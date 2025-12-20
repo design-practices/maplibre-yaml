@@ -1,0 +1,40 @@
+{
+  "name": "maplibre-yaml",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Declarative Maplibre web maps with YAML configuration",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/design-practices/maplibre-yaml.git"
+  },
+  "keywords": [
+    "maplibre",
+    "maps",
+    "yaml",
+    "geojson",
+    "geospatial",
+    "web-components"
+  ],
+  "author": "mariogiampieri",
+  "license": "None",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r clean && rm -rf node_modules",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
