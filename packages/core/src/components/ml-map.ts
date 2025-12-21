@@ -147,12 +147,14 @@ export class MLMap extends HTMLElement {
       try {
         const parsed = safeParseYAMLConfig(yamlScript.textContent);
         if (parsed.success) {
-          // Find the map block in the parsed config
-          const mapBlock = parsed.data.blocks?.find(
-            (block: any) => block.type === "map"
-          );
-          if (mapBlock) {
-            return mapBlock as MapBlock;
+          // Find the first map block in pages
+          for (const page of parsed.data.pages || []) {
+            const mapBlock = page.blocks?.find(
+              (block: any) => block.type === "map"
+            );
+            if (mapBlock) {
+              return mapBlock as MapBlock;
+            }
           }
         } else {
           console.error("Invalid YAML config:", parsed.errors);
@@ -201,24 +203,8 @@ export class MLMap extends HTMLElement {
               this.renderer?.addControls(config.controls);
             }
 
-            // Build legend if specified
-            if (config.legend) {
-              const legendContainer =
-                typeof config.legend.container === "string"
-                  ? document.getElementById(config.legend.container)
-                  : config.legend.container;
-
-              if (legendContainer) {
-                this.renderer
-                  ?.getLegendBuilder()
-                  .build(legendContainer, config.layers || [], config.legend);
-              } else {
-                console.warn(
-                  "Legend container not found:",
-                  config.legend.container
-                );
-              }
-            }
+            // Legend configuration is handled by MapRenderer internally
+            // No explicit legend building needed here
 
             // Dispatch load event
             this.dispatchEvent(
