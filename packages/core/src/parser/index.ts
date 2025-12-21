@@ -1,11 +1,18 @@
 /**
- * YAML parser and validator for maplibre-yaml.
+ * @file Parser module exports
+ * @module @maplibre-yaml/core/parser
  *
- * @module parser
+ * @description
+ * This module exports the YAML parser and related utilities for parsing and
+ * validating MapLibre YAML configuration files.
+ *
+ * @example
+ * ```typescript
+ * import { YAMLParser, parseYAMLConfig } from '@maplibre-yaml/core/parser';
+ *
+ * const config = parseYAMLConfig(yamlString);
+ * ```
  */
 
-// Placeholder - Claude Code will implement
-export const PARSER_VERSION = "0.1.0-alpha.0";
-
-// TODO: Export from:
-// - yaml-parser.ts
+export { YAMLParser, parseYAMLConfig, safeParseYAMLConfig } from './yaml-parser';
+export type { RootConfig, ParseError, ParseResult } from './yaml-parser';
