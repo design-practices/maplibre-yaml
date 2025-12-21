@@ -165,6 +165,13 @@ export class MapRenderer {
   }
 
   /**
+   * Get the legend builder instance
+   */
+  getLegendBuilder(): LegendBuilder {
+    return this.legendBuilder;
+  }
+
+  /**
    * Register an event listener
    */
   on<K extends keyof MapRendererEvents>(event: K, callback: (data: MapRendererEvents[K]) => void): void {

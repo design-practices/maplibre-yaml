@@ -4,7 +4,7 @@
  */
 
 import { MapRenderer } from "../renderer";
-import { parseYAML } from "../parser";
+import { safeParseYAMLConfig } from "../parser";
 import type { z } from "zod";
 import { MapBlockSchema } from "../schemas";
 
@@ -145,10 +145,16 @@ export class MLMap extends HTMLElement {
     ) as HTMLScriptElement;
     if (yamlScript?.textContent) {
       try {
-        const parsed = parseYAML(yamlScript.textContent);
-        if (parsed.success && parsed.data.type === "map") {
-          return parsed.data;
-        } else if (!parsed.success) {
+        const parsed = safeParseYAMLConfig(yamlScript.textContent);
+        if (parsed.success) {
+          // Find the map block in the parsed config
+          const mapBlock = parsed.data.blocks?.find(
+            (block: any) => block.type === "map"
+          );
+          if (mapBlock) {
+            return mapBlock as MapBlock;
+          }
+        } else {
           console.error("Invalid YAML config:", parsed.errors);
         }
       } catch (error) {
