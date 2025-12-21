@@ -16,7 +16,7 @@
     "web-components"
   ],
   "author": "mariogiampieri",
-  "license": "None",
+  "license": "MIT",
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
