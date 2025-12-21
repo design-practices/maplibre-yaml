@@ -1,6 +1,33 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { JSDOM } from "jsdom";
-import { MLMap } from "../../src/components/ml-map";
+
+// Mock maplibre-gl before any imports
+vi.mock("maplibre-gl", () => ({
+  default: {
+    Map: vi.fn(() => ({
+      on: vi.fn(),
+      off: vi.fn(),
+      remove: vi.fn(),
+      addSource: vi.fn(),
+      addLayer: vi.fn(),
+      getSource: vi.fn(),
+      getLayer: vi.fn(),
+      getCanvas: vi.fn(() => ({
+        style: { cursor: "" },
+      })),
+    })),
+    Popup: vi.fn(() => ({
+      setLngLat: vi.fn().mockReturnThis(),
+      setHTML: vi.fn().mockReturnThis(),
+      addTo: vi.fn().mockReturnThis(),
+      remove: vi.fn(),
+    })),
+    NavigationControl: vi.fn(),
+    GeolocateControl: vi.fn(),
+    ScaleControl: vi.fn(),
+    FullscreenControl: vi.fn(),
+  },
+}));
 
 // Mock MapRenderer before import
 vi.mock("../../src/renderer/map-renderer", () => ({
@@ -34,6 +61,8 @@ vi.mock("../../src/renderer/map-renderer", () => ({
     }),
 }));
 
+import { MLMap } from "../../src/components/ml-map";
+
 describe("MLMap", () => {
   let dom: JSDOM;
   let document: Document;
@@ -52,8 +81,9 @@ describe("MLMap", () => {
     global.window = window as any;
     global.HTMLElement = window.HTMLElement;
     global.CustomEvent = window.CustomEvent;
+    global.customElements = window.customElements;
 
-    // Register the custom element
+    // Register the custom element if not already registered
     if (!window.customElements.get("ml-map")) {
       window.customElements.define("ml-map", MLMap);
     }
@@ -65,7 +95,7 @@ describe("MLMap", () => {
 
   describe("connectedCallback", () => {
     it("creates container div when connected", () => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       document.body.appendChild(element);
 
       const container = element.querySelector("div");
@@ -75,7 +105,7 @@ describe("MLMap", () => {
     });
 
     it("dispatches error event when no config is found", (done) => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
 
       element.addEventListener("error", (e: Event) => {
         const customEvent = e as CustomEvent;
@@ -92,10 +122,10 @@ describe("MLMap", () => {
 
   describe("disconnectedCallback", () => {
     it("cleans up renderer when disconnected", async () => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({
+        JSON.stringify({type: "map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -121,10 +151,10 @@ describe("MLMap", () => {
 
   describe("attributeChangedCallback", () => {
     it("re-renders when config attribute changes", async () => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({
+        JSON.stringify({type: "map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -142,7 +172,7 @@ describe("MLMap", () => {
       // Change config
       element.setAttribute(
         "config",
-        JSON.stringify({
+        JSON.stringify({type: "map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [10, 10],
@@ -160,24 +190,27 @@ describe("MLMap", () => {
   describe("config from JSON attribute", () => {
     it("parses valid JSON config attribute", async () => {
       const config = {
+        type: "map" as const,
         config: {
           mapStyle: "https://demotiles.maplibre.org/style.json",
-          center: [-74.5, 40],
+          center: [-74.5, 40] as [number, number],
           zoom: 9,
         },
         layers: [
           {
             id: "test-layer",
-            type: "circle",
+            type: "circle" as const,
+            visible: true,
+            toggleable: false,
             source: {
-              type: "geojson",
-              data: { type: "FeatureCollection", features: [] },
+              type: "geojson" as const,
+              data: { type: "FeatureCollection" as const, features: [] },
             },
           },
         ],
       };
 
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       element.setAttribute("config", JSON.stringify(config));
 
       document.body.appendChild(element);
@@ -190,7 +223,7 @@ describe("MLMap", () => {
     });
 
     it("handles invalid JSON in config attribute", (done) => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       element.setAttribute("config", "not valid json");
 
       element.addEventListener("error", () => {
@@ -203,7 +236,7 @@ describe("MLMap", () => {
 
   describe("config from YAML script", () => {
     it("parses valid YAML script", async () => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       const script = document.createElement("script");
       script.type = "application/yaml";
       script.textContent = `
@@ -234,7 +267,7 @@ layers:
     });
 
     it("handles invalid YAML script", (done) => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       const script = document.createElement("script");
       script.type = "application/yaml";
       script.textContent = "not: valid: yaml: structure:";
@@ -250,10 +283,10 @@ layers:
 
   describe("config from JSON script", () => {
     it("parses valid JSON script", async () => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       const script = document.createElement("script");
       script.type = "application/json";
-      script.textContent = JSON.stringify({
+      script.textContent = JSON.stringify({type: "map",
         config: {
           mapStyle: "https://demotiles.maplibre.org/style.json",
           center: [-74.5, 40],
@@ -270,7 +303,7 @@ layers:
     });
 
     it("handles invalid JSON script", (done) => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       const script = document.createElement("script");
       script.type = "application/json";
       script.textContent = "not valid json";
@@ -286,12 +319,12 @@ layers:
 
   describe("config priority", () => {
     it("prefers config attribute over scripts", async () => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
 
       // Add JSON script
       const jsonScript = document.createElement("script");
       jsonScript.type = "application/json";
-      jsonScript.textContent = JSON.stringify({
+      jsonScript.textContent = JSON.stringify({type: "map",
         config: {
           mapStyle: "https://script.com/style.json",
           center: [0, 0],
@@ -303,7 +336,7 @@ layers:
       // Set config attribute (should take priority)
       element.setAttribute(
         "config",
-        JSON.stringify({
+        JSON.stringify({type: "map",
           config: {
             mapStyle: "https://attribute.com/style.json",
             center: [10, 10],
@@ -324,10 +357,10 @@ layers:
 
   describe("event dispatching", () => {
     it("dispatches load event when map loads", (done) => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({
+        JSON.stringify({type: "map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -348,10 +381,10 @@ layers:
 
   describe("controls integration", () => {
     it("adds controls when specified in config", async () => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({
+        JSON.stringify({type: "map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -379,10 +412,10 @@ layers:
       legendContainer.id = "legend";
       document.body.appendChild(legendContainer);
 
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({
+        JSON.stringify({type: "map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -405,10 +438,10 @@ layers:
 
   describe("public methods", () => {
     it("getRenderer returns renderer instance", async () => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({
+        JSON.stringify({type: "map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -424,10 +457,10 @@ layers:
     });
 
     it("getMap returns map instance", async () => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({
+        JSON.stringify({type: "map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -443,7 +476,7 @@ layers:
     });
 
     it("getMap returns null when no renderer", () => {
-      const element = document.createElement("ml-map") as MLMap;
+      const element = new MLMap();
       expect(element.getMap()).toBeNull();
     });
   });
