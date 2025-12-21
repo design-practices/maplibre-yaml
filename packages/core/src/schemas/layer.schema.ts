@@ -243,7 +243,7 @@ export type LegendItem = z.infer<typeof LegendItemSchema>;
  * @remarks
  * Common configuration that applies to every layer regardless of type.
  */
-const BaseLayerPropertiesSchema = z.object({
+export const BaseLayerPropertiesSchema = z.object({
   id: z.string().describe("Unique layer identifier"),
   label: z.string().optional().describe("Human-readable layer label"),
   source: z
