@@ -3,12 +3,23 @@
  * @module @maplibre-yaml/core/renderer
  */
 
-import type { Map as MapLibreMap, GeoJSONSource, AnySourceData } from 'maplibre-gl';
+import type { Map as MapLibreMap, GeoJSONSource } from 'maplibre-gl';
 import type { z } from 'zod';
-import { LayerSchema, GeoJSONSourceSchema } from '../schemas';
+import {
+  LayerSchema,
+  GeoJSONSourceSchema,
+  VectorSourceSchema,
+  RasterSourceSchema,
+  ImageSourceSchema,
+  VideoSourceSchema,
+} from '../schemas';
 
 type Layer = z.infer<typeof LayerSchema>;
 type GeoJSONSourceConfig = z.infer<typeof GeoJSONSourceSchema>;
+type VectorSourceConfig = z.infer<typeof VectorSourceSchema>;
+type RasterSourceConfig = z.infer<typeof RasterSourceSchema>;
+type ImageSourceConfig = z.infer<typeof ImageSourceSchema>;
+type VideoSourceConfig = z.infer<typeof VideoSourceSchema>;
 
 /**
  * Callbacks for layer data loading events
@@ -57,14 +68,19 @@ export class LayerManager {
       layerSpec.layout.visibility = 'none';
     }
 
-    this.map.addLayer(layerSpec, layer.before);
+    this.map.addLayer(layerSpec, layer.before as string | undefined);
 
-    if (typeof layer.source === 'object' && layer.source.type === 'geojson' && layer.source.refreshInterval) {
-      this.startRefreshInterval(layer);
+    // Check if this is a GeoJSON source with refresh interval
+    if (typeof layer.source === 'object' && layer.source !== null) {
+      const sourceObj = layer.source as { type: string; refreshInterval?: number };
+      if (sourceObj.type === 'geojson' && sourceObj.refreshInterval) {
+        this.startRefreshInterval(layer);
+      }
     }
   }
 
   private async addSource(sourceId: string, layer: Layer): Promise<void> {
+    // Handle source reference (string ID)
     if (typeof layer.source === 'string') {
       if (!this.map.getSource(layer.source)) {
         throw new Error(`Source reference '${layer.source}' not found`);
@@ -72,70 +88,64 @@ export class LayerManager {
       return;
     }
 
+    // layer.source is now guaranteed to be an object
     const source = layer.source;
 
-    switch (source.type) {
-      case 'geojson':
-        if (source.url) {
-          await this.addGeoJSONSourceFromURL(sourceId, layer.id, source);
-        } else if (source.data) {
-          this.map.addSource(sourceId, {
-            type: 'geojson',
-            data: source.data,
-            cluster: source.cluster,
-            clusterRadius: source.clusterRadius,
-            clusterMaxZoom: source.clusterMaxZoom,
-            clusterMinPoints: source.clusterMinPoints,
-            clusterProperties: source.clusterProperties,
-          } as AnySourceData);
-        } else if (source.stream) {
-          this.map.addSource(sourceId, {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] },
-          } as AnySourceData);
-        }
-        break;
-
-      case 'vector': {
-        const vectorSource: any = { type: 'vector' };
-        if (source.url) vectorSource.url = source.url;
-        if (source.tiles) vectorSource.tiles = source.tiles;
-        if (source.minzoom !== undefined) vectorSource.minzoom = source.minzoom;
-        if (source.maxzoom !== undefined) vectorSource.maxzoom = source.maxzoom;
-        if (source.bounds) vectorSource.bounds = source.bounds;
-        if (source.attribution) vectorSource.attribution = source.attribution;
-        this.map.addSource(sourceId, vectorSource);
-        break;
-      }
-
-      case 'raster': {
-        const rasterSource: any = { type: 'raster' };
-        if (source.url) rasterSource.url = source.url;
-        if (source.tiles) rasterSource.tiles = source.tiles;
-        if (source.tileSize !== undefined) rasterSource.tileSize = source.tileSize;
-        if (source.minzoom !== undefined) rasterSource.minzoom = source.minzoom;
-        if (source.maxzoom !== undefined) rasterSource.maxzoom = source.maxzoom;
-        if (source.bounds) rasterSource.bounds = source.bounds;
-        if (source.attribution) rasterSource.attribution = source.attribution;
-        this.map.addSource(sourceId, rasterSource);
-        break;
-      }
-
-      case 'image':
+    if (source.type === 'geojson') {
+      const geojsonSource = source as GeoJSONSourceConfig;
+      if (geojsonSource.url) {
+        await this.addGeoJSONSourceFromURL(sourceId, layer.id, geojsonSource);
+      } else if (geojsonSource.data) {
         this.map.addSource(sourceId, {
-          type: 'image',
-          url: source.url,
-          coordinates: source.coordinates,
-        } as AnySourceData);
-        break;
-
-      case 'video':
+          type: 'geojson',
+          data: geojsonSource.data,
+          cluster: geojsonSource.cluster,
+          clusterRadius: geojsonSource.clusterRadius,
+          clusterMaxZoom: geojsonSource.clusterMaxZoom,
+          clusterMinPoints: geojsonSource.clusterMinPoints,
+          clusterProperties: geojsonSource.clusterProperties,
+        });
+      } else if (geojsonSource.stream) {
         this.map.addSource(sourceId, {
-          type: 'video',
-          urls: source.urls,
-          coordinates: source.coordinates,
-        } as AnySourceData);
-        break;
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+      }
+    } else if (source.type === 'vector') {
+      const vectorSource = source as VectorSourceConfig;
+      const vectorSpec: any = { type: 'vector' };
+      if (vectorSource.url) vectorSpec.url = vectorSource.url;
+      if (vectorSource.tiles) vectorSpec.tiles = vectorSource.tiles;
+      if (vectorSource.minzoom !== undefined) vectorSpec.minzoom = vectorSource.minzoom;
+      if (vectorSource.maxzoom !== undefined) vectorSpec.maxzoom = vectorSource.maxzoom;
+      if (vectorSource.bounds) vectorSpec.bounds = vectorSource.bounds;
+      if (vectorSource.attribution) vectorSpec.attribution = vectorSource.attribution;
+      this.map.addSource(sourceId, vectorSpec);
+    } else if (source.type === 'raster') {
+      const rasterSource = source as RasterSourceConfig;
+      const rasterSpec: any = { type: 'raster' };
+      if (rasterSource.url) rasterSpec.url = rasterSource.url;
+      if (rasterSource.tiles) rasterSpec.tiles = rasterSource.tiles;
+      if (rasterSource.tileSize !== undefined) rasterSpec.tileSize = rasterSource.tileSize;
+      if (rasterSource.minzoom !== undefined) rasterSpec.minzoom = rasterSource.minzoom;
+      if (rasterSource.maxzoom !== undefined) rasterSpec.maxzoom = rasterSource.maxzoom;
+      if (rasterSource.bounds) rasterSpec.bounds = rasterSource.bounds;
+      if (rasterSource.attribution) rasterSpec.attribution = rasterSource.attribution;
+      this.map.addSource(sourceId, rasterSpec);
+    } else if (source.type === 'image') {
+      const imageSource = source as ImageSourceConfig;
+      this.map.addSource(sourceId, {
+        type: 'image',
+        url: imageSource.url,
+        coordinates: imageSource.coordinates,
+      });
+    } else if (source.type === 'video') {
+      const videoSource = source as VideoSourceConfig;
+      this.map.addSource(sourceId, {
+        type: 'video',
+        urls: videoSource.urls,
+        coordinates: videoSource.coordinates,
+      });
     }
   }
 
@@ -148,13 +158,12 @@ export class LayerManager {
       clusterMaxZoom: config.clusterMaxZoom,
       clusterMinPoints: config.clusterMinPoints,
       clusterProperties: config.clusterProperties,
-    } as AnySourceData);
+    });
 
     await this.fetchAndUpdateSource(sourceId, layerId, config.url!, config);
   }
 
   private async fetchAndUpdateSource(sourceId: string, layerId: string, url: string, config: GeoJSONSourceConfig): Promise<void> {
-    const timeout = config.timeout ?? 30000;
     const retryAttempts = config.retryAttempts ?? 3;
 
     this.callbacks.onDataLoading?.(layerId);
@@ -214,12 +223,19 @@ export class LayerManager {
   }
 
   startRefreshInterval(layer: Layer): void {
-    if (typeof layer.source !== 'object' || layer.source.type !== 'geojson' || !layer.source.url) return;
+    if (typeof layer.source !== 'object' || layer.source === null || layer.source.type !== 'geojson') {
+      return;
+    }
+
+    const geojsonSource = layer.source as GeoJSONSourceConfig;
+    if (!geojsonSource.url || !geojsonSource.refreshInterval) {
+      return;
+    }
 
     const interval = setInterval(() => {
       const sourceId = `${layer.id}-source`;
-      this.fetchAndUpdateSource(sourceId, layer.id, layer.source.url!, layer.source as GeoJSONSourceConfig);
-    }, layer.source.refreshInterval!);
+      this.fetchAndUpdateSource(sourceId, layer.id, geojsonSource.url!, geojsonSource);
+    }, geojsonSource.refreshInterval);
 
     this.refreshIntervals.set(layer.id, interval);
   }

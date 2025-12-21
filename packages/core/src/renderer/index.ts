@@ -1,16 +1,17 @@
 /**
- * Map rendering components for maplibre-yaml.
- *
- * @module renderer
+ * @file Renderer module exports
+ * @module @maplibre-yaml/core/renderer
  */
 
-// Placeholder - Claude Code will implement
-export const RENDERER_VERSION = "0.1.0-alpha.0";
+export { MapRenderer } from "./map-renderer";
+export type { MapRendererOptions, MapRendererEvents } from "./map-renderer";
 
-// TODO: Export from:
-// - map-renderer.ts
-// - layer-manager.ts
-// - event-handler.ts
-// - popup-builder.ts
-// - legend-builder.ts
-// - controls-manager.ts
+export { LayerManager } from "./layer-manager";
+export type { LayerManagerCallbacks } from "./layer-manager";
+
+export { EventHandler } from "./event-handler";
+export type { EventHandlerCallbacks } from "./event-handler";
+
+export { PopupBuilder } from "./popup-builder";
+export { LegendBuilder } from "./legend-builder";
+export { ControlsManager } from "./controls-manager";
