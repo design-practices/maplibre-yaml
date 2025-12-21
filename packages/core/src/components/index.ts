@@ -4,12 +4,22 @@
  * Import this module to register custom elements:
  * - <ml-map> - Map container component
  *
- * @module components
+ * Styles are automatically injected when this module is imported.
+ *
+ * @module @maplibre-yaml/core/components
+ *
+ * @example
+ * ```typescript
+ * // Import to register components and inject styles
+ * import '@maplibre-yaml/core/components';
+ *
+ * // Or import specific components
+ * import { MLMap } from '@maplibre-yaml/core/components';
+ * ```
  */
 
-// Placeholder - Claude Code will implement
-export const COMPONENTS_VERSION = "0.1.0-alpha.0";
+export { MLMap } from "./ml-map";
+export { defaultStyles, injectStyles } from "./styles";
 
-// TODO: Export from:
-// - ml-map.ts
-// - styles.ts
+// Auto-inject styles when module is imported
+import "./styles";
