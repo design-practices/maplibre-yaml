@@ -125,7 +125,9 @@ describe("MLMap", () => {
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map", id: "test-map",
+        JSON.stringify({
+          type: "map",
+          id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -154,7 +156,9 @@ describe("MLMap", () => {
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map", id: "test-map",
+        JSON.stringify({
+          type: "map",
+          id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -172,7 +176,9 @@ describe("MLMap", () => {
       // Change config
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map", id: "test-map",
+        JSON.stringify({
+          type: "map",
+          id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [10, 10],
@@ -298,7 +304,9 @@ pages:
       const element = new MLMap();
       const script = document.createElement("script");
       script.type = "application/json";
-      script.textContent = JSON.stringify({type: "map", id: "test-map",
+      script.textContent = JSON.stringify({
+        type: "map",
+        id: "test-map",
         config: {
           mapStyle: "https://demotiles.maplibre.org/style.json",
           center: [-74.5, 40],
@@ -336,7 +344,9 @@ pages:
       // Add JSON script
       const jsonScript = document.createElement("script");
       jsonScript.type = "application/json";
-      jsonScript.textContent = JSON.stringify({type: "map", id: "test-map",
+      jsonScript.textContent = JSON.stringify({
+        type: "map",
+        id: "test-map",
         config: {
           mapStyle: "https://script.com/style.json",
           center: [0, 0],
@@ -348,7 +358,9 @@ pages:
       // Set config attribute (should take priority)
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map", id: "test-map",
+        JSON.stringify({
+          type: "map",
+          id: "test-map",
           config: {
             mapStyle: "https://attribute.com/style.json",
             center: [10, 10],
@@ -372,7 +384,9 @@ pages:
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map", id: "test-map",
+        JSON.stringify({
+          type: "map",
+          id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -396,7 +410,9 @@ pages:
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map", id: "test-map",
+        JSON.stringify({
+          type: "map",
+          id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -423,7 +439,9 @@ pages:
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map", id: "test-map",
+        JSON.stringify({
+          type: "map",
+          id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -450,7 +468,9 @@ pages:
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map", id: "test-map",
+        JSON.stringify({
+          type: "map",
+          id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -469,7 +489,9 @@ pages:
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map", id: "test-map",
+        JSON.stringify({
+          type: "map",
+          id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
