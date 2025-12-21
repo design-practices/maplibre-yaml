@@ -1,0 +1,29 @@
+{
+  "name": "@maplibre-yaml/astro",
+  "version": "0.1.0-alpha.0",
+  "description": "Astro integration for maplibre-yaml",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "echo 'Astro package - Phase 3'",
+    "dev": "echo 'Astro package - Phase 3'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@maplibre-yaml/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "astro": "^4.0.0"
+  },
+  "license": "MIT"
+}
