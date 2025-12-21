@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { LayerManager } from "../../src/renderer/layer-manager";
 
 describe("LayerManager", () => {
@@ -31,6 +31,8 @@ describe("LayerManager", () => {
       const layer = {
         id: "test-layer",
         type: "circle" as const,
+        visible: true,
+        toggleable: false,
         source: {
           type: "geojson" as const,
           data: {
@@ -68,6 +70,8 @@ describe("LayerManager", () => {
       const layer = {
         id: "vector-layer",
         type: "fill" as const,
+        visible: true,
+        toggleable: false,
         source: {
           type: "vector" as const,
           url: "https://example.com/tiles.json",
@@ -89,11 +93,12 @@ describe("LayerManager", () => {
       const layer = {
         id: "hidden-layer",
         type: "circle" as const,
+        visible: false,
+        toggleable: false,
         source: {
           type: "geojson" as const,
           data: { type: "FeatureCollection" as const, features: [] },
         },
-        visible: false,
       };
 
       await manager.addLayer(layer);
@@ -112,6 +117,8 @@ describe("LayerManager", () => {
       const layer = {
         id: "ordered-layer",
         type: "circle" as const,
+        visible: true,
+        toggleable: false,
         source: {
           type: "geojson" as const,
           data: { type: "FeatureCollection" as const, features: [] },
@@ -131,6 +138,8 @@ describe("LayerManager", () => {
       const layer = {
         id: "complex-layer",
         type: "circle" as const,
+        visible: true,
+        toggleable: false,
         source: {
           type: "geojson" as const,
           data: { type: "FeatureCollection" as const, features: [] },
@@ -255,6 +264,8 @@ describe("LayerManager", () => {
       const layer = {
         id: "refresh-layer",
         type: "circle" as const,
+        visible: true,
+        toggleable: false,
         source: {
           type: "geojson" as const,
           url: "https://example.com/data.geojson",
@@ -274,6 +285,8 @@ describe("LayerManager", () => {
       const layer1 = {
         id: "layer1",
         type: "circle" as const,
+        visible: true,
+        toggleable: false,
         source: {
           type: "geojson" as const,
           url: "https://example.com/data1.geojson",
@@ -284,6 +297,8 @@ describe("LayerManager", () => {
       const layer2 = {
         id: "layer2",
         type: "circle" as const,
+        visible: true,
+        toggleable: false,
         source: {
           type: "geojson" as const,
           url: "https://example.com/data2.geojson",
