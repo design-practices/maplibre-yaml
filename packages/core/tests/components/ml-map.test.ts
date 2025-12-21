@@ -125,7 +125,7 @@ describe("MLMap", () => {
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map",
+        JSON.stringify({type: "map", id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -154,7 +154,7 @@ describe("MLMap", () => {
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map",
+        JSON.stringify({type: "map", id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -172,7 +172,7 @@ describe("MLMap", () => {
       // Change config
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map",
+        JSON.stringify({type: "map", id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [10, 10],
@@ -191,6 +191,7 @@ describe("MLMap", () => {
     it("parses valid JSON config attribute", async () => {
       const config = {
         type: "map" as const,
+        id: "test-map",
         config: {
           mapStyle: "https://demotiles.maplibre.org/style.json",
           center: [-74.5, 40] as [number, number],
@@ -241,6 +242,7 @@ describe("MLMap", () => {
       script.type = "application/yaml";
       script.textContent = `
 type: map
+id: test-map
 config:
   mapStyle: https://demotiles.maplibre.org/style.json
   center: [-74.5, 40]
@@ -248,6 +250,8 @@ config:
 layers:
   - id: test-layer
     type: circle
+    visible: true
+    toggleable: false
     source:
       type: geojson
       data:
@@ -286,7 +290,7 @@ layers:
       const element = new MLMap();
       const script = document.createElement("script");
       script.type = "application/json";
-      script.textContent = JSON.stringify({type: "map",
+      script.textContent = JSON.stringify({type: "map", id: "test-map",
         config: {
           mapStyle: "https://demotiles.maplibre.org/style.json",
           center: [-74.5, 40],
@@ -324,7 +328,7 @@ layers:
       // Add JSON script
       const jsonScript = document.createElement("script");
       jsonScript.type = "application/json";
-      jsonScript.textContent = JSON.stringify({type: "map",
+      jsonScript.textContent = JSON.stringify({type: "map", id: "test-map",
         config: {
           mapStyle: "https://script.com/style.json",
           center: [0, 0],
@@ -336,7 +340,7 @@ layers:
       // Set config attribute (should take priority)
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map",
+        JSON.stringify({type: "map", id: "test-map",
           config: {
             mapStyle: "https://attribute.com/style.json",
             center: [10, 10],
@@ -360,7 +364,7 @@ layers:
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map",
+        JSON.stringify({type: "map", id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -384,7 +388,7 @@ layers:
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map",
+        JSON.stringify({type: "map", id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -415,7 +419,7 @@ layers:
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map",
+        JSON.stringify({type: "map", id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -441,7 +445,7 @@ layers:
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map",
+        JSON.stringify({type: "map", id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
@@ -460,7 +464,7 @@ layers:
       const element = new MLMap();
       element.setAttribute(
         "config",
-        JSON.stringify({type: "map",
+        JSON.stringify({type: "map", id: "test-map",
           config: {
             mapStyle: "https://demotiles.maplibre.org/style.json",
             center: [0, 0],
