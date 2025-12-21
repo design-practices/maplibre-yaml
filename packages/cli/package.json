@@ -1,0 +1,21 @@
+{
+  "name": "@maplibre-yaml/cli",
+  "version": "0.1.0-alpha.0",
+  "description": "CLI tools for maplibre-yaml",
+  "type": "module",
+  "bin": {
+    "maplibre-yaml": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "echo 'CLI package - Phase 4'",
+    "dev": "echo 'CLI package - Phase 4'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@maplibre-yaml/core": "workspace:*"
+  },
+  "license": "MIT"
+}

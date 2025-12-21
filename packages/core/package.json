@@ -1,0 +1,76 @@
+{
+  "name": "@maplibre-yaml/core",
+  "version": "0.1.0-alpha.0",
+  "description": "Core library for declarative MapLibre maps with YAML",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "maplibre-gl": "^4.1.0",
+    "yaml": "^2.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.14",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^1.4.0",
+    "jsdom": "^24.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  },
+  "peerDependencies": {
+    "maplibre-gl": "^3.0.0 || ^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "maplibre-gl": {
+      "optional": false
+    }
+  },
+  "keywords": [
+    "maplibre",
+    "maps",
+    "yaml",
+    "geojson",
+    "web-components",
+    "declarative"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/design-practices/maplibre-yaml.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/design-practices/maplibre-yaml/issues"
+  },
+  "homepage": "https://github.com/design-practices/maplibre-yaml#readme"
+}
