@@ -53,12 +53,14 @@ export class EventHandler {
   attachEvents(layer: Layer): void {
     if (!layer.interactive) return;
 
-    const { hover, click } = layer.interactive;
+    // Type guard: interactive is defined, cast to proper type
+    const interactive = layer.interactive as { hover?: any; click?: any };
+    const { hover, click } = interactive;
     const handlers: any = {};
 
     // Hover handling
     if (hover) {
-      handlers.mouseenter = (e: MapMouseEvent) => {
+      handlers.mouseenter = (e: MapMouseEvent & { features?: any[] }) => {
         if (hover.cursor) {
           this.map.getCanvas().style.cursor = hover.cursor;
         }
@@ -77,7 +79,7 @@ export class EventHandler {
 
     // Click handling
     if (click) {
-      handlers.click = (e: MapMouseEvent) => {
+      handlers.click = (e: MapMouseEvent & { features?: any[] }) => {
         const feature = e.features?.[0];
         if (!feature) return;
 

@@ -20,8 +20,11 @@ export class PopupBuilder {
     return content
       .map((item) => {
         const entries = Object.entries(item);
-        if (entries.length === 0) return '';
-        const [tag, items] = entries[0];
+        if (entries.length === 0) return "";
+        const entry = entries[0];
+        if (!entry) return "";
+        const [tag, items] = entry;
+        if (!Array.isArray(items)) return "";
         const innerHTML = items
           .map((i: PopupContentItem) => this.buildItem(i, properties))
           .join("");
@@ -88,7 +91,8 @@ export class PopupBuilder {
 
     // Extract decimal places
     const decimalMatch = format.match(/\.(\d+)/);
-    const decimals = decimalMatch && decimalMatch[1] ? parseInt(decimalMatch[1]) : 0;
+    const decimals =
+      decimalMatch && decimalMatch[1] ? parseInt(decimalMatch[1]) : 0;
 
     // Format the number
     let result = value.toFixed(decimals);
@@ -96,7 +100,9 @@ export class PopupBuilder {
     // Add thousands separators if requested
     if (useThousands) {
       const parts = result.split(".");
-      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      if (parts[0]) {
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      }
       result = parts.join(".");
     }
 

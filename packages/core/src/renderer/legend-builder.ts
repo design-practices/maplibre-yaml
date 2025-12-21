@@ -17,14 +17,14 @@ export class LegendBuilder {
   /**
    * Build legend in container from layers
    */
-  build(container: string | HTMLElement, layers: Layer[], config: LegendConfig = {}): void {
+  build(container: string | HTMLElement, layers: Layer[], config?: Partial<LegendConfig>): void {
     const el = typeof container === 'string' ? document.getElementById(container) : container;
     if (!el) return;
 
-    const items = config.items || this.extractItems(layers);
+    const items = config?.items || this.extractItems(layers);
 
     let html = '<div class="maplibre-legend">';
-    if (config.title) {
+    if (config?.title) {
       html += `<div class="legend-title">${this.escapeHtml(config.title)}</div>`;
     }
     html += '<div class="legend-items">';
@@ -68,7 +68,9 @@ export class LegendBuilder {
    * Extract legend items from layers
    */
   private extractItems(layers: Layer[]): LegendItem[] {
-    return layers.filter((l) => l.legend).map((l) => l.legend!);
+    return layers
+      .filter((l) => l.legend && typeof l.legend === 'object')
+      .map((l) => l.legend as LegendItem);
   }
 
   /**
