@@ -12,7 +12,7 @@
  * ```
  */
 
-import { z } from 'zod';
+import { z } from "zod";
 
 /**
  * Longitude value in degrees.
@@ -27,9 +27,9 @@ import { z } from 'zod';
  */
 export const LongitudeSchema = z
   .number()
-  .min(-180, 'Longitude must be >= -180')
-  .max(180, 'Longitude must be <= 180')
-  .describe('Longitude in degrees (-180 to 180)');
+  .min(-180, "Longitude must be >= -180")
+  .max(180, "Longitude must be <= 180")
+  .describe("Longitude in degrees (-180 to 180)");
 
 /**
  * Latitude value in degrees.
@@ -44,9 +44,9 @@ export const LongitudeSchema = z
  */
 export const LatitudeSchema = z
   .number()
-  .min(-90, 'Latitude must be >= -90')
-  .max(90, 'Latitude must be <= 90')
-  .describe('Latitude in degrees (-90 to 90)');
+  .min(-90, "Latitude must be >= -90")
+  .max(90, "Latitude must be <= 90")
+  .describe("Latitude in degrees (-90 to 90)");
 
 /**
  * Geographic coordinates as [longitude, latitude].
@@ -78,7 +78,7 @@ export const LatitudeSchema = z
  */
 export const LngLatSchema = z
   .tuple([LongitudeSchema, LatitudeSchema])
-  .describe('Geographic coordinates as [longitude, latitude]');
+  .describe("Geographic coordinates as [longitude, latitude]");
 
 /** Inferred type for geographic coordinates. */
 export type LngLat = z.infer<typeof LngLatSchema>;
@@ -107,11 +107,11 @@ export type LngLat = z.infer<typeof LngLatSchema>;
 export const LngLatBoundsSchema = z
   .tuple([
     LongitudeSchema, // west
-    LatitudeSchema,  // south
+    LatitudeSchema, // south
     LongitudeSchema, // east
-    LatitudeSchema,  // north
+    LatitudeSchema, // north
   ])
-  .describe('Bounding box as [west, south, east, north]');
+  .describe("Bounding box as [west, south, east, north]");
 
 /** Inferred type for bounding box. */
 export type LngLatBounds = z.infer<typeof LngLatBoundsSchema>;
@@ -149,23 +149,26 @@ export const ColorSchema = z
   .refine(
     (val) => {
       // Hex color (#rgb, #rrggbb, #rrggbbaa)
-      if (val.startsWith('#')) {
+      if (val.startsWith("#")) {
         return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(val);
       }
       // rgb/rgba
-      if (val.startsWith('rgb')) {
+      if (val.startsWith("rgb")) {
         return /^rgba?\s*\([^)]+\)$/.test(val);
       }
       // hsl/hsla
-      if (val.startsWith('hsl')) {
+      if (val.startsWith("hsl")) {
         return /^hsla?\s*\([^)]+\)$/.test(val);
       }
       // Named colors (accept any other string, browser will validate)
       return true;
     },
-    { message: 'Invalid color format. Use hex (#rgb, #rrggbb), rgb(), rgba(), hsl(), hsla(), or named colors.' }
+    {
+      message:
+        "Invalid color format. Use hex (#rgb, #rrggbb), rgb(), rgba(), hsl(), hsla(), or named colors.",
+    }
   )
-  .describe('CSS color value');
+  .describe("CSS color value");
 
 /** Inferred type for color values. */
 export type Color = z.infer<typeof ColorSchema>;
@@ -220,11 +223,11 @@ export type Color = z.infer<typeof ColorSchema>;
  */
 export const ExpressionSchema: z.ZodType<any[]> = z
   .array(z.any())
-  .refine(
-    (val) => val.length > 0 && typeof val[0] === 'string',
-    { message: 'Expression must be an array starting with a string operator (e.g., ["get", "property"])' }
-  )
-  .describe('MapLibre expression for data-driven styling');
+  .refine((val) => val.length > 0 && typeof val[0] === "string", {
+    message:
+      'Expression must be an array starting with a string operator (e.g., ["get", "property"])',
+  })
+  .describe("MapLibre expression for data-driven styling");
 
 /** Inferred type for expressions. */
 export type Expression = z.infer<typeof ExpressionSchema>;
@@ -255,7 +258,7 @@ export type Expression = z.infer<typeof ExpressionSchema>;
  */
 export const NumberOrExpressionSchema = z
   .union([z.number(), ExpressionSchema])
-  .describe('Number value or MapLibre expression');
+  .describe("Number value or MapLibre expression");
 
 /** Inferred type for number or expression. */
 export type NumberOrExpression = z.infer<typeof NumberOrExpressionSchema>;
@@ -288,7 +291,7 @@ export type NumberOrExpression = z.infer<typeof NumberOrExpressionSchema>;
  */
 export const ColorOrExpressionSchema = z
   .union([ColorSchema, ExpressionSchema])
-  .describe('Color value or MapLibre expression');
+  .describe("Color value or MapLibre expression");
 
 /** Inferred type for color or expression. */
 export type ColorOrExpression = z.infer<typeof ColorOrExpressionSchema>;
@@ -315,9 +318,9 @@ export type ColorOrExpression = z.infer<typeof ColorOrExpressionSchema>;
  */
 export const ZoomLevelSchema = z
   .number()
-  .min(0, 'Zoom level must be >= 0')
-  .max(24, 'Zoom level must be <= 24')
-  .describe('Map zoom level (0-24)');
+  .min(0, "Zoom level must be >= 0")
+  .max(24, "Zoom level must be <= 24")
+  .describe("Map zoom level (0-24)");
 
 /** Inferred type for zoom level. */
 export type ZoomLevel = z.infer<typeof ZoomLevelSchema>;
