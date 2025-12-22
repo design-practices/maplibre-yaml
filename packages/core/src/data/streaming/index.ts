@@ -12,3 +12,6 @@ export type {
 
 export { SSEConnection } from "./sse-connection";
 export type { SSEConfig } from "./sse-connection";
+
+export { WebSocketConnection } from "./websocket-connection";
+export type { WebSocketConfig } from "./websocket-connection";
