@@ -4,6 +4,10 @@
  * @module utils
  */
 
+// Event emitter
+export { EventEmitter } from "./event-emitter";
+export type { EventHandler } from "./event-emitter";
+
 /**
  * Deep merge two objects.
  */
