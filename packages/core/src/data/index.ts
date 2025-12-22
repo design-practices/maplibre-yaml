@@ -15,3 +15,9 @@ export type { CacheConfig, CacheEntry, CacheStats } from "./memory-cache";
 
 export { RetryManager, MaxRetriesExceededError } from "./retry-manager";
 export type { RetryConfig, RetryCallbacks } from "./retry-manager";
+
+export { PollingManager } from "./polling-manager";
+export type { PollingConfig, PollingState } from "./polling-manager";
+
+// Streaming exports
+export * from "./streaming";
