@@ -21,3 +21,6 @@ export type { PollingConfig, PollingState } from "./polling-manager";
 
 // Streaming exports
 export * from "./streaming";
+
+// Merge exports
+export * from "./merge";
