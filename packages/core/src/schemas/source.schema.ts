@@ -25,18 +25,14 @@ import { LngLatSchema } from "./base.schema";
  * - `websocket` - Bidirectional WebSocket connection
  * - `sse` - Server-Sent Events (unidirectional)
  *
- * **Protocols:**
- * - `json` - Generic JSON messages
- * - `geojson` - Complete GeoJSON FeatureCollection
- * - `geojson-seq` - Newline-delimited GeoJSON features
- *
  * @example WebSocket
  * ```yaml
  * stream:
  *   type: websocket
  *   url: "wss://api.example.com/live-data"
- *   protocol: geojson-seq
  *   reconnect: true
+ *   reconnectMaxAttempts: 10
+ *   protocols: ["json", "v1"]
  * ```
  *
  * @example Server-Sent Events
@@ -44,25 +40,39 @@ import { LngLatSchema } from "./base.schema";
  * stream:
  *   type: sse
  *   url: "https://api.example.com/events"
- *   protocol: geojson
+ *   eventTypes: ["update", "delete"]
  * ```
  */
 export const StreamConfigSchema = z.object({
   type: z.enum(["websocket", "sse"]).describe("Streaming connection type"),
-  url: z.string().url().describe("WebSocket or SSE endpoint URL"),
-  protocol: z
-    .enum(["json", "geojson", "geojson-seq"])
-    .default("geojson")
-    .describe("Data format protocol"),
+  url: z.string().url().optional().describe("WebSocket or SSE endpoint URL"),
   reconnect: z
     .boolean()
     .default(true)
     .describe("Automatically reconnect on disconnect"),
-  reconnectDelay: z
+  reconnectMaxAttempts: z
     .number()
     .min(0)
-    .default(5000)
-    .describe("Delay in milliseconds before reconnecting"),
+    .default(10)
+    .describe("Maximum number of reconnection attempts"),
+  reconnectDelay: z
+    .number()
+    .min(100)
+    .default(1000)
+    .describe("Initial delay in milliseconds before reconnecting"),
+  reconnectMaxDelay: z
+    .number()
+    .min(1000)
+    .default(30000)
+    .describe("Maximum delay in milliseconds for exponential backoff"),
+  eventTypes: z
+    .array(z.string())
+    .optional()
+    .describe("Event types to listen for (SSE only)"),
+  protocols: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .describe("WebSocket sub-protocols (WebSocket only)"),
 });
 
 /** Inferred type for stream configuration. */
@@ -77,23 +87,118 @@ export type StreamConfig = z.infer<typeof StreamConfigSchema>;
  * @example
  * ```yaml
  * loading:
- *   showSpinner: true
+ *   enabled: true
  *   message: "Loading earthquake data..."
- *   timeout: 15000
+ *   showErrorOverlay: true
  * ```
  */
 export const LoadingConfigSchema = z.object({
-  showSpinner: z.boolean().default(true).describe("Display loading spinner"),
-  message: z.string().optional().describe("Loading message to display"),
-  timeout: z
-    .number()
-    .min(1000)
-    .default(30000)
-    .describe("Request timeout in milliseconds"),
+  enabled: z
+    .boolean()
+    .default(false)
+    .describe("Enable loading UI overlays"),
+  message: z.string().optional().describe("Custom loading message to display"),
+  showErrorOverlay: z
+    .boolean()
+    .default(true)
+    .describe("Show error overlay on fetch failure"),
 });
 
 /** Inferred type for loading configuration. */
 export type LoadingConfig = z.infer<typeof LoadingConfigSchema>;
+
+/**
+ * Cache configuration for data fetching.
+ *
+ * @remarks
+ * Controls HTTP caching behavior for fetched data.
+ *
+ * @example
+ * ```yaml
+ * cache:
+ *   enabled: true
+ *   ttl: 300000  # 5 minutes
+ * ```
+ */
+export const CacheConfigSchema = z.object({
+  enabled: z.boolean().default(true).describe("Enable HTTP caching"),
+  ttl: z
+    .number()
+    .positive()
+    .optional()
+    .describe("Cache TTL in milliseconds (overrides default)"),
+});
+
+/** Inferred type for cache configuration. */
+export type CacheConfig = z.infer<typeof CacheConfigSchema>;
+
+/**
+ * Refresh configuration for polling updates.
+ *
+ * @remarks
+ * Configures periodic data refresh with merge strategies.
+ *
+ * @example Replace Strategy
+ * ```yaml
+ * refresh:
+ *   refreshInterval: 5000
+ *   updateStrategy: replace
+ * ```
+ *
+ * @example Merge Strategy
+ * ```yaml
+ * refresh:
+ *   refreshInterval: 10000
+ *   updateStrategy: merge
+ *   updateKey: "vehicleId"
+ * ```
+ *
+ * @example Append-Window Strategy
+ * ```yaml
+ * refresh:
+ *   refreshInterval: 15000
+ *   updateStrategy: append-window
+ *   windowSize: 100
+ *   windowDuration: 3600000  # 1 hour
+ *   timestampField: "timestamp"
+ * ```
+ */
+export const RefreshConfigSchema = z
+  .object({
+    refreshInterval: z
+      .number()
+      .min(1000)
+      .optional()
+      .describe("Polling interval in milliseconds (minimum 1000ms)"),
+    updateStrategy: z
+      .enum(["replace", "merge", "append-window"])
+      .default("replace")
+      .describe("How to merge incoming data with existing data"),
+    updateKey: z
+      .string()
+      .optional()
+      .describe("Property key for merge strategy (required for merge)"),
+    windowSize: z
+      .number()
+      .positive()
+      .optional()
+      .describe("Maximum features to keep (append-window)"),
+    windowDuration: z
+      .number()
+      .positive()
+      .optional()
+      .describe("Maximum age in milliseconds (append-window)"),
+    timestampField: z
+      .string()
+      .optional()
+      .describe("Property field containing timestamp (append-window)"),
+  })
+  .refine((data) => !(data.updateStrategy === "merge" && !data.updateKey), {
+    message: "updateKey is required when updateStrategy is 'merge'",
+  });
+
+/** Inferred type for refresh configuration. */
+export type RefreshConfig = z.infer<typeof RefreshConfigSchema>;
 
 /**
  * GeoJSON data source configuration.
@@ -179,43 +284,38 @@ export const GeoJSONSourceSchema = z
     type: z.literal("geojson").describe("Source type"),
     url: z.string().url().optional().describe("URL to fetch GeoJSON data"),
     data: z.any().optional().describe("Inline GeoJSON object"),
+    prefetchedData: z
+      .any()
+      .optional()
+      .describe("Pre-fetched data from build time"),
     fetchStrategy: z
       .enum(["runtime", "build", "hybrid"])
       .default("runtime")
       .describe("When to fetch data: runtime (default), build, or hybrid"),
-    refreshInterval: z
-      .number()
-      .min(
-        1000,
-        "Refresh interval must be at least 1000ms to avoid excessive requests"
-      )
-      .optional()
-      .describe("Polling interval in milliseconds (minimum 1000ms)"),
-    timeout: z
-      .number()
-      .min(0)
-      .default(30000)
-      .describe("Request timeout in milliseconds"),
-    retryAttempts: z
-      .number()
-      .int()
-      .min(0)
-      .default(3)
-      .describe("Number of retry attempts on fetch failure"),
     stream: StreamConfigSchema.optional().describe(
       "WebSocket/SSE streaming configuration"
     ),
+    refresh: RefreshConfigSchema.optional().describe(
+      "Polling refresh configuration"
+    ),
+    // Legacy support for direct refresh properties
+    refreshInterval: z
+      .number()
+      .min(1000)
+      .optional()
+      .describe("Polling interval in milliseconds (legacy, use refresh.refreshInterval)"),
     updateStrategy: z
-      .enum(["replace", "merge"])
-      .default("replace")
-      .describe("How to update data: replace all or merge by key"),
+      .enum(["replace", "merge", "append-window"])
+      .optional()
+      .describe("Update strategy (legacy, use refresh.updateStrategy)"),
     updateKey: z
       .string()
       .optional()
-      .describe("Property name to use as unique identifier for merge strategy"),
+      .describe("Update key (legacy, use refresh.updateKey)"),
     loading: LoadingConfigSchema.optional().describe(
       "Loading UI configuration"
     ),
+    cache: CacheConfigSchema.optional().describe("Cache configuration"),
     // MapLibre clustering options
     cluster: z.boolean().optional().describe("Enable point clustering"),
     clusterRadius: z
@@ -249,11 +349,11 @@ export const GeoJSONSourceSchema = z
     attribution: z.string().optional(),
   })
   .passthrough()
-  .refine((data) => data.url || data.data || data.stream, {
+  .refine((data) => data.url || data.data || data.prefetchedData, {
     message:
-      "GeoJSON source requires at least one of: url, data, or stream. " +
+      "GeoJSON source requires at least one of: url, data, or prefetchedData. " +
       'Use "url" to fetch from an endpoint, "data" for inline GeoJSON, ' +
-      'or "stream" for real-time WebSocket/SSE connections.',
+      'or "prefetchedData" for build-time fetched data.',
   });
 
 /** Inferred type for GeoJSON source. */
