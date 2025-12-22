@@ -15,3 +15,6 @@ export type { SSEConfig } from "./sse-connection";
 
 export { WebSocketConnection } from "./websocket-connection";
 export type { WebSocketConfig } from "./websocket-connection";
+
+export { StreamManager } from "./stream-manager";
+export type { StreamConfig, StreamState } from "./stream-manager";
