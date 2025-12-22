@@ -1,0 +1,36 @@
+pages:
+  - id: home
+    path: "/"
+    title: "Live Data"
+    blocks:
+      - type: map
+        id: live-map
+        config:
+          center: [-73.9712, 40.7831]
+          zoom: 12
+          mapStyle: "https://demotiles.maplibre.org/style.json"
+        layers:
+          - id: bikes
+            type: line
+            visible: true
+            toggleable: false
+            source:
+              type: geojson
+              url: "https://data.cityofnewyork.us/resource/mzxg-pwib.geojson?$limit=1000"
+              refreshInterval: 60000
+              loading:
+                message: "Loading bike lanes..."
+            paint:
+              line-color: "#00ff00"
+              line-width: 2
+        controls:
+          navigation:
+            enabled: true
+          scale:
+            enabled: true
+        legend:
+          title: "Map Legend"
+          items:
+            - color: "#00ff00"
+              label: "Bike Lanes"
+              shape: line

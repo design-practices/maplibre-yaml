@@ -1,0 +1,39 @@
+pages:
+  - id: home
+    path: "/"
+    title: "Simple Map"
+    blocks:
+      - type: map
+        id: simple-map
+        config:
+          center: [-74.006, 40.7128]
+          zoom: 12
+          mapStyle: "https://demotiles.maplibre.org/style.json"
+        layers:
+          - id: points
+            type: circle
+            visible: true
+            toggleable: false
+            source:
+              type: geojson
+              data:
+                type: FeatureCollection
+                features:
+                  - type: Feature
+                    geometry:
+                      type: Point
+                      coordinates: [-74.006, 40.7128]
+                    properties:
+                      name: "New York"
+            paint:
+              circle-radius: 10
+              circle-color: "#ff0000"
+            interactive:
+              hover:
+                cursor: pointer
+              click:
+                popup:
+                  - h3:
+                      - property: name
+                  - p:
+                      - str: "Click for more info"
