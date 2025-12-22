@@ -9,3 +9,6 @@ export type {
   ConnectionEvents,
   ConnectionConfig,
 } from "./base-connection";
+
+export { SSEConnection } from "./sse-connection";
+export type { SSEConfig } from "./sse-connection";
