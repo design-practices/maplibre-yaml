@@ -39,19 +39,24 @@ describe('StreamConfigSchema', () => {
         url: 'wss://example.com/stream',
       };
       const result = StreamConfigSchema.parse(config);
-      expect(result.protocol).toBe('geojson');
       expect(result.reconnect).toBe(true);
-      expect(result.reconnectDelay).toBe(5000);
+      expect(result.reconnectDelay).toBe(1000);
+      expect(result.reconnectMaxAttempts).toBe(10);
+      expect(result.reconnectMaxDelay).toBe(30000);
     });
 
-    it('accepts custom protocol', () => {
+    it('accepts custom reconnect settings', () => {
       const config = {
         type: 'websocket' as const,
         url: 'wss://example.com/stream',
-        protocol: 'geojson-seq' as const,
+        reconnectMaxAttempts: 5,
+        reconnectDelay: 500,
+        reconnectMaxDelay: 10000,
       };
       const result = StreamConfigSchema.parse(config);
-      expect(result.protocol).toBe('geojson-seq');
+      expect(result.reconnectMaxAttempts).toBe(5);
+      expect(result.reconnectDelay).toBe(500);
+      expect(result.reconnectMaxDelay).toBe(10000);
     });
   });
 
@@ -89,25 +94,26 @@ describe('StreamConfigSchema', () => {
 describe('LoadingConfigSchema', () => {
   it('accepts full configuration', () => {
     const config = {
-      showSpinner: false,
+      enabled: true,
       message: 'Loading data...',
-      timeout: 15000,
+      showErrorOverlay: false,
     };
     expect(LoadingConfigSchema.parse(config)).toMatchObject(config);
   });
 
   it('applies default values', () => {
     const result = LoadingConfigSchema.parse({});
-    expect(result.showSpinner).toBe(true);
-    expect(result.timeout).toBe(30000);
+    expect(result.enabled).toBe(false);
+    expect(result.showErrorOverlay).toBe(true);
   });
 
-  it('rejects timeout less than 1000ms', () => {
-    expect(() =>
-      LoadingConfigSchema.parse({
-        timeout: 500,
-      })
-    ).toThrow();
+  it('accepts optional message', () => {
+    const config = {
+      enabled: true,
+      message: 'Custom loading message',
+    };
+    const result = LoadingConfigSchema.parse(config);
+    expect(result.message).toBe('Custom loading message');
   });
 });
 
@@ -158,6 +164,7 @@ describe('GeoJSONSourceSchema', () => {
     it('accepts WebSocket streaming', () => {
       const source = {
         type: 'geojson' as const,
+        url: 'https://example.com/data.geojson',
         stream: {
           type: 'websocket' as const,
           url: 'wss://example.com/stream',
@@ -171,6 +178,7 @@ describe('GeoJSONSourceSchema', () => {
     it('accepts SSE streaming', () => {
       const source = {
         type: 'geojson' as const,
+        url: 'https://example.com/data.geojson',
         stream: {
           type: 'sse' as const,
           url: 'https://example.com/events',
@@ -215,12 +223,12 @@ describe('GeoJSONSourceSchema', () => {
   });
 
   describe('validation', () => {
-    it('rejects source without url, data, or stream', () => {
+    it('rejects source without url, data, or prefetchedData', () => {
       expect(() =>
         GeoJSONSourceSchema.parse({
           type: 'geojson',
         })
-      ).toThrow(/requires at least one of: url, data, or stream/);
+      ).toThrow(/requires at least one of: url, data, or prefetchedData/);
     });
 
     it('applies default values', () => {
@@ -230,9 +238,7 @@ describe('GeoJSONSourceSchema', () => {
       };
       const result = GeoJSONSourceSchema.parse(source);
       expect(result.fetchStrategy).toBe('runtime');
-      expect(result.timeout).toBe(30000);
-      expect(result.retryAttempts).toBe(3);
-      expect(result.updateStrategy).toBe('replace');
+      expect(result.clusterRadius).toBe(50);
     });
   });
 
@@ -242,7 +248,7 @@ describe('GeoJSONSourceSchema', () => {
         type: 'geojson' as const,
         url: 'https://example.com/data.geojson',
         loading: {
-          showSpinner: true,
+          enabled: true,
           message: 'Loading data...',
         },
       };

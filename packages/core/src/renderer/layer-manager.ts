@@ -5,6 +5,7 @@
 
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { z } from "zod";
+import type { FeatureCollection } from "geojson";
 import {
   LayerSchema,
   GeoJSONSourceSchema,
@@ -13,6 +14,12 @@ import {
   ImageSourceSchema,
   VideoSourceSchema,
 } from "../schemas";
+import { DataFetcher } from "../data/data-fetcher";
+import { PollingManager } from "../data/polling-manager";
+import { StreamManager } from "../data/streaming/stream-manager";
+import { DataMerger } from "../data/merge/data-merger";
+import { LoadingManager } from "../ui/loading-manager";
+import type { MergeStrategy } from "../data/merge/data-merger";
 
 type Layer = z.infer<typeof LayerSchema>;
 type GeoJSONSourceConfig = z.infer<typeof GeoJSONSourceSchema>;
@@ -36,18 +43,37 @@ export interface LayerManagerCallbacks {
 export class LayerManager {
   private map: MapLibreMap;
   private callbacks: LayerManagerCallbacks;
+  private dataFetcher: DataFetcher;
+  private pollingManager: PollingManager;
+  private streamManager: StreamManager;
+  private dataMerger: DataMerger;
+  private loadingManager: LoadingManager;
+  private sourceData: Map<string, FeatureCollection>;
+  private layerToSource: Map<string, string>;
+
+  // Legacy support (deprecated)
   private refreshIntervals: Map<string, NodeJS.Timeout>;
   private abortControllers: Map<string, AbortController>;
 
   constructor(map: MapLibreMap, callbacks?: LayerManagerCallbacks) {
     this.map = map;
     this.callbacks = callbacks || {};
+    this.dataFetcher = new DataFetcher();
+    this.pollingManager = new PollingManager();
+    this.streamManager = new StreamManager();
+    this.dataMerger = new DataMerger();
+    this.loadingManager = new LoadingManager({ showUI: false });
+    this.sourceData = new Map();
+    this.layerToSource = new Map();
+
+    // Legacy support
     this.refreshIntervals = new Map();
     this.abortControllers = new Map();
   }
 
   async addLayer(layer: Layer): Promise<void> {
     const sourceId = `${layer.id}-source`;
+    this.layerToSource.set(layer.id, sourceId);
     await this.addSource(sourceId, layer);
 
     const layerSpec: any = {
@@ -71,14 +97,14 @@ export class LayerManager {
 
     this.map.addLayer(layerSpec, layer.before as string | undefined);
 
-    // Check if this is a GeoJSON source with refresh interval
+    // Check if this is a GeoJSON source with refresh interval (legacy or new config)
     if (typeof layer.source === "object" && layer.source !== null) {
-      const sourceObj = layer.source as {
-        type: string;
-        refreshInterval?: number;
-      };
-      if (sourceObj.type === "geojson" && sourceObj.refreshInterval) {
-        this.startRefreshInterval(layer);
+      const sourceObj = layer.source as GeoJSONSourceConfig;
+      if (sourceObj.type === "geojson") {
+        // Use new refresh config if available, otherwise fall back to legacy
+        if (sourceObj.refresh || sourceObj.refreshInterval) {
+          await this.setupDataUpdates(layer.id, sourceId, sourceObj);
+        }
       }
     }
   }
@@ -165,9 +191,22 @@ export class LayerManager {
     layerId: string,
     config: GeoJSONSourceConfig
   ): Promise<void> {
+    // Determine initial data source
+    let initialData: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [],
+    };
+
+    if (config.prefetchedData) {
+      initialData = config.prefetchedData as FeatureCollection;
+    } else if (config.data) {
+      initialData = config.data as FeatureCollection;
+    }
+
+    // Add source with initial data
     this.map.addSource(sourceId, {
       type: "geojson",
-      data: { type: "FeatureCollection", features: [] },
+      data: initialData,
       cluster: config.cluster,
       clusterRadius: config.clusterRadius,
       clusterMaxZoom: config.clusterMaxZoom,
@@ -175,57 +214,179 @@ export class LayerManager {
       clusterProperties: config.clusterProperties,
     });
 
-    await this.fetchAndUpdateSource(sourceId, layerId, config.url!, config);
-  }
+    this.sourceData.set(sourceId, initialData);
 
-  private async fetchAndUpdateSource(
-    sourceId: string,
-    layerId: string,
-    url: string,
-    config: GeoJSONSourceConfig
-  ): Promise<void> {
-    const retryAttempts = config.retryAttempts ?? 3;
+    // Fetch from URL if needed
+    if (config.url && !config.prefetchedData) {
+      this.callbacks.onDataLoading?.(layerId);
 
-    this.callbacks.onDataLoading?.(layerId);
-
-    const controller = new AbortController();
-    this.abortControllers.set(layerId, controller);
-
-    for (let attempt = 0; attempt < retryAttempts; attempt++) {
       try {
-        const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok)
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const cacheEnabled = config.cache?.enabled ?? true;
+        const cacheTTL = config.cache?.ttl;
 
-        const data = await response.json();
-        if (!data || typeof data !== "object")
-          throw new Error("Invalid GeoJSON");
+        const result = await this.dataFetcher.fetch(config.url, {
+          skipCache: !cacheEnabled,
+          ttl: cacheTTL,
+        });
+
+        const data = result.data as FeatureCollection;
+        this.sourceData.set(sourceId, data);
 
         const source = this.map.getSource(sourceId) as GeoJSONSource;
-        if (source && source.setData) source.setData(data);
-
-        const featureCount = data.features?.length ?? 0;
-        this.callbacks.onDataLoaded?.(layerId, featureCount);
-        return;
-      } catch (error: any) {
-        if (error.name === "AbortError") return;
-        if (attempt === retryAttempts - 1) {
-          this.callbacks.onDataError?.(
-            layerId,
-            new Error(
-              `Failed after ${retryAttempts} attempts: ${error.message}`
-            )
-          );
-          return;
+        if (source?.setData) {
+          source.setData(data);
         }
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.pow(2, attempt) * 1000)
-        );
+
+        this.callbacks.onDataLoaded?.(layerId, data.features.length);
+      } catch (error: any) {
+        this.callbacks.onDataError?.(layerId, error);
       }
+    } else if (config.prefetchedData) {
+      // Emit loaded event for prefetched data
+      this.callbacks.onDataLoaded?.(layerId, initialData.features.length);
     }
   }
 
+  /**
+   * Setup polling and/or streaming for a GeoJSON source
+   */
+  private async setupDataUpdates(
+    layerId: string,
+    sourceId: string,
+    config: GeoJSONSourceConfig
+  ): Promise<void> {
+    // Setup streaming if configured
+    if (config.stream) {
+      const streamConfig = config.stream;
+      await this.streamManager.connect(layerId, {
+        type: streamConfig.type,
+        url: streamConfig.url || config.url!,
+        onData: (data) => {
+          this.handleDataUpdate(sourceId, layerId, data, {
+            strategy:
+              config.refresh?.updateStrategy ||
+              config.updateStrategy ||
+              "replace",
+            updateKey: config.refresh?.updateKey || config.updateKey,
+            windowSize: config.refresh?.windowSize,
+            windowDuration: config.refresh?.windowDuration,
+            timestampField: config.refresh?.timestampField,
+          });
+        },
+        onError: (error) => {
+          this.callbacks.onDataError?.(layerId, error);
+        },
+        reconnect: {
+          enabled: streamConfig.reconnect !== false,
+          maxRetries: streamConfig.reconnectMaxAttempts,
+          initialDelay: streamConfig.reconnectDelay,
+          maxDelay: streamConfig.reconnectMaxDelay,
+        },
+        eventTypes: streamConfig.eventTypes,
+        protocols: streamConfig.protocols,
+      });
+    }
+
+    // Setup polling if configured (new refresh config or legacy refreshInterval)
+    const refreshInterval =
+      config.refresh?.refreshInterval || config.refreshInterval;
+    if (refreshInterval && config.url) {
+      const url = config.url;
+      const cacheEnabled = config.cache?.enabled ?? true;
+      const cacheTTL = config.cache?.ttl;
+
+      await this.pollingManager.start(layerId, {
+        interval: refreshInterval,
+        onTick: async () => {
+          const result = await this.dataFetcher.fetch(url, {
+            skipCache: !cacheEnabled,
+            ttl: cacheTTL,
+          });
+          this.handleDataUpdate(sourceId, layerId, result.data as FeatureCollection, {
+            strategy:
+              config.refresh?.updateStrategy ||
+              config.updateStrategy ||
+              "replace",
+            updateKey: config.refresh?.updateKey || config.updateKey,
+            windowSize: config.refresh?.windowSize,
+            windowDuration: config.refresh?.windowDuration,
+            timestampField: config.refresh?.timestampField,
+          });
+        },
+        onError: (error) => {
+          this.callbacks.onDataError?.(layerId, error);
+        },
+      });
+    }
+  }
+
+  /**
+   * Handle incoming data updates with merge strategy
+   */
+  private handleDataUpdate(
+    sourceId: string,
+    layerId: string,
+    incoming: FeatureCollection,
+    options: {
+      strategy: MergeStrategy;
+      updateKey?: string;
+      windowSize?: number;
+      windowDuration?: number;
+      timestampField?: string;
+    }
+  ): void {
+    const existing =
+      this.sourceData.get(sourceId) || {
+        type: "FeatureCollection" as const,
+        features: [],
+      };
+
+    const mergeResult = this.dataMerger.merge(existing, incoming, options);
+    this.sourceData.set(sourceId, mergeResult.data);
+
+    const source = this.map.getSource(sourceId) as GeoJSONSource;
+    if (source?.setData) {
+      source.setData(mergeResult.data);
+    }
+
+    this.callbacks.onDataLoaded?.(layerId, mergeResult.total);
+  }
+
+  /**
+   * Pause data refresh for a layer (polling)
+   */
+  pauseRefresh(layerId: string): void {
+    this.pollingManager.pause(layerId);
+  }
+
+  /**
+   * Resume data refresh for a layer (polling)
+   */
+  resumeRefresh(layerId: string): void {
+    this.pollingManager.resume(layerId);
+  }
+
+  /**
+   * Force immediate refresh for a layer (polling)
+   */
+  async refreshNow(layerId: string): Promise<void> {
+    await this.pollingManager.triggerNow(layerId);
+  }
+
+  /**
+   * Disconnect streaming connection for a layer
+   */
+  disconnectStream(layerId: string): void {
+    this.streamManager.disconnect(layerId);
+  }
+
   removeLayer(layerId: string): void {
+    // Stop all data updates
+    this.pollingManager.stop(layerId);
+    this.streamManager.disconnect(layerId);
+    this.loadingManager.hideLoading(layerId);
+
+    // Legacy support
     this.stopRefreshInterval(layerId);
 
     const controller = this.abortControllers.get(layerId);
@@ -236,8 +397,12 @@ export class LayerManager {
 
     if (this.map.getLayer(layerId)) this.map.removeLayer(layerId);
 
-    const sourceId = `${layerId}-source`;
+    const sourceId = this.layerToSource.get(layerId) || `${layerId}-source`;
     if (this.map.getSource(sourceId)) this.map.removeSource(sourceId);
+
+    // Clean up data references
+    this.sourceData.delete(sourceId);
+    this.layerToSource.delete(layerId);
   }
 
   setVisibility(layerId: string, visible: boolean): void {
@@ -255,7 +420,12 @@ export class LayerManager {
     if (source && source.setData) source.setData(data as any);
   }
 
+  /**
+   * @deprecated Legacy refresh method - use PollingManager instead
+   */
   startRefreshInterval(layer: Layer): void {
+    // Legacy method kept for backward compatibility
+    // New code should use setupDataUpdates() which is called automatically from addLayer
     if (typeof layer.source !== "object" || layer.source === null) {
       return;
     }
@@ -274,14 +444,27 @@ export class LayerManager {
     }
 
     const geojsonSource = layer.source as unknown as GeoJSONSourceConfig;
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       const sourceId = `${layer.id}-source`;
-      this.fetchAndUpdateSource(
-        sourceId,
-        layer.id,
-        geojsonSource.url!,
-        geojsonSource
-      );
+      try {
+        const cacheEnabled = geojsonSource.cache?.enabled ?? true;
+        const cacheTTL = geojsonSource.cache?.ttl;
+
+        const result = await this.dataFetcher.fetch(geojsonSource.url!, {
+          skipCache: !cacheEnabled,
+          ttl: cacheTTL,
+        });
+        const data = result.data as FeatureCollection;
+        this.sourceData.set(sourceId, data);
+
+        const source = this.map.getSource(sourceId) as GeoJSONSource;
+        if (source?.setData) {
+          source.setData(data);
+        }
+        this.callbacks.onDataLoaded?.(layer.id, data.features.length);
+      } catch (error: any) {
+        this.callbacks.onDataError?.(layer.id, error);
+      }
     }, geojsonSource.refreshInterval!);
 
     this.refreshIntervals.set(layer.id, interval);
@@ -302,6 +485,16 @@ export class LayerManager {
   }
 
   destroy(): void {
+    // Clean up all data management components
+    this.pollingManager.destroy();
+    this.streamManager.destroy();
+    this.loadingManager.destroy();
+
+    // Clear data references
+    this.sourceData.clear();
+    this.layerToSource.clear();
+
+    // Legacy cleanup
     this.clearAllIntervals();
     for (const controller of this.abortControllers.values()) controller.abort();
     this.abortControllers.clear();
