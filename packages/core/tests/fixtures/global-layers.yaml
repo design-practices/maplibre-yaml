@@ -1,0 +1,50 @@
+config:
+  title: "Test App"
+  defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+
+layers:
+  bikeLayer:
+    id: bikes
+    type: line
+    visible: true
+    toggleable: false
+    source:
+      type: geojson
+      url: "https://example.com/bikes.geojson"
+    paint:
+      line-color: "#00ff00"
+      line-width: 2
+    legend:
+      color: "#00ff00"
+      label: "Bike Lanes"
+      shape: line
+
+  parkLayer:
+    id: parks
+    type: fill
+    visible: true
+    toggleable: false
+    source:
+      type: geojson
+      url: "https://example.com/parks.geojson"
+    paint:
+      fill-color: "#228B22"
+      fill-opacity: 0.5
+    legend:
+      color: "#228B22"
+      label: "Parks"
+      shape: square
+
+pages:
+  - id: home
+    path: "/"
+    title: "Home"
+    blocks:
+      - type: map
+        id: main-map
+        config:
+          center: [-74.006, 40.7128]
+          zoom: 12
+        layers:
+          - $ref: "#/layers/bikeLayer"
+          - $ref: "#/layers/parkLayer"
