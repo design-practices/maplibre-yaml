@@ -19,16 +19,14 @@ hero:
 import { Card, CardGrid } from "@astrojs/starlight/components";
 import LiveMap from "../../components/LiveMap.astro";
 
-## See It in Action
-
-<LiveMap
-  yaml={`
+export const heroMapYAML = `
 type: map
 id: hero-map
 config:
   center: [-74.006, 40.7128]
-  zoom: 11
+  zoom: 1
   mapStyle: "https://demotiles.maplibre.org/style.json"
+  interactive: false
 layers:
   - id: points
     type: circle
@@ -47,9 +45,13 @@ layers:
       circle-radius: 12
       circle-color: "#ff6b6b"
       circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"
-`}
-  height="300px"
+      circle-stroke-color: "#ffffff"`;
+
+## See It in Action
+
+<LiveMap
+  yaml={heroMapYAML}
+  height="400px"
   caption="A simple map created with just YAML"
 />
 
