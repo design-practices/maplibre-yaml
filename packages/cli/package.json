@@ -3,6 +3,7 @@
   "version": "0.1.0-alpha.0",
   "description": "CLI tools for maplibre-yaml",
   "type": "module",
+  "private": true,
   "bin": {
     "maplibre-yaml": "./dist/index.js"
   },
