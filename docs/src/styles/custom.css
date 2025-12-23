@@ -1,4 +1,6 @@
 /* MapLibre GL overrides for docs */
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
 .maplibregl-map {
   font-family: inherit;
 }

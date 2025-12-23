@@ -9,7 +9,7 @@ export default defineConfig({
     starlight({
       title: "maplibre-yaml",
       description: "Declarative web maps with YAML configuration",
-
+      customCss: ["./src/styles/custom.css"],
       logo: {
         src: "./src/assets/houston.webp",
         replacesTitle: false,

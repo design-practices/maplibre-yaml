@@ -21,7 +21,7 @@ importers:
         specifier: ^0.37.1
         version: 0.37.1(astro@5.16.6(@types/node@20.19.27)(rollup@4.54.0)(typescript@5.9.3)(yaml@2.8.2))
       '@maplibre-yaml/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../packages/core
       astro:
         specifier: ^5.6.1
