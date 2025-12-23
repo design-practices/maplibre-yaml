@@ -1,0 +1,280 @@
+---
+title: Live Data
+description: Polling, streaming, and real-time updates
+---
+
+import LiveMap from "../../../components/LiveMap.astro";
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+maplibre-yaml makes it easy to keep your map data fresh with automatic polling, Server-Sent Events (SSE), and WebSocket streaming.
+
+## Polling (auto-refresh)
+
+The simplest way to keep data current is polling - fetching data at regular intervals:
+
+```yaml
+source:
+  type: geojson
+  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
+  refreshInterval: 60000 # Refresh every 60 seconds (milliseconds)
+```
+
+<LiveMap
+  yaml={`
+type: map
+id: polling-demo
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
+      refreshInterval: 60000
+      updateStrategy: replace
+    paint:
+      circle-radius: 8
+      circle-color: "#ef4444"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+controls:
+  navigation: true
+`}
+  height="350px"
+  caption="Refreshes every 60 seconds"
+/>
+
+### Controlling polling
+
+```javascript
+const renderer = new MapRenderer(container, config);
+
+// Pause updates (e.g., when tab is inactive)
+renderer.pauseRefresh("earthquakes");
+
+// Resume updates
+renderer.resumeRefresh("earthquakes");
+
+// Trigger immediate refresh
+await renderer.refreshNow("earthquakes");
+```
+
+<Aside>
+  Polling is automatically paused when the browser tab is hidden and resumes
+  when visible again.
+</Aside>
+
+## Update strategies
+
+When new data arrives, how should it combine with existing data?
+
+### Replace (default)
+
+New data completely replaces old data:
+
+```yaml
+source:
+  type: geojson
+  url: "https://..."
+  refreshInterval: 30000
+  updateStrategy: replace # Default behavior
+```
+
+**Use for:** Complete datasets that are re-fetched in full each time.
+
+### Merge
+
+Update existing features, add new ones, keep features not in the update:
+
+```yaml
+source:
+  type: geojson
+  url: "https://api.example.com/vehicles"
+  refreshInterval: 5000
+  updateStrategy: merge
+  updateKey: "vehicleId" # Match features by this property
+```
+
+**Use for:** Entity tracking where each feature has a unique ID.
+
+**Example scenario:**
+
+- Initial data: Vehicles A, B, C
+- Update contains: A (new position), D (new vehicle)
+- Result: A (updated), B (unchanged), C (unchanged), D (added)
+
+### Append with window
+
+Add new features while limiting total count or age:
+
+```yaml
+source:
+  type: geojson
+  stream:
+    type: sse
+    url: "https://stream.example.com/events"
+  updateStrategy: append-window
+  windowSize: 100 # Keep latest 100 features
+  windowDuration: 3600000 # Or features from last hour
+  timestampField: "time" # Property containing timestamp
+```
+
+**Use for:** Event streams, activity feeds, time-series data.
+
+## Server-Sent Events (SSE)
+
+For real-time push updates, use SSE streaming:
+
+```yaml
+source:
+  type: geojson
+  stream:
+    type: sse
+    url: "https://stream.example.com/events"
+    reconnect: true # Auto-reconnect on disconnect
+    reconnectMaxAttempts: 10 # Give up after 10 failures
+    reconnectDelay: 1000 # Initial delay (doubles each retry)
+  updateStrategy: merge
+  updateKey: "id"
+```
+
+### How SSE works
+
+1. Browser opens persistent HTTP connection
+2. Server sends data as events occur
+3. Browser automatically reconnects if connection drops
+4. Each message updates the map
+
+### SSE configuration options
+
+| Option                 | Default       | Description                  |
+| ---------------------- | ------------- | ---------------------------- |
+| `reconnect`            | `true`        | Auto-reconnect on disconnect |
+| `reconnectMaxAttempts` | `10`          | Max reconnection attempts    |
+| `reconnectDelay`       | `1000`        | Initial delay (ms)           |
+| `reconnectMaxDelay`    | `30000`       | Max delay between retries    |
+| `eventTypes`           | `['message']` | Event types to listen for    |
+
+## WebSocket streaming
+
+For bidirectional communication, use WebSocket:
+
+```yaml
+source:
+  type: geojson
+  stream:
+    type: websocket
+    url: "wss://stream.example.com/data"
+    reconnect: true
+  updateStrategy: merge
+  updateKey: "id"
+```
+
+WebSocket is useful when you need to send messages to the server (e.g., subscribing to specific data channels).
+
+## Handling connection states
+
+Monitor streaming connection status:
+
+```javascript
+const renderer = new MapRenderer(container, config);
+
+renderer.on("layer:stream-state", ({ layerId, state }) => {
+  // state: 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'failed'
+  console.log(`${layerId} stream: ${state}`);
+
+  if (state === "reconnecting") {
+    showNotification("Connection lost, reconnecting...");
+  } else if (state === "connected") {
+    hideNotification();
+  }
+});
+```
+
+## Error handling
+
+Handle fetch and stream errors:
+
+```javascript
+renderer.on("layer:error", ({ layerId, error }) => {
+  console.error(`${layerId} error:`, error.message);
+});
+
+renderer.on("layer:retry", ({ layerId, attempt, delay }) => {
+  console.log(`Retrying ${layerId} (attempt ${attempt}) in ${delay}ms`);
+});
+```
+
+## Complete example
+
+Here's a complete live tracking example:
+
+```yaml
+type: map
+id: vehicle-tracker
+config:
+  center: [-122.4, 37.8]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+
+layers:
+  - id: vehicles
+    type: circle
+    source:
+      type: geojson
+      url: "https://api.example.com/vehicles"
+      refreshInterval: 5000 # Poll every 5 seconds
+      updateStrategy: merge # Update existing, add new
+      updateKey: "vehicleId" # Match by vehicle ID
+      cache:
+        enabled: false # Don't cache live data
+      loading:
+        enabled: true
+        message: "Loading vehicles..."
+    paint:
+      circle-radius: 10
+      circle-color:
+        - match
+        - ["get", "status"]
+        - "active"
+        - "#22c55e"
+        - "idle"
+        - "#eab308"
+        - "offline"
+        - "#6b7280"
+        - "#6b7280"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: vehicleName
+          - p:
+              - str: "Status: "
+              - property: status
+          - p:
+              - str: "Last update: "
+              - property: lastUpdate
+
+controls:
+  navigation: true
+```
+
+## Best practices
+
+1. **Choose appropriate intervals** - Don't poll more frequently than data changes
+2. **Use merge for entities** - When tracking things with IDs, use merge to avoid flicker
+3. **Set reasonable retry limits** - Don't retry forever if the server is down
+4. **Disable cache for live data** - Ensure you're always getting fresh data
+5. **Handle errors gracefully** - Show users when data isn't updating
+
+## Next steps
+
+- [Interactivity](/guides/interactivity/) - Add popups and hover effects
+- [Examples](/examples/) - See complete working examples

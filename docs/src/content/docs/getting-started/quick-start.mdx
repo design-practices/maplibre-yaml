@@ -1,0 +1,228 @@
+---
+title: Quick Start
+description: Create your first map in 5 minutes
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import LiveMap from "../../../components/LiveMap.astro";
+import YAMLBlock from "../../../components/YAMLBlock.astro";
+
+Let's create a map showing earthquake data in under 5 minutes.
+
+<Steps>
+
+1. **Create an HTML file**
+
+   Create a new file called `index.html`:
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>My First Map</title>
+    <link
+      href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+      }
+      #map {
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script type="module" src="map.js"></script>
+  </body>
+</html>
+```
+
+2. **Create your map configuration**
+
+   Create a file called `map.js`:
+
+```javascript
+import { parseYAML, MapRenderer } from "@maplibre-yaml/core";
+
+const yaml = `
+   type: map
+   id: earthquake-map
+   config:
+     center: [-120, 37]
+     zoom: 5
+     mapStyle: "https://demotiles.maplibre.org/style.json"
+   layers:
+     - id: earthquakes
+       type: circle
+       source:
+         type: geojson
+         url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+       paint:
+         circle-radius: 6
+         circle-color: "#e74c3c"
+         circle-stroke-width: 1
+         circle-stroke-color: "#ffffff"
+   `;
+
+const config = parseYAML(yaml);
+const renderer = new MapRenderer(document.getElementById("map"), config);
+
+renderer.on("layer:loaded", ({ layerId, featureCount }) => {
+  console.log(`Loaded ${featureCount} earthquakes`);
+});
+```
+
+3. **Run a local server**
+
+```bash
+   npx serve .
+```
+
+Open http://localhost:3000 in your browser.
+
+</Steps>
+
+## Result
+
+Here's what you'll see:
+
+<LiveMap
+  yaml={`
+type: map
+id: quickstart-demo
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+`}
+  height="400px"
+  caption="Live earthquake data from USGS"
+/>
+
+## Understanding the configuration
+
+Let's break down the YAML:
+
+<YAMLBlock highlight={[1, 2, 3, 4, 5, 6, 7]} caption="Map configuration">
+  {`type: map                    # Block type (required)
+id: earthquake-map           # Unique identifier
+config:
+  center: [-120, 37]         # [longitude, latitude]
+  zoom: 5                    # Initial zoom level
+  mapStyle: "https://..."    # Base map style URL`}
+</YAMLBlock>
+
+<YAMLBlock highlight={[1, 2, 3, 4, 5, 6]} caption="Layer configuration">
+  {`layers:
+  - id: earthquakes          # Layer identifier
+    type: circle             # Render as circles
+    source:                  # Data source
+      type: geojson
+      url: "https://..."     # GeoJSON URL`}
+</YAMLBlock>
+
+<YAMLBlock highlight={[1, 2, 3, 4, 5]} caption="Styling with paint properties">
+  {`    paint:
+      circle-radius: 6       # Circle size in pixels
+      circle-color: "#e74c3c"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"`}
+</YAMLBlock>
+
+## Add interactivity
+
+Let's make the earthquakes clickable. Update your YAML:
+
+```yaml {18-24}
+type: map
+id: earthquake-map
+config:
+  center: [-120, 37]
+  zoom: 5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: title
+```
+
+<LiveMap
+  yaml={`
+type: map
+id: quickstart-interactive
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: title
+`}
+  height="400px"
+  caption="Click on any earthquake to see details"
+/>
+
+## Add live updates
+
+Make the map refresh automatically every 60 seconds:
+
+```yaml {7-8}
+source:
+  type: geojson
+  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
+  refreshInterval: 60000
+  updateStrategy: replace
+```
+
+## Next steps
+
+You've created your first interactive, live-updating map! Continue learning:
+
+- [Adding Layers](/guides/layers/) - Learn about different layer types and styling
+- [Data Sources](/guides/data-sources/) - Load data from various sources
+- [Live Data](/guides/live-data/) - Polling, streaming, and merge strategies
+- [Examples](/examples/) - See complete real-world examples

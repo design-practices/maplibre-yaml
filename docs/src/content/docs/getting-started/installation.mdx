@@ -1,0 +1,124 @@
+---
+title: Installation
+description: How to install maplibre-yaml in your project
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+## Package installation
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash npm install @maplibre-yaml/core maplibre-gl ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash pnpm add @maplibre-yaml/core maplibre-gl ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash yarn add @maplibre-yaml/core maplibre-gl ```
+  </TabItem>
+</Tabs>
+
+## Required CSS
+
+MapLibre GL JS requires its CSS for proper rendering. Add it to your HTML or import it in your JavaScript:
+
+<Tabs>
+  <TabItem label="HTML">
+    ```html
+    <link
+      href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    ```
+  </TabItem>
+  <TabItem label="JavaScript">
+    ```javascript import 'maplibre-gl/dist/maplibre-gl.css'; ```
+  </TabItem>
+</Tabs>
+
+## Browser usage (CDN)
+
+For quick prototypes or simple pages, you can use maplibre-yaml directly from a CDN:
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <link
+      href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <script type="module">
+      import {
+        parseYAML,
+        MapRenderer,
+      } from "https://unpkg.com/@maplibre-yaml/core";
+
+      // Your map code here
+    </script>
+  </head>
+  <body>
+    <div id="map" style="width: 100%; height: 400px;"></div>
+  </body>
+</html>
+```
+
+## Web component registration
+
+To use the `<ml-map>` web component, import the registration module:
+
+```javascript
+import "@maplibre-yaml/core/web-components";
+```
+
+Then use it in your HTML:
+
+```html
+<ml-map
+  style="width: 100%; height: 400px;"
+  config='{"type":"map","config":{"center":[-74,40],"zoom":10,"mapStyle":"https://demotiles.maplibre.org/style.json"},"layers":[]}'
+>
+</ml-map>
+```
+
+## TypeScript
+
+maplibre-yaml is written in TypeScript and includes type definitions. No additional `@types` packages are needed.
+
+```typescript
+import { parseYAML, MapRenderer } from "@maplibre-yaml/core";
+import type { MapBlock, LayerConfig } from "@maplibre-yaml/core";
+
+const config: MapBlock = parseYAML(yamlString);
+```
+
+## Verify installation
+
+Create a simple test to verify everything is working:
+
+```javascript
+import { parseYAML } from "@maplibre-yaml/core";
+
+const yaml = `
+type: map
+id: test
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers: []
+`;
+
+try {
+  const config = parseYAML(yaml);
+  console.log("✓ maplibre-yaml is working!");
+  console.log("  Map ID:", config.id);
+} catch (error) {
+  console.error("✗ Installation issue:", error.message);
+}
+```
+
+## Next steps
+
+Now that you have maplibre-yaml installed, let's [create your first map](/getting-started/quick-start/).
