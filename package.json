@@ -1,7 +1,7 @@
 {
   "name": "maplibre-yaml",
   "version": "0.1.0",
-  "private": false,
+  "private": true,
   "description": "Declarative Maplibre web maps with YAML configuration",
   "repository": {
     "type": "git",
