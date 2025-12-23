@@ -1,0 +1,120 @@
+---
+// docs/src/components/LiveMap.astro
+interface Props {
+  yaml: string;
+  height?: string;
+  caption?: string;
+}
+
+const { yaml, height = '400px', caption } = Astro.props;
+const id = `map-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+<figure class="live-map-container">
+  <div class="live-map" id={id} style={`height: ${height}`}>
+    <div class="map-loading">Loading map...</div>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script define:vars={{ id, yaml }}>
+  // Dynamic import to avoid SSR issues
+  async function initMap() {
+    const { YAMLParser, MapRenderer } = await import('@maplibre-yaml/core');
+    
+    const container = document.getElementById(id);
+    if (!container) return;
+    
+    try {
+      // Remove loading indicator
+      container.innerHTML = '';
+      
+      // Parse YAML configuration
+      const parsed = YAMLParser.parse(yaml);
+      
+      // Find the first map block
+      let mapBlock = null;
+      for (const page of parsed.pages || []) {
+        for (const block of page.blocks || []) {
+          if (block.type === 'map' || block.type === 'map-fullpage') {
+            mapBlock = block;
+            break;
+          }
+        }
+        if (mapBlock) break;
+      }
+      
+      // If yaml is a direct map config (not full pages structure)
+      if (!mapBlock && parsed.type === 'map') {
+        mapBlock = parsed;
+      }
+      
+      if (!mapBlock) {
+        container.innerHTML = '<div class="map-error">No map block found in configuration</div>';
+        return;
+      }
+      
+      // Render the map
+      const renderer = new MapRenderer(
+        container,
+        mapBlock.config,
+        mapBlock.layers || [],
+        {
+          onLoad: () => {
+            if (mapBlock.controls) {
+              renderer.addControls(mapBlock.controls);
+            }
+          },
+          onError: (err) => {
+            console.error('Map error:', err);
+          }
+        }
+      );
+    } catch (error) {
+      container.innerHTML = `<div class="map-error">Error: ${error.message}</div>`;
+      console.error('Map initialization error:', error);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMap);
+  } else {
+    initMap();
+  }
+</script>
+
+<style>
+  .live-map-container {
+    margin: 1.5rem 0;
+  }
+  
+  .live-map {
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--sl-color-gray-5);
+  }
+  
+  .map-loading,
+  .map-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: var(--sl-color-gray-6);
+    color: var(--sl-color-gray-2);
+  }
+  
+  .map-error {
+    color: var(--sl-color-red);
+    padding: 1rem;
+    text-align: center;
+  }
+  
+  figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+</style>
