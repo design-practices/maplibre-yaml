@@ -123,18 +123,23 @@ export class LayerManager {
 
     if (source.type === "geojson") {
       const geojsonSource = source as unknown as GeoJSONSourceConfig;
+
       if (geojsonSource.url) {
         await this.addGeoJSONSourceFromURL(sourceId, layer.id, geojsonSource);
       } else if (geojsonSource.data) {
-        this.map.addSource(sourceId, {
+        const sourceSpec: any = {
           type: "geojson",
           data: geojsonSource.data,
-          cluster: geojsonSource.cluster,
-          clusterRadius: geojsonSource.clusterRadius,
-          clusterMaxZoom: geojsonSource.clusterMaxZoom,
-          clusterMinPoints: geojsonSource.clusterMinPoints,
-          clusterProperties: geojsonSource.clusterProperties,
-        });
+        };
+
+        // Only add clustering properties if they are defined
+        if (geojsonSource.cluster !== undefined) sourceSpec.cluster = geojsonSource.cluster;
+        if (geojsonSource.clusterRadius !== undefined) sourceSpec.clusterRadius = geojsonSource.clusterRadius;
+        if (geojsonSource.clusterMaxZoom !== undefined) sourceSpec.clusterMaxZoom = geojsonSource.clusterMaxZoom;
+        if (geojsonSource.clusterMinPoints !== undefined) sourceSpec.clusterMinPoints = geojsonSource.clusterMinPoints;
+        if (geojsonSource.clusterProperties !== undefined) sourceSpec.clusterProperties = geojsonSource.clusterProperties;
+
+        this.map.addSource(sourceId, sourceSpec);
       } else if (geojsonSource.stream) {
         this.map.addSource(sourceId, {
           type: "geojson",

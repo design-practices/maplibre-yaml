@@ -5,14 +5,14 @@ template: splash
 hero:
   tagline: Create interactive maps with simple YAML — no JavaScript required
   image:
-    file: ../../assets/houston.webp
+    file: ../../assets/yaml-file-icon.webp
   actions:
     - text: Get Started
       link: /getting-started/introduction/
       icon: right-arrow
       variant: primary
     - text: View on GitHub
-      link: https://github.com/YOUR_USERNAME/maplibre-yaml
+      link: https://github.com/design-practices/maplibre-yaml
       icon: external
 ---
 
@@ -23,8 +23,9 @@ export const heroMapYAML = `type: map
 id: hero-map
 config:
   center: [-74.006, 40.7128]
-  zoom: 11
+  zoom: 5
   mapStyle: "https://demotiles.maplibre.org/style.json"
+  interactive: false
 layers:
   - id: points
     type: circle
@@ -40,14 +41,8 @@ layers:
               coordinates: [-74.006, 40.7128]
             properties:
               name: "New York"
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-75.1652, 39.9526]
-            properties:
-              name: "New Jersey"
     paint:
-      circle-radius: 200
+      circle-radius: 10
       circle-color: "#ff6b6b"
       circle-stroke-width: 2
       circle-stroke-color: "#ffffff"`;
