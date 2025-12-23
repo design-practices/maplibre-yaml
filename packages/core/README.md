@@ -7,16 +7,16 @@
 
 ## Features
 
-### =� **Declarative Map Configuration**
+### =� **Declarative Map Configuration**
 Define your entire maplayers, sources, controls, and interactivityin clean, readable YAML syntax.
 
-### =� **Comprehensive Data Management**
+### =� **Comprehensive Data Management**
 - **HTTP Fetching** with automatic retry and caching
 - **Real-time Updates** via Server-Sent Events (SSE) and WebSocket
 - **Polling** with configurable intervals and merge strategies
 - **Smart Merging** - Replace, merge by key, or window-based appending
 
-### <� **Rich Visualization**
+### <� **Rich Visualization**
 - Support for all MapLibre layer types (circle, line, fill, symbol, heatmap, etc.)
 - Dynamic styling with expressions
 - Multiple data sources (GeoJSON, Vector Tiles, Raster, etc.)
@@ -27,13 +27,13 @@ Define your entire maplayers, sources, controls, and interactivityin clean, re
 - Data-driven legends
 - Map controls (navigation, scale, geolocation, fullscreen)
 
-### � **Performance Optimized**
+### � **Performance Optimized**
 - LRU caching with TTL
 - Request deduplication
 - Non-overlapping polling execution
 - Automatic reconnection for streaming
 
-### =� **Framework Integration**
+### =� **Framework Integration**
 - Vanilla JavaScript/TypeScript
 - Web Components (`<ml-map>`)
 - Astro components (via `@maplibre-yaml/astro`)
@@ -498,6 +498,627 @@ try {
 }
 ```
 
+## Schemas
+
+The schema system is a core component of `@maplibre-yaml/core`, providing type-safe validation and excellent developer experience. All schemas are built with [Zod](https://zod.dev) and automatically generate TypeScript types.
+
+### Schema Architecture
+
+```
+MapConfigSchema
+├── PageConfigSchema (scrollytelling)
+│   ├── SectionSchema
+│   └── StepSchema
+└── MapSchema (single map)
+    ├── MapConfigurationSchema
+    ├── LayerSchema[]
+    ├── SourceSchema[]
+    ├── LegendSchema
+    ├── ControlsSchema
+    └── InteractionSchema
+```
+
+### Map Configuration Schema
+
+The top-level `MapConfigSchema` validates complete map configurations:
+
+```typescript
+import { MapConfigSchema } from '@maplibre-yaml/core/schemas';
+
+const config = MapConfigSchema.parse({
+  type: 'map',
+  id: 'my-map',
+  config: {
+    center: [-122.4, 37.8],
+    zoom: 12,
+    pitch: 0,
+    bearing: 0,
+    style: 'https://demotiles.maplibre.org/style.json',
+    minZoom: 0,
+    maxZoom: 22,
+    bounds: [[-180, -90], [180, 90]],
+    maxBounds: [[-180, -90], [180, 90]],
+    fitBoundsOptions: {
+      padding: 50,
+      maxZoom: 15
+    }
+  },
+  layers: [],
+  sources: [],
+  controls: {},
+  legend: {},
+  interactions: []
+});
+```
+
+### Layer Schema
+
+Supports all MapLibre layer types with full paint and layout properties:
+
+```typescript
+import { LayerSchema } from '@maplibre-yaml/core/schemas';
+
+// Circle layer
+const circleLayer = LayerSchema.parse({
+  id: 'points',
+  type: 'circle',
+  source: 'points-source',
+  paint: {
+    'circle-radius': 6,
+    'circle-color': '#3b82f6',
+    'circle-opacity': 0.8,
+    'circle-stroke-width': 2,
+    'circle-stroke-color': '#ffffff'
+  },
+  layout: {
+    visibility: 'visible'
+  },
+  minzoom: 0,
+  maxzoom: 22,
+  filter: ['==', ['get', 'type'], 'poi']
+});
+
+// Symbol layer with expressions
+const symbolLayer = LayerSchema.parse({
+  id: 'labels',
+  type: 'symbol',
+  source: 'places',
+  layout: {
+    'text-field': ['get', 'name'],
+    'text-size': 12,
+    'text-anchor': 'top',
+    'text-offset': [0, 1],
+    'icon-image': 'marker',
+    'icon-size': 1
+  },
+  paint: {
+    'text-color': '#000000',
+    'text-halo-color': '#ffffff',
+    'text-halo-width': 2
+  }
+});
+
+// Heatmap layer
+const heatmapLayer = LayerSchema.parse({
+  id: 'density',
+  type: 'heatmap',
+  source: 'points',
+  paint: {
+    'heatmap-weight': [
+      'interpolate',
+      ['linear'],
+      ['get', 'value'],
+      0, 0,
+      100, 1
+    ],
+    'heatmap-intensity': 1,
+    'heatmap-radius': 30,
+    'heatmap-opacity': 0.7
+  }
+});
+```
+
+**Supported Layer Types:**
+- `circle` - Point data as circles
+- `line` - Linear features
+- `fill` - Polygon fills
+- `fill-extrusion` - 3D buildings/polygons
+- `symbol` - Icons and text labels
+- `heatmap` - Density visualization
+- `hillshade` - Terrain shading
+- `raster` - Raster tiles
+- `background` - Map background
+
+### Source Schema
+
+Multiple source types with comprehensive configuration options:
+
+#### GeoJSON Source
+
+```typescript
+import { GeoJSONSourceSchema } from '@maplibre-yaml/core/schemas';
+
+const source = GeoJSONSourceSchema.parse({
+  type: 'geojson',
+
+  // Data options (one required)
+  url: 'https://example.com/data.geojson',
+  // OR data: { type: 'FeatureCollection', features: [] },
+  // OR prefetchedData: { type: 'FeatureCollection', features: [] },
+
+  // Fetch strategy
+  fetchStrategy: 'runtime', // 'runtime' | 'build' | 'hybrid'
+
+  // Real-time updates
+  refresh: {
+    refreshInterval: 5000,
+    updateStrategy: 'merge',  // 'replace' | 'merge' | 'append-window'
+    updateKey: 'id',
+    windowSize: 100,
+    windowDuration: 300000,
+    timestampField: 'timestamp'
+  },
+
+  // Streaming
+  stream: {
+    type: 'websocket',  // 'websocket' | 'sse'
+    url: 'wss://example.com/stream',
+    reconnect: true,
+    reconnectMaxAttempts: 10,
+    reconnectDelay: 1000,
+    reconnectMaxDelay: 30000,
+    eventTypes: ['update', 'delete'],
+    protocols: ['v1', 'v2']
+  },
+
+  // Caching
+  cache: {
+    enabled: true,
+    ttl: 300000  // 5 minutes
+  },
+
+  // Loading UI
+  loading: {
+    enabled: true,
+    message: 'Loading data...',
+    showErrorOverlay: true
+  },
+
+  // Clustering
+  cluster: true,
+  clusterRadius: 50,
+  clusterMaxZoom: 14,
+  clusterMinPoints: 2,
+  clusterProperties: {
+    sum: ['+', ['get', 'value']],
+    max: ['max', ['get', 'value']]
+  },
+
+  // Spatial index
+  tolerance: 0.375,
+  buffer: 128,
+  lineMetrics: false,
+  generateId: false
+});
+```
+
+#### Vector Tile Source
+
+```typescript
+import { VectorSourceSchema } from '@maplibre-yaml/core/schemas';
+
+const source = VectorSourceSchema.parse({
+  type: 'vector',
+  tiles: [
+    'https://tiles.example.com/{z}/{x}/{y}.pbf'
+  ],
+  // OR url: 'https://tiles.example.com/tiles.json',
+  minzoom: 0,
+  maxzoom: 14,
+  bounds: [-180, -85.0511, 180, 85.0511],
+  attribution: '© Example Maps'
+});
+```
+
+#### Raster Source
+
+```typescript
+import { RasterSourceSchema } from '@maplibre-yaml/core/schemas';
+
+const source = RasterSourceSchema.parse({
+  type: 'raster',
+  tiles: [
+    'https://tiles.example.com/{z}/{x}/{y}.png'
+  ],
+  tileSize: 256,
+  minzoom: 0,
+  maxzoom: 18,
+  attribution: '© Example Imagery'
+});
+```
+
+#### Image & Video Sources
+
+```typescript
+import { ImageSourceSchema, VideoSourceSchema } from '@maplibre-yaml/core/schemas';
+
+// Image overlay
+const imageSource = ImageSourceSchema.parse({
+  type: 'image',
+  url: 'https://example.com/overlay.png',
+  coordinates: [
+    [-122.5, 37.9],  // top-left
+    [-122.3, 37.9],  // top-right
+    [-122.3, 37.7],  // bottom-right
+    [-122.5, 37.7]   // bottom-left
+  ]
+});
+
+// Video overlay
+const videoSource = VideoSourceSchema.parse({
+  type: 'video',
+  urls: [
+    'https://example.com/video.mp4',
+    'https://example.com/video.webm'
+  ],
+  coordinates: [
+    [-122.5, 37.9],
+    [-122.3, 37.9],
+    [-122.3, 37.7],
+    [-122.5, 37.7]
+  ]
+});
+```
+
+### Controls Schema
+
+Configure map controls with the `ControlsSchema`:
+
+```typescript
+import { ControlsSchema } from '@maplibre-yaml/core/schemas';
+
+const controls = ControlsSchema.parse({
+  navigation: {
+    enabled: true,
+    position: 'top-right',
+    showCompass: true,
+    showZoom: true,
+    visualizePitch: true
+  },
+  scale: {
+    enabled: true,
+    position: 'bottom-left',
+    maxWidth: 100,
+    unit: 'metric'  // 'metric' | 'imperial' | 'nautical'
+  },
+  geolocation: {
+    enabled: true,
+    position: 'top-right',
+    trackUserLocation: true,
+    showUserHeading: true,
+    showAccuracyCircle: true
+  },
+  fullscreen: {
+    enabled: true,
+    position: 'top-right'
+  }
+});
+```
+
+### Legend Schema
+
+Create dynamic legends with the `LegendSchema`:
+
+```typescript
+import { LegendSchema } from '@maplibre-yaml/core/schemas';
+
+const legend = LegendSchema.parse({
+  enabled: true,
+  position: 'bottom-left',
+  title: 'Map Legend',
+  entries: [
+    {
+      label: 'Active',
+      color: '#22c55e',
+      shape: 'circle'  // 'circle' | 'square' | 'line'
+    },
+    {
+      label: 'Delayed',
+      color: '#f59e0b',
+      shape: 'circle'
+    },
+    {
+      label: 'Inactive',
+      color: '#6b7280',
+      shape: 'circle'
+    }
+  ],
+  style: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: '10px',
+    borderRadius: '4px'
+  }
+});
+```
+
+### Interaction Schema
+
+Define click handlers and popups:
+
+```typescript
+import { InteractionSchema } from '@maplibre-yaml/core/schemas';
+
+const interaction = InteractionSchema.parse({
+  type: 'click',
+  layers: ['points', 'polygons'],
+  popup: {
+    content: `
+      <h3>{{name}}</h3>
+      <p>{{description}}</p>
+      <p><strong>Category:</strong> {{category}}</p>
+      <p><strong>Value:</strong> {{value}}</p>
+    `,
+    closeButton: true,
+    closeOnClick: true,
+    maxWidth: '300px',
+    className: 'custom-popup'
+  },
+  action: 'popup'  // 'popup' | 'toggle-visibility' | 'fly-to'
+});
+```
+
+### Scrollytelling Schema (Page Configuration)
+
+For narrative-driven maps with synchronized scrolling:
+
+```typescript
+import { PageConfigSchema } from '@maplibre-yaml/core/schemas';
+
+const page = PageConfigSchema.parse({
+  type: 'page',
+  id: 'story-map',
+  title: 'Urban Growth Story',
+  description: 'Explore urban development over time',
+  sections: [
+    {
+      id: 'intro',
+      type: 'text',
+      title: 'Introduction',
+      content: 'This story explores urban development...',
+      style: {
+        backgroundColor: '#f9fafb',
+        padding: '60px'
+      }
+    },
+    {
+      id: 'map-section',
+      type: 'map',
+      config: {
+        center: [-122.4, 37.8],
+        zoom: 12,
+        style: 'https://demotiles.maplibre.org/style.json'
+      },
+      steps: [
+        {
+          id: 'step1',
+          content: '## 1990s\nUrban core development began...',
+          map: {
+            center: [-122.4, 37.8],
+            zoom: 13,
+            pitch: 0,
+            bearing: 0,
+            duration: 2000
+          },
+          layers: {
+            show: ['buildings-1990'],
+            hide: ['buildings-2000', 'buildings-2010']
+          }
+        },
+        {
+          id: 'step2',
+          content: '## 2000s\nSuburban expansion accelerated...',
+          map: {
+            center: [-122.3, 37.9],
+            zoom: 12,
+            pitch: 45,
+            bearing: -17.6,
+            duration: 2000
+          },
+          layers: {
+            show: ['buildings-1990', 'buildings-2000'],
+            hide: ['buildings-2010']
+          }
+        }
+      ]
+    }
+  ]
+});
+```
+
+### Schema Composition
+
+Schemas can be composed for complex configurations:
+
+```typescript
+import {
+  MapSchema,
+  LayerSchema,
+  GeoJSONSourceSchema,
+  ControlsSchema,
+  LegendSchema
+} from '@maplibre-yaml/core/schemas';
+
+// Build configuration programmatically
+const layer = LayerSchema.parse({ /* ... */ });
+const source = GeoJSONSourceSchema.parse({ /* ... */ });
+const controls = ControlsSchema.parse({ /* ... */ });
+
+const map = MapSchema.parse({
+  type: 'map',
+  id: 'composed-map',
+  config: { /* ... */ },
+  layers: [layer],
+  sources: [{ id: 'my-source', ...source }],
+  controls
+});
+```
+
+### Validation and Error Handling
+
+Schemas provide detailed validation errors:
+
+```typescript
+import { MapConfigSchema } from '@maplibre-yaml/core/schemas';
+import { ZodError } from 'zod';
+
+try {
+  const config = MapConfigSchema.parse(invalidConfig);
+} catch (error) {
+  if (error instanceof ZodError) {
+    error.issues.forEach(issue => {
+      console.error(
+        `${issue.path.join('.')}: ${issue.message}`
+      );
+    });
+    // Example output:
+    // layers.0.source: Required
+    // config.center: Expected array, received string
+    // layers.0.paint.circle-radius: Expected number, received string
+  }
+}
+```
+
+### Safe Parsing
+
+Use `safeParse` for non-throwing validation:
+
+```typescript
+import { LayerSchema } from '@maplibre-yaml/core/schemas';
+
+const result = LayerSchema.safeParse(data);
+
+if (result.success) {
+  // result.data is typed and valid
+  console.log('Valid layer:', result.data);
+} else {
+  // result.error contains validation issues
+  console.error('Validation failed:', result.error.issues);
+}
+```
+
+### Type Inference
+
+Schemas automatically generate TypeScript types:
+
+```typescript
+import { LayerSchema, GeoJSONSourceSchema } from '@maplibre-yaml/core/schemas';
+import type { z } from 'zod';
+
+// Infer types from schemas
+type Layer = z.infer<typeof LayerSchema>;
+type GeoJSONSource = z.infer<typeof GeoJSONSourceSchema>;
+
+// Use inferred types
+const createLayer = (layer: Layer) => {
+  // layer is fully typed with autocomplete
+  console.log(layer.id, layer.type, layer.paint);
+};
+```
+
+### Custom Validation
+
+Extend schemas with custom validation:
+
+```typescript
+import { LayerSchema } from '@maplibre-yaml/core/schemas';
+import { z } from 'zod';
+
+// Add custom refinement
+const CustomLayerSchema = LayerSchema.refine(
+  (layer) => {
+    if (layer.type === 'circle' && layer.paint) {
+      const radius = layer.paint['circle-radius'];
+      return typeof radius === 'number' && radius > 0;
+    }
+    return true;
+  },
+  {
+    message: 'Circle radius must be a positive number'
+  }
+);
+```
+
+### Schema Defaults
+
+Many schemas include sensible defaults:
+
+```typescript
+import { GeoJSONSourceSchema } from '@maplibre-yaml/core/schemas';
+
+const source = GeoJSONSourceSchema.parse({
+  type: 'geojson',
+  url: 'https://example.com/data.geojson'
+  // Defaults applied:
+  // - fetchStrategy: 'runtime'
+  // - cluster: false
+  // - clusterRadius: 50
+  // - tolerance: 0.375
+  // - cache.enabled: true
+  // - loading.enabled: false
+});
+
+console.log(source.fetchStrategy); // 'runtime'
+console.log(source.cluster);       // false
+console.log(source.clusterRadius); // 50
+```
+
+### Available Schemas
+
+All schemas are exported from `@maplibre-yaml/core/schemas`:
+
+```typescript
+import {
+  // Top-level
+  MapConfigSchema,
+  PageConfigSchema,
+
+  // Map components
+  MapSchema,
+  MapConfigurationSchema,
+
+  // Layers
+  LayerSchema,
+  CircleLayerSchema,
+  LineLayerSchema,
+  FillLayerSchema,
+  SymbolLayerSchema,
+  HeatmapLayerSchema,
+
+  // Sources
+  SourceSchema,
+  GeoJSONSourceSchema,
+  VectorSourceSchema,
+  RasterSourceSchema,
+  ImageSourceSchema,
+  VideoSourceSchema,
+
+  // Configuration
+  ControlsSchema,
+  LegendSchema,
+  InteractionSchema,
+
+  // Scrollytelling
+  SectionSchema,
+  StepSchema,
+
+  // Data management
+  RefreshConfigSchema,
+  StreamConfigSchema,
+  CacheConfigSchema,
+  LoadingConfigSchema
+} from '@maplibre-yaml/core/schemas';
+```
+
 ## TypeScript Support
 
 Full TypeScript support with exported types:
@@ -579,7 +1200,7 @@ Contributions are welcome! Please read the [contributing guidelines](../../CONTR
 
 ## License
 
-MIT � [Your Name]
+MIT � [Your Name]
 
 ## Related Packages
 
