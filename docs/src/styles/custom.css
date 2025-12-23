@@ -1,0 +1,46 @@
+/* MapLibre GL overrides for docs */
+.maplibregl-map {
+  font-family: inherit;
+}
+
+/* Live map containers */
+.live-map-container {
+  --map-border-radius: 8px;
+}
+
+/* Code block enhancements */
+.expressive-code {
+  margin: 1.5rem 0;
+}
+
+/* Schema tables */
+.schema-table code {
+  white-space: nowrap;
+}
+
+/* Improve sidebar scrolling */
+.sidebar-content {
+  scrollbar-width: thin;
+}
+
+/* Hero section map */
+.hero .live-map-container {
+  margin-top: 2rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .live-map {
+    height: 250px !important;
+  }
+}
+
+/* Dark mode adjustments for maps */
+[data-theme='dark'] .maplibregl-popup-content {
+  background: var(--sl-color-gray-6);
+  color: var(--sl-color-white);
+}
+
+[data-theme='dark'] .maplibregl-popup-tip {
+  border-top-color: var(--sl-color-gray-6);
+}

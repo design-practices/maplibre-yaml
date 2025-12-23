@@ -11,12 +11,8 @@ export default defineConfig({
       description: "Declarative web maps with YAML configuration",
 
       logo: {
-        src: "./src/assets/logo.svg",
+        src: "./src/assets/houston.webp",
         replacesTitle: false,
-      },
-
-      social: {
-        github: "https://github.com/design-practices/maplibre-yaml",
       },
 
       editLink: {
