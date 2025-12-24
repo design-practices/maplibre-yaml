@@ -3,8 +3,8 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
 export default defineConfig({
-  site: "https://design-practices.github.io",
-  base: "/maplibre-yaml",
+  site: "https://docs.maplibre-yaml.org",
+  base: "/",
   integrations: [
     starlight({
       title: "maplibre-yaml",
