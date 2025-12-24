@@ -1,0 +1,476 @@
+---
+title: Interactivity
+description: User interactions, events, and dynamic behavior
+---
+
+Interactivity in maplibre-yaml is primarily configured through:
+- **Map Controls** - Navigation, scale, geolocation, fullscreen
+- **Legends** - Interactive layer information
+- **Layer Interactions** - Click, hover, and pointer events (configured at layer level)
+
+## Map Controls
+
+Map controls provide standard UI elements for map interaction. See [Map Configuration](/schema/map-config/) for detailed control configuration.
+
+### Available Controls
+
+```yaml
+controls:
+  navigation: true      # Zoom and rotation controls
+  geolocate: true       # User geolocation button
+  scale: true           # Distance scale
+  fullscreen: true      # Fullscreen toggle
+  attribution: true     # Attribution text
+```
+
+### Control Positioning
+
+Each control can be positioned independently:
+
+```yaml
+controls:
+  navigation:
+    enabled: true
+    position: top-left
+  scale:
+    enabled: true
+    position: bottom-right
+```
+
+**Available positions:**
+- `top-left`
+- `top-right`
+- `bottom-left`
+- `bottom-right`
+
+## Interactive Legends
+
+Legends display layer information and can be positioned anywhere on the map.
+
+### Basic Legend
+
+```yaml
+legend:
+  title: "Map Features"
+  position: top-right
+  collapsed: false
+```
+
+### Custom Legend Items
+
+```yaml
+legend:
+  title: "Data Categories"
+  position: top-left
+  items:
+    - color: "#e74c3c"
+      label: "High Priority"
+      shape: circle
+    - color: "#f39c12"
+      label: "Medium Priority"
+      shape: circle
+    - color: "#2ecc71"
+      label: "Low Priority"
+      shape: circle
+```
+
+### Legend Item Shapes
+
+- `circle` - Circular symbol
+- `square` - Square symbol
+- `line` - Line symbol
+- `icon` - Custom icon (requires `icon` property)
+
+```yaml
+legend:
+  title: "Transportation"
+  items:
+    - color: "#3b82f6"
+      label: "Highway"
+      shape: line
+    - color: "#10b981"
+      label: "Local Road"
+      shape: line
+    - color: "#000000"
+      label: "Restaurant"
+      shape: icon
+      icon: "restaurant"
+```
+
+## Map Interaction Settings
+
+Control which user interactions are enabled.
+
+### Disable All Interactions
+
+Create a static presentation map:
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  interactive: false
+  mapStyle: "..."
+```
+
+### Selective Interactions
+
+Enable specific interactions:
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  scrollZoom: true
+  dragPan: true
+  dragRotate: false      # Disable rotation
+  touchPitch: false      # Disable pitch on mobile
+  doubleClickZoom: false # Disable double-click zoom
+  mapStyle: "..."
+```
+
+### Interaction Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `interactive` | boolean | `true` | Enable all interactions |
+| `scrollZoom` | boolean | `true` | Scroll to zoom |
+| `boxZoom` | boolean | `true` | Shift+drag box zoom |
+| `dragRotate` | boolean | `true` | Right-drag to rotate |
+| `dragPan` | boolean | `true` | Drag to pan |
+| `keyboard` | boolean | `true` | Keyboard shortcuts |
+| `doubleClickZoom` | boolean | `true` | Double-click zoom |
+| `touchZoomRotate` | boolean | `true` | Touch zoom/rotate |
+| `touchPitch` | boolean | `true` | Two-finger pitch |
+
+## Layer Interactivity
+
+Layer-level interactivity is configured through MapLibre's event system. While the schema doesn't explicitly define event handlers (as they're runtime JavaScript), you can configure interactive styling.
+
+### Interactive Layer Styling
+
+Use MapLibre expressions to create interactive visual feedback:
+
+```yaml
+- id: interactive-fill
+  type: fill
+  source:
+    type: geojson
+    url: "https://example.com/regions.geojson"
+  paint:
+    fill-color:
+      - case
+      - ["boolean", ["feature-state", "hover"], false]
+      - "#3b82f6"  # Blue when hovered
+      - "#e5e7eb"  # Gray otherwise
+    fill-opacity:
+      - case
+      - ["boolean", ["feature-state", "hover"], false]
+      - 0.8
+      - 0.5
+```
+
+### Clickable Features
+
+Layers with interactive styling can respond to user clicks when implemented in the runtime renderer:
+
+```yaml
+- id: clickable-points
+  type: circle
+  source:
+    type: geojson
+    url: "https://example.com/points.geojson"
+  paint:
+    circle-radius: 8
+    circle-color:
+      - case
+      - ["boolean", ["feature-state", "selected"], false]
+      - "#dc2626"  # Red when selected
+      - "#3b82f6"  # Blue otherwise
+    circle-stroke-width: 2
+    circle-stroke-color: "#ffffff"
+```
+
+## Keyboard Shortcuts
+
+When keyboard interaction is enabled (`keyboard: true`), the following shortcuts are available:
+
+| Keys | Action |
+|------|--------|
+| `+` / `=` | Zoom in |
+| `-` | Zoom out |
+| Arrow keys | Pan map |
+| Shift + Arrow keys | Rotate map |
+| Shift + `+` / `-` | Increase/decrease pitch |
+
+### Disable Keyboard
+
+```yaml
+config:
+  center: [0, 0]
+  zoom: 2
+  keyboard: false
+  mapStyle: "..."
+```
+
+## Touch Interactions
+
+Control touch gestures on mobile devices.
+
+### Enable All Touch
+
+```yaml
+config:
+  center: [0, 0]
+  zoom: 2
+  touchZoomRotate: true
+  touchPitch: true
+  mapStyle: "..."
+```
+
+### Disable Pitch on Touch
+
+Prevent accidental camera tilt:
+
+```yaml
+config:
+  center: [0, 0]
+  zoom: 2
+  touchZoomRotate: true
+  touchPitch: false
+  mapStyle: "..."
+```
+
+## URL Hash Syncing
+
+Sync map state (center, zoom, bearing, pitch) with the URL hash for bookmarkable views.
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  hash: true  # Enable URL hash syncing
+  mapStyle: "..."
+```
+
+When enabled, the URL will update as users interact with the map:
+```
+https://example.com/map#12/40.7128/-74.006
+```
+
+## Cursor Styling
+
+The map automatically changes the cursor to indicate interactivity:
+- Default cursor over the map
+- Pointer cursor over interactive features
+- Grab cursor when dragging
+
+## Complete Examples
+
+### Fully Interactive Map
+
+```yaml
+- type: map
+  id: interactive-map
+  config:
+    center: [-74.006, 40.7128]
+    zoom: 12
+    hash: true
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: buildings
+      type: fill
+      source:
+        type: geojson
+        url: "https://example.com/buildings.geojson"
+      paint:
+        fill-color:
+          - case
+          - ["boolean", ["feature-state", "hover"], false]
+          - "#3b82f6"
+          - "#cbd5e1"
+        fill-opacity: 0.7
+  controls:
+    navigation: true
+    geolocate: true
+    scale: true
+    fullscreen: true
+  legend:
+    title: "Buildings"
+    position: top-right
+    items:
+      - color: "#cbd5e1"
+        label: "Building"
+        shape: square
+      - color: "#3b82f6"
+        label: "Hovered"
+        shape: square
+```
+
+### Limited Interaction Map
+
+```yaml
+- type: map
+  id: limited-map
+  config:
+    center: [0, 20]
+    zoom: 2
+    scrollZoom: true
+    dragPan: true
+    dragRotate: false
+    touchPitch: false
+    doubleClickZoom: false
+    keyboard: false
+    minZoom: 1
+    maxZoom: 8
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: data-layer
+      type: circle
+      source:
+        type: geojson
+        url: "https://example.com/data.geojson"
+      paint:
+        circle-radius: 6
+        circle-color: "#3b82f6"
+  controls:
+    navigation: true
+    scale: true
+  legend:
+    title: "Data Points"
+    position: top-left
+```
+
+### Static Presentation Map
+
+```yaml
+- type: map
+  id: static-map
+  style: "height: 500px;"
+  config:
+    center: [-74.006, 40.7128]
+    zoom: 12
+    pitch: 45
+    bearing: -30
+    interactive: false
+    attributionControl: false
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: buildings
+      type: fill-extrusion
+      source:
+        type: vector
+        url: "https://demotiles.maplibre.org/tiles/tiles.json"
+      source-layer: building
+      paint:
+        fill-extrusion-color: "#aaa"
+        fill-extrusion-height: ["get", "height"]
+        fill-extrusion-opacity: 0.8
+  legend:
+    title: "3D Buildings"
+    position: bottom-right
+    items:
+      - color: "#aaa"
+        label: "Building"
+        shape: square
+```
+
+### Touch-Optimized Mobile Map
+
+```yaml
+- type: map
+  id: mobile-map
+  config:
+    center: [-74.006, 40.7128]
+    zoom: 12
+    touchZoomRotate: true
+    touchPitch: false        # Disable pitch to prevent accidental tilts
+    dragRotate: false        # Disable rotation
+    keyboard: false          # Not needed on mobile
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: points
+      type: circle
+      source:
+        type: geojson
+        url: "https://example.com/points.geojson"
+      paint:
+        circle-radius: 12     # Larger for touch targets
+        circle-color: "#3b82f6"
+        circle-stroke-width: 2
+        circle-stroke-color: "#ffffff"
+  controls:
+    navigation:
+      enabled: true
+      position: top-right
+    geolocate:
+      enabled: true
+      position: top-right
+    scale:
+      enabled: true
+      position: bottom-left
+  legend:
+    title: "Locations"
+    position: top-left
+    collapsed: true          # Start collapsed on mobile
+```
+
+## Best Practices
+
+### Performance
+
+1. **Limit interactive features**: Too many interactive features can impact performance
+2. **Use feature-state**: Prefer feature-state for hover/select styling over re-rendering
+3. **Throttle updates**: Limit update frequency for real-time data sources
+
+### User Experience
+
+1. **Provide visual feedback**: Use hover states to indicate clickable features
+2. **Clear controls**: Position controls logically and consistently
+3. **Mobile-first**: Disable complex gestures like pitch on mobile
+4. **Accessibility**: Include keyboard navigation and clear visual indicators
+
+### Map Constraints
+
+1. **Set zoom limits**: Use `minZoom`/`maxZoom` to keep users in relevant area
+2. **Geographic bounds**: Use `maxBounds` to restrict panning
+3. **Disable unnecessary interactions**: Remove interactions that don't serve your use case
+
+## TypeScript Types
+
+```typescript
+import {
+  type ControlsConfig,
+  type LegendConfig,
+  type MapConfig
+} from '@maplibre-yaml/core/schemas';
+
+const controls: ControlsConfig = {
+  navigation: {
+    enabled: true,
+    position: "top-right"
+  },
+  scale: true,
+  geolocate: true
+};
+
+const legend: LegendConfig = {
+  title: "Features",
+  position: "top-left",
+  collapsed: false,
+  items: [
+    { color: "#ff0000", label: "High", shape: "circle" },
+    { color: "#00ff00", label: "Low", shape: "circle" }
+  ]
+};
+
+const interactiveConfig: MapConfig = {
+  center: [-74.006, 40.7128],
+  zoom: 12,
+  mapStyle: "https://demotiles.maplibre.org/style.json",
+  interactive: true,
+  scrollZoom: true,
+  dragPan: true,
+  hash: true
+};
+```

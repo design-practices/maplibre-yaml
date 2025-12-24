@@ -1,0 +1,176 @@
+---
+title: Schema Overview
+description: Understanding the maplibre-yaml configuration schema
+---
+
+The maplibre-yaml schema is built on [Zod](https://zod.dev), providing type-safe configuration with automatic validation and TypeScript type inference.
+
+## Architecture
+
+The schema follows a hierarchical structure:
+
+```
+RootSchema
+├── GlobalConfig (optional)
+├── Layers (optional, named definitions)
+├── Sources (optional, named definitions)
+└── Pages (array, required)
+    └── PageSchema
+        ├── path
+        ├── title
+        └── blocks (array)
+            ├── ContentBlock
+            ├── MapBlock
+            ├── ScrollytellingBlock
+            └── MixedBlock
+```
+
+## Core Concepts
+
+### Type Safety
+
+All configuration is validated at parse time:
+
+```typescript
+import { YAMLParser } from '@maplibre-yaml/core';
+
+const result = YAMLParser.safeParse(yaml);
+if (result.success) {
+  // result.data is fully typed
+  console.log(result.data.pages[0].title);
+} else {
+  // result.errors contains detailed validation errors
+  console.error(result.errors);
+}
+```
+
+### Schema Composition
+
+Schemas are composed from smaller, reusable schemas:
+
+- **Base schemas**: LngLat, ZoomLevel, Color, Expression
+- **Source schemas**: GeoJSON, Vector, Raster, Image, Video
+- **Layer schemas**: Circle, Line, Fill, Symbol, Heatmap, etc.
+- **Block schemas**: Content, Map, Scrollytelling, Mixed
+- **Page schemas**: Page, Root, GlobalConfig
+
+### Default Values
+
+Many properties have sensible defaults:
+
+```yaml
+config:
+  center: [0, 0]
+  zoom: 2
+  # pitch defaults to 0
+  # bearing defaults to 0
+  # interactive defaults to true
+```
+
+### Optional vs Required
+
+Required properties will cause validation errors if missing:
+
+```yaml
+# ✅ Valid - all required fields present
+type: map
+id: my-map
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+
+# ❌ Invalid - missing required 'mapStyle'
+type: map
+id: my-map
+config:
+  center: [0, 0]
+  zoom: 2
+```
+
+## Validation
+
+### Error Messages
+
+The schema provides detailed, human-readable error messages:
+
+```typescript
+const result = YAMLParser.safeParse(invalidYaml);
+if (!result.success) {
+  result.errors.forEach(err => {
+    console.log(`${err.path}: ${err.message}`);
+  });
+}
+```
+
+Example errors:
+
+```
+pages[0].blocks[0].config.zoom: Expected number, got string
+pages[0].blocks[1].layers[0].type: Invalid enum value. Expected 'circle' | 'line' | 'fill' | 'symbol' | 'raster' | 'hillshade' | 'heatmap' | 'fill-extrusion' | 'background', received 'invalid'
+```
+
+### Custom Validation
+
+Some schemas include custom validation rules:
+
+```typescript
+// Zoom level must be 0-24
+zoom: z.number().min(0).max(24)
+
+// LngLat must be [lon, lat] where lon is -180 to 180, lat is -90 to 90
+center: z.tuple([
+  z.number().min(-180).max(180),
+  z.number().min(-90).max(90)
+])
+```
+
+## Reference Resolution
+
+The schema supports `$ref` pointers to reuse layers and sources:
+
+```yaml
+# Define once
+layers:
+  myLayer:
+    id: shared-layer
+    type: circle
+    source: {...}
+
+# Reference multiple times
+pages:
+  - path: "/"
+    blocks:
+      - type: map
+        id: map1
+        layers:
+          - $ref: "#/layers/myLayer"
+      - type: map
+        id: map2
+        layers:
+          - $ref: "#/layers/myLayer"
+```
+
+## Type Inference
+
+Use Zod's type inference for TypeScript projects:
+
+```typescript
+import { RootSchema, type z } from '@maplibre-yaml/core/schemas';
+
+type RootConfig = z.infer<typeof RootSchema>;
+type PageConfig = RootConfig['pages'][number];
+type MapBlock = Extract<PageConfig['blocks'][number], { type: 'map' }>;
+```
+
+## Next Steps
+
+Explore specific schema sections:
+
+- [Root Configuration](/schema/root/) - Top-level configuration
+- [Pages & Blocks](/schema/pages/) - Page and block structure
+- [Map Configuration](/schema/map-config/) - Map settings and properties
+- [Data Sources](/schema/sources/) - GeoJSON, Vector, Raster sources
+- [Layer Types](/schema/layers/) - All layer types and styling
+- [Interactivity](/schema/interactivity/) - Events, popups, and controls
+- [Scrollytelling](/schema/scrollytelling/) - Narrative maps with chapters

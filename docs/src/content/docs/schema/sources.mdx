@@ -1,0 +1,649 @@
+---
+title: Data Sources
+description: GeoJSON, Vector, Raster, Image, and Video sources with real-time updates
+---
+
+Data sources provide the data for map layers. maplibre-yaml supports all MapLibre GL JS source types with enhanced features for dynamic data loading, real-time updates, and streaming.
+
+## Source Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `geojson` | GeoJSON point, line, and polygon data | Primary data source, supports real-time updates |
+| `vector` | Vector tiles (Mapbox Vector Tiles) | Efficient large datasets, base maps |
+| `raster` | Raster tile imagery | Satellite imagery, hillshading |
+| `image` | Single image overlay | Map overlays, floor plans |
+| `video` | Video overlay | Animated overlays |
+
+## GeoJSON Source
+
+The primary data source type with comprehensive support for dynamic data loading.
+
+### Data Loading Strategies
+
+| Strategy | Description | When to Use |
+|----------|-------------|-------------|
+| `runtime` (default) | Fetch when map loads | Keep bundle small, fresh data |
+| `build` | Fetch at build time | Faster load, static data |
+| `hybrid` | Build-time with runtime refresh | Best of both: fast initial + updates |
+
+### Basic Structure
+
+```yaml
+source:
+  type: geojson
+  url: "https://example.com/data.geojson"
+  fetchStrategy: runtime
+```
+
+### Data Source Options
+
+**One of these is required:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `url` | string | URL to fetch GeoJSON data |
+| `data` | object | Inline GeoJSON object |
+| `prefetchedData` | object | Pre-fetched data from build time |
+
+### Examples
+
+#### URL Source
+
+```yaml
+source:
+  type: geojson
+  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+```
+
+#### Inline Data
+
+```yaml
+source:
+  type: geojson
+  data:
+    type: FeatureCollection
+    features:
+      - type: Feature
+        geometry:
+          type: Point
+          coordinates: [-74.006, 40.7128]
+        properties:
+          name: "New York"
+          population: 8336817
+      - type: Feature
+        geometry:
+          type: Point
+          coordinates: [-118.2437, 34.0522]
+        properties:
+          name: "Los Angeles"
+          population: 3979576
+```
+
+#### Build-Time Fetch
+
+```yaml
+source:
+  type: geojson
+  url: "https://example.com/static-data.geojson"
+  fetchStrategy: build
+```
+
+## Real-Time Updates
+
+### Polling Updates
+
+Periodically refresh data from a URL.
+
+```yaml
+source:
+  type: geojson
+  url: "https://api.example.com/live-data"
+  refresh:
+    refreshInterval: 5000        # Fetch every 5 seconds
+    updateStrategy: replace      # Replace all data
+```
+
+### Update Strategies
+
+| Strategy | Description | Use Case |
+|----------|-------------|----------|
+| `replace` | Replace all data | Complete data refresh |
+| `merge` | Merge by unique key | Update/add features |
+| `append-window` | Append with size/time limits | Time-series data |
+
+#### Replace Strategy
+
+```yaml
+source:
+  type: geojson
+  url: "https://api.example.com/current-weather"
+  refresh:
+    refreshInterval: 300000  # 5 minutes
+    updateStrategy: replace
+```
+
+#### Merge Strategy
+
+Update existing features by unique key:
+
+```yaml
+source:
+  type: geojson
+  url: "https://api.example.com/vehicles"
+  refresh:
+    refreshInterval: 10000
+    updateStrategy: merge
+    updateKey: "vehicleId"  # Required for merge
+```
+
+#### Append-Window Strategy
+
+Keep only recent data:
+
+```yaml
+source:
+  type: geojson
+  url: "https://api.example.com/events"
+  refresh:
+    refreshInterval: 15000
+    updateStrategy: append-window
+    windowSize: 100              # Max 100 features
+    windowDuration: 3600000      # Max 1 hour old
+    timestampField: "timestamp"  # Feature property with timestamp
+```
+
+## Streaming Data
+
+Real-time data via WebSocket or Server-Sent Events.
+
+### WebSocket
+
+```yaml
+source:
+  type: geojson
+  stream:
+    type: websocket
+    url: "wss://api.example.com/stream"
+    reconnect: true
+    reconnectMaxAttempts: 10
+    reconnectDelay: 1000
+    reconnectMaxDelay: 30000
+    protocols: ["json", "v1"]
+  refresh:
+    updateStrategy: merge
+    updateKey: "id"
+```
+
+### Server-Sent Events (SSE)
+
+```yaml
+source:
+  type: geojson
+  stream:
+    type: sse
+    url: "https://api.example.com/events"
+    eventTypes: ["update", "delete", "create"]
+    reconnect: true
+  refresh:
+    updateStrategy: merge
+    updateKey: "id"
+```
+
+### Streaming Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `type` | `"websocket"` \| `"sse"` | - | Connection type |
+| `url` | string | - | Endpoint URL |
+| `reconnect` | boolean | `true` | Auto-reconnect on disconnect |
+| `reconnectMaxAttempts` | number | `10` | Max reconnection attempts |
+| `reconnectDelay` | number | `1000` | Initial reconnect delay (ms) |
+| `reconnectMaxDelay` | number | `30000` | Max reconnect delay (ms) |
+| `eventTypes` | string[] | - | SSE event types to listen for |
+| `protocols` | string \| string[] | - | WebSocket sub-protocols |
+
+## Point Clustering
+
+Automatically cluster nearby points at lower zoom levels.
+
+```yaml
+source:
+  type: geojson
+  url: "https://example.com/points.geojson"
+  cluster: true
+  clusterRadius: 50
+  clusterMaxZoom: 14
+  clusterMinPoints: 2
+```
+
+### Clustering Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `cluster` | boolean | `false` | Enable clustering |
+| `clusterRadius` | number | `50` | Cluster radius in pixels |
+| `clusterMaxZoom` | number | - | Max zoom to cluster |
+| `clusterMinPoints` | number | `2` | Min points to form cluster |
+| `clusterProperties` | object | - | Aggregate cluster properties |
+
+### Cluster Properties Example
+
+Calculate aggregates for clusters:
+
+```yaml
+source:
+  type: geojson
+  url: "https://example.com/earthquakes.geojson"
+  cluster: true
+  clusterRadius: 50
+  clusterMaxZoom: 14
+  clusterProperties:
+    maxMagnitude: ["max", ["get", "magnitude"]]
+    avgMagnitude: ["avg", ["get", "magnitude"]]
+    count: ["+", 1]
+```
+
+## Loading UI
+
+Configure loading indicators while data is fetching.
+
+```yaml
+source:
+  type: geojson
+  url: "https://example.com/large-dataset.geojson"
+  loading:
+    enabled: true
+    message: "Loading earthquake data..."
+    showErrorOverlay: true
+```
+
+### Loading Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enabled` | boolean | `false` | Show loading overlay |
+| `message` | string | - | Custom loading message |
+| `showErrorOverlay` | boolean | `true` | Show errors in overlay |
+
+## Caching
+
+Control HTTP caching behavior.
+
+```yaml
+source:
+  type: geojson
+  url: "https://example.com/data.geojson"
+  cache:
+    enabled: true
+    ttl: 300000  # 5 minutes
+```
+
+### Cache Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable HTTP caching |
+| `ttl` | number | - | Cache TTL in milliseconds |
+
+## Additional GeoJSON Options
+
+MapLibre GL JS GeoJSON options are supported:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `tolerance` | number | Simplification tolerance |
+| `buffer` | number | Tile buffer size |
+| `lineMetrics` | boolean | Enable line distance metrics |
+| `generateId` | boolean | Auto-generate feature IDs |
+| `promoteId` | string \| object | Promote property to feature ID |
+| `attribution` | string | Attribution text |
+
+### Example
+
+```yaml
+source:
+  type: geojson
+  url: "https://example.com/lines.geojson"
+  lineMetrics: true
+  tolerance: 0.375
+  buffer: 128
+  attribution: "© Data Provider"
+```
+
+## Vector Source
+
+Vector tiles for efficient large dataset rendering.
+
+### Structure
+
+```yaml
+source:
+  type: vector
+  url: "https://api.maptiler.com/tiles/v3/tiles.json?key=YOUR_KEY"
+```
+
+or
+
+```yaml
+source:
+  type: vector
+  tiles:
+    - "https://tile.example.com/{z}/{x}/{y}.pbf"
+  minzoom: 0
+  maxzoom: 14
+```
+
+### Vector Properties
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `url` | string | One of url/tiles | TileJSON URL |
+| `tiles` | string[] | One of url/tiles | Tile URL templates |
+| `minzoom` | number | No | Minimum zoom level |
+| `maxzoom` | number | No | Maximum zoom level |
+| `bounds` | number[] | No | Bounds [west, south, east, north] |
+| `scheme` | `"xyz"` \| `"tms"` | No | Tile coordinate scheme |
+| `attribution` | string | No | Attribution text |
+
+### Example
+
+```yaml
+source:
+  type: vector
+  tiles:
+    - "https://demotiles.maplibre.org/tiles/{z}/{x}/{y}.pbf"
+  minzoom: 0
+  maxzoom: 14
+  bounds: [-180, -85, 180, 85]
+  attribution: "© MapLibre"
+```
+
+## Raster Source
+
+Raster tile imagery for satellite, terrain, etc.
+
+### Structure
+
+```yaml
+source:
+  type: raster
+  tiles:
+    - "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+  tileSize: 256
+  maxzoom: 19
+  attribution: "© OpenStreetMap contributors"
+```
+
+### Raster Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `url` | string | - | TileJSON URL |
+| `tiles` | string[] | - | Tile URL templates |
+| `tileSize` | number | `512` | Tile size in pixels |
+| `minzoom` | number | - | Minimum zoom level |
+| `maxzoom` | number | - | Maximum zoom level |
+| `bounds` | number[] | - | Bounds [west, south, east, north] |
+| `scheme` | `"xyz"` \| `"tms"` | - | Tile coordinate scheme |
+| `attribution` | string | - | Attribution text |
+
+### Example
+
+```yaml
+source:
+  type: raster
+  tiles:
+    - "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+  tileSize: 256
+  maxzoom: 19
+  attribution: "Esri, Maxar, Earthstar Geographics"
+```
+
+## Image Source
+
+Single image overlay anchored to geographic coordinates.
+
+### Structure
+
+Four corner coordinates must be specified clockwise starting from top-left:
+1. Top-left
+2. Top-right
+3. Bottom-right
+4. Bottom-left
+
+```yaml
+source:
+  type: image
+  url: "https://example.com/overlay.png"
+  coordinates:
+    - [-80.425, 46.437]  # top-left
+    - [-71.516, 46.437]  # top-right
+    - [-71.516, 37.936]  # bottom-right
+    - [-80.425, 37.936]  # bottom-left
+```
+
+### Image Properties
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `url` | string | Yes | Image URL |
+| `coordinates` | array | Yes | Four corner coordinates [topLeft, topRight, bottomRight, bottomLeft] |
+
+### Example
+
+```yaml
+- id: map-overlay
+  type: raster
+  source:
+    type: image
+    url: "https://example.com/historical-map-1890.png"
+    coordinates:
+      - [-80.425, 46.437]
+      - [-71.516, 46.437]
+      - [-71.516, 37.936]
+      - [-80.425, 37.936]
+  paint:
+    raster-opacity: 0.7
+```
+
+## Video Source
+
+Video content overlay anchored to geographic coordinates.
+
+### Structure
+
+```yaml
+source:
+  type: video
+  urls:
+    - "https://example.com/video.mp4"
+    - "https://example.com/video.webm"
+  coordinates:
+    - [-122.51596391201019, 37.56238816766053]
+    - [-122.51467645168304, 37.56410183312965]
+    - [-122.51309394836426, 37.563391708549425]
+    - [-122.51423120498657, 37.56161849366671]
+```
+
+### Video Properties
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `urls` | string[] | Yes | Video URLs for browser compatibility |
+| `coordinates` | array | Yes | Four corner coordinates [topLeft, topRight, bottomRight, bottomLeft] |
+
+### Example
+
+```yaml
+- id: video-overlay
+  type: raster
+  source:
+    type: video
+    urls:
+      - "https://example.com/drone-footage.mp4"
+      - "https://example.com/drone-footage.webm"
+    coordinates:
+      - [-122.51596391201019, 37.56238816766053]
+      - [-122.51467645168304, 37.56410183312965]
+      - [-122.51309394836426, 37.563391708549425]
+      - [-122.51423120498657, 37.56161849366671]
+  paint:
+    raster-opacity: 0.85
+```
+
+## Named Source Definitions
+
+Define sources once and reference them in layers.
+
+```yaml
+sources:
+  earthquakeData:
+    type: geojson
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    refresh:
+      refreshInterval: 300000
+      updateStrategy: replace
+
+  satelliteImagery:
+    type: raster
+    tiles:
+      - "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+    tileSize: 256
+    maxzoom: 19
+
+pages:
+  - path: "/"
+    title: "Home"
+    blocks:
+      - type: map
+        id: main-map
+        config:
+          center: [0, 0]
+          zoom: 2
+          mapStyle: "..."
+        layers:
+          - id: quakes
+            type: circle
+            source: "#/sources/earthquakeData"
+            paint:
+              circle-radius: 6
+              circle-color: "#e74c3c"
+```
+
+## Complete Examples
+
+### Real-Time Vehicle Tracking
+
+```yaml
+- id: vehicles
+  type: circle
+  source:
+    type: geojson
+    stream:
+      type: websocket
+      url: "wss://api.example.com/vehicles"
+      reconnect: true
+    refresh:
+      updateStrategy: merge
+      updateKey: "vehicleId"
+    loading:
+      enabled: true
+      message: "Connecting to vehicle stream..."
+  paint:
+    circle-radius: 8
+    circle-color:
+      - match
+      - ["get", "status"]
+      - "active"
+      - "#10b981"
+      - "idle"
+      - "#f59e0b"
+      - "#6b7280"
+```
+
+### Time-Series Event Data
+
+```yaml
+- id: events
+  type: circle
+  source:
+    type: geojson
+    url: "https://api.example.com/events"
+    refresh:
+      refreshInterval: 30000
+      updateStrategy: append-window
+      windowSize: 1000
+      windowDuration: 3600000
+      timestampField: "eventTime"
+  paint:
+    circle-radius: 6
+    circle-color: "#3b82f6"
+    circle-opacity:
+      - interpolate
+      - ["linear"]
+      - ["get", "age"]
+      - 0
+      - 1
+      - 3600000
+      - 0.2
+```
+
+### Clustered Points with Custom Properties
+
+```yaml
+- id: earthquakes
+  type: circle
+  source:
+    type: geojson
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    cluster: true
+    clusterRadius: 50
+    clusterMaxZoom: 12
+    clusterProperties:
+      maxMagnitude: ["max", ["get", "mag"]]
+      count: ["+", 1]
+  paint:
+    circle-radius:
+      - case
+      - ["has", "point_count"]
+      - ["step", ["get", "point_count"], 20, 10, 30, 50, 40]
+      - 8
+    circle-color:
+      - case
+      - ["has", "point_count"]
+      - ["interpolate", ["linear"], ["get", "maxMagnitude"], 0, "#fef3c7", 8, "#dc2626"]
+      - "#3b82f6"
+```
+
+## TypeScript Types
+
+```typescript
+import {
+  type GeoJSONSource,
+  type VectorSource,
+  type RasterSource,
+  type ImageSource,
+  type VideoSource,
+  type LayerSource,
+  type StreamConfig,
+  type RefreshConfig
+} from '@maplibre-yaml/core/schemas';
+
+const geojsonSource: GeoJSONSource = {
+  type: "geojson",
+  url: "https://example.com/data.geojson",
+  fetchStrategy: "runtime",
+  refresh: {
+    refreshInterval: 5000,
+    updateStrategy: "replace"
+  }
+};
+
+const streamConfig: StreamConfig = {
+  type: "websocket",
+  url: "wss://api.example.com/stream",
+  reconnect: true,
+  reconnectMaxAttempts: 10
+};
+```
