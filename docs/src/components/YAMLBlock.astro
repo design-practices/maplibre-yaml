@@ -1,0 +1,226 @@
+---
+/**
+ * YAMLBlock - Displays syntax-highlighted YAML with optional features.
+ * 
+ * @example
+ * <YAMLBlock caption="Map configuration">
+ * {`type: map
+ * id: demo
+ * config:
+ *   center: [-74, 40]`}
+ * </YAMLBlock>
+ * 
+ * @example With line highlighting
+ * <YAMLBlock highlight={[1, 2, 3]} caption="Important lines">
+ * {`line 1
+ * line 2
+ * line 3`}
+ * </YAMLBlock>
+ */
+
+interface Props {
+  /** Optional caption/title */
+  caption?: string;
+  /** Line numbers to highlight (1-indexed) */
+  highlight?: number[];
+  /** Show line numbers (default: true) */
+  lineNumbers?: boolean;
+  /** Show copy button (default: true) */
+  copyButton?: boolean;
+  /** File name to display */
+  filename?: string;
+}
+
+const { 
+  caption, 
+  highlight = [], 
+  lineNumbers = true, 
+  copyButton = true,
+  filename 
+} = Astro.props;
+
+const id = `yaml-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+<div class="yaml-block not-content">
+  {(caption || filename) && (
+    <div class="yaml-header">
+      {filename && <span class="yaml-filename">{filename}</span>}
+      {caption && <span class="yaml-caption">{caption}</span>}
+    </div>
+  )}
+  
+  <div class="yaml-content">
+    {copyButton && (
+      <button class="yaml-copy" data-target={id} title="Copy to clipboard">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span class="yaml-copy-text">Copy</span>
+      </button>
+    )}
+    
+    <pre id={id} class:list={['yaml-pre', { 'with-line-numbers': lineNumbers }]}><code class="language-yaml" set:html={formatYAML(await Astro.slots.render('default'), highlight, lineNumbers)} /></pre>
+  </div>
+</div>
+
+<script>
+  // Copy button functionality
+  document.querySelectorAll('.yaml-copy').forEach(button => {
+    button.addEventListener('click', async () => {
+      const targetId = button.getAttribute('data-target');
+      const pre = document.getElementById(targetId);
+      if (!pre) return;
+      
+      // Get plain text (without line numbers)
+      const code = pre.querySelector('code');
+      const text = code?.textContent || '';
+      
+      try {
+        await navigator.clipboard.writeText(text);
+        
+        // Show feedback
+        const textEl = button.querySelector('.yaml-copy-text');
+        if (textEl) {
+          const original = textEl.textContent;
+          textEl.textContent = 'Copied!';
+          button.classList.add('copied');
+          
+          setTimeout(() => {
+            textEl.textContent = original;
+            button.classList.remove('copied');
+          }, 2000);
+        }
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
+    });
+  });
+</script>
+
+{/* Helper function to format YAML with line numbers and highlighting */}
+<Fragment set:html={`
+<script>
+  // This runs at build time via set:html
+</script>
+`} />
+
+<style>
+  .yaml-block {
+    margin: 1.5rem 0;
+    border-radius: 8px;
+    border: 1px solid var(--sl-color-gray-5);
+    overflow: hidden;
+    background: var(--sl-color-gray-6);
+  }
+  
+  .yaml-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--sl-color-gray-5);
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    font-size: 0.75rem;
+  }
+  
+  .yaml-filename {
+    font-family: var(--sl-font-mono);
+    color: var(--sl-color-white);
+    background: var(--sl-color-gray-4);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  
+  .yaml-caption {
+    color: var(--sl-color-gray-2);
+  }
+  
+  .yaml-content {
+    position: relative;
+  }
+  
+  .yaml-copy {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    color: var(--sl-color-gray-3);
+    background: var(--sl-color-gray-5);
+    border: 1px solid var(--sl-color-gray-4);
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+    z-index: 10;
+  }
+  
+  .yaml-content:hover .yaml-copy {
+    opacity: 1;
+  }
+  
+  .yaml-copy:hover {
+    background: var(--sl-color-gray-4);
+    color: var(--sl-color-white);
+  }
+  
+  .yaml-copy.copied {
+    color: var(--sl-color-green-high);
+    border-color: var(--sl-color-green);
+  }
+  
+  .yaml-copy svg {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .yaml-pre {
+    margin: 0;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+  }
+  
+  .yaml-pre code {
+    background: none;
+    padding: 0;
+  }
+  
+  /* Line numbers */
+  .yaml-pre.with-line-numbers {
+    padding-left: 3.5rem;
+  }
+  
+  .yaml-pre.with-line-numbers :global(.line) {
+    position: relative;
+  }
+  
+  .yaml-pre.with-line-numbers :global(.line::before) {
+    content: attr(data-line);
+    position: absolute;
+    left: -2.5rem;
+    width: 2rem;
+    text-align: right;
+    color: var(--sl-color-gray-4);
+    font-size: 0.75rem;
+  }
+  
+  /* Highlighted lines */
+  .yaml-pre :global(.line.highlighted) {
+    background: var(--sl-color-accent-low);
+    margin: 0 -1rem;
+    padding: 0 1rem;
+    display: block;
+  }
+  
+  .yaml-pre.with-line-numbers :global(.line.highlighted) {
+    margin-left: -3.5rem;
+    padding-left: 3.5rem;
+  }
+</style>
