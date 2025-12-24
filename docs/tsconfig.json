@@ -1,0 +1,11 @@
+// docs/tsconfig.json
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@components/*": ["src/components/*"],
+      "@maplibre-yaml/core": ["../packages/core/src/index.ts"]
+    }
+  }
+}

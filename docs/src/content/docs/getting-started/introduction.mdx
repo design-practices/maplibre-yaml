@@ -1,0 +1,93 @@
+---
+title: Introduction
+description: Learn what maplibre-yaml is and who it's for
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+# Introduction to maplibre-yaml
+
+**maplibre-yaml** is a library that lets you create interactive web maps using YAML configuration instead of JavaScript code.
+
+## Who Is This For?
+
+### 🎓 Students
+
+Learning web mapping but don't want to write JavaScript? maplibre-yaml lets you focus on cartography and data visualization without the programming overhead.
+
+### 🚀 Developers
+
+Need to prototype maps quickly? Define layers, styling, and interactivity in YAML and iterate faster than ever.
+
+### 📝 Content Creators
+
+Building story maps or data journalism pieces? Use scrollytelling features without touching code.
+
+## How It Works
+
+Instead of this JavaScript:
+
+```javascript
+const map = new maplibregl.Map({
+  container: "map",
+  style: "https://demotiles.maplibre.org/style.json",
+  center: [-74.006, 40.7128],
+  zoom: 12,
+});
+
+map.on("load", () => {
+  map.addSource("bikes", {
+    type: "geojson",
+    data: "https://example.com/bikes.geojson",
+  });
+
+  map.addLayer({
+    id: "bike-lanes",
+    type: "line",
+    source: "bikes",
+    paint: {
+      "line-color": "#00ff00",
+      "line-width": 2,
+    },
+  });
+});
+```
+
+You write this YAML:
+
+```yaml
+type: map
+id: my-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: bike-lanes
+    type: line
+    source:
+      type: geojson
+      url: "https://example.com/bikes.geojson"
+    paint:
+      line-color: "#00ff00"
+      line-width: 2
+```
+
+## Key Features
+
+| Feature                | Description                         |
+| ---------------------- | ----------------------------------- |
+| **Declarative Config** | Define maps in YAML or JSON         |
+| **Runtime Data**       | Fetch GeoJSON when map loads        |
+| **Live Updates**       | WebSocket, SSE, and polling support |
+| **Scrollytelling**     | Narrative story maps                |
+| **Web Components**     | `<ml-map>` works anywhere           |
+| **Type Safety**        | Full TypeScript support             |
+
+## Next Steps
+
+Ready to get started?
+
+1. [Install maplibre-yaml](/getting-started/installation/)
+2. [Create your first map](/getting-started/first-map/)
+3. [Explore the guides](/guides/layers/)

@@ -1,0 +1,71 @@
+---
+/**
+ * ConfigPreview - Shows YAML configuration alongside a live map preview.
+ * 
+ * @example
+ * <ConfigPreview yaml={`...`} caption="Interactive example" />
+ */
+
+import LiveMap from './LiveMap.astro';
+import YAMLBlock from './YAMLBlock.astro';
+
+interface Props {
+  yaml: string;
+  caption?: string;
+  mapHeight?: string;
+  layout?: 'horizontal' | 'vertical';
+}
+
+const { yaml, caption, mapHeight = '350px', layout = 'horizontal' } = Astro.props;
+---
+
+<div class:list={['config-preview', `layout-${layout}`]}>
+  <div class="config-preview-yaml">
+    <YAMLBlock lineNumbers={true} copyButton={true}>
+      {yaml}
+    </YAMLBlock>
+  </div>
+  
+  <div class="config-preview-map">
+    <LiveMap yaml={yaml} height={mapHeight} caption={caption} />
+  </div>
+</div>
+
+<style>
+  .config-preview {
+    display: flex;
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  
+  .layout-horizontal {
+    flex-direction: row;
+  }
+  
+  .layout-vertical {
+    flex-direction: column;
+  }
+  
+  .layout-horizontal .config-preview-yaml,
+  .layout-horizontal .config-preview-map {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .layout-vertical .config-preview-yaml,
+  .layout-vertical .config-preview-map {
+    width: 100%;
+  }
+  
+  /* Remove default margins from nested components */
+  .config-preview :global(.yaml-block),
+  .config-preview :global(.livemap-container) {
+    margin: 0;
+  }
+  
+  @media (max-width: 768px) {
+    .layout-horizontal {
+      flex-direction: column;
+    }
+  }
+</style>

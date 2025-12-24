@@ -1,0 +1,112 @@
+---
+title: maplibre-yaml
+description: Declarative web maps with YAML configuration
+template: splash
+hero:
+  tagline: Create interactive maps with simple YAML — no JavaScript required
+  image:
+    file: ../../assets/yaml-file-icon.webp
+  actions:
+    - text: Get Started
+      link: /getting-started/introduction/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/design-practices/maplibre-yaml
+      icon: external
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+import LiveMap from "../../components/LiveMap.astro";
+
+export const heroMapYAML = `type: map
+id: hero-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+  interactive: false
+layers:
+  - id: points
+    type: circle
+    source:
+      type: geojson
+      cluster: false
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-74.006, 40.7128]
+            properties:
+              name: "New York"
+    paint:
+      circle-radius: 10
+      circle-color: "#ff6b6b"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"`;
+
+## See It in Action
+
+<LiveMap
+  yaml={heroMapYAML}
+  height="400px"
+  caption="A simple map created with just YAML"
+/>
+
+## Why maplibre-yaml?
+
+<CardGrid stagger>
+  <Card title="No JavaScript Required" icon="pencil">
+    Define your entire map in YAML. Perfect for students, content creators, and
+    developers who want rapid prototyping.
+  </Card>
+  <Card title="Runtime-First" icon="rocket">
+    Data is fetched when your map loads, keeping bundles tiny (~165KB) and
+    supporting real-time updates.
+  </Card>
+  <Card title="Full MapLibre Power" icon="setting">
+    Access all MapLibre GL features: expressions, data-driven styling, 3D
+    terrain, and more.
+  </Card>
+  <Card title="Framework Agnostic" icon="puzzle">
+    Use with vanilla JavaScript, Astro, or any framework via web components.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```yaml
+type: map
+id: my-first-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: bike-lanes
+    type: line
+    source:
+      type: geojson
+      url: "https://data.cityofnewyork.us/resource/bikes.geojson"
+    paint:
+      line-color: "#00ff00"
+      line-width: 2
+controls:
+  navigation: true
+  scale: true
+```
+
+## Ready to Start?
+
+<CardGrid>
+  <Card title="Installation" icon="laptop">
+    Get maplibre-yaml installed in your project in under a minute. [Install Now
+    →](/getting-started/installation/)
+  </Card>
+  <Card title="Your First Map" icon="document">
+    Follow our step-by-step tutorial to create your first map. [Start Tutorial
+    →](/guides/first-map/)
+  </Card>
+</CardGrid>

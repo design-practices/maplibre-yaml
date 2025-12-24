@@ -1,0 +1,369 @@
+---
+title: Adding Layers
+description: Learn about layer types, paint properties, and data-driven styling
+---
+
+import LiveMap from "../../../components/LiveMap.astro";
+import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
+
+Layers are how you visualize data on your map. maplibre-yaml supports all MapLibre layer types, each suited to different kinds of geographic data.
+
+## Layer types
+
+| Type             | Best for                 | Geometry     |
+| ---------------- | ------------------------ | ------------ |
+| `circle`         | Point markers, dots      | Point        |
+| `symbol`         | Icons and labels         | Point        |
+| `line`           | Roads, paths, routes     | LineString   |
+| `fill`           | Areas, regions, polygons | Polygon      |
+| `fill-extrusion` | 3D buildings             | Polygon      |
+| `heatmap`        | Density visualization    | Point        |
+| `raster`         | Satellite imagery        | Raster tiles |
+
+## Circle layers
+
+Circles are the simplest way to show point data:
+
+```yaml
+- id: points
+  type: circle
+  source:
+    type: geojson
+    data: { ... }
+  paint:
+    circle-radius: 8
+    circle-color: "#3b82f6"
+    circle-stroke-width: 2
+    circle-stroke-color: "#ffffff"
+    circle-opacity: 0.8
+```
+
+<LiveMap
+  yaml={`
+type: map
+id: circle-demo
+config:
+  center: [-122.4, 37.8]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: points
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-122.4194, 37.7749] }
+            properties: { name: "San Francisco" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-122.2711, 37.8044] }
+            properties: { name: "Oakland" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-122.0322, 37.3688] }
+            properties: { name: "San Jose" }
+    paint:
+      circle-radius: 12
+      circle-color: "#3b82f6"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+`}
+  height="300px"
+/>
+
+## Line layers
+
+Use lines for paths, routes, and boundaries:
+
+```yaml
+- id: route
+  type: line
+  source:
+    type: geojson
+    data: { ... }
+  paint:
+    line-color: "#ef4444"
+    line-width: 4
+    line-opacity: 0.8
+  layout:
+    line-cap: round
+    line-join: round
+```
+
+<LiveMap
+  yaml={`
+type: map
+id: line-demo
+config:
+  center: [-122.4, 37.75]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: route
+    type: line
+    source:
+      type: geojson
+      data:
+        type: Feature
+        geometry:
+          type: LineString
+          coordinates:
+            - [-122.4194, 37.7749]
+            - [-122.4, 37.79]
+            - [-122.35, 37.8]
+            - [-122.2711, 37.8044]
+    paint:
+      line-color: "#ef4444"
+      line-width: 4
+    layout:
+      line-cap: round
+      line-join: round
+`}
+  height="300px"
+/>
+
+## Fill layers
+
+Fill layers shade polygon areas:
+
+```yaml
+- id: regions
+  type: fill
+  source:
+    type: geojson
+    data: { ... }
+  paint:
+    fill-color: "#22c55e"
+    fill-opacity: 0.5
+    fill-outline-color: "#166534"
+```
+
+<LiveMap
+  yaml={`
+type: map
+id: fill-demo
+config:
+  center: [-122.4, 37.77]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: park
+    type: fill
+    source:
+      type: geojson
+      data:
+        type: Feature
+        geometry:
+          type: Polygon
+          coordinates:
+            - - [-122.43, 37.775]
+              - [-122.41, 37.775]
+              - [-122.41, 37.765]
+              - [-122.43, 37.765]
+              - [-122.43, 37.775]
+        properties:
+          name: "Sample Park"
+    paint:
+      fill-color: "#22c55e"
+      fill-opacity: 0.5
+      fill-outline-color: "#166534"
+`}
+  height="300px"
+/>
+
+## Data-driven styling
+
+The real power of maplibre-yaml is data-driven styling. Style features based on their properties using expressions.
+
+### Categorical colors
+
+Color features based on a category:
+
+```yaml
+paint:
+  circle-color:
+    - match
+    - ["get", "type"] # Get the "type" property
+    - "hospital"
+    - "#ef4444" # Red for hospitals
+    - "school"
+    - "#3b82f6" # Blue for schools
+    - "park"
+    - "#22c55e" # Green for parks
+    - "#6b7280" # Gray default
+```
+
+<LiveMap
+  yaml={`
+type: map
+id: categorical-demo
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: places
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: { name: "Hospital", type: "hospital" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.01, 40.715] }
+            properties: { name: "School", type: "school" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.002, 40.71] }
+            properties: { name: "Park", type: "park" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.008, 40.708] }
+            properties: { name: "Library", type: "library" }
+    paint:
+      circle-radius: 12
+      circle-color:
+        - match
+        - ["get", "type"]
+        - "hospital"
+        - "#ef4444"
+        - "school"
+        - "#3b82f6"
+        - "park"
+        - "#22c55e"
+        - "#6b7280"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+`}
+  height="300px"
+  caption="Colors based on feature type"
+/>
+
+### Interpolated values
+
+Create smooth gradients based on numeric properties:
+
+```yaml
+paint:
+  circle-radius:
+    - interpolate
+    - ["linear"]
+    - ["get", "magnitude"]
+    - 1 # Input: magnitude 1
+    - 4 # Output: radius 4px
+    - 5 # Input: magnitude 5
+    - 20 # Output: radius 20px
+  circle-color:
+    - interpolate
+    - ["linear"]
+    - ["get", "magnitude"]
+    - 1
+    - "#fef08a" # Yellow for small
+    - 5
+    - "#dc2626" # Red for large
+```
+
+<LiveMap
+  yaml={`
+type: map
+id: interpolate-demo
+config:
+  center: [-120, 37]
+  zoom: 5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: quakes
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-121, 36] }
+            properties: { magnitude: 1.5 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-119, 37.5] }
+            properties: { magnitude: 2.8 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-120.5, 38] }
+            properties: { magnitude: 4.2 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-118, 36.5] }
+            properties: { magnitude: 5.1 }
+    paint:
+      circle-radius:
+        - interpolate
+        - ["linear"]
+        - ["get", "magnitude"]
+        - 1
+        - 6
+        - 5
+        - 24
+      circle-color:
+        - interpolate
+        - ["linear"]
+        - ["get", "magnitude"]
+        - 1
+        - "#fef08a"
+        - 5
+        - "#dc2626"
+      circle-opacity: 0.8
+`}
+  height="300px"
+  caption="Size and color based on magnitude"
+/>
+
+### Step functions
+
+Create discrete categories from continuous values:
+
+```yaml
+paint:
+  circle-color:
+    - step
+    - ["get", "count"]
+    - "#22c55e" # Green: count < 10
+    - 10
+    - "#eab308" # Yellow: 10 <= count < 100
+    - 100
+    - "#ef4444" # Red: count >= 100
+```
+
+## Layer ordering
+
+Layers are drawn in order. Later layers appear on top:
+
+```yaml
+layers:
+  - id: background-fill      # Drawn first (bottom)
+    type: fill
+    ...
+  - id: roads                # Drawn second
+    type: line
+    ...
+  - id: labels               # Drawn last (top)
+    type: symbol
+    ...
+```
+
+## Filtering layers
+
+Show only features matching certain criteria:
+
+```yaml
+- id: large-earthquakes
+  type: circle
+  source: earthquakes
+  filter: [">=", ["get", "mag"], 4.5] # Only magnitude 4.5+
+  paint:
+    circle-color: "#ef4444"
+```
+
+## Next steps
+
+- [Data Sources](/guides/data-sources/) - Load data from URLs
+- [Live Data](/guides/live-data/) - Auto-refresh and streaming
+- [Interactivity](/guides/interactivity/) - Popups and hover effects

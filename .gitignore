@@ -37,4 +37,5 @@ EOF
 
 .claude
 .history/
-/docs/project-memory
+
+/project-memory

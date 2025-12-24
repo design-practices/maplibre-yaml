@@ -1,0 +1,22 @@
+// packages/core/typedoc.json
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "../docs/src/content/docs/api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "entryFileName": "index",
+  "outputFileStrategy": "modules",
+  "fileExtension": ".mdx",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "categorizeByGroup": true,
+  "categoryOrder": ["Schemas", "Parser", "Renderer", "Components", "*"],
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true
+  },
+  "frontmatter": {
+    "layout": "doc"
+  }
+}

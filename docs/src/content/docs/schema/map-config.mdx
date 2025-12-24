@@ -1,0 +1,596 @@
+---
+title: Map Configuration
+description: Map settings, view options, controls, and legends
+---
+
+Map configuration defines the initial view, interaction settings, controls, and legends for map blocks. All configuration follows the [MapLibre GL JS API](https://maplibre.org/maplibre-gl-js/docs/API/).
+
+## Map Config Structure
+
+```yaml
+- type: map
+  id: my-map
+  config:              # Map configuration
+    center: [lng, lat]
+    zoom: 12
+    mapStyle: "..."
+    pitch: 0
+    bearing: 0
+    # ... additional options
+  layers: [...]        # Map layers
+  controls: {...}      # Map controls (optional)
+  legend: {...}        # Legend (optional)
+```
+
+## Required Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `center` | [number, number] | Initial map center [longitude, latitude] |
+| `zoom` | number | Initial zoom level (0-24) |
+| `mapStyle` | string \| object | MapLibre style URL or style object |
+
+### Example
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+## View Options
+
+Control the camera position and orientation.
+
+| Property | Type | Default | Range | Description |
+|----------|------|---------|-------|-------------|
+| `pitch` | number | `0` | 0-85 | Camera tilt angle in degrees |
+| `bearing` | number | `0` | -180 to 180 | Camera rotation in degrees |
+| `bounds` | array | - | - | Fit map to geographic bounds |
+
+### Examples
+
+#### 3D Perspective View
+
+```yaml
+config:
+  center: [-122.4194, 37.7749]
+  zoom: 15
+  pitch: 60
+  bearing: 30
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+#### Fit to Bounds
+
+```yaml
+config:
+  center: [-74.006, 40.7128]  # Fallback center
+  zoom: 12                     # Fallback zoom
+  bounds: [-74.3, 40.5, -73.7, 40.9]  # [west, south, east, north]
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+## Constraints
+
+Limit user interaction to specific zoom levels, pitch angles, or geographic areas.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `minZoom` | number | Minimum zoom level (0-24) |
+| `maxZoom` | number | Maximum zoom level (0-24) |
+| `minPitch` | number | Minimum pitch angle (0-85) |
+| `maxPitch` | number | Maximum pitch angle (0-85) |
+| `maxBounds` | array | Maximum geographic bounds [west, south, east, north] |
+
+### Example
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  minZoom: 8
+  maxZoom: 18
+  maxBounds: [-74.3, 40.5, -73.7, 40.9]
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+## Interaction Settings
+
+Control user interaction capabilities.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `interactive` | boolean | `true` | Enable all map interactions |
+| `scrollZoom` | boolean | `true` | Enable scroll to zoom |
+| `boxZoom` | boolean | `true` | Enable shift+drag box zoom |
+| `dragRotate` | boolean | `true` | Enable right-drag to rotate |
+| `dragPan` | boolean | `true` | Enable drag to pan |
+| `keyboard` | boolean | `true` | Enable keyboard shortcuts |
+| `doubleClickZoom` | boolean | `true` | Enable double-click zoom |
+| `touchZoomRotate` | boolean | `true` | Enable touch zoom/rotate |
+| `touchPitch` | boolean | `true` | Enable two-finger touch pitch |
+
+### Non-Interactive Map
+
+Create a static map for presentation:
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  interactive: false
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+### Custom Interaction
+
+Disable specific interactions:
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  dragRotate: false      # Disable rotation
+  touchPitch: false      # Disable pitch on mobile
+  doubleClickZoom: false # Disable double-click zoom
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+## Display Options
+
+Control map display and behavior.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `hash` | boolean | `false` | Sync map state with URL hash |
+| `attributionControl` | boolean | `true` | Show attribution control |
+| `logoPosition` | string | `"bottom-left"` | MapLibre logo position |
+| `fadeDuration` | number | `300` | Fade duration in milliseconds |
+| `crossSourceCollisions` | boolean | `true` | Check for cross-source symbol collisions |
+
+### Example
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  hash: true                      # Enable URL hash syncing
+  attributionControl: false       # Hide attribution
+  logoPosition: bottom-right      # Move logo
+  fadeDuration: 500               # Slower fade
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+## Rendering Options
+
+Advanced rendering configuration.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `antialias` | boolean | `false` | Enable antialiasing |
+| `refreshExpiredTiles` | boolean | `true` | Refresh expired tiles |
+| `renderWorldCopies` | boolean | `true` | Render multiple world copies |
+| `maxTileCacheSize` | number | - | Maximum tiles to cache |
+| `preserveDrawingBuffer` | boolean | `false` | Preserve drawing buffer for export |
+| `failIfMajorPerformanceCaveat` | boolean | `false` | Fail if WebGL performance is poor |
+
+### Example
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  antialias: true                 # Smoother rendering
+  preserveDrawingBuffer: true     # Enable map.getCanvas().toDataURL()
+  maxTileCacheSize: 100           # Cache more tiles
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+## Localization
+
+Customize UI text for different languages.
+
+```yaml
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  locale:
+    "AttributionControl.ToggleAttribution": "Show attribution"
+    "FullscreenControl.Enter": "Enter fullscreen"
+    "FullscreenControl.Exit": "Exit fullscreen"
+    "GeolocateControl.FindMyLocation": "Find my location"
+    "NavigationControl.ResetBearing": "Reset bearing"
+    "NavigationControl.ZoomIn": "Zoom in"
+    "NavigationControl.ZoomOut": "Zoom out"
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+## Map Controls
+
+Configure which controls are displayed and where.
+
+### Controls Structure
+
+```yaml
+controls:
+  navigation: true | { enabled: true, position: "top-right" }
+  geolocate: true | { enabled: true, position: "top-right" }
+  scale: true | { enabled: true, position: "bottom-left" }
+  fullscreen: true | { enabled: true, position: "top-right" }
+  attribution: true | { enabled: true, position: "bottom-right" }
+```
+
+### Available Controls
+
+| Control | Default Position | Description |
+|---------|------------------|-------------|
+| `navigation` | `top-right` | Zoom and rotation controls |
+| `geolocate` | `top-right` | User geolocation button |
+| `scale` | `bottom-left` | Distance scale indicator |
+| `fullscreen` | `top-right` | Fullscreen toggle |
+| `attribution` | `bottom-right` | Attribution text |
+
+### Control Positions
+
+- `top-left`
+- `top-right`
+- `bottom-left`
+- `bottom-right`
+
+### Examples
+
+#### Enable All Controls
+
+```yaml
+controls:
+  navigation: true
+  geolocate: true
+  scale: true
+  fullscreen: true
+```
+
+#### Custom Positions
+
+```yaml
+controls:
+  navigation:
+    enabled: true
+    position: top-left
+  scale:
+    enabled: true
+    position: bottom-right
+  fullscreen:
+    enabled: true
+    position: top-right
+```
+
+#### Minimal Controls
+
+```yaml
+controls:
+  navigation: true
+  scale: true
+```
+
+## Legend
+
+Display a map legend showing layer information.
+
+### Legend Structure
+
+```yaml
+legend:
+  title: "Map Legend"
+  position: top-left
+  collapsed: false
+  items:
+    - color: "#ff0000"
+      label: "Category 1"
+      shape: circle
+    - color: "#00ff00"
+      label: "Category 2"
+      shape: square
+```
+
+### Legend Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `position` | string | `"top-left"` | Legend position |
+| `title` | string | - | Legend title |
+| `collapsed` | boolean | `false` | Start collapsed |
+| `items` | array | - | Custom legend items |
+
+### Legend Item Properties
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `color` | string | Yes | - | Item color (CSS color) |
+| `label` | string | Yes | - | Item label text |
+| `shape` | string | No | `"square"` | Symbol shape: `circle`, `square`, `line`, `icon` |
+| `icon` | string | No | - | Icon name or URL (when `shape: icon`) |
+
+### Examples
+
+#### Automatic Legend
+
+If `items` is not provided, legend items are extracted from layers with legend configuration:
+
+```yaml
+legend:
+  title: "Earthquake Magnitude"
+  position: top-left
+```
+
+#### Custom Legend Items
+
+```yaml
+legend:
+  title: "Features"
+  position: top-right
+  collapsed: false
+  items:
+    - color: "#e74c3c"
+      label: "High Priority"
+      shape: circle
+    - color: "#f39c12"
+      label: "Medium Priority"
+      shape: circle
+    - color: "#2ecc71"
+      label: "Low Priority"
+      shape: circle
+```
+
+#### Line Legend
+
+```yaml
+legend:
+  title: "Routes"
+  position: bottom-left
+  items:
+    - color: "#3b82f6"
+      label: "Highway"
+      shape: line
+    - color: "#10b981"
+      label: "Local Road"
+      shape: line
+```
+
+#### Icon Legend
+
+```yaml
+legend:
+  title: "Points of Interest"
+  position: top-left
+  items:
+    - color: "#000000"
+      label: "Restaurant"
+      shape: icon
+      icon: "restaurant"
+    - color: "#000000"
+      label: "Hotel"
+      shape: icon
+      icon: "hotel"
+```
+
+## Complete Examples
+
+### Basic Interactive Map
+
+```yaml
+- type: map
+  id: basic-map
+  config:
+    center: [-74.006, 40.7128]
+    zoom: 12
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: points
+      type: circle
+      source:
+        type: geojson
+        url: "https://example.com/points.geojson"
+      paint:
+        circle-radius: 8
+        circle-color: "#3b82f6"
+  controls:
+    navigation: true
+    scale: true
+```
+
+### 3D Map with Custom Controls
+
+```yaml
+- type: map
+  id: 3d-map
+  config:
+    center: [-122.4194, 37.7749]
+    zoom: 15
+    pitch: 60
+    bearing: -45
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: buildings
+      type: fill-extrusion
+      source:
+        type: vector
+        url: "https://demotiles.maplibre.org/tiles/tiles.json"
+      source-layer: building
+      paint:
+        fill-extrusion-color: "#aaa"
+        fill-extrusion-height: ["get", "height"]
+        fill-extrusion-opacity: 0.8
+  controls:
+    navigation:
+      enabled: true
+      position: top-left
+    fullscreen:
+      enabled: true
+      position: top-right
+```
+
+### Constrained Map with Legend
+
+```yaml
+- type: map
+  id: constrained-map
+  config:
+    center: [-74.006, 40.7128]
+    zoom: 12
+    minZoom: 8
+    maxZoom: 16
+    maxBounds: [-74.3, 40.5, -73.7, 40.9]
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: zones
+      type: fill
+      source:
+        type: geojson
+        url: "https://example.com/zones.geojson"
+      paint:
+        fill-color:
+          - match
+          - ["get", "type"]
+          - "residential"
+          - "#fef3c7"
+          - "commercial"
+          - "#dbeafe"
+          - "industrial"
+          - "#f3e8ff"
+          - "#e5e7eb"
+        fill-opacity: 0.6
+  controls:
+    navigation: true
+    scale: true
+  legend:
+    title: "Zone Types"
+    position: top-right
+    items:
+      - color: "#fef3c7"
+        label: "Residential"
+        shape: square
+      - color: "#dbeafe"
+        label: "Commercial"
+        shape: square
+      - color: "#f3e8ff"
+        label: "Industrial"
+        shape: square
+```
+
+### Non-Interactive Presentation Map
+
+```yaml
+- type: map
+  id: static-map
+  style: "height: 400px; width: 600px;"
+  config:
+    center: [0, 20]
+    zoom: 2
+    interactive: false
+    attributionControl: false
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: earthquakes
+      type: circle
+      source:
+        type: geojson
+        url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+      paint:
+        circle-radius: 6
+        circle-color: "#e74c3c"
+        circle-opacity: 0.8
+```
+
+### Full-Page Immersive Map
+
+```yaml
+- type: map-fullpage
+  id: immersive-map
+  config:
+    center: [-122.4194, 37.7749]
+    zoom: 13
+    pitch: 45
+    bearing: 0
+    hash: true
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: buildings
+      type: fill-extrusion
+      source:
+        type: vector
+        url: "https://demotiles.maplibre.org/tiles/tiles.json"
+      source-layer: building
+      paint:
+        fill-extrusion-color: "#aaa"
+        fill-extrusion-height: ["get", "height"]
+  controls:
+    navigation: true
+    geolocate: true
+    fullscreen: true
+    scale: true
+```
+
+## Using Global Default Style
+
+Define a default map style once in global config:
+
+```yaml
+config:
+  defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+
+pages:
+  - path: "/"
+    title: "Home"
+    blocks:
+      - type: map
+        id: map1
+        config:
+          center: [-74, 40]
+          zoom: 12
+          # mapStyle inherited from global config
+
+      - type: map
+        id: map2
+        config:
+          center: [139, 35]
+          zoom: 12
+          # mapStyle inherited from global config
+```
+
+## TypeScript Types
+
+```typescript
+import {
+  type MapConfig,
+  type ControlsConfig,
+  type LegendConfig,
+  type MapBlock
+} from '@maplibre-yaml/core/schemas';
+
+const mapConfig: MapConfig = {
+  center: [-74.006, 40.7128],
+  zoom: 12,
+  mapStyle: "https://demotiles.maplibre.org/style.json",
+  pitch: 45,
+  bearing: 0
+};
+
+const controls: ControlsConfig = {
+  navigation: true,
+  scale: {
+    enabled: true,
+    position: "bottom-right"
+  }
+};
+
+const legend: LegendConfig = {
+  title: "Map Legend",
+  position: "top-left",
+  collapsed: false,
+  items: [
+    { color: "#ff0000", label: "High", shape: "circle" }
+  ]
+};
+```

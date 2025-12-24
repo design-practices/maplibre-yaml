@@ -1,0 +1,732 @@
+---
+title: Scrollytelling
+description: Narrative-driven map stories with chapters and animations
+---
+
+Scrollytelling creates immersive narrative map experiences where the map transitions between chapters as users scroll through content. Perfect for data journalism, storytelling, and guided tours.
+
+## Scrollytelling Block Structure
+
+```yaml
+- type: scrollytelling
+  id: story
+  config:              # Base map configuration
+    center: [lng, lat]
+    zoom: 2
+    mapStyle: "..."
+  theme: light         # Visual theme
+  showMarkers: false   # Chapter markers
+  layers: [...]        # Persistent layers
+  chapters: [...]      # Story chapters (required)
+  footer: "..."        # Optional footer HTML
+```
+
+## Scrollytelling Properties
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `type` | `"scrollytelling"` | Yes | - | Block type |
+| `id` | string | Yes | - | Unique identifier |
+| `config` | object | Yes | - | Base map configuration |
+| `chapters` | array | Yes | - | Story chapters (min: 1) |
+| `theme` | `"light"` \| `"dark"` | No | `"light"` | Visual theme |
+| `showMarkers` | boolean | No | `false` | Show chapter markers on map |
+| `markerColor` | string | No | `"#3FB1CE"` | Chapter marker color |
+| `layers` | array | No | `[]` | Persistent layers |
+| `footer` | string | No | - | Footer HTML content |
+
+## Chapters
+
+Each chapter represents one section of the narrative. As users scroll, the map smoothly transitions between chapters.
+
+### Chapter Structure
+
+```yaml
+chapters:
+  - id: intro
+    title: "Introduction"
+    description: "Welcome to our story."
+    center: [-74.006, 40.7128]
+    zoom: 12
+    pitch: 0
+    bearing: 0
+    animation: flyTo
+    alignment: center
+```
+
+### Required Chapter Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | string | Unique chapter identifier |
+| `title` | string | Chapter title |
+| `center` | [number, number] | Map center [longitude, latitude] |
+| `zoom` | number | Zoom level (0-24) |
+
+### Optional Chapter Properties
+
+#### Content
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `description` | string | Chapter description (HTML/markdown) |
+| `image` | string | Hero image URL |
+| `video` | string | Video URL |
+
+#### Camera
+
+| Property | Type | Default | Range | Description |
+|----------|------|---------|-------|-------------|
+| `pitch` | number | `0` | 0-85 | Camera tilt angle |
+| `bearing` | number | `0` | -180 to 180 | Camera rotation |
+| `speed` | number | `0.6` | 0-2 | Animation speed multiplier |
+| `curve` | number | `1` | 0-2 | Animation curve (0=linear, 1=default, 2=steep) |
+| `animation` | string | `"flyTo"` | - | Animation type: `flyTo`, `easeTo`, `jumpTo` |
+| `rotateAnimation` | boolean | `false` | - | Continuous rotation |
+| `spinGlobe` | boolean | `false` | - | Globe spin (low zoom) |
+
+#### Layout
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `alignment` | string | `"center"` | Content position: `left`, `right`, `center`, `full` |
+| `hidden` | boolean | `false` | Hide chapter content (map-only) |
+
+## Basic Example
+
+```yaml
+- type: scrollytelling
+  id: basic-story
+  config:
+    center: [-74.006, 40.7128]
+    zoom: 10
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  chapters:
+    - id: intro
+      title: "Welcome to New York"
+      description: "Our story begins in Manhattan."
+      center: [-74.006, 40.7128]
+      zoom: 12
+
+    - id: downtown
+      title: "Downtown Manhattan"
+      description: "The heart of the financial district."
+      center: [-74.0099, 40.7061]
+      zoom: 14
+
+    - id: brooklyn
+      title: "Brooklyn Bridge"
+      description: "Crossing the East River."
+      center: [-73.9969, 40.7061]
+      zoom: 15
+```
+
+## Animation Types
+
+### flyTo (Default)
+
+Smooth, curved flight between locations:
+
+```yaml
+- id: flight
+  title: "Flying Across Country"
+  center: [-118.2437, 34.0522]
+  zoom: 10
+  animation: flyTo
+  speed: 0.8
+  curve: 1.5
+```
+
+### easeTo
+
+Linear transition:
+
+```yaml
+- id: smooth
+  title: "Smooth Transition"
+  center: [-74.006, 40.7128]
+  zoom: 12
+  animation: easeTo
+```
+
+### jumpTo
+
+Instant transition:
+
+```yaml
+- id: instant
+  title: "Instant Jump"
+  center: [-74.006, 40.7128]
+  zoom: 12
+  animation: jumpTo
+```
+
+## 3D Perspectives
+
+Create dramatic camera angles:
+
+```yaml
+- id: 3d-view
+  title: "Bird's Eye View"
+  description: "See the city from above."
+  center: [-74.006, 40.7128]
+  zoom: 16
+  pitch: 60
+  bearing: -45
+  speed: 0.4
+```
+
+## Content Alignment
+
+Control where chapter content appears.
+
+### Left Alignment
+
+```yaml
+- id: left-aligned
+  title: "Story on Left"
+  description: "Content appears on the left side."
+  center: [-74.006, 40.7128]
+  zoom: 12
+  alignment: left
+```
+
+### Right Alignment
+
+```yaml
+- id: right-aligned
+  title: "Story on Right"
+  description: "Content appears on the right side."
+  center: [-74.006, 40.7128]
+  zoom: 12
+  alignment: right
+```
+
+### Center Alignment
+
+```yaml
+- id: centered
+  title: "Centered Story"
+  description: "Content centered on screen."
+  center: [-74.006, 40.7128]
+  zoom: 12
+  alignment: center
+```
+
+### Full Width
+
+```yaml
+- id: fullwidth
+  title: "Immersive Experience"
+  description: "Content spans full width."
+  center: [-74.006, 40.7128]
+  zoom: 12
+  alignment: full
+```
+
+## Media in Chapters
+
+### Hero Images
+
+```yaml
+- id: with-image
+  title: "Beautiful Vista"
+  description: "A stunning view of the landscape."
+  image: "https://example.com/vista.jpg"
+  center: [-120, 35]
+  zoom: 10
+```
+
+### Videos
+
+```yaml
+- id: with-video
+  title: "City Life"
+  description: "Experience the urban energy."
+  video: "https://example.com/city-timelapse.mp4"
+  center: [-74.006, 40.7128]
+  zoom: 14
+```
+
+## Layer Control
+
+Show and hide layers during chapters.
+
+```yaml
+chapters:
+  - id: overview
+    title: "Regional Overview"
+    center: [-120, 35]
+    zoom: 6
+    layers:
+      show:
+        - all-earthquakes
+      hide:
+        - fault-lines
+
+  - id: detail
+    title: "Fault Lines"
+    center: [-118, 34]
+    zoom: 10
+    layers:
+      show:
+        - fault-lines
+        - all-earthquakes
+```
+
+## Chapter Actions
+
+Execute actions when entering or exiting chapters.
+
+### Action Types
+
+| Action | Description |
+|--------|-------------|
+| `setFilter` | Update layer filter |
+| `setPaintProperty` | Update layer paint property |
+| `setLayoutProperty` | Update layer layout property |
+| `fitBounds` | Fit map to bounds |
+| `custom` | Custom action (application-defined) |
+
+### Set Filter
+
+```yaml
+- id: filtered
+  title: "High Magnitude Events"
+  center: [-120, 35]
+  zoom: 6
+  onChapterEnter:
+    - action: setFilter
+      layer: earthquakes
+      filter: [">=", ["get", "magnitude"], 5]
+  onChapterExit:
+    - action: setFilter
+      layer: earthquakes
+      filter: null  # Clear filter
+```
+
+### Set Paint Property
+
+```yaml
+- id: highlight
+  title: "Highlighted Buildings"
+  center: [-74.006, 40.7128]
+  zoom: 16
+  onChapterEnter:
+    - action: setPaintProperty
+      layer: buildings
+      property: fill-extrusion-color
+      value: "#ff0000"
+  onChapterExit:
+    - action: setPaintProperty
+      layer: buildings
+      property: fill-extrusion-color
+      value: "#aaaaaa"
+```
+
+### Set Layout Property
+
+```yaml
+- id: show-labels
+  title: "Points of Interest"
+  center: [-74.006, 40.7128]
+  zoom: 14
+  onChapterEnter:
+    - action: setLayoutProperty
+      layer: poi-labels
+      property: visibility
+      value: visible
+  onChapterExit:
+    - action: setLayoutProperty
+      layer: poi-labels
+      property: visibility
+      value: none
+```
+
+### Fit Bounds
+
+```yaml
+- id: bounded
+  title: "City Limits"
+  center: [-74.006, 40.7128]
+  zoom: 10
+  onChapterEnter:
+    - action: fitBounds
+      bounds: [-74.3, 40.5, -73.7, 40.9]
+      options:
+        padding: 50
+        duration: 2000
+```
+
+## Themes
+
+### Light Theme (Default)
+
+```yaml
+- type: scrollytelling
+  id: light-story
+  theme: light
+  config:
+    center: [0, 0]
+    zoom: 2
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  chapters: [...]
+```
+
+### Dark Theme
+
+```yaml
+- type: scrollytelling
+  id: dark-story
+  theme: dark
+  config:
+    center: [0, 0]
+    zoom: 2
+    mapStyle: "https://demotiles.maplibre.org/dark-style.json"
+  chapters: [...]
+```
+
+## Chapter Markers
+
+Show markers on the map for each chapter location.
+
+```yaml
+- type: scrollytelling
+  id: marked-story
+  showMarkers: true
+  markerColor: "#ff0000"
+  config:
+    center: [0, 0]
+    zoom: 2
+    mapStyle: "..."
+  chapters:
+    - id: location1
+      title: "First Location"
+      center: [-74, 40]
+      zoom: 12
+
+    - id: location2
+      title: "Second Location"
+      center: [-118, 34]
+      zoom: 12
+```
+
+## Persistent Layers
+
+Layers that remain visible throughout the story.
+
+```yaml
+- type: scrollytelling
+  id: story-with-layers
+  config:
+    center: [0, 20]
+    zoom: 2
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: base-data
+      type: circle
+      source:
+        type: geojson
+        url: "https://example.com/data.geojson"
+      paint:
+        circle-radius: 6
+        circle-color: "#888888"
+        circle-opacity: 0.5
+  chapters:
+    - id: chapter1
+      title: "First Chapter"
+      center: [0, 20]
+      zoom: 3
+
+    - id: chapter2
+      title: "Second Chapter"
+      center: [0, 40]
+      zoom: 4
+```
+
+## Footer
+
+Add footer content after all chapters.
+
+```yaml
+- type: scrollytelling
+  id: story
+  config:
+    center: [0, 0]
+    zoom: 2
+    mapStyle: "..."
+  chapters: [...]
+  footer: |
+    <h3>Data Sources</h3>
+    <p>Data from USGS Earthquake Catalog</p>
+    <p>Created with maplibre-yaml</p>
+    <p>&copy; 2024</p>
+```
+
+## Complete Examples
+
+### Simple Story
+
+```yaml
+pages:
+  - path: "/story"
+    title: "Our Journey"
+    blocks:
+      - type: scrollytelling
+        id: journey
+        config:
+          center: [0, 20]
+          zoom: 2
+          mapStyle: "https://demotiles.maplibre.org/style.json"
+        chapters:
+          - id: start
+            title: "The Beginning"
+            description: "Our story starts here."
+            center: [0, 20]
+            zoom: 2
+
+          - id: destination
+            title: "The Destination"
+            description: "And ends here."
+            center: [100, 30]
+            zoom: 5
+```
+
+### Earthquake Story
+
+```yaml
+- type: scrollytelling
+  id: earthquake-story
+  theme: dark
+  showMarkers: true
+  markerColor: "#e74c3c"
+  config:
+    center: [-120, 35]
+    zoom: 4
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: earthquakes
+      type: circle
+      source:
+        type: geojson
+        url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+      paint:
+        circle-radius: 6
+        circle-color:
+          - interpolate
+          - ["linear"]
+          - ["get", "mag"]
+          - 0
+          - "#fef3c7"
+          - 8
+          - "#dc2626"
+  chapters:
+    - id: intro
+      title: "Global Seismic Activity"
+      description: "Earthquakes around the world in the past week."
+      center: [0, 20]
+      zoom: 2
+
+    - id: california
+      title: "California"
+      description: "High seismic activity along the San Andreas Fault."
+      center: [-119, 37]
+      zoom: 6
+      pitch: 0
+
+    - id: la
+      title: "Los Angeles"
+      description: "Urban areas at risk."
+      center: [-118.2437, 34.0522]
+      zoom: 10
+      pitch: 45
+      bearing: 30
+      layers:
+        show:
+          - earthquakes
+
+    - id: major
+      title: "Major Events"
+      description: "Focusing on significant earthquakes."
+      center: [-120, 35]
+      zoom: 6
+      onChapterEnter:
+        - action: setFilter
+          layer: earthquakes
+          filter: [">=", ["get", "mag"], 5]
+      onChapterExit:
+        - action: setFilter
+          layer: earthquakes
+          filter: null
+  footer: |
+    <p><strong>Data Source:</strong> USGS Earthquake Catalog</p>
+    <p>Updated in real-time</p>
+```
+
+### City Tour
+
+```yaml
+- type: scrollytelling
+  id: city-tour
+  theme: light
+  config:
+    center: [-74.006, 40.7128]
+    zoom: 12
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  chapters:
+    - id: intro
+      title: "Welcome to New York"
+      description: "Join us on a tour of the greatest city on Earth."
+      image: "https://example.com/nyc-skyline.jpg"
+      center: [-74.006, 40.7128]
+      zoom: 11
+      alignment: center
+
+    - id: downtown
+      title: "Financial District"
+      description: "The heart of global finance."
+      center: [-74.0099, 40.7061]
+      zoom: 15
+      pitch: 60
+      bearing: -45
+      alignment: left
+
+    - id: brooklyn
+      title: "Brooklyn Bridge"
+      description: "An iconic landmark connecting Manhattan and Brooklyn."
+      center: [-73.9969, 40.7061]
+      zoom: 16
+      pitch: 45
+      bearing: 90
+      alignment: right
+
+    - id: central-park
+      title: "Central Park"
+      description: "An urban oasis in the heart of the city."
+      center: [-73.9654, 40.7829]
+      zoom: 14
+      pitch: 0
+      bearing: 0
+      alignment: center
+      animation: easeTo
+
+    - id: outro
+      title: "Thank You"
+      description: "Thanks for joining our tour!"
+      center: [-74.006, 40.7128]
+      zoom: 11
+      alignment: full
+      hidden: false
+```
+
+### Data Journalism
+
+```yaml
+- type: scrollytelling
+  id: climate-story
+  theme: light
+  showMarkers: false
+  config:
+    center: [0, 30]
+    zoom: 2
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: temperature
+      type: circle
+      source:
+        type: geojson
+        url: "https://example.com/temperature.geojson"
+      paint:
+        circle-radius: 8
+        circle-color:
+          - interpolate
+          - ["linear"]
+          - ["get", "temp"]
+          - -10
+          - "#3b82f6"
+          - 0
+          - "#ffffff"
+          - 40
+          - "#dc2626"
+        circle-opacity: 0.7
+  chapters:
+    - id: overview
+      title: "Global Temperature Changes"
+      description: "How our planet is warming."
+      center: [0, 30]
+      zoom: 2
+
+    - id: arctic
+      title: "The Arctic"
+      description: "Temperature rise is most dramatic at the poles."
+      center: [0, 75]
+      zoom: 3
+      onChapterEnter:
+        - action: setPaintProperty
+          layer: temperature
+          property: circle-radius
+          value: 12
+
+    - id: equator
+      title: "The Tropics"
+      description: "Heat stress increasing near the equator."
+      center: [0, 0]
+      zoom: 3
+
+    - id: conclusion
+      title: "What Can We Do?"
+      description: "The time to act is now."
+      center: [0, 30]
+      zoom: 2
+      onChapterEnter:
+        - action: setPaintProperty
+          layer: temperature
+          property: circle-opacity
+          value: 1
+  footer: |
+    <h3>Sources</h3>
+    <p>Climate data from NOAA</p>
+    <p>Analysis by Climate Research Institute</p>
+```
+
+## TypeScript Types
+
+```typescript
+import {
+  type ScrollytellingBlock,
+  type Chapter,
+  type ChapterAction,
+  type ChapterLayers
+} from '@maplibre-yaml/core/schemas';
+
+const chapter: Chapter = {
+  id: "intro",
+  title: "Introduction",
+  description: "Welcome to our story",
+  center: [-74.006, 40.7128],
+  zoom: 12,
+  pitch: 45,
+  bearing: 0,
+  animation: "flyTo",
+  alignment: "center"
+};
+
+const action: ChapterAction = {
+  action: "setFilter",
+  layer: "earthquakes",
+  filter: [">=", ["get", "magnitude"], 5]
+};
+
+const scrollytelling: ScrollytellingBlock = {
+  type: "scrollytelling",
+  id: "story",
+  config: {
+    center: [0, 0],
+    zoom: 2,
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  },
+  chapters: [chapter],
+  theme: "light",
+  showMarkers: false
+};
+```

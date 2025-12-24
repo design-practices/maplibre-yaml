@@ -1,0 +1,261 @@
+---
+title: Data Sources
+description: Loading GeoJSON from URLs, inline data, and remote APIs
+---
+
+import LiveMap from "../../../components/LiveMap.astro";
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+maplibre-yaml supports multiple ways to provide data to your layers: inline GeoJSON, remote URLs, and streaming connections.
+
+## Inline data
+
+For small, static datasets, embed the GeoJSON directly:
+
+```yaml
+source:
+  type: geojson
+  data:
+    type: FeatureCollection
+    features:
+      - type: Feature
+        geometry:
+          type: Point
+          coordinates: [-74.006, 40.7128]
+        properties:
+          name: "New York"
+```
+
+<Aside type="tip">
+  Inline data is great for prototyping and small datasets. For larger datasets
+  (100+ features), use a URL instead.
+</Aside>
+
+## Remote URL
+
+Load GeoJSON from any URL:
+
+```yaml
+source:
+  type: geojson
+  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+```
+
+<LiveMap
+  yaml={`
+type: map
+id: remote-demo
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 5
+      circle-color: "#ef4444"
+      circle-opacity: 0.7
+`}
+  height="350px"
+  caption="Live earthquake data from USGS"
+/>
+
+### CORS considerations
+
+When loading from remote URLs, the server must allow cross-origin requests (CORS). If you see errors, the API may not support browser requests.
+
+**Solutions:**
+
+- Use APIs that support CORS (like USGS earthquake feed)
+- Set up a proxy server
+- Host the data yourself
+
+## Caching
+
+Control how fetched data is cached:
+
+```yaml
+source:
+  type: geojson
+  url: "https://api.example.com/data.geojson"
+  cache:
+    enabled: true # Enable caching (default)
+    ttl: 300000 # Cache for 5 minutes (milliseconds)
+```
+
+### Cache behavior
+
+| Scenario                | Behavior                           |
+| ----------------------- | ---------------------------------- |
+| First request           | Fetch from network, store in cache |
+| Subsequent (within TTL) | Return cached data immediately     |
+| After TTL expires       | Fetch fresh data, update cache     |
+| `enabled: false`        | Always fetch from network          |
+
+<Aside>
+  Caching is in-memory only and resets when the page reloads. For offline
+  support, see the future roadmap.
+</Aside>
+
+## Loading states
+
+Show feedback while data loads:
+
+```yaml
+source:
+  type: geojson
+  url: "https://api.example.com/data.geojson"
+  loading:
+    enabled: true
+    message: "Loading earthquake data..."
+```
+
+When enabled, maplibre-yaml shows a spinner overlay while fetching data and an error message if the fetch fails.
+
+### Handling errors programmatically
+
+```javascript
+const renderer = new MapRenderer(container, config);
+
+renderer.on("layer:loading", ({ layerId }) => {
+  console.log(`Loading ${layerId}...`);
+});
+
+renderer.on("layer:loaded", ({ layerId, featureCount, fromCache }) => {
+  console.log(`Loaded ${featureCount} features (cached: ${fromCache})`);
+});
+
+renderer.on("layer:error", ({ layerId, error }) => {
+  console.error(`Failed to load ${layerId}:`, error.message);
+});
+```
+
+## Clustering
+
+For point datasets with many features, enable clustering:
+
+```yaml
+source:
+  type: geojson
+  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson"
+  cluster: true
+  clusterRadius: 50 # Cluster points within 50px
+  clusterMaxZoom: 14 # Stop clustering at zoom 14
+```
+
+Then style clustered and unclustered points separately:
+
+```yaml
+layers:
+  # Clustered points
+  - id: clusters
+    type: circle
+    source: earthquakes
+    filter: ["has", "point_count"]
+    paint:
+      circle-radius:
+        - step
+        - ["get", "point_count"]
+        - 20 # Default size
+        - 100
+        - 30 # Larger for 100+ points
+        - 750
+        - 40 # Even larger for 750+
+      circle-color: "#3b82f6"
+
+  # Cluster count labels
+  - id: cluster-count
+    type: symbol
+    source: earthquakes
+    filter: ["has", "point_count"]
+    layout:
+      text-field: "{point_count_abbreviated}"
+      text-size: 12
+
+  # Individual points
+  - id: unclustered
+    type: circle
+    source: earthquakes
+    filter: ["!", ["has", "point_count"]]
+    paint:
+      circle-radius: 6
+      circle-color: "#ef4444"
+```
+
+<LiveMap
+  yaml={`
+type: map
+id: cluster-demo
+config:
+  center: [-120, 37]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: clusters
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson"
+      cluster: true
+      clusterRadius: 50
+      clusterMaxZoom: 14
+    filter: ["has", "point_count"]
+    paint:
+      circle-radius:
+        - step
+        - ["get", "point_count"]
+        - 20
+        - 100
+        - 30
+        - 750
+        - 40
+      circle-color: "#3b82f6"
+      circle-opacity: 0.8
+  - id: cluster-count
+    type: symbol
+    source: clusters
+    filter: ["has", "point_count"]
+    layout:
+      text-field: "{point_count_abbreviated}"
+      text-size: 12
+  - id: unclustered
+    type: circle
+    source: clusters
+    filter: ["!", ["has", "point_count"]]
+    paint:
+      circle-radius: 6
+      circle-color: "#ef4444"
+`}
+  height="400px"
+  caption="Clustered earthquake data - zoom in to see individual points"
+/>
+
+## Multiple sources
+
+Reference the same source from multiple layers:
+
+```yaml
+layers:
+  - id: earthquakes-source
+    type: circle
+    source:
+      id: quakes # Named source
+      type: geojson
+      url: "https://..."
+    paint: { ... }
+
+  - id: earthquake-labels
+    type: symbol
+    source: quakes # Reference by ID
+    layout:
+      text-field: "{mag}"
+```
+
+## Next steps
+
+- [Live Data](/guides/live-data/) - Auto-refresh and streaming
+- [Examples](/examples/) - Complete working examples

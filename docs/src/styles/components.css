@@ -1,0 +1,25 @@
+/* Import MapLibre CSS */
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+/* Component reset - prevent Starlight prose styles from affecting components */
+.not-content {
+  all: initial;
+  display: block;
+  font-family: var(--sl-font);
+  color: var(--sl-color-text);
+}
+
+.not-content * {
+  box-sizing: border-box;
+}
+
+/* YAML Syntax Colors */
+:root {
+  --yaml-comment: var(--sl-color-gray-3);
+  --yaml-key: #c792ea;
+  --yaml-string: #c3e88d;
+  --yaml-number: #f78c6c;
+  --yaml-boolean: #ffcb6b;
+}
+
+/* Dark mode adjustments (Starlight handles this automatically) */

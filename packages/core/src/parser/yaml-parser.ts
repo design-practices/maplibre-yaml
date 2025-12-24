@@ -74,6 +74,7 @@
 import { parse as parseYAML } from "yaml";
 import { ZodError } from "zod";
 import { RootSchema } from "../schemas/page.schema";
+import { MapBlockSchema } from "../schemas/map.schema";
 import type { z } from "zod";
 
 /**
@@ -83,6 +84,14 @@ import type { z } from "zod";
  * Inferred from the RootSchema Zod schema
  */
 export type RootConfig = z.infer<typeof RootSchema>;
+
+/**
+ * Type alias for a single map block
+ *
+ * @remarks
+ * Inferred from the MapBlockSchema Zod schema
+ */
+export type MapBlock = z.infer<typeof MapBlockSchema>;
 
 /**
  * Error information for a single validation or parsing error
@@ -106,9 +115,9 @@ export interface ParseError {
  * @property data - Validated configuration object (only present if success is true)
  * @property errors - Array of errors (only present if success is false)
  */
-export interface ParseResult {
+export interface ParseResult<T = RootConfig> {
   success: boolean;
-  data?: RootConfig;
+  data?: T;
   errors: ParseError[];
 }
 
@@ -253,6 +262,109 @@ export class YAMLParser {
   static validate(config: unknown): RootConfig {
     const validated = RootSchema.parse(config);
     return this.resolveReferences(validated);
+  }
+
+  /**
+   * Parse YAML string for a single map block and validate against MapBlockSchema
+   *
+   * @param yaml - YAML string to parse (should be a map block, not a full document)
+   * @returns Validated map block object
+   * @throws {Error} If YAML syntax is invalid
+   * @throws {ZodError} If validation fails
+   *
+   * @remarks
+   * This method is specifically for parsing individual map blocks (e.g., in documentation
+   * or component usage). Unlike {@link parse}, it validates against MapBlockSchema rather
+   * than RootSchema, so it expects a single map configuration without the pages array wrapper.
+   *
+   * @example
+   * ```typescript
+   * const yaml = `
+   * type: map
+   * id: example
+   * config:
+   *   center: [0, 0]
+   *   zoom: 2
+   *   mapStyle: "https://example.com/style.json"
+   * layers:
+   *   - id: points
+   *     type: circle
+   *     source:
+   *       type: geojson
+   *       data: { type: "FeatureCollection", features: [] }
+   * `;
+   *
+   * const mapBlock = YAMLParser.parseMapBlock(yaml);
+   * ```
+   */
+  static parseMapBlock(yaml: string): MapBlock {
+    // Parse YAML string to JavaScript object
+    let parsed: unknown;
+    try {
+      parsed = parseYAML(yaml);
+    } catch (error) {
+      throw new Error(
+        `YAML syntax error: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    // Validate against MapBlockSchema
+    return MapBlockSchema.parse(parsed);
+  }
+
+  /**
+   * Parse YAML string for a single map block, returning a result object
+   *
+   * @param yaml - YAML string to parse (should be a map block, not a full document)
+   * @returns Result object with success flag and either data or errors
+   *
+   * @remarks
+   * This is the non-throwing version of {@link parseMapBlock}. Instead of throwing
+   * errors, it returns a result object that indicates success or failure.
+   * Use this when you want to handle errors gracefully without try/catch.
+   *
+   * @example
+   * ```typescript
+   * const result = YAMLParser.safeParseMapBlock(yamlString);
+   * if (result.success) {
+   *   console.log('Map config:', result.data);
+   * } else {
+   *   result.errors.forEach(err => {
+   *     console.error(`Error at ${err.path}: ${err.message}`);
+   *   });
+   * }
+   * ```
+   */
+  static safeParseMapBlock(yaml: string): ParseResult<MapBlock> {
+    try {
+      const data = this.parseMapBlock(yaml);
+      return {
+        success: true,
+        data,
+        errors: [],
+      };
+    } catch (error) {
+      // Handle Zod validation errors
+      if (error instanceof ZodError) {
+        return {
+          success: false,
+          errors: this.formatZodErrors(error),
+        };
+      }
+
+      // Handle other errors (YAML syntax, etc.)
+      return {
+        success: false,
+        errors: [
+          {
+            path: "",
+            message: error instanceof Error ? error.message : String(error),
+          },
+        ],
+      };
+    }
   }
 
   /**

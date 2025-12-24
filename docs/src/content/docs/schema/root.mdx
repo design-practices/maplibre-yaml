@@ -1,0 +1,313 @@
+---
+title: Root Configuration
+description: Top-level YAML structure and global configuration
+---
+
+The root configuration is the top-level structure of your maplibre-yaml file. It defines global settings, reusable definitions, and pages.
+
+## Structure
+
+```yaml
+config:           # Global configuration (optional)
+  title: ...
+  defaultMapStyle: ...
+
+layers:           # Named layer definitions (optional)
+  layerName: ...
+
+sources:          # Named source definitions (optional)
+  sourceName: ...
+
+pages:            # Page definitions (required, min: 1)
+  - path: ...
+    blocks: ...
+```
+
+## Global Configuration
+
+Optional top-level settings that apply across all pages.
+
+### Properties
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `title` | string | No | - | Application title |
+| `description` | string | No | - | Application description |
+| `defaultMapStyle` | string (URL) | No | - | Default map style for all maps |
+| `theme` | `"light"` \| `"dark"` | No | `"light"` | Default theme |
+| `dataFetching` | object | No | - | Data fetching configuration |
+
+### Data Fetching Configuration
+
+Configure how data is fetched across all maps:
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `defaultStrategy` | `"runtime"` \| `"build"` \| `"hybrid"` | No | `"runtime"` | When to fetch data |
+| `timeout` | number | No | `30000` | Timeout in milliseconds (min: 1000) |
+| `retryAttempts` | number | No | `3` | Number of retry attempts (min: 0) |
+
+### Example
+
+```yaml
+config:
+  title: "My Map Application"
+  description: "Interactive maps and data visualization"
+  defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+  theme: dark
+  dataFetching:
+    defaultStrategy: build
+    timeout: 15000
+    retryAttempts: 5
+```
+
+## Named Layer Definitions
+
+Define layers once and reference them in multiple maps using `$ref`.
+
+### Example
+
+```yaml
+layers:
+  earthquakes:
+    id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
+
+  cities:
+    id: cities
+    type: symbol
+    source:
+      type: geojson
+      url: "https://example.com/cities.geojson"
+    layout:
+      text-field: ["get", "name"]
+      text-size: 12
+
+pages:
+  - path: "/"
+    blocks:
+      - type: map
+        id: map1
+        config: {...}
+        layers:
+          - $ref: "#/layers/earthquakes"
+          - $ref: "#/layers/cities"
+```
+
+## Named Source Definitions
+
+Define sources once and reference them in layer definitions.
+
+### Example
+
+```yaml
+sources:
+  earthquakeData:
+    type: geojson
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    refresh:
+      refreshInterval: 300000  # 5 minutes
+      updateStrategy: merge
+
+  tileSource:
+    type: vector
+    tiles:
+      - "https://example.com/tiles/{z}/{x}/{y}.pbf"
+    minzoom: 0
+    maxzoom: 14
+
+pages:
+  - path: "/"
+    blocks:
+      - type: map
+        id: map1
+        config: {...}
+        layers:
+          - id: quakes
+            type: circle
+            source: "#/sources/earthquakeData"
+            paint:
+              circle-radius: 6
+```
+
+## Pages
+
+Required array of page configurations. At least one page must be defined.
+
+```yaml
+pages:
+  - path: "/"
+    title: "Home"
+    blocks: [...]
+
+  - path: "/map"
+    title: "Interactive Map"
+    blocks: [...]
+```
+
+See [Pages & Blocks](/schema/pages/) for detailed page configuration.
+
+## Complete Example
+
+```yaml
+# Global configuration
+config:
+  title: "Earthquake Monitoring"
+  description: "Real-time earthquake visualization"
+  defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+  theme: dark
+  dataFetching:
+    defaultStrategy: runtime
+    timeout: 10000
+    retryAttempts: 3
+
+# Reusable layer definitions
+layers:
+  earthquakes:
+    id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+      refresh:
+        refreshInterval: 300000
+        updateStrategy: replace
+    paint:
+      circle-radius:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - 2
+        - 8
+        - 20
+      circle-color:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - "#ffffcc"
+        - 4
+        - "#fd8d3c"
+        - 8
+        - "#800026"
+      circle-opacity: 0.8
+
+# Reusable source definitions
+sources:
+  tectonicPlates:
+    type: geojson
+    url: "https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_plates.json"
+
+# Pages
+pages:
+  - path: "/"
+    title: "Earthquake Map"
+    blocks:
+      - type: content
+        content:
+          - h1: [{ str: "Global Earthquake Activity" }]
+          - p: [{ str: "Real-time earthquake data from USGS" }]
+
+      - type: map
+        id: main-map
+        config:
+          center: [0, 20]
+          zoom: 2
+          pitch: 0
+        layers:
+          - $ref: "#/layers/earthquakes"
+          - id: plates
+            type: line
+            source: "#/sources/tectonicPlates"
+            paint:
+              line-color: "#ffffff"
+              line-width: 2
+              line-opacity: 0.5
+        controls:
+          navigation: true
+          scale: true
+        legend:
+          title: "Magnitude"
+          items:
+            - label: "< 4.0"
+              color: "#ffffcc"
+            - label: "4.0 - 6.0"
+              color: "#fd8d3c"
+            - label: "> 6.0"
+              color: "#800026"
+
+  - path: "/story"
+    title: "Earthquake Story"
+    blocks:
+      - type: scrollytelling
+        id: story
+        config:
+          center: [0, 20]
+          zoom: 2
+        chapters:
+          - id: intro
+            title: "Introduction"
+            description: "Understanding global seismic activity"
+            center: [0, 20]
+            zoom: 2
+          - id: pacific
+            title: "Ring of Fire"
+            description: "The Pacific Ring of Fire accounts for 90% of earthquakes"
+            center: [155, 10]
+            zoom: 4
+```
+
+## Reference Resolution
+
+When using `$ref`, the format is:
+
+- `#/layers/layerName` - Reference a named layer
+- `#/sources/sourceName` - Reference a named source
+
+References are resolved at parse time and replaced with the actual definition.
+
+## Validation
+
+The root schema enforces:
+
+- **At least one page**: `pages` array must have minimum 1 item
+- **Valid URLs**: `defaultMapStyle` must be a valid URL if provided
+- **Valid enums**: `theme`, `defaultStrategy` must be valid enum values
+- **Numeric constraints**: `timeout` ≥ 1000, `retryAttempts` ≥ 0
+
+### Example Validation Errors
+
+```
+pages: Array must have at least 1 element(s)
+config.defaultMapStyle: Invalid URL format
+config.theme: Invalid enum value. Expected 'light' | 'dark', received 'blue'
+config.dataFetching.timeout: Value must be >= 1000
+```
+
+## TypeScript Types
+
+```typescript
+import { type RootConfig, type GlobalConfig } from '@maplibre-yaml/core/schemas';
+
+const config: RootConfig = {
+  config: {
+    title: "My App",
+    defaultMapStyle: "https://example.com/style.json",
+    theme: "dark"
+  },
+  pages: [
+    {
+      path: "/",
+      title: "Home",
+      blocks: []
+    }
+  ]
+};
+```

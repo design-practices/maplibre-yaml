@@ -1,0 +1,224 @@
+---
+title: Layer Types
+description: Complete reference for all layer types
+---
+
+import SchemaTable from "../../../components/SchemaTable.astro";
+import LiveMap from "../../../components/LiveMap.astro";
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+# Layer Types
+
+Layers define how your data is visualized on the map. maplibre-yaml supports all MapLibre layer types.
+
+## Common Properties
+
+All layers share these base properties:
+
+<SchemaTable
+  properties={[
+    {
+      name: "id",
+      type: "string",
+      required: true,
+      description: "Unique identifier for the layer",
+    },
+    {
+      name: "type",
+      type: "string",
+      required: true,
+      description: "Layer type (circle, line, fill, etc.)",
+    },
+    {
+      name: "source",
+      type: "Source | string",
+      required: true,
+      description: "Data source configuration or reference",
+    },
+    {
+      name: "source-layer",
+      type: "string",
+      description: "Source layer (for vector tiles)",
+    },
+    {
+      name: "minzoom",
+      type: "number",
+      default: "0",
+      description: "Minimum zoom level",
+    },
+    {
+      name: "maxzoom",
+      type: "number",
+      default: "24",
+      description: "Maximum zoom level",
+    },
+    { name: "filter", type: "Expression", description: "Filter expression" },
+    {
+      name: "visible",
+      type: "boolean",
+      default: "true",
+      description: "Initial visibility",
+    },
+    {
+      name: "before",
+      type: "string",
+      description: "Insert before this layer ID",
+    },
+    {
+      name: "interactive",
+      type: "object",
+      description: "Click/hover configuration",
+    },
+    {
+      name: "legend",
+      type: "object",
+      description: "Legend entry configuration",
+    },
+  ]}
+/>
+
+---
+
+## Circle Layer
+
+Renders points as circles. Great for point data visualization.
+
+<LiveMap
+  yaml={`
+type: map
+id: circle-demo
+config:
+  center: [-74.006, 40.7128]
+  zoom: 10
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: points
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: { size: 10 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-73.95, 40.75] }
+            properties: { size: 20 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.05, 40.68] }
+            properties: { size: 15 }
+    paint:
+      circle-radius: ["get", "size"]
+      circle-color: "#ff6b6b"
+      circle-opacity: 0.8
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+`}
+  height="300px"
+  caption="Circle layer with data-driven radius"
+/>
+
+### Circle Paint Properties
+
+<SchemaTable
+  properties={[
+    {
+      name: "circle-radius",
+      type: "number | Expression",
+      default: "5",
+      description: "Circle radius in pixels",
+    },
+    {
+      name: "circle-color",
+      type: "color | Expression",
+      default: '"#000000"',
+      description: "Fill color",
+    },
+    {
+      name: "circle-opacity",
+      type: "number | Expression",
+      default: "1",
+      description: "Fill opacity (0-1)",
+    },
+    {
+      name: "circle-stroke-width",
+      type: "number | Expression",
+      default: "0",
+      description: "Stroke width in pixels",
+    },
+    {
+      name: "circle-stroke-color",
+      type: "color | Expression",
+      default: '"#000000"',
+      description: "Stroke color",
+    },
+    {
+      name: "circle-stroke-opacity",
+      type: "number | Expression",
+      default: "1",
+      description: "Stroke opacity (0-1)",
+    },
+    {
+      name: "circle-blur",
+      type: "number | Expression",
+      default: "0",
+      description: "Blur amount",
+    },
+  ]}
+/>
+
+### Example
+
+<Tabs>
+  <TabItem label="Basic">
+```yaml
+- id: points
+  type: circle
+  source:
+    type: geojson
+    url: "https://example.com/points.geojson"
+  paint:
+    circle-radius: 8
+    circle-color: "#ff0000"
+```
+  </TabItem>
+  <TabItem label="Data-Driven">
+```yaml
+- id: earthquakes
+  type: circle
+  source:
+    type: geojson
+    url: "https://example.com/earthquakes.geojson"
+  paint:
+    circle-radius:
+      - interpolate
+      - ["linear"]
+      - ["get", "magnitude"]
+      - 1
+      - 4
+      - 5
+      - 12
+      - 8
+      - 24
+    circle-color:
+      - interpolate
+      - ["linear"]
+      - ["get", "magnitude"]
+      - 1
+      - "#ffffcc"
+      - 5
+      - "#fd8d3c"
+      - 8
+      - "#bd0026"
+```
+  </TabItem>
+</Tabs>
+
+---
+
+## Line Layer
+
+Renders lines and line strings. Perfect for routes, boundaries, and networks.
+
+{/* Similar structure for line, fill, symbol, etc. */}

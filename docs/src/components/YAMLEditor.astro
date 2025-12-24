@@ -1,0 +1,88 @@
+---
+// docs/src/components/YAMLEditor.astro
+interface Props {
+  yaml: string;
+  editable?: boolean;
+  showLineNumbers?: boolean;
+}
+
+const { yaml, editable = false, showLineNumbers = true } = Astro.props;
+const id = `editor-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+<div class="yaml-editor" id={id}>
+  <div class="editor-header">
+    <span class="editor-title">YAML Configuration</span>
+    {editable && <button class="copy-button">Copy</button>}
+  </div>
+  <pre class:list={['editor-content', { 'line-numbers': showLineNumbers }]}><code>{yaml.trim()}</code></pre>
+</div>
+
+<script define:vars={{ id }}>
+  const container = document.getElementById(id);
+  const copyButton = container?.querySelector('.copy-button');
+  const code = container?.querySelector('code');
+  
+  copyButton?.addEventListener('click', async () => {
+    if (code) {
+      await navigator.clipboard.writeText(code.textContent || '');
+      copyButton.textContent = 'Copied!';
+      setTimeout(() => {
+        copyButton.textContent = 'Copy';
+      }, 2000);
+    }
+  });
+</script>
+
+<style>
+  .yaml-editor {
+    margin: 1rem 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--sl-color-gray-5);
+  }
+  
+  .editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--sl-color-gray-6);
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+  
+  .editor-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--sl-color-gray-3);
+  }
+  
+  .copy-button {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--sl-color-gray-4);
+    background: transparent;
+    color: var(--sl-color-gray-2);
+    cursor: pointer;
+  }
+  
+  .copy-button:hover {
+    background: var(--sl-color-gray-5);
+  }
+  
+  .editor-content {
+    margin: 0;
+    padding: 1rem;
+    overflow-x: auto;
+    background: var(--sl-color-bg);
+  }
+  
+  .editor-content code {
+    font-family: var(--sl-font-mono);
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+</style>

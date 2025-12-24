@@ -1,0 +1,509 @@
+---
+title: Pages & Blocks
+description: Page routing, block types, and layout configuration
+---
+
+Pages represent individual routes in your application. Each page contains an array of blocks that define the content and interactive elements.
+
+## Page Structure
+
+```yaml
+pages:
+  - path: "/"           # URL path (required)
+    title: "Home"       # Page title (required)
+    description: "..."  # SEO description (optional)
+    blocks: [...]       # Array of blocks (required)
+```
+
+## Page Properties
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `path` | string | Yes | URL path (e.g., `"/"`, `"/map"`, `"/about"`) |
+| `title` | string | Yes | Page title for browser tab and SEO |
+| `description` | string | No | Meta description for SEO |
+| `blocks` | array | Yes | Array of content/map blocks |
+
+### Example
+
+```yaml
+pages:
+  - path: "/"
+    title: "Home"
+    description: "Welcome to our interactive mapping application"
+    blocks:
+      - type: content
+        content:
+          - h1: [{ str: "Welcome" }]
+      - type: map
+        id: home-map
+        config:
+          center: [0, 0]
+          zoom: 2
+          mapStyle: "https://demotiles.maplibre.org/style.json"
+
+  - path: "/about"
+    title: "About Us"
+    description: "Learn more about our mission"
+    blocks:
+      - type: content
+        content:
+          - h1: [{ str: "About Us" }]
+          - p: [{ str: "Our story..." }]
+```
+
+## Block Types
+
+Blocks are the building blocks of pages. Each page contains an array of blocks rendered in order.
+
+### Available Block Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `content` | Rich text and media | Static content, headings, paragraphs |
+| `map` | Standard map | Interactive maps with layers |
+| `map-fullpage` | Full viewport map | Immersive map experiences |
+| `scrollytelling` | Narrative map story | Story-driven map experiences with chapters |
+| `mixed` | Layout container | Combining multiple blocks with custom layouts |
+
+## Content Block
+
+Rich text content using a structured format.
+
+```yaml
+- type: content
+  content:
+    - h1: [{ str: "Main Heading" }]
+    - h2: [{ str: "Subheading" }]
+    - p: [{ str: "Paragraph text" }]
+    - ul:
+        - [{ str: "List item 1" }]
+        - [{ str: "List item 2" }]
+```
+
+See [Content Schema](/schema/content/) for complete content formatting options.
+
+## Map Block
+
+Standard interactive map with configurable size and layers.
+
+```yaml
+- type: map
+  id: my-map
+  config:
+    center: [-74.006, 40.7128]
+    zoom: 12
+    pitch: 45
+    bearing: 0
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: points
+      type: circle
+      source:
+        type: geojson
+        url: "https://example.com/points.geojson"
+      paint:
+        circle-radius: 8
+        circle-color: "#3b82f6"
+  controls:
+    navigation: true
+    scale: true
+```
+
+See [Map Configuration](/schema/map-config/) for detailed map options.
+
+## Map Full Page Block
+
+Full viewport map that fills the entire screen.
+
+```yaml
+- type: map-fullpage
+  id: immersive-map
+  config:
+    center: [0, 20]
+    zoom: 3
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  layers:
+    - id: earthquakes
+      type: circle
+      source:
+        type: geojson
+        url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+      paint:
+        circle-radius: 6
+        circle-color: "#e74c3c"
+```
+
+## Scrollytelling Block
+
+Narrative-driven map experience with chapters that update the map view.
+
+```yaml
+- type: scrollytelling
+  id: story
+  config:
+    center: [0, 20]
+    zoom: 2
+    mapStyle: "https://demotiles.maplibre.org/style.json"
+  chapters:
+    - id: intro
+      title: "Introduction"
+      description: "Welcome to our story"
+      center: [0, 20]
+      zoom: 2
+    - id: location1
+      title: "First Location"
+      description: "Details about this location"
+      center: [-74, 40]
+      zoom: 12
+```
+
+See [Scrollytelling](/schema/scrollytelling/) for complete chapter configuration.
+
+## Mixed Block
+
+Layout container for combining multiple blocks with custom layouts.
+
+### Layout Options
+
+| Layout | Description | CSS Equivalent |
+|--------|-------------|----------------|
+| `row` | Horizontal layout | `display: flex; flex-direction: row` |
+| `column` | Vertical layout (default) | `display: flex; flex-direction: column` |
+| `grid` | CSS Grid layout | `display: grid` |
+
+### Properties
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `type` | `"mixed"` | Yes | - | Block type |
+| `id` | string | No | - | Unique identifier |
+| `className` | string | No | - | CSS class name |
+| `style` | string | No | - | Inline CSS styles |
+| `layout` | `"row"` \| `"column"` \| `"grid"` | No | `"row"` | Layout direction |
+| `gap` | string | No | - | Gap between blocks (CSS gap property) |
+| `blocks` | array | Yes | - | Child blocks |
+
+### Row Layout
+
+Arrange blocks horizontally:
+
+```yaml
+- type: mixed
+  layout: row
+  gap: "20px"
+  blocks:
+    - type: content
+      content:
+        - h2: [{ str: "Left Column" }]
+        - p: [{ str: "Content on the left" }]
+    - type: map
+      id: side-map
+      config:
+        center: [-74, 40]
+        zoom: 10
+        mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+### Column Layout
+
+Stack blocks vertically:
+
+```yaml
+- type: mixed
+  layout: column
+  gap: "40px"
+  blocks:
+    - type: content
+      content:
+        - h2: [{ str: "Header Content" }]
+    - type: map
+      id: map1
+      config:
+        center: [0, 0]
+        zoom: 2
+        mapStyle: "..."
+    - type: content
+      content:
+        - p: [{ str: "Footer content" }]
+```
+
+### Grid Layout
+
+Create complex grid layouts:
+
+```yaml
+- type: mixed
+  layout: grid
+  style: "grid-template-columns: repeat(2, 1fr); gap: 20px;"
+  blocks:
+    - type: content
+      content:
+        - h3: [{ str: "Grid Item 1" }]
+    - type: content
+      content:
+        - h3: [{ str: "Grid Item 2" }]
+    - type: map
+      id: map1
+      config:
+        center: [-100, 40]
+        zoom: 4
+        mapStyle: "..."
+    - type: map
+      id: map2
+      config:
+        center: [100, 40]
+        zoom: 4
+        mapStyle: "..."
+```
+
+### Nested Mixed Blocks
+
+Mixed blocks can be nested for complex layouts:
+
+```yaml
+- type: mixed
+  layout: column
+  blocks:
+    - type: content
+      content:
+        - h1: [{ str: "Dashboard" }]
+
+    - type: mixed
+      layout: row
+      gap: "20px"
+      blocks:
+        - type: map
+          id: left-map
+          config:
+            center: [-74, 40]
+            zoom: 10
+            mapStyle: "..."
+        - type: map
+          id: right-map
+          config:
+            center: [139, 35]
+            zoom: 10
+            mapStyle: "..."
+
+    - type: content
+      content:
+        - p: [{ str: "Footer content" }]
+```
+
+## Complete Page Examples
+
+### Simple Content Page
+
+```yaml
+- path: "/about"
+  title: "About"
+  description: "Learn more about our project"
+  blocks:
+    - type: content
+      content:
+        - h1: [{ str: "About Our Project" }]
+        - p: [{ str: "We create interactive map experiences..." }]
+        - h2: [{ str: "Our Mission" }]
+        - p: [{ str: "To make geospatial data accessible..." }]
+```
+
+### Interactive Map Page
+
+```yaml
+- path: "/map"
+  title: "Interactive Map"
+  description: "Explore our interactive map"
+  blocks:
+    - type: content
+      content:
+        - h1: [{ str: "Explore the Map" }]
+        - p: [{ str: "Click on features for details" }]
+
+    - type: map
+      id: main-map
+      config:
+        center: [-74.006, 40.7128]
+        zoom: 12
+        pitch: 45
+        mapStyle: "https://demotiles.maplibre.org/style.json"
+      layers:
+        - id: buildings
+          type: fill-extrusion
+          source:
+            type: vector
+            url: "https://demotiles.maplibre.org/tiles/tiles.json"
+          paint:
+            fill-extrusion-color: "#aaa"
+            fill-extrusion-height: ["get", "height"]
+      controls:
+        navigation: true
+        scale: true
+```
+
+### Story Page
+
+```yaml
+- path: "/story"
+  title: "Our Story"
+  description: "Follow our journey across the globe"
+  blocks:
+    - type: scrollytelling
+      id: global-story
+      config:
+        center: [0, 20]
+        zoom: 2
+        mapStyle: "https://demotiles.maplibre.org/style.json"
+      chapters:
+        - id: intro
+          title: "The Beginning"
+          description: "Our story starts here"
+          center: [0, 20]
+          zoom: 2
+        - id: location1
+          title: "New York"
+          description: "Our first office"
+          center: [-74, 40.7]
+          zoom: 12
+        - id: location2
+          title: "Tokyo"
+          description: "Expanding to Asia"
+          center: [139.7, 35.7]
+          zoom: 12
+```
+
+### Dashboard Page
+
+```yaml
+- path: "/dashboard"
+  title: "Dashboard"
+  description: "Real-time data visualization"
+  blocks:
+    - type: content
+      content:
+        - h1: [{ str: "Global Dashboard" }]
+
+    - type: mixed
+      layout: row
+      gap: "20px"
+      blocks:
+        - type: map
+          id: map-west
+          config:
+            center: [-100, 40]
+            zoom: 4
+            mapStyle: "..."
+          layers:
+            - $ref: "#/layers/usData"
+
+        - type: map
+          id: map-east
+          config:
+            center: [10, 50]
+            zoom: 4
+            mapStyle: "..."
+          layers:
+            - $ref: "#/layers/europeData"
+
+    - type: content
+      content:
+        - h2: [{ str: "Analysis" }]
+        - p: [{ str: "Data updated in real-time..." }]
+```
+
+## Multi-Page Application
+
+Complete example with multiple pages:
+
+```yaml
+config:
+  title: "Multi-Page Map App"
+  defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+
+pages:
+  - path: "/"
+    title: "Home"
+    description: "Welcome to our mapping application"
+    blocks:
+      - type: content
+        content:
+          - h1: [{ str: "Welcome" }]
+          - p: [{ str: "Explore our interactive maps" }]
+          - ul:
+              - [{ str: "Real-time data visualization" }]
+              - [{ str: "Interactive stories" }]
+              - [{ str: "Custom map styles" }]
+
+  - path: "/map"
+    title: "Map"
+    description: "Interactive map viewer"
+    blocks:
+      - type: map
+        id: viewer
+        config:
+          center: [0, 0]
+          zoom: 2
+
+  - path: "/story"
+    title: "Story"
+    description: "Our interactive story"
+    blocks:
+      - type: scrollytelling
+        id: main-story
+        config:
+          center: [0, 0]
+          zoom: 2
+        chapters:
+          - id: ch1
+            title: "Chapter 1"
+            center: [0, 0]
+            zoom: 3
+
+  - path: "/dashboard"
+    title: "Dashboard"
+    description: "Data dashboard"
+    blocks:
+      - type: mixed
+        layout: grid
+        style: "grid-template-columns: repeat(2, 1fr);"
+        blocks:
+          - type: map
+            id: map1
+            config:
+              center: [-100, 40]
+              zoom: 4
+          - type: map
+            id: map2
+            config:
+              center: [100, 40]
+              zoom: 4
+```
+
+## TypeScript Types
+
+```typescript
+import { type Page, type Block, type MixedBlock } from '@maplibre-yaml/core/schemas';
+
+const page: Page = {
+  path: "/",
+  title: "Home",
+  description: "Welcome page",
+  blocks: [
+    {
+      type: "content",
+      content: [
+        { h1: [{ str: "Welcome" }] }
+      ]
+    }
+  ]
+};
+
+const mixedBlock: MixedBlock = {
+  type: "mixed",
+  layout: "row",
+  gap: "20px",
+  blocks: [
+    // ... child blocks
+  ]
+};
+```

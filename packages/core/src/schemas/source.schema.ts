@@ -93,10 +93,7 @@ export type StreamConfig = z.infer<typeof StreamConfigSchema>;
  * ```
  */
 export const LoadingConfigSchema = z.object({
-  enabled: z
-    .boolean()
-    .default(false)
-    .describe("Enable loading UI overlays"),
+  enabled: z.boolean().default(false).describe("Enable loading UI overlays"),
   message: z.string().optional().describe("Custom loading message to display"),
   showErrorOverlay: z
     .boolean()
@@ -303,7 +300,9 @@ export const GeoJSONSourceSchema = z
       .number()
       .min(1000)
       .optional()
-      .describe("Polling interval in milliseconds (legacy, use refresh.refreshInterval)"),
+      .describe(
+        "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+      ),
     updateStrategy: z
       .enum(["replace", "merge", "append-window"])
       .optional()
@@ -322,8 +321,8 @@ export const GeoJSONSourceSchema = z
       .number()
       .int()
       .min(0)
-      .default(50)
-      .describe("Cluster radius in pixels"),
+      .optional()
+      .describe("Cluster radius in pixels (default: 50)"),
     clusterMaxZoom: z
       .number()
       .min(0)
