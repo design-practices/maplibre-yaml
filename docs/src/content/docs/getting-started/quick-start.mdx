@@ -3,17 +3,14 @@ title: Quick Start
 description: Create your first map in 5 minutes
 ---
 
-import { Steps } from "@astrojs/starlight/components";
 import LiveMap from "../../../components/LiveMap.astro";
 import YAMLBlock from "../../../components/YAMLBlock.astro";
 
 Let's create a map showing earthquake data in under 5 minutes.
 
-<Steps>
+## 1. Create an HTML file
 
-1. **Create an HTML file**
-
-   Create a new file called `index.html`:
+Create a new file called `index.html`:
 
 ```html
 <!DOCTYPE html>
@@ -41,9 +38,9 @@ Let's create a map showing earthquake data in under 5 minutes.
 </html>
 ```
 
-2. **Create your map configuration**
+## 2. Create your map configuration
 
-   Create a file called `map.js`:
+Create a file called `map.js`:
 
 ```javascript
 import { parseYAML, MapRenderer } from "@maplibre-yaml/core";
@@ -76,15 +73,13 @@ renderer.on("layer:loaded", ({ layerId, featureCount }) => {
 });
 ```
 
-3. **Run a local server**
+## 3. Run a local server
 
 ```bash
-   npx serve .
+npx serve .
 ```
 
 Open http://localhost:3000 in your browser.
-
-</Steps>
 
 ## Result
 

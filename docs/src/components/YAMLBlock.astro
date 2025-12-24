@@ -1,7 +1,7 @@
 ---
 /**
  * YAMLBlock - Displays syntax-highlighted YAML with optional features.
- * 
+ *
  * @example
  * <YAMLBlock caption="Map configuration">
  * {`type: map
@@ -9,7 +9,7 @@
  * config:
  *   center: [-74, 40]`}
  * </YAMLBlock>
- * 
+ *
  * @example With line highlighting
  * <YAMLBlock highlight={[1, 2, 3]} caption="Important lines">
  * {`line 1
@@ -17,6 +17,8 @@
  * line 3`}
  * </YAMLBlock>
  */
+
+import { formatYAML } from '../utils/yaml-format';
 
 interface Props {
   /** Optional caption/title */
