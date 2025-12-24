@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "build": "astro build",
+    "build": "pnpm --filter @maplibre-yaml/core build && astro build",
     "preview": "astro preview",
     "astro": "astro",
     "typedoc": "typedoc --options ../packages/core/typedoc.json"
