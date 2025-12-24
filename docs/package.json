@@ -10,7 +10,6 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "prebuild": "pnpm typedoc",
     "typedoc": "typedoc --options ../packages/core/typedoc.json"
   },
   "dependencies": {
