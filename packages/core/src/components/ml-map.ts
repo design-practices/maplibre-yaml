@@ -125,17 +125,20 @@ export class MLMap extends HTMLElement {
   private getConfig(): MapBlock | null {
     // Try 'config' attribute (JSON string)
     const configAttr = this.getAttribute("config");
+    console.log('[ml-map] Getting config, attribute length:', configAttr?.length);
     if (configAttr) {
       try {
         const parsed = JSON.parse(configAttr);
+        console.log('[ml-map] Parsed JSON config:', parsed);
         const result = MapBlockSchema.safeParse(parsed);
         if (result.success) {
+          console.log('[ml-map] Config validation successful');
           return result.data;
         } else {
-          console.error("Invalid map config in attribute:", result.error);
+          console.error("[ml-map] Invalid map config in attribute:", result.error);
         }
       } catch (error) {
-        console.error("Failed to parse config attribute as JSON:", error);
+        console.error("[ml-map] Failed to parse config attribute as JSON:", error);
       }
     }
 
@@ -191,6 +194,9 @@ export class MLMap extends HTMLElement {
   private render(config: MapBlock): void {
     if (!this.container) return;
 
+    console.log('[ml-map] Rendering map with config:', config);
+    console.log('[ml-map] Layers:', config.layers);
+
     try {
       this.renderer = new MapRenderer(
         this.container,
@@ -198,6 +204,7 @@ export class MLMap extends HTMLElement {
         config.layers || [],
         {
           onLoad: () => {
+            console.log('[ml-map] Map loaded successfully');
             // Add controls if specified
             if (config.controls) {
               this.renderer?.addControls(config.controls);

@@ -1,6 +1,18 @@
 // docs/src/utils/yaml-format.ts
 
 /**
+ * Decode HTML entities to plain text
+ */
+function decodeHtml(text: string): string {
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+/**
  * Format YAML for display with optional line numbers and highlighting.
  */
 export function formatYAML(
@@ -8,7 +20,9 @@ export function formatYAML(
   highlight: number[] = [],
   lineNumbers: boolean = true
 ): string {
-  const lines = yaml.trim().split("\n");
+  // First decode any HTML entities from Astro slot rendering
+  const decodedYaml = decodeHtml(yaml);
+  const lines = decodedYaml.trim().split("\n");
 
   return lines
     .map((line, index) => {
@@ -29,6 +43,7 @@ export function formatYAML(
 }
 
 function escapeHtml(text: string): string {
+  // Escape HTML special characters for safe rendering
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

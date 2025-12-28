@@ -1,0 +1,736 @@
+---
+title: Web Components
+description: Use the <ml-map> custom element for zero-JavaScript map embedding
+---
+
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
+The `<ml-map>` web component is the simplest way to add maps to any HTML page. No JavaScript required for basic usage - just HTML and a configuration.
+
+## Quick Start
+
+Get a map on your page in 3 steps.
+
+<Steps>
+
+1. **Add the scripts and styles**
+
+   ```html
+   <head>
+     <!-- MapLibre GL CSS -->
+     <link
+       href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+       rel="stylesheet"
+     />
+
+     <!-- Register the web component -->
+     <script type="module">
+       import "https://unpkg.com/@maplibre-yaml/core/register";
+     </script>
+   </head>
+   ```
+
+2. **Add the component with inline config**
+
+   ```html
+   <ml-map
+     style="width: 100%; height: 400px; display: block;"
+     config='{
+       "type": "map",
+       "id": "quick-map",
+       "config": {
+         "center": [-74.006, 40.7128],
+         "zoom": 12,
+         "mapStyle": "https://demotiles.maplibre.org/style.json"
+       },
+       "layers": []
+     }'
+   >
+   </ml-map>
+   ```
+
+3. **View in browser**
+
+   Open the HTML file - no build step or server required!
+
+</Steps>
+
+<Aside type="tip">
+  The `display: block` style is important - custom elements are inline by
+  default, which can cause sizing issues.
+</Aside>
+
+## Installation Options
+
+### CDN (Recommended for Quick Start)
+
+```html
+<script type="module">
+  import "https://unpkg.com/@maplibre-yaml/core/register";
+</script>
+```
+
+### npm (With Build Tools)
+
+```bash
+npm install @maplibre-yaml/core maplibre-gl
+```
+
+```javascript
+// In your JavaScript entry point
+import "@maplibre-yaml/core/register";
+import "maplibre-gl/dist/maplibre-gl.css";
+```
+
+## Configuration Methods
+
+### Method 1: JSON in `config` Attribute
+
+Pass configuration as a JSON string:
+
+```html
+<ml-map
+  config='{"type":"map","id":"demo","config":{"center":[-74,40],"zoom":10,"mapStyle":"https://demotiles.maplibre.org/style.json"},"layers":[]}'
+></ml-map>
+```
+
+For readability, use a `<script>` tag:
+
+```html
+<ml-map
+  id="my-map"
+  style="width: 100%; height: 400px; display: block;"
+></ml-map>
+
+<script type="module">
+  const config = {
+    type: "map",
+    id: "demo",
+    config: {
+      center: [-74.006, 40.7128],
+      zoom: 12,
+      mapStyle: "https://demotiles.maplibre.org/style.json",
+    },
+    layers: [
+      {
+        id: "points",
+        type: "circle",
+        source: {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: { type: "Point", coordinates: [-74.006, 40.7128] },
+                properties: { name: "NYC" },
+              },
+            ],
+          },
+        },
+        paint: {
+          "circle-radius": 10,
+          "circle-color": "#3b82f6",
+        },
+      },
+    ],
+  };
+
+  document
+    .getElementById("my-map")
+    .setAttribute("config", JSON.stringify(config));
+</script>
+```
+
+### Method 2: Load from YAML File (Recommended)
+
+The cleanest approach - keep configuration in external YAML files:
+
+```html
+<ml-map id="yaml-map" style="width: 100%; height: 400px; display: block;">
+</ml-map>
+
+<script type="module">
+  import { YAMLParser } from "https://unpkg.com/@maplibre-yaml/core";
+
+  // Fetch YAML file
+  const response = await fetch("map-config.yaml");
+  const yamlText = await response.text();
+
+  // Parse YAML to JSON
+  const result = YAMLParser.safeParseMapBlock(yamlText);
+
+  if (result.success) {
+    document
+      .getElementById("yaml-map")
+      .setAttribute("config", JSON.stringify(result.data));
+  } else {
+    console.error("YAML errors:", result.errors);
+  }
+</script>
+```
+
+**map-config.yaml:**
+
+```yaml
+type: map
+id: my-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: points
+    type: circle
+    source:
+      type: geojson
+      url: "https://example.com/data.geojson"
+    paint:
+      circle-radius: 8
+      circle-color: "#3b82f6"
+```
+
+### Method 3: Programmatic Configuration
+
+Set config via JavaScript property (not attribute):
+
+```html
+<ml-map
+  id="prog-map"
+  style="width: 100%; height: 400px; display: block;"
+></ml-map>
+
+<script type="module">
+  import "https://unpkg.com/@maplibre-yaml/core/register";
+
+  const mapEl = document.getElementById("prog-map");
+
+  // Set config as object (not string)
+  mapEl.config = {
+    type: "map",
+    id: "programmatic",
+    config: {
+      center: [-74.006, 40.7128],
+      zoom: 12,
+      mapStyle: "https://demotiles.maplibre.org/style.json",
+    },
+    layers: [],
+  };
+</script>
+```
+
+## Component Lifecycle
+
+### Initialization Flow
+
+```
+1. Element added to DOM
+2. connectedCallback() fires
+3. Config attribute/property read
+4. Config validated against schema
+5. MapLibre GL map created
+6. Layers added
+7. 'ml-map:load' event dispatched
+```
+
+### Lifecycle Events
+
+```javascript
+const mapEl = document.querySelector("ml-map");
+
+// Map loaded and ready
+mapEl.addEventListener("ml-map:load", (event) => {
+  console.log("Map ready!");
+});
+
+// Error during initialization or runtime
+mapEl.addEventListener("ml-map:error", (event) => {
+  console.error("Map error:", event.detail.error);
+});
+
+// Layer data loaded
+mapEl.addEventListener("ml-map:layer-loaded", (event) => {
+  const { layerId, featureCount } = event.detail;
+  console.log(`${layerId}: ${featureCount} features`);
+});
+
+// Layer data loading
+mapEl.addEventListener("ml-map:layer-loading", (event) => {
+  console.log(`Loading ${event.detail.layerId}...`);
+});
+
+// Layer error
+mapEl.addEventListener("ml-map:layer-error", (event) => {
+  console.error(`${event.detail.layerId} error:`, event.detail.error);
+});
+```
+
+## Accessing the MapLibre Instance
+
+For advanced customization, access the underlying MapLibre GL map:
+
+```javascript
+const mapEl = document.querySelector("ml-map");
+
+mapEl.addEventListener("ml-map:load", () => {
+  // Get the MapLibre GL map instance
+  const map = mapEl.getMap();
+
+  // Now you can use any MapLibre GL API
+  map.flyTo({
+    center: [-122.4194, 37.7749],
+    zoom: 14,
+    duration: 2000,
+  });
+
+  // Add custom controls
+  map.addControl(new maplibregl.NavigationControl());
+
+  // Add custom layers
+  map.addLayer({
+    id: "custom-layer",
+    type: "fill",
+    source: "some-source",
+    paint: { "fill-color": "#ff0000" },
+  });
+});
+```
+
+<Aside type="caution">
+  Only access `getMap()` after the `ml-map:load` event fires. Before that, the
+  map instance doesn't exist.
+</Aside>
+
+## Controlling Live Data
+
+For maps with polling or streaming data:
+
+```javascript
+const mapEl = document.querySelector("ml-map");
+
+mapEl.addEventListener("ml-map:load", () => {
+  // Pause auto-refresh
+  mapEl.pauseRefresh("earthquakes");
+
+  // Resume auto-refresh
+  mapEl.resumeRefresh("earthquakes");
+
+  // Trigger immediate refresh
+  mapEl.refreshNow("earthquakes").then(() => {
+    console.log("Data refreshed");
+  });
+});
+```
+
+## Complete Example: Earthquake Monitor
+
+**index.html:**
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Earthquake Monitor</title>
+    <link
+      href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: system-ui, sans-serif;
+      }
+
+      .container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      header {
+        padding: 15px 20px;
+        background: #1f2937;
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      h1 {
+        font-size: 1.25rem;
+        font-weight: 600;
+      }
+
+      .status {
+        font-size: 0.875rem;
+        color: #9ca3af;
+      }
+
+      .status.loading {
+        color: #fbbf24;
+      }
+      .status.error {
+        color: #ef4444;
+      }
+      .status.ready {
+        color: #22c55e;
+      }
+
+      ml-map {
+        flex: 1;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🌍 Earthquake Monitor</h1>
+        <div class="status" id="status">Initializing...</div>
+      </header>
+
+      <ml-map id="earthquake-map"></ml-map>
+    </div>
+
+    <script type="module">
+      import "https://unpkg.com/@maplibre-yaml/core/register";
+      import { YAMLParser } from "https://unpkg.com/@maplibre-yaml/core";
+
+      const statusEl = document.getElementById("status");
+      const mapEl = document.getElementById("earthquake-map");
+
+      // Load YAML configuration
+      async function init() {
+        try {
+          statusEl.textContent = "Loading configuration...";
+          statusEl.className = "status loading";
+
+          const response = await fetch("earthquake-config.yaml");
+          const yamlText = await response.text();
+
+          const result = YAMLParser.safeParseMapBlock(yamlText);
+
+          if (!result.success) {
+            throw new Error(result.errors[0].message);
+          }
+
+          // Set configuration
+          mapEl.setAttribute("config", JSON.stringify(result.data));
+        } catch (error) {
+          statusEl.textContent = `Error: ${error.message}`;
+          statusEl.className = "status error";
+        }
+      }
+
+      // Event handlers
+      mapEl.addEventListener("ml-map:load", () => {
+        statusEl.textContent = "Loading earthquake data...";
+        statusEl.className = "status loading";
+      });
+
+      mapEl.addEventListener("ml-map:layer-loaded", (event) => {
+        const { featureCount } = event.detail;
+        const time = new Date().toLocaleTimeString();
+        statusEl.textContent = `${featureCount} earthquakes · ${time}`;
+        statusEl.className = "status ready";
+      });
+
+      mapEl.addEventListener("ml-map:layer-error", (event) => {
+        statusEl.textContent = `Data error: ${event.detail.error.message}`;
+        statusEl.className = "status error";
+      });
+
+      mapEl.addEventListener("ml-map:error", (event) => {
+        statusEl.textContent = `Map error: ${event.detail.error.message}`;
+        statusEl.className = "status error";
+      });
+
+      // Initialize
+      init();
+    </script>
+  </body>
+</html>
+```
+
+**earthquake-config.yaml:**
+
+```yaml
+type: map
+id: earthquake-monitor
+config:
+  center: [-120, 40]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
+      refreshInterval: 60000
+      updateStrategy: replace
+    paint:
+      circle-radius:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - 4
+        - 5
+        - 20
+      circle-color:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - "#22c55e"
+        - 3
+        - "#eab308"
+        - 5
+        - "#ef4444"
+      circle-opacity: 0.8
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: title
+          - p:
+              - str: "Magnitude: "
+              - property: mag
+          - p:
+              - str: "Depth: "
+              - property: depth
+              - str: " km"
+```
+
+## Multiple Maps on One Page
+
+Each `<ml-map>` is independent:
+
+```html
+<div
+  style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 100vh;"
+>
+  <ml-map id="map-1" style="display: block;"></ml-map>
+  <ml-map id="map-2" style="display: block;"></ml-map>
+</div>
+
+<script type="module">
+  import "https://unpkg.com/@maplibre-yaml/core/register";
+
+  // Configure each map independently
+  document.getElementById("map-1").config = {
+    /* config 1 */
+  };
+  document.getElementById("map-2").config = {
+    /* config 2 */
+  };
+</script>
+```
+
+## Framework Compatibility
+
+The `<ml-map>` web component works in any framework:
+
+### React
+
+```jsx
+import "@maplibre-yaml/core/register";
+
+function Map({ config }) {
+  const configJson = JSON.stringify(config);
+
+  return (
+    <ml-map
+      style={{ width: "100%", height: "400px", display: "block" }}
+      config={configJson}
+    />
+  );
+}
+```
+
+### Vue
+
+```vue
+<template>
+  <ml-map
+    :config="configJson"
+    style="width: 100%; height: 400px; display: block;"
+  />
+</template>
+
+<script setup>
+import "@maplibre-yaml/core/register";
+import { computed } from "vue";
+
+const props = defineProps(["config"]);
+const configJson = computed(() => JSON.stringify(props.config));
+</script>
+```
+
+### Svelte
+
+```svelte
+<script>
+  import '@maplibre-yaml/core/register';
+  export let config;
+</script>
+
+<ml-map config={JSON.stringify(config)} style="width: 100%; height: 400px; display: block;" />
+```
+
+## Troubleshooting
+
+### Component Not Rendering
+
+**Symptoms:** `<ml-map>` element exists but shows nothing.
+
+**Solutions:**
+
+1. **Check registration**
+
+   ```javascript
+   // Verify component is registered
+   console.log(customElements.get("ml-map")); // Should not be undefined
+   ```
+
+2. **Check dimensions**
+
+   ```css
+   ml-map {
+     display: block; /* Required! */
+     width: 100%;
+     height: 400px;
+   }
+   ```
+
+3. **Check config is valid JSON**
+   ```javascript
+   try {
+     JSON.parse(mapEl.getAttribute("config"));
+   } catch (e) {
+     console.error("Invalid JSON config");
+   }
+   ```
+
+### "Invalid map config in attribute" Error
+
+**Symptoms:** Console shows Zod validation errors.
+
+**Cause:** Configuration doesn't match schema.
+
+**Debug:**
+
+```javascript
+mapEl.addEventListener("ml-map:error", (event) => {
+  console.error("Config error:", event.detail.error);
+  // Check which fields are invalid
+});
+```
+
+**Common fixes:**
+
+- Ensure `type: "map"` is present
+- Ensure `id` is a string
+- Ensure `config.center` is `[longitude, latitude]`
+- Ensure `config.mapStyle` is a valid URL
+
+### Events Not Firing
+
+**Symptoms:** Event listeners never trigger.
+
+**Solutions:**
+
+1. **Add listeners before setting config**
+
+   ```javascript
+   const mapEl = document.getElementById('my-map');
+
+   // ✅ Add listener first
+   mapEl.addEventListener('ml-map:load', () => {});
+
+   // Then set config
+   mapEl.config = { ... };
+   ```
+
+2. **Check for errors**
+   ```javascript
+   mapEl.addEventListener("ml-map:error", (event) => {
+     console.error("Error prevented load:", event.detail.error);
+   });
+   ```
+
+### Map Loads but No Layers Visible
+
+**Symptoms:** Base map shows, but data layers don't appear.
+
+**Debug steps:**
+
+1. **Check layer loading events**
+
+   ```javascript
+   mapEl.addEventListener("ml-map:layer-loading", (e) =>
+     console.log("Loading:", e.detail.layerId)
+   );
+   mapEl.addEventListener("ml-map:layer-loaded", (e) =>
+     console.log("Loaded:", e.detail.layerId, e.detail.featureCount)
+   );
+   mapEl.addEventListener("ml-map:layer-error", (e) =>
+     console.error("Error:", e.detail.layerId, e.detail.error)
+   );
+   ```
+
+2. **Check network requests** - Open browser DevTools → Network tab
+
+3. **Verify GeoJSON URL** - Open the URL directly in browser
+
+4. **Check for CORS issues** - Look for CORS errors in console
+
+## Component API Reference
+
+### Attributes
+
+| Attribute | Type        | Description                           |
+| --------- | ----------- | ------------------------------------- |
+| `config`  | JSON string | Map configuration as stringified JSON |
+
+### Properties
+
+| Property | Type   | Description                        |
+| -------- | ------ | ---------------------------------- |
+| `config` | Object | Map configuration object (set/get) |
+
+### Methods
+
+| Method                   | Returns          | Description                          |
+| ------------------------ | ---------------- | ------------------------------------ |
+| `getMap()`               | `maplibregl.Map` | Returns the MapLibre GL map instance |
+| `getRenderer()`          | `MapRenderer`    | Returns the MapRenderer instance     |
+| `pauseRefresh(layerId)`  | `void`           | Pause polling for a layer            |
+| `resumeRefresh(layerId)` | `void`           | Resume polling for a layer           |
+| `refreshNow(layerId)`    | `Promise<void>`  | Trigger immediate data refresh       |
+
+### Events
+
+| Event                  | Detail                                      | Description          |
+| ---------------------- | ------------------------------------------- | -------------------- |
+| `ml-map:load`          | `{}`                                        | Map loaded and ready |
+| `ml-map:error`         | `{ error: Error }`                          | Error occurred       |
+| `ml-map:layer-loading` | `{ layerId: string }`                       | Layer data loading   |
+| `ml-map:layer-loaded`  | `{ layerId: string, featureCount: number }` | Layer data loaded    |
+| `ml-map:layer-error`   | `{ layerId: string, error: Error }`         | Layer data error     |
+
+## Next Steps
+
+- [Vanilla JavaScript Integration](/integrations/vanilla-js/) - More control with direct API usage
+- [Astro Integration](/integrations/astro/) - For Astro-based sites
+- [Live Data Guide](/guides/live-data/) - Polling and streaming configuration
+- [API Reference](/api/) - Complete API documentation

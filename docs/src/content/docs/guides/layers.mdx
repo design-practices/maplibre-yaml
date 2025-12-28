@@ -6,41 +6,7 @@ description: Learn about layer types, paint properties, and data-driven styling
 import LiveMap from "../../../components/LiveMap.astro";
 import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
-Layers are how you visualize data on your map. maplibre-yaml supports all MapLibre layer types, each suited to different kinds of geographic data.
-
-## Layer types
-
-| Type             | Best for                 | Geometry     |
-| ---------------- | ------------------------ | ------------ |
-| `circle`         | Point markers, dots      | Point        |
-| `symbol`         | Icons and labels         | Point        |
-| `line`           | Roads, paths, routes     | LineString   |
-| `fill`           | Areas, regions, polygons | Polygon      |
-| `fill-extrusion` | 3D buildings             | Polygon      |
-| `heatmap`        | Density visualization    | Point        |
-| `raster`         | Satellite imagery        | Raster tiles |
-
-## Circle layers
-
-Circles are the simplest way to show point data:
-
-```yaml
-- id: points
-  type: circle
-  source:
-    type: geojson
-    data: { ... }
-  paint:
-    circle-radius: 8
-    circle-color: "#3b82f6"
-    circle-stroke-width: 2
-    circle-stroke-color: "#ffffff"
-    circle-opacity: 0.8
-```
-
-<LiveMap
-  yaml={`
-type: map
+export const circleDemoYAML = `type: map
 id: circle-demo
 config:
   center: [-122.4, 37.8]
@@ -67,33 +33,9 @@ layers:
       circle-radius: 12
       circle-color: "#3b82f6"
       circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"
-`}
-  height="300px"
-/>
+      circle-stroke-color: "#ffffff"`;
 
-## Line layers
-
-Use lines for paths, routes, and boundaries:
-
-```yaml
-- id: route
-  type: line
-  source:
-    type: geojson
-    data: { ... }
-  paint:
-    line-color: "#ef4444"
-    line-width: 4
-    line-opacity: 0.8
-  layout:
-    line-cap: round
-    line-join: round
-```
-
-<LiveMap
-  yaml={`
-type: map
+export const lineDemoYAML = `type: map
 id: line-demo
 config:
   center: [-122.4, 37.75]
@@ -118,30 +60,9 @@ layers:
       line-width: 4
     layout:
       line-cap: round
-      line-join: round
-`}
-  height="300px"
-/>
+      line-join: round`;
 
-## Fill layers
-
-Fill layers shade polygon areas:
-
-```yaml
-- id: regions
-  type: fill
-  source:
-    type: geojson
-    data: { ... }
-  paint:
-    fill-color: "#22c55e"
-    fill-opacity: 0.5
-    fill-outline-color: "#166534"
-```
-
-<LiveMap
-  yaml={`
-type: map
+export const fillDemoYAML = `type: map
 id: fill-demo
 config:
   center: [-122.4, 37.77]
@@ -167,36 +88,9 @@ layers:
     paint:
       fill-color: "#22c55e"
       fill-opacity: 0.5
-      fill-outline-color: "#166534"
-`}
-  height="300px"
-/>
+      fill-outline-color: "#166534"`;
 
-## Data-driven styling
-
-The real power of maplibre-yaml is data-driven styling. Style features based on their properties using expressions.
-
-### Categorical colors
-
-Color features based on a category:
-
-```yaml
-paint:
-  circle-color:
-    - match
-    - ["get", "type"] # Get the "type" property
-    - "hospital"
-    - "#ef4444" # Red for hospitals
-    - "school"
-    - "#3b82f6" # Blue for schools
-    - "park"
-    - "#22c55e" # Green for parks
-    - "#6b7280" # Gray default
-```
-
-<LiveMap
-  yaml={`
-type: map
+export const categoricalDemoYAML = `type: map
 id: categorical-demo
 config:
   center: [-74.006, 40.7128]
@@ -235,39 +129,9 @@ layers:
         - "#22c55e"
         - "#6b7280"
       circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"
-`}
-  height="300px"
-  caption="Colors based on feature type"
-/>
+      circle-stroke-color: "#ffffff"`;
 
-### Interpolated values
-
-Create smooth gradients based on numeric properties:
-
-```yaml
-paint:
-  circle-radius:
-    - interpolate
-    - ["linear"]
-    - ["get", "magnitude"]
-    - 1 # Input: magnitude 1
-    - 4 # Output: radius 4px
-    - 5 # Input: magnitude 5
-    - 20 # Output: radius 20px
-  circle-color:
-    - interpolate
-    - ["linear"]
-    - ["get", "magnitude"]
-    - 1
-    - "#fef08a" # Yellow for small
-    - 5
-    - "#dc2626" # Red for large
-```
-
-<LiveMap
-  yaml={`
-type: map
+export const interpolateDemoYAML = `type: map
 id: interpolate-demo
 config:
   center: [-120, 37]
@@ -310,8 +174,144 @@ layers:
         - "#fef08a"
         - 5
         - "#dc2626"
-      circle-opacity: 0.8
-`}
+      circle-opacity: 0.8`;
+
+Layers are how you visualize data on your map. maplibre-yaml supports all MapLibre layer types, each suited to different kinds of geographic data.
+
+## Layer types
+
+| Type             | Best for                 | Geometry     |
+| ---------------- | ------------------------ | ------------ |
+| `circle`         | Point markers, dots      | Point        |
+| `symbol`         | Icons and labels         | Point        |
+| `line`           | Roads, paths, routes     | LineString   |
+| `fill`           | Areas, regions, polygons | Polygon      |
+| `fill-extrusion` | 3D buildings             | Polygon      |
+| `heatmap`        | Density visualization    | Point        |
+| `raster`         | Satellite imagery        | Raster tiles |
+
+## Circle layers
+
+Circles are the simplest way to show point data:
+
+```yaml
+- id: points
+  type: circle
+  source:
+    type: geojson
+    data: { ... }
+  paint:
+    circle-radius: 8
+    circle-color: "#3b82f6"
+    circle-stroke-width: 2
+    circle-stroke-color: "#ffffff"
+    circle-opacity: 0.8
+```
+
+<LiveMap
+  yaml={circleDemoYAML}
+  height="300px"
+/>
+
+## Line layers
+
+Use lines for paths, routes, and boundaries:
+
+```yaml
+- id: route
+  type: line
+  source:
+    type: geojson
+    data: { ... }
+  paint:
+    line-color: "#ef4444"
+    line-width: 4
+    line-opacity: 0.8
+  layout:
+    line-cap: round
+    line-join: round
+```
+
+<LiveMap
+  yaml={lineDemoYAML}
+  height="300px"
+/>
+
+## Fill layers
+
+Fill layers shade polygon areas:
+
+```yaml
+- id: regions
+  type: fill
+  source:
+    type: geojson
+    data: { ... }
+  paint:
+    fill-color: "#22c55e"
+    fill-opacity: 0.5
+    fill-outline-color: "#166534"
+```
+
+<LiveMap
+  yaml={fillDemoYAML}
+  height="300px"
+/>
+
+## Data-driven styling
+
+The real power of maplibre-yaml is data-driven styling. Style features based on their properties using expressions.
+
+### Categorical colors
+
+Color features based on a category:
+
+```yaml
+paint:
+  circle-color:
+    - match
+    - ["get", "type"] # Get the "type" property
+    - "hospital"
+    - "#ef4444" # Red for hospitals
+    - "school"
+    - "#3b82f6" # Blue for schools
+    - "park"
+    - "#22c55e" # Green for parks
+    - "#6b7280" # Gray default
+```
+
+<LiveMap
+  yaml={categoricalDemoYAML}
+  height="300px"
+  caption="Colors based on feature type"
+/>
+
+### Interpolated values
+
+Create smooth gradients based on numeric properties:
+
+```yaml
+paint:
+  circle-radius:
+    - interpolate
+    - ["linear"]
+    - ["get", "magnitude"]
+    - 1 # Input: magnitude 1
+    - 4 # Output: radius 4px
+    - 5 # Input: magnitude 5
+    - 20 # Output: radius 20px
+  circle-color:
+    - interpolate
+    - ["linear"]
+    - ["get", "magnitude"]
+    - 1
+    - "#fef08a" # Yellow for small
+    - 5
+    - "#dc2626" # Red for large
+```
+
+<LiveMap
+  yaml={interpolateDemoYAML}
   height="300px"
   caption="Size and color based on magnitude"
 />

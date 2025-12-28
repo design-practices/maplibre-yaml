@@ -1,0 +1,167 @@
+---
+title: Interactive Points
+description: Rich popups and hover effects
+---
+
+import LiveMap from '../../../components/LiveMap.astro';
+
+export const interactiveYAML = `type: map
+id: interactive-demo
+config:
+  center: [-122.4, 37.77]
+  zoom: 13
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: locations
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-122.4194, 37.7749]
+            properties:
+              name: "City Hall"
+              category: "government"
+              address: "1 Dr Carlton B Goodlett Pl"
+              rating: 4.2
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-122.4089, 37.7855]
+            properties:
+              name: "Ferry Building"
+              category: "landmark"
+              address: "1 Ferry Building"
+              rating: 4.7
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-122.4058, 37.7648]
+            properties:
+              name: "Oracle Park"
+              category: "sports"
+              address: "24 Willie Mays Plaza"
+              rating: 4.6
+    paint:
+      circle-radius: 14
+      circle-color:
+        - match
+        - ["get", "category"]
+        - "government"
+        - "#6366f1"
+        - "landmark"
+        - "#f59e0b"
+        - "sports"
+        - "#22c55e"
+        - "#6b7280"
+      circle-stroke-width: 3
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - str: "📍 "
+              - property: address
+          - p:
+              - str: "⭐ "
+              - property: rating
+              - str: " / 5"
+controls:
+  navigation: true`;
+
+Demonstrates interactive features with detailed popups.
+
+## Live Demo
+
+<LiveMap
+  yaml={interactiveYAML}
+  height="500px"
+  caption="Click locations for details"
+/>
+
+## Key Concepts
+
+### Categorical colors with match expression
+
+Different colors for each category:
+
+```yaml
+circle-color:
+  - match
+  - ["get", "category"]
+  - "government"
+  - "#6366f1"        # Indigo for government
+  - "landmark"
+  - "#f59e0b"        # Amber for landmarks
+  - "sports"
+  - "#22c55e"        # Green for sports
+  - "#6b7280"        # Gray fallback
+```
+
+### Rich multi-line popups
+
+Popups can contain multiple elements with mixed content:
+
+```yaml
+interactive:
+  click:
+    popup:
+      - h3:
+          - property: name
+      - p:
+          - str: "📍 "
+          - property: address
+      - p:
+          - str: "⭐ "
+          - property: rating
+          - str: " / 5"
+```
+
+### Hover cursor
+
+Change cursor on hover to indicate interactivity:
+
+```yaml
+interactive:
+  hover:
+    cursor: pointer    # Shows pointer cursor on hover
+```
+
+### Popup structure
+
+Each popup item is an object with:
+- **Tag**: HTML element (`h3`, `p`, `div`, etc.)
+- **Content**: Array of content items that can be:
+  - `{ str: "text" }` - Static text
+  - `{ property: "name" }` - Feature property value
+
+### Emoji in content
+
+Unicode characters work in popup text:
+
+```yaml
+- p:
+    - str: "📍 "
+    - property: address
+```
+
+## Advanced: Hover effects
+
+You can also change styling on hover:
+
+```yaml
+interactive:
+  hover:
+    cursor: pointer
+    paint:
+      circle-radius: 18        # Grow on hover
+      circle-stroke-width: 4   # Thicker stroke
+```

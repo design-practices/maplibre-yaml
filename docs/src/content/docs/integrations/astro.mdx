@@ -1,0 +1,795 @@
+---
+title: Astro Integration
+description: Use maplibre-yaml in Astro sites and components
+---
+
+import {
+  Aside,
+  Steps,
+  Tabs,
+  TabItem,
+  Card,
+  CardGrid,
+} from "@astrojs/starlight/components";
+
+Astro is a natural fit for maplibre-yaml - both embrace configuration-driven approaches. This guide covers integrating maps into Astro sites, from simple page embeds to reusable components.
+
+<Aside type="caution" title="Important: YAML Formatting in MDX">
+  When embedding YAML in Astro components or MDX files, whitespace handling can
+  cause subtle bugs. This guide covers the correct patterns to avoid these
+  issues.
+</Aside>
+
+## Quick Start
+
+Get a map in your Astro site in 5 minutes.
+
+<Steps>
+
+1. **Install dependencies**
+
+   ```bash
+   pnpm add @maplibre-yaml/core maplibre-gl
+   ```
+
+2. **Create a map configuration file**
+
+   Create `src/configs/hero-map.yaml`:
+
+   ```yaml
+   type: map
+   id: hero-map
+   config:
+     center: [-74.006, 40.7128]
+     zoom: 12
+     mapStyle: "https://demotiles.maplibre.org/style.json"
+   layers:
+     - id: marker
+       type: circle
+       source:
+         type: geojson
+         data:
+           type: FeatureCollection
+           features:
+             - type: Feature
+               geometry:
+                 type: Point
+                 coordinates: [-74.006, 40.7128]
+               properties:
+                 name: "New York City"
+       paint:
+         circle-radius: 12
+         circle-color: "#3b82f6"
+         circle-stroke-width: 2
+         circle-stroke-color: "#ffffff"
+   ```
+
+3. **Create a Map component**
+
+   Create `src/components/Map.astro`:
+
+   ```astro
+   ---
+   import { YAMLParser } from '@maplibre-yaml/core';
+
+   interface Props {
+     configPath: string;
+     height?: string;
+     class?: string;
+   }
+
+   const { configPath, height = '400px', class: className } = Astro.props;
+
+   // Load and parse YAML at build time
+   const yamlFiles = import.meta.glob('/src/configs/*.yaml', { as: 'raw', eager: true });
+   const yamlContent = yamlFiles[configPath];
+
+   if (!yamlContent) {
+     throw new Error(`YAML config not found: ${configPath}`);
+   }
+
+   const result = YAMLParser.safeParseMapBlock(yamlContent);
+
+   if (!result.success) {
+     throw new Error(`Invalid YAML config: ${result.errors.map(e => e.message).join(', ')}`);
+   }
+
+   const configJson = JSON.stringify(result.data);
+   ---
+
+   <ml-map
+     style={`height: ${height}; display: block;`}
+     class={className}
+     config={configJson}
+   />
+
+   <script>
+     import '@maplibre-yaml/core/register';
+     import 'maplibre-gl/dist/maplibre-gl.css';
+   </script>
+
+   <style>
+     ml-map {
+       width: 100%;
+       border-radius: 8px;
+       overflow: hidden;
+     }
+   </style>
+   ```
+
+4. **Use in a page**
+
+   ```astro
+   ---
+   // src/pages/index.astro
+   import Layout from '../layouts/Layout.astro';
+   import Map from '../components/Map.astro';
+   ---
+
+   <Layout title="Home">
+     <h1>Welcome</h1>
+     <Map configPath="/src/configs/hero-map.yaml" height="500px" />
+   </Layout>
+   ```
+
+</Steps>
+
+## Component Patterns
+
+### Pattern 1: External YAML Files (Recommended)
+
+Keep YAML configuration in separate files for clean separation:
+
+**File structure:**
+
+```
+src/
+├── components/
+│   └── Map.astro
+├── configs/
+│   ├── hero-map.yaml
+│   ├── contact-map.yaml
+│   └── locations-map.yaml
+└── pages/
+    └── index.astro
+```
+
+**Map.astro:**
+
+```astro
+---
+import { YAMLParser } from '@maplibre-yaml/core';
+
+interface Props {
+  configPath: string;
+  height?: string;
+}
+
+const { configPath, height = '400px' } = Astro.props;
+
+// Import all YAML files at build time
+const yamlFiles = import.meta.glob('/src/configs/**/*.yaml', {
+  as: 'raw',
+  eager: true
+});
+
+const yamlContent = yamlFiles[configPath];
+
+if (!yamlContent) {
+  const available = Object.keys(yamlFiles).join(', ');
+  throw new Error(`Config not found: ${configPath}. Available: ${available}`);
+}
+
+const result = YAMLParser.safeParseMapBlock(yamlContent);
+
+if (!result.success) {
+  console.error('YAML parse errors:', result.errors);
+  throw new Error(`Invalid config ${configPath}: ${result.errors[0].message}`);
+}
+
+const configJson = JSON.stringify(result.data);
+---
+
+<ml-map style={`height: ${height}; display: block;`} config={configJson} />
+
+<script>
+  import '@maplibre-yaml/core/register';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+</script>
+```
+
+**Usage:**
+
+```astro
+<Map configPath="/src/configs/hero-map.yaml" />
+<Map configPath="/src/configs/contact-map.yaml" height="300px" />
+```
+
+**Benefits:**
+
+- ✅ YAML indentation preserved correctly
+- ✅ Easy to edit YAML without touching components
+- ✅ YAML files can be validated independently
+- ✅ Clear separation of configuration and presentation
+- ✅ Build-time parsing catches errors early
+
+### Pattern 2: Inline Configuration (With Caution)
+
+For simple, one-off maps, you can inline configuration. But you must follow specific formatting rules.
+
+<Aside type="danger" title="Critical: YAML Formatting Rules">
+  When inlining YAML in Astro/MDX, template literal whitespace handling will
+  break your YAML unless you follow these rules exactly.
+</Aside>
+
+**❌ WRONG - This will fail:**
+
+```astro
+---
+// Indented YAML in template literal - BROKEN
+const yaml = `
+type: map
+config:
+  center: [-74, 40]
+  zoom: 10
+`;
+---
+```
+
+**❌ WRONG - Leading newline breaks parsing:**
+
+```astro
+---
+const yaml = `
+type: map
+id: my-map
+config:
+  center: [-74, 40]
+`;
+---
+```
+
+**✅ CORRECT - Start immediately, no leading newline:**
+
+```astro
+---
+const yaml = `type: map
+id: my-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 10
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers: []`;
+---
+```
+
+**InlineMap.astro:**
+
+```astro
+---
+import { YAMLParser } from '@maplibre-yaml/core';
+
+interface Props {
+  yaml: string;
+  height?: string;
+}
+
+const { yaml, height = '400px' } = Astro.props;
+
+const result = YAMLParser.safeParseMapBlock(yaml);
+
+if (!result.success) {
+  console.error('Parse errors:', result.errors);
+}
+
+const configJson = result.success ? JSON.stringify(result.data) : null;
+const error = result.success ? null : result.errors;
+---
+
+{error ? (
+  <div class="map-error">
+    <strong>Configuration Error</strong>
+    <pre>{JSON.stringify(error, null, 2)}</pre>
+  </div>
+) : (
+  <ml-map style={`height: ${height}; display: block;`} config={configJson} />
+)}
+
+<script>
+  import '@maplibre-yaml/core/register';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+</script>
+
+<style>
+  .map-error {
+    padding: 20px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    color: #dc2626;
+  }
+  .map-error pre {
+    margin-top: 10px;
+    font-size: 12px;
+    overflow-x: auto;
+  }
+</style>
+```
+
+**Usage in page:**
+
+```astro
+---
+import InlineMap from '../components/InlineMap.astro';
+
+// ⚠️ MUST start content immediately after backtick
+const simpleMapYaml = `type: map
+id: simple-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers: []`;
+---
+
+<InlineMap yaml={simpleMapYaml} height="300px" />
+```
+
+### Pattern 3: MDX with Export Constants
+
+In MDX files (like documentation), use `export const` declarations:
+
+**guide.mdx:**
+
+```mdx
+---
+title: Map Guide
+---
+
+import InlineMap from "../../components/InlineMap.astro";
+
+export const earthquakeYaml = `type: map
+id: earthquake-demo
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: quakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#ef4444"`;
+
+## Live Earthquake Data
+
+Here's a map showing recent earthquakes:
+
+<InlineMap yaml={earthquakeYaml} height="400px" />
+
+The data refreshes from the USGS API.
+```
+
+<Aside type="tip">
+  The `export const` pattern works because: 1. The constant is defined at module
+  scope (not inside JSX) 2. JavaScript preserves whitespace in template literals
+  at module level 3. MDX processes exports before rendering JSX
+</Aside>
+
+## Advanced: Interactive Map Component
+
+A full-featured component with events and controls:
+
+**InteractiveMap.astro:**
+
+```astro
+---
+import { YAMLParser } from '@maplibre-yaml/core';
+
+interface Props {
+  configPath: string;
+  height?: string;
+  showControls?: boolean;
+  onLayerClick?: string; // JavaScript function name to call
+}
+
+const {
+  configPath,
+  height = '400px',
+  showControls = false,
+  onLayerClick
+} = Astro.props;
+
+const yamlFiles = import.meta.glob('/src/configs/**/*.yaml', { as: 'raw', eager: true });
+const yamlContent = yamlFiles[configPath];
+
+if (!yamlContent) {
+  throw new Error(`Config not found: ${configPath}`);
+}
+
+const result = YAMLParser.safeParseMapBlock(yamlContent);
+if (!result.success) {
+  throw new Error(`Invalid config: ${result.errors[0].message}`);
+}
+
+const configJson = JSON.stringify(result.data);
+const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+<div class="interactive-map" id={mapId}>
+  {showControls && (
+    <div class="map-controls">
+      <button class="control-btn" data-action="zoom-in" title="Zoom In">+</button>
+      <button class="control-btn" data-action="zoom-out" title="Zoom Out">−</button>
+      <button class="control-btn" data-action="reset" title="Reset View">⌂</button>
+    </div>
+  )}
+
+  <ml-map
+    style={`height: ${height}; display: block;`}
+    config={configJson}
+    data-click-handler={onLayerClick}
+  />
+
+  <div class="map-status"></div>
+</div>
+
+<script>
+  import '@maplibre-yaml/core/register';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+
+  // Initialize all interactive maps
+  document.querySelectorAll('.interactive-map').forEach(container => {
+    const mapEl = container.querySelector('ml-map');
+    const statusEl = container.querySelector('.map-status');
+    const controls = container.querySelector('.map-controls');
+
+    if (!mapEl) return;
+
+    let initialCenter: [number, number] | null = null;
+    let initialZoom: number | null = null;
+
+    // Status updates
+    mapEl.addEventListener('ml-map:load', () => {
+      const map = mapEl.getMap();
+      initialCenter = map.getCenter().toArray() as [number, number];
+      initialZoom = map.getZoom();
+      statusEl.textContent = 'Map ready';
+      statusEl.className = 'map-status ready';
+    });
+
+    mapEl.addEventListener('ml-map:layer-loading', (e: CustomEvent) => {
+      statusEl.textContent = `Loading ${e.detail.layerId}...`;
+      statusEl.className = 'map-status loading';
+    });
+
+    mapEl.addEventListener('ml-map:layer-loaded', (e: CustomEvent) => {
+      statusEl.textContent = `${e.detail.featureCount} features loaded`;
+      statusEl.className = 'map-status ready';
+    });
+
+    mapEl.addEventListener('ml-map:error', (e: CustomEvent) => {
+      statusEl.textContent = `Error: ${e.detail.error.message}`;
+      statusEl.className = 'map-status error';
+    });
+
+    // Custom click handler
+    const clickHandler = mapEl.dataset.clickHandler;
+    if (clickHandler && typeof window[clickHandler] === 'function') {
+      mapEl.addEventListener('ml-map:layer-click', (e: CustomEvent) => {
+        window[clickHandler](e.detail);
+      });
+    }
+
+    // Control buttons
+    if (controls) {
+      controls.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest('[data-action]');
+        if (!btn) return;
+
+        const map = mapEl.getMap();
+        if (!map) return;
+
+        const action = btn.dataset.action;
+
+        switch (action) {
+          case 'zoom-in':
+            map.zoomIn();
+            break;
+          case 'zoom-out':
+            map.zoomOut();
+            break;
+          case 'reset':
+            if (initialCenter && initialZoom !== null) {
+              map.flyTo({ center: initialCenter, zoom: initialZoom });
+            }
+            break;
+        }
+      });
+    }
+  });
+</script>
+
+<style>
+  .interactive-map {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+  }
+
+  .map-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .control-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: white;
+    border-radius: 4px;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .control-btn:hover {
+    background: #f3f4f6;
+  }
+
+  .map-status {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.9);
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 10;
+  }
+
+  .map-status.loading { color: #d97706; }
+  .map-status.ready { color: #059669; }
+  .map-status.error { color: #dc2626; }
+</style>
+```
+
+## Content Collections Integration
+
+For sites with many maps, use Astro Content Collections:
+
+**src/content/config.ts:**
+
+```typescript
+import { defineCollection, z } from "astro:content";
+
+const maps = defineCollection({
+  type: "data",
+  schema: z.object({
+    type: z.literal("map"),
+    id: z.string(),
+    config: z.object({
+      center: z.tuple([z.number(), z.number()]),
+      zoom: z.number(),
+      mapStyle: z.string(),
+      pitch: z.number().optional(),
+      bearing: z.number().optional(),
+    }),
+    layers: z.array(z.any()),
+  }),
+});
+
+export const collections = { maps };
+```
+
+**src/content/maps/headquarters.yaml:**
+
+```yaml
+type: map
+id: headquarters
+config:
+  center: [-122.4194, 37.7749]
+  zoom: 15
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: office
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: Feature
+        geometry:
+          type: Point
+          coordinates: [-122.4194, 37.7749]
+        properties:
+          name: "Headquarters"
+    paint:
+      circle-radius: 12
+      circle-color: "#3b82f6"
+```
+
+**CollectionMap.astro:**
+
+```astro
+---
+import { getEntry } from 'astro:content';
+
+interface Props {
+  slug: string;
+  height?: string;
+}
+
+const { slug, height = '400px' } = Astro.props;
+
+const mapEntry = await getEntry('maps', slug);
+
+if (!mapEntry) {
+  throw new Error(`Map not found: ${slug}`);
+}
+
+// Content collection already validates against schema
+const configJson = JSON.stringify(mapEntry.data);
+---
+
+<ml-map style={`height: ${height}; display: block;`} config={configJson} />
+
+<script>
+  import '@maplibre-yaml/core/register';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+</script>
+```
+
+**Usage:**
+
+```astro
+<CollectionMap slug="headquarters" height="500px" />
+```
+
+## Troubleshooting
+
+### "Expected object, got null" or Similar Schema Errors
+
+**Cause:** YAML indentation was destroyed by template literal processing.
+
+**Solutions:**
+
+1. **Use external YAML files** (recommended)
+
+   ```astro
+   <Map configPath="/src/configs/my-map.yaml" />
+   ```
+
+2. **If inlining, follow the rules exactly:**
+
+   ```javascript
+   // ✅ Start immediately after backtick, no leading newline
+   const yaml = `type: map
+   id: my-map
+   config:
+     center: [-74, 40]
+     zoom: 10
+     mapStyle: "https://demotiles.maplibre.org/style.json"
+   layers: []`;
+   ```
+
+3. **Debug by logging the parsed result:**
+   ```astro
+   ---
+   const result = YAMLParser.safeParseMapBlock(yaml);
+   console.log('Parse result:', result);
+   console.log('Raw YAML:', JSON.stringify(yaml)); // Check for whitespace issues
+   ---
+   ```
+
+### Map Container Has Zero Height
+
+**Symptoms:** Nothing visible, or map is 0px tall.
+
+**Cause:** CSS height not set properly.
+
+**Solution:**
+
+```astro
+<ml-map style="height: 400px; display: block;" config={...} />
+```
+
+Both `height` and `display: block` are required.
+
+### "Config not found" Error
+
+**Symptoms:** `Error: Config not found: /src/configs/my-map.yaml`
+
+**Cause:** Path doesn't match `import.meta.glob` pattern.
+
+**Solutions:**
+
+1. Check the exact path matches
+2. Ensure file exists
+3. Check glob pattern includes your directory:
+   ```javascript
+   // This pattern must match your file location
+   const yamlFiles = import.meta.glob("/src/configs/**/*.yaml", {
+     as: "raw",
+     eager: true,
+   });
+   ```
+
+### HMR Not Updating YAML Changes
+
+**Symptoms:** Changes to YAML files don't appear until full page reload.
+
+**Cause:** Astro's HMR doesn't always catch data file changes.
+
+**Workaround:**
+
+- Save the `.astro` component file to trigger rebuild
+- Or restart the dev server
+
+### TypeScript Errors with `import.meta.glob`
+
+**Solution:** Add to `src/env.d.ts`:
+
+```typescript
+/// <reference types="astro/client" />
+
+declare module "*.yaml" {
+  const content: string;
+  export default content;
+}
+```
+
+### Web Component Not Defined
+
+**Symptoms:** `<ml-map>` renders as unknown element.
+
+**Cause:** Registration script didn't run.
+
+**Solution:** Ensure script is in component:
+
+```astro
+<script>
+  import '@maplibre-yaml/core/register';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+</script>
+```
+
+The script must be inside the component, not in the frontmatter.
+
+## Best Practices Summary
+
+<CardGrid>
+  <Card title="Use External YAML Files" icon="document">
+    Keep YAML in `/src/configs/*.yaml` files. Avoids all template literal whitespace issues.
+  </Card>
+
+  <Card title="Validate at Build Time" icon="approve-check">
+    Parse YAML in frontmatter to catch errors during build, not at runtime.
+  </Card>
+
+  <Card title="Set Explicit Dimensions" icon="seti:css">
+    Always set `height` and `display: block` on `<ml-map>` elements.
+  </Card>
+
+  <Card title="Handle Errors Gracefully" icon="warning">
+    Check `result.success` and show meaningful error messages.
+  </Card>
+</CardGrid>
+
+## Next Steps
+
+- [Vanilla JavaScript Integration](/integrations/vanilla-js/) - For non-Astro projects
+- [Web Components Reference](/integrations/web-components/) - Deep dive into `<ml-map>`
+- [Live Data Guide](/guides/live-data/) - Polling and streaming
+- [API Reference](/api/) - Complete API documentation

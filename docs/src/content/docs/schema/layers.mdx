@@ -84,8 +84,7 @@ All layers share these base properties:
 Renders points as circles. Great for point data visualization.
 
 <LiveMap
-  yaml={`
-type: map
+  yaml={`type: map
 id: circle-demo
 config:
   center: [-74.006, 40.7128]
@@ -171,7 +170,8 @@ layers:
 ### Example
 
 <Tabs>
-  <TabItem label="Basic">
+<TabItem label="Basic">
+
 ```yaml
 - id: points
   type: circle
@@ -182,8 +182,10 @@ layers:
     circle-radius: 8
     circle-color: "#ff0000"
 ```
-  </TabItem>
-  <TabItem label="Data-Driven">
+
+</TabItem>
+<TabItem label="Data-Driven">
+
 ```yaml
 - id: earthquakes
   type: circle
@@ -212,7 +214,8 @@ layers:
       - 8
       - "#bd0026"
 ```
-  </TabItem>
+
+</TabItem>
 </Tabs>
 
 ---
