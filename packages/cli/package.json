@@ -47,5 +47,13 @@
     "type": "git",
     "url": "https://github.com/design-practices/maplibre-yaml.git",
     "directory": "packages/cli"
-  }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "bugs": {
+    "url": "https://github.com/design-practices/maplibre-yaml/issues"
+  },
+  "homepage": "https://github.com/design-practices/maplibre-yaml#readme"
 }
