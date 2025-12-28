@@ -40,9 +40,7 @@ export default defineConfig({
           items: [
             { label: "Working with Layers", link: "/guides/layers/" },
             { label: "Data Sources", link: "/guides/data-sources/" },
-            { label: "Interactivity", link: "/guides/interactivity/" },
             { label: "Live Data & Streaming", link: "/guides/live-data/" },
-            { label: "Scrollytelling", link: "/guides/scrollytelling/" },
             { label: "Styling & Theming", link: "/guides/styling/" },
           ],
         },
@@ -74,10 +72,12 @@ export default defineConfig({
         {
           label: "Examples",
           items: [
+            { label: "Overview", link: "/examples/" },
             { label: "Basic Map", link: "/examples/basic-map/" },
-            { label: "Choropleth", link: "/examples/choropleth/" },
-            { label: "Live Dashboard", link: "/examples/live-dashboard/" },
-            { label: "Story Map", link: "/examples/story-map/" },
+            { label: "Earthquake Tracker", link: "/examples/earthquake-tracker/" },
+            { label: "Clustered Data", link: "/examples/clustering/" },
+            { label: "Interactive Points", link: "/examples/interactive-points/" },
+            { label: "Live Vehicle Tracking", link: "/examples/live-vehicles/" },
           ],
         },
       ],

@@ -1,0 +1,139 @@
+---
+title: Earthquake Tracker
+description: Live earthquake data with automatic refresh
+---
+
+import LiveMap from '../../../components/LiveMap.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+export const earthquakeYAML = `type: map
+id: earthquake-tracker
+config:
+  center: [-120, 40]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+      refreshInterval: 60000
+      updateStrategy: replace
+      cache:
+        enabled: false
+    paint:
+      circle-radius:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - 3
+        - 2
+        - 6
+        - 4
+        - 12
+        - 6
+        - 24
+      circle-color:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - "#22c55e"
+        - 2
+        - "#eab308"
+        - 4
+        - "#f97316"
+        - 6
+        - "#dc2626"
+      circle-opacity: 0.75
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: title
+          - p:
+              - str: "Magnitude: "
+              - property: mag
+controls:
+  navigation: true
+  scale: true`;
+
+Real-time earthquake visualization using USGS data.
+
+<Aside>
+Data refreshes every 60 seconds from the USGS Earthquake Hazards Program.
+</Aside>
+
+## Live Demo
+
+<LiveMap
+  yaml={earthquakeYAML}
+  height="500px"
+  caption="Live USGS earthquake data - refreshes every 60 seconds"
+/>
+
+## Key Concepts
+
+### Remote data with auto-refresh
+
+Data is fetched from a URL and automatically refreshes:
+
+```yaml
+source:
+  type: geojson
+  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+  refreshInterval: 60000     # Refresh every 60 seconds
+  updateStrategy: replace    # Replace all data on each refresh
+  cache:
+    enabled: false          # Don't cache live data
+```
+
+### Color gradient by magnitude
+
+Earthquakes are colored on a green-to-red scale:
+
+```yaml
+circle-color:
+  - interpolate
+  - ["linear"]
+  - ["get", "mag"]
+  - 0
+  - "#22c55e"    # Green for magnitude 0
+  - 2
+  - "#eab308"    # Yellow for magnitude 2
+  - 4
+  - "#f97316"    # Orange for magnitude 4
+  - 6
+  - "#dc2626"    # Red for magnitude 6+
+```
+
+### Size scaling by magnitude
+
+Larger circles for stronger earthquakes:
+
+```yaml
+circle-radius:
+  - interpolate
+  - ["linear"]
+  - ["get", "mag"]
+  - 0
+  - 3     # 3px radius for magnitude 0
+  - 2
+  - 6     # 6px radius for magnitude 2
+  - 4
+  - 12    # 12px radius for magnitude 4
+  - 6
+  - 24    # 24px radius for magnitude 6+
+```
+
+## Update strategies
+
+- **replace**: Completely replaces all data (used here for earthquake feed)
+- **merge**: Updates existing features by ID (useful for vehicle tracking)
+- **append-window**: Adds new data while maintaining size/time limits (useful for event streams)

@@ -1,0 +1,192 @@
+---
+title: Live Vehicle Tracking
+description: Real-time positions with merge updates
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside>
+This example shows the configuration pattern. Connect to your fleet API for real data.
+</Aside>
+
+## Configuration Pattern
+
+This demonstrates the `merge` update strategy for tracking entities with unique IDs.
+
+```yaml
+type: map
+id: vehicle-tracker
+config:
+  center: [-122.4, 37.8]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+
+layers:
+  - id: vehicles
+    type: circle
+    source:
+      type: geojson
+      url: "https://api.example.com/vehicles"
+      refreshInterval: 5000        # Poll every 5 seconds
+      updateStrategy: merge        # Update existing, add new
+      updateKey: "vehicleId"       # Match by this property
+      cache:
+        enabled: false
+      loading:
+        enabled: true
+        message: "Loading vehicles..."
+    paint:
+      circle-radius: 12
+      circle-color:
+        - match
+        - ["get", "status"]
+        - "active"
+        - "#22c55e"                # Green for active
+        - "idle"
+        - "#eab308"                # Yellow for idle
+        - "offline"
+        - "#ef4444"                # Red for offline
+        - "#6b7280"                # Gray fallback
+      circle-stroke-width: 3
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: vehicleName
+          - p:
+              - str: "Status: "
+              - property: status
+          - p:
+              - str: "Speed: "
+              - property: speed
+              - str: " mph"
+
+controls:
+  navigation: true
+```
+
+## Key Concepts
+
+### Merge update strategy
+
+Unlike `replace` which clears all data on each update, `merge`:
+
+1. **Updates** existing vehicles by matching `updateKey`
+2. **Adds** new vehicles that appear
+3. **Keeps** vehicles not in the update (they don't disappear)
+
+```yaml
+source:
+  type: geojson
+  url: "https://api.example.com/vehicles"
+  refreshInterval: 5000
+  updateStrategy: merge
+  updateKey: "vehicleId"    # Feature property used for matching
+```
+
+### Status-based colors
+
+Visual indication of vehicle state:
+
+```yaml
+circle-color:
+  - match
+  - ["get", "status"]
+  - "active"
+  - "#22c55e"    # Green
+  - "idle"
+  - "#eab308"    # Yellow
+  - "offline"
+  - "#ef4444"    # Red
+  - "#6b7280"    # Gray fallback
+```
+
+### Loading UI
+
+Show spinner during initial load:
+
+```yaml
+source:
+  loading:
+    enabled: true
+    message: "Loading vehicles..."
+```
+
+### Disable caching
+
+Ensure fresh data on every request:
+
+```yaml
+source:
+  cache:
+    enabled: false
+```
+
+## Expected API Response
+
+Your API should return standard GeoJSON:
+
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-122.4, 37.8]
+      },
+      "properties": {
+        "vehicleId": "V001",
+        "vehicleName": "Truck 42",
+        "status": "active",
+        "speed": 35
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-122.42, 37.81]
+      },
+      "properties": {
+        "vehicleId": "V002",
+        "vehicleName": "Van 15",
+        "status": "idle",
+        "speed": 0
+      }
+    }
+  ]
+}
+```
+
+## Update behavior example
+
+**Initial state:** Vehicles V001, V002, V003
+
+**Update contains:** V001 (new position), V004 (new vehicle)
+
+**Result after merge:**
+- V001: Updated position
+- V002: Unchanged (still visible)
+- V003: Unchanged (still visible)
+- V004: Added (now visible)
+
+## Alternative: Replace strategy
+
+For comparison, `replace` strategy would:
+- Clear all vehicles
+- Show only V001 and V004
+- V002 and V003 would disappear
+
+```yaml
+source:
+  updateStrategy: replace    # Different behavior
+```
+
+Use `replace` when your API returns the complete current state each time.
+
+Use `merge` when your API returns incremental updates and you want smooth transitions.

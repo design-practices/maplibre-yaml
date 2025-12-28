@@ -1,0 +1,166 @@
+---
+title: Clustered Data
+description: Efficiently display thousands of points
+---
+
+import LiveMap from '../../../components/LiveMap.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+export const clusteringYAML = `type: map
+id: clustered-map
+config:
+  center: [-120, 37]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: clusters
+    type: circle
+    source:
+      id: quakes
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson"
+      cluster: true
+      clusterRadius: 50
+      clusterMaxZoom: 14
+    filter: ["has", "point_count"]
+    paint:
+      circle-radius:
+        - step
+        - ["get", "point_count"]
+        - 20
+        - 100
+        - 30
+        - 750
+        - 40
+      circle-color:
+        - step
+        - ["get", "point_count"]
+        - "#51bbd6"
+        - 100
+        - "#f1f075"
+        - 750
+        - "#f28cb1"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+  - id: cluster-count
+    type: symbol
+    source: quakes
+    filter: ["has", "point_count"]
+    layout:
+      text-field: "{point_count_abbreviated}"
+      text-size: 12
+    paint:
+      text-color: "#ffffff"
+  - id: unclustered
+    type: circle
+    source: quakes
+    filter: ["!", ["has", "point_count"]]
+    paint:
+      circle-radius: 6
+      circle-color: "#11b4da"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: title
+controls:
+  navigation: true`;
+
+When displaying many points, clustering improves performance and readability.
+
+<Aside>
+Clustering groups nearby points together at lower zoom levels. Zoom in to see individual earthquakes.
+</Aside>
+
+## Live Demo
+
+<LiveMap
+  yaml={clusteringYAML}
+  height="500px"
+  caption="Zoom in to see individual points"
+/>
+
+## Key Concepts
+
+### Enable clustering
+
+Configure clustering on the GeoJSON source:
+
+```yaml
+source:
+  id: quakes                # Named source for reuse
+  type: geojson
+  url: "..."
+  cluster: true             # Enable clustering
+  clusterRadius: 50         # Cluster radius in pixels
+  clusterMaxZoom: 14        # Don't cluster above zoom 14
+```
+
+### Multiple layers from one source
+
+Three layers reference the same source:
+
+```yaml
+layers:
+  # Layer 1: Cluster circles
+  - id: clusters
+    source: quakes
+    filter: ["has", "point_count"]    # Only clusters
+
+  # Layer 2: Cluster counts
+  - id: cluster-count
+    source: quakes
+    filter: ["has", "point_count"]    # Only clusters
+
+  # Layer 3: Individual points
+  - id: unclustered
+    source: quakes
+    filter: ["!", ["has", "point_count"]]    # Only points
+```
+
+### Step expressions for cluster size
+
+Cluster size increases with point count:
+
+```yaml
+circle-radius:
+  - step
+  - ["get", "point_count"]
+  - 20       # < 100 points: 20px radius
+  - 100
+  - 30       # 100-749 points: 30px radius
+  - 750
+  - 40       # 750+ points: 40px radius
+```
+
+### Step expressions for cluster color
+
+Cluster color changes with point count:
+
+```yaml
+circle-color:
+  - step
+  - ["get", "point_count"]
+  - "#51bbd6"    # < 100 points: blue
+  - 100
+  - "#f1f075"    # 100-749 points: yellow
+  - 750
+  - "#f28cb1"    # 750+ points: pink
+```
+
+### Filter expressions
+
+- `["has", "point_count"]` - Match only clusters
+- `["!", ["has", "point_count"]]` - Match only individual points
+
+## Performance benefits
+
+Clustering provides:
+
+- **Faster rendering**: Fewer features to draw at low zoom levels
+- **Clearer visualization**: Avoids visual clutter from overlapping points
+- **Better UX**: Users can zoom in to see detail where needed
