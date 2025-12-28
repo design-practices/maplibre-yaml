@@ -170,18 +170,52 @@ layers:
 ### Example
 
 <Tabs>
-  <TabItem label="Basic">
-    ```yaml - id: points type: circle source: type: geojson url:
-    "https://example.com/points.geojson" paint: circle-radius: 8 circle-color:
-    "#ff0000" ```
-  </TabItem>
-  <TabItem label="Data-Driven">
-    ```yaml - id: earthquakes type: circle source: type: geojson url:
-    "https://example.com/earthquakes.geojson" paint: circle-radius: -
-    interpolate - ["linear"] - ["get", "magnitude"] - 1 - 4 - 5 - 12 - 8 - 24
-    circle-color: - interpolate - ["linear"] - ["get", "magnitude"] - 1 -
-    "#ffffcc" - 5 - "#fd8d3c" - 8 - "#bd0026" ```
-  </TabItem>
+<TabItem label="Basic">
+
+```yaml
+- id: points
+  type: circle
+  source:
+    type: geojson
+    url: "https://example.com/points.geojson"
+  paint:
+    circle-radius: 8
+    circle-color: "#ff0000"
+```
+
+</TabItem>
+<TabItem label="Data-Driven">
+
+```yaml
+- id: earthquakes
+  type: circle
+  source:
+    type: geojson
+    url: "https://example.com/earthquakes.geojson"
+  paint:
+    circle-radius:
+      - interpolate
+      - ["linear"]
+      - ["get", "magnitude"]
+      - 1
+      - 4
+      - 5
+      - 12
+      - 8
+      - 24
+    circle-color:
+      - interpolate
+      - ["linear"]
+      - ["get", "magnitude"]
+      - 1
+      - "#ffffcc"
+      - 5
+      - "#fd8d3c"
+      - 8
+      - "#bd0026"
+```
+
+</TabItem>
 </Tabs>
 
 ---
