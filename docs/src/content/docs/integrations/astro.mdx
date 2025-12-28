@@ -14,10 +14,8 @@ import {
 
 Astro is a natural fit for maplibre-yaml - both embrace configuration-driven approaches. This guide covers integrating maps into Astro sites, from simple page embeds to reusable components.
 
-<Aside type="caution" title="Important: YAML Formatting in MDX">
-  When embedding YAML in Astro components or MDX files, whitespace handling can
-  cause subtle bugs. This guide covers the correct patterns to avoid these
-  issues.
+<Aside type="tip" title="Recommended: Use the src Attribute">
+  The simplest approach is to place YAML files in the `/public` directory and use the `src` attribute. The web component handles loading and parsing automatically.
 </Aside>
 
 ## Quick Start
@@ -34,7 +32,7 @@ Get a map in your Astro site in 5 minutes.
 
 2. **Create a map configuration file**
 
-   Create `src/configs/hero-map.yaml`:
+   Create `public/configs/hero-map.yaml`:
 
    ```yaml
    type: map
@@ -70,37 +68,19 @@ Get a map in your Astro site in 5 minutes.
 
    ```astro
    ---
-   import { YAMLParser } from '@maplibre-yaml/core';
-
    interface Props {
-     configPath: string;
+     src: string;
      height?: string;
      class?: string;
    }
 
-   const { configPath, height = '400px', class: className } = Astro.props;
-
-   // Load and parse YAML at build time
-   const yamlFiles = import.meta.glob('/src/configs/*.yaml', { as: 'raw', eager: true });
-   const yamlContent = yamlFiles[configPath];
-
-   if (!yamlContent) {
-     throw new Error(`YAML config not found: ${configPath}`);
-   }
-
-   const result = YAMLParser.safeParseMapBlock(yamlContent);
-
-   if (!result.success) {
-     throw new Error(`Invalid YAML config: ${result.errors.map(e => e.message).join(', ')}`);
-   }
-
-   const configJson = JSON.stringify(result.data);
+   const { src, height = '400px', class: className } = Astro.props;
    ---
 
    <ml-map
+     src={src}
      style={`height: ${height}; display: block;`}
      class={className}
-     config={configJson}
    />
 
    <script>
@@ -128,7 +108,7 @@ Get a map in your Astro site in 5 minutes.
 
    <Layout title="Home">
      <h1>Welcome</h1>
-     <Map configPath="/src/configs/hero-map.yaml" height="500px" />
+     <Map src="/configs/hero-map.yaml" height="500px" />
    </Layout>
    ```
 
@@ -136,9 +116,64 @@ Get a map in your Astro site in 5 minutes.
 
 ## Component Patterns
 
-### Pattern 1: External YAML Files (Recommended)
+### Pattern 1: External YAML with src Attribute (Recommended)
 
-Keep YAML configuration in separate files for clean separation:
+The simplest pattern - let the web component handle everything. Place YAML files in the `/public` directory and reference them with the `src` attribute.
+
+**File structure:**
+
+```
+public/
+├── configs/
+│   ├── hero-map.yaml
+│   ├── contact-map.yaml
+│   └── locations-map.yaml
+src/
+├── components/
+│   └── Map.astro
+└── pages/
+    └── index.astro
+```
+
+**Map.astro:**
+
+```astro
+---
+interface Props {
+  src: string;
+  height?: string;
+}
+
+const { src, height = '400px' } = Astro.props;
+---
+
+<ml-map src={src} style={`height: ${height}; display: block;`} />
+
+<script>
+  import '@maplibre-yaml/core/register';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+</script>
+```
+
+**Usage:**
+
+```astro
+<Map src="/configs/hero-map.yaml" />
+<Map src="/configs/contact-map.yaml" height="300px" />
+```
+
+**Benefits:**
+
+- ✅ Simplest possible implementation
+- ✅ No build-time parsing needed
+- ✅ YAML files are easy to edit
+- ✅ Clear separation of configuration and presentation
+- ✅ Works with any static file server
+- ✅ No template literal whitespace issues
+
+### Pattern 2: External YAML with Build-Time Parsing
+
+For projects that want build-time validation, you can parse YAML during the build:
 
 **File structure:**
 
@@ -207,61 +242,22 @@ const configJson = JSON.stringify(result.data);
 
 **Benefits:**
 
-- ✅ YAML indentation preserved correctly
-- ✅ Easy to edit YAML without touching components
-- ✅ YAML files can be validated independently
-- ✅ Clear separation of configuration and presentation
 - ✅ Build-time parsing catches errors early
+- ✅ YAML validation during development
+- ✅ Configuration bundled with the build
 
-### Pattern 2: Inline Configuration (With Caution)
+**Tradeoffs:**
 
-For simple, one-off maps, you can inline configuration. But you must follow specific formatting rules.
+- ⚠️ More complex component code
+- ⚠️ Requires rebuild to see YAML changes
 
-<Aside type="danger" title="Critical: YAML Formatting Rules">
-  When inlining YAML in Astro/MDX, template literal whitespace handling will
-  break your YAML unless you follow these rules exactly.
+### Pattern 3: Inline Configuration (Not Recommended)
+
+For simple, one-off maps, you can inline configuration. However, this approach has significant drawbacks and is generally not recommended.
+
+<Aside type="caution" title="Use Pattern 1 Instead">
+  Template literal whitespace handling can break YAML formatting. The `src` attribute pattern (Pattern 1) avoids all these issues.
 </Aside>
-
-**❌ WRONG - This will fail:**
-
-```astro
----
-// Indented YAML in template literal - BROKEN
-const yaml = `
-type: map
-config:
-  center: [-74, 40]
-  zoom: 10
-`;
----
-```
-
-**❌ WRONG - Leading newline breaks parsing:**
-
-```astro
----
-const yaml = `
-type: map
-id: my-map
-config:
-  center: [-74, 40]
-`;
----
-```
-
-**✅ CORRECT - Start immediately, no leading newline:**
-
-```astro
----
-const yaml = `type: map
-id: my-map
-config:
-  center: [-74.006, 40.7128]
-  zoom: 10
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers: []`;
----
-```
 
 **InlineMap.astro:**
 
@@ -335,9 +331,9 @@ layers: []`;
 <InlineMap yaml={simpleMapYaml} height="300px" />
 ```
 
-### Pattern 3: MDX with Export Constants
+### Pattern 4: Using src Attribute in MDX
 
-In MDX files (like documentation), use `export const` declarations:
+In MDX files (like documentation), use the `src` attribute pattern for the cleanest approach:
 
 **guide.mdx:**
 
@@ -346,9 +342,21 @@ In MDX files (like documentation), use `export const` declarations:
 title: Map Guide
 ---
 
-import InlineMap from "../../components/InlineMap.astro";
+import Map from "../../components/Map.astro";
 
-export const earthquakeYaml = `type: map
+## Live Earthquake Data
+
+Here's a map showing recent earthquakes:
+
+<Map src="/configs/earthquake-map.yaml" height="400px" />
+
+The data refreshes from the USGS API.
+```
+
+**public/configs/earthquake-map.yaml:**
+
+```yaml
+type: map
 id: earthquake-demo
 config:
   center: [-120, 37]
@@ -362,60 +370,35 @@ layers:
       url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     paint:
       circle-radius: 6
-      circle-color: "#ef4444"`;
-
-## Live Earthquake Data
-
-Here's a map showing recent earthquakes:
-
-<InlineMap yaml={earthquakeYaml} height="400px" />
-
-The data refreshes from the USGS API.
+      circle-color: "#ef4444"
 ```
 
 <Aside type="tip">
-  The `export const` pattern works because: 1. The constant is defined at module
-  scope (not inside JSX) 2. JavaScript preserves whitespace in template literals
-  at module level 3. MDX processes exports before rendering JSX
+  This pattern keeps your MDX clean and readable, with map configurations in separate YAML files that are easy to maintain.
 </Aside>
 
 ## Advanced: Interactive Map Component
 
-A full-featured component with events and controls:
+A full-featured component with events and controls using the `src` pattern:
 
 **InteractiveMap.astro:**
 
 ```astro
 ---
-import { YAMLParser } from '@maplibre-yaml/core';
-
 interface Props {
-  configPath: string;
+  src: string;
   height?: string;
   showControls?: boolean;
   onLayerClick?: string; // JavaScript function name to call
 }
 
 const {
-  configPath,
+  src,
   height = '400px',
   showControls = false,
   onLayerClick
 } = Astro.props;
 
-const yamlFiles = import.meta.glob('/src/configs/**/*.yaml', { as: 'raw', eager: true });
-const yamlContent = yamlFiles[configPath];
-
-if (!yamlContent) {
-  throw new Error(`Config not found: ${configPath}`);
-}
-
-const result = YAMLParser.safeParseMapBlock(yamlContent);
-if (!result.success) {
-  throw new Error(`Invalid config: ${result.errors[0].message}`);
-}
-
-const configJson = JSON.stringify(result.data);
 const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
 ---
 
@@ -429,8 +412,8 @@ const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
   )}
 
   <ml-map
+    src={src}
     style={`height: ${height}; display: block;`}
-    config={configJson}
     data-click-handler={onLayerClick}
   />
 
@@ -566,9 +549,9 @@ const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
 </style>
 ```
 
-## Content Collections Integration
+## Content Collections Integration (Optional/Advanced)
 
-For sites with many maps, use Astro Content Collections:
+For sites with many maps that need build-time validation, you can use Astro Content Collections. Note that this is more complex than the recommended `src` attribute pattern:
 
 **src/content/config.ts:**
 
@@ -661,37 +644,25 @@ const configJson = JSON.stringify(mapEntry.data);
 
 ### "Expected object, got null" or Similar Schema Errors
 
-**Cause:** YAML indentation was destroyed by template literal processing.
+**Cause:** YAML indentation was destroyed by template literal processing, or the file couldn't be loaded.
 
 **Solutions:**
 
-1. **Use external YAML files** (recommended)
+1. **Use the `src` attribute pattern** (recommended)
 
    ```astro
-   <Map configPath="/src/configs/my-map.yaml" />
+   <Map src="/configs/my-map.yaml" />
    ```
 
-2. **If inlining, follow the rules exactly:**
+   Place your YAML file in `public/configs/my-map.yaml`
 
-   ```javascript
-   // ✅ Start immediately after backtick, no leading newline
-   const yaml = `type: map
-   id: my-map
-   config:
-     center: [-74, 40]
-     zoom: 10
-     mapStyle: "https://demotiles.maplibre.org/style.json"
-   layers: []`;
-   ```
+2. **Check browser console for loading errors**
 
-3. **Debug by logging the parsed result:**
-   ```astro
-   ---
-   const result = YAMLParser.safeParseMapBlock(yaml);
-   console.log('Parse result:', result);
-   console.log('Raw YAML:', JSON.stringify(yaml)); // Check for whitespace issues
-   ---
-   ```
+   The web component will log errors if it can't fetch or parse the YAML file.
+
+3. **Verify file path is correct**
+
+   Files in `/public` are served from the root, so `/public/configs/map.yaml` becomes `src="/configs/map.yaml"`
 
 ### Map Container Has Zero Height
 
@@ -702,40 +673,35 @@ const configJson = JSON.stringify(mapEntry.data);
 **Solution:**
 
 ```astro
-<ml-map style="height: 400px; display: block;" config={...} />
+<ml-map src="/configs/map.yaml" style="height: 400px; display: block;" />
 ```
 
 Both `height` and `display: block` are required.
 
-### "Config not found" Error
+### Map Not Loading from Public Directory
 
-**Symptoms:** `Error: Config not found: /src/configs/my-map.yaml`
+**Symptoms:** `Error: Config not found` or network 404 error
 
-**Cause:** Path doesn't match `import.meta.glob` pattern.
+**Cause:** Incorrect path or file not in public directory.
 
 **Solutions:**
 
-1. Check the exact path matches
-2. Ensure file exists
-3. Check glob pattern includes your directory:
-   ```javascript
-   // This pattern must match your file location
-   const yamlFiles = import.meta.glob("/src/configs/**/*.yaml", {
-     as: "raw",
-     eager: true,
-   });
-   ```
+1. Ensure file is in `/public` directory (not `/src`)
+2. Use root-relative paths: `src="/configs/map.yaml"` for `/public/configs/map.yaml`
+3. Check browser network tab for 404 errors
+4. Verify file name and extension are correct
 
-### HMR Not Updating YAML Changes
+### YAML File Changes Not Updating
 
-**Symptoms:** Changes to YAML files don't appear until full page reload.
+**Symptoms:** Changes to YAML files in `/public` don't appear immediately.
 
-**Cause:** Astro's HMR doesn't always catch data file changes.
+**Cause:** Browser caching or dev server needs refresh.
 
 **Workaround:**
 
-- Save the `.astro` component file to trigger rebuild
+- Hard refresh the browser (Cmd+Shift+R or Ctrl+Shift+R)
 - Or restart the dev server
+- Note: Files in `/public` are served statically, so they update immediately without rebuild
 
 ### TypeScript Errors with `import.meta.glob`
 
@@ -770,20 +736,20 @@ The script must be inside the component, not in the frontmatter.
 ## Best Practices Summary
 
 <CardGrid>
-  <Card title="Use External YAML Files" icon="document">
-    Keep YAML in `/src/configs/*.yaml` files. Avoids all template literal whitespace issues.
-  </Card>
-
-  <Card title="Validate at Build Time" icon="approve-check">
-    Parse YAML in frontmatter to catch errors during build, not at runtime.
+  <Card title="Use src Attribute (Recommended)" icon="document">
+    Place YAML files in `/public/configs/` and use `<ml-map src="/configs/map.yaml">`. Simplest and most maintainable approach.
   </Card>
 
   <Card title="Set Explicit Dimensions" icon="seti:css">
     Always set `height` and `display: block` on `<ml-map>` elements.
   </Card>
 
-  <Card title="Handle Errors Gracefully" icon="warning">
-    Check `result.success` and show meaningful error messages.
+  <Card title="Keep Config Separate" icon="approve-check">
+    Avoid inline YAML in components. External files are easier to edit and maintain.
+  </Card>
+
+  <Card title="Use Build-Time Validation (Optional)" icon="warning">
+    For critical applications, parse YAML at build time (Pattern 2) to catch errors early.
   </Card>
 </CardGrid>
 

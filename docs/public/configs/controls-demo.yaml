@@ -1,0 +1,10 @@
+type: map
+id: controls-demo
+config:
+  center: [-98, 39]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers: []
+controls:
+  navigation: true
+  scale: true

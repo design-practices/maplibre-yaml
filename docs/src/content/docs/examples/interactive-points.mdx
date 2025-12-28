@@ -5,84 +5,12 @@ description: Rich popups and hover effects
 
 import LiveMap from '../../../components/LiveMap.astro';
 
-export const interactiveYAML = `type: map
-id: interactive-demo
-config:
-  center: [-122.4, 37.77]
-  zoom: 13
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: locations
-    type: circle
-    source:
-      type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-122.4194, 37.7749]
-            properties:
-              name: "City Hall"
-              category: "government"
-              address: "1 Dr Carlton B Goodlett Pl"
-              rating: 4.2
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-122.4089, 37.7855]
-            properties:
-              name: "Ferry Building"
-              category: "landmark"
-              address: "1 Ferry Building"
-              rating: 4.7
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-122.4058, 37.7648]
-            properties:
-              name: "Oracle Park"
-              category: "sports"
-              address: "24 Willie Mays Plaza"
-              rating: 4.6
-    paint:
-      circle-radius: 14
-      circle-color:
-        - match
-        - ["get", "category"]
-        - "government"
-        - "#6366f1"
-        - "landmark"
-        - "#f59e0b"
-        - "sports"
-        - "#22c55e"
-        - "#6b7280"
-      circle-stroke-width: 3
-      circle-stroke-color: "#ffffff"
-    interactive:
-      hover:
-        cursor: pointer
-      click:
-        popup:
-          - h3:
-              - property: name
-          - p:
-              - str: "📍 "
-              - property: address
-          - p:
-              - str: "⭐ "
-              - property: rating
-              - str: " / 5"
-controls:
-  navigation: true`;
-
 Demonstrates interactive features with detailed popups.
 
 ## Live Demo
 
 <LiveMap
-  yaml={interactiveYAML}
+  src="/configs/interactive-points.yaml"
   height="500px"
   caption="Click locations for details"
 />

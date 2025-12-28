@@ -1,0 +1,26 @@
+type: map
+id: line-demo
+config:
+  center: [-122.4, 37.75]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: route
+    type: line
+    source:
+      type: geojson
+      data:
+        type: Feature
+        geometry:
+          type: LineString
+          coordinates:
+            - [-122.4194, 37.7749]
+            - [-122.4, 37.79]
+            - [-122.35, 37.8]
+            - [-122.2711, 37.8044]
+    paint:
+      line-color: "#ef4444"
+      line-width: 4
+    layout:
+      line-cap: round
+      line-join: round

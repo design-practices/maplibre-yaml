@@ -1,0 +1,57 @@
+type: map
+id: earthquake-tracker
+config:
+  center: [-120, 40]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+      refreshInterval: 60000
+      updateStrategy: replace
+      cache:
+        enabled: false
+    paint:
+      circle-radius:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - 3
+        - 2
+        - 6
+        - 4
+        - 12
+        - 6
+        - 24
+      circle-color:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - "#22c55e"
+        - 2
+        - "#eab308"
+        - 4
+        - "#f97316"
+        - 6
+        - "#dc2626"
+      circle-opacity: 0.75
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: title
+          - p:
+              - str: "Magnitude: "
+              - property: mag
+controls:
+  navigation: true
+  scale: true

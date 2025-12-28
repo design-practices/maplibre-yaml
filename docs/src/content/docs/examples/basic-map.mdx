@@ -5,92 +5,11 @@ description: A simple map showing major US cities with data-driven styling
 
 import LiveMap from '../../../components/LiveMap.astro';
 
-export const basicMapYAML = `type: map
-id: basic-cities
-config:
-  center: [-98.5, 39.8]
-  zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: cities
-    type: circle
-    source:
-      type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-74.006, 40.7128]
-            properties:
-              name: "New York"
-              population: 8336817
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-118.2437, 34.0522]
-            properties:
-              name: "Los Angeles"
-              population: 3979576
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-87.6298, 41.8781]
-            properties:
-              name: "Chicago"
-              population: 2693976
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-95.3698, 29.7604]
-            properties:
-              name: "Houston"
-              population: 2320268
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-122.4194, 37.7749]
-            properties:
-              name: "San Francisco"
-              population: 881549
-    paint:
-      circle-radius:
-        - interpolate
-        - ["linear"]
-        - ["get", "population"]
-        - 500000
-        - 8
-        - 5000000
-        - 20
-        - 10000000
-        - 30
-      circle-color: "#3b82f6"
-      circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"
-    interactive:
-      hover:
-        cursor: pointer
-      click:
-        popup:
-          - h3:
-              - property: name
-          - p:
-              - str: "Population: "
-              - property: population
-controls:
-  navigation: true
-  scale: true`;
-
 A simple example showing circle markers for major cities with size based on population.
 
 ## Live Demo
 
-<LiveMap
-  yaml={basicMapYAML}
-  height="500px"
-  caption="Click cities to see population"
-/>
+<LiveMap src="/configs/basic-map.yaml" height="500px" caption="Click cities to see population" />
 
 ## Key Concepts
 

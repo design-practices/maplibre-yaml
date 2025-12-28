@@ -5,11 +5,15 @@ description: Use maplibre-yaml in plain JavaScript projects
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
-This guide covers using maplibre-yaml in vanilla JavaScript projects - no frameworks, no build tools required. This is the simplest integration and a great way to understand the core APIs.
+This guide covers using maplibre-yaml in vanilla JavaScript projects - no frameworks, no build tools required.
 
-## Quick Start
+You have two options:
+1. **Web Component** (`<ml-map>`) - Zero JavaScript, just HTML (recommended for simplicity)
+2. **JavaScript API** (`YAMLParser` + `MapRenderer`) - More control and customization
 
-Get a map rendering in under 5 minutes.
+## Quick Start: Web Component (Recommended)
+
+The fastest way to get started - no JavaScript code needed!
 
 <Steps>
 
@@ -24,19 +28,22 @@ Get a map rendering in under 5 minutes.
          href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
          rel="stylesheet"
        />
+       <script type="module">
+         import "https://unpkg.com/@maplibre-yaml/core/register";
+       </script>
        <style>
          body {
            margin: 0;
          }
-         #map {
+         ml-map {
+           display: block;
            width: 100vw;
            height: 100vh;
          }
        </style>
      </head>
      <body>
-       <div id="map"></div>
-       <script type="module" src="map.js"></script>
+       <ml-map src="map.yaml"></ml-map>
      </body>
    </html>
    ```
@@ -70,6 +77,59 @@ Get a map rendering in under 5 minutes.
          circle-radius: 10
          circle-color: "#3b82f6"
    ```
+
+3. **Serve and view**
+
+   ```bash
+   npx serve .
+   ```
+
+   Open http://localhost:3000
+
+</Steps>
+
+<Aside type="tip">
+  That's it! No JavaScript code needed. The `<ml-map>` component automatically
+  fetches, parses, and renders your YAML configuration.
+</Aside>
+
+## Quick Start: JavaScript API (More Control)
+
+For cases where you need programmatic control or want to use the lower-level APIs:
+
+<Steps>
+
+1. **Create an HTML file**
+
+   ```html
+   <!DOCTYPE html>
+   <html>
+     <head>
+       <title>My Map</title>
+       <link
+         href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+         rel="stylesheet"
+       />
+       <style>
+         body {
+           margin: 0;
+         }
+         #map {
+           width: 100vw;
+           height: 100vh;
+         }
+       </style>
+     </head>
+     <body>
+       <div id="map"></div>
+       <script type="module" src="map.js"></script>
+     </body>
+   </html>
+   ```
+
+2. **Create a YAML configuration file**
+
+   Create `map.yaml` (same as above)
 
 3. **Create your JavaScript file**
 
@@ -112,6 +172,25 @@ Get a map rendering in under 5 minutes.
    Open http://localhost:3000
 
 </Steps>
+
+## Which Approach Should I Use?
+
+**Use the Web Component (`<ml-map>`) if:**
+- ✅ You want the simplest possible integration
+- ✅ You don't need programmatic control
+- ✅ You're embedding maps in static pages
+- ✅ You want zero JavaScript code
+
+**Use the JavaScript API (`YAMLParser` + `MapRenderer`) if:**
+- ✅ You need to programmatically modify the map
+- ✅ You want to build custom UI controls
+- ✅ You need access to the MapLibre GL instance
+- ✅ You're building a complex interactive application
+
+<Aside type="tip">
+  You can also use **both approaches together** - start with `<ml-map>` for basic rendering,
+  then access the underlying `MapRenderer` via `mapElement.getRenderer()` when you need more control.
+</Aside>
 
 ## Installation Options
 

@@ -6,28 +6,6 @@ description: Polling, streaming, and real-time updates
 import LiveMap from "../../../components/LiveMap.astro";
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
-export const pollingDemoYAML = `type: map
-id: polling-demo
-config:
-  center: [-120, 37]
-  zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: earthquakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-      refreshInterval: 60000
-      updateStrategy: replace
-    paint:
-      circle-radius: 8
-      circle-color: "#ef4444"
-      circle-stroke-width: 1
-      circle-stroke-color: "#ffffff"
-controls:
-  navigation: true`;
-
 maplibre-yaml makes it easy to keep your map data fresh with automatic polling, Server-Sent Events (SSE), and WebSocket streaming.
 
 ## Polling (auto-refresh)
@@ -42,7 +20,7 @@ source:
 ```
 
 <LiveMap
-  yaml={pollingDemoYAML}
+  src="/configs/polling-demo.yaml"
   height="350px"
   caption="Refreshes every 60 seconds"
 />

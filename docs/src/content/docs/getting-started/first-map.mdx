@@ -6,119 +6,6 @@ description: Understanding the basics of maplibre-yaml configuration
 import LiveMap from "../../../components/LiveMap.astro";
 import { Aside } from "@astrojs/starlight/components";
 
-export const configDemoYAML = `type: map
-id: config-demo
-config:
-  center: [-74.006, 40.7128]
-  zoom: 14
-  pitch: 45
-  bearing: -17
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers: []`;
-
-export const simpleLayerYAML = `type: map
-id: simple-layer
-config:
-  center: [-74.006, 40.7128]
-  zoom: 10
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: my-points
-    type: circle
-    source:
-      type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-74.006, 40.7128]
-            properties:
-              name: "New York"
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-118.243, 34.052]
-            properties:
-              name: "Los Angeles"
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-87.623, 41.881]
-            properties:
-              name: "Chicago"
-    paint:
-      circle-radius: 12
-      circle-color: "#3b82f6"
-      circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"`;
-
-export const controlsDemoYAML = `type: map
-id: controls-demo
-config:
-  center: [-98, 39]
-  zoom: 3
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers: []
-controls:
-  navigation: true
-  scale: true`;
-
-export const completeExampleYAML = `type: map
-id: complete-example
-config:
-  center: [-98, 39]
-  zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: cities
-    type: circle
-    source:
-      type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-74.006, 40.7128]
-            properties:
-              name: "New York"
-              population: 8336817
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-118.243, 34.052]
-            properties:
-              name: "Los Angeles"
-              population: 3979576
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-87.623, 41.881]
-            properties:
-              name: "Chicago"
-              population: 2693976
-    paint:
-      circle-radius: 10
-      circle-color: "#ef4444"
-      circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"
-    interactive:
-      hover:
-        cursor: pointer
-      click:
-        popup:
-          - h3:
-              - property: name
-          - p:
-              - str: "Population: "
-              - property: population
-controls:
-  navigation: true
-  scale: true`;
-
 This guide walks you through the fundamentals of maplibre-yaml configuration. By the end, you'll understand how to create maps, configure their appearance, and add basic layers.
 
 ## Map structure
@@ -157,7 +44,7 @@ config:
 ```
 
 <LiveMap
-  yaml={configDemoYAML}
+  src="/configs/config-demo.yaml"
   height="350px"
   caption="Map with pitch and bearing applied"
 />
@@ -219,7 +106,7 @@ layers:
 ```
 
 <LiveMap
-  yaml={simpleLayerYAML}
+  src="/configs/simple-layer.yaml"
   height="350px"
   caption="Three US cities displayed as circle markers"
 />
@@ -237,7 +124,7 @@ controls:
 ```
 
 <LiveMap
-  yaml={controlsDemoYAML}
+  src="/configs/controls-demo.yaml"
   height="350px"
   caption="Map with navigation and scale controls"
 />
@@ -307,7 +194,7 @@ controls:
 ```
 
 <LiveMap
-  yaml={completeExampleYAML}
+  src="/configs/complete-example.yaml"
   height="400px"
   caption="Complete example with interactive popups and controls"
 />

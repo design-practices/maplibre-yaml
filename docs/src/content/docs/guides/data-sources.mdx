@@ -6,65 +6,6 @@ description: Loading GeoJSON from URLs, inline data, and remote APIs
 import LiveMap from "../../../components/LiveMap.astro";
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
-export const remoteDemoYAML = `type: map
-id: remote-demo
-config:
-  center: [-120, 37]
-  zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: earthquakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    paint:
-      circle-radius: 5
-      circle-color: "#ef4444"
-      circle-opacity: 0.7`;
-
-export const clusterDemoYAML = `type: map
-id: cluster-demo
-config:
-  center: [-120, 37]
-  zoom: 3
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: earthquakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson"
-      cluster: true
-      clusterRadius: 50
-      clusterMaxZoom: 14
-    filter: ["has", "point_count"]
-    paint:
-      circle-radius:
-        - step
-        - ["get", "point_count"]
-        - 20
-        - 100
-        - 30
-        - 750
-        - 40
-      circle-color: "#3b82f6"
-      circle-opacity: 0.8
-  - id: cluster-count
-    type: symbol
-    source: earthquakes
-    filter: ["has", "point_count"]
-    layout:
-      text-field: "{point_count_abbreviated}"
-      text-size: 12
-  - id: unclustered
-    type: circle
-    source: earthquakes
-    filter: ["!", ["has", "point_count"]]
-    paint:
-      circle-radius: 6
-      circle-color: "#ef4444"`;
-
 maplibre-yaml supports multiple ways to provide data to your layers: inline GeoJSON, remote URLs, and streaming connections.
 
 ## Inline data
@@ -101,7 +42,7 @@ source:
 ```
 
 <LiveMap
-  yaml={remoteDemoYAML}
+  src="/configs/remote-demo.yaml"
   height="350px"
   caption="Live earthquake data from USGS"
 />
@@ -229,7 +170,7 @@ layers:
 ```
 
 <LiveMap
-  yaml={clusterDemoYAML}
+  src="/configs/cluster-demo.yaml"
   height="400px"
   caption="Clustered earthquake data - zoom in to see individual points"
 />

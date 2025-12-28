@@ -1,0 +1,16 @@
+type: map
+id: remote-demo
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 5
+      circle-color: "#ef4444"
+      circle-opacity: 0.7

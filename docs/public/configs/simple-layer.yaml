@@ -1,0 +1,37 @@
+type: map
+id: simple-layer
+config:
+  center: [-74.006, 40.7128]
+  zoom: 10
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: my-points
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-74.006, 40.7128]
+            properties:
+              name: "New York"
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-118.243, 34.052]
+            properties:
+              name: "Los Angeles"
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-87.623, 41.881]
+            properties:
+              name: "Chicago"
+    paint:
+      circle-radius: 12
+      circle-color: "#3b82f6"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

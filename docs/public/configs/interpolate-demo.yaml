@@ -1,0 +1,44 @@
+type: map
+id: interpolate-demo
+config:
+  center: [-120, 37]
+  zoom: 5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: quakes
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-121, 36] }
+            properties: { magnitude: 1.5 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-119, 37.5] }
+            properties: { magnitude: 2.8 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-120.5, 38] }
+            properties: { magnitude: 4.2 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-118, 36.5] }
+            properties: { magnitude: 5.1 }
+    paint:
+      circle-radius:
+        - interpolate
+        - ["linear"]
+        - ["get", "magnitude"]
+        - 1
+        - 6
+        - 5
+        - 24
+      circle-color:
+        - interpolate
+        - ["linear"]
+        - ["get", "magnitude"]
+        - 1
+        - "#fef08a"
+        - 5
+        - "#dc2626"
+      circle-opacity: 0.8
