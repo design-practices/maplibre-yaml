@@ -208,16 +208,20 @@ export class LayerManager {
       initialData = config.data as FeatureCollection;
     }
 
-    // Add source with initial data
-    this.map.addSource(sourceId, {
+    // Add source with initial data - only include clustering properties if defined
+    const sourceSpec: any = {
       type: "geojson",
       data: initialData,
-      cluster: config.cluster,
-      clusterRadius: config.clusterRadius,
-      clusterMaxZoom: config.clusterMaxZoom,
-      clusterMinPoints: config.clusterMinPoints,
-      clusterProperties: config.clusterProperties,
-    });
+    };
+
+    // Only add clustering properties if they are defined
+    if (config.cluster !== undefined) sourceSpec.cluster = config.cluster;
+    if (config.clusterRadius !== undefined) sourceSpec.clusterRadius = config.clusterRadius;
+    if (config.clusterMaxZoom !== undefined) sourceSpec.clusterMaxZoom = config.clusterMaxZoom;
+    if (config.clusterMinPoints !== undefined) sourceSpec.clusterMinPoints = config.clusterMinPoints;
+    if (config.clusterProperties !== undefined) sourceSpec.clusterProperties = config.clusterProperties;
+
+    this.map.addSource(sourceId, sourceSpec);
 
     this.sourceData.set(sourceId, initialData);
 

@@ -6,6 +6,49 @@ description: Create your first map in 5 minutes
 import LiveMap from "../../../components/LiveMap.astro";
 import YAMLBlock from "../../../components/YAMLBlock.astro";
 
+export const quickstartYAML = `type: map
+id: quickstart-demo
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"`;
+
+export const interactiveYAML = `type: map
+id: quickstart-interactive
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: title`;
+
 Let's create a map showing earthquake data in under 5 minutes.
 
 ## 1. Create an HTML file
@@ -43,34 +86,38 @@ Create a new file called `index.html`:
 Create a file called `map.js`:
 
 ```javascript
-import { parseYAML, MapRenderer } from "@maplibre-yaml/core";
+import { YAMLParser, MapRenderer } from "@maplibre-yaml/core";
 
-const yaml = `
-   type: map
-   id: earthquake-map
-   config:
-     center: [-120, 37]
-     zoom: 5
-     mapStyle: "https://demotiles.maplibre.org/style.json"
-   layers:
-     - id: earthquakes
-       type: circle
-       source:
-         type: geojson
-         url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-       paint:
-         circle-radius: 6
-         circle-color: "#e74c3c"
-         circle-stroke-width: 1
-         circle-stroke-color: "#ffffff"
-   `;
+// IMPORTANT: No leading newline, no extra indentation
+const yaml = `type: map
+id: earthquake-map
+config:
+  center: [-120, 37]
+  zoom: 5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"`;
 
-const config = parseYAML(yaml);
-const renderer = new MapRenderer(document.getElementById("map"), config);
+const result = YAMLParser.safeParseMapBlock(yaml);
 
-renderer.on("layer:loaded", ({ layerId, featureCount }) => {
-  console.log(`Loaded ${featureCount} earthquakes`);
-});
+if (!result.success) {
+  console.error("YAML parsing failed:", result.errors);
+} else {
+  const renderer = new MapRenderer(document.getElementById("map"), result.data);
+
+  renderer.on("layer:loaded", ({ layerId, featureCount }) => {
+    console.log(`Loaded ${featureCount} earthquakes`);
+  });
+}
 ```
 
 ## 3. Run a local server
@@ -86,25 +133,7 @@ Open http://localhost:3000 in your browser.
 Here's what you'll see:
 
 <LiveMap
-  yaml={`
-type: map
-id: quickstart-demo
-config:
-  center: [-120, 37]
-  zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: earthquakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    paint:
-      circle-radius: 6
-      circle-color: "#e74c3c"
-      circle-stroke-width: 1
-      circle-stroke-color: "#ffffff"
-`}
+  yaml={quickstartYAML}
   height="400px"
   caption="Live earthquake data from USGS"
 />
@@ -171,32 +200,7 @@ layers:
 ```
 
 <LiveMap
-  yaml={`
-type: map
-id: quickstart-interactive
-config:
-  center: [-120, 37]
-  zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: earthquakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    paint:
-      circle-radius: 6
-      circle-color: "#e74c3c"
-      circle-stroke-width: 1
-      circle-stroke-color: "#ffffff"
-    interactive:
-      hover:
-        cursor: pointer
-      click:
-        popup:
-          - h3:
-              - property: title
-`}
+  yaml={interactiveYAML}
   height="400px"
   caption="Click on any earthquake to see details"
 />
@@ -205,12 +209,19 @@ layers:
 
 Make the map refresh automatically every 60 seconds:
 
-```yaml {7-8}
-source:
-  type: geojson
-  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-  refreshInterval: 60000
-  updateStrategy: replace
+```yaml {6-9}
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
+      refresh:
+        refreshInterval: 60000
+        updateStrategy: replace
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
 ```
 
 ## Next steps

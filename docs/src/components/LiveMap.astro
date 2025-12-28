@@ -10,15 +10,39 @@ const { yaml, height = '400px', caption } = Astro.props;
 // Parse YAML to JSON config for the web component
 import { YAMLParser } from '@maplibre-yaml/core';
 
-const result = YAMLParser.safeParseMapBlock(yaml);
+// Trim leading/trailing whitespace but preserve internal indentation
+const cleanedYaml = yaml.trim();
+
+const result = YAMLParser.safeParseMapBlock(cleanedYaml);
 const configJson = result.success ? JSON.stringify(result.data) : null;
 const error = result.success ? null : result.errors;
+
+// Log parsing for debugging
+if (!result.success) {
+  console.error('LiveMap YAML parsing failed:', error);
+  console.error('Raw YAML:', yaml);
+  console.error('Cleaned YAML:', cleanedYaml);
+} else {
+  console.log('LiveMap parsed successfully:', result.data);
+  console.log('Config JSON length:', configJson?.length);
+}
 ---
 
 <figure class="livemap-container">
-  <div class="livemap-wrapper">
-    <ml-map style={`height: ${height}; display: block;`} config={configJson}></ml-map>
-  </div>
+  {!result.success ? (
+    <div class="livemap-error">
+      <h4>YAML Parsing Error</h4>
+      <pre>{JSON.stringify(error, null, 2)}</pre>
+      <details>
+        <summary>YAML Input</summary>
+        <pre>{yaml}</pre>
+      </details>
+    </div>
+  ) : (
+    <div class="livemap-wrapper">
+      <ml-map style={`height: ${height}; display: block;`} config={configJson}></ml-map>
+    </div>
+  )}
   {caption && <figcaption>{caption}</figcaption>}
 </figure>
 
@@ -35,6 +59,23 @@ const error = result.success ? null : result.errors;
     border-radius: 8px;
     border: 1px solid var(--sl-color-gray-5);
     overflow: hidden;
+  }
+  .livemap-error {
+    padding: 1rem;
+    background: #fee;
+    border: 1px solid #fcc;
+    border-radius: 8px;
+  }
+  .livemap-error h4 {
+    margin: 0 0 0.5rem;
+    color: #c00;
+  }
+  .livemap-error pre {
+    background: #fff;
+    padding: 0.5rem;
+    border-radius: 4px;
+    overflow: auto;
+    font-size: 0.875rem;
   }
   figcaption {
     margin-top: 0.5rem;
