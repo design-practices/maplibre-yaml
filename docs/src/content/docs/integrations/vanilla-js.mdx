@@ -1,0 +1,740 @@
+---
+title: Vanilla JavaScript
+description: Use maplibre-yaml in plain JavaScript projects
+---
+
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
+This guide covers using maplibre-yaml in vanilla JavaScript projects - no frameworks, no build tools required. This is the simplest integration and a great way to understand the core APIs.
+
+## Quick Start
+
+Get a map rendering in under 5 minutes.
+
+<Steps>
+
+1. **Create an HTML file**
+
+   ```html
+   <!DOCTYPE html>
+   <html>
+     <head>
+       <title>My Map</title>
+       <link
+         href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+         rel="stylesheet"
+       />
+       <style>
+         body {
+           margin: 0;
+         }
+         #map {
+           width: 100vw;
+           height: 100vh;
+         }
+       </style>
+     </head>
+     <body>
+       <div id="map"></div>
+       <script type="module" src="map.js"></script>
+     </body>
+   </html>
+   ```
+
+2. **Create a YAML configuration file**
+
+   Create `map.yaml`:
+
+   ```yaml
+   type: map
+   id: my-first-map
+   config:
+     center: [-74.006, 40.7128]
+     zoom: 12
+     mapStyle: "https://demotiles.maplibre.org/style.json"
+   layers:
+     - id: points
+       type: circle
+       source:
+         type: geojson
+         data:
+           type: FeatureCollection
+           features:
+             - type: Feature
+               geometry:
+                 type: Point
+                 coordinates: [-74.006, 40.7128]
+               properties:
+                 name: "New York City"
+       paint:
+         circle-radius: 10
+         circle-color: "#3b82f6"
+   ```
+
+3. **Create your JavaScript file**
+
+   Create `map.js`:
+
+   ```javascript
+   import { YAMLParser, MapRenderer } from "https://unpkg.com/@maplibre-yaml/core";
+
+   // Fetch and parse YAML configuration
+   const response = await fetch("map.yaml");
+   const yamlText = await response.text();
+
+   // Parse and validate
+   const result = YAMLParser.safeParseMapBlock(yamlText);
+
+   if (!result.success) {
+     console.error("Configuration errors:", result.errors);
+     document.getElementById("map").innerHTML = `
+          <div style="color: red; padding: 20px;">
+            <h3>Configuration Error</h3>
+            <pre>${JSON.stringify(result.errors, null, 2)}</pre>
+          </div>
+        `;
+   } else {
+     // Render the map
+     const renderer = new MapRenderer(document.getElementById("map"), result.data);
+
+     renderer.on("load", () => {
+       console.log("Map loaded successfully!");
+     });
+   }
+   ```
+
+4. **Serve and view**
+
+   ```bash
+   npx serve .
+   ```
+
+   Open http://localhost:3000
+
+</Steps>
+
+## Installation Options
+
+### CDN (No Build Tools)
+
+For quick prototypes or simple projects:
+
+```html
+<script type="module">
+  import {
+    YAMLParser,
+    MapRenderer,
+  } from "https://unpkg.com/@maplibre-yaml/core";
+  // Your code here
+</script>
+```
+
+### npm (With Build Tools)
+
+For production projects with bundlers:
+
+<Tabs>
+<TabItem label="npm">
+
+```bash
+npm install @maplibre-yaml/core maplibre-gl
+```
+
+</TabItem>
+<TabItem label="pnpm">
+
+```bash
+pnpm add @maplibre-yaml/core maplibre-gl
+```
+
+</TabItem>
+<TabItem label="yarn">
+
+```bash
+yarn add @maplibre-yaml/core maplibre-gl
+```
+
+</TabItem>
+</Tabs>
+
+```javascript
+import { YAMLParser, MapRenderer } from '@maplibre-yaml/core';
+import 'maplibre-gl/dist/maplibre-gl.css';
+```
+
+## Loading YAML Configuration
+
+### Recommended: External YAML Files
+
+External files are the recommended approach for most projects:
+
+```javascript
+// Load from file
+const response = await fetch("/configs/map.yaml");
+const yamlText = await response.text();
+const result = YAMLParser.safeParseMapBlock(yamlText);
+```
+
+**Benefits:**
+
+- Clean separation of configuration and code
+- Easy to edit without touching JavaScript
+- Proper YAML indentation preserved
+- Can be validated independently
+- Cacheable by browsers
+
+### Alternative: Inline YAML Strings
+
+For simple cases where you want everything in one file:
+
+```javascript
+// ⚠️ Important: Start content immediately after backtick
+// No leading newline!
+const yamlConfig = `type: map
+id: inline-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers: []`;
+
+const result = YAMLParser.safeParseMapBlock(yamlConfig);
+```
+
+<Aside type="caution" title="Template Literal Formatting">
+When using inline YAML in template literals:
+- Start content immediately after the opening backtick (no newline)
+- Maintain consistent 2-space indentation
+- No trailing newline before closing backtick
+
+Incorrect formatting will cause parsing errors because JavaScript template literals can affect whitespace.
+
+</Aside>
+
+## Core APIs
+
+### YAMLParser
+
+The parser validates YAML against the maplibre-yaml schema.
+
+```javascript
+import { YAMLParser } from "@maplibre-yaml/core";
+
+// Safe parsing (recommended) - returns result object
+const result = YAMLParser.safeParseMapBlock(yamlText);
+
+if (result.success) {
+  console.log("Valid config:", result.data);
+} else {
+  console.error("Errors:", result.errors);
+  // errors: [{ path: 'config.center', message: 'Expected array' }, ...]
+}
+
+// Direct parsing - throws on error
+try {
+  const config = YAMLParser.parseMapBlock(yamlText);
+} catch (error) {
+  console.error("Parse error:", error.message);
+}
+```
+
+### MapRenderer
+
+The renderer creates and manages the MapLibre GL map.
+
+```javascript
+import { MapRenderer } from "@maplibre-yaml/core";
+
+const renderer = new MapRenderer(container, config);
+
+// Events
+renderer.on("load", () => {
+  /* Map ready */
+});
+renderer.on("error", ({ error }) => {
+  /* Handle error */
+});
+renderer.on("layer:click", ({ layerId, feature }) => {
+  /* Handle click */
+});
+
+// Methods
+renderer.destroy(); // Clean up resources
+```
+
+### Full Event List
+
+```javascript
+// Map lifecycle
+renderer.on("load", () => {});
+renderer.on("error", ({ error }) => {});
+
+// Layer events
+renderer.on("layer:loading", ({ layerId }) => {});
+renderer.on("layer:loaded", ({ layerId, featureCount }) => {});
+renderer.on("layer:error", ({ layerId, error }) => {});
+
+// Interaction events
+renderer.on("layer:click", ({ layerId, feature, coordinates }) => {});
+renderer.on("layer:hover", ({ layerId, feature }) => {});
+
+// Data events (for live data)
+renderer.on("layer:data-update", ({ layerId, featureCount }) => {});
+```
+
+## Working with Live Data
+
+### Polling (Auto-refresh)
+
+```yaml
+# map.yaml
+type: map
+id: live-map
+config:
+  center: [-120, 37]
+  zoom: 5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
+      refreshInterval: 60000 # Refresh every 60 seconds
+      updateStrategy: replace
+    paint:
+      circle-radius: 8
+      circle-color: "#ef4444"
+```
+
+```javascript
+// Control polling programmatically
+renderer.pauseRefresh("earthquakes");
+renderer.resumeRefresh("earthquakes");
+await renderer.refreshNow("earthquakes");
+```
+
+### Handling Data Updates
+
+```javascript
+renderer.on("layer:loading", ({ layerId }) => {
+  showSpinner(layerId);
+});
+
+renderer.on("layer:loaded", ({ layerId, featureCount }) => {
+  hideSpinner(layerId);
+  updateStatus(`Loaded ${featureCount} features`);
+});
+
+renderer.on("layer:error", ({ layerId, error }) => {
+  hideSpinner(layerId);
+  showError(`Failed to load ${layerId}: ${error.message}`);
+});
+```
+
+## Accessing the MapLibre Instance
+
+For advanced use cases, access the underlying MapLibre GL map:
+
+```javascript
+const renderer = new MapRenderer(container, config);
+
+renderer.on("load", () => {
+  // Access the MapLibre GL map instance
+  const map = renderer.getMap();
+
+  // Use any MapLibre GL API
+  map.flyTo({ center: [-122.4, 37.8], zoom: 14 });
+
+  // Add custom controls
+  map.addControl(new maplibregl.NavigationControl());
+
+  // Add custom event handlers
+  map.on("moveend", () => {
+    console.log("Map moved to:", map.getCenter());
+  });
+});
+```
+
+<Aside type="tip">
+  The MapRenderer manages sources and layers declared in your YAML. You can add
+  additional sources and layers directly via the MapLibre API, but be careful
+  not to conflict with IDs defined in your YAML configuration.
+</Aside>
+
+## Complete Example: Interactive Dashboard
+
+Here's a complete example showing a map with live data and UI controls:
+
+**index.html:**
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Earthquake Dashboard</title>
+    <link
+      href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+      }
+      #map {
+        width: 100vw;
+        height: 100vh;
+      }
+      .controls {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        z-index: 1;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 14px;
+        color: #666;
+      }
+      button {
+        padding: 8px 16px;
+        margin-right: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: white;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #f5f5f5;
+      }
+      button.active {
+        background: #3b82f6;
+        color: white;
+        border-color: #3b82f6;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div class="controls">
+      <button id="pause">Pause Updates</button>
+      <button id="refresh">Refresh Now</button>
+      <div class="status" id="status">Loading...</div>
+    </div>
+    <script type="module" src="dashboard.js"></script>
+  </body>
+</html>
+```
+
+**earthquakes.yaml:**
+
+```yaml
+type: map
+id: earthquake-dashboard
+config:
+  center: [-120, 40]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
+      refreshInterval: 60000
+      updateStrategy: replace
+    paint:
+      circle-radius:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - 4
+        - 5
+        - 20
+      circle-color:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - "#22c55e"
+        - 3
+        - "#eab308"
+        - 5
+        - "#ef4444"
+      circle-opacity: 0.8
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: title
+          - p:
+              - str: "Magnitude: "
+              - property: mag
+```
+
+**dashboard.js:**
+
+```javascript
+import { YAMLParser, MapRenderer } from "https://unpkg.com/@maplibre-yaml/core";
+
+// State
+let isPaused = false;
+let renderer = null;
+
+// DOM elements
+const statusEl = document.getElementById("status");
+const pauseBtn = document.getElementById("pause");
+const refreshBtn = document.getElementById("refresh");
+
+// Load and initialize
+async function init() {
+  try {
+    // Load YAML configuration
+    const response = await fetch("earthquakes.yaml");
+    const yamlText = await response.text();
+
+    // Parse and validate
+    const result = YAMLParser.safeParseMapBlock(yamlText);
+
+    if (!result.success) {
+      statusEl.textContent = `Config error: ${result.errors[0].message}`;
+      statusEl.style.color = "#ef4444";
+      return;
+    }
+
+    // Create renderer
+    renderer = new MapRenderer(document.getElementById("map"), result.data);
+
+    // Set up event handlers
+    renderer.on("load", () => {
+      statusEl.textContent = "Map ready, loading data...";
+    });
+
+    renderer.on("layer:loading", ({ layerId }) => {
+      statusEl.textContent = `Loading ${layerId}...`;
+    });
+
+    renderer.on("layer:loaded", ({ layerId, featureCount }) => {
+      const time = new Date().toLocaleTimeString();
+      statusEl.textContent = `${featureCount} earthquakes · Updated ${time}`;
+      statusEl.style.color = "#666";
+    });
+
+    renderer.on("layer:error", ({ layerId, error }) => {
+      statusEl.textContent = `Error: ${error.message}`;
+      statusEl.style.color = "#ef4444";
+    });
+  } catch (error) {
+    statusEl.textContent = `Failed to initialize: ${error.message}`;
+    statusEl.style.color = "#ef4444";
+  }
+}
+
+// Button handlers
+pauseBtn.addEventListener("click", () => {
+  if (!renderer) return;
+
+  isPaused = !isPaused;
+
+  if (isPaused) {
+    renderer.pauseRefresh("earthquakes");
+    pauseBtn.textContent = "Resume Updates";
+    pauseBtn.classList.add("active");
+  } else {
+    renderer.resumeRefresh("earthquakes");
+    pauseBtn.textContent = "Pause Updates";
+    pauseBtn.classList.remove("active");
+  }
+});
+
+refreshBtn.addEventListener("click", async () => {
+  if (!renderer) return;
+
+  refreshBtn.disabled = true;
+  refreshBtn.textContent = "Refreshing...";
+
+  await renderer.refreshNow("earthquakes");
+
+  refreshBtn.disabled = false;
+  refreshBtn.textContent = "Refresh Now";
+});
+
+// Initialize
+init();
+```
+
+## Troubleshooting
+
+### Map Shows But No Data Appears
+
+**Symptoms:** Base map renders, but layers with URL data don't show any features.
+
+**Common Causes:**
+
+1. **CORS blocking the request**
+
+   Check the browser console for CORS errors. The data URL must allow cross-origin requests.
+
+```javascript
+// Check network tab - is the request being made?
+renderer.on("layer:error", ({ layerId, error }) => {
+  console.error(`${layerId} failed:`, error);
+});
+```
+
+2. **URL returns invalid GeoJSON**
+
+   Test the URL directly in your browser to verify it returns valid GeoJSON.
+
+3. **Data loaded but features have no geometry**
+
+```javascript
+renderer.on("layer:loaded", ({ layerId, featureCount }) => {
+  console.log(`${layerId}: ${featureCount} features`);
+  // If featureCount is 0, the GeoJSON may be empty or malformed
+});
+```
+
+### YAML Parsing Errors
+
+**Symptoms:** `safeParseMapBlock` returns `success: false` with errors.
+
+**Common Causes:**
+
+1. **Indentation issues**
+
+   YAML requires consistent indentation (2 spaces recommended):
+
+```yaml
+   # ✅ Correct
+   config:
+     center: [-74, 40]
+     zoom: 10
+
+   # ❌ Wrong - inconsistent indentation
+   config:
+     center: [-74, 40]
+      zoom: 10
+```
+
+2. **Missing required fields**
+
+```yaml
+   # ❌ Missing required fields
+   type: map
+   layers: []
+
+   # ✅ Correct - has all required fields
+   type: map
+   id: my-map
+   config:
+     center: [0, 0]
+     zoom: 2
+     mapStyle: "https://..."
+   layers: []
+```
+
+3. **Invalid values**
+
+```yaml
+   # ❌ center must be [longitude, latitude]
+   config:
+     center: "New York"
+
+   # ✅ Correct
+   config:
+     center: [-74.006, 40.7128]
+```
+
+### Template Literal YAML Issues
+
+**Symptoms:** YAML works in a file but fails when inline in JavaScript.
+
+**Cause:** JavaScript template literals can mangle whitespace.
+
+```javascript
+// ❌ WRONG - Leading newline causes issues
+const yaml = `
+type: map
+config:
+  center: [-74, 40]
+`;
+
+// ✅ CORRECT - Start immediately after backtick
+const yaml = `type: map
+id: my-map
+config:
+  center: [-74, 40]
+  zoom: 10
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers: []`;
+```
+
+**Best Practice:** Use external YAML files whenever possible.
+
+### Map Container Has Zero Size
+
+**Symptoms:** Map doesn't render, or renders as a tiny sliver.
+
+**Cause:** The container element needs explicit dimensions.
+
+```css
+/* ❌ Container has no size */
+#map {
+}
+
+/* ✅ Explicit dimensions */
+#map {
+  width: 100%;
+  height: 400px;
+}
+
+/* ✅ Or fill viewport */
+#map {
+  width: 100vw;
+  height: 100vh;
+}
+```
+
+### Events Not Firing
+
+**Symptoms:** `renderer.on('load', ...)` callback never runs.
+
+**Common Causes:**
+
+1. **Event registered after map loaded**
+
+```javascript
+// ❌ Map might already be loaded
+const renderer = new MapRenderer(container, config);
+setTimeout(() => {
+  renderer.on("load", () => {}); // Might miss the event
+}, 1000);
+
+// ✅ Register immediately
+const renderer = new MapRenderer(container, config);
+renderer.on("load", () => {});
+```
+
+2. **Configuration error prevented map creation**
+
+```javascript
+renderer.on("error", ({ error }) => {
+  console.error("Map failed to initialize:", error);
+});
+```
+
+## Next Steps
+
+- [Web Components Integration](/integrations/web-components/) - Even simpler HTML-only approach
+- [Astro Integration](/integrations/astro/) - For Astro-based sites
+- [Live Data Guide](/guides/live-data/) - Deep dive into polling and streaming
+- [API Reference](/api/) - Complete API documentation

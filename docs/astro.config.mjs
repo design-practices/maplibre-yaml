@@ -60,7 +60,7 @@ export default defineConfig({
         {
           label: "Integrations",
           items: [
-            { label: "Vanilla JavaScript", link: "/integrations/vanilla/" },
+            { label: "Vanilla JavaScript", link: "/integrations/vanilla-js/" },
             { label: "Astro", link: "/integrations/astro/" },
             { label: "Web Components", link: "/integrations/web-components/" },
           ],
@@ -74,10 +74,19 @@ export default defineConfig({
           items: [
             { label: "Overview", link: "/examples/" },
             { label: "Basic Map", link: "/examples/basic-map/" },
-            { label: "Earthquake Tracker", link: "/examples/earthquake-tracker/" },
+            {
+              label: "Earthquake Tracker",
+              link: "/examples/earthquake-tracker/",
+            },
             { label: "Clustered Data", link: "/examples/clustering/" },
-            { label: "Interactive Points", link: "/examples/interactive-points/" },
-            { label: "Live Vehicle Tracking", link: "/examples/live-vehicles/" },
+            {
+              label: "Interactive Points",
+              link: "/examples/interactive-points/",
+            },
+            {
+              label: "Live Vehicle Tracking",
+              link: "/examples/live-vehicles/",
+            },
           ],
         },
       ],
