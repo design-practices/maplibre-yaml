@@ -6,7 +6,7 @@ description: Create your first map in 5 minutes
 import LiveMap from "../../../components/LiveMap.astro";
 import YAMLBlock from "../../../components/YAMLBlock.astro";
 
-Let's create a map showing earthquake data in under 5 minutes.
+Let's create a map showing earthquake data in under 5 minutes using the `<ml-map>` web component.
 
 ## 1. Create an HTML file
 
@@ -21,32 +21,32 @@ Create a new file called `index.html`:
       href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
       rel="stylesheet"
     />
+    <script type="module">
+      import "https://unpkg.com/@maplibre-yaml/core/register";
+    </script>
     <style>
       body {
         margin: 0;
       }
-      #map {
+      ml-map {
+        display: block;
         width: 100vw;
         height: 100vh;
       }
     </style>
   </head>
   <body>
-    <div id="map"></div>
-    <script type="module" src="map.js"></script>
+    <ml-map src="earthquake-map.yaml"></ml-map>
   </body>
 </html>
 ```
 
-## 2. Create your map configuration
+## 2. Create your YAML configuration
 
-Create a file called `map.js`:
+Create a file called `earthquake-map.yaml`:
 
-```javascript
-import { YAMLParser, MapRenderer } from "@maplibre-yaml/core";
-
-// IMPORTANT: No leading newline, no extra indentation
-const yaml = `type: map
+```yaml
+type: map
 id: earthquake-map
 config:
   center: [-120, 37]
@@ -62,19 +62,7 @@ layers:
       circle-radius: 6
       circle-color: "#e74c3c"
       circle-stroke-width: 1
-      circle-stroke-color: "#ffffff"`;
-
-const result = YAMLParser.safeParseMapBlock(yaml);
-
-if (!result.success) {
-  console.error("YAML parsing failed:", result.errors);
-} else {
-  const renderer = new MapRenderer(document.getElementById("map"), result.data);
-
-  renderer.on("layer:loaded", ({ layerId, featureCount }) => {
-    console.log(`Loaded ${featureCount} earthquakes`);
-  });
-}
+      circle-stroke-color: "#ffffff"
 ```
 
 ## 3. Run a local server
