@@ -6,7 +6,7 @@ import { createServer, type ViteDevServer } from 'vite';
 import { watch } from 'chokidar';
 import { resolve, dirname } from 'pathe';
 import { readFile } from 'node:fs/promises';
-import { YAMLParser } from '@maplibre-yaml/core';
+import { YAMLParser, type ParseError } from '@maplibre-yaml/core';
 import { logger } from '../lib/logger.js';
 import type { PreviewOptions } from '../types.js';
 
@@ -40,7 +40,7 @@ export async function createPreviewServer(
         currentConfig = JSON.stringify(result.data);
         return { valid: true, config: result.data };
       } else {
-        const errorMsg = result.errors.map(e => e.path ? e.path + ': ' + e.message : e.message).join('\n');
+        const errorMsg = result.errors.map((e: ParseError) => e.path ? e.path + ': ' + e.message : e.message).join('\n');
         return { valid: false, error: errorMsg };
       }
     } catch (error) {
@@ -68,8 +68,10 @@ export async function createPreviewServer(
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>maplibre-yaml preview</title><link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" /><style>* { margin: 0; padding: 0; box-sizing: border-box; }body { font-family: system-ui, -apple-system, sans-serif; }#map { width: 100vw; height: 100vh; }.error-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }.error-box { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 24px; max-width: 600px; max-height: 80vh; overflow: auto; }.error-title { color: #dc2626; font-weight: 600; font-size: 18px; margin-bottom: 12px; }.error-message { color: #991b1b; font-family: monospace; font-size: 14px; white-space: pre-wrap; }.status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1f2937; color: white; padding: 8px 16px; font-size: 12px; display: flex; justify-content: space-between; z-index: 999; }.status-indicator { display: flex; align-items: center; gap: 8px; }.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }.status-dot.error { background: #ef4444; }</style></head><body><div id="map"></div>' + errorOverlay + '<div class="status-bar"><div class="status-indicator"><div class="status-dot ' + statusDotClass + '"></div><span>' + statusText + '</span></div><div><span>' + configPath + '</span></div></div><script type="module">import \'@maplibre-yaml/core/register\';const config = ' + configJson + ';if (config) {const mapEl = document.createElement(\'ml-map\');mapEl.style.cssText = \'width: 100%; height: 100%;\';mapEl.config = config;document.getElementById(\'map\').appendChild(mapEl);mapEl.addEventListener(\'ml-map:load\', () => console.log(\'[preview] Map loaded\'));mapEl.addEventListener(\'ml-map:error\', (e) => console.error(\'[preview] Map error:\', e.detail));}if (import.meta.hot) {import.meta.hot.on(\'yaml-update\', () => {console.log(\'[preview] Config updated, reloading...\');window.location.reload();});}</script></body></html>';
   }
 
+  const serverUrl = 'http://localhost:' + port;
+
   return {
-    url: 'http://localhost:' + port,
+    url: serverUrl,
 
     async start() {
       const initial = await loadConfig();
@@ -93,7 +95,7 @@ export async function createPreviewServer(
       });
 
       await viteServer.listen();
-      logger.success('Preview server running at ' + this.url);
+      logger.success('Preview server running at ' + serverUrl);
 
       watcher = watch(absoluteConfigPath, { ignoreInitial: true });
       watcher.on('change', async () => {

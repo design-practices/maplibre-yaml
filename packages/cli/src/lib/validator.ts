@@ -5,7 +5,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve } from 'pathe';
-import { YAMLParser } from '@maplibre-yaml/core';
+import { YAMLParser, type ParseError } from '@maplibre-yaml/core';
 import type { ValidationResult, ValidationError } from '../types.js';
 
 /**
@@ -58,7 +58,7 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
   }
 
   // Convert parse errors to validation errors
-  const errors: ValidationError[] = result.errors.map(err => ({
+  const errors: ValidationError[] = result.errors.map((err: ParseError) => ({
     path: err.path,
     message: err.message,
     line: err.line,
