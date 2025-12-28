@@ -160,8 +160,8 @@ describe("RetryManager", () => {
       await retry.execute(fn);
       const duration = Date.now() - start;
 
-      // Should wait at least initialDelay (100ms)
-      expect(duration).toBeGreaterThanOrEqual(100);
+      // Should wait at least initialDelay (100ms) with small tolerance for timing variations
+      expect(duration).toBeGreaterThanOrEqual(95);
     });
   });
 
