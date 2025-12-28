@@ -6,176 +6,6 @@ description: Learn about layer types, paint properties, and data-driven styling
 import LiveMap from "../../../components/LiveMap.astro";
 import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
-export const circleDemoYAML = `type: map
-id: circle-demo
-config:
-  center: [-122.4, 37.8]
-  zoom: 11
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: points
-    type: circle
-    source:
-      type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry: { type: Point, coordinates: [-122.4194, 37.7749] }
-            properties: { name: "San Francisco" }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-122.2711, 37.8044] }
-            properties: { name: "Oakland" }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-122.0322, 37.3688] }
-            properties: { name: "San Jose" }
-    paint:
-      circle-radius: 12
-      circle-color: "#3b82f6"
-      circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"`;
-
-export const lineDemoYAML = `type: map
-id: line-demo
-config:
-  center: [-122.4, 37.75]
-  zoom: 11
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: route
-    type: line
-    source:
-      type: geojson
-      data:
-        type: Feature
-        geometry:
-          type: LineString
-          coordinates:
-            - [-122.4194, 37.7749]
-            - [-122.4, 37.79]
-            - [-122.35, 37.8]
-            - [-122.2711, 37.8044]
-    paint:
-      line-color: "#ef4444"
-      line-width: 4
-    layout:
-      line-cap: round
-      line-join: round`;
-
-export const fillDemoYAML = `type: map
-id: fill-demo
-config:
-  center: [-122.4, 37.77]
-  zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: park
-    type: fill
-    source:
-      type: geojson
-      data:
-        type: Feature
-        geometry:
-          type: Polygon
-          coordinates:
-            - - [-122.43, 37.775]
-              - [-122.41, 37.775]
-              - [-122.41, 37.765]
-              - [-122.43, 37.765]
-              - [-122.43, 37.775]
-        properties:
-          name: "Sample Park"
-    paint:
-      fill-color: "#22c55e"
-      fill-opacity: 0.5
-      fill-outline-color: "#166534"`;
-
-export const categoricalDemoYAML = `type: map
-id: categorical-demo
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: places
-    type: circle
-    source:
-      type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
-            properties: { name: "Hospital", type: "hospital" }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-74.01, 40.715] }
-            properties: { name: "School", type: "school" }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-74.002, 40.71] }
-            properties: { name: "Park", type: "park" }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-74.008, 40.708] }
-            properties: { name: "Library", type: "library" }
-    paint:
-      circle-radius: 12
-      circle-color:
-        - match
-        - ["get", "type"]
-        - "hospital"
-        - "#ef4444"
-        - "school"
-        - "#3b82f6"
-        - "park"
-        - "#22c55e"
-        - "#6b7280"
-      circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"`;
-
-export const interpolateDemoYAML = `type: map
-id: interpolate-demo
-config:
-  center: [-120, 37]
-  zoom: 5
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: quakes
-    type: circle
-    source:
-      type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry: { type: Point, coordinates: [-121, 36] }
-            properties: { magnitude: 1.5 }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-119, 37.5] }
-            properties: { magnitude: 2.8 }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-120.5, 38] }
-            properties: { magnitude: 4.2 }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-118, 36.5] }
-            properties: { magnitude: 5.1 }
-    paint:
-      circle-radius:
-        - interpolate
-        - ["linear"]
-        - ["get", "magnitude"]
-        - 1
-        - 6
-        - 5
-        - 24
-      circle-color:
-        - interpolate
-        - ["linear"]
-        - ["get", "magnitude"]
-        - 1
-        - "#fef08a"
-        - 5
-        - "#dc2626"
-      circle-opacity: 0.8`;
-
 Layers are how you visualize data on your map. maplibre-yaml supports all MapLibre layer types, each suited to different kinds of geographic data.
 
 ## Layer types
@@ -209,7 +39,7 @@ Circles are the simplest way to show point data:
 ```
 
 <LiveMap
-  yaml={circleDemoYAML}
+  src="/configs/circle-demo.yaml"
   height="300px"
 />
 
@@ -233,7 +63,7 @@ Use lines for paths, routes, and boundaries:
 ```
 
 <LiveMap
-  yaml={lineDemoYAML}
+  src="/configs/line-demo.yaml"
   height="300px"
 />
 
@@ -254,7 +84,7 @@ Fill layers shade polygon areas:
 ```
 
 <LiveMap
-  yaml={fillDemoYAML}
+  src="/configs/fill-demo.yaml"
   height="300px"
 />
 
@@ -281,7 +111,7 @@ paint:
 ```
 
 <LiveMap
-  yaml={categoricalDemoYAML}
+  src="/configs/categorical-demo.yaml"
   height="300px"
   caption="Colors based on feature type"
 />
@@ -311,7 +141,7 @@ paint:
 ```
 
 <LiveMap
-  yaml={interpolateDemoYAML}
+  src="/configs/interpolate-demo.yaml"
   height="300px"
   caption="Size and color based on magnitude"
 />

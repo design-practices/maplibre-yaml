@@ -1,42 +1,17 @@
 ---
 interface Props {
-  yaml?: string;
-  src?: string;
+  src: string;
   height?: string;
   caption?: string;
 }
 
-const { yaml, src, height = '400px', caption } = Astro.props;
-
-import { YAMLParser } from '@maplibre-yaml/core';
-
-let configJson = null;
-let error = null;
-
-// If yaml prop is provided, parse it (legacy pattern)
-if (yaml) {
-  const cleanedYaml = yaml.trim();
-  const result = YAMLParser.safeParseMapBlock(cleanedYaml);
-  configJson = result.success ? JSON.stringify(result.data) : null;
-  error = result.success ? null : result.errors;
-}
+const { src, height = '400px', caption } = Astro.props;
 ---
 
 <figure class="livemap-container">
-  {error ? (
-    <div class="livemap-error">
-      <h4>YAML Parsing Error</h4>
-      <pre>{JSON.stringify(error, null, 2)}</pre>
-    </div>
-  ) : (
-    <div class="livemap-wrapper">
-      {src ? (
-        <ml-map src={src} style={`height: ${height}; display: block;`}></ml-map>
-      ) : (
-        <ml-map style={`height: ${height}; display: block;`} config={configJson}></ml-map>
-      )}
-    </div>
-  )}
+  <div class="livemap-wrapper">
+    <ml-map src={src} style={`height: ${height}; display: block;`}></ml-map>
+  </div>
   {caption && <figcaption>{caption}</figcaption>}
 </figure>
 

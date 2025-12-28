@@ -1,0 +1,27 @@
+type: map
+id: fill-demo
+config:
+  center: [-122.4, 37.77]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: park
+    type: fill
+    source:
+      type: geojson
+      data:
+        type: Feature
+        geometry:
+          type: Polygon
+          coordinates:
+            - - [-122.43, 37.775]
+              - [-122.41, 37.775]
+              - [-122.41, 37.765]
+              - [-122.43, 37.765]
+              - [-122.43, 37.775]
+        properties:
+          name: "Sample Park"
+    paint:
+      fill-color: "#22c55e"
+      fill-opacity: 0.5
+      fill-outline-color: "#166534"

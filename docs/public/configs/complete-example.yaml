@@ -1,0 +1,53 @@
+type: map
+id: complete-example
+config:
+  center: [-98, 39]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-74.006, 40.7128]
+            properties:
+              name: "New York"
+              population: 8336817
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-118.243, 34.052]
+            properties:
+              name: "Los Angeles"
+              population: 3979576
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-87.623, 41.881]
+            properties:
+              name: "Chicago"
+              population: 2693976
+    paint:
+      circle-radius: 10
+      circle-color: "#ef4444"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - str: "Population: "
+              - property: population
+controls:
+  navigation: true
+  scale: true

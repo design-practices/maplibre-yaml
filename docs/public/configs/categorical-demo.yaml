@@ -1,0 +1,40 @@
+type: map
+id: categorical-demo
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: places
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: { name: "Hospital", type: "hospital" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.01, 40.715] }
+            properties: { name: "School", type: "school" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.002, 40.71] }
+            properties: { name: "Park", type: "park" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.008, 40.708] }
+            properties: { name: "Library", type: "library" }
+    paint:
+      circle-radius: 12
+      circle-color:
+        - match
+        - ["get", "type"]
+        - "hospital"
+        - "#ef4444"
+        - "school"
+        - "#3b82f6"
+        - "park"
+        - "#22c55e"
+        - "#6b7280"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

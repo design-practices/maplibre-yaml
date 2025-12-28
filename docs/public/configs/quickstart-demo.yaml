@@ -1,0 +1,17 @@
+type: map
+id: quickstart-demo
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"

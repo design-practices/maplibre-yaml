@@ -1,0 +1,28 @@
+type: map
+id: circle-demo
+config:
+  center: [-122.4, 37.8]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: points
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-122.4194, 37.7749] }
+            properties: { name: "San Francisco" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-122.2711, 37.8044] }
+            properties: { name: "Oakland" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-122.0322, 37.3688] }
+            properties: { name: "San Jose" }
+    paint:
+      circle-radius: 12
+      circle-color: "#3b82f6"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

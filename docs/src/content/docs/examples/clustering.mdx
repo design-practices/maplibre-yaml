@@ -6,70 +6,6 @@ description: Efficiently display thousands of points
 import LiveMap from '../../../components/LiveMap.astro';
 import { Aside } from '@astrojs/starlight/components';
 
-export const clusteringYAML = `type: map
-id: clustered-map
-config:
-  center: [-120, 37]
-  zoom: 3
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: clusters
-    type: circle
-    source:
-      id: quakes
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson"
-      cluster: true
-      clusterRadius: 50
-      clusterMaxZoom: 14
-    filter: ["has", "point_count"]
-    paint:
-      circle-radius:
-        - step
-        - ["get", "point_count"]
-        - 20
-        - 100
-        - 30
-        - 750
-        - 40
-      circle-color:
-        - step
-        - ["get", "point_count"]
-        - "#51bbd6"
-        - 100
-        - "#f1f075"
-        - 750
-        - "#f28cb1"
-      circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"
-  - id: cluster-count
-    type: symbol
-    source: quakes
-    filter: ["has", "point_count"]
-    layout:
-      text-field: "{point_count_abbreviated}"
-      text-size: 12
-    paint:
-      text-color: "#ffffff"
-  - id: unclustered
-    type: circle
-    source: quakes
-    filter: ["!", ["has", "point_count"]]
-    paint:
-      circle-radius: 6
-      circle-color: "#11b4da"
-      circle-stroke-width: 1
-      circle-stroke-color: "#ffffff"
-    interactive:
-      hover:
-        cursor: pointer
-      click:
-        popup:
-          - h3:
-              - property: title
-controls:
-  navigation: true`;
-
 When displaying many points, clustering improves performance and readability.
 
 <Aside>
@@ -79,7 +15,7 @@ Clustering groups nearby points together at lower zoom levels. Zoom in to see in
 ## Live Demo
 
 <LiveMap
-  yaml={clusteringYAML}
+  src="/configs/clustering.yaml"
   height="500px"
   caption="Zoom in to see individual points"
 />
