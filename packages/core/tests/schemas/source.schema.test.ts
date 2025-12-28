@@ -238,7 +238,9 @@ describe('GeoJSONSourceSchema', () => {
       };
       const result = GeoJSONSourceSchema.parse(source);
       expect(result.fetchStrategy).toBe('runtime');
-      expect(result.clusterRadius).toBe(50);
+      // Clustering properties have no defaults - they must be explicitly set
+      // This prevents MapLibre from receiving undefined values
+      expect(result.clusterRadius).toBeUndefined();
     });
   });
 
