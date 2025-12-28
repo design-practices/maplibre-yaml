@@ -3,20 +3,57 @@
   "version": "0.1.0",
   "description": "CLI tools for maplibre-yaml",
   "type": "module",
-  "private": true,
   "bin": {
-    "maplibre-yaml": "./dist/index.js"
+    "maplibre-yaml": "./dist/cli.js",
+    "mlym": "./dist/cli.js"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "echo 'CLI package - Phase 4'",
-    "dev": "echo 'CLI package - Phase 4'",
-    "typecheck": "tsc --noEmit"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@maplibre-yaml/core": "workspace:*"
+    "@maplibre-yaml/core": "workspace:*",
+    "citty": "^0.1.6",
+    "consola": "^3.2.3",
+    "pathe": "^1.1.2",
+    "picocolors": "^1.0.0",
+    "vite": "^5.0.0",
+    "chokidar": "^3.5.3"
   },
-  "license": "MIT"
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "maplibre",
+    "yaml",
+    "cli",
+    "validation",
+    "preview"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/design-practices/maplibre-yaml.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "bugs": {
+    "url": "https://github.com/design-practices/maplibre-yaml/issues"
+  },
+  "homepage": "https://github.com/design-practices/maplibre-yaml#readme"
 }

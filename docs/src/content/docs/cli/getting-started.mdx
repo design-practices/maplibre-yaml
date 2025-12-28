@@ -1,0 +1,228 @@
+---
+title: CLI Getting Started
+description: Install and use the maplibre-yaml CLI
+---
+
+The maplibre-yaml CLI provides command-line tools for validating and previewing your YAML map configurations. It helps catch errors early and enables rapid development with hot reload.
+
+## Installation
+
+### Global Installation
+
+Install the CLI globally to use it anywhere:
+
+```bash
+npm install -g @maplibre-yaml/cli
+```
+
+Or with pnpm:
+
+```bash
+pnpm add -g @maplibre-yaml/cli
+```
+
+### Using npx
+
+You can use the CLI without installing it:
+
+```bash
+npx @maplibre-yaml/cli <command>
+```
+
+### Short Alias
+
+The CLI provides a shorter `mlym` alias:
+
+```bash
+mlym validate config.yaml
+```
+
+## Validate Configuration
+
+Validate your YAML configuration files to catch errors before runtime.
+
+### Basic Validation
+
+```bash
+maplibre-yaml validate my-map.yaml
+```
+
+Output for valid configuration:
+```
+✓ my-map.yaml
+
+✓ 1 file(s) valid
+```
+
+Output for invalid configuration:
+```
+✗ my-map.yaml
+  error config: Expected object, got undefined
+
+✗ 1 file(s) with issues: 1 error(s)
+```
+
+### JSON Output for CI/CD
+
+Get structured JSON output for use in CI/CD pipelines:
+
+```bash
+maplibre-yaml validate my-map.yaml --json
+```
+
+Output:
+```json
+{
+  "valid": true,
+  "files": [
+    {
+      "file": "my-map.yaml",
+      "valid": true,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "valid": 1,
+    "invalid": 0,
+    "errorCount": 0,
+    "warningCount": 0
+  }
+}
+```
+
+### Strict Mode
+
+Treat warnings as errors:
+
+```bash
+maplibre-yaml validate my-map.yaml --strict
+```
+
+### Exit Codes
+
+The validate command uses specific exit codes for automation:
+
+| Code | Meaning |
+|------|---------|
+| 0 | Valid configuration |
+| 1 | Validation errors |
+| 2 | File not found |
+| 3 | Invalid YAML syntax |
+| 4 | Unknown error |
+
+Example CI usage:
+
+```yaml
+# .github/workflows/validate.yml
+name: Validate Maps
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npx @maplibre-yaml/cli validate maps/*.yaml --json
+```
+
+## Preview Your Map
+
+Start a local development server with hot reload to preview your map as you edit.
+
+### Basic Preview
+
+```bash
+maplibre-yaml preview my-map.yaml
+```
+
+This will:
+- Start a Vite development server on port 3000
+- Open your browser automatically
+- Watch the YAML file for changes
+- Reload the map when you save edits
+
+### Custom Port
+
+Use a different port:
+
+```bash
+maplibre-yaml preview my-map.yaml --port 8080
+```
+
+### Don't Open Browser
+
+Start the server without opening the browser:
+
+```bash
+maplibre-yaml preview my-map.yaml --no-open
+```
+
+### Preview Features
+
+The preview server includes:
+
+- **Hot Reload**: Automatically refreshes when you edit the YAML file
+- **Error Overlay**: Shows configuration errors with helpful messages
+- **Status Bar**: Displays connection state and file path
+- **Live Validation**: Validates configuration on every change
+- **MapLibre Integration**: Full support for all MapLibre features
+
+### Error Handling
+
+If your configuration has errors, the preview will show:
+- A dark overlay with the error message
+- Red status indicator
+- Specific error details (path, line, column)
+- No map render (prevents confusion)
+
+Example error display:
+```
+Configuration Error
+━━━━━━━━━━━━━━━━━
+config: Expected object, got undefined
+```
+
+### Development Workflow
+
+1. Start the preview server:
+   ```bash
+   maplibre-yaml preview my-map.yaml
+   ```
+
+2. Edit your YAML file in your editor
+
+3. Save the file
+
+4. Preview automatically reloads with changes
+
+5. Fix any errors shown in the overlay
+
+6. Repeat!
+
+## Getting Help
+
+### Command Help
+
+Get help for any command:
+
+```bash
+maplibre-yaml --help
+maplibre-yaml validate --help
+maplibre-yaml preview --help
+```
+
+### Version
+
+Check the installed version:
+
+```bash
+maplibre-yaml --version
+```
+
+## Next Steps
+
+- [Command Reference](/cli/reference) - Detailed command documentation
+- [Examples](/examples) - Sample YAML configurations
+- [Schema Reference](/schema) - Full schema documentation

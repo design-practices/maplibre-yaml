@@ -1,0 +1,8 @@
+type: map
+id: test-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+  broken: [this is not valid yaml
+layers: []

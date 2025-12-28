@@ -66,6 +66,12 @@ export default defineConfig({
           ],
         },
         {
+          label: "CLI Tools",
+          items: [
+            { label: "Getting Started", link: "/cli/getting-started/" },
+          ],
+        },
+        {
           label: "API Reference",
           autogenerate: { directory: "api" },
         },
