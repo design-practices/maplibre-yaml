@@ -1,0 +1,47 @@
+name: Validate MapLibre YAML Configurations
+
+on:
+  push:
+    paths:
+      - '**/*.yaml'
+      - '**/*.yml'
+  pull_request:
+    paths:
+      - '**/*.yaml'
+      - '**/*.yml'
+
+jobs:
+  validate:
+    name: Validate YAML Configurations
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Required for uploading SARIF results
+      security-events: write
+      # Required for actions/checkout
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate configurations
+        run: |
+          npx @maplibre-yaml/cli validate "configs/**/*.yaml" --sarif > results.sarif
+        continue-on-error: true
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: maplibre-yaml
+
+      - name: Validate configurations (for PR status)
+        if: github.event_name == 'pull_request'
+        run: |
+          npx @maplibre-yaml/cli validate "configs/**/*.yaml"
