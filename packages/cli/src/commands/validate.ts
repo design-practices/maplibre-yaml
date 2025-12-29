@@ -9,6 +9,7 @@ import { validateFile } from '../lib/validator.js';
 import { formatHuman, formatJSON } from '../lib/formatter.js';
 import { formatSARIF } from '../lib/sarif-formatter.js';
 import { createWatcher, formatWatchEvent } from '../lib/watcher.js';
+import { loadProjectConfig, mergeConfig } from '../lib/config-loader.js';
 import { logger } from '../lib/logger.js';
 import { EXIT_CODES } from '../types.js';
 
@@ -49,7 +50,15 @@ export const validateCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const { config, json, sarif, strict, watch: watchMode } = args;
+    // Load project config
+    const projectConfig = await loadProjectConfig();
+
+    // Merge CLI args with project config (CLI takes precedence)
+    const mergedArgs = projectConfig?.validate
+      ? mergeConfig(args, projectConfig.validate)
+      : args;
+
+    const { config, json, sarif, strict, watch: watchMode } = mergedArgs;
 
     // Define validation function
     async function runValidation() {

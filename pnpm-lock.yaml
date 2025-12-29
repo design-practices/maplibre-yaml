@@ -72,6 +72,9 @@ importers:
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@20.19.27)
+      yaml:
+        specifier: ^2.4.0
+        version: 2.8.2
     devDependencies:
       '@types/node':
         specifier: ^20.0.0

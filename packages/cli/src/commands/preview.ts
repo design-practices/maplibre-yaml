@@ -6,6 +6,7 @@ import { defineCommand } from 'citty';
 import { existsSync } from 'node:fs';
 import { resolve } from 'pathe';
 import { createPreviewServer } from '../preview/server.js';
+import { loadProjectConfig, mergeConfig } from '../lib/config-loader.js';
 import { logger, error } from '../lib/logger.js';
 import { EXIT_CODES } from '../types.js';
 
@@ -37,7 +38,15 @@ export const previewCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const { config, port, open, debug } = args;
+    // Load project config
+    const projectConfig = await loadProjectConfig();
+
+    // Merge CLI args with project config (CLI takes precedence)
+    const mergedArgs = projectConfig?.preview
+      ? mergeConfig(args, projectConfig.preview)
+      : args;
+
+    const { config, port, open, debug } = mergedArgs;
     const configPath = resolve(config);
 
     // Check file exists
