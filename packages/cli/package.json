@@ -8,7 +8,8 @@
     "mlym": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "templates"
   ],
   "scripts": {
     "build": "tsup",

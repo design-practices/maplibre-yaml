@@ -1,0 +1,17 @@
+{
+  "name": "story",
+  "description": "A multi-page story map with navigation",
+  "version": "1.0.0",
+  "variables": [
+    {
+      "name": "projectName",
+      "description": "Project name",
+      "default": "my-story-map"
+    },
+    {
+      "name": "title",
+      "description": "Story title",
+      "default": "My Story Map"
+    }
+  ]
+}

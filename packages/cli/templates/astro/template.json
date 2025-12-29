@@ -1,0 +1,15 @@
+{
+  "name": "astro",
+  "description": "Astro project with maplibre-yaml integration",
+  "version": "1.0.0",
+  "variables": [
+    {
+      "name": "projectName",
+      "description": "Project name",
+      "default": "my-astro-map"
+    }
+  ],
+  "postInstall": [
+    "npm install"
+  ]
+}

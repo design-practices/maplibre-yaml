@@ -1,0 +1,22 @@
+---
+// Astro page with maplibre-yaml integration
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width" />
+  <title>{{projectName}}</title>
+  <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
+  <script type="module">
+    import '@maplibre-yaml/core/register';
+  </script>
+  <style>
+    body { margin: 0; }
+    ml-map { display: block; width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <ml-map src="/configs/map.yaml"></ml-map>
+</body>
+</html>

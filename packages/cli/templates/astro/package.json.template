@@ -1,0 +1,16 @@
+{
+  "name": "{{projectName}}",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@maplibre-yaml/core": "latest",
+    "astro": "^4.0.0",
+    "maplibre-gl": "^4.0.0"
+  }
+}

@@ -6,6 +6,7 @@
 import { defineCommand, runMain } from 'citty';
 import { validateCommand } from './commands/validate.js';
 import { previewCommand } from './commands/preview.js';
+import { initCommand } from './commands/init.js';
 
 const main = defineCommand({
   meta: {
@@ -16,6 +17,7 @@ const main = defineCommand({
   subCommands: {
     validate: validateCommand,
     preview: previewCommand,
+    init: initCommand,
   },
 });
 

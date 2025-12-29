@@ -1,0 +1,17 @@
+{
+  "name": "basic",
+  "description": "A simple single-map project",
+  "version": "1.0.0",
+  "variables": [
+    {
+      "name": "projectName",
+      "description": "Project name",
+      "default": "my-map"
+    },
+    {
+      "name": "mapCenter",
+      "description": "Initial map center [lng, lat]",
+      "default": "[-74.006, 40.7128]"
+    }
+  ]
+}

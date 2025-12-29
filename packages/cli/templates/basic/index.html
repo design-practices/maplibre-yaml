@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{projectName}}</title>
+  <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
+  <script type="module">
+    import 'https://unpkg.com/@maplibre-yaml/core/register';
+  </script>
+  <style>
+    body { margin: 0; }
+    ml-map { display: block; width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <ml-map src="map.yaml"></ml-map>
+</body>
+</html>
