@@ -42,8 +42,12 @@ export const previewCommand = defineCommand({
     const projectConfig = await loadProjectConfig();
 
     // Merge CLI args with project config (CLI takes precedence)
+    // Note: port from config file is number, from CLI is string
     const mergedArgs = projectConfig?.preview
-      ? mergeConfig(args, projectConfig.preview)
+      ? mergeConfig(args, {
+          ...projectConfig.preview,
+          port: projectConfig.preview.port?.toString(),
+        })
       : args;
 
     const { config, port, open, debug } = mergedArgs;
