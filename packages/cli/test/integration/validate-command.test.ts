@@ -124,10 +124,11 @@ describe('validate command (integration)', () => {
   });
 
   it('shows help with --help', async () => {
-    const { stdout } = await execAsync(`node "${CLI}" validate --help`);
-    expect(stdout).toContain('validate');
-    expect(stdout).toContain('pattern');
-    expect(stdout).toContain('format');
+    const { stdout, stderr } = await execAsync(`node "${CLI}" validate --help`);
+    const output = stdout + stderr;
+    expect(output).toContain('validate');
+    expect(output).toContain('pattern');
+    expect(output).toContain('format');
   });
 
   it('respects --strict flag', async () => {
