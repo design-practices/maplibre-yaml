@@ -24,6 +24,7 @@
     "chokidar": "^3.5.3",
     "citty": "^0.1.6",
     "consola": "^3.2.3",
+    "fast-glob": "^3.3.3",
     "pathe": "^1.1.2",
     "picocolors": "^1.0.0",
     "vite": "^5.0.0",

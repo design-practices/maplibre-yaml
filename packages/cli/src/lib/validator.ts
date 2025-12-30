@@ -80,3 +80,24 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
 export async function validateFiles(filePaths: string[]): Promise<ValidationResult[]> {
   return Promise.all(filePaths.map(validateFile));
 }
+
+/**
+ * Validate files in parallel with concurrency limit
+ */
+export async function validateFilesParallel(
+  files: string[],
+  concurrency = 10
+): Promise<ValidationResult[]> {
+  const results: ValidationResult[] = [];
+
+  // Process in batches
+  for (let i = 0; i < files.length; i += concurrency) {
+    const batch = files.slice(i, i + concurrency);
+    const batchResults = await Promise.all(
+      batch.map(file => validateFile(file))
+    );
+    results.push(...batchResults);
+  }
+
+  return results;
+}
