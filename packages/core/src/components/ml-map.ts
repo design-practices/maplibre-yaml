@@ -166,21 +166,27 @@ export class MLMap extends HTMLElement {
   private async initialize(): Promise<void> {
     this.initialized = true;
 
-    // Priority 1: Script tag with YAML
+    // Priority 1: Programmatically set config property
+    if (this._config) {
+      this.renderMap(this._config);
+      return;
+    }
+
+    // Priority 2: Script tag with YAML
     const yamlScript = this.querySelector('script[type="text/yaml"]');
     if (yamlScript?.textContent) {
       this.loadFromScriptTag(yamlScript.textContent);
       return;
     }
 
-    // Priority 2: External YAML file
+    // Priority 3: External YAML file
     const srcAttr = this.getAttribute("src");
     if (srcAttr) {
       await this.loadFromURL(srcAttr);
       return;
     }
 
-    // Priority 3: JSON config attribute
+    // Priority 4: JSON config attribute
     const configAttr = this.getAttribute("config");
     if (configAttr) {
       this.loadFromJSONAttribute(configAttr);

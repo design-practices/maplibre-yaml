@@ -1,6 +1,6 @@
 {
   "name": "@maplibre-yaml/cli",
-  "version": "0.1.3",
+  "version": "0.1.10",
   "description": "CLI tools for maplibre-yaml",
   "type": "module",
   "bin": {
@@ -20,7 +20,7 @@
     "prepack": "chmod +x dist/cli.js"
   },
   "dependencies": {
-    "@maplibre-yaml/core": "^0.1.0-alpha.0",
+    "@maplibre-yaml/core": "^0.1.2",
     "chokidar": "^3.5.3",
     "citty": "^0.1.6",
     "consola": "^3.2.3",
