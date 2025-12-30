@@ -1,0 +1,89 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "maplibre-yaml: Validate Current File",
+      "type": "shell",
+      "command": "npx",
+      "args": [
+        "@maplibre-yaml/cli",
+        "validate",
+        "${file}",
+        "--format",
+        "vscode"
+      ],
+      "problemMatcher": {
+        "owner": "maplibre-yaml",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+):(\\d+):(\\d+): (error|warning): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "group": "build"
+    },
+    {
+      "label": "maplibre-yaml: Validate All Configs",
+      "type": "shell",
+      "command": "npx",
+      "args": [
+        "@maplibre-yaml/cli",
+        "validate",
+        "configs/**/*.yaml",
+        "--format",
+        "vscode"
+      ],
+      "problemMatcher": {
+        "owner": "maplibre-yaml",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+):(\\d+):(\\d+): (error|warning): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      },
+      "group": "build"
+    },
+    {
+      "label": "maplibre-yaml: Watch and Validate",
+      "type": "shell",
+      "command": "npx",
+      "args": [
+        "@maplibre-yaml/cli",
+        "validate",
+        "configs/**/*.yaml",
+        "--watch",
+        "--format",
+        "vscode"
+      ],
+      "problemMatcher": {
+        "owner": "maplibre-yaml",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+):(\\d+):(\\d+): (error|warning): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}

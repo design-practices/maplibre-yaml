@@ -43,11 +43,14 @@ Validate your YAML configuration files to catch errors before runtime.
 
 ### Basic Validation
 
+Validate a single file:
+
 ```bash
 maplibre-yaml validate my-map.yaml
 ```
 
 Output for valid configuration:
+
 ```
 ✓ my-map.yaml
 
@@ -55,6 +58,7 @@ Output for valid configuration:
 ```
 
 Output for invalid configuration:
+
 ```
 ✗ my-map.yaml
   error config: Expected object, got undefined
@@ -62,15 +66,51 @@ Output for invalid configuration:
 ✗ 1 file(s) with issues: 1 error(s)
 ```
 
-### JSON Output for CI/CD
+### Glob Patterns
 
-Get structured JSON output for use in CI/CD pipelines:
+Validate multiple files using glob patterns:
 
 ```bash
-maplibre-yaml validate my-map.yaml --json
+# Validate all YAML files in a directory
+maplibre-yaml validate "configs/**/*.yaml"
+
+# Validate specific patterns
+maplibre-yaml validate "maps/*.yaml"
+
+# Multiple patterns
+maplibre-yaml validate "src/**/*.map.yaml" "configs/*.yaml"
+```
+
+Output with progress indicator (for >10 files):
+
+```
+Validating [████████████████████] 100% (25/25)
+✓ Validated 25 files
+
+✓ 23 file(s) valid
+✗ 2 file(s) with issues: 3 error(s)
+```
+
+### Output Formats
+
+Choose from multiple output formats:
+
+#### Human-Readable (default)
+
+```bash
+maplibre-yaml validate my-map.yaml
+```
+
+#### JSON for CI/CD
+
+Get structured JSON output:
+
+```bash
+maplibre-yaml validate my-map.yaml --format json
 ```
 
 Output:
+
 ```json
 {
   "valid": true,
@@ -92,6 +132,45 @@ Output:
 }
 ```
 
+#### SARIF for GitHub Code Scanning
+
+Generate SARIF format for GitHub Advanced Security:
+
+```bash
+maplibre-yaml validate my-map.yaml --format sarif
+```
+
+#### VSCode Problem Matcher
+
+Output format compatible with VSCode's Problem Matcher:
+
+```bash
+maplibre-yaml validate my-map.yaml --format vscode
+```
+
+Output:
+
+```
+/path/to/config.yaml:5:10: error: [config.center] Expected array, got string
+/path/to/config.yaml:12:3: warning: [layers[0]] Deprecated property
+```
+
+See [VSCode Integration](/cli/vscode) for setup instructions.
+
+### Watch Mode
+
+Continuously validate files as they change:
+
+```bash
+maplibre-yaml validate "configs/**/*.yaml" --watch
+```
+
+Features:
+
+- **Intelligent Caching**: Only re-validates changed files
+- **Fast**: Cached validations complete in less than 1ms
+- **Real-time Feedback**: Shows errors immediately on save
+
 ### Strict Mode
 
 Treat warnings as errors:
@@ -104,13 +183,22 @@ maplibre-yaml validate my-map.yaml --strict
 
 The validate command uses specific exit codes for automation:
 
-| Code | Meaning |
-|------|---------|
-| 0 | Valid configuration |
-| 1 | Validation errors |
-| 2 | File not found |
-| 3 | Invalid YAML syntax |
-| 4 | Unknown error |
+| Code | Meaning             |
+| ---- | ------------------- |
+| 0    | Valid configuration |
+| 1    | Validation errors   |
+| 2    | File not found      |
+| 3    | Invalid YAML syntax |
+| 4    | Unknown error       |
+
+### Performance
+
+The CLI is highly optimized for speed:
+
+- **100 files**: Validated in ~80ms
+- **Single file**: Validated in ~1ms
+- **Watch mode**: Cached validations in ~1ms
+- **Parallel processing**: Configurable concurrency (default: 10)
 
 Example CI usage:
 
@@ -124,7 +212,27 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
-      - run: npx @maplibre-yaml/cli validate maps/*.yaml --json
+      - run: npx @maplibre-yaml/cli validate "configs/**/*.yaml" --format json
+```
+
+GitHub Code Scanning with SARIF:
+
+```yaml
+# .github/workflows/code-scanning.yml
+name: Code Scanning
+on: [push, pull_request]
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npx @maplibre-yaml/cli validate "**/*.yaml" --format sarif > results.sarif
+      - uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: results.sarif
 ```
 
 ## Preview Your Map
@@ -138,6 +246,7 @@ maplibre-yaml preview my-map.yaml
 ```
 
 This will:
+
 - Start a Vite development server on port 3000
 - Open your browser automatically
 - Watch the YAML file for changes
@@ -172,12 +281,14 @@ The preview server includes:
 ### Error Handling
 
 If your configuration has errors, the preview will show:
+
 - A dark overlay with the error message
 - Red status indicator
 - Specific error details (path, line, column)
 - No map render (prevents confusion)
 
 Example error display:
+
 ```
 Configuration Error
 ━━━━━━━━━━━━━━━━━
@@ -187,6 +298,7 @@ config: Expected object, got undefined
 ### Development Workflow
 
 1. Start the preview server:
+
    ```bash
    maplibre-yaml preview my-map.yaml
    ```

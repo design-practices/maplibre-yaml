@@ -1,0 +1,59 @@
+type: map
+id: complex-map
+config:
+  center: [-122.4194, 37.7749]
+  zoom: 13
+  pitch: 45
+  bearing: -17.6
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+  minZoom: 10
+  maxZoom: 18
+layers:
+  - id: buildings-3d
+    type: fill-extrusion
+    source:
+      type: vector
+      url: "https://demotiles.maplibre.org/tiles/tiles.json"
+    source-layer: building
+    paint:
+      fill-extrusion-color: "#aaa"
+      fill-extrusion-height:
+        type: identity
+        property: height
+      fill-extrusion-base:
+        type: identity
+        property: min_height
+      fill-extrusion-opacity: 0.6
+  - id: markers
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-122.4194, 37.7749]
+            properties:
+              name: "San Francisco"
+              category: "city"
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-122.4090, 37.7850]
+            properties:
+              name: "Fisherman's Wharf"
+              category: "attraction"
+    paint:
+      circle-radius: 8
+      circle-color:
+        type: categorical
+        property: category
+        stops:
+          - - city
+            - "#ff0000"
+          - - attraction
+            - "#00ff00"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

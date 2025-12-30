@@ -5,12 +5,16 @@
 import { defineCommand } from 'citty';
 import consola from 'consola';
 import pc from 'picocolors';
-import { validateFile } from '../lib/validator.js';
+import { validateFile, validateFilesParallel } from '../lib/validator.js';
 import { formatHuman, formatJSON } from '../lib/formatter.js';
 import { formatSARIF } from '../lib/sarif-formatter.js';
+import { formatVSCode } from '../lib/formatter-vscode.js';
 import { createWatcher, formatWatchEvent } from '../lib/watcher.js';
 import { loadProjectConfig, mergeConfig } from '../lib/config-loader.js';
 import { logger } from '../lib/logger.js';
+import { resolveGlobPatterns } from '../lib/glob.js';
+import { createProgress } from '../lib/progress.js';
+import { validateWithCache, clearCache } from '../lib/cache.js';
 import { EXIT_CODES } from '../types.js';
 
 // Get version from package.json
@@ -22,20 +26,15 @@ export const validateCommand = defineCommand({
     description: 'Validate YAML configuration files',
   },
   args: {
-    config: {
+    patterns: {
       type: 'positional',
       required: true,
-      description: 'Path to YAML configuration file',
+      description: 'File path(s) or glob pattern(s)',
     },
-    json: {
-      type: 'boolean',
-      default: false,
-      description: 'Output results as JSON',
-    },
-    sarif: {
-      type: 'boolean',
-      default: false,
-      description: 'Output results as SARIF (for GitHub code scanning)',
+    format: {
+      type: 'string',
+      alias: 'f',
+      description: 'Output format: human, json, sarif, vscode',
     },
     strict: {
       type: 'boolean',
@@ -58,14 +57,59 @@ export const validateCommand = defineCommand({
       ? mergeConfig(args, projectConfig.validate)
       : args;
 
-    const { config, json, sarif, strict, watch: watchMode } = mergedArgs;
+    const { patterns, format, strict, watch: watchMode } = mergedArgs;
+
+    // Parse patterns (space-separated or single)
+    const patternList = patterns.includes(' ')
+      ? patterns.split(/\s+/).filter(Boolean)
+      : [patterns];
+
+    // Resolve glob patterns to files
+    let files: string[];
+    try {
+      files = await resolveGlobPatterns(patternList, {
+        ignore: projectConfig?.validate?.ignorePatterns,
+      });
+    } catch (error) {
+      consola.error('Failed to resolve patterns:', error);
+      process.exit(EXIT_CODES.FILE_NOT_FOUND);
+    }
+
+    if (files.length === 0) {
+      console.log(pc.yellow('No files found matching pattern(s):'), patternList.join(', '));
+      process.exit(EXIT_CODES.FILE_NOT_FOUND);
+    }
 
     // Define validation function
     async function runValidation() {
       try {
-        // Validate the file
-        const result = await validateFile(config);
-        const results = [result];
+        // Validate with progress for large sets
+        let results;
+
+        if (files.length > 10 && format !== 'json' && format !== 'sarif') {
+          const progress = createProgress({ total: files.length, label: 'Validating' });
+          results = [];
+
+          for (const file of files) {
+            // Use cache in watch mode for better performance
+            const result = watchMode
+              ? await validateWithCache(file, validateFile)
+              : await validateFile(file);
+            results.push(result);
+            progress.update();
+          }
+
+          progress.done(`Validated ${files.length} files`);
+        } else {
+          // Use cache in watch mode
+          if (watchMode) {
+            results = await Promise.all(
+              files.map(file => validateWithCache(file, validateFile))
+            );
+          } else {
+            results = await validateFilesParallel(files);
+          }
+        }
 
         // Apply strict mode
         if (strict) {
@@ -80,12 +124,18 @@ export const validateCommand = defineCommand({
 
         // Format output
         let output: string;
-        if (sarif) {
-          output = formatSARIF(results, version);
-        } else if (json) {
-          output = formatJSON(results);
-        } else {
-          output = formatHuman(results);
+        switch (format) {
+          case 'json':
+            output = formatJSON(results);
+            break;
+          case 'sarif':
+            output = formatSARIF(results, version);
+            break;
+          case 'vscode':
+            output = formatVSCode(results);
+            break;
+          default:
+            output = formatHuman(results);
         }
         console.log(output);
 
@@ -112,7 +162,7 @@ export const validateCommand = defineCommand({
       logger.info(`\nWatching for changes... ${pc.dim('(Ctrl+C to stop)')}\n`);
 
       const watcher = createWatcher({
-        patterns: [config],
+        patterns: files,
         onChange: async (path) => {
           console.log(formatWatchEvent('change', path));
           await runValidation();

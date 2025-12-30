@@ -5,7 +5,6 @@
 import { defineCommand } from 'citty';
 import { existsSync } from 'node:fs';
 import { resolve } from 'pathe';
-import { createPreviewServer } from '../preview/server.js';
 import { loadProjectConfig, mergeConfig } from '../lib/config-loader.js';
 import { logger, error } from '../lib/logger.js';
 import { EXIT_CODES } from '../types.js';
@@ -42,8 +41,12 @@ export const previewCommand = defineCommand({
     const projectConfig = await loadProjectConfig();
 
     // Merge CLI args with project config (CLI takes precedence)
+    // Note: port from config file is number, from CLI is string
     const mergedArgs = projectConfig?.preview
-      ? mergeConfig(args, projectConfig.preview)
+      ? mergeConfig(args, {
+          ...projectConfig.preview,
+          port: projectConfig.preview.port?.toString(),
+        })
       : args;
 
     const { config, port, open, debug } = mergedArgs;
@@ -56,6 +59,9 @@ export const previewCommand = defineCommand({
     }
 
     try {
+      // Lazy load the preview server (includes heavy Vite dependency)
+      const { createPreviewServer } = await import('../preview/server.js');
+
       const server = await createPreviewServer(configPath, {
         port: parseInt(port, 10),
         open,

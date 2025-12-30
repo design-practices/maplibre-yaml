@@ -4,20 +4,28 @@
  */
 
 import { defineCommand, runMain } from 'citty';
-import { validateCommand } from './commands/validate.js';
-import { previewCommand } from './commands/preview.js';
-import { initCommand } from './commands/init.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+// Get package.json path
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageJsonPath = join(__dirname, '../package.json');
 
 const main = defineCommand({
   meta: {
     name: 'maplibre-yaml',
-    version: '0.1.0',
+    // Lazy load version to avoid parsing package.json on every run
+    get version() {
+      return JSON.parse(readFileSync(packageJsonPath, 'utf-8')).version;
+    },
     description: 'CLI tools for maplibre-yaml configurations',
   },
   subCommands: {
-    validate: validateCommand,
-    preview: previewCommand,
-    init: initCommand,
+    // Lazy load commands - only import when actually used
+    validate: () => import('./commands/validate.js').then(m => m.validateCommand),
+    preview: () => import('./commands/preview.js').then(m => m.previewCommand),
+    init: () => import('./commands/init.js').then(m => m.initCommand),
   },
 });
 

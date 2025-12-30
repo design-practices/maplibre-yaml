@@ -1,0 +1,458 @@
+---
+title: CLI Reference
+description: Complete command reference for maplibre-yaml CLI
+---
+
+Complete reference for all maplibre-yaml CLI commands, options, and arguments.
+
+## Global Options
+
+Available for all commands:
+
+| Option      | Alias | Description           |
+| ----------- | ----- | --------------------- |
+| `--help`    | `-h`  | Show help for command |
+| `--version` | `-v`  | Show CLI version      |
+
+## Commands
+
+### validate
+
+Validate YAML configuration files against the maplibre-yaml schema.
+
+```bash
+maplibre-yaml validate <patterns> [options]
+```
+
+#### Arguments
+
+| Argument   | Required | Description                                 |
+| ---------- | -------- | ------------------------------------------- |
+| `patterns` | Yes      | File path(s) or glob pattern(s) to validate |
+
+Patterns can be:
+
+- Single file: `map.yaml`
+- Glob pattern: `configs/**/*.yaml`
+- Multiple patterns (space-separated): `src/**/*.map.yaml configs/*.yaml`
+
+#### Options
+
+| Option     | Alias | Type    | Default | Description                                       |
+| ---------- | ----- | ------- | ------- | ------------------------------------------------- |
+| `--format` | `-f`  | string  | `human` | Output format: `human`, `json`, `sarif`, `vscode` |
+| `--strict` |       | boolean | `false` | Treat warnings as errors                          |
+| `--watch`  | `-w`  | boolean | `false` | Watch for changes and re-validate                 |
+
+#### Output Formats
+
+**human** (default)
+
+- Human-readable colored output
+- Shows file paths with checkmarks/X marks
+- Displays errors with paths and messages
+- Includes summary with counts
+
+**json**
+
+- Structured JSON output
+- Machine-parseable
+- Ideal for CI/CD pipelines
+- Includes detailed error information with line/column numbers
+
+**sarif**
+
+- [SARIF v2.1.0](https://sarifweb.azurewebsites.net/) format
+- Compatible with GitHub Code Scanning
+- Integrates with GitHub Advanced Security
+- Provides rich error context
+
+**vscode**
+
+- VSCode Problem Matcher compatible format
+- Format: `file:line:column: severity: [path] message`
+- Use with VSCode Tasks for IDE integration
+- See [VSCode Integration](/cli/vscode)
+
+#### Exit Codes
+
+| Code | Meaning                 |
+| ---- | ----------------------- |
+| `0`  | All files valid         |
+| `1`  | Validation errors found |
+| `2`  | File(s) not found       |
+| `3`  | Invalid YAML syntax     |
+| `4`  | Unknown error           |
+
+#### Examples
+
+Validate a single file:
+
+```bash
+maplibre-yaml validate map.yaml
+```
+
+Validate with glob pattern:
+
+```bash
+maplibre-yaml validate "configs/**/*.yaml"
+```
+
+Validate multiple patterns:
+
+```bash
+maplibre-yaml validate "src/**/*.map.yaml" "configs/*.yaml"
+```
+
+JSON output for CI/CD:
+
+```bash
+maplibre-yaml validate "**/*.yaml" --format json
+```
+
+SARIF for GitHub Code Scanning:
+
+```bash
+maplibre-yaml validate "**/*.yaml" --format sarif > results.sarif
+```
+
+Strict mode (warnings as errors):
+
+```bash
+maplibre-yaml validate map.yaml --strict
+```
+
+Watch mode for development:
+
+```bash
+maplibre-yaml validate "configs/**/*.yaml" --watch
+```
+
+VSCode Problem Matcher format:
+
+```bash
+maplibre-yaml validate config.yaml --format vscode
+```
+
+---
+
+### preview
+
+Start a local development server to preview your map with hot reload.
+
+```bash
+maplibre-yaml preview <config> [options]
+```
+
+#### Arguments
+
+| Argument | Required | Description                     |
+| -------- | -------- | ------------------------------- |
+| `config` | Yes      | Path to YAML configuration file |
+
+#### Options
+
+| Option      | Type    | Default | Description                              |
+| ----------- | ------- | ------- | ---------------------------------------- |
+| `--port`    | number  | `3000`  | Port for development server              |
+| `--open`    | boolean | `true`  | Open browser automatically               |
+| `--no-open` | boolean |         | Don't open browser (keep server running) |
+| `--debug`   | boolean | `false` | Show debug panel with config JSON        |
+
+#### Features
+
+- **Hot Reload**: Automatically updates map when YAML file changes
+- **Error Overlay**: Shows validation errors with details
+- **Status Bar**: Displays connection state and file path
+- **Live Validation**: Validates configuration on every change
+- **Debug Panel**: Optional JSON view of parsed configuration
+
+#### Examples
+
+Basic preview:
+
+```bash
+maplibre-yaml preview map.yaml
+```
+
+Custom port:
+
+```bash
+maplibre-yaml preview map.yaml --port 8080
+```
+
+Don't open browser:
+
+```bash
+maplibre-yaml preview map.yaml --no-open
+```
+
+Debug mode:
+
+```bash
+maplibre-yaml preview map.yaml --debug
+```
+
+---
+
+### init
+
+Initialize a new maplibre-yaml project with example configurations.
+
+```bash
+maplibre-yaml init [options]
+```
+
+#### Options
+
+| Option       | Type   | Default | Description                          |
+| ------------ | ------ | ------- | ------------------------------------ |
+| `--dir`      | string | `.`     | Directory to initialize project in   |
+| `--template` | string | `basic` | Template to use: `basic`, `advanced` |
+
+#### What it Creates
+
+- Sample YAML configuration files
+- `.maplibre-yaml.config.json` project configuration
+- Example layer configurations
+- README with getting started instructions
+
+#### Examples
+
+Initialize in current directory:
+
+```bash
+maplibre-yaml init
+```
+
+Initialize in specific directory:
+
+```bash
+maplibre-yaml init --dir my-maps
+```
+
+Use advanced template:
+
+```bash
+maplibre-yaml init --template advanced
+```
+
+---
+
+## Configuration File
+
+Create `.maplibre-yaml.config.json` in your project root to set default options:
+
+```json
+{
+  "validate": {
+    "format": "human",
+    "strict": false,
+    "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/*.backup.yaml"]
+  },
+  "preview": {
+    "port": 3000,
+    "open": true
+  }
+}
+```
+
+### Configuration Options
+
+#### validate
+
+| Option           | Type     | Default | Description              |
+| ---------------- | -------- | ------- | ------------------------ |
+| `format`         | string   | `human` | Default output format    |
+| `strict`         | boolean  | `false` | Treat warnings as errors |
+| `ignorePatterns` | string[] | `[]`    | Glob patterns to ignore  |
+
+#### preview
+
+| Option | Type    | Default | Description             |
+| ------ | ------- | ------- | ----------------------- |
+| `port` | number  | `3000`  | Default server port     |
+| `open` | boolean | `true`  | Open browser by default |
+
+CLI arguments always take precedence over config file settings.
+
+---
+
+## Aliases
+
+The CLI provides a shorter alias for convenience:
+
+```bash
+# These are equivalent
+maplibre-yaml validate map.yaml
+mlym validate map.yaml
+```
+
+Use `mlym` as a shorthand for `maplibre-yaml` in all commands.
+
+---
+
+## Performance
+
+The CLI is optimized for speed:
+
+| Operation              | Performance   |
+| ---------------------- | ------------- |
+| Single file validation | ~1ms          |
+| 10 files validation    | ~3ms          |
+| 100 files validation   | ~80ms         |
+| Watch mode (cached)    | ~1ms per file |
+| CLI startup (`--help`) | ~350ms        |
+
+### Parallel Processing
+
+The validate command processes files in parallel with a default concurrency of 10. For large file sets (>10 files), a progress indicator shows validation status in real-time.
+
+### Watch Mode Caching
+
+Watch mode uses mtime-based caching to avoid re-validating unchanged files. Only modified files are re-validated, making watch mode extremely fast for development workflows.
+
+---
+
+## Exit Codes
+
+All commands use consistent exit codes:
+
+| Code | Meaning             | Commands          |
+| ---- | ------------------- | ----------------- |
+| `0`  | Success             | All               |
+| `1`  | Validation errors   | validate          |
+| `2`  | File not found      | validate, preview |
+| `3`  | Invalid YAML syntax | validate          |
+| `4`  | Unknown error       | All               |
+
+Use exit codes in scripts and CI/CD pipelines to detect failures:
+
+```bash
+if maplibre-yaml validate "**/*.yaml"; then
+  echo "All configurations valid"
+else
+  echo "Validation failed with exit code $?"
+  exit 1
+fi
+```
+
+---
+
+## Environment Variables
+
+### NODE_ENV
+
+Set to `production` to disable debug output:
+
+```bash
+NODE_ENV=production maplibre-yaml validate "**/*.yaml"
+```
+
+### NO_COLOR
+
+Disable colored output:
+
+```bash
+NO_COLOR=1 maplibre-yaml validate map.yaml
+```
+
+---
+
+## Integration Examples
+
+### npm Scripts
+
+Add to `package.json`:
+
+```json
+{
+  "scripts": {
+    "validate": "maplibre-yaml validate 'configs/**/*.yaml'",
+    "validate:watch": "maplibre-yaml validate 'configs/**/*.yaml' --watch",
+    "preview": "maplibre-yaml preview map.yaml",
+    "validate:ci": "maplibre-yaml validate '**/*.yaml' --format json --strict"
+  }
+}
+```
+
+### GitHub Actions
+
+```yaml
+name: Validate Maps
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npx @maplibre-yaml/cli validate "**/*.yaml" --format json --strict
+```
+
+### GitHub Code Scanning
+
+```yaml
+name: Code Scanning
+on: [push, pull_request]
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npx @maplibre-yaml/cli validate "**/*.yaml" --format sarif > results.sarif
+      - uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: results.sarif
+```
+
+### Pre-commit Hook
+
+Using [husky](https://typicode.github.io/husky/):
+
+```bash
+#!/bin/sh
+npx maplibre-yaml validate "$(git diff --cached --name-only --diff-filter=ACM | grep '\.yaml$')"
+```
+
+---
+
+## Troubleshooting
+
+### Command not found
+
+If `maplibre-yaml` command is not found:
+
+1. Install globally: `npm install -g @maplibre-yaml/cli`
+2. Use npx: `npx @maplibre-yaml/cli <command>`
+3. Check PATH includes npm global bin directory
+
+### Glob patterns not matching files
+
+- Quote patterns to prevent shell expansion: `"configs/**/*.yaml"`
+- Use absolute paths or run from project root
+- Check ignore patterns in config file
+
+### Watch mode not detecting changes
+
+- Ensure file is within watched pattern
+- Check file system limits (increase with `ulimit -n 4096`)
+- Verify file permissions
+
+### Permission errors
+
+- Ensure read access to all matched files
+- Check directory permissions
+- Run with appropriate user permissions
+
+---
+
+## See Also
+
+- [Getting Started](/cli/getting-started) - Installation and basic usage
+- [VSCode Integration](/cli/vscode) - Set up IDE integration
+- [Schema Reference](/schema) - Full schema documentation
+- [Examples](/examples) - Sample configurations
