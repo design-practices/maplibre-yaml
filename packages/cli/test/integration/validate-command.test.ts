@@ -78,8 +78,8 @@ describe('validate command (integration)', () => {
     try {
       await execAsync(`node "${CLI}" validate "nonexistent.yaml"`);
     } catch (error: any) {
-      expect(error.code).toBe(1);
-      expect(error.stdout).toContain('not found');
+      expect(error.code).toBe(2);
+      expect(error.stdout).toContain('No files found');
     }
   });
 

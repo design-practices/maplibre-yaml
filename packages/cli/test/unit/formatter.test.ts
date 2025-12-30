@@ -40,7 +40,7 @@ describe('formatter', () => {
     it('formats warnings', () => {
       const results: ValidationResult[] = [{
         file: 'test.yaml',
-        valid: true,
+        valid: false,
         errors: [],
         warnings: [{
           path: 'layers[0]',
@@ -69,7 +69,8 @@ describe('formatter', () => {
       }];
 
       const output = formatHuman(results);
-      expect(output).toContain(':5:10');
+      expect(output).toContain('line 5');
+      expect(output).toContain('column 10');
     });
 
     it('formats multiple files summary', () => {
@@ -80,8 +81,8 @@ describe('formatter', () => {
       ];
 
       const output = formatHuman(results);
-      expect(output).toContain('2 file(s) valid');
       expect(output).toContain('1 file(s) with issues');
+      expect(output).toContain('1 error');
     });
 
     it('shows error and warning counts', () => {

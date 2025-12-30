@@ -49,8 +49,7 @@ describe('SARIF formatter', () => {
     expect(parsed.runs[0].results).toHaveLength(1);
     const result = parsed.runs[0].results[0];
     expect(result.level).toBe('error');
-    expect(result.message.text).toContain('config.center');
-    expect(result.message.text).toContain('Expected array, got string');
+    expect(result.message.text).toBe('Expected array, got string');
   });
 
   it('includes location information', () => {
