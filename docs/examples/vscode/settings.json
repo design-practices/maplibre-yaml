@@ -1,0 +1,18 @@
+{
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/design-practices/maplibre-yaml/main/schemas/map-block.json": [
+      "configs/**/*.yaml",
+      "*.map.yaml"
+    ]
+  },
+  "yaml.customTags": [],
+  "files.associations": {
+    "*.map.yaml": "yaml",
+    "**/configs/**/*.yaml": "yaml"
+  },
+  "editor.defaultFormatter": "redhat.vscode-yaml",
+  "[yaml]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "redhat.vscode-yaml"
+  }
+}

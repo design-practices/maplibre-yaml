@@ -1,0 +1,212 @@
+---
+title: VSCode Integration
+description: Use maplibre-yaml with Visual Studio Code
+---
+
+Integrate maplibre-yaml validation into your VSCode workflow for real-time error detection and quick fixes.
+
+## Quick Start (No Extension Required)
+
+You can use maplibre-yaml with VSCode immediately using the built-in **Tasks** feature:
+
+### Step 1: Add Task Configuration
+
+Create or update `.vscode/tasks.json` in your project:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "maplibre-yaml: Validate Current File",
+      "type": "shell",
+      "command": "npx",
+      "args": [
+        "@maplibre-yaml/cli",
+        "validate",
+        "${file}",
+        "--format",
+        "vscode"
+      ],
+      "problemMatcher": {
+        "owner": "maplibre-yaml",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+):(\\d+):(\\d+): (error|warning): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "group": "build"
+    }
+  ]
+}
+```
+
+### Step 2: Run the Task
+
+1. Open a `.yaml` file
+2. Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
+3. Type "Run Task"
+4. Select **maplibre-yaml: Validate Current File**
+
+### Step 3: View Errors
+
+Errors appear in the **Problems** panel (`Cmd+Shift+M` / `Ctrl+Shift+M`) with:
+- ✅ Clickable file paths
+- ✅ Line and column numbers
+- ✅ Error messages with context
+- ✅ Quick navigation to error locations
+
+## Configuration Files
+
+### Complete tasks.json
+
+Download the complete configuration with all tasks:
+[tasks.json example](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/tasks.json)
+
+Includes:
+- **Validate Current File**: Validates the open file
+- **Validate All Configs**: Validates all YAML files
+- **Watch and Validate**: Continuous validation
+
+### YAML Schema Settings
+
+Add to `.vscode/settings.json` for autocomplete:
+
+```json
+{
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/design-practices/maplibre-yaml/main/schemas/map-block.json": [
+      "configs/**/*.yaml",
+      "*.map.yaml"
+    ]
+  },
+  "files.associations": {
+    "*.map.yaml": "yaml",
+    "**/configs/**/*.yaml": "yaml"
+  }
+}
+```
+
+[Download complete settings.json](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/settings.json)
+
+## Usage Examples
+
+### Validate on Save
+
+Set up a keyboard shortcut:
+
+1. Press `Cmd+K Cmd+S` (Mac) or `Ctrl+K Ctrl+S` (Windows/Linux)
+2. Search for "Run Task"
+3. Add keybinding (e.g., `Cmd+Shift+V`)
+4. Configure to run **maplibre-yaml: Validate Current File**
+
+### Batch Validation
+
+Run **maplibre-yaml: Validate All Configs** to validate all files in your project.
+
+Output appears in the Problems panel grouped by file.
+
+### Watch Mode
+
+Run **maplibre-yaml: Watch and Validate** for continuous validation:
+
+- Runs in background
+- Updates Problems panel on file save
+- Shows real-time errors
+- Perfect for development workflow
+
+## Problem Matcher
+
+The VSCode Problem Matcher parses CLI output in the format:
+
+```
+file:line:column: severity: [path] message
+```
+
+Example:
+```
+/Users/you/project/config.yaml:5:10: error: [config.center] Expected array, got string
+```
+
+This enables VSCode to:
+- Parse error locations
+- Underline errors in the editor
+- Display in Problems panel
+- Provide quick navigation
+
+## Output Format
+
+The `--format vscode` flag produces Problem Matcher-compatible output:
+
+```bash
+maplibre-yaml validate config.yaml --format vscode
+```
+
+Output:
+```
+/path/to/config.yaml:5:10: error: [config.center] Expected array
+/path/to/config.yaml:12:3: warning: [layers[0]] Deprecated property
+```
+
+## Keyboard Shortcuts
+
+Recommended shortcuts:
+
+| Action | Default | Suggested |
+|--------|---------|-----------|
+| Run Task | `Cmd+Shift+P` > "Run Task" | `Cmd+Shift+V` |
+| Problems Panel | `Cmd+Shift+M` | - |
+| Next Error | `F8` | - |
+| Previous Error | `Shift+F8` | - |
+
+## Future: Native Extension
+
+We're planning a native VSCode extension with:
+
+- ✅ Real-time validation as you type
+- ✅ Autocomplete for map properties
+- ✅ Hover documentation
+- ✅ Inline map preview
+- ✅ Go to definition for layer references
+- ✅ Rename refactoring
+
+**Roadmap**: [Extension Architecture](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/EXTENSION_ROADMAP.md)
+
+**Phase 1** (Available Now): CLI with Tasks
+**Phase 2** (Q1 2025): Extension MVP
+**Phase 3** (Q2 2025): Language Server
+**Phase 4** (Q3 2025): Preview Webview
+
+## Troubleshooting
+
+### Errors Don't Appear in Problems Panel
+
+1. Check that the task includes `problemMatcher`
+2. Verify `--format vscode` is in the args
+3. Ensure file paths are absolute
+4. Check Problems panel filter settings
+
+### Task Not Found
+
+1. Ensure `.vscode/tasks.json` exists in project root
+2. Reload VSCode window
+3. Check JSON syntax is valid
+
+### Permission Errors
+
+On first run, VSCode may ask to allow task execution. Click "Allow" to proceed.
+
+## Resources
+
+- [VSCode Tasks Documentation](https://code.visualstudio.com/docs/editor/tasks)
+- [Problem Matchers](https://code.visualstudio.com/docs/editor/tasks#_defining-a-problem-matcher)
+- [Example Configurations](https://github.com/design-practices/maplibre-yaml/tree/main/docs/examples/vscode)

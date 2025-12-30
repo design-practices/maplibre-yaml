@@ -8,6 +8,7 @@ import pc from 'picocolors';
 import { validateFile, validateFilesParallel } from '../lib/validator.js';
 import { formatHuman, formatJSON } from '../lib/formatter.js';
 import { formatSARIF } from '../lib/sarif-formatter.js';
+import { formatVSCode } from '../lib/formatter-vscode.js';
 import { createWatcher, formatWatchEvent } from '../lib/watcher.js';
 import { loadProjectConfig, mergeConfig } from '../lib/config-loader.js';
 import { logger } from '../lib/logger.js';
@@ -33,7 +34,7 @@ export const validateCommand = defineCommand({
     format: {
       type: 'string',
       alias: 'f',
-      description: 'Output format: human, json, sarif',
+      description: 'Output format: human, json, sarif, vscode',
     },
     strict: {
       type: 'boolean',
@@ -129,6 +130,9 @@ export const validateCommand = defineCommand({
             break;
           case 'sarif':
             output = formatSARIF(results, version);
+            break;
+          case 'vscode':
+            output = formatVSCode(results);
             break;
           default:
             output = formatHuman(results);

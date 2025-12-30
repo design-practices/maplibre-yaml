@@ -69,6 +69,8 @@ export default defineConfig({
           label: "CLI Tools",
           items: [
             { label: "Getting Started", link: "/cli/getting-started/" },
+            { label: "VSCode Integration", link: "/cli/vscode/" },
+            { label: "Command Reference", link: "/cli/reference/" },
           ],
         },
         {
