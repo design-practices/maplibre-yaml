@@ -5,7 +5,6 @@
 import { defineCommand } from 'citty';
 import { existsSync } from 'node:fs';
 import { resolve } from 'pathe';
-import { createPreviewServer } from '../preview/server.js';
 import { loadProjectConfig, mergeConfig } from '../lib/config-loader.js';
 import { logger, error } from '../lib/logger.js';
 import { EXIT_CODES } from '../types.js';
@@ -60,6 +59,9 @@ export const previewCommand = defineCommand({
     }
 
     try {
+      // Lazy load the preview server (includes heavy Vite dependency)
+      const { createPreviewServer } = await import('../preview/server.js');
+
       const server = await createPreviewServer(configPath, {
         port: parseInt(port, 10),
         open,

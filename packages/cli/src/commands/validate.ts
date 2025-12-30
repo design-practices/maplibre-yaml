@@ -13,6 +13,7 @@ import { loadProjectConfig, mergeConfig } from '../lib/config-loader.js';
 import { logger } from '../lib/logger.js';
 import { resolveGlobPatterns } from '../lib/glob.js';
 import { createProgress } from '../lib/progress.js';
+import { validateWithCache, clearCache } from '../lib/cache.js';
 import { EXIT_CODES } from '../types.js';
 
 // Get version from package.json
@@ -89,14 +90,24 @@ export const validateCommand = defineCommand({
           results = [];
 
           for (const file of files) {
-            const result = await validateFile(file);
+            // Use cache in watch mode for better performance
+            const result = watchMode
+              ? await validateWithCache(file, validateFile)
+              : await validateFile(file);
             results.push(result);
             progress.update();
           }
 
           progress.done(`Validated ${files.length} files`);
         } else {
-          results = await validateFilesParallel(files);
+          // Use cache in watch mode
+          if (watchMode) {
+            results = await Promise.all(
+              files.map(file => validateWithCache(file, validateFile))
+            );
+          } else {
+            results = await validateFilesParallel(files);
+          }
         }
 
         // Apply strict mode
