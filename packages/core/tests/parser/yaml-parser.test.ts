@@ -597,4 +597,245 @@ pages:
       expect(result.success).toBe(true);
     });
   });
+
+  describe("parseScrollytellingBlock()", () => {
+    it("parses valid scrollytelling block", () => {
+      const yaml = `
+type: scrollytelling
+id: story
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+chapters:
+  - id: intro
+    title: "Introduction"
+    center: [0, 0]
+    zoom: 3
+  - id: chapter2
+    title: "Chapter 2"
+    center: [10, 10]
+    zoom: 5
+`;
+
+      const block = YAMLParser.parseScrollytellingBlock(yaml);
+
+      expect(block).toBeDefined();
+      expect(block.type).toBe("scrollytelling");
+      expect(block.id).toBe("story");
+      expect(block.chapters).toHaveLength(2);
+      expect(block.chapters[0].title).toBe("Introduction");
+      expect(block.chapters[1].title).toBe("Chapter 2");
+    });
+
+    it("throws on invalid YAML syntax", () => {
+      const invalidYaml = `
+type: scrollytelling
+id: story
+config:
+  center: [0, 0
+  # Missing closing bracket
+`;
+
+      expect(() => YAMLParser.parseScrollytellingBlock(invalidYaml)).toThrow(
+        "YAML syntax error"
+      );
+    });
+
+    it("throws on schema validation error", () => {
+      const yaml = `
+type: scrollytelling
+id: story
+config:
+  center: [999, 0]  # Invalid longitude
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+chapters:
+  - id: intro
+    title: "Intro"
+    center: [0, 0]
+    zoom: 3
+`;
+
+      expect(() => YAMLParser.parseScrollytellingBlock(yaml)).toThrow();
+    });
+
+    it("throws when chapters array is empty", () => {
+      const yaml = `
+type: scrollytelling
+id: story
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+chapters: []
+`;
+
+      expect(() => YAMLParser.parseScrollytellingBlock(yaml)).toThrow();
+    });
+
+    it("parses scrollytelling with optional properties", () => {
+      const yaml = `
+type: scrollytelling
+id: story
+theme: dark
+showMarkers: true
+markerColor: "#ff0000"
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+chapters:
+  - id: intro
+    title: "Introduction"
+    center: [0, 0]
+    zoom: 3
+    description: "Welcome to our story"
+    alignment: left
+    pitch: 45
+    bearing: 30
+footer: "<p>Data sources: Example</p>"
+`;
+
+      const block = YAMLParser.parseScrollytellingBlock(yaml);
+
+      expect(block.theme).toBe("dark");
+      expect(block.showMarkers).toBe(true);
+      expect(block.markerColor).toBe("#ff0000");
+      expect(block.footer).toBe("<p>Data sources: Example</p>");
+      expect(block.chapters[0].description).toBe("Welcome to our story");
+      expect(block.chapters[0].alignment).toBe("left");
+      expect(block.chapters[0].pitch).toBe(45);
+      expect(block.chapters[0].bearing).toBe(30);
+    });
+
+    it("parses chapters with actions", () => {
+      const yaml = `
+type: scrollytelling
+id: story
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+chapters:
+  - id: intro
+    title: "Introduction"
+    center: [0, 0]
+    zoom: 3
+    onChapterEnter:
+      - action: setFilter
+        layer: earthquakes
+        filter: [">=", ["get", "magnitude"], 5]
+    onChapterExit:
+      - action: setFilter
+        layer: earthquakes
+        filter: null
+`;
+
+      const block = YAMLParser.parseScrollytellingBlock(yaml);
+
+      expect(block.chapters[0].onChapterEnter).toHaveLength(1);
+      expect(block.chapters[0].onChapterEnter[0].action).toBe("setFilter");
+      expect(block.chapters[0].onChapterExit).toHaveLength(1);
+    });
+  });
+
+  describe("safeParseScrollytellingBlock()", () => {
+    it("returns success: true for valid scrollytelling block", () => {
+      const yaml = `
+type: scrollytelling
+id: story
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+chapters:
+  - id: intro
+    title: "Introduction"
+    center: [0, 0]
+    zoom: 3
+`;
+
+      const result = YAMLParser.safeParseScrollytellingBlock(yaml);
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBeDefined();
+      expect(result.errors).toHaveLength(0);
+      expect(result.data?.type).toBe("scrollytelling");
+    });
+
+    it("returns success: false with errors for invalid config", () => {
+      const yaml = `
+type: scrollytelling
+id: story
+config:
+  center: [999, 0]  # Invalid longitude
+  zoom: 50  # Invalid zoom
+  mapStyle: "https://example.com/style.json"
+chapters:
+  - id: intro
+    title: "Intro"
+    center: [0, 0]
+    zoom: 3
+`;
+
+      const result = YAMLParser.safeParseScrollytellingBlock(yaml);
+
+      expect(result.success).toBe(false);
+      expect(result.data).toBeUndefined();
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toHaveProperty("path");
+      expect(result.errors[0]).toHaveProperty("message");
+    });
+
+    it("returns YAML syntax errors", () => {
+      const invalidYaml = `
+type: scrollytelling
+id: story
+config:
+  center: [0, 0
+`;
+
+      const result = YAMLParser.safeParseScrollytellingBlock(invalidYaml);
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors![0]!.message).toContain("YAML syntax error");
+    });
+
+    it("handles missing chapters", () => {
+      const yaml = `
+type: scrollytelling
+id: story
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+`;
+
+      const result = YAMLParser.safeParseScrollytellingBlock(yaml);
+
+      expect(result.success).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    it("handles empty chapters array", () => {
+      const yaml = `
+type: scrollytelling
+id: story
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+chapters: []
+`;
+
+      const result = YAMLParser.safeParseScrollytellingBlock(yaml);
+
+      expect(result.success).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+      const error = result.errors.find((e) => e.path.includes("chapters"));
+      expect(error).toBeDefined();
+    });
+  });
 });

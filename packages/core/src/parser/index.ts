@@ -15,4 +15,4 @@
  */
 
 export { YAMLParser, parseYAMLConfig, safeParseYAMLConfig } from './yaml-parser';
-export type { RootConfig, MapBlock, ParseError, ParseResult } from './yaml-parser';
+export type { RootConfig, MapBlock, ScrollytellingBlock, ParseError, ParseResult } from './yaml-parser';

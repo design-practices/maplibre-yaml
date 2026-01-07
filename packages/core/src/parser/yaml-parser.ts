@@ -75,6 +75,7 @@ import { parse as parseYAML } from "yaml";
 import { ZodError } from "zod";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
+import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
 import type { z } from "zod";
 
 /**
@@ -92,6 +93,14 @@ export type RootConfig = z.infer<typeof RootSchema>;
  * Inferred from the MapBlockSchema Zod schema
  */
 export type MapBlock = z.infer<typeof MapBlockSchema>;
+
+/**
+ * Type alias for a scrollytelling block
+ *
+ * @remarks
+ * Inferred from the ScrollytellingBlockSchema Zod schema
+ */
+export type ScrollytellingBlock = z.infer<typeof ScrollytellingBlockSchema>;
 
 /**
  * Error information for a single validation or parsing error
@@ -340,6 +349,116 @@ export class YAMLParser {
   static safeParseMapBlock(yaml: string): ParseResult<MapBlock> {
     try {
       const data = this.parseMapBlock(yaml);
+      return {
+        success: true,
+        data,
+        errors: [],
+      };
+    } catch (error) {
+      // Handle Zod validation errors
+      if (error instanceof ZodError) {
+        return {
+          success: false,
+          errors: this.formatZodErrors(error),
+        };
+      }
+
+      // Handle other errors (YAML syntax, etc.)
+      return {
+        success: false,
+        errors: [
+          {
+            path: "",
+            message: error instanceof Error ? error.message : String(error),
+          },
+        ],
+      };
+    }
+  }
+
+  /**
+   * Parse YAML string for a scrollytelling block and validate against ScrollytellingBlockSchema
+   *
+   * @param yaml - YAML string to parse (should be a scrollytelling block, not a full document)
+   * @returns Validated scrollytelling block object
+   * @throws {Error} If YAML syntax is invalid
+   * @throws {ZodError} If validation fails
+   *
+   * @remarks
+   * This method is specifically for parsing individual scrollytelling blocks (e.g., in documentation
+   * or component usage). Unlike {@link parse}, it validates against ScrollytellingBlockSchema rather
+   * than RootSchema, so it expects a single scrollytelling configuration without the pages array wrapper.
+   *
+   * @example
+   * ```typescript
+   * const yaml = `
+   * type: scrollytelling
+   * id: story
+   * config:
+   *   center: [0, 0]
+   *   zoom: 2
+   *   mapStyle: "https://example.com/style.json"
+   * chapters:
+   *   - id: intro
+   *     title: "Introduction"
+   *     center: [0, 0]
+   *     zoom: 3
+   *     description: "Welcome to our story."
+   *   - id: chapter2
+   *     title: "Chapter 2"
+   *     center: [10, 10]
+   *     zoom: 5
+   *     description: "The story continues."
+   * `;
+   *
+   * const scrollyBlock = YAMLParser.parseScrollytellingBlock(yaml);
+   * ```
+   */
+  static parseScrollytellingBlock(yaml: string): ScrollytellingBlock {
+    // Parse YAML string to JavaScript object
+    let parsed: unknown;
+    try {
+      parsed = parseYAML(yaml);
+    } catch (error) {
+      throw new Error(
+        `YAML syntax error: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    // Validate against ScrollytellingBlockSchema
+    return ScrollytellingBlockSchema.parse(parsed);
+  }
+
+  /**
+   * Parse YAML string for a scrollytelling block, returning a result object
+   *
+   * @param yaml - YAML string to parse (should be a scrollytelling block, not a full document)
+   * @returns Result object with success flag and either data or errors
+   *
+   * @remarks
+   * This is the non-throwing version of {@link parseScrollytellingBlock}. Instead of throwing
+   * errors, it returns a result object that indicates success or failure.
+   * Use this when you want to handle errors gracefully without try/catch.
+   *
+   * @example
+   * ```typescript
+   * const result = YAMLParser.safeParseScrollytellingBlock(yamlString);
+   * if (result.success) {
+   *   console.log('Scrollytelling config:', result.data);
+   * } else {
+   *   result.errors.forEach(err => {
+   *     console.error(`Error at ${err.path}: ${err.message}`);
+   *   });
+   * }
+   * ```
+   */
+  static safeParseScrollytellingBlock(
+    yaml: string
+  ): ParseResult<ScrollytellingBlock> {
+    try {
+      const data = this.parseScrollytellingBlock(yaml);
       return {
         success: true,
         data,
