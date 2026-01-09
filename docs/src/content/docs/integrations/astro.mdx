@@ -441,6 +441,275 @@ const featuredMaps = await getCollection('maps', ({ data }) => data.featured);
 ))}
 ```
 
+## FullPageMap Component
+
+The `FullPageMap` component creates a full-viewport map with built-in controls and an optional legend. It's perfect for landing pages, dashboards, or dedicated map views.
+
+### Features
+
+- **Full Viewport**: Fixed positioning that fills the entire viewport (100vw × 100vh)
+- **Built-in Controls**: Zoom in/out and reset view buttons
+- **Optional Legend**: Auto-generated legend with configurable positioning
+- **Same Loading Options**: Supports both `src` (runtime) and `config` (build-time) loading
+- **Responsive Design**: Optimized layouts for mobile and desktop
+
+### Basic Usage
+
+<Tabs>
+  <TabItem label="Runtime Loading">
+```astro
+---
+import { FullPageMap } from '@maplibre-yaml/astro';
+---
+<FullPageMap src="/configs/world-map.yaml" />
+```
+  </TabItem>
+  <TabItem label="Build-time Loading">
+```astro
+---
+import { FullPageMap, loadMapConfig } from '@maplibre-yaml/astro';
+const config = await loadMapConfig('./src/configs/world-map.yaml');
+---
+<FullPageMap config={config} />
+```
+  </TabItem>
+</Tabs>
+
+### Component API
+
+```typescript
+interface FullPageMapProps {
+  // Map source (one required)
+  src?: string;                    // Path to YAML file in /public
+  config?: MapBlock;               // Pre-loaded configuration object
+
+  // Control options
+  showControls?: boolean;          // Show zoom/reset controls (default: true)
+  showLegend?: boolean;            // Show auto-generated legend (default: false)
+  legendPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+                                   // Legend position (default: 'top-right')
+
+  // Styling (optional - component is fixed viewport by default)
+  class?: string;                  // Additional CSS classes
+  style?: string;                  // Additional inline styles
+}
+```
+
+### Examples
+
+#### Full-page landing map with legend
+
+```astro
+---
+import { FullPageMap } from '@maplibre-yaml/astro';
+---
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Interactive Map Dashboard</title>
+  </head>
+  <body style="margin: 0; padding: 0;">
+    <FullPageMap
+      src="/configs/dashboard-map.yaml"
+      showControls
+      showLegend
+      legendPosition="bottom-left"
+    />
+  </body>
+</html>
+```
+
+#### Without controls
+
+```astro
+<FullPageMap
+  src="/configs/presentation-map.yaml"
+  showControls={false}
+/>
+```
+
+#### With custom styling
+
+```astro
+<FullPageMap
+  src="/configs/branded-map.yaml"
+  showLegend
+  legendPosition="top-right"
+  style="z-index: 100;"
+  class="dashboard-map"
+/>
+```
+
+#### Build-time loaded with complete configuration
+
+```astro
+---
+import { FullPageMap, loadMapConfig } from '@maplibre-yaml/astro';
+
+const mapConfig = await loadMapConfig('./src/configs/geospatial-data.yaml');
+---
+<FullPageMap
+  config={mapConfig}
+  showControls
+  showLegend
+  legendPosition="bottom-right"
+/>
+```
+
+### Legend
+
+When `showLegend` is enabled, the component automatically generates a legend based on your map's layers:
+
+- **Fill layers**: Colored squares with fill color and opacity
+- **Line layers**: Horizontal lines with stroke color
+- **Circle layers**: Circular symbols with fill color
+
+The legend automatically:
+- Groups layers by source and type
+- Extracts paint properties for visualization
+- Filters out MapLibre internal layers
+- Displays human-readable layer names
+
+### Controls
+
+The built-in controls provide:
+
+- **Zoom In** (+): Increases zoom level by 1
+- **Zoom Out** (−): Decreases zoom level by 1
+- **Reset View** (↻): Returns to initial center, zoom, bearing, and pitch
+
+Controls are accessible with ARIA labels and keyboard navigation.
+
+## Chapter Component
+
+The `Chapter` component displays individual narrative sections within scrollytelling experiences. It's typically used internally by the `Scrollytelling` component but can be used independently for custom implementations.
+
+### Features
+
+- **Flexible Content**: Title, HTML description, images, and videos
+- **Multiple Alignments**: left, right, center, or full-width layouts
+- **Theme Support**: Light and dark themes with CSS custom properties
+- **Hidden Mode**: Map-only chapters without visible content
+- **Active States**: Visual feedback based on scroll position
+- **Accessibility**: ARIA labels, semantic HTML, keyboard navigation
+- **Responsive Design**: Mobile-optimized with multiple breakpoints
+- **Reduced Motion**: Respects user's motion preferences
+
+### Component API
+
+```typescript
+interface ChapterProps {
+  id: string;                                  // Unique chapter identifier (required)
+  title: string;                               // Chapter title (required)
+  description?: string;                        // HTML description content
+  image?: string;                              // Image URL (absolute or relative)
+  video?: string;                              // Video URL (absolute or relative)
+  alignment?: 'left' | 'right' | 'center' | 'full';  // Content position (default: 'center')
+  hidden?: boolean;                            // Hide content for map-only chapters
+  isActive?: boolean;                          // Active state (controlled by parent)
+  theme?: 'light' | 'dark';                    // Visual theme (default: 'light')
+}
+```
+
+### Examples
+
+#### Basic chapter
+
+```astro
+---
+import { Chapter } from '@maplibre-yaml/astro';
+---
+<Chapter
+  id="intro"
+  title="Introduction"
+  description="<p>Welcome to our story about climate data.</p>"
+  alignment="center"
+/>
+```
+
+#### Chapter with image
+
+```astro
+<Chapter
+  id="hero"
+  title="The Journey Begins"
+  description="<p>Exploring the landscape of our data.</p>"
+  image="/images/hero-landscape.jpg"
+  alignment="left"
+  theme="dark"
+/>
+```
+
+#### Chapter with video
+
+```astro
+<Chapter
+  id="demo"
+  title="How It Works"
+  description="<p>Watch this short demonstration.</p>"
+  video="/videos/tutorial.mp4"
+  alignment="center"
+/>
+```
+
+#### Hidden chapter (map-only)
+
+```astro
+<Chapter
+  id="transition"
+  title="Transition View"
+  hidden
+/>
+```
+
+#### Full-width chapter
+
+```astro
+<Chapter
+  id="finale"
+  title="Conclusion"
+  description="<p>Thank you for following this journey through the data.</p>"
+  alignment="full"
+  theme="dark"
+/>
+```
+
+### Alignment Options
+
+- **left**: Content positioned on the left side (good for right-aligned maps)
+- **right**: Content positioned on the right side (good for left-aligned maps)
+- **center**: Content centered (default, works with most layouts)
+- **full**: Full-width content, centered text (impactful for conclusions)
+
+### Themes
+
+**Light theme** (default):
+- White/translucent background (rgba(255, 255, 255, 0.95))
+- Dark text (#1f2937)
+- Blue links (#3b82f6)
+
+**Dark theme**:
+- Dark gray/translucent background (rgba(31, 41, 55, 0.95))
+- Light text (#f9fafb)
+- Light blue links (#60a5fa)
+
+### Active States
+
+The `isActive` prop controls visual emphasis:
+- Active chapters: Full opacity (1.0), normal scale
+- Inactive chapters: Reduced opacity (0.4), slightly scaled down (0.98)
+
+This is typically managed by the parent `Scrollytelling` component based on scroll position.
+
+### Accessibility Features
+
+- Semantic `<section>` with `role="region"`
+- Unique `aria-labelledby` for each chapter
+- Lazy-loaded images with `alt` text
+- Videos with controls and fallback text
+- High contrast mode support
+- Reduced motion support
+
 ## Component Patterns
 
 ### Pattern 1: External YAML with src Attribute (Recommended)
