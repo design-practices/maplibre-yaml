@@ -233,7 +233,7 @@ export async function loadMapConfig(path: string): Promise<MapBlock> {
       );
     }
 
-    return result.data;
+    return result.data!;
   } catch (error) {
     // Re-throw YAMLLoadError as-is
     if (error instanceof YAMLLoadError) {
@@ -310,7 +310,7 @@ export async function loadScrollytellingConfig(
       );
     }
 
-    return result.data;
+    return result.data!;
   } catch (error) {
     // Re-throw YAMLLoadError as-is
     if (error instanceof YAMLLoadError) {
