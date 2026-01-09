@@ -1,6 +1,546 @@
 ---
 /**
- * FullPageMap component stub - implementation in Phase 3.4
+ * @file Full-page Map component with controls and legend
+ * @module @maplibre-yaml/astro/components/FullPageMap
+ *
+ * @description
+ * A full-viewport map component that renders an interactive MapLibre map using
+ * YAML configuration. Includes built-in controls (zoom, reset) and optional legend.
+ * Perfect for landing pages, dashboards, or dedicated map views.
+ *
+ * ## Features
+ *
+ * - **Full Viewport**: Automatically fills 100vh with fixed positioning
+ * - **Built-in Controls**: Zoom in/out and reset view buttons
+ * - **Optional Legend**: Display with configurable positioning
+ * - **Dual Loading**: Use `config` for build-time or `src` for runtime
+ * - **Customizable**: Control visibility, legend position, and styling
+ * - **Type Safe**: Full TypeScript support with validation
+ *
+ * @example Full-page landing map
+ * ```astro
+ * ---
+ * import { FullPageMap, loadMapConfig } from '@maplibre-yaml/astro';
+ * const config = await loadMapConfig('./src/configs/world-map.yaml');
+ * ---
+ * <FullPageMap config={config} showLegend legendPosition="top-right" />
+ * ```
+ *
+ * @example Runtime loading with controls
+ * ```astro
+ * ---
+ * import { FullPageMap } from '@maplibre-yaml/astro';
+ * ---
+ * <FullPageMap
+ *   src="/configs/dashboard.yaml"
+ *   showControls
+ *   showLegend
+ *   legendPosition="bottom-left"
+ * />
+ * ```
+ *
+ * @example Minimal full-page map
+ * ```astro
+ * <FullPageMap src="/configs/simple-map.yaml" />
+ * ```
  */
+
+import type { FullPageMapProps } from "../types";
+import "@maplibre-yaml/core/register";
+
+interface Props extends FullPageMapProps {}
+
+const {
+  src,
+  config,
+  showControls = true,
+  showLegend = false,
+  legendPosition = "top-right",
+  class: className,
+  style,
+} = Astro.props;
+
+// Validate that either src or config is provided
+if (!src && !config) {
+  throw new Error(
+    "FullPageMap component requires either 'src' or 'config' prop"
+  );
+}
+
+// If both are provided, prefer config
+if (src && config) {
+  console.warn(
+    "FullPageMap component received both 'src' and 'config' props. Using 'config' and ignoring 'src'."
+  );
+}
+
+// Generate unique ID for this map instance
+const mapId = `fullmap-${Math.random().toString(36).substring(2, 11)}`;
+const controlsId = `controls-${mapId}`;
+const legendId = `legend-${mapId}`;
+
+// Serialize config for client-side if provided
+const serializedConfig = config ? JSON.stringify(config) : null;
+
+// Legend position CSS mapping
+const legendPositions = {
+  "top-left": "top: 20px; left: 20px;",
+  "top-right": "top: 20px; right: 20px;",
+  "bottom-left": "bottom: 20px; left: 20px;",
+  "bottom-right": "bottom: 20px; right: 20px;",
+};
 ---
-<div>FullPageMap component - Phase 3.4</div>
+
+<div
+  class:list={["ml-fullpage-map", className]}
+  style={`${style || ""}`}
+  data-map-id={mapId}
+>
+  {
+    config ? (
+      // Build-time loaded config: render directly with web component
+      <ml-map id={mapId} config={serializedConfig!} />
+    ) : (
+      // Runtime loaded config: placeholder that will be populated by client script
+      <ml-map id={mapId} data-src={src} />
+    )
+  }
+
+  {
+    showControls && (
+      <div id={controlsId} class="ml-map-controls">
+        <button
+          class="ml-control-btn ml-zoom-in"
+          aria-label="Zoom in"
+          title="Zoom in"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 5V15M5 10H15"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+        <button
+          class="ml-control-btn ml-zoom-out"
+          aria-label="Zoom out"
+          title="Zoom out"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M5 10H15"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+        <button
+          class="ml-control-btn ml-reset"
+          aria-label="Reset view"
+          title="Reset view"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 10C4 6.686 6.686 4 10 4C13.314 4 16 6.686 16 10C16 13.314 13.314 16 10 16C7.93 16 6.128 14.906 5.143 13.25M5.143 13.25H8M5.143 13.25V16"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
+    )
+  }
+
+  {
+    showLegend && (
+      <div
+        id={legendId}
+        class="ml-map-legend"
+        style={legendPositions[legendPosition]}
+      >
+        <div class="ml-legend-title">Legend</div>
+        <div class="ml-legend-items" />
+      </div>
+    )
+  }
+</div>
+
+{
+  src && !config && (
+    <script is:inline define:vars={{ mapId, src }}>
+      // Runtime YAML loading for src prop
+      (async () => {
+        try {
+          const mapElement = document.getElementById(mapId);
+          if (!mapElement) {
+            console.error(`Map element with id ${mapId} not found`);
+            return;
+          }
+
+          // Fetch YAML file from public directory
+          const response = await fetch(src);
+          if (!response.ok) {
+            throw new Error(
+              `Failed to fetch ${src}: ${response.status} ${response.statusText}`
+            );
+          }
+
+          const yamlText = await response.text();
+
+          // Parse YAML using the core library
+          const { YAMLParser } = await import("@maplibre-yaml/core");
+          const result = YAMLParser.safeParseMapBlock(yamlText);
+
+          if (!result.success) {
+            console.error("Map configuration validation failed:", result.errors);
+            mapElement.innerHTML = `
+              <div style="
+                padding: 20px;
+                background: #fee;
+                border: 1px solid #fcc;
+                border-radius: 4px;
+                color: #c33;
+                margin: 20px;
+              ">
+                <strong>Map Configuration Error</strong>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                  ${result.errors
+                    .map(
+                      (err) =>
+                        `<li>${err.path ? err.path + ": " : ""}${err.message}</li>`
+                    )
+                    .join("")}
+                </ul>
+              </div>
+            `;
+            return;
+          }
+
+          // Set config on the web component
+          mapElement.setAttribute("config", JSON.stringify(result.data));
+        } catch (error) {
+          console.error("Failed to load map configuration:", error);
+          const mapElement = document.getElementById(mapId);
+          if (mapElement) {
+            mapElement.innerHTML = `
+              <div style="
+                padding: 20px;
+                background: #fee;
+                border: 1px solid #fcc;
+                border-radius: 4px;
+                color: #c33;
+                margin: 20px;
+              ">
+                <strong>Map Loading Error</strong>
+                <p style="margin: 10px 0;">${
+                  error instanceof Error ? error.message : String(error)
+                }</p>
+              </div>
+            `;
+          }
+        }
+      })();
+    </script>
+  )
+}
+
+<script is:inline define:vars={{ mapId, controlsId, legendId, showControls, showLegend }}>
+  // Map controls interaction
+  (async () => {
+    try {
+      const mapElement = document.getElementById(mapId);
+      if (!mapElement) return;
+
+      // Wait for map to be ready
+      await new Promise((resolve) => {
+        if (mapElement.hasAttribute("config")) {
+          // Map already has config, wait a bit for initialization
+          setTimeout(resolve, 100);
+        } else {
+          // Wait for config to be set
+          const observer = new MutationObserver((mutations) => {
+            if (mapElement.hasAttribute("config")) {
+              observer.disconnect();
+              setTimeout(resolve, 100);
+            }
+          });
+          observer.observe(mapElement, { attributes: true });
+        }
+      });
+
+      // Get map instance from web component
+      const map = mapElement.map;
+      if (!map) {
+        console.warn("Map instance not available on web component");
+        return;
+      }
+
+      // Store initial view for reset
+      const initialView = {
+        center: map.getCenter(),
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+      };
+
+      // Setup controls
+      if (showControls) {
+        const controlsEl = document.getElementById(controlsId);
+        if (controlsEl) {
+          controlsEl.querySelector(".ml-zoom-in")?.addEventListener("click", () => {
+            map.zoomIn();
+          });
+
+          controlsEl.querySelector(".ml-zoom-out")?.addEventListener("click", () => {
+            map.zoomOut();
+          });
+
+          controlsEl.querySelector(".ml-reset")?.addEventListener("click", () => {
+            map.flyTo({
+              center: initialView.center,
+              zoom: initialView.zoom,
+              bearing: initialView.bearing,
+              pitch: initialView.pitch,
+            });
+          });
+        }
+      }
+
+      // Setup legend
+      if (showLegend) {
+        const legendEl = document.getElementById(legendId);
+        const legendItemsEl = legendEl?.querySelector(".ml-legend-items");
+
+        if (legendItemsEl) {
+          // Get layers from map and populate legend
+          map.on("load", () => {
+            const layers = map.getStyle().layers || [];
+            const legendItems = [];
+
+            // Group layers by source and type
+            const layerGroups = new Map();
+            layers.forEach((layer) => {
+              if (layer.id.startsWith("gl-") || layer.id.startsWith("maplibre-")) return;
+
+              const key = `${layer.source}-${layer.type}`;
+              if (!layerGroups.has(key)) {
+                layerGroups.set(key, {
+                  source: layer.source,
+                  type: layer.type,
+                  id: layer.id,
+                  paint: layer.paint,
+                });
+              }
+            });
+
+            // Create legend items
+            layerGroups.forEach((group) => {
+              const item = document.createElement("div");
+              item.className = "ml-legend-item";
+
+              const symbol = document.createElement("div");
+              symbol.className = "ml-legend-symbol";
+
+              // Style symbol based on layer type
+              if (group.type === "fill") {
+                symbol.style.background = group.paint?.["fill-color"] || "#888";
+                symbol.style.opacity = group.paint?.["fill-opacity"] || "0.5";
+              } else if (group.type === "line") {
+                symbol.style.borderBottom = `3px solid ${group.paint?.["line-color"] || "#888"}`;
+              } else if (group.type === "circle") {
+                symbol.style.borderRadius = "50%";
+                symbol.style.background = group.paint?.["circle-color"] || "#888";
+              }
+
+              const label = document.createElement("span");
+              label.className = "ml-legend-label";
+              label.textContent = group.id.replace(/-/g, " ");
+
+              item.appendChild(symbol);
+              item.appendChild(label);
+              legendItemsEl.appendChild(item);
+            });
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to setup map controls:", error);
+    }
+  })();
+</script>
+
+<style>
+  .ml-fullpage-map {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0;
+  }
+
+  ml-map {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Loading state */
+  ml-map:not([config]) {
+    background: linear-gradient(
+      135deg,
+      #f5f5f5 25%,
+      transparent 25%,
+      transparent 50%,
+      #f5f5f5 50%,
+      #f5f5f5 75%,
+      transparent 75%,
+      transparent
+    );
+    background-size: 40px 40px;
+    animation: loading-pattern 1s linear infinite;
+  }
+
+  @keyframes loading-pattern {
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 40px 40px;
+    }
+  }
+
+  /* Map Controls */
+  .ml-map-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 10;
+  }
+
+  .ml-control-btn {
+    width: 40px;
+    height: 40px;
+    background: white;
+    border: none;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #333;
+    transition: all 0.2s ease;
+  }
+
+  .ml-control-btn:hover {
+    background: #f8f8f8;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .ml-control-btn:active {
+    transform: scale(0.95);
+  }
+
+  .ml-control-btn svg {
+    pointer-events: none;
+  }
+
+  /* Map Legend */
+  .ml-map-legend {
+    position: absolute;
+    z-index: 10;
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    padding: 12px;
+    min-width: 150px;
+    max-width: 250px;
+  }
+
+  .ml-legend-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 8px;
+    color: #333;
+  }
+
+  .ml-legend-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ml-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #555;
+  }
+
+  .ml-legend-symbol {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    border: 1px solid #ddd;
+  }
+
+  .ml-legend-label {
+    text-transform: capitalize;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .ml-map-controls {
+      top: 10px;
+      right: 10px;
+    }
+
+    .ml-control-btn {
+      width: 36px;
+      height: 36px;
+    }
+
+    .ml-map-legend {
+      font-size: 12px;
+      padding: 10px;
+      min-width: 120px;
+    }
+
+    .ml-legend-title {
+      font-size: 13px;
+    }
+
+    .ml-legend-symbol {
+      width: 16px;
+      height: 16px;
+    }
+  }
+</style>

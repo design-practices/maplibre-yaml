@@ -114,6 +114,333 @@ Get a map in your Astro site in 5 minutes.
 
 </Steps>
 
+## Using @maplibre-yaml/astro Package
+
+<Aside type="tip" title="Recommended for Astro Projects">
+  The `@maplibre-yaml/astro` package provides native Astro components with built-in TypeScript support, better error handling, and improved developer experience.
+</Aside>
+
+For Astro projects, we recommend using the dedicated `@maplibre-yaml/astro` package instead of the core web components directly. This package provides:
+
+- **Native Astro Components** - Designed specifically for Astro's architecture
+- **Build-Time Loading** - Load and validate YAML at build time for better performance
+- **Runtime Loading** - Or load from `/public` for dynamic configs
+- **TypeScript Support** - Full type safety with MapBlock types
+- **Error Handling** - Beautiful error messages with validation details
+- **Content Collections** - Schema helpers for Astro Content Collections
+
+### Installation
+
+```bash
+pnpm add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl
+```
+
+### Basic Usage with Map Component
+
+The `Map` component is the simplest way to add a map to your Astro site:
+
+<Tabs>
+<TabItem label="Runtime Loading">
+
+**Load YAML from `/public` directory:**
+
+```astro
+---
+// src/pages/index.astro
+import { Map } from '@maplibre-yaml/astro';
+---
+
+<Map
+  src="/configs/map.yaml"
+  height="500px"
+  class="my-map"
+/>
+```
+
+Place your YAML file in `/public/configs/map.yaml`:
+
+```yaml
+type: map
+id: my-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: points
+    type: circle
+    source:
+      type: geojson
+      url: "https://example.com/data.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#007cbf"
+```
+
+</TabItem>
+<TabItem label="Build-Time Loading">
+
+**Load and validate YAML at build time:**
+
+```astro
+---
+// src/pages/index.astro
+import { Map, loadMapConfig } from '@maplibre-yaml/astro';
+
+// Loaded at build time - validates YAML and catches errors early
+const config = await loadMapConfig('./src/configs/map.yaml');
+---
+
+<Map
+  config={config}
+  height="600px"
+  style="border: 2px solid #e2e8f0; border-radius: 8px;"
+/>
+```
+
+**Benefits of build-time loading:**
+- ✅ Validates configuration during build
+- ✅ Catches errors before deployment
+- ✅ Faster page loads (no runtime YAML parsing)
+- ✅ Better for static site generation
+
+</TabItem>
+</Tabs>
+
+### Map Component API
+
+```typescript
+interface MapProps {
+  // Data source (one required)
+  src?: string;              // Path to YAML file in /public
+  config?: MapBlock;         // Pre-loaded configuration
+
+  // Styling
+  height?: string;           // Container height (default: "400px")
+  class?: string;            // CSS class name
+  style?: string;            // Inline styles
+}
+```
+
+**Examples:**
+
+```astro
+<!-- Minimal -->
+<Map src="/maps/simple.yaml" />
+
+<!-- With custom height -->
+<Map src="/maps/dashboard.yaml" height="100vh" />
+
+<!-- With styling -->
+<Map
+  src="/maps/styled.yaml"
+  height="500px"
+  class="shadow-lg rounded-lg"
+  style="border: 1px solid #ccc;"
+/>
+
+<!-- Build-time loaded -->
+---
+import { Map, loadMapConfig } from '@maplibre-yaml/astro';
+const earthquakes = await loadMapConfig('./src/maps/earthquakes.yaml');
+---
+<Map config={earthquakes} height="600px" />
+```
+
+### Loading Utilities
+
+The package provides utilities for loading YAML configurations:
+
+#### loadMapConfig()
+
+Load and validate a map configuration from a file:
+
+```astro
+---
+import { loadMapConfig, Map } from '@maplibre-yaml/astro';
+
+try {
+  const config = await loadMapConfig('./src/configs/my-map.yaml');
+  // config is fully typed as MapBlock
+} catch (error) {
+  console.error('Failed to load map config:', error);
+}
+---
+
+<Map config={config} />
+```
+
+#### loadFromGlob()
+
+Load multiple configurations at once:
+
+```astro
+---
+import { loadFromGlob, Map } from '@maplibre-yaml/astro';
+import { YAMLParser } from '@maplibre-yaml/core';
+
+const configFiles = import.meta.glob('./src/configs/*.yaml', { as: 'raw' });
+const maps = await loadFromGlob(
+  configFiles,
+  (yaml) => YAMLParser.safeParseMapBlock(yaml)
+);
+---
+
+<div class="map-gallery">
+  {maps.map(({ path, config }) => (
+    <div>
+      <h2>{config.id}</h2>
+      <Map config={config} height="400px" />
+    </div>
+  ))}
+</div>
+```
+
+### Content Collections Integration
+
+Use Astro Content Collections for managing map configurations:
+
+**1. Define collection schema:**
+
+```typescript
+// src/content/config.ts
+import { defineCollection } from 'astro:content';
+import { getMapSchema } from '@maplibre-yaml/astro/utils';
+
+export const collections = {
+  maps: defineCollection({
+    type: 'data',
+    schema: getMapSchema()
+  })
+};
+```
+
+**2. Add YAML files:**
+
+```yaml
+# src/content/maps/earthquake-map.yaml
+type: map
+id: earthquake-map
+config:
+  center: [-120, 35]
+  zoom: 6
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 8
+      circle-color: "#ff4444"
+```
+
+**3. Query and use in pages:**
+
+```astro
+---
+import { getCollection } from 'astro:content';
+import { Map } from '@maplibre-yaml/astro';
+
+const maps = await getCollection('maps');
+const earthquakeMap = maps.find(m => m.id === 'earthquake-map');
+---
+
+<Map config={earthquakeMap.data} height="600px" />
+```
+
+### Error Handling
+
+The Map component displays user-friendly errors when configurations fail to load or validate:
+
+```astro
+<!-- Invalid YAML or network error will show error message -->
+<Map src="/configs/broken.yaml" />
+```
+
+Error display includes:
+- **YAML Syntax Errors**: Shows parsing error with details
+- **Validation Errors**: Lists all validation failures with paths
+- **Network Errors**: Shows fetch failure messages
+
+You can also handle errors programmatically with build-time loading:
+
+```astro
+---
+import { loadMapConfig, YAMLLoadError } from '@maplibre-yaml/astro';
+
+let config;
+try {
+  config = await loadMapConfig('./src/configs/map.yaml');
+} catch (error) {
+  if (error instanceof YAMLLoadError) {
+    console.error('Validation errors:');
+    error.errors.forEach(e => {
+      console.error(`  ${e.path}: ${e.message}`);
+    });
+  }
+  throw error; // Fail build on invalid config
+}
+---
+
+<Map config={config} />
+```
+
+### Advanced: Extending Schemas
+
+Add custom metadata to your map configurations:
+
+```typescript
+// src/content/config.ts
+import { defineCollection } from 'astro:content';
+import { extendSchema, getMapSchema } from '@maplibre-yaml/astro/utils';
+import { z } from 'zod';
+
+export const collections = {
+  maps: defineCollection({
+    type: 'data',
+    schema: extendSchema(getMapSchema(), {
+      author: z.string(),
+      publishDate: z.date(),
+      tags: z.array(z.string()),
+      featured: z.boolean().default(false)
+    })
+  })
+};
+```
+
+```yaml
+# src/content/maps/featured-map.yaml
+author: "Jane Doe"
+publishDate: 2024-01-15
+tags: ["earthquakes", "geoscience"]
+featured: true
+
+type: map
+id: featured-map
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+```astro
+---
+import { getCollection } from 'astro:content';
+
+const featuredMaps = await getCollection('maps', ({ data }) => data.featured);
+---
+
+{featuredMaps.map(entry => (
+  <div>
+    <h2>{entry.data.id}</h2>
+    <p>By {entry.data.author} on {entry.data.publishDate}</p>
+    <Map config={entry.data} />
+  </div>
+))}
+```
+
 ## Component Patterns
 
 ### Pattern 1: External YAML with src Attribute (Recommended)
