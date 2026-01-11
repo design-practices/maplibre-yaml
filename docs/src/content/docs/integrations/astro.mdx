@@ -710,6 +710,303 @@ This is typically managed by the parent `Scrollytelling` component based on scro
 - High contrast mode support
 - Reduced motion support
 
+## Scrollytelling Component
+
+The `Scrollytelling` component creates immersive narrative experiences where the map transitions between different views as users scroll through story chapters. Perfect for data journalism, interactive reports, and guided data tours.
+
+### Features
+
+- **Scroll-Driven Navigation**: Map automatically transitions as you scroll through chapters
+- **Smooth Camera Transitions**: Choose from flyTo, easeTo, or jumpTo animations
+- **Layer Control**: Show/hide map layers per chapter for progressive disclosure
+- **Chapter Actions**: Execute custom MapLibre actions on chapter enter/exit
+- **Optional Markers**: Visual navigation dots for quick chapter access
+- **Dual Loading**: Build-time or runtime YAML loading
+- **Debug Mode**: Visual indicators to help during development
+- **Accessible**: Full keyboard navigation and screen reader support
+
+### Component API
+
+```typescript
+interface ScrollytellingProps {
+  src?: string;              // Path to YAML config file (in public directory)
+  config?: ScrollytellingBlock;  // Pre-loaded scrollytelling configuration
+  class?: string;            // Additional CSS class for container
+  debug?: boolean;           // Debug mode - shows chapter boundaries
+}
+```
+
+### Basic Usage
+
+<Tabs>
+  <TabItem label="Runtime Loading">
+```astro
+---
+import { Scrollytelling } from '@maplibre-yaml/astro';
+---
+<Scrollytelling src="/stories/earthquake-history.yaml" />
+```
+  </TabItem>
+  <TabItem label="Build-time Loading">
+```astro
+---
+import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
+const story = await loadScrollytellingConfig('./src/stories/climate-change.yaml');
+---
+<Scrollytelling config={story} />
+```
+  </TabItem>
+</Tabs>
+
+### YAML Configuration
+
+A complete scrollytelling story includes base map configuration, data sources, layers, and chapters:
+
+```yaml
+version: "1.0"
+id: earthquake-story
+theme: dark                    # 'light' or 'dark'
+showMarkers: true             # Show chapter navigation dots
+markerColor: "#3FB1CE"        # Custom marker color
+
+# Base map configuration
+config:
+  style: "https://demotiles.maplibre.org/style.json"
+  center: [-118.2437, 34.0522]
+  zoom: 9
+  pitch: 0
+  bearing: 0
+
+# Data sources
+sources:
+  earthquakes:
+    type: geojson
+    data: "/data/earthquakes.geojson"
+
+# Map layers
+layers:
+  - id: earthquake-circles
+    type: circle
+    source: earthquakes
+    paint:
+      circle-radius: 8
+      circle-color: "#ff0000"
+
+# Story chapters
+chapters:
+  - id: intro
+    title: "Los Angeles Earthquakes"
+    description: "<p>Exploring seismic activity in Southern California.</p>"
+    center: [-118.2437, 34.0522]
+    zoom: 9
+    alignment: center
+
+  - id: detail
+    title: "Major Fault Lines"
+    description: "<p>The San Andreas Fault runs through this region.</p>"
+    image: "/images/fault-lines.jpg"
+    center: [-118.0, 34.0]
+    zoom: 11
+    pitch: 45
+    bearing: 30
+    animation: flyTo
+    speed: 0.8
+    alignment: left
+    layers:
+      show: [earthquake-circles]
+      hide: []
+
+  - id: conclusion
+    title: "Preparing for the Future"
+    description: "<p>Understanding earthquake patterns helps us prepare.</p>"
+    center: [-118.2437, 34.0522]
+    zoom: 9
+    alignment: full
+
+footer: "<p>Data source: USGS</p><p>&copy; 2024</p>"
+```
+
+### Examples
+
+#### Simple story with runtime loading
+
+```astro
+---
+import { Scrollytelling } from '@maplibre-yaml/astro';
+---
+<Scrollytelling src="/stories/city-tour.yaml" />
+```
+
+#### Build-time loading with debug mode
+
+```astro
+---
+import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
+const story = await loadScrollytellingConfig('./src/stories/development.yaml');
+---
+<Scrollytelling config={story} debug />
+```
+
+#### Custom styling
+
+```astro
+<Scrollytelling
+  src="/stories/brand-story.yaml"
+  class="branded-scrollytelling"
+/>
+
+<style>
+  .branded-scrollytelling {
+    font-family: 'Custom Font', sans-serif;
+  }
+</style>
+```
+
+### Chapter Configuration
+
+Each chapter supports extensive configuration options:
+
+**Position & Camera:**
+- `center`: [longitude, latitude] coordinates
+- `zoom`: Zoom level (0-22)
+- `pitch`: Camera tilt (0-60 degrees)
+- `bearing`: Camera rotation (0-360 degrees)
+
+**Animation:**
+- `animation`: "flyTo" (smooth arc), "easeTo" (direct), or "jumpTo" (instant)
+- `speed`: Animation speed (0.1-2.0, default 0.6)
+- `curve`: Fly curve intensity (0.1-2.0, default 1.0)
+
+**Content:**
+- `title`: Chapter heading (required)
+- `description`: HTML content
+- `image`: Image URL for visual context
+- `video`: Video URL with inline player
+- `alignment`: "left", "right", "center", or "full"
+- `hidden`: Hide content for map-only transitions
+
+**Interactivity:**
+- `layers.show`: Array of layer IDs to make visible
+- `layers.hide`: Array of layer IDs to hide
+- `onChapterEnter`: Actions to execute when entering chapter
+- `onChapterExit`: Actions to execute when leaving chapter
+
+### Chapter Actions
+
+Execute MapLibre actions when users enter or exit chapters:
+
+```yaml
+chapters:
+  - id: filtered-view
+    title: "Major Earthquakes Only"
+    center: [-118.2, 34.0]
+    zoom: 10
+    onChapterEnter:
+      - action: setFilter
+        layer: earthquake-circles
+        filter: [">=", "magnitude", 5.0]
+      - action: setPaintProperty
+        layer: earthquake-circles
+        property: circle-color
+        value: "#ff0000"
+    onChapterExit:
+      - action: setFilter
+        layer: earthquake-circles
+        filter: null
+```
+
+**Available Actions:**
+- `setFilter`: Filter features in a layer
+- `setPaintProperty`: Change layer paint properties
+- `setLayoutProperty`: Change layer layout properties
+
+### Chapter Markers
+
+When `showMarkers: true`, navigation dots appear on the right side of the viewport:
+
+- Click markers to jump to specific chapters
+- Active marker is highlighted
+- Customizable color via `markerColor`
+- Accessible with keyboard navigation
+- Automatically positioned and scaled
+
+### Themes
+
+**Light theme** (default):
+- Light chapter cards on map background
+- Suitable for bright map styles
+- Light footer background
+
+**Dark theme**:
+- Dark semi-transparent chapter cards
+- Works well with satellite/dark base maps
+- Dark footer background
+
+### Debug Mode
+
+Enable `debug` prop to see:
+- Red dashed outlines around inactive chapters
+- Green outlines around the active chapter
+- Helpful for fine-tuning scroll trigger points
+
+```astro
+<Scrollytelling src="/stories/test.yaml" debug />
+```
+
+### Scroll Behavior
+
+The component uses IntersectionObserver with these settings:
+- Trigger zone: Middle 20% of viewport (40% margin top/bottom)
+- Activates when chapter enters the trigger zone
+- Smooth map transitions between chapters
+- Progressive chapter content fade in/out
+
+### Accessibility
+
+- Semantic HTML with proper ARIA labels
+- Keyboard navigation for chapter markers
+- Screen reader friendly chapter titles
+- Respects reduced motion preferences
+- High contrast mode support
+
+### Performance Tips
+
+1. **Use build-time loading** for better initial page load
+2. **Optimize images**: Compress chapter images and use appropriate sizes
+3. **Limit chapters**: 5-10 chapters for optimal scrolling experience
+4. **Simplify transitions**: Use `jumpTo` for instant transitions on slower devices
+5. **Lazy load media**: Images and videos load only when needed
+
+### Full Example Story
+
+```astro
+---
+// src/pages/earthquake-story.astro
+import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
+
+const story = await loadScrollytellingConfig('./src/stories/earthquakes.yaml');
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earthquake History Story</title>
+  </head>
+  <body>
+    <Scrollytelling config={story} />
+  </body>
+</html>
+
+<style is:global>
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: system-ui, sans-serif;
+  }
+</style>
+```
+
 ## Component Patterns
 
 ### Pattern 1: External YAML with src Attribute (Recommended)

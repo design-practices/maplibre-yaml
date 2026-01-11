@@ -1,6 +1,571 @@
 ---
 /**
- * Scrollytelling component stub - implementation in Phase 3.6
+ * @file Scrollytelling component for narrative map stories
+ * @module @maplibre-yaml/astro/components/Scrollytelling
+ *
+ * @description
+ * Creates an immersive scrollytelling experience where the map transitions
+ * between different views as users scroll through narrative chapters.
+ * Perfect for data journalism, interactive reports, and guided tours.
+ *
+ * ## Features
+ *
+ * - **Scroll-Driven Navigation**: Map transitions triggered by scroll position
+ * - **Smooth Camera Transitions**: flyTo, easeTo, or jumpTo animations
+ * - **Layer Control**: Show/hide layers per chapter
+ * - **Chapter Actions**: Execute custom actions on enter/exit
+ * - **Optional Markers**: Visual chapter indicators on the map
+ * - **Dual Loading**: Build-time or runtime YAML loading
+ * - **Debug Mode**: Visual indicators for development
+ *
+ * @example Runtime loading
+ * ```astro
+ * ---
+ * import { Scrollytelling } from '@maplibre-yaml/astro';
+ * ---
+ * <Scrollytelling src="/stories/climate-change.yaml" />
+ * ```
+ *
+ * @example Build-time loading with markers
+ * ```astro
+ * ---
+ * import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
+ * const config = await loadScrollytellingConfig('./src/stories/earthquake.yaml');
+ * ---
+ * <Scrollytelling config={config} />
+ * ```
+ *
+ * @example Debug mode
+ * ```astro
+ * <Scrollytelling src="/stories/test.yaml" debug />
+ * ```
  */
+
+import Chapter from "./Chapter.astro";
+import type { ScrollytellingProps } from "../types";
+import type { Chapter as ChapterType } from "@maplibre-yaml/core";
+import "@maplibre-yaml/core/register";
+
+interface Props extends ScrollytellingProps {}
+
+const { src, config, class: className, debug = false } = Astro.props;
+
+// Validate that either src or config is provided
+if (!src && !config) {
+  throw new Error(
+    "Scrollytelling component requires either 'src' or 'config' prop"
+  );
+}
+
+// Extract config properties
+const chapters: ChapterType[] = config?.chapters ?? [];
+const theme = config?.theme ?? "light";
+const showMarkers = config?.showMarkers ?? false;
+const markerColor = config?.markerColor ?? "#3FB1CE";
+const footer = config?.footer;
+
+// Generate unique ID for this instance
+const storyId = `scrolly-${Math.random().toString(36).substring(2, 11)}`;
+
+// Serialize config for client-side if provided
+const serializedConfig = config ? JSON.stringify(config) : null;
 ---
-<div>Scrollytelling component - Phase 3.6</div>
+
+<div
+  class:list={[
+    "scrollytelling-container",
+    `theme-${theme}`,
+    className,
+    { debug },
+  ]}
+  id={storyId}
+  data-src={src}
+  data-config={serializedConfig}
+  data-show-markers={showMarkers}
+  data-marker-color={markerColor}
+>
+  <!-- Sticky map container -->
+  <div class="scrolly-map-container">
+    <ml-map
+      id={`${storyId}-map`}
+      style="width: 100%; height: 100%; display: block;"
+    />
+
+    {
+      showMarkers && (
+        <div class="chapter-markers" id={`${storyId}-markers`}>
+          {/* Markers injected by client script */}
+        </div>
+      )
+    }
+  </div>
+
+  <!-- Scrollable chapters container -->
+  <div class="scrolly-chapters">
+    {
+      config ? (
+        // Server-rendered chapters when config is provided
+        chapters.map((chapter, index) => (
+          <Chapter
+            id={chapter.id}
+            title={chapter.title}
+            description={chapter.description}
+            image={chapter.image}
+            video={chapter.video}
+            alignment={chapter.alignment}
+            hidden={chapter.hidden}
+            theme={theme}
+            isActive={index === 0}
+          />
+        ))
+      ) : (
+        // Placeholder for client-rendered chapters when using src
+        <div class="chapters-loading">
+          <div class="loading-spinner" />
+          <p>Loading story...</p>
+        </div>
+      )
+    }
+
+    {footer && <footer class="scrolly-footer" set:html={footer} />}
+  </div>
+</div>
+
+{
+  src && !config && (
+    <script is:inline define:vars={{ storyId, src }}>
+      // Runtime YAML loading for src prop
+      (async () => {
+        try {
+          const container = document.getElementById(storyId);
+          if (!container) return;
+
+          const response = await fetch(src);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch ${src}: ${response.statusText}`);
+          }
+
+          const yamlText = await response.text();
+          const { YAMLParser } = await import("@maplibre-yaml/core");
+          const result = YAMLParser.safeParseScrollytellingBlock(yamlText);
+
+          if (!result.success) {
+            console.error("Scrollytelling validation failed:", result.errors);
+            const chaptersEl = container.querySelector(".scrolly-chapters");
+            if (chaptersEl) {
+              chaptersEl.innerHTML = `
+                <div style="padding: 40px; text-align: center; color: #c33;">
+                  <h2>Configuration Error</h2>
+                  <ul style="text-align: left; max-width: 600px; margin: 20px auto;">
+                    ${result.errors.map((err) => `<li>${err.path ? err.path + ": " : ""}${err.message}</li>`).join("")}
+                  </ul>
+                </div>
+              `;
+            }
+            return;
+          }
+
+          // Store parsed config
+          container.setAttribute("data-config", JSON.stringify(result.data));
+
+          // Render chapters
+          const chaptersContainer = container.querySelector(".scrolly-chapters");
+          const loading = chaptersContainer?.querySelector(".chapters-loading");
+          if (loading) loading.remove();
+
+          result.data.chapters.forEach((chapter, index) => {
+            const section = document.createElement("section");
+            section.className = `scrolly-chapter align-${chapter.alignment || "center"} theme-${result.data.theme || "light"}`;
+            if (chapter.hidden) section.classList.add("is-hidden");
+            if (index === 0) section.classList.add("is-active");
+            section.setAttribute("data-chapter-id", chapter.id);
+            section.setAttribute("role", "region");
+            section.setAttribute("aria-labelledby", `chapter-title-${chapter.id}`);
+
+            if (!chapter.hidden) {
+              const contentDiv = document.createElement("div");
+              contentDiv.className = "chapter-content";
+
+              let html = "";
+              if (chapter.image) {
+                html += `<div class="chapter-media"><img src="${chapter.image}" alt="${chapter.title}" loading="lazy" decoding="async" /></div>`;
+              }
+              if (chapter.video) {
+                html += `<div class="chapter-media"><video src="${chapter.video}" controls playsinline preload="metadata">Your browser does not support the video element.</video></div>`;
+              }
+              html += `<h2 class="chapter-title" id="chapter-title-${chapter.id}">${chapter.title}</h2>`;
+              if (chapter.description) {
+                html += `<div class="chapter-description">${chapter.description}</div>`;
+              }
+
+              contentDiv.innerHTML = html;
+              section.appendChild(contentDiv);
+            }
+
+            chaptersContainer?.appendChild(section);
+          });
+
+          // Add footer
+          if (result.data.footer) {
+            const footer = document.createElement("footer");
+            footer.className = "scrolly-footer";
+            footer.innerHTML = result.data.footer;
+            chaptersContainer?.appendChild(footer);
+          }
+        } catch (error) {
+          console.error("Failed to load scrollytelling config:", error);
+        }
+      })();
+    </script>
+  )
+}
+
+<script is:inline define:vars={{ storyId }}>
+  // Scrollytelling controller
+  (async () => {
+    const container = document.getElementById(storyId);
+    if (!container) return;
+
+    // Wait for config to be available
+    let config = container.getAttribute("data-config");
+    if (!config) {
+      // Wait for runtime loading
+      await new Promise((resolve) => {
+        const observer = new MutationObserver(() => {
+          config = container.getAttribute("data-config");
+          if (config) {
+            observer.disconnect();
+            resolve(null);
+          }
+        });
+        observer.observe(container, { attributes: true });
+        setTimeout(resolve, 5000); // Timeout after 5s
+      });
+    }
+
+    if (!config) {
+      console.error("Scrollytelling: No config available");
+      return;
+    }
+
+    const scrollyConfig = JSON.parse(config);
+    const mapEl = container.querySelector("ml-map");
+    if (!mapEl) return;
+
+    // Wait for map to be ready
+    await new Promise((resolve) => {
+      if (mapEl.hasAttribute("config") || mapEl.map) {
+        setTimeout(resolve, 100);
+      } else {
+        const observer = new MutationObserver(() => {
+          if (mapEl.hasAttribute("config") || mapEl.map) {
+            observer.disconnect();
+            setTimeout(resolve, 100);
+          }
+        });
+        observer.observe(mapEl, { attributes: true });
+      }
+    });
+
+    // Initialize map with base configuration
+    if (scrollyConfig.config) {
+      mapEl.setAttribute("config", JSON.stringify({
+        version: "1.0",
+        map: scrollyConfig.config,
+        sources: scrollyConfig.sources || {},
+        layers: scrollyConfig.layers || [],
+      }));
+    }
+
+    // Wait a bit more for map instance
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const map = mapEl.map;
+    if (!map) {
+      console.warn("Map instance not available");
+      return;
+    }
+
+    // Setup chapters data
+    const chapters = scrollyConfig.chapters.map((chapter) => ({
+      id: chapter.id,
+      center: chapter.center,
+      zoom: chapter.zoom,
+      pitch: chapter.pitch ?? 0,
+      bearing: chapter.bearing ?? 0,
+      speed: chapter.speed ?? 0.6,
+      curve: chapter.curve ?? 1,
+      animation: chapter.animation ?? "flyTo",
+      layers: chapter.layers,
+      onChapterEnter: chapter.onChapterEnter ?? [],
+      onChapterExit: chapter.onChapterExit ?? [],
+    }));
+
+    let activeChapterId = chapters[0]?.id || null;
+
+    // Setup markers if enabled
+    if (scrollyConfig.showMarkers) {
+      const markersContainer = container.querySelector(".chapter-markers");
+      if (markersContainer) {
+        chapters.forEach((chapter, index) => {
+          const marker = document.createElement("button");
+          marker.className = "chapter-marker";
+          marker.setAttribute("data-chapter-id", chapter.id);
+          marker.setAttribute("aria-label", `Go to chapter ${index + 1}`);
+          marker.style.background = scrollyConfig.markerColor || "#3FB1CE";
+          if (index === 0) marker.classList.add("active");
+
+          marker.addEventListener("click", () => {
+            const section = container.querySelector(`[data-chapter-id="${chapter.id}"]`);
+            if (section) {
+              section.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          });
+
+          markersContainer.appendChild(marker);
+        });
+      }
+    }
+
+    // Chapter activation function
+    function activateChapter(chapterId) {
+      const previousId = activeChapterId;
+      activeChapterId = chapterId;
+
+      // Update DOM active states
+      container.querySelectorAll(".scrolly-chapter").forEach((section) => {
+        const isActive = section.getAttribute("data-chapter-id") === chapterId;
+        section.classList.toggle("is-active", isActive);
+      });
+
+      container.querySelectorAll(".chapter-marker").forEach((marker) => {
+        const isActive = marker.getAttribute("data-chapter-id") === chapterId;
+        marker.classList.toggle("active", isActive);
+      });
+
+      const chapter = chapters.find((c) => c.id === chapterId);
+      if (!chapter) return;
+
+      // Execute exit actions for previous chapter
+      if (previousId) {
+        const prevChapter = chapters.find((c) => c.id === previousId);
+        if (prevChapter) {
+          executeActions(prevChapter.onChapterExit);
+        }
+      }
+
+      // Transition map
+      const options = {
+        center: chapter.center,
+        zoom: chapter.zoom,
+        pitch: chapter.pitch,
+        bearing: chapter.bearing,
+        speed: chapter.speed,
+        curve: chapter.curve,
+      };
+
+      switch (chapter.animation) {
+        case "flyTo":
+          map.flyTo(options);
+          break;
+        case "easeTo":
+          map.easeTo(options);
+          break;
+        case "jumpTo":
+          map.jumpTo(options);
+          break;
+      }
+
+      // Update layer visibility
+      if (chapter.layers) {
+        chapter.layers.show?.forEach((layerId) => {
+          if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, "visibility", "visible");
+          }
+        });
+
+        chapter.layers.hide?.forEach((layerId) => {
+          if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, "visibility", "none");
+          }
+        });
+      }
+
+      // Execute enter actions
+      executeActions(chapter.onChapterEnter);
+    }
+
+    // Execute chapter actions
+    function executeActions(actions) {
+      if (!actions || !actions.length) return;
+
+      actions.forEach((action) => {
+        switch (action.action) {
+          case "setFilter":
+            if (action.layer && map.getLayer(action.layer)) {
+              map.setFilter(action.layer, action.filter);
+            }
+            break;
+          case "setPaintProperty":
+            if (action.layer && map.getLayer(action.layer)) {
+              map.setPaintProperty(action.layer, action.property, action.value);
+            }
+            break;
+          case "setLayoutProperty":
+            if (action.layer && map.getLayer(action.layer)) {
+              map.setLayoutProperty(action.layer, action.property, action.value);
+            }
+            break;
+        }
+      });
+    }
+
+    // Setup IntersectionObserver for scroll-based activation
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const chapterId = entry.target.getAttribute("data-chapter-id");
+            if (chapterId && chapterId !== activeChapterId) {
+              activateChapter(chapterId);
+            }
+          }
+        });
+      },
+      {
+        root: null,
+        rootMargin: "-40% 0px -40% 0px",
+        threshold: 0,
+      }
+    );
+
+    // Observe all chapters
+    container.querySelectorAll(".scrolly-chapter").forEach((section) => {
+      observer.observe(section);
+    });
+  })();
+</script>
+
+<style>
+  /* Container */
+  .scrollytelling-container {
+    position: relative;
+    width: 100%;
+  }
+
+  /* Sticky map */
+  .scrolly-map-container {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    height: 100vh;
+    z-index: 0;
+  }
+
+  /* Chapters overlay */
+  .scrolly-chapters {
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .scrolly-chapters > * {
+    pointer-events: auto;
+  }
+
+  /* Loading state */
+  .chapters-loading {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+  }
+
+  .loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid #e2e8f0;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 16px;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Chapter markers */
+  .chapter-markers {
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 10;
+  }
+
+  .chapter-marker {
+    width: 12px;
+    height: 12px;
+    border: 2px solid white;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    padding: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .chapter-marker:hover {
+    transform: scale(1.3);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .chapter-marker.active {
+    transform: scale(1.5);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Footer */
+  .scrolly-footer {
+    min-height: 50vh;
+    padding: 40px 20px;
+    background: var(--footer-bg, #f8fafc);
+    color: var(--footer-text, #1f2937);
+    text-align: center;
+  }
+
+  .theme-dark .scrolly-footer {
+    --footer-bg: #1f2937;
+    --footer-text: #f9fafb;
+  }
+
+  /* Debug mode */
+  .scrollytelling-container.debug .scrolly-chapter {
+    outline: 2px dashed rgba(255, 0, 0, 0.5);
+    outline-offset: -2px;
+  }
+
+  .scrollytelling-container.debug .scrolly-chapter.is-active {
+    outline-color: rgba(0, 255, 0, 0.8);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .chapter-markers {
+      right: 10px;
+      gap: 8px;
+    }
+
+    .chapter-marker {
+      width: 10px;
+      height: 10px;
+    }
+  }
+</style>
