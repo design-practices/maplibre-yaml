@@ -136,13 +136,14 @@ export {
   MapFullPageBlockSchema,
 } from "./map.schema";
 
-// Scrollytelling schemas
+// Scrollytelling schemas and types
 export {
   ChapterActionSchema,
   ChapterLayersSchema,
   ChapterSchema,
   ScrollytellingBlockSchema,
 } from "./scrollytelling.schema";
+export type { Chapter, ChapterAction, ChapterLayers } from "./scrollytelling.schema";
 
 // Page schemas
 export {
