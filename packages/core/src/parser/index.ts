@@ -15,4 +15,5 @@
  */
 
 export { YAMLParser, parseYAMLConfig, safeParseYAMLConfig } from './yaml-parser';
-export type { RootConfig, MapBlock, ScrollytellingBlock, ParseError, ParseResult } from './yaml-parser';
+export type { ParseError, ParseResult } from './yaml-parser';
+// Note: RootConfig, MapBlock, ScrollytellingBlock types are exported from ./schemas

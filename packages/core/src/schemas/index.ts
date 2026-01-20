@@ -151,7 +151,7 @@ export {
   ChapterSchema,
   ScrollytellingBlockSchema,
 } from "./scrollytelling.schema";
-export type { Chapter, ChapterAction, ChapterLayers } from "./scrollytelling.schema";
+export type { Chapter, ChapterAction, ChapterLayers, ScrollytellingBlock } from "./scrollytelling.schema";
 
 // Page schemas
 export {
