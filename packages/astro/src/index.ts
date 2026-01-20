@@ -71,6 +71,40 @@ export {
   extendSchema,
 } from "./utils/collections";
 
+// Blog integration utilities
+export {
+  getBlogWithLocationSchema,
+  getBlogWithLocationsSchema,
+  getBlogWithRegionSchema,
+  getBlogWithRouteSchema,
+  getBlogWithGeoSchema,
+  LocationPointSchema,
+  RegionPolygonSchema,
+  RouteLineSchema,
+} from "./utils/collections-schemas";
+
+export type {
+  LocationPoint,
+  RegionPolygon,
+  RouteLine,
+} from "./utils/collections-schemas";
+
+export {
+  buildPointMapConfig,
+  buildMultiPointMapConfig,
+  buildPolygonMapConfig,
+  buildRouteMapConfig,
+  calculateCenter,
+  calculateBounds,
+} from "./utils/map-builders";
+
+export type {
+  PointMapOptions,
+  MultiPointMapOptions,
+  PolygonMapOptions,
+  RouteMapOptions,
+} from "./utils/map-builders";
+
 // Type exports
 export type {
   MapProps,
