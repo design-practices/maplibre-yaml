@@ -8,6 +8,15 @@
 export { EventEmitter } from "./event-emitter";
 export type { EventHandler } from "./event-emitter";
 
+// Config resolution
+export {
+  resolveMapConfig,
+  resolveMapBlock,
+  isMapConfigComplete,
+  createSimpleMapConfig,
+  ConfigResolutionError,
+} from "./config-resolver";
+
 /**
  * Deep merge two objects.
  */

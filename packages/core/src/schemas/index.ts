@@ -135,6 +135,14 @@ export {
   MapBlockSchema,
   MapFullPageBlockSchema,
 } from "./map.schema";
+export type {
+  ControlPosition,
+  ControlsConfig,
+  LegendConfig,
+  MapConfig,
+  MapBlock,
+  MapFullPageBlock,
+} from "./map.schema";
 
 // Scrollytelling schemas and types
 export {
@@ -152,4 +160,11 @@ export {
   PageSchema,
   GlobalConfigSchema,
   RootSchema,
+} from "./page.schema";
+export type {
+  MixedBlock,
+  Block,
+  Page,
+  GlobalConfig,
+  RootConfig,
 } from "./page.schema";
