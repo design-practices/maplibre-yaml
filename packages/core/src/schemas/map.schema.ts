@@ -166,7 +166,10 @@ export type LegendConfig = z.infer<typeof LegendConfigSchema>;
  * **Required:**
  * - `center` - Initial map center [lng, lat]
  * - `zoom` - Initial zoom level (0-24)
- * - `mapStyle` - MapLibre style URL or object
+ *
+ * **Optional (with global fallback):**
+ * - `mapStyle` - MapLibre style URL or object. When omitted, inherits from
+ *   global `config.defaultMapStyle`. Required if no global default is set.
  *
  * **View Options:**
  * - `pitch` - Camera tilt angle (0-85)
@@ -181,12 +184,28 @@ export type LegendConfig = z.infer<typeof LegendConfigSchema>;
  * - `scrollZoom`, `boxZoom`, `dragRotate`, `dragPan` - Individual controls
  * - `keyboard`, `doubleClickZoom`, `touchZoomRotate`, `touchPitch`
  *
- * @example Basic Map
+ * @example Basic Map (explicit style)
  * ```yaml
  * config:
  *   center: [-74.006, 40.7128]
  *   zoom: 12
  *   mapStyle: "https://demotiles.maplibre.org/style.json"
+ * ```
+ *
+ * @example Map with Global Style Inheritance
+ * ```yaml
+ * # Root config sets default style
+ * config:
+ *   defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+ *
+ * pages:
+ *   - blocks:
+ *       - type: map
+ *         id: simple-map
+ *         config:
+ *           center: [-74.006, 40.7128]
+ *           zoom: 12
+ *           # mapStyle inherited from config.defaultMapStyle
  * ```
  *
  * @example 3D View
@@ -228,7 +247,11 @@ export const MapConfigSchema = z
     zoom: ZoomLevelSchema.describe("Initial zoom level (0-24)"),
     mapStyle: z
       .union([z.string().url(), z.any()])
-      .describe("MapLibre style URL or style object"),
+      .optional()
+      .describe(
+        "MapLibre style URL or style object. " +
+          "Optional when global config.defaultMapStyle is set."
+      ),
 
     // View
     pitch: z

@@ -1,0 +1,341 @@
+---
+/**
+ * @file Chapter component for scrollytelling narratives
+ * @module @maplibre-yaml/astro/components/Chapter
+ *
+ * @description
+ * An individual chapter component used within scrollytelling experiences.
+ * Displays narrative content with title, description, and optional media.
+ * Supports multiple alignment options and light/dark themes.
+ *
+ * ## Features
+ *
+ * - **Flexible Content**: Title, HTML description, images, and videos
+ * - **Multiple Alignments**: left, right, center, or full-width layouts
+ * - **Theme Support**: Light and dark themes with smooth transitions
+ * - **Hidden Mode**: Map-only chapters without visible content
+ * - **Active States**: Visual feedback for scroll position
+ * - **Responsive Design**: Adapts to mobile and desktop viewports
+ *
+ * @remarks
+ * This component is typically used internally by Scrollytelling.astro
+ * but can be used independently for custom implementations.
+ *
+ * @example Basic chapter
+ * ```astro
+ * <Chapter
+ *   id="intro"
+ *   title="Introduction"
+ *   description="<p>Welcome to our story.</p>"
+ *   alignment="left"
+ * />
+ * ```
+ *
+ * @example Chapter with image
+ * ```astro
+ * <Chapter
+ *   id="hero"
+ *   title="The Journey Begins"
+ *   description="<p>Explore the landscape.</p>"
+ *   image="/images/hero.jpg"
+ *   alignment="center"
+ *   theme="dark"
+ * />
+ * ```
+ *
+ * @example Hidden chapter (map-only)
+ * ```astro
+ * <Chapter
+ *   id="transition"
+ *   title="Transition"
+ *   hidden
+ * />
+ * ```
+ */
+
+import type { ChapterProps } from "../types";
+
+interface Props extends ChapterProps {}
+
+const {
+  id,
+  title,
+  description,
+  image,
+  video,
+  alignment = "center",
+  hidden = false,
+  theme = "light",
+  isActive = false,
+} = Astro.props;
+
+// Don't render content if hidden (map-only chapter)
+const showContent = !hidden;
+
+// Generate unique IDs for media elements
+const imageId = image ? `img-${id}` : undefined;
+const videoId = video ? `vid-${id}` : undefined;
+---
+
+<section
+  class:list={[
+    "scrolly-chapter",
+    `align-${alignment}`,
+    `theme-${theme}`,
+    { "is-active": isActive, "is-hidden": hidden },
+  ]}
+  data-chapter-id={id}
+  role="region"
+  aria-labelledby={`chapter-title-${id}`}
+>
+  {
+    showContent && (
+      <div class="chapter-content">
+        {image && (
+          <div class="chapter-media">
+            <img
+              id={imageId}
+              src={image}
+              alt={title}
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        )}
+
+        {video && (
+          <div class="chapter-media">
+            <video
+              id={videoId}
+              src={video}
+              controls
+              playsinline
+              preload="metadata"
+            >
+              Your browser does not support the video element.
+            </video>
+          </div>
+        )}
+
+        <h2 class="chapter-title" id={`chapter-title-${id}`}>
+          {title}
+        </h2>
+
+        {description && (
+          <div class="chapter-description" set:html={description} />
+        )}
+      </div>
+    )
+  }
+</section>
+
+<style>
+  /* Chapter container */
+  .scrolly-chapter {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: 20vh 5vw;
+    position: relative;
+  }
+
+  /* Hidden chapters (map-only) */
+  .scrolly-chapter.is-hidden {
+    min-height: 50vh;
+    padding: 10vh 0;
+  }
+
+  /* Alignment variants */
+  .scrolly-chapter.align-left {
+    justify-content: flex-start;
+  }
+
+  .scrolly-chapter.align-right {
+    justify-content: flex-end;
+  }
+
+  .scrolly-chapter.align-center {
+    justify-content: center;
+  }
+
+  .scrolly-chapter.align-full {
+    justify-content: center;
+  }
+
+  .scrolly-chapter.align-full .chapter-content {
+    max-width: none;
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Content box */
+  .chapter-content {
+    background: var(--chapter-bg, rgba(255, 255, 255, 0.95));
+    color: var(--chapter-text, #1f2937);
+    padding: 32px;
+    border-radius: 12px;
+    max-width: 450px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    position: relative;
+    z-index: 10;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+
+  /* Theme variants */
+  .theme-dark .chapter-content {
+    --chapter-bg: rgba(31, 41, 55, 0.95);
+    --chapter-text: #f9fafb;
+  }
+
+  .theme-light .chapter-content {
+    --chapter-bg: rgba(255, 255, 255, 0.95);
+    --chapter-text: #1f2937;
+  }
+
+  /* Active state */
+  .scrolly-chapter:not(.is-active) .chapter-content {
+    opacity: 0.4;
+    transform: scale(0.98);
+  }
+
+  .scrolly-chapter.is-active .chapter-content {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  /* Title */
+  .chapter-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0 0 16px 0;
+    line-height: 1.2;
+    color: inherit;
+  }
+
+  /* Description */
+  .chapter-description {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: inherit;
+  }
+
+  .chapter-description :global(p) {
+    margin: 0 0 12px 0;
+  }
+
+  .chapter-description :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .chapter-description :global(a) {
+    color: var(--chapter-link, #3b82f6);
+    text-decoration: underline;
+  }
+
+  .chapter-description :global(a:hover) {
+    color: var(--chapter-link-hover, #2563eb);
+  }
+
+  .theme-dark .chapter-description :global(a) {
+    --chapter-link: #60a5fa;
+    --chapter-link-hover: #93c5fd;
+  }
+
+  /* Media elements */
+  .chapter-media {
+    margin-bottom: 20px;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .chapter-media img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .chapter-media video {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: #000;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .scrolly-chapter {
+      padding: 15vh 4vw;
+    }
+
+    .scrolly-chapter.is-hidden {
+      min-height: 40vh;
+      padding: 8vh 0;
+    }
+
+    .chapter-content {
+      padding: 24px;
+      max-width: 100%;
+    }
+
+    .chapter-title {
+      font-size: 1.5rem;
+    }
+
+    .chapter-description {
+      font-size: 0.9375rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .scrolly-chapter {
+      padding: 12vh 3vw;
+    }
+
+    .chapter-content {
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .chapter-title {
+      font-size: 1.375rem;
+      margin-bottom: 12px;
+    }
+
+    .chapter-description {
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    .chapter-media {
+      margin-bottom: 16px;
+    }
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    .chapter-content {
+      transition: opacity 0.5s ease;
+      transform: none !important;
+    }
+
+    .scrolly-chapter:not(.is-active) .chapter-content {
+      transform: none;
+    }
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    .chapter-content {
+      border: 2px solid currentColor;
+    }
+
+    .theme-dark .chapter-content {
+      --chapter-bg: rgba(0, 0, 0, 0.95);
+    }
+
+    .theme-light .chapter-content {
+      --chapter-bg: rgba(255, 255, 255, 1);
+    }
+  }
+</style>

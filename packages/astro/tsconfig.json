@@ -1,9 +1,17 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "declaration": true,
+    "declarationMap": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "astro",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["astro/client", "vitest/globals"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "tests"]
 }

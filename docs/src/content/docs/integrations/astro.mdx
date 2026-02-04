@@ -114,6 +114,899 @@ Get a map in your Astro site in 5 minutes.
 
 </Steps>
 
+## Using @maplibre-yaml/astro Package
+
+<Aside type="tip" title="Recommended for Astro Projects">
+  The `@maplibre-yaml/astro` package provides native Astro components with built-in TypeScript support, better error handling, and improved developer experience.
+</Aside>
+
+For Astro projects, we recommend using the dedicated `@maplibre-yaml/astro` package instead of the core web components directly. This package provides:
+
+- **Native Astro Components** - Designed specifically for Astro's architecture
+- **Build-Time Loading** - Load and validate YAML at build time for better performance
+- **Runtime Loading** - Or load from `/public` for dynamic configs
+- **TypeScript Support** - Full type safety with MapBlock types
+- **Error Handling** - Beautiful error messages with validation details
+- **Content Collections** - Schema helpers for Astro Content Collections
+
+### Installation
+
+```bash
+pnpm add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl
+```
+
+### Basic Usage with Map Component
+
+The `Map` component is the simplest way to add a map to your Astro site:
+
+<Tabs>
+<TabItem label="Runtime Loading">
+
+**Load YAML from `/public` directory:**
+
+```astro
+---
+// src/pages/index.astro
+import { Map } from '@maplibre-yaml/astro';
+---
+
+<Map
+  src="/configs/map.yaml"
+  height="500px"
+  class="my-map"
+/>
+```
+
+Place your YAML file in `/public/configs/map.yaml`:
+
+```yaml
+type: map
+id: my-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: points
+    type: circle
+    source:
+      type: geojson
+      url: "https://example.com/data.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#007cbf"
+```
+
+</TabItem>
+<TabItem label="Build-Time Loading">
+
+**Load and validate YAML at build time:**
+
+```astro
+---
+// src/pages/index.astro
+import { Map, loadMapConfig } from '@maplibre-yaml/astro';
+
+// Loaded at build time - validates YAML and catches errors early
+const config = await loadMapConfig('./src/configs/map.yaml');
+---
+
+<Map
+  config={config}
+  height="600px"
+  style="border: 2px solid #e2e8f0; border-radius: 8px;"
+/>
+```
+
+**Benefits of build-time loading:**
+- ✅ Validates configuration during build
+- ✅ Catches errors before deployment
+- ✅ Faster page loads (no runtime YAML parsing)
+- ✅ Better for static site generation
+
+</TabItem>
+</Tabs>
+
+### Map Component API
+
+```typescript
+interface MapProps {
+  // Data source (one required)
+  src?: string;              // Path to YAML file in /public
+  config?: MapBlock;         // Pre-loaded configuration
+
+  // Styling
+  height?: string;           // Container height (default: "400px")
+  class?: string;            // CSS class name
+  style?: string;            // Inline styles
+}
+```
+
+**Examples:**
+
+```astro
+<!-- Minimal -->
+<Map src="/maps/simple.yaml" />
+
+<!-- With custom height -->
+<Map src="/maps/dashboard.yaml" height="100vh" />
+
+<!-- With styling -->
+<Map
+  src="/maps/styled.yaml"
+  height="500px"
+  class="shadow-lg rounded-lg"
+  style="border: 1px solid #ccc;"
+/>
+
+<!-- Build-time loaded -->
+---
+import { Map, loadMapConfig } from '@maplibre-yaml/astro';
+const earthquakes = await loadMapConfig('./src/maps/earthquakes.yaml');
+---
+<Map config={earthquakes} height="600px" />
+```
+
+### Loading Utilities
+
+The package provides utilities for loading YAML configurations:
+
+#### loadMapConfig()
+
+Load and validate a map configuration from a file:
+
+```astro
+---
+import { loadMapConfig, Map } from '@maplibre-yaml/astro';
+
+try {
+  const config = await loadMapConfig('./src/configs/my-map.yaml');
+  // config is fully typed as MapBlock
+} catch (error) {
+  console.error('Failed to load map config:', error);
+}
+---
+
+<Map config={config} />
+```
+
+#### loadFromGlob()
+
+Load multiple configurations at once:
+
+```astro
+---
+import { loadFromGlob, Map } from '@maplibre-yaml/astro';
+import { YAMLParser } from '@maplibre-yaml/core';
+
+const configFiles = import.meta.glob('./src/configs/*.yaml', { as: 'raw' });
+const maps = await loadFromGlob(
+  configFiles,
+  (yaml) => YAMLParser.safeParseMapBlock(yaml)
+);
+---
+
+<div class="map-gallery">
+  {maps.map(({ path, config }) => (
+    <div>
+      <h2>{config.id}</h2>
+      <Map config={config} height="400px" />
+    </div>
+  ))}
+</div>
+```
+
+### Content Collections Integration
+
+Use Astro Content Collections for managing map configurations:
+
+**1. Define collection schema:**
+
+```typescript
+// src/content/config.ts
+import { defineCollection } from 'astro:content';
+import { getMapSchema } from '@maplibre-yaml/astro/utils';
+
+export const collections = {
+  maps: defineCollection({
+    type: 'data',
+    schema: getMapSchema()
+  })
+};
+```
+
+**2. Add YAML files:**
+
+```yaml
+# src/content/maps/earthquake-map.yaml
+type: map
+id: earthquake-map
+config:
+  center: [-120, 35]
+  zoom: 6
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 8
+      circle-color: "#ff4444"
+```
+
+**3. Query and use in pages:**
+
+```astro
+---
+import { getCollection } from 'astro:content';
+import { Map } from '@maplibre-yaml/astro';
+
+const maps = await getCollection('maps');
+const earthquakeMap = maps.find(m => m.id === 'earthquake-map');
+---
+
+<Map config={earthquakeMap.data} height="600px" />
+```
+
+### Error Handling
+
+The Map component displays user-friendly errors when configurations fail to load or validate:
+
+```astro
+<!-- Invalid YAML or network error will show error message -->
+<Map src="/configs/broken.yaml" />
+```
+
+Error display includes:
+- **YAML Syntax Errors**: Shows parsing error with details
+- **Validation Errors**: Lists all validation failures with paths
+- **Network Errors**: Shows fetch failure messages
+
+You can also handle errors programmatically with build-time loading:
+
+```astro
+---
+import { loadMapConfig, YAMLLoadError } from '@maplibre-yaml/astro';
+
+let config;
+try {
+  config = await loadMapConfig('./src/configs/map.yaml');
+} catch (error) {
+  if (error instanceof YAMLLoadError) {
+    console.error('Validation errors:');
+    error.errors.forEach(e => {
+      console.error(`  ${e.path}: ${e.message}`);
+    });
+  }
+  throw error; // Fail build on invalid config
+}
+---
+
+<Map config={config} />
+```
+
+### Advanced: Extending Schemas
+
+Add custom metadata to your map configurations:
+
+```typescript
+// src/content/config.ts
+import { defineCollection } from 'astro:content';
+import { extendSchema, getMapSchema } from '@maplibre-yaml/astro/utils';
+import { z } from 'zod';
+
+export const collections = {
+  maps: defineCollection({
+    type: 'data',
+    schema: extendSchema(getMapSchema(), {
+      author: z.string(),
+      publishDate: z.date(),
+      tags: z.array(z.string()),
+      featured: z.boolean().default(false)
+    })
+  })
+};
+```
+
+```yaml
+# src/content/maps/featured-map.yaml
+author: "Jane Doe"
+publishDate: 2024-01-15
+tags: ["earthquakes", "geoscience"]
+featured: true
+
+type: map
+id: featured-map
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+```astro
+---
+import { getCollection } from 'astro:content';
+
+const featuredMaps = await getCollection('maps', ({ data }) => data.featured);
+---
+
+{featuredMaps.map(entry => (
+  <div>
+    <h2>{entry.data.id}</h2>
+    <p>By {entry.data.author} on {entry.data.publishDate}</p>
+    <Map config={entry.data} />
+  </div>
+))}
+```
+
+## FullPageMap Component
+
+The `FullPageMap` component creates a full-viewport map with built-in controls and an optional legend. It's perfect for landing pages, dashboards, or dedicated map views.
+
+### Features
+
+- **Full Viewport**: Fixed positioning that fills the entire viewport (100vw × 100vh)
+- **Built-in Controls**: Zoom in/out and reset view buttons
+- **Optional Legend**: Auto-generated legend with configurable positioning
+- **Same Loading Options**: Supports both `src` (runtime) and `config` (build-time) loading
+- **Responsive Design**: Optimized layouts for mobile and desktop
+
+### Basic Usage
+
+<Tabs>
+  <TabItem label="Runtime Loading">
+```astro
+---
+import { FullPageMap } from '@maplibre-yaml/astro';
+---
+<FullPageMap src="/configs/world-map.yaml" />
+```
+  </TabItem>
+  <TabItem label="Build-time Loading">
+```astro
+---
+import { FullPageMap, loadMapConfig } from '@maplibre-yaml/astro';
+const config = await loadMapConfig('./src/configs/world-map.yaml');
+---
+<FullPageMap config={config} />
+```
+  </TabItem>
+</Tabs>
+
+### Component API
+
+```typescript
+interface FullPageMapProps {
+  // Map source (one required)
+  src?: string;                    // Path to YAML file in /public
+  config?: MapBlock;               // Pre-loaded configuration object
+
+  // Control options
+  showControls?: boolean;          // Show zoom/reset controls (default: true)
+  showLegend?: boolean;            // Show auto-generated legend (default: false)
+  legendPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+                                   // Legend position (default: 'top-right')
+
+  // Styling (optional - component is fixed viewport by default)
+  class?: string;                  // Additional CSS classes
+  style?: string;                  // Additional inline styles
+}
+```
+
+### Examples
+
+#### Full-page landing map with legend
+
+```astro
+---
+import { FullPageMap } from '@maplibre-yaml/astro';
+---
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Interactive Map Dashboard</title>
+  </head>
+  <body style="margin: 0; padding: 0;">
+    <FullPageMap
+      src="/configs/dashboard-map.yaml"
+      showControls
+      showLegend
+      legendPosition="bottom-left"
+    />
+  </body>
+</html>
+```
+
+#### Without controls
+
+```astro
+<FullPageMap
+  src="/configs/presentation-map.yaml"
+  showControls={false}
+/>
+```
+
+#### With custom styling
+
+```astro
+<FullPageMap
+  src="/configs/branded-map.yaml"
+  showLegend
+  legendPosition="top-right"
+  style="z-index: 100;"
+  class="dashboard-map"
+/>
+```
+
+#### Build-time loaded with complete configuration
+
+```astro
+---
+import { FullPageMap, loadMapConfig } from '@maplibre-yaml/astro';
+
+const mapConfig = await loadMapConfig('./src/configs/geospatial-data.yaml');
+---
+<FullPageMap
+  config={mapConfig}
+  showControls
+  showLegend
+  legendPosition="bottom-right"
+/>
+```
+
+### Legend
+
+When `showLegend` is enabled, the component automatically generates a legend based on your map's layers:
+
+- **Fill layers**: Colored squares with fill color and opacity
+- **Line layers**: Horizontal lines with stroke color
+- **Circle layers**: Circular symbols with fill color
+
+The legend automatically:
+- Groups layers by source and type
+- Extracts paint properties for visualization
+- Filters out MapLibre internal layers
+- Displays human-readable layer names
+
+### Controls
+
+The built-in controls provide:
+
+- **Zoom In** (+): Increases zoom level by 1
+- **Zoom Out** (−): Decreases zoom level by 1
+- **Reset View** (↻): Returns to initial center, zoom, bearing, and pitch
+
+Controls are accessible with ARIA labels and keyboard navigation.
+
+## Chapter Component
+
+The `Chapter` component displays individual narrative sections within scrollytelling experiences. It's typically used internally by the `Scrollytelling` component but can be used independently for custom implementations.
+
+### Features
+
+- **Flexible Content**: Title, HTML description, images, and videos
+- **Multiple Alignments**: left, right, center, or full-width layouts
+- **Theme Support**: Light and dark themes with CSS custom properties
+- **Hidden Mode**: Map-only chapters without visible content
+- **Active States**: Visual feedback based on scroll position
+- **Accessibility**: ARIA labels, semantic HTML, keyboard navigation
+- **Responsive Design**: Mobile-optimized with multiple breakpoints
+- **Reduced Motion**: Respects user's motion preferences
+
+### Component API
+
+```typescript
+interface ChapterProps {
+  id: string;                                  // Unique chapter identifier (required)
+  title: string;                               // Chapter title (required)
+  description?: string;                        // HTML description content
+  image?: string;                              // Image URL (absolute or relative)
+  video?: string;                              // Video URL (absolute or relative)
+  alignment?: 'left' | 'right' | 'center' | 'full';  // Content position (default: 'center')
+  hidden?: boolean;                            // Hide content for map-only chapters
+  isActive?: boolean;                          // Active state (controlled by parent)
+  theme?: 'light' | 'dark';                    // Visual theme (default: 'light')
+}
+```
+
+### Examples
+
+#### Basic chapter
+
+```astro
+---
+import { Chapter } from '@maplibre-yaml/astro';
+---
+<Chapter
+  id="intro"
+  title="Introduction"
+  description="<p>Welcome to our story about climate data.</p>"
+  alignment="center"
+/>
+```
+
+#### Chapter with image
+
+```astro
+<Chapter
+  id="hero"
+  title="The Journey Begins"
+  description="<p>Exploring the landscape of our data.</p>"
+  image="/images/hero-landscape.jpg"
+  alignment="left"
+  theme="dark"
+/>
+```
+
+#### Chapter with video
+
+```astro
+<Chapter
+  id="demo"
+  title="How It Works"
+  description="<p>Watch this short demonstration.</p>"
+  video="/videos/tutorial.mp4"
+  alignment="center"
+/>
+```
+
+#### Hidden chapter (map-only)
+
+```astro
+<Chapter
+  id="transition"
+  title="Transition View"
+  hidden
+/>
+```
+
+#### Full-width chapter
+
+```astro
+<Chapter
+  id="finale"
+  title="Conclusion"
+  description="<p>Thank you for following this journey through the data.</p>"
+  alignment="full"
+  theme="dark"
+/>
+```
+
+### Alignment Options
+
+- **left**: Content positioned on the left side (good for right-aligned maps)
+- **right**: Content positioned on the right side (good for left-aligned maps)
+- **center**: Content centered (default, works with most layouts)
+- **full**: Full-width content, centered text (impactful for conclusions)
+
+### Themes
+
+**Light theme** (default):
+- White/translucent background (rgba(255, 255, 255, 0.95))
+- Dark text (#1f2937)
+- Blue links (#3b82f6)
+
+**Dark theme**:
+- Dark gray/translucent background (rgba(31, 41, 55, 0.95))
+- Light text (#f9fafb)
+- Light blue links (#60a5fa)
+
+### Active States
+
+The `isActive` prop controls visual emphasis:
+- Active chapters: Full opacity (1.0), normal scale
+- Inactive chapters: Reduced opacity (0.4), slightly scaled down (0.98)
+
+This is typically managed by the parent `Scrollytelling` component based on scroll position.
+
+### Accessibility Features
+
+- Semantic `<section>` with `role="region"`
+- Unique `aria-labelledby` for each chapter
+- Lazy-loaded images with `alt` text
+- Videos with controls and fallback text
+- High contrast mode support
+- Reduced motion support
+
+## Scrollytelling Component
+
+The `Scrollytelling` component creates immersive narrative experiences where the map transitions between different views as users scroll through story chapters. Perfect for data journalism, interactive reports, and guided data tours.
+
+### Features
+
+- **Scroll-Driven Navigation**: Map automatically transitions as you scroll through chapters
+- **Smooth Camera Transitions**: Choose from flyTo, easeTo, or jumpTo animations
+- **Layer Control**: Show/hide map layers per chapter for progressive disclosure
+- **Chapter Actions**: Execute custom MapLibre actions on chapter enter/exit
+- **Optional Markers**: Visual navigation dots for quick chapter access
+- **Dual Loading**: Build-time or runtime YAML loading
+- **Debug Mode**: Visual indicators to help during development
+- **Accessible**: Full keyboard navigation and screen reader support
+
+### Component API
+
+```typescript
+interface ScrollytellingProps {
+  src?: string;              // Path to YAML config file (in public directory)
+  config?: ScrollytellingBlock;  // Pre-loaded scrollytelling configuration
+  class?: string;            // Additional CSS class for container
+  debug?: boolean;           // Debug mode - shows chapter boundaries
+}
+```
+
+### Basic Usage
+
+<Tabs>
+  <TabItem label="Runtime Loading">
+```astro
+---
+import { Scrollytelling } from '@maplibre-yaml/astro';
+---
+<Scrollytelling src="/stories/earthquake-history.yaml" />
+```
+  </TabItem>
+  <TabItem label="Build-time Loading">
+```astro
+---
+import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
+const story = await loadScrollytellingConfig('./src/stories/climate-change.yaml');
+---
+<Scrollytelling config={story} />
+```
+  </TabItem>
+</Tabs>
+
+### YAML Configuration
+
+A complete scrollytelling story includes base map configuration, data sources, layers, and chapters:
+
+```yaml
+version: "1.0"
+id: earthquake-story
+theme: dark                    # 'light' or 'dark'
+showMarkers: true             # Show chapter navigation dots
+markerColor: "#3FB1CE"        # Custom marker color
+
+# Base map configuration
+config:
+  style: "https://demotiles.maplibre.org/style.json"
+  center: [-118.2437, 34.0522]
+  zoom: 9
+  pitch: 0
+  bearing: 0
+
+# Data sources
+sources:
+  earthquakes:
+    type: geojson
+    data: "/data/earthquakes.geojson"
+
+# Map layers
+layers:
+  - id: earthquake-circles
+    type: circle
+    source: earthquakes
+    paint:
+      circle-radius: 8
+      circle-color: "#ff0000"
+
+# Story chapters
+chapters:
+  - id: intro
+    title: "Los Angeles Earthquakes"
+    description: "<p>Exploring seismic activity in Southern California.</p>"
+    center: [-118.2437, 34.0522]
+    zoom: 9
+    alignment: center
+
+  - id: detail
+    title: "Major Fault Lines"
+    description: "<p>The San Andreas Fault runs through this region.</p>"
+    image: "/images/fault-lines.jpg"
+    center: [-118.0, 34.0]
+    zoom: 11
+    pitch: 45
+    bearing: 30
+    animation: flyTo
+    speed: 0.8
+    alignment: left
+    layers:
+      show: [earthquake-circles]
+      hide: []
+
+  - id: conclusion
+    title: "Preparing for the Future"
+    description: "<p>Understanding earthquake patterns helps us prepare.</p>"
+    center: [-118.2437, 34.0522]
+    zoom: 9
+    alignment: full
+
+footer: "<p>Data source: USGS</p><p>&copy; 2024</p>"
+```
+
+### Examples
+
+#### Simple story with runtime loading
+
+```astro
+---
+import { Scrollytelling } from '@maplibre-yaml/astro';
+---
+<Scrollytelling src="/stories/city-tour.yaml" />
+```
+
+#### Build-time loading with debug mode
+
+```astro
+---
+import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
+const story = await loadScrollytellingConfig('./src/stories/development.yaml');
+---
+<Scrollytelling config={story} debug />
+```
+
+#### Custom styling
+
+```astro
+<Scrollytelling
+  src="/stories/brand-story.yaml"
+  class="branded-scrollytelling"
+/>
+
+<style>
+  .branded-scrollytelling {
+    font-family: 'Custom Font', sans-serif;
+  }
+</style>
+```
+
+### Chapter Configuration
+
+Each chapter supports extensive configuration options:
+
+**Position & Camera:**
+- `center`: [longitude, latitude] coordinates
+- `zoom`: Zoom level (0-22)
+- `pitch`: Camera tilt (0-60 degrees)
+- `bearing`: Camera rotation (0-360 degrees)
+
+**Animation:**
+- `animation`: "flyTo" (smooth arc), "easeTo" (direct), or "jumpTo" (instant)
+- `speed`: Animation speed (0.1-2.0, default 0.6)
+- `curve`: Fly curve intensity (0.1-2.0, default 1.0)
+
+**Content:**
+- `title`: Chapter heading (required)
+- `description`: HTML content
+- `image`: Image URL for visual context
+- `video`: Video URL with inline player
+- `alignment`: "left", "right", "center", or "full"
+- `hidden`: Hide content for map-only transitions
+
+**Interactivity:**
+- `layers.show`: Array of layer IDs to make visible
+- `layers.hide`: Array of layer IDs to hide
+- `onChapterEnter`: Actions to execute when entering chapter
+- `onChapterExit`: Actions to execute when leaving chapter
+
+### Chapter Actions
+
+Execute MapLibre actions when users enter or exit chapters:
+
+```yaml
+chapters:
+  - id: filtered-view
+    title: "Major Earthquakes Only"
+    center: [-118.2, 34.0]
+    zoom: 10
+    onChapterEnter:
+      - action: setFilter
+        layer: earthquake-circles
+        filter: [">=", "magnitude", 5.0]
+      - action: setPaintProperty
+        layer: earthquake-circles
+        property: circle-color
+        value: "#ff0000"
+    onChapterExit:
+      - action: setFilter
+        layer: earthquake-circles
+        filter: null
+```
+
+**Available Actions:**
+- `setFilter`: Filter features in a layer
+- `setPaintProperty`: Change layer paint properties
+- `setLayoutProperty`: Change layer layout properties
+
+### Chapter Markers
+
+When `showMarkers: true`, navigation dots appear on the right side of the viewport:
+
+- Click markers to jump to specific chapters
+- Active marker is highlighted
+- Customizable color via `markerColor`
+- Accessible with keyboard navigation
+- Automatically positioned and scaled
+
+### Themes
+
+**Light theme** (default):
+- Light chapter cards on map background
+- Suitable for bright map styles
+- Light footer background
+
+**Dark theme**:
+- Dark semi-transparent chapter cards
+- Works well with satellite/dark base maps
+- Dark footer background
+
+### Debug Mode
+
+Enable `debug` prop to see:
+- Red dashed outlines around inactive chapters
+- Green outlines around the active chapter
+- Helpful for fine-tuning scroll trigger points
+
+```astro
+<Scrollytelling src="/stories/test.yaml" debug />
+```
+
+### Scroll Behavior
+
+The component uses IntersectionObserver with these settings:
+- Trigger zone: Middle 20% of viewport (40% margin top/bottom)
+- Activates when chapter enters the trigger zone
+- Smooth map transitions between chapters
+- Progressive chapter content fade in/out
+
+### Accessibility
+
+- Semantic HTML with proper ARIA labels
+- Keyboard navigation for chapter markers
+- Screen reader friendly chapter titles
+- Respects reduced motion preferences
+- High contrast mode support
+
+### Performance Tips
+
+1. **Use build-time loading** for better initial page load
+2. **Optimize images**: Compress chapter images and use appropriate sizes
+3. **Limit chapters**: 5-10 chapters for optimal scrolling experience
+4. **Simplify transitions**: Use `jumpTo` for instant transitions on slower devices
+5. **Lazy load media**: Images and videos load only when needed
+
+### Full Example Story
+
+```astro
+---
+// src/pages/earthquake-story.astro
+import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
+
+const story = await loadScrollytellingConfig('./src/stories/earthquakes.yaml');
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earthquake History Story</title>
+  </head>
+  <body>
+    <Scrollytelling config={story} />
+  </body>
+</html>
+
+<style is:global>
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: system-ui, sans-serif;
+  }
+</style>
+```
+
 ## Component Patterns
 
 ### Pattern 1: External YAML with src Attribute (Recommended)
