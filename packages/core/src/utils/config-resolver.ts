@@ -86,6 +86,10 @@ export function resolveMapConfig(
     center: mapConfig.center,
     zoom: mapConfig.zoom,
     mapStyle: mapConfig.mapStyle ?? globalConfig?.defaultMapStyle,
+    // Explicit defaults for schema-defaulted fields (required by TypeScript)
+    interactive: mapConfig.interactive ?? true,
+    pitch: mapConfig.pitch ?? 0,
+    bearing: mapConfig.bearing ?? 0,
   };
 
   // Validate required fields
