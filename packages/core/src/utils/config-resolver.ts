@@ -33,10 +33,7 @@ import type { MapConfig, GlobalConfig, MapBlock } from "../schemas";
  * Error thrown when map configuration is invalid after resolution.
  */
 export class ConfigResolutionError extends Error {
-  constructor(
-    message: string,
-    public readonly missingFields: string[]
-  ) {
+  constructor(message: string, public readonly missingFields: string[]) {
     super(message);
     this.name = "ConfigResolutionError";
   }
@@ -82,7 +79,7 @@ export class ConfigResolutionError extends Error {
  */
 export function resolveMapConfig(
   mapConfig: Partial<MapConfig> & { center: [number, number]; zoom: number },
-  globalConfig?: GlobalConfig
+  globalConfig?: GlobalConfig,
 ): MapConfig {
   const resolved: MapConfig = {
     ...mapConfig,
@@ -100,10 +97,12 @@ export function resolveMapConfig(
 
   if (missingFields.length > 0) {
     throw new ConfigResolutionError(
-      `Map configuration is missing required fields: ${missingFields.join(", ")}. ` +
+      `Map configuration is missing required fields: ${missingFields.join(
+        ", ",
+      )}. ` +
         "Either provide these fields in the map config or set defaults in global config " +
         "(e.g., config.defaultMapStyle).",
-      missingFields
+      missingFields,
     );
   }
 
@@ -139,7 +138,7 @@ export function resolveMapConfig(
  */
 export function resolveMapBlock(
   mapBlock: MapBlock,
-  globalConfig?: GlobalConfig
+  globalConfig?: GlobalConfig,
 ): MapBlock {
   return {
     ...mapBlock,
@@ -164,7 +163,7 @@ export function resolveMapBlock(
  * ```
  */
 export function isMapConfigComplete(
-  mapConfig: Partial<MapConfig>
+  mapConfig: Partial<MapConfig>,
 ): mapConfig is MapConfig {
   return (
     mapConfig.center !== undefined &&
@@ -182,7 +181,7 @@ export function isMapConfigComplete(
  *
  * @remarks
  * This is a convenience function for creating simple map configurations
- * without needing to specify every field. Useful for blog posts and
+ * without needing to specify every field. Useful for collection items and
  * content-focused applications.
  *
  * **Default Values:**
@@ -216,17 +215,19 @@ export function createSimpleMapConfig(
     bearing?: number;
     interactive?: boolean;
   },
-  globalConfig?: GlobalConfig
+  globalConfig?: GlobalConfig,
 ): MapConfig {
-  const config: Partial<MapConfig> & { center: [number, number]; zoom: number } =
-    {
-      center: options.center,
-      zoom: options.zoom ?? 12,
-      mapStyle: options.mapStyle,
-      pitch: options.pitch ?? 0,
-      bearing: options.bearing ?? 0,
-      interactive: options.interactive ?? true,
-    };
+  const config: Partial<MapConfig> & {
+    center: [number, number];
+    zoom: number;
+  } = {
+    center: options.center,
+    zoom: options.zoom ?? 12,
+    mapStyle: options.mapStyle,
+    pitch: options.pitch ?? 0,
+    bearing: options.bearing ?? 0,
+    interactive: options.interactive ?? true,
+  };
 
   return resolveMapConfig(config, globalConfig);
 }

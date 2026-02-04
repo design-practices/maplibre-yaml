@@ -71,13 +71,13 @@ export {
   extendSchema,
 } from "./utils/collections";
 
-// Blog integration utilities
+// Collection integration utilities
 export {
-  getBlogWithLocationSchema,
-  getBlogWithLocationsSchema,
-  getBlogWithRegionSchema,
-  getBlogWithRouteSchema,
-  getBlogWithGeoSchema,
+  getCollectionItemWithLocationSchema,
+  getCollectionItemWithLocationsSchema,
+  getCollectionItemWithRegionSchema,
+  getCollectionItemWithRouteSchema,
+  getCollectionItemWithGeoSchema,
   LocationPointSchema,
   RegionPolygonSchema,
   RouteLineSchema,

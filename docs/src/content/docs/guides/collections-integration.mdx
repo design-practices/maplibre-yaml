@@ -1,22 +1,24 @@
 ---
-title: Blog Integration
-description: Add interactive maps to Astro blog posts using maplibre-yaml
+title: Collection Integration
+description: Add interactive maps to Astro collection item posts using maplibre-yaml
 ---
 
-import { Tabs, TabItem, Aside, Code } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside, Code } from "@astrojs/starlight/components";
 
-This guide shows how to embed maps in Astro blog posts using content collection schemas and map builder utilities. Whether you're creating a travel blog, restaurant reviews, or hiking guides, maplibre-yaml provides simple patterns for adding geographic context.
+This guide shows how to embed maps in Astro collection item posts using content collection schemas and map builder utilities. Whether you're creating a travel blog, restaurant reviews, or hiking guides, maplibre-yaml provides simple patterns for adding geographic context.
 
 ## Overview
 
-The blog integration approach uses three key concepts:
+The collection item integration approach uses three key concepts:
 
-1. **Content Collection Schemas** - Pre-built Zod schemas that add location/region/route fields to your blog frontmatter
+1. **Content Collection Schemas** - Pre-built Zod schemas that add location/region/route fields to your collection item frontmatter
 2. **Map Builder Utilities** - Functions that convert simple geographic data into full map configurations
 3. **Global Configuration** - Site-wide map style settings that individual posts can inherit
 
 <Aside type="tip">
-  This guide assumes you're familiar with [Astro Content Collections](https://docs.astro.build/en/guides/content-collections/). If not, read their documentation first.
+  This guide assumes you're familiar with [Astro Content
+  Collections](https://docs.astro.build/en/guides/content-collections/). If not,
+  read their documentation first.
 </Aside>
 
 ## Quick Start
@@ -27,14 +29,14 @@ Choose the schema that matches your content type:
 
 ```typescript
 // src/content/config.ts
-import { defineCollection } from 'astro:content';
-import { getBlogWithLocationSchema } from '@maplibre-yaml/astro';
+import { defineCollection } from "astro:content";
+import { getCollectionItemWithLocationSchema } from "@maplibre-yaml/astro";
 
 export const collections = {
   posts: defineCollection({
-    type: 'content',
-    schema: getBlogWithLocationSchema()
-  })
+    type: "content",
+    schema: getCollectionItemWithLocationSchema(),
+  }),
 };
 ```
 
@@ -50,7 +52,6 @@ location:
   name: "Paris, France"
   zoom: 12
 ---
-
 We arrived in Paris on a crisp spring morning...
 ```
 
@@ -75,7 +76,7 @@ const { post } = Astro.props;
 const { Content } = await post.render();
 
 // Build map config if location exists
-const mapConfig = post.data.location 
+const mapConfig = post.data.location
   ? buildPointMapConfig({
       location: post.data.location,
       mapStyle: 'https://demotiles.maplibre.org/style.json'
@@ -86,11 +87,11 @@ const mapConfig = post.data.location
 <BaseLayout title={post.data.title}>
   <article>
     <h1>{post.data.title}</h1>
-    
+
     {mapConfig && (
       <Map config={mapConfig} height="300px" />
     )}
-    
+
     <Content />
   </article>
 </BaseLayout>
@@ -103,9 +104,9 @@ const mapConfig = post.data.location
 Best for: Restaurant reviews, place spotlights, single-destination content.
 
 ```typescript
-import { getBlogWithLocationSchema } from '@maplibre-yaml/astro';
+import { getCollectionItemWithLocationSchema } from "@maplibre-yaml/astro";
 
-const schema = getBlogWithLocationSchema();
+const schema = getCollectionItemWithLocationSchema();
 ```
 
 **Frontmatter example:**
@@ -127,9 +128,9 @@ location:
 Best for: Travel itineraries, city guides, comparison posts.
 
 ```typescript
-import { getBlogWithLocationsSchema } from '@maplibre-yaml/astro';
+import { getCollectionItemWithLocationsSchema } from "@maplibre-yaml/astro";
 
-const schema = getBlogWithLocationsSchema();
+const schema = getCollectionItemWithLocationsSchema();
 ```
 
 **Frontmatter example:**
@@ -156,9 +157,9 @@ locations:
 Best for: Neighborhood guides, property coverage areas, territorial content.
 
 ```typescript
-import { getBlogWithRegionSchema } from '@maplibre-yaml/astro';
+import { getCollectionItemWithRegionSchema } from "@maplibre-yaml/astro";
 
-const schema = getBlogWithRegionSchema();
+const schema = getCollectionItemWithRegionSchema();
 ```
 
 **Frontmatter example:**
@@ -170,7 +171,13 @@ pubDate: 2024-03-15
 region:
   name: "Brooklyn Heights"
   coordinates:
-    - [[-73.998, 40.698], [-73.985, 40.698], [-73.985, 40.692], [-73.998, 40.692], [-73.998, 40.698]]
+    - [
+        [-73.998, 40.698],
+        [-73.985, 40.698],
+        [-73.985, 40.692],
+        [-73.998, 40.692],
+        [-73.998, 40.698],
+      ]
   fillColor: "#3388ff"
   fillOpacity: 0.3
 ---
@@ -181,9 +188,9 @@ region:
 Best for: Hiking guides, road trips, cycling routes.
 
 ```typescript
-import { getBlogWithRouteSchema } from '@maplibre-yaml/astro';
+import { getCollectionItemWithRouteSchema } from "@maplibre-yaml/astro";
 
-const schema = getBlogWithRouteSchema();
+const schema = getCollectionItemWithRouteSchema();
 ```
 
 **Frontmatter example:**
@@ -195,12 +202,12 @@ pubDate: 2024-03-15
 route:
   name: "SF to LA via PCH"
   coordinates:
-    - [-122.4194, 37.7749]  # San Francisco
-    - [-122.0322, 36.9741]  # Santa Cruz
-    - [-121.8947, 36.6002]  # Monterey
-    - [-120.6596, 35.2828]  # San Luis Obispo
-    - [-119.6982, 34.4208]  # Santa Barbara
-    - [-118.2437, 34.0522]  # Los Angeles
+    - [-122.4194, 37.7749] # San Francisco
+    - [-122.0322, 36.9741] # Santa Cruz
+    - [-121.8947, 36.6002] # Monterey
+    - [-120.6596, 35.2828] # San Luis Obispo
+    - [-119.6982, 34.4208] # Santa Barbara
+    - [-118.2437, 34.0522] # Los Angeles
   color: "#e74c3c"
   width: 4
 ---
@@ -208,16 +215,16 @@ route:
 
 ### Flexible Schema
 
-For blogs with mixed content types, use the comprehensive schema:
+For collection items with mixed content types, use the comprehensive schema:
 
 ```typescript
-import { getBlogWithGeoSchema } from '@maplibre-yaml/astro';
+import { getCollectionItemWithGeoSchema } from "@maplibre-yaml/astro";
 
-const schema = getBlogWithGeoSchema({
+const schema = getCollectionItemWithGeoSchema({
   // Add your custom fields
   author: z.string(),
-  category: z.enum(['travel', 'hiking', 'food', 'city-guide']),
-  tags: z.array(z.string()).default([])
+  category: z.enum(["travel", "hiking", "food", "city-guide"]),
+  tags: z.array(z.string()).default([]),
 });
 ```
 
@@ -228,17 +235,17 @@ const schema = getBlogWithGeoSchema({
 Creates a map centered on a single location with a marker:
 
 ```typescript
-import { buildPointMapConfig } from '@maplibre-yaml/astro';
+import { buildPointMapConfig } from "@maplibre-yaml/astro";
 
 const config = buildPointMapConfig({
   location: {
     coordinates: [-74.006, 40.7128],
-    name: 'New York City',
-    description: 'The Big Apple'
+    name: "New York City",
+    description: "The Big Apple",
   },
-  mapStyle: 'https://demotiles.maplibre.org/style.json',
-  zoom: 12,  // optional, defaults to location.zoom or 12
-  interactive: true  // optional, defaults to true
+  mapStyle: "https://demotiles.maplibre.org/style.json",
+  zoom: 12, // optional, defaults to location.zoom or 12
+  interactive: true, // optional, defaults to true
 });
 ```
 
@@ -247,16 +254,16 @@ const config = buildPointMapConfig({
 Creates a map showing multiple locations with automatic bounds fitting:
 
 ```typescript
-import { buildMultiPointMapConfig } from '@maplibre-yaml/astro';
+import { buildMultiPointMapConfig } from "@maplibre-yaml/astro";
 
 const config = buildMultiPointMapConfig({
   locations: [
-    { coordinates: [-74.006, 40.7128], name: 'NYC' },
-    { coordinates: [-118.2437, 34.0522], name: 'LA' },
-    { coordinates: [-87.6298, 41.8781], name: 'Chicago' }
+    { coordinates: [-74.006, 40.7128], name: "NYC" },
+    { coordinates: [-118.2437, 34.0522], name: "LA" },
+    { coordinates: [-87.6298, 41.8781], name: "Chicago" },
   ],
-  mapStyle: 'https://demotiles.maplibre.org/style.json',
-  padding: 50  // pixels of padding around bounds
+  mapStyle: "https://demotiles.maplibre.org/style.json",
+  padding: 50, // pixels of padding around bounds
 });
 ```
 
@@ -265,20 +272,24 @@ const config = buildMultiPointMapConfig({
 Creates a map displaying a polygon region:
 
 ```typescript
-import { buildPolygonMapConfig } from '@maplibre-yaml/astro';
+import { buildPolygonMapConfig } from "@maplibre-yaml/astro";
 
 const config = buildPolygonMapConfig({
   region: {
-    coordinates: [[
-      [-74.0, 40.7], [-73.9, 40.7],
-      [-73.9, 40.8], [-74.0, 40.8],
-      [-74.0, 40.7]  // Close the polygon
-    ]],
-    name: 'Manhattan',
-    fillColor: '#ff6b6b',
-    fillOpacity: 0.4
+    coordinates: [
+      [
+        [-74.0, 40.7],
+        [-73.9, 40.7],
+        [-73.9, 40.8],
+        [-74.0, 40.8],
+        [-74.0, 40.7], // Close the polygon
+      ],
+    ],
+    name: "Manhattan",
+    fillColor: "#ff6b6b",
+    fillOpacity: 0.4,
   },
-  mapStyle: 'https://demotiles.maplibre.org/style.json'
+  mapStyle: "https://demotiles.maplibre.org/style.json",
 });
 ```
 
@@ -287,20 +298,20 @@ const config = buildPolygonMapConfig({
 Creates a map showing a line/route with start/end markers:
 
 ```typescript
-import { buildRouteMapConfig } from '@maplibre-yaml/astro';
+import { buildRouteMapConfig } from "@maplibre-yaml/astro";
 
 const config = buildRouteMapConfig({
   route: {
     coordinates: [
       [-122.4194, 37.7749],
       [-121.8947, 36.6002],
-      [-118.2437, 34.0522]
+      [-118.2437, 34.0522],
     ],
-    name: 'California Road Trip',
-    color: '#e74c3c',
-    width: 4
+    name: "California Road Trip",
+    color: "#e74c3c",
+    width: 4,
   },
-  mapStyle: 'https://demotiles.maplibre.org/style.json'
+  mapStyle: "https://demotiles.maplibre.org/style.json",
 });
 ```
 
@@ -311,7 +322,7 @@ Instead of specifying `mapStyle` on every map, create a shared configuration:
 ```typescript
 // src/lib/map-config.ts
 export const globalMapConfig = {
-  mapStyle: 'https://api.maptiler.com/maps/streets/style.json?key=YOUR_KEY',
+  mapStyle: "https://api.maptiler.com/maps/streets/style.json?key=YOUR_KEY",
   // Add any other defaults you want to share
 };
 ```
@@ -325,7 +336,7 @@ import { globalMapConfig } from '../lib/map-config';
 
 const { location } = Astro.props.post.data;
 
-const mapConfig = location 
+const mapConfig = location
   ? buildPointMapConfig({
       location,
       mapStyle: globalMapConfig.mapStyle
@@ -337,20 +348,24 @@ const mapConfig = location
 ```
 
 <Aside type="note">
-  When you omit `mapStyle` from map builder functions, the resulting configuration will have `mapStyle: undefined`. This works with the schema (which now allows optional `mapStyle`), but you'll need to ensure the style is resolved before rendering. The global configuration pattern above is the recommended approach for v0.1.0.
+  When you omit `mapStyle` from map builder functions, the resulting
+  configuration will have `mapStyle: undefined`. This works with the schema
+  (which now allows optional `mapStyle`), but you'll need to ensure the style is
+  resolved before rendering. The global configuration pattern above is the
+  recommended approach for v0.1.0.
 </Aside>
 
 ## Complete Blog Template Example
 
-Here's a full example of a blog post template with conditional map rendering:
+Here's a full example of a collection item post template with conditional map rendering:
 
 ```astro
 ---
 // src/pages/posts/[...slug].astro
 import { getCollection } from 'astro:content';
-import { 
-  Map, 
-  buildPointMapConfig, 
+import {
+  Map,
+  buildPointMapConfig,
   buildMultiPointMapConfig,
   buildPolygonMapConfig,
   buildRouteMapConfig
@@ -399,13 +414,13 @@ const mapConfig = getMapConfig();
         {post.data.pubDate.toLocaleDateString()}
       </time>
     </header>
-    
+
     {mapConfig && (
       <div class="post-map">
         <Map config={mapConfig} height="350px" />
       </div>
     )}
-    
+
     <div class="post-content">
       <Content />
     </div>
@@ -429,12 +444,12 @@ const mapConfig = getMapConfig();
 Calculate the center point of multiple coordinates:
 
 ```typescript
-import { calculateCenter } from '@maplibre-yaml/astro';
+import { calculateCenter } from "@maplibre-yaml/astro";
 
 const center = calculateCenter([
   [-74.006, 40.7128],
-  [-73.935, 40.730],
-  [-73.867, 40.752]
+  [-73.935, 40.73],
+  [-73.867, 40.752],
 ]);
 // Returns approximately [-73.936, 40.732]
 ```
@@ -444,11 +459,11 @@ const center = calculateCenter([
 Calculate the bounding box of coordinates:
 
 ```typescript
-import { calculateBounds } from '@maplibre-yaml/astro';
+import { calculateBounds } from "@maplibre-yaml/astro";
 
 const bounds = calculateBounds([
   [-74.006, 40.7128],
-  [-73.867, 40.752]
+  [-73.867, 40.752],
 ]);
 // Returns [[-74.006, 40.7128], [-73.867, 40.752]]
 ```
@@ -473,7 +488,7 @@ For purely illustrative maps, disable interactivity to reduce visual noise:
 const config = buildPointMapConfig({
   location,
   mapStyle: MAP_STYLE,
-  interactive: false
+  interactive: false,
 });
 ```
 

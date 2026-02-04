@@ -1,5 +1,5 @@
 /**
- * @file Map configuration builders for blog integration
+ * @file Map configuration builders for collection item integration
  * @module @maplibre-yaml/astro/utils/map-builders
  *
  * @description
@@ -9,7 +9,7 @@
  *
  * ## Usage
  *
- * Use these builders to create map configurations from blog frontmatter
+ * Use these builders to create map configurations from collection item frontmatter
  * data without manually constructing the full MapBlock structure.
  *
  * @example Point Map from Location
