@@ -2,15 +2,8 @@
 
 Astro components for creating interactive maps and scrollytelling experiences using YAML configuration.
 
-## Features
-
-- 🗺️ **Declarative Maps** - Define maps with simple YAML syntax
-- 📖 **Scrollytelling** - Create narrative map stories with chapter-based transitions
-- ⚡ **Build-Time or Runtime** - Load YAML at build time or runtime
-- 🎨 **Customizable** - Full control over styling and behavior
-- ♿ **Accessible** - ARIA labels, keyboard navigation, screen reader support
-- 📱 **Responsive** - Mobile-optimized components
-- 🔒 **Type-Safe** - Full TypeScript support with Zod validation
+[![npm version](https://img.shields.io/npm/v/@maplibre-yaml/astro.svg)](https://www.npmjs.com/package/@maplibre-yaml/astro)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ## Installation
 
@@ -88,16 +81,6 @@ Full-viewport map with built-in controls and optional legend.
 - `class?: string` - Additional CSS classes
 - `style?: string` - Additional inline styles
 
-**Example:**
-
-```astro
-<FullPageMap
-  src="/configs/world-map.yaml"
-  showLegend
-  legendPosition="top-right"
-/>
-```
-
 ### Scrollytelling
 
 Immersive narrative experiences with scroll-driven map transitions.
@@ -107,16 +90,6 @@ Immersive narrative experiences with scroll-driven map transitions.
 - `config?: ScrollytellingBlock` - Pre-loaded story configuration
 - `class?: string` - Additional CSS classes
 - `debug?: boolean` - Show debug outlines
-
-**Example:**
-
-```astro
----
-import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
-const story = await loadScrollytellingConfig('./src/stories/climate.yaml');
----
-<Scrollytelling config={story} />
-```
 
 ### Chapter
 
@@ -133,35 +106,91 @@ Individual chapter component (typically used internally by Scrollytelling).
 - `theme?: 'light' | 'dark'` - Visual theme
 - `isActive?: boolean` - Active state
 
+## YAML Configuration
+
+### Map
+
+```yaml
+type: map
+id: my-map
+config:
+  center: [-122.4, 37.8]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+
+layers:
+  - id: points-layer
+    type: circle
+    source:
+      type: geojson
+      url: "/data/points.geojson"
+    paint:
+      circle-radius: 8
+      circle-color: "#3b82f6"
+```
+
+### Scrollytelling
+
+```yaml
+type: scrollytelling
+id: my-story
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+
+chapters:
+  - id: intro
+    title: "Introduction"
+    description: "<p>Welcome to the story.</p>"
+    location:
+      center: [0, 0]
+      zoom: 2
+    alignment: center
+
+  - id: detail
+    title: "The Details"
+    description: "<p>Here's what happened.</p>"
+    image: "/images/detail.jpg"
+    location:
+      center: [10, 10]
+      zoom: 8
+      pitch: 45
+      bearing: 30
+    alignment: left
+    onChapterEnter:
+      - action: setPaintProperty
+        layer: data-layer
+        property: circle-color
+        value: "#ff0000"
+    onChapterExit:
+      - action: setFilter
+        layer: data-layer
+        filter: null
+```
+
 ## Utilities
 
-### loadMapConfig
-
-Load and validate a map configuration from a YAML file at build time.
+### YAML Loaders
 
 ```typescript
-import { loadMapConfig } from '@maplibre-yaml/astro';
+import {
+  loadMapConfig,
+  loadScrollytellingConfig,
+  loadYAML,
+  loadFromGlob
+} from '@maplibre-yaml/astro';
 
-const config = await loadMapConfig('./src/configs/map.yaml');
-```
+// Load and validate a map config
+const map = await loadMapConfig('./src/configs/map.yaml');
 
-### loadScrollytellingConfig
-
-Load and validate a scrollytelling story from a YAML file.
-
-```typescript
-import { loadScrollytellingConfig } from '@maplibre-yaml/astro';
-
+// Load and validate a scrollytelling config
 const story = await loadScrollytellingConfig('./src/stories/earthquake.yaml');
-```
 
-### loadFromGlob
+// Load raw YAML
+const raw = await loadYAML('./src/configs/custom.yaml');
 
-Load multiple YAML files using Astro's glob patterns.
-
-```typescript
-import { loadFromGlob } from '@maplibre-yaml/astro';
-
+// Load multiple files via glob
 const maps = await loadFromGlob('./src/configs/*.yaml');
 ```
 
@@ -186,114 +215,106 @@ export const collections = {
 };
 ```
 
-## YAML Configuration
+### Collection Items with Geographic Data
 
-### Map Configuration
+Pre-built schemas for adding location data to content collections (blog posts, articles, etc.):
+
+```typescript
+// src/content/config.ts
+import { defineCollection } from 'astro:content';
+import {
+  getCollectionItemWithLocationSchema,
+  getCollectionItemWithLocationsSchema,
+  getCollectionItemWithRegionSchema,
+  getCollectionItemWithRouteSchema,
+  getCollectionItemWithGeoSchema,
+} from '@maplibre-yaml/astro';
+
+export const collections = {
+  // Posts with a single location
+  posts: defineCollection({
+    type: 'content',
+    schema: getCollectionItemWithLocationSchema()
+  }),
+
+  // Travel posts with multiple locations
+  travel: defineCollection({
+    type: 'content',
+    schema: getCollectionItemWithLocationsSchema()
+  }),
+
+  // Neighborhood guides with regions
+  neighborhoods: defineCollection({
+    type: 'content',
+    schema: getCollectionItemWithRegionSchema()
+  }),
+
+  // Hiking guides with routes
+  trails: defineCollection({
+    type: 'content',
+    schema: getCollectionItemWithRouteSchema()
+  }),
+
+  // Mixed geographic content
+  adventures: defineCollection({
+    type: 'content',
+    schema: getCollectionItemWithGeoSchema({
+      author: z.string(),
+      category: z.enum(['travel', 'hiking', 'city-guide'])
+    })
+  })
+};
+```
+
+Example frontmatter for a post with location:
 
 ```yaml
-version: "1.0"
-map:
-  style: "https://demotiles.maplibre.org/style.json"
-  center: [-122.4, 37.8]
+---
+title: "My Trip to Paris"
+pubDate: 2024-03-15
+location:
+  coordinates: [2.3522, 48.8566]
+  name: "Paris, France"
   zoom: 12
-  pitch: 0
-  bearing: 0
-
-sources:
-  points:
-    type: geojson
-    data: "/data/points.geojson"
-
-layers:
-  - id: points-layer
-    type: circle
-    source: points
-    paint:
-      circle-radius: 8
-      circle-color: "#3b82f6"
+---
 ```
 
-### Scrollytelling Configuration
+### Map Builders
 
-```yaml
-version: "1.0"
-id: my-story
-theme: dark
-showMarkers: true
-markerColor: "#3FB1CE"
+Generate map configurations from collection item geographic data:
 
-config:
-  style: "https://demotiles.maplibre.org/style.json"
-  center: [0, 0]
-  zoom: 2
+```typescript
+import {
+  buildPointMapConfig,
+  buildMultiPointMapConfig,
+  buildPolygonMapConfig,
+  buildRouteMapConfig,
+  calculateCenter,
+  calculateBounds,
+} from '@maplibre-yaml/astro';
 
-chapters:
-  - id: intro
-    title: "Introduction"
-    description: "<p>Welcome to the story.</p>"
-    center: [0, 0]
-    zoom: 2
-    alignment: center
+// Build a map config from a single location
+const mapConfig = buildPointMapConfig({
+  location: post.data.location,
+  mapStyle: 'https://demotiles.maplibre.org/style.json'
+});
 
-  - id: detail
-    title: "The Details"
-    description: "<p>Here's what happened.</p>"
-    image: "/images/detail.jpg"
-    center: [10, 10]
-    zoom: 8
-    pitch: 45
-    bearing: 30
-    animation: flyTo
-    speed: 0.8
-    alignment: left
+// Build from multiple locations
+const multiMap = buildMultiPointMapConfig({
+  locations: travel.data.locations,
+  mapStyle: 'https://demotiles.maplibre.org/style.json'
+});
 
-footer: "<p>&copy; 2024 Your Organization</p>"
-```
-
-## Advanced Features
-
-### Chapter Actions
-
-Execute MapLibre actions on chapter enter/exit:
-
-```yaml
-chapters:
-  - id: filtered
-    title: "Filtered View"
-    center: [0, 0]
-    zoom: 5
-    onChapterEnter:
-      - action: setFilter
-        layer: data-layer
-        filter: [">=", "value", 100]
-      - action: setPaintProperty
-        layer: data-layer
-        property: circle-color
-        value: "#ff0000"
-    onChapterExit:
-      - action: setFilter
-        layer: data-layer
-        filter: null
-```
-
-### Layer Visibility Control
-
-Show/hide layers per chapter:
-
-```yaml
-chapters:
-  - id: chapter1
-    title: "Phase 1"
-    center: [0, 0]
-    zoom: 5
-    layers:
-      show: [layer-1, layer-2]
-      hide: [layer-3]
+// Build from a route
+const routeMap = buildRouteMapConfig({
+  route: trail.data.route,
+  mapStyle: 'https://demotiles.maplibre.org/style.json'
+});
 ```
 
 ### Custom Schemas
 
-Extend schemas with custom metadata:
+Extend built-in schemas with custom metadata:
 
 ```typescript
 import { extendSchema, getMapSchema } from '@maplibre-yaml/astro';
@@ -307,8 +328,6 @@ const customMapSchema = extendSchema(getMapSchema(), {
 ```
 
 ## Error Handling
-
-The package includes comprehensive error handling:
 
 ```typescript
 import { loadMapConfig, YAMLLoadError } from '@maplibre-yaml/astro';
@@ -332,38 +351,29 @@ import type {
   MapProps,
   FullPageMapProps,
   ScrollytellingProps,
-  ChapterProps
+  ChapterProps,
+  LocationPoint,
+  RegionPolygon,
+  RouteLine,
+  PointMapOptions,
+  MultiPointMapOptions,
+  PolygonMapOptions,
+  RouteMapOptions,
 } from '@maplibre-yaml/astro';
 ```
-
-## Browser Support
-
-- Modern browsers with ES2020+ support
-- MapLibre GL JS 4.0+
-- WebGL-enabled browsers
-
-## Performance Tips
-
-1. **Use build-time loading** for better performance:
-   ```astro
-   const config = await loadMapConfig('./src/configs/map.yaml');
-   ```
-
-2. **Optimize images**: Compress chapter images and use appropriate formats
-
-3. **Limit scrollytelling chapters**: 5-10 chapters for best experience
-
-4. **Use jumpTo for instant transitions** on slower devices
-
-5. **Lazy load media**: Images and videos load only when needed
 
 ## License
 
 MIT
 
+## Related Packages
+
+- [`@maplibre-yaml/core`](../core) - Core library: schemas, parser, renderer
+- [`@maplibre-yaml/cli`](../cli) - CLI for validation, preview, scaffolding
+
 ## Links
 
-- [Documentation](https://maplibre-yaml.design-practices.com/integrations/astro/)
-- [GitHub Repository](https://github.com/design-practices/maplibre-yaml)
+- [Documentation](https://docs.maplibre-yaml.org/integrations/astro/)
+- [GitHub](https://github.com/design-practices/maplibre-yaml)
 - [MapLibre GL JS](https://maplibre.org/)
 - [Astro](https://astro.build/)
