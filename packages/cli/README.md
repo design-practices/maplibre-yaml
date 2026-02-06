@@ -163,6 +163,11 @@ mlym init my-project -t basic
     sarif_file: results.sarif
 ```
 
+## Related Packages
+
+- [`@maplibre-yaml/core`](../core) - Core library: schemas, parser, renderer
+- [`@maplibre-yaml/astro`](../astro) - Astro components and integration
+
 ## Documentation
 
 For detailed documentation, visit [docs.maplibre-yaml.org/cli](https://docs.maplibre-yaml.org/cli/getting-started/)

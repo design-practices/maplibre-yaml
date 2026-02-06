@@ -305,7 +305,7 @@ Use Astro Content Collections for managing map configurations:
 ```typescript
 // src/content/config.ts
 import { defineCollection } from 'astro:content';
-import { getMapSchema } from '@maplibre-yaml/astro/utils';
+import { getMapSchema } from '@maplibre-yaml/astro';
 
 export const collections = {
   maps: defineCollection({
@@ -394,7 +394,7 @@ Add custom metadata to your map configurations:
 ```typescript
 // src/content/config.ts
 import { defineCollection } from 'astro:content';
-import { extendSchema, getMapSchema } from '@maplibre-yaml/astro/utils';
+import { extendSchema, getMapSchema } from '@maplibre-yaml/astro';
 import { z } from 'zod';
 
 export const collections = {
