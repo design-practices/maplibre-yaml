@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { LngLatSchema } from "./base.schema";
 import { ContentBlockSchema } from "./content.schema";
 import { MapBlockSchema, MapFullPageBlockSchema } from "./map.schema";
 import { ScrollytellingBlockSchema } from "./scrollytelling.schema";
@@ -260,6 +261,15 @@ export const GlobalConfigSchema = z
       .optional()
       .describe("Default map style URL"),
     theme: z.enum(["light", "dark"]).default("light").describe("Default theme"),
+    defaultZoom: z
+      .number()
+      .min(0)
+      .max(24)
+      .optional()
+      .describe("Default zoom level for all maps"),
+    defaultCenter: LngLatSchema.optional().describe(
+      "Default center [lng, lat] for all maps",
+    ),
     dataFetching: z
       .object({
         defaultStrategy: z
