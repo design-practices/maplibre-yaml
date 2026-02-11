@@ -51,9 +51,12 @@ export class ConfigResolutionError extends Error {
  * Resolution order (highest to lowest priority):
  * 1. Values explicitly set in mapConfig
  * 2. Values from globalConfig defaults
+ * 3. Error (no silent fallbacks for center, zoom, or mapStyle)
  *
  * **Inherited Properties:**
  * - `mapStyle` ← `globalConfig.defaultMapStyle`
+ * - `center` ← `globalConfig.defaultCenter`
+ * - `zoom` ← `globalConfig.defaultZoom`
  *
  * @example Basic Resolution
  * ```typescript
@@ -64,39 +67,55 @@ export class ConfigResolutionError extends Error {
  * // resolved.mapStyle === 'https://example.com/style.json'
  * ```
  *
- * @example Override Global Default
+ * @example Inherit zoom/center from global
  * ```typescript
  * const resolved = resolveMapConfig(
- *   {
- *     center: [0, 0],
- *     zoom: 5,
- *     mapStyle: 'https://custom.com/style.json'  // Explicit override
- *   },
- *   { defaultMapStyle: 'https://example.com/style.json' }
+ *   { mapStyle: 'https://example.com/style.json' },
+ *   { defaultCenter: [-74.006, 40.7128], defaultZoom: 10 }
  * );
- * // resolved.mapStyle === 'https://custom.com/style.json'
+ * // resolved.center === [-74.006, 40.7128]
+ * // resolved.zoom === 10
  * ```
  */
+// Overload: with globalConfig, center/zoom can come from either source
+export function resolveMapConfig(
+  mapConfig: Partial<MapConfig>,
+  globalConfig: GlobalConfig,
+): MapConfig;
+// Overload: without globalConfig, center/zoom are required in mapConfig
 export function resolveMapConfig(
   mapConfig: Partial<MapConfig> & { center: [number, number]; zoom: number },
   globalConfig?: GlobalConfig,
+): MapConfig;
+// Implementation
+export function resolveMapConfig(
+  mapConfig: Partial<MapConfig>,
+  globalConfig?: GlobalConfig,
 ): MapConfig {
-  const resolved: MapConfig = {
+  const center = mapConfig.center ?? globalConfig?.defaultCenter;
+  const zoom = mapConfig.zoom ?? globalConfig?.defaultZoom;
+
+  const resolved = {
     ...mapConfig,
-    center: mapConfig.center,
-    zoom: mapConfig.zoom,
+    center,
+    zoom,
     mapStyle: mapConfig.mapStyle ?? globalConfig?.defaultMapStyle,
-    // Explicit defaults for schema-defaulted fields (required by TypeScript)
     interactive: mapConfig.interactive ?? true,
     pitch: mapConfig.pitch ?? 0,
     bearing: mapConfig.bearing ?? 0,
   };
 
-  // Validate required fields
+  // Validate all required fields -- no silent fallbacks
   const missingFields: string[] = [];
 
   if (!resolved.mapStyle) {
     missingFields.push("mapStyle");
+  }
+  if (resolved.center === undefined) {
+    missingFields.push("center");
+  }
+  if (resolved.zoom === undefined) {
+    missingFields.push("zoom");
   }
 
   if (missingFields.length > 0) {
@@ -105,12 +124,12 @@ export function resolveMapConfig(
         ", ",
       )}. ` +
         "Either provide these fields in the map config or set defaults in global config " +
-        "(e.g., config.defaultMapStyle).",
+        "(e.g., config.defaultMapStyle, config.defaultCenter, config.defaultZoom).",
       missingFields,
     );
   }
 
-  return resolved;
+  return resolved as MapConfig;
 }
 
 /**
