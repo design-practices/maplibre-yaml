@@ -44,7 +44,6 @@
  */
 
 import type { MapProps } from "../types";
-import "@maplibre-yaml/core/register";
 
 interface Props extends MapProps {}
 
@@ -84,6 +83,11 @@ const serializedConfig = config ? JSON.stringify(config) : null;
     )
   }
 </div>
+
+<script>
+  import "@maplibre-yaml/core/register";
+  import "maplibre-gl/dist/maplibre-gl.css";
+</script>
 
 {
   src && !config && (
