@@ -1007,6 +1007,209 @@ const story = await loadScrollytellingConfig('./src/stories/earthquakes.yaml');
 </style>
 ```
 
+## Global Configuration
+
+For sites with multiple maps, define site-wide defaults (basemap style, center, zoom) once and inherit them everywhere. This eliminates repetition and ensures consistency.
+
+<Steps>
+
+1. **Create a global config YAML file**
+
+   ```yaml
+   # src/config/maps.yaml
+   title: "My Map Application"
+   defaultMapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+   defaultCenter: [-73.985, 40.674]
+   defaultZoom: 14
+   theme: light
+   ```
+
+2. **Create a shared loader module**
+
+   ```typescript
+   // src/lib/map-config.ts
+   import { loadGlobalMapConfig } from "@maplibre-yaml/astro";
+
+   export const globalMapConfig = await loadGlobalMapConfig(
+     "./src/config/maps.yaml"
+   );
+   ```
+
+   Top-level `await` is supported in Astro modules during the build phase.
+
+3. **Use in pages with map builders**
+
+   ```astro
+   ---
+   import { Map, buildPointMapConfig } from "@maplibre-yaml/astro";
+   import { globalMapConfig } from "../lib/map-config";
+
+   const mapConfig = buildPointMapConfig(
+     {
+       location: {
+         coordinates: [-73.983, 40.676],
+         name: "Project Site",
+       },
+     },
+     globalMapConfig, // mapStyle, center, zoom inherited as fallbacks
+   );
+   ---
+   <Map config={mapConfig} height="400px" />
+   ```
+
+</Steps>
+
+All map builders (`buildPointMapConfig`, `buildPolygonMapConfig`, `buildRouteMapConfig`, `buildMultiPointMapConfig`) accept `globalConfig` as their second argument. Values explicitly set in the builder options take priority; global defaults fill in anything omitted.
+
+### GlobalConfig Schema
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | `string?` | Application title |
+| `description` | `string?` | Application description |
+| `defaultMapStyle` | `string (URL)?` | Default basemap style for all maps |
+| `defaultCenter` | `[lng, lat]?` | Default map center |
+| `defaultZoom` | `number (0-24)?` | Default zoom level |
+| `theme` | `"light" \| "dark"` | Default theme (default: `"light"`) |
+
+## Adding Geographic Data to Content Collections
+
+You can add map support to any existing Astro content collection by importing the geographic schemas. This works for points, polygons, and lines — all optional, so items without geographic data still work.
+
+### Schema setup
+
+```typescript
+// src/content/config.ts
+import { defineCollection, z } from "astro:content";
+import { glob } from "astro/loaders";
+import {
+  LocationPointSchema,
+  RegionPolygonSchema,
+  RouteLineSchema,
+} from "@maplibre-yaml/astro";
+
+const projects = defineCollection({
+  loader: glob({ pattern: "**/*.md", base: "./src/content/projects" }),
+  schema: z.object({
+    title: z.string(),
+    status: z.string(),
+    // Geographic data — all optional
+    location: LocationPointSchema.optional(),  // point
+    region: RegionPolygonSchema.optional(),     // polygon
+    route: RouteLineSchema.optional(),          // line
+  }),
+});
+
+export const collections = { projects };
+```
+
+### Frontmatter examples
+
+<Tabs>
+<TabItem label="Point">
+
+```yaml
+---
+title: "New Library Branch"
+status: "In Progress"
+location:
+  coordinates: [-73.983, 40.676]
+  name: "487 4th Avenue"
+  description: "Proposed 3-story library building"
+  zoom: 16
+  markerColor: "#e74c3c"
+---
+```
+
+</TabItem>
+<TabItem label="Polygon">
+
+```yaml
+---
+title: "Park Renovation"
+status: "Planning"
+region:
+  name: "Greene Park"
+  description: "Park boundary"
+  coordinates:
+    - - [-73.9848, 40.6748]
+      - [-73.9833, 40.6748]
+      - [-73.9833, 40.6738]
+      - [-73.9848, 40.6738]
+      - [-73.9848, 40.6748]
+  fillColor: "#2ecc71"
+  fillOpacity: 0.35
+---
+```
+
+</TabItem>
+<TabItem label="Line">
+
+```yaml
+---
+title: "Canal Infrastructure"
+status: "Active"
+route:
+  name: "Canal Path"
+  description: "Stormwater infrastructure route"
+  coordinates:
+    - [-73.9890, 40.6790]
+    - [-73.9870, 40.6760]
+    - [-73.9855, 40.6730]
+    - [-73.9840, 40.6700]
+  color: "#3498db"
+  width: 4
+---
+```
+
+</TabItem>
+</Tabs>
+
+### Dynamic map per collection item
+
+In a dynamic route page (`[slug].astro`), detect which geometry type is present and call the matching builder:
+
+```astro
+---
+import {
+  Map,
+  buildPointMapConfig,
+  buildPolygonMapConfig,
+  buildRouteMapConfig,
+} from "@maplibre-yaml/astro";
+import type { MapBlock } from "@maplibre-yaml/core";
+import { globalMapConfig } from "../lib/map-config";
+
+// `entry` is a collection item from getStaticPaths
+const { entry } = Astro.props;
+const data = entry.data;
+
+let mapConfig: MapBlock;
+
+if (data.region) {
+  mapConfig = buildPolygonMapConfig({ region: data.region }, globalMapConfig);
+} else if (data.route) {
+  mapConfig = buildRouteMapConfig({ route: data.route }, globalMapConfig);
+} else if (data.location) {
+  mapConfig = buildPointMapConfig({ location: data.location }, globalMapConfig);
+} else {
+  // Fallback: default area map from global config
+  mapConfig = buildPointMapConfig(
+    {
+      location: {
+        coordinates: globalMapConfig.defaultCenter!,
+        name: data.title,
+      },
+    },
+    globalMapConfig,
+  );
+}
+---
+<Map config={mapConfig} height="300px" />
+```
+
+Items without any geographic data gracefully fall back to the global default center.
+
 ## Component Patterns
 
 ### Pattern 1: External YAML with src Attribute (Recommended)
@@ -1534,6 +1737,74 @@ const configJson = JSON.stringify(mapEntry.data);
 ```
 
 ## Troubleshooting
+
+### `ReferenceError: HTMLElement is not defined`
+
+<Aside type="danger" title="Critical: Do not import register in frontmatter">
+  This is the most common error when using maplibre-yaml with Astro.
+</Aside>
+
+**Cause:** Importing `@maplibre-yaml/core/register` in an Astro component's frontmatter (`---` block). The register module defines `class MLMap extends HTMLElement`, which crashes during Astro's server-side rendering because `HTMLElement` is a browser-only API.
+
+**Wrong:**
+
+```astro
+---
+import "@maplibre-yaml/core/register"; // ❌ Crashes during SSR
+---
+<ml-map src="/map.yaml" style="height: 400px; display: block;" />
+```
+
+**Correct:**
+
+```astro
+<ml-map src="/map.yaml" style="height: 400px; display: block;" />
+
+<script>
+  import "@maplibre-yaml/core/register";  // ✅ Runs client-side only
+  import "maplibre-gl/dist/maplibre-gl.css";
+</script>
+```
+
+Astro processes non-`is:inline` `<script>` tags as client-side bundles — they never run during SSR. The `@maplibre-yaml/astro` components (`Map`, `FullPageMap`, `Scrollytelling`) handle this automatically.
+
+### Using `client:only` or `client:load` on Astro Components
+
+**Symptoms:** Error like `Unknown component type` or component doesn't render.
+
+**Cause:** Using client directives (`client:only="react"`, `client:load`, etc.) on components from `@maplibre-yaml/astro`. These are **Astro components**, not framework components (React/Vue/Svelte), so client directives are invalid.
+
+**Wrong:**
+
+```astro
+<Map client:only="react" src="/map.yaml" height="400px" />  <!-- ❌ -->
+```
+
+**Correct:**
+
+```astro
+<Map src="/map.yaml" height="400px" />  <!-- ✅ -->
+```
+
+### Incorrect `src` Path for Public Files
+
+**Symptoms:** 404 error or `Failed to fetch` in the console.
+
+**Cause:** Using a filesystem path instead of a URL path for the `src` prop.
+
+**Wrong:**
+
+```astro
+<Map src="public/configs/map.yaml" height="400px" />  <!-- ❌ -->
+```
+
+**Correct:**
+
+```astro
+<Map src="/configs/map.yaml" height="400px" />  <!-- ✅ -->
+```
+
+Files in Astro's `/public` directory are served from the root URL, so `public/configs/map.yaml` is accessed as `/configs/map.yaml`.
 
 ### "Expected object, got null" or Similar Schema Errors
 

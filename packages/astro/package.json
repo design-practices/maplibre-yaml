@@ -1,6 +1,6 @@
 {
   "name": "@maplibre-yaml/astro",
-  "version": "0.1.1-beta.0",
+  "version": "0.1.2",
   "description": "Astro components for maplibre-yaml",
   "type": "module",
   "exports": {
@@ -42,5 +42,14 @@
     "yaml",
     "scrollytelling"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/design-practices/maplibre-yaml.git",
+    "directory": "packages/astro"
+  }
 }

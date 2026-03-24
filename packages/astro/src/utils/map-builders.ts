@@ -28,7 +28,8 @@
  * ```
  */
 
-import type { MapBlock, MapConfig } from "@maplibre-yaml/core";
+import type { MapBlock, MapConfig, GlobalConfig } from "@maplibre-yaml/core";
+import { resolveMapConfig } from "@maplibre-yaml/core";
 import type {
   LocationPoint,
   RegionPolygon,
@@ -238,7 +239,10 @@ function generateMapId(prefix: string): string {
  * });
  * ```
  */
-export function buildPointMapConfig(options: PointMapOptions): MapBlock {
+export function buildPointMapConfig(
+  options: PointMapOptions,
+  globalConfig?: GlobalConfig,
+): MapBlock {
   const { location, mapStyle, zoom, id, interactive = true } = options;
   const markerColor = location.markerColor ?? DEFAULT_MARKER_COLOR;
 
@@ -253,21 +257,20 @@ export function buildPointMapConfig(options: PointMapOptions): MapBlock {
         ]
       : undefined;
 
-  const mapConfig: Partial<MapConfig> = {
-    center: location.coordinates,
-    zoom: zoom ?? location.zoom ?? 12,
-    interactive,
-  };
-
-  // Only include mapStyle if provided (allows global inheritance)
-  if (mapStyle) {
-    mapConfig.mapStyle = mapStyle;
-  }
+  const config = resolveMapConfig(
+    {
+      center: location.coordinates,
+      zoom: zoom ?? location.zoom ?? 12,
+      mapStyle,
+      interactive,
+    },
+    globalConfig,
+  );
 
   return {
     type: "map",
     id: id ?? generateMapId("point-map"),
-    config: mapConfig as MapConfig,
+    config,
     layers: [
       {
         id: "location-marker",
@@ -335,6 +338,7 @@ export function buildPointMapConfig(options: PointMapOptions): MapBlock {
  */
 export function buildMultiPointMapConfig(
   options: MultiPointMapOptions,
+  globalConfig?: GlobalConfig,
 ): MapBlock {
   const { locations, mapStyle, padding = 50, id, interactive = true } = options;
 
@@ -359,21 +363,21 @@ export function buildMultiPointMapConfig(
     },
   }));
 
-  const mapConfig: Partial<MapConfig> = {
-    center,
-    zoom: 10, // Will be overridden by bounds
-    bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
-    interactive,
-  };
-
-  if (mapStyle) {
-    mapConfig.mapStyle = mapStyle;
-  }
+  const config = resolveMapConfig(
+    {
+      center,
+      zoom: 10, // Will be overridden by bounds
+      bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
+      mapStyle,
+      interactive,
+    },
+    globalConfig,
+  );
 
   return {
     type: "map",
     id: id ?? generateMapId("multi-point-map"),
-    config: mapConfig as MapConfig,
+    config,
     layers: [
       {
         id: "location-markers",
@@ -432,7 +436,10 @@ export function buildMultiPointMapConfig(
  * });
  * ```
  */
-export function buildPolygonMapConfig(options: PolygonMapOptions): MapBlock {
+export function buildPolygonMapConfig(
+  options: PolygonMapOptions,
+  globalConfig?: GlobalConfig,
+): MapBlock {
   const { region, mapStyle, zoom, id, interactive = true } = options;
 
   // Flatten coordinates to calculate center/bounds
@@ -452,21 +459,21 @@ export function buildPolygonMapConfig(options: PolygonMapOptions): MapBlock {
         ]
       : undefined;
 
-  const mapConfig: Partial<MapConfig> = {
-    center,
-    zoom: zoom ?? 12,
-    bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
-    interactive,
-  };
-
-  if (mapStyle) {
-    mapConfig.mapStyle = mapStyle;
-  }
+  const config = resolveMapConfig(
+    {
+      center,
+      zoom: zoom ?? 12,
+      bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
+      mapStyle,
+      interactive,
+    },
+    globalConfig,
+  );
 
   return {
     type: "map",
     id: id ?? generateMapId("polygon-map"),
-    config: mapConfig as MapConfig,
+    config,
     layers: [
       {
         id: "region-fill",
@@ -543,7 +550,10 @@ export function buildPolygonMapConfig(options: PolygonMapOptions): MapBlock {
  * });
  * ```
  */
-export function buildRouteMapConfig(options: RouteMapOptions): MapBlock {
+export function buildRouteMapConfig(
+  options: RouteMapOptions,
+  globalConfig?: GlobalConfig,
+): MapBlock {
   const { route, mapStyle, padding = 50, id, interactive = true } = options;
 
   const center = calculateCenter(route.coordinates);
@@ -560,21 +570,21 @@ export function buildRouteMapConfig(options: RouteMapOptions): MapBlock {
         ]
       : undefined;
 
-  const mapConfig: Partial<MapConfig> = {
-    center,
-    zoom: 10,
-    bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
-    interactive,
-  };
-
-  if (mapStyle) {
-    mapConfig.mapStyle = mapStyle;
-  }
+  const config = resolveMapConfig(
+    {
+      center,
+      zoom: 10,
+      bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
+      mapStyle,
+      interactive,
+    },
+    globalConfig,
+  );
 
   return {
     type: "map",
     id: id ?? generateMapId("route-map"),
-    config: mapConfig as MapConfig,
+    config,
     layers: [
       {
         id: "route-line",

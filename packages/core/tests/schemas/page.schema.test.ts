@@ -329,6 +329,41 @@ describe("GlobalConfigSchema", () => {
     expect(GlobalConfigSchema.parse({ theme: "light" }).theme).toBe("light");
     expect(GlobalConfigSchema.parse({ theme: "dark" }).theme).toBe("dark");
   });
+
+  it("accepts defaultZoom", () => {
+    const config = { defaultZoom: 10 };
+    expect(GlobalConfigSchema.parse(config).defaultZoom).toBe(10);
+  });
+
+  it("accepts defaultCenter", () => {
+    const config = { defaultCenter: [-74.006, 40.7128] };
+    expect(GlobalConfigSchema.parse(config).defaultCenter).toEqual([
+      -74.006, 40.7128,
+    ]);
+  });
+
+  it("rejects defaultZoom out of range", () => {
+    expect(() => GlobalConfigSchema.parse({ defaultZoom: -1 })).toThrow();
+    expect(() => GlobalConfigSchema.parse({ defaultZoom: 25 })).toThrow();
+  });
+
+  it("accepts defaultZoom at boundaries", () => {
+    expect(GlobalConfigSchema.parse({ defaultZoom: 0 }).defaultZoom).toBe(0);
+    expect(GlobalConfigSchema.parse({ defaultZoom: 24 }).defaultZoom).toBe(24);
+  });
+
+  it("accepts full config with new fields", () => {
+    const config = {
+      title: "My App",
+      defaultMapStyle: "https://example.com/style.json",
+      theme: "dark" as const,
+      defaultZoom: 12,
+      defaultCenter: [-74.006, 40.7128],
+    };
+    const result = GlobalConfigSchema.parse(config);
+    expect(result.defaultZoom).toBe(12);
+    expect(result.defaultCenter).toEqual([-74.006, 40.7128]);
+  });
 });
 
 describe("RootSchema", () => {

@@ -46,7 +46,6 @@
  */
 
 import type { FullPageMapProps } from "../types";
-import "@maplibre-yaml/core/register";
 
 interface Props extends FullPageMapProps {}
 
@@ -187,6 +186,11 @@ const legendPositions = {
     )
   }
 </div>
+
+<script>
+  import "@maplibre-yaml/core/register";
+  import "maplibre-gl/dist/maplibre-gl.css";
+</script>
 
 {
   src && !config && (

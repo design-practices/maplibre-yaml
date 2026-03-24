@@ -98,6 +98,9 @@ export {
   calculateBounds,
 } from "./utils/map-builders";
 
+// Global config utilities
+export { loadGlobalMapConfig } from "./utils/global-config";
+
 export type {
   PointMapOptions,
   MultiPointMapOptions,

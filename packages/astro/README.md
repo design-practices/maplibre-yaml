@@ -106,6 +106,204 @@ Individual chapter component (typically used internally by Scrollytelling).
 - `theme?: 'light' | 'dark'` - Visual theme
 - `isActive?: boolean` - Active state
 
+## Global Configuration
+
+Define site-wide map defaults (style, center, zoom) that are inherited by all maps. This avoids repeating the same base configuration on every page.
+
+### 1. Create a global config YAML file
+
+```yaml
+# src/config/maps.yaml
+title: "My Map App"
+defaultMapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+defaultCenter: [-73.985, 40.674]
+defaultZoom: 14
+theme: light
+```
+
+### 2. Create a shared loader module
+
+```typescript
+// src/lib/map-config.ts
+import { loadGlobalMapConfig } from "@maplibre-yaml/astro";
+
+export const globalMapConfig = await loadGlobalMapConfig(
+  "./src/config/maps.yaml"
+);
+```
+
+### 3. Use in pages with map builders
+
+```astro
+---
+import { Map, buildPointMapConfig } from "@maplibre-yaml/astro";
+import { globalMapConfig } from "../lib/map-config";
+
+// mapStyle, center, and zoom are inherited from global config
+const mapConfig = buildPointMapConfig(
+  {
+    location: {
+      coordinates: [-73.983, 40.676],
+      name: "My Location",
+    },
+  },
+  globalMapConfig,
+);
+---
+<Map config={mapConfig} height="400px" />
+```
+
+All map builders (`buildPointMapConfig`, `buildPolygonMapConfig`, `buildRouteMapConfig`, `buildMultiPointMapConfig`) accept `globalConfig` as their second argument.
+
+## Adding Geographic Data to Existing Collections
+
+You can add map support to any Astro content collection by importing the geographic schemas directly. This is useful when your collection has its own schema and you just want to add optional location data.
+
+### Schema setup
+
+```typescript
+// src/content/config.ts
+import { defineCollection, z } from "astro:content";
+import { glob } from "astro/loaders";
+import {
+  LocationPointSchema,
+  RegionPolygonSchema,
+  RouteLineSchema,
+} from "@maplibre-yaml/astro";
+
+const projects = defineCollection({
+  loader: glob({ pattern: "**/*.md", base: "./src/content/projects" }),
+  schema: z.object({
+    title: z.string(),
+    status: z.string(),
+    description: z.string(),
+    // Add optional geographic data for any geometry type
+    location: LocationPointSchema.optional(),  // point
+    region: RegionPolygonSchema.optional(),     // polygon
+    route: RouteLineSchema.optional(),          // line
+  }),
+});
+```
+
+### Frontmatter examples
+
+**Point** (simplest — just coordinates):
+
+```yaml
+---
+title: "New Library Branch"
+status: "In Progress"
+description: "Construction of new public library"
+location:
+  coordinates: [-73.983, 40.676]
+  name: "487 4th Avenue"
+  description: "Proposed 3-story library building"
+  zoom: 16
+---
+```
+
+**Polygon** (area/region):
+
+```yaml
+---
+title: "Park Renovation"
+status: "Planning"
+description: "Remediation and renovation of Greene Park"
+region:
+  name: "Greene Park"
+  description: "Park boundary"
+  coordinates:
+    - - [-73.9848, 40.6748]
+      - [-73.9833, 40.6748]
+      - [-73.9833, 40.6738]
+      - [-73.9848, 40.6738]
+      - [-73.9848, 40.6748]
+  fillColor: "#2ecc71"
+  fillOpacity: 0.35
+---
+```
+
+**Line** (route/path):
+
+```yaml
+---
+title: "Canal Stormwater Management"
+status: "Active"
+description: "Stormwater infrastructure along the canal"
+route:
+  name: "Canal Path"
+  description: "Infrastructure route"
+  coordinates:
+    - [-73.9890, 40.6790]
+    - [-73.9870, 40.6760]
+    - [-73.9855, 40.6730]
+    - [-73.9840, 40.6700]
+  color: "#3498db"
+  width: 4
+---
+```
+
+### Dynamic map per collection item
+
+```astro
+---
+import {
+  Map,
+  buildPointMapConfig,
+  buildPolygonMapConfig,
+  buildRouteMapConfig,
+} from "@maplibre-yaml/astro";
+import type { MapBlock } from "@maplibre-yaml/core";
+import { globalMapConfig } from "../lib/map-config";
+
+// Assuming `entry` is a collection item with optional geo fields
+const { entry } = Astro.props;
+const data = entry.data;
+
+let mapConfig: MapBlock;
+
+if (data.region) {
+  mapConfig = buildPolygonMapConfig({ region: data.region }, globalMapConfig);
+} else if (data.route) {
+  mapConfig = buildRouteMapConfig({ route: data.route }, globalMapConfig);
+} else if (data.location) {
+  mapConfig = buildPointMapConfig({ location: data.location }, globalMapConfig);
+} else {
+  // Fallback: default area map from global config
+  mapConfig = buildPointMapConfig(
+    {
+      location: {
+        coordinates: globalMapConfig.defaultCenter!,
+        name: data.title,
+      },
+    },
+    globalMapConfig,
+  );
+}
+---
+<Map config={mapConfig} height="300px" />
+```
+
+Items without any geographic data gracefully fall back to the global default center.
+
+## Important Notes
+
+> **Do NOT import `@maplibre-yaml/core/register` in Astro frontmatter.**
+> The register module contains `class MLMap extends HTMLElement`, which crashes
+> during Astro's server-side rendering with `ReferenceError: HTMLElement is not defined`.
+> The `@maplibre-yaml/astro` components handle registration automatically via
+> a client-side `<script>` tag. If you are writing a custom component using
+> `<ml-map>` directly, place the import in a `<script>` tag (not `is:inline`),
+> never in the frontmatter `---` block.
+
+> **Do NOT use `client:only` or other client directives** on components from
+> `@maplibre-yaml/astro`. They are Astro components (not React/Vue/Svelte),
+> so client directives are invalid and will cause errors.
+
+> **The `src` prop is a URL path, not a filesystem path.** Files in `/public`
+> are served from the root, so `public/configs/map.yaml` should be referenced
+> as `src="/configs/map.yaml"`.
+
 ## YAML Configuration
 
 ### Map
@@ -281,7 +479,7 @@ location:
 
 ### Map Builders
 
-Generate map configurations from collection item geographic data:
+Generate map configurations from collection item geographic data. All builders accept an optional `globalConfig` as a second argument for inheriting defaults:
 
 ```typescript
 import {
@@ -291,25 +489,34 @@ import {
   buildRouteMapConfig,
   calculateCenter,
   calculateBounds,
+  loadGlobalMapConfig,
 } from '@maplibre-yaml/astro';
 
-// Build a map config from a single location
-const mapConfig = buildPointMapConfig({
-  location: post.data.location,
-  mapStyle: 'https://demotiles.maplibre.org/style.json'
-});
+const globalConfig = await loadGlobalMapConfig('./src/config/maps.yaml');
+
+// Build a map config from a single location (inherits mapStyle from global)
+const mapConfig = buildPointMapConfig(
+  { location: post.data.location },
+  globalConfig,
+);
 
 // Build from multiple locations
-const multiMap = buildMultiPointMapConfig({
-  locations: travel.data.locations,
-  mapStyle: 'https://demotiles.maplibre.org/style.json'
-});
+const multiMap = buildMultiPointMapConfig(
+  { locations: travel.data.locations },
+  globalConfig,
+);
+
+// Build from a polygon region
+const regionMap = buildPolygonMapConfig(
+  { region: guide.data.region },
+  globalConfig,
+);
 
 // Build from a route
-const routeMap = buildRouteMapConfig({
-  route: trail.data.route,
-  mapStyle: 'https://demotiles.maplibre.org/style.json'
-});
+const routeMap = buildRouteMapConfig(
+  { route: trail.data.route },
+  globalConfig,
+);
 ```
 
 ### Custom Schemas

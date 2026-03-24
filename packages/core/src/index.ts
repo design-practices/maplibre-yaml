@@ -24,6 +24,13 @@ export * from "./ui";
 // Utils
 export { EventEmitter } from "./utils/event-emitter";
 export type { EventHandler } from "./utils/event-emitter";
+export {
+  resolveMapConfig,
+  resolveMapBlock,
+  isMapConfigComplete,
+  createSimpleMapConfig,
+  ConfigResolutionError,
+} from "./utils/config-resolver";
 
 // Note: Components are exported separately via './components' entry point
 // to avoid auto-registering custom elements when not needed
