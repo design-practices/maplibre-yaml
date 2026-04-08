@@ -1,6 +1,6 @@
 {
   "name": "@maplibre-yaml/astro",
-  "version": "0.1.2",
+  "version": "1.0.0",
   "description": "Astro components for maplibre-yaml",
   "type": "module",
   "exports": {
