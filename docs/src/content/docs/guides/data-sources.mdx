@@ -175,26 +175,62 @@ layers:
   caption="Clustered earthquake data - zoom in to see individual points"
 />
 
-## Multiple sources
+## Named Sources
 
-Reference the same source from multiple layers:
+Define sources at the block level and reference them by name across multiple layers. This avoids duplicating source definitions and is the recommended approach when multiple layers share the same data.
 
 ```yaml
-layers:
-  - id: earthquakes-source
-    type: circle
-    source:
-      id: quakes # Named source
-      type: geojson
-      url: "https://..."
-    paint: { ... }
+type: map
+id: earthquake-map
+config:
+  center: [-120, 35]
+  zoom: 6
+  mapStyle: "https://demotiles.maplibre.org/style.json"
 
-  - id: earthquake-labels
+sources:
+  quakes:
+    type: geojson
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    cluster: true
+    clusterRadius: 50
+    clusterMaxZoom: 14
+
+layers:
+  - id: clusters
+    type: circle
+    source: quakes
+    filter: ["has", "point_count"]
+    paint:
+      circle-radius:
+        - step
+        - ["get", "point_count"]
+        - 20
+        - 100
+        - 30
+      circle-color: "#3b82f6"
+
+  - id: cluster-count
     type: symbol
-    source: quakes # Reference by ID
+    source: quakes
+    filter: ["has", "point_count"]
     layout:
-      text-field: "{mag}"
+      text-field: "{point_count_abbreviated}"
+      text-size: 12
+
+  - id: unclustered
+    type: circle
+    source: quakes
+    filter: ["!", ["has", "point_count"]]
+    paint:
+      circle-radius: 6
+      circle-color: "#ef4444"
 ```
+
+Named sources are added to the map before layers, so any layer can reference them by string ID. Inline sources on individual layers still work — the two approaches can be mixed freely.
+
+<Aside type="tip">
+  Use named sources when multiple layers share the same data (e.g., a fill layer and an outline layer from the same GeoJSON). Use inline sources for single-layer convenience.
+</Aside>
 
 ## Next steps
 

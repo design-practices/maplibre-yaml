@@ -356,6 +356,96 @@ describe("MapBlockSchema", () => {
     expect(MapBlockSchema.parse(block)).toMatchObject(block);
   });
 
+  it("accepts map block with named sources", () => {
+    const block = {
+      type: "map" as const,
+      id: "map-with-sources",
+      config: {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+      },
+      sources: {
+        "gowanus-data": {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection", features: [] },
+        },
+      },
+      layers: [
+        {
+          id: "gowanus-fill",
+          type: "fill" as const,
+          source: "gowanus-data",
+          paint: { "fill-color": "#3388ff" },
+        },
+      ],
+    };
+    const result = MapBlockSchema.parse(block);
+    expect(result.sources).toBeDefined();
+    expect(result.sources!["gowanus-data"]).toMatchObject({
+      type: "geojson",
+    });
+  });
+
+  it("accepts map block with multiple sources shared across layers", () => {
+    const block = {
+      type: "map" as const,
+      id: "multi-source-map",
+      config: {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+      },
+      sources: {
+        "boundary": {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection", features: [] },
+        },
+        "parcels": {
+          type: "vector" as const,
+          url: "https://example.com/tiles.json",
+        },
+      },
+      layers: [
+        {
+          id: "boundary-fill",
+          type: "fill" as const,
+          source: "boundary",
+          paint: { "fill-color": "#aaa" },
+        },
+        {
+          id: "boundary-outline",
+          type: "line" as const,
+          source: "boundary",
+          paint: { "line-color": "#000" },
+        },
+        {
+          id: "parcels-fill",
+          type: "fill" as const,
+          source: "parcels",
+          "source-layer": "parcels",
+          paint: { "fill-color": "#ccc" },
+        },
+      ],
+    };
+    const result = MapBlockSchema.parse(block);
+    expect(Object.keys(result.sources!)).toHaveLength(2);
+  });
+
+  it("accepts map block without sources (optional)", () => {
+    const block = {
+      type: "map" as const,
+      id: "no-sources",
+      config: {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+      },
+    };
+    const result = MapBlockSchema.parse(block);
+    expect(result.sources).toBeUndefined();
+  });
+
   it("accepts map block with layer references", () => {
     const block = {
       type: "map" as const,
@@ -508,6 +598,39 @@ describe("MapFullPageBlockSchema", () => {
       },
     };
     expect(MapFullPageBlockSchema.parse(block)).toMatchObject(block);
+  });
+
+  it("accepts full-page map with named sources", () => {
+    const block = {
+      type: "map-fullpage" as const,
+      id: "fullpage-with-sources",
+      config: {
+        center: [0, 0] as [number, number],
+        zoom: 12,
+        mapStyle: "https://example.com/style.json",
+      },
+      sources: {
+        "buildings": {
+          type: "vector" as const,
+          url: "https://example.com/buildings.json",
+        },
+      },
+      layers: [
+        {
+          id: "buildings-3d",
+          type: "fill-extrusion" as const,
+          source: "buildings",
+          "source-layer": "buildings",
+          paint: {
+            "fill-extrusion-color": "#aaa",
+            "fill-extrusion-height": 10,
+          },
+        },
+      ],
+    };
+    const result = MapFullPageBlockSchema.parse(block);
+    expect(result.sources).toBeDefined();
+    expect(result.sources!["buildings"]).toMatchObject({ type: "vector" });
   });
 
   it('requires type to be "map-fullpage"', () => {

@@ -18,6 +18,7 @@ import {
   ZoomLevelSchema,
 } from "./base.schema";
 import { LayerOrReferenceSchema } from "./layer.schema";
+import { LayerSourceSchema } from "./source.schema";
 
 /**
  * Control position on the map.
@@ -85,7 +86,7 @@ const ControlConfigSchema = z.union([
 export const ControlsConfigSchema = z
   .object({
     navigation: ControlConfigSchema.optional().describe(
-      "Navigation controls (zoom, rotation)"
+      "Navigation controls (zoom, rotation)",
     ),
     geolocate: ControlConfigSchema.optional().describe("Geolocation control"),
     scale: ControlConfigSchema.optional().describe("Scale control"),
@@ -146,7 +147,7 @@ export const LegendConfigSchema = z
             .string()
             .optional()
             .describe("Icon name/URL (for shape: icon)"),
-        })
+        }),
       )
       .optional()
       .describe("Custom legend items (overrides layer legends)"),
@@ -250,7 +251,7 @@ export const MapConfigSchema = z
       .optional()
       .describe(
         "MapLibre style URL or style object. " +
-          "Optional when global config.defaultMapStyle is set."
+          "Optional when global config.defaultMapStyle is set.",
       ),
 
     // View
@@ -277,7 +278,7 @@ export const MapConfigSchema = z
     minPitch: z.number().min(0).max(85).optional().describe("Minimum pitch"),
     maxPitch: z.number().min(0).max(85).optional().describe("Maximum pitch"),
     maxBounds: LngLatBoundsSchema.optional().describe(
-      "Maximum geographic bounds"
+      "Maximum geographic bounds",
     ),
 
     // Interaction
@@ -304,7 +305,7 @@ export const MapConfigSchema = z
       .optional()
       .describe("Show attribution control"),
     logoPosition: ControlPositionSchema.optional().describe(
-      "MapLibre logo position"
+      "MapLibre logo position",
     ),
     fadeDuration: z
       .number()
@@ -413,6 +414,10 @@ export const MapBlockSchema: z.ZodObject<any> = z
     className: z.string().optional().describe("CSS class name for container"),
     style: z.string().optional().describe("Inline CSS styles for container"),
     config: MapConfigSchema.describe("Map configuration"),
+    sources: z
+      .record(z.string(), LayerSourceSchema)
+      .optional()
+      .describe("Map sources"),
     layers: z.array(LayerOrReferenceSchema).default([]).describe("Map layers"),
     controls: ControlsConfigSchema.optional().describe("Map controls"),
     legend: LegendConfigSchema.optional().describe("Legend configuration"),
@@ -460,6 +465,10 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     className: z.string().optional().describe("CSS class name for container"),
     style: z.string().optional().describe("Inline CSS styles for container"),
     config: MapConfigSchema.describe("Map configuration"),
+    sources: z
+      .record(z.string(), LayerSourceSchema)
+      .optional()
+      .describe("Map sources"),
     layers: z.array(LayerOrReferenceSchema).default([]).describe("Map layers"),
     controls: ControlsConfigSchema.optional().describe("Map controls"),
     legend: LegendConfigSchema.optional().describe("Legend configuration"),

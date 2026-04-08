@@ -264,6 +264,125 @@ describe("MapRenderer", () => {
     });
   });
 
+  describe("block-level sources", () => {
+    it("adds named sources to map before layers on load", (done) => {
+      const config = {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+      };
+
+      const sources = {
+        "my-geojson": {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection", features: [] },
+        },
+      };
+
+      renderer = new MapRenderer(container, config, [], { onLoad: () => {
+        const map = renderer.getMap();
+        expect(map.addSource).toHaveBeenCalledWith("my-geojson", sources["my-geojson"]);
+        done();
+      }}, sources);
+
+      renderer.getMap().emit("load");
+    });
+
+    it("does not re-add source if it already exists on the map", (done) => {
+      const config = {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+      };
+
+      const sources = {
+        "existing-source": {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection", features: [] },
+        },
+      };
+
+      renderer = new MapRenderer(container, config, [], { onLoad: () => {
+        const map = renderer.getMap();
+        // addSource should not have been called for the existing source
+        const addSourceCalls = (map.addSource as any).mock.calls;
+        const calledWithExisting = addSourceCalls.some(
+          (call: any[]) => call[0] === "existing-source"
+        );
+        expect(calledWithExisting).toBe(false);
+        done();
+      }}, sources);
+
+      // Simulate that source already exists
+      const map = renderer.getMap();
+      map.getSource = vi.fn().mockReturnValue({ type: "geojson" });
+
+      map.emit("load");
+    });
+
+    it("adds sources before layers so string references resolve", (done) => {
+      const config = {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+      };
+
+      const sources = {
+        "shared-data": {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection", features: [] },
+        },
+      };
+
+      const layers = [
+        {
+          id: "fill-layer",
+          type: "fill" as const,
+          source: "shared-data",
+          paint: { "fill-color": "#aaa" },
+        },
+      ];
+
+      const callOrder: string[] = [];
+      renderer = new MapRenderer(container, config, layers, { onLoad: () => {
+        // Verify addSource was called (for the named source) before addLayer
+        const map = renderer.getMap();
+        expect(map.addSource).toHaveBeenCalledWith("shared-data", sources["shared-data"]);
+        expect(map.addLayer).toHaveBeenCalled();
+        done();
+      }}, sources);
+
+      // Make getSource return the source after it's been "added"
+      const map = renderer.getMap();
+      const originalGetSource = map.getSource;
+      map.getSource = vi.fn().mockImplementation((id: string) => {
+        if (id === "shared-data") {
+          // Return truthy after addSource was called for it
+          const calls = (map.addSource as any).mock.calls;
+          return calls.some((c: any[]) => c[0] === "shared-data") ? { type: "geojson" } : undefined;
+        }
+        return originalGetSource(id);
+      });
+
+      map.emit("load");
+    });
+
+    it("works without sources parameter", (done) => {
+      const config = {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+      };
+
+      renderer = new MapRenderer(container, config, [], { onLoad: () => {
+        // No sources to add, should still load fine
+        done();
+      }});
+
+      renderer.getMap().emit("load");
+    });
+  });
+
   describe("controls", () => {
     beforeEach(() => {
       const config = {

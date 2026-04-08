@@ -5,7 +5,7 @@
 
 import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl';
 import type { z } from 'zod';
-import { MapConfigSchema, LayerSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
+import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
 import { EventHandler, type EventHandlerCallbacks } from './event-handler';
 import { LegendBuilder } from './legend-builder';
@@ -13,6 +13,7 @@ import { ControlsManager } from './controls-manager';
 
 type MapConfig = z.infer<typeof MapConfigSchema>;
 type Layer = z.infer<typeof LayerSchema>;
+type LayerSource = z.infer<typeof LayerSourceSchema>;
 type ControlsConfig = z.infer<typeof ControlsConfigSchema>;
 type LegendConfig = z.infer<typeof LegendConfigSchema>;
 
@@ -50,7 +51,7 @@ export class MapRenderer {
   private eventListeners: Map<string, Set<Function>>;
   private isLoaded: boolean;
 
-  constructor(container: string | HTMLElement, config: MapConfig, layers: Layer[] = [], options: MapRendererOptions = {}) {
+  constructor(container: string | HTMLElement, config: MapConfig, layers: Layer[] = [], options: MapRendererOptions = {}, sources?: Record<string, LayerSource>) {
     this.eventListeners = new Map();
     this.isLoaded = false;
 
@@ -86,6 +87,15 @@ export class MapRenderer {
     // Set up load handler
     this.map.on('load', () => {
       this.isLoaded = true;
+
+      // Add named sources from block config before processing layers
+      if (sources) {
+        for (const [id, sourceSpec] of Object.entries(sources)) {
+          if (!this.map.getSource(id)) {
+            this.map.addSource(id, sourceSpec as any);
+          }
+        }
+      }
 
       // Add layers
       Promise.all(layers.map((layer) => this.addLayer(layer)))

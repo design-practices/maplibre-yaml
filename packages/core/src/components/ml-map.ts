@@ -300,10 +300,10 @@ export class MLMap extends HTMLElement {
     this.appendChild(this.mapContainer);
 
     try {
-      // Extract config and layers from MapBlock
-      const { config, layers = [] } = mapBlock;
+      // Extract config, sources, and layers from MapBlock
+      const { config, sources, layers = [] } = mapBlock;
 
-      // Create renderer with config and layers
+      // Create renderer with config, layers, and named sources
       this.renderer = new MapRenderer(this.mapContainer, config, layers, {
         onLoad: () => {
           // Load event is also emitted via the event system
@@ -316,7 +316,7 @@ export class MLMap extends HTMLElement {
             })
           );
         },
-      });
+      }, sources);
 
       // Set up event forwarding
       this.setupEventForwarding();
