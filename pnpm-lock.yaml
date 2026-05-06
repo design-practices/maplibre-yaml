@@ -76,8 +76,8 @@ importers:
   packages/cli:
     dependencies:
       '@maplibre-yaml/core':
-        specifier: ^0.1.2
-        version: 0.1.2(maplibre-gl@4.7.1)
+        specifier: ^0.2.0
+        version: 0.2.0(maplibre-gl@4.7.1)
       chokidar:
         specifier: ^3.5.3
         version: 3.6.0
@@ -1204,8 +1204,8 @@ packages:
     resolution: {integrity: sha512-Es6WcD0nO5l+2BOQS4uLfNPYQaNDfbot3X1XUoloz+x0mPDS3eeORZJl06HXjwBG1fOGwCRnzK88LMdxKRrd6Q==}
     engines: {node: '>=6.0.0'}
 
-  '@maplibre-yaml/core@0.1.2':
-    resolution: {integrity: sha512-JYHVHvkU8pdI95H8oklLysLWkrmeucLIm/1HUyrymcXEH4/1S+lKTD0syXGNPfEs7PCK4MHhcmlxF6Nn/VvOdA==}
+  '@maplibre-yaml/core@0.2.0':
+    resolution: {integrity: sha512-x+9red9pxcKXKBRit8NXLIm7+R1qotKANSYw0QoMLIICbv8k0TZnh4gLDEwHUHeIPYj/vC1+o1h50N4cTBQJLw==}
     peerDependencies:
       maplibre-gl: ^3.0.0 || ^4.0.0
 
@@ -5187,7 +5187,7 @@ snapshots:
 
   '@mapbox/whoots-js@3.1.0': {}
 
-  '@maplibre-yaml/core@0.1.2(maplibre-gl@4.7.1)':
+  '@maplibre-yaml/core@0.2.0(maplibre-gl@4.7.1)':
     dependencies:
       maplibre-gl: 4.7.1
       yaml: 2.8.2

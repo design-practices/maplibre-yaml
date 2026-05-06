@@ -441,6 +441,53 @@ const featuredMaps = await getCollection('maps', ({ data }) => data.featured);
 ))}
 ```
 
+## Named Sources
+
+Sources can be defined at the block level and referenced by name across multiple layers. This avoids duplicating source definitions and makes it easy to share data between layers (e.g., a fill and an outline from the same GeoJSON).
+
+```yaml
+type: map
+id: neighborhood-map
+config:
+  center: [-73.985, 40.674]
+  zoom: 14
+  mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+
+sources:
+  boundary:
+    type: geojson
+    url: "/data/boundary.geojson"
+  parcels:
+    type: vector
+    url: "https://example.com/tiles.json"
+
+layers:
+  - id: boundary-fill
+    type: fill
+    source: boundary
+    paint:
+      fill-color: "#3388ff"
+      fill-opacity: 0.2
+  - id: boundary-outline
+    type: line
+    source: boundary
+    paint:
+      line-color: "#3388ff"
+      line-width: 2
+  - id: parcels-fill
+    type: fill
+    source: parcels
+    source-layer: parcels
+    paint:
+      fill-color: "#ccc"
+```
+
+Named sources are added to the map before layers are processed, so any layer can reference them by string ID. Inline sources on individual layers still work as before — the two approaches can be mixed freely.
+
+<Aside type="tip">
+  Use named sources when multiple layers share the same data. Use inline sources for single-layer convenience.
+</Aside>
+
 ## FullPageMap Component
 
 The `FullPageMap` component creates a full-viewport map with built-in controls and an optional legend. It's perfect for landing pages, dashboards, or dedicated map views.

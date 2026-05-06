@@ -72,9 +72,20 @@ export class LayerManager {
   }
 
   async addLayer(layer: Layer): Promise<void> {
-    const sourceId = `${layer.id}-source`;
+    // If source is a string reference (named source), use it directly;
+    // otherwise generate a source ID for inline source objects
+    const isSourceRef = typeof layer.source === "string";
+    const sourceId = isSourceRef ? layer.source as string : `${layer.id}-source`;
     this.layerToSource.set(layer.id, sourceId);
-    await this.addSource(sourceId, layer);
+
+    if (!isSourceRef) {
+      await this.addSource(sourceId, layer);
+    } else if (!this.map.getSource(sourceId)) {
+      throw new Error(
+        `Source '${sourceId}' referenced by layer '${layer.id}' not found. ` +
+        `Ensure it is defined in the block-level 'sources' map.`
+      );
+    }
 
     const layerSpec: any = {
       id: layer.id,
@@ -110,15 +121,7 @@ export class LayerManager {
   }
 
   private async addSource(sourceId: string, layer: Layer): Promise<void> {
-    // Handle source reference (string ID)
-    if (typeof layer.source === "string") {
-      if (!this.map.getSource(layer.source)) {
-        throw new Error(`Source reference '${layer.source}' not found`);
-      }
-      return;
-    }
-
-    // layer.source is now guaranteed to be an object
+    // layer.source is guaranteed to be an object (string refs handled in addLayer)
     const source = layer.source as { type: string };
 
     if (source.type === "geojson") {
@@ -407,7 +410,13 @@ export class LayerManager {
     if (this.map.getLayer(layerId)) this.map.removeLayer(layerId);
 
     const sourceId = this.layerToSource.get(layerId) || `${layerId}-source`;
-    if (this.map.getSource(sourceId)) this.map.removeSource(sourceId);
+
+    // Only remove the source if it was created inline for this layer (not a shared named source).
+    // A shared named source's ID won't match the "${layerId}-source" pattern.
+    const isInlineSource = sourceId === `${layerId}-source`;
+    if (isInlineSource && this.map.getSource(sourceId)) {
+      this.map.removeSource(sourceId);
+    }
 
     // Clean up data references
     this.sourceData.delete(sourceId);

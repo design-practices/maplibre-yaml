@@ -104,6 +104,50 @@ layers:
       circle-color: "#ef4444"
 ```
 
+### Named Sources
+
+Define sources at the block level and reference them by name across multiple layers:
+
+```yaml
+type: map
+id: neighborhood-map
+config:
+  center: [-73.985, 40.674]
+  zoom: 14
+  mapStyle: https://basemaps.cartocdn.com/gl/positron-gl-style/style.json
+
+sources:
+  boundary:
+    type: geojson
+    url: https://example.com/boundary.geojson
+  parcels:
+    type: vector
+    url: https://example.com/parcels.json
+
+layers:
+  - id: boundary-fill
+    type: fill
+    source: boundary
+    paint:
+      fill-color: "#3388ff"
+      fill-opacity: 0.2
+  - id: boundary-outline
+    type: line
+    source: boundary
+    paint:
+      line-color: "#3388ff"
+      line-width: 2
+  - id: parcels-fill
+    type: fill
+    source: parcels
+    source-layer: parcels
+    paint:
+      fill-color: "#ccc"
+      fill-opacity: 0.5
+```
+
+Sources defined at the block level are added to the map before layers, so any layer can reference them by name. This avoids duplicating source definitions when multiple layers use the same data. Inline sources on individual layers still work as before.
+
 ### Real-time Data with Polling
 
 ```yaml
