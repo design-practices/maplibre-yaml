@@ -3,7 +3,7 @@
  * @module @maplibre-yaml/core/renderer
  */
 
-import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl';
+import { Map as MapLibreMap, type LngLat } from 'maplibre-gl';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
@@ -35,8 +35,8 @@ export interface MapRendererEvents {
   'layer:data-loading': { layerId: string };
   'layer:data-loaded': { layerId: string; featureCount: number };
   'layer:data-error': { layerId: string; error: Error };
-  'layer:click': { layerId: string; feature: any; lngLat: maplibregl.LngLat };
-  'layer:hover': { layerId: string; feature: any; lngLat: maplibregl.LngLat };
+  'layer:click': { layerId: string; feature: any; lngLat: LngLat };
+  'layer:hover': { layerId: string; feature: any; lngLat: LngLat };
 }
 
 /**
@@ -56,7 +56,7 @@ export class MapRenderer {
     this.isLoaded = false;
 
     // Initialize MapLibre map
-    this.map = new maplibregl.Map({
+    this.map = new MapLibreMap({
       ...config,
       container: typeof container === 'string' ? container : container,
       style: config.mapStyle as any,

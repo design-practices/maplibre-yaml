@@ -3,11 +3,11 @@
  * @module @maplibre-yaml/core/renderer
  */
 
-import maplibregl, {
+import {
   type Map as MapLibreMap,
   type MapMouseEvent,
-  type Popup,
   type LngLat,
+  Popup,
 } from "maplibre-gl";
 import type { z } from "zod";
 import { LayerSchema, PopupContentSchema } from "../schemas";
@@ -105,7 +105,7 @@ export class EventHandler {
 
     const html = this.popupBuilder.build(content, feature.properties);
 
-    this.activePopup = new maplibregl.Popup()
+    this.activePopup = new Popup()
       .setLngLat(lngLat)
       .setHTML(html)
       .addTo(this.map);
