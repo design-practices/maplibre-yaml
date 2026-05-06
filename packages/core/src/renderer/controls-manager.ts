@@ -3,13 +3,9 @@
  * @module @maplibre-yaml/core/renderer
  */
 
-import {
+import maplibregl, {
   type Map as MapLibreMap,
   type IControl,
-  NavigationControl,
-  GeolocateControl,
-  ScaleControl,
-  FullscreenControl,
 } from "maplibre-gl";
 import type { z } from "zod";
 import { ControlsConfigSchema } from "../schemas";
@@ -38,7 +34,7 @@ export class ControlsManager {
       const options =
         typeof config.navigation === "object" ? config.navigation : {};
       const position = (options as any).position || "top-right";
-      const control = new NavigationControl();
+      const control = new maplibregl.NavigationControl();
       this.map.addControl(control, position as any);
       this.addedControls.push(control);
     }
@@ -47,7 +43,7 @@ export class ControlsManager {
       const options =
         typeof config.geolocate === "object" ? config.geolocate : {};
       const position = (options as any).position || "top-right";
-      const control = new GeolocateControl({
+      const control = new maplibregl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
         trackUserLocation: true,
       });
@@ -58,7 +54,7 @@ export class ControlsManager {
     if (config.scale) {
       const options = typeof config.scale === "object" ? config.scale : {};
       const position = (options as any).position || "bottom-left";
-      const control = new ScaleControl();
+      const control = new maplibregl.ScaleControl();
       this.map.addControl(control, position as any);
       this.addedControls.push(control);
     }
@@ -67,7 +63,7 @@ export class ControlsManager {
       const options =
         typeof config.fullscreen === "object" ? config.fullscreen : {};
       const position = (options as any).position || "top-right";
-      const control = new FullscreenControl();
+      const control = new maplibregl.FullscreenControl();
       this.map.addControl(control, position as any);
       this.addedControls.push(control);
     }

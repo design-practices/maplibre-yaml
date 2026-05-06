@@ -1,39 +1,32 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // Mock maplibre-gl before any imports
-vi.mock("maplibre-gl", () => {
-  const Map = vi.fn(() => ({
-    on: vi.fn(),
-    off: vi.fn(),
-    remove: vi.fn(),
-    addSource: vi.fn(),
-    addLayer: vi.fn(),
-    getSource: vi.fn(),
-    getLayer: vi.fn(),
-    getCanvas: vi.fn(() => ({
-      style: { cursor: "" },
+vi.mock("maplibre-gl", () => ({
+  default: {
+    Map: vi.fn(() => ({
+      on: vi.fn(),
+      off: vi.fn(),
+      remove: vi.fn(),
+      addSource: vi.fn(),
+      addLayer: vi.fn(),
+      getSource: vi.fn(),
+      getLayer: vi.fn(),
+      getCanvas: vi.fn(() => ({
+        style: { cursor: "" },
+      })),
     })),
-  }));
-  const Popup = vi.fn(() => ({
-    setLngLat: vi.fn().mockReturnThis(),
-    setHTML: vi.fn().mockReturnThis(),
-    addTo: vi.fn().mockReturnThis(),
-    remove: vi.fn(),
-  }));
-  const NavigationControl = vi.fn();
-  const GeolocateControl = vi.fn();
-  const ScaleControl = vi.fn();
-  const FullscreenControl = vi.fn();
-  return {
-    default: { Map, Popup, NavigationControl, GeolocateControl, ScaleControl, FullscreenControl },
-    Map,
-    Popup,
-    NavigationControl,
-    GeolocateControl,
-    ScaleControl,
-    FullscreenControl,
-  };
-});
+    Popup: vi.fn(() => ({
+      setLngLat: vi.fn().mockReturnThis(),
+      setHTML: vi.fn().mockReturnThis(),
+      addTo: vi.fn().mockReturnThis(),
+      remove: vi.fn(),
+    })),
+    NavigationControl: vi.fn(),
+    GeolocateControl: vi.fn(),
+    ScaleControl: vi.fn(),
+    FullscreenControl: vi.fn(),
+  },
+}));
 
 // Mock MapRenderer before import
 vi.mock("../../src/renderer/map-renderer", () => ({

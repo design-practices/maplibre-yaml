@@ -2,19 +2,14 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ControlsManager } from "../../src/renderer/controls-manager";
 
 // Mock maplibre-gl
-vi.mock("maplibre-gl", () => {
-  const NavigationControl = vi.fn(() => ({ type: "navigation" }));
-  const GeolocateControl = vi.fn(() => ({ type: "geolocate" }));
-  const ScaleControl = vi.fn(() => ({ type: "scale" }));
-  const FullscreenControl = vi.fn(() => ({ type: "fullscreen" }));
-  return {
-    default: { NavigationControl, GeolocateControl, ScaleControl, FullscreenControl },
-    NavigationControl,
-    GeolocateControl,
-    ScaleControl,
-    FullscreenControl,
-  };
-});
+vi.mock("maplibre-gl", () => ({
+  default: {
+    NavigationControl: vi.fn(() => ({ type: "navigation" })),
+    GeolocateControl: vi.fn(() => ({ type: "geolocate" })),
+    ScaleControl: vi.fn(() => ({ type: "scale" })),
+    FullscreenControl: vi.fn(() => ({ type: "fullscreen" })),
+  },
+}));
 
 describe("ControlsManager", () => {
   let mockMap: any;

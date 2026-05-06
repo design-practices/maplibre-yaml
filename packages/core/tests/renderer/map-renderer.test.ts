@@ -36,32 +36,20 @@ vi.mock("maplibre-gl", () => {
     remove() {}
   }
 
-  const NavigationControl = vi.fn(() => ({ type: "navigation" }));
-  const GeolocateControl = vi.fn(() => ({ type: "geolocate" }));
-  const ScaleControl = vi.fn(() => ({ type: "scale" }));
-  const FullscreenControl = vi.fn(() => ({ type: "fullscreen" }));
-  const Popup = vi.fn(() => ({
-    setLngLat: vi.fn().mockReturnThis(),
-    setHTML: vi.fn().mockReturnThis(),
-    addTo: vi.fn().mockReturnThis(),
-    remove: vi.fn(),
-  }));
-
   return {
     default: {
       Map: MockMap,
-      NavigationControl,
-      GeolocateControl,
-      ScaleControl,
-      FullscreenControl,
-      Popup,
+      NavigationControl: vi.fn(() => ({ type: "navigation" })),
+      GeolocateControl: vi.fn(() => ({ type: "geolocate" })),
+      ScaleControl: vi.fn(() => ({ type: "scale" })),
+      FullscreenControl: vi.fn(() => ({ type: "fullscreen" })),
+      Popup: vi.fn(() => ({
+        setLngLat: vi.fn().mockReturnThis(),
+        setHTML: vi.fn().mockReturnThis(),
+        addTo: vi.fn().mockReturnThis(),
+        remove: vi.fn(),
+      })),
     },
-    Map: MockMap,
-    NavigationControl,
-    GeolocateControl,
-    ScaleControl,
-    FullscreenControl,
-    Popup,
   };
 });
 

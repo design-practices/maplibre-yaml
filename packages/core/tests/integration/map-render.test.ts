@@ -6,12 +6,12 @@ import { YAMLParser } from "../../src/parser/yaml-parser";
 import { MapRenderer } from "../../src/renderer/map-renderer";
 
 // Mock maplibre-gl before imports
-vi.mock("maplibre-gl", () => {
-  const NativeMap = globalThis.Map;
-  const MaplibreMap = vi.fn().mockImplementation((options) => {
-      const events = new NativeMap<string, Set<Function>>();
-      const sources = new NativeMap<string, any>();
-      const layers = new NativeMap<string, any>();
+vi.mock("maplibre-gl", () => ({
+  default: {
+    Map: vi.fn().mockImplementation((options) => {
+      const events = new Map<string, Set<Function>>();
+      const sources = new Map<string, any>();
+      const layers = new Map<string, any>();
 
       const map = {
         options,
@@ -59,27 +59,19 @@ vi.mock("maplibre-gl", () => {
       };
 
       return map;
-    });
-  const NavigationControl = vi.fn();
-  const GeolocateControl = vi.fn();
-  const ScaleControl = vi.fn();
-  const FullscreenControl = vi.fn();
-  const Popup = vi.fn(() => ({
-    setLngLat: vi.fn().mockReturnThis(),
-    setHTML: vi.fn().mockReturnThis(),
-    addTo: vi.fn().mockReturnThis(),
-    remove: vi.fn(),
-  }));
-  return {
-    default: { Map: MaplibreMap, NavigationControl, GeolocateControl, ScaleControl, FullscreenControl, Popup },
-    Map: MaplibreMap,
-    NavigationControl,
-    GeolocateControl,
-    ScaleControl,
-    FullscreenControl,
-    Popup,
-  };
-});
+    }),
+    NavigationControl: vi.fn(),
+    GeolocateControl: vi.fn(),
+    ScaleControl: vi.fn(),
+    FullscreenControl: vi.fn(),
+    Popup: vi.fn(() => ({
+      setLngLat: vi.fn().mockReturnThis(),
+      setHTML: vi.fn().mockReturnThis(),
+      addTo: vi.fn().mockReturnThis(),
+      remove: vi.fn(),
+    })),
+  },
+}));
 
 /**
  * Integration tests for map rendering from YAML configs

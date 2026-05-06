@@ -1,18 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Mock maplibre-gl before import
-vi.mock("maplibre-gl", () => {
-  const Popup = vi.fn(() => ({
-    setLngLat: vi.fn().mockReturnThis(),
-    setHTML: vi.fn().mockReturnThis(),
-    addTo: vi.fn().mockReturnThis(),
-    remove: vi.fn(),
-  }));
-  return {
-    default: { Popup },
-    Popup,
-  };
-});
+vi.mock("maplibre-gl", () => ({
+  default: {
+    Popup: vi.fn(() => ({
+      setLngLat: vi.fn().mockReturnThis(),
+      setHTML: vi.fn().mockReturnThis(),
+      addTo: vi.fn().mockReturnThis(),
+      remove: vi.fn(),
+    })),
+  },
+}));
 
 import { EventHandler } from "../../src/renderer/event-handler";
 
