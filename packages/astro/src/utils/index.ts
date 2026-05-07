@@ -96,6 +96,10 @@ export {
   clearFeatureCache,
 } from "./feature-ref-loader";
 
+// Feature reference builder
+export { buildFeatureMapConfig } from "./feature-ref-builder";
+export type { BuildFeatureMapOptions } from "./feature-ref-builder";
+
 // Map builder utilities
 export {
   buildPointMapConfig,
