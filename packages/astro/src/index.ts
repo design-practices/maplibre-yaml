@@ -101,6 +101,8 @@ export type { FeatureRef } from "./utils/feature-ref-schema";
 export {
   GeoJSONLoadError,
   findFeature,
+  loadFeatureFile,
+  clearFeatureCache,
 } from "./utils/feature-ref-loader";
 
 export {

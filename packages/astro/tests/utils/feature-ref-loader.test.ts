@@ -3,11 +3,17 @@
  * @module @maplibre-yaml/astro/tests/utils/feature-ref-loader
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { writeFile, mkdir, rm, utimes } from "fs/promises";
+import { join } from "path";
+import { tmpdir } from "os";
 import type { Feature, FeatureCollection } from "geojson";
 import {
   GeoJSONLoadError,
   findFeature,
+  loadFeatureFile,
+  clearFeatureCache,
+  _getCacheEntryDebug,
 } from "../../src/utils/feature-ref-loader";
 import type { FeatureRef } from "../../src/utils/feature-ref-schema";
 
@@ -270,6 +276,323 @@ describe("findFeature", () => {
 
       expect(fc.features.length).toBe(beforeLen);
       expect(fc.features[0]!.id).toBe(beforeFirstId);
+    });
+  });
+});
+
+describe("loadFeatureFile", () => {
+  let testDir: string;
+
+  beforeEach(async () => {
+    clearFeatureCache();
+    testDir = join(tmpdir(), `astro-feature-ref-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    await mkdir(testDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    clearFeatureCache();
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  function writeFC(name: string, fc: FeatureCollection): Promise<string> {
+    const path = join(testDir, name);
+    return writeFile(path, JSON.stringify(fc)).then(() => path);
+  }
+
+  describe("happy paths", () => {
+    it("loads and parses a valid FeatureCollection", async () => {
+      const fc: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [
+          pointFeature("a", { name: "Alpha" }),
+          pointFeature("b", { name: "Beta" }),
+        ],
+      };
+      const path = await writeFC("test.geojson", fc);
+
+      const result = await loadFeatureFile(path);
+      expect(result.type).toBe("FeatureCollection");
+      expect(result.features.length).toBe(2);
+      expect(result.features[0]!.id).toBe("a");
+    });
+
+    it("supports finding features in loaded files", async () => {
+      const fc: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [
+          pointFeature("library-487", { gotf_id: 1.1 }),
+          pointFeature("park-9", { gotf_id: 2.4 }),
+        ],
+      };
+      const path = await writeFC("test.geojson", fc);
+      const loaded = await loadFeatureFile(path);
+
+      const feature = findFeature(loaded, {
+        source: path,
+        featureId: "library-487",
+      });
+      expect(feature.id).toBe("library-487");
+    });
+  });
+
+  describe("caching", () => {
+    it("returns the same parsed object on repeated calls (cache hit)", async () => {
+      const fc: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [pointFeature("a", {})],
+      };
+      const path = await writeFC("test.geojson", fc);
+
+      const first = await loadFeatureFile(path);
+      const second = await loadFeatureFile(path);
+      expect(first).toBe(second); // reference equality = cache hit
+    });
+
+    it("invalidates cache when file mtime changes", async () => {
+      const fc1: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [pointFeature("a", { version: 1 })],
+      };
+      const path = await writeFC("test.geojson", fc1);
+      const first = await loadFeatureFile(path);
+      expect(
+        (first.features[0]!.properties as { version?: number }).version,
+      ).toBe(1);
+
+      // Rewrite the file with new content
+      const fc2: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [pointFeature("a", { version: 2 })],
+      };
+      await writeFile(path, JSON.stringify(fc2));
+      // Bump mtime explicitly to ensure invalidation across fast-running tests
+      const futureTime = new Date(Date.now() + 5000);
+      await utimes(path, futureTime, futureTime);
+
+      const second = await loadFeatureFile(path);
+      expect(first).not.toBe(second);
+      expect(
+        (second.features[0]!.properties as { version?: number }).version,
+      ).toBe(2);
+    });
+
+    it("normalizes paths: relative and absolute resolve to the same cache entry", async () => {
+      const fc: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [pointFeature("a", {})],
+      };
+      const absPath = await writeFC("test.geojson", fc);
+
+      const first = await loadFeatureFile(absPath);
+      // Use the same absolute path again -- second call must hit cache
+      const second = await loadFeatureFile(absPath);
+      expect(first).toBe(second);
+    });
+
+    it("clearFeatureCache forces a fresh read", async () => {
+      const fc: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [pointFeature("a", {})],
+      };
+      const path = await writeFC("test.geojson", fc);
+      const first = await loadFeatureFile(path);
+
+      clearFeatureCache();
+      const second = await loadFeatureFile(path);
+      expect(first).not.toBe(second);
+    });
+  });
+
+  describe("error paths", () => {
+    it("throws GeoJSONLoadError for missing file", async () => {
+      const missing = join(testDir, "does-not-exist.geojson");
+      await expect(loadFeatureFile(missing)).rejects.toThrow(GeoJSONLoadError);
+
+      try {
+        await loadFeatureFile(missing);
+        expect.fail("should have thrown");
+      } catch (err) {
+        const message = (err as Error).message;
+        expect(message).toMatch(/Cannot find/);
+        expect(message).toMatch(/does-not-exist\.geojson/);
+        expect(message).toMatch(/project root/);
+      }
+    });
+
+    it("throws for malformed JSON", async () => {
+      const path = join(testDir, "bad.geojson");
+      await writeFile(path, "{ this is not json");
+      await expect(loadFeatureFile(path)).rejects.toThrow(GeoJSONLoadError);
+
+      try {
+        await loadFeatureFile(path);
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect((err as Error).message).toMatch(/invalid JSON/);
+      }
+    });
+
+    it("throws for valid JSON that is not a FeatureCollection (single Feature)", async () => {
+      const path = join(testDir, "feature.geojson");
+      await writeFile(
+        path,
+        JSON.stringify({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [0, 0] },
+          properties: {},
+        }),
+      );
+
+      try {
+        await loadFeatureFile(path);
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(GeoJSONLoadError);
+        expect((err as Error).message).toMatch(/FeatureCollection/);
+        expect((err as Error).message).toMatch(/Feature/);
+      }
+    });
+
+    it("throws when file contains a JSON array", async () => {
+      const path = join(testDir, "array.geojson");
+      await writeFile(path, JSON.stringify([1, 2, 3]));
+
+      try {
+        await loadFeatureFile(path);
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(GeoJSONLoadError);
+        expect((err as Error).message).toMatch(/FeatureCollection/);
+      }
+    });
+  });
+
+  describe("lazy per-property index", () => {
+    function manyFeatures(count: number, propName = "gotf_id"): Feature[] {
+      const features: Feature[] = [];
+      for (let i = 0; i < count; i++) {
+        features.push(pointFeature(undefined, { [propName]: i }));
+      }
+      return features;
+    }
+
+    it("does not build an index for small files (below threshold)", async () => {
+      const path = await writeFC("small.geojson", {
+        type: "FeatureCollection",
+        features: manyFeatures(50),
+      });
+      const fc = await loadFeatureFile(path);
+
+      findFeature(fc, {
+        source: path,
+        match: { property: "gotf_id", equals: 25 },
+      });
+      findFeature(fc, {
+        source: path,
+        match: { property: "gotf_id", equals: 25 },
+      });
+
+      const entry = _getCacheEntryDebug(path);
+      expect(entry).toBeDefined();
+      expect(entry!.indexByProperty.size).toBe(0);
+    });
+
+    it("does not build an index on first access for a large file", async () => {
+      const path = await writeFC("large.geojson", {
+        type: "FeatureCollection",
+        features: manyFeatures(250),
+      });
+      const fc = await loadFeatureFile(path);
+
+      findFeature(fc, {
+        source: path,
+        match: { property: "gotf_id", equals: 100 },
+      });
+
+      const entry = _getCacheEntryDebug(path);
+      expect(entry!.indexByProperty.size).toBe(0); // not yet built
+      expect(entry!.propertyAccessCount.get("gotf_id")).toBe(1);
+    });
+
+    it("builds an index on second access for a large file", async () => {
+      const path = await writeFC("large.geojson", {
+        type: "FeatureCollection",
+        features: manyFeatures(250),
+      });
+      const fc = await loadFeatureFile(path);
+
+      findFeature(fc, {
+        source: path,
+        match: { property: "gotf_id", equals: 100 },
+      });
+      findFeature(fc, {
+        source: path,
+        match: { property: "gotf_id", equals: 150 },
+      });
+
+      const entry = _getCacheEntryDebug(path);
+      expect(entry!.indexByProperty.has("gotf_id")).toBe(true);
+      expect(entry!.indexByProperty.get("gotf_id")!.size).toBeGreaterThan(0);
+      expect(entry!.propertyAccessCount.get("gotf_id")).toBe(2);
+    });
+
+    it("does not build an index for properties accessed only once", async () => {
+      // Each feature has a unique gotf_id (0..249) and a unique secondary
+      // property `code` so single lookups against either property succeed
+      const path = await writeFC("large.geojson", {
+        type: "FeatureCollection",
+        features: manyFeatures(250).map((f, i) => ({
+          ...f,
+          properties: { ...f.properties, code: `c-${i}` },
+        })),
+      });
+      const fc = await loadFeatureFile(path);
+
+      findFeature(fc, {
+        source: path,
+        match: { property: "gotf_id", equals: 100 },
+      });
+      findFeature(fc, {
+        source: path,
+        match: { property: "gotf_id", equals: 200 },
+      });
+      findFeature(fc, {
+        source: path,
+        match: { property: "code", equals: "c-50" },
+      });
+
+      const entry = _getCacheEntryDebug(path);
+      expect(entry!.indexByProperty.has("gotf_id")).toBe(true);
+      expect(entry!.indexByProperty.has("code")).toBe(false);
+    });
+
+    it("indexed lookups still surface multi-match errors correctly", async () => {
+      const features = manyFeatures(250);
+      // Make two features share the same gotf_id
+      (features[10]!.properties as Record<string, unknown>).gotf_id = 999;
+      (features[20]!.properties as Record<string, unknown>).gotf_id = 999;
+
+      const path = await writeFC("dup.geojson", {
+        type: "FeatureCollection",
+        features,
+      });
+      const fc = await loadFeatureFile(path);
+
+      // First call (linear scan) should detect multi-match
+      expect(() =>
+        findFeature(fc, {
+          source: path,
+          match: { property: "gotf_id", equals: 999 },
+        }),
+      ).toThrow(/2 features/);
+
+      // Second call (index lookup) should also detect multi-match
+      expect(() =>
+        findFeature(fc, {
+          source: path,
+          match: { property: "gotf_id", equals: 999 },
+        }),
+      ).toThrow(/2 features/);
     });
   });
 });

@@ -92,6 +92,8 @@ export type { FeatureRef } from "./feature-ref-schema";
 export {
   GeoJSONLoadError,
   findFeature,
+  loadFeatureFile,
+  clearFeatureCache,
 } from "./feature-ref-loader";
 
 // Map builder utilities
