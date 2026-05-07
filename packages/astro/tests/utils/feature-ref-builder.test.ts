@@ -238,6 +238,28 @@ describe("buildFeatureMapConfig", () => {
     });
   });
 
+  describe("XOR validation (moved from schema to build time)", () => {
+    it("rejects a ref with neither featureId nor match", async () => {
+      await expect(
+        buildFeatureMapConfig({
+          ref: { source: FIXTURE_PATH } as Parameters<typeof buildFeatureMapConfig>[0]["ref"],
+        }),
+      ).rejects.toThrow(/either.+featureId.+or.+match/);
+    });
+
+    it("rejects a ref with both featureId and match", async () => {
+      await expect(
+        buildFeatureMapConfig({
+          ref: {
+            source: FIXTURE_PATH,
+            featureId: "point-1",
+            match: { property: "gotf_id", equals: 1.1 },
+          },
+        }),
+      ).rejects.toThrow(/exactly one of.+featureId.+or.+match/);
+    });
+  });
+
   describe("error: file not found", () => {
     it("missing source file surfaces clear error", async () => {
       await expect(

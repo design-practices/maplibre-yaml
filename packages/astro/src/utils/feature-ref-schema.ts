@@ -146,29 +146,60 @@ export const FeatureRefSchema = z
       .optional()
       .describe("Line width in pixels for LineString features"),
   })
-  .superRefine((data, ctx) => {
-    const hasId = data.featureId !== undefined;
-    const hasMatch = data.match !== undefined;
-
-    if (!hasId && !hasMatch) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "feature_ref must specify either 'featureId' or 'match: { property, equals }'",
-      });
-    }
-    if (hasId && hasMatch) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "feature_ref must specify exactly one of 'featureId' or 'match', not both",
-      });
-    }
-  })
   .describe("Reference to a feature in an external GeoJSON file");
+
+// NOTE: FeatureRefSchema is intentionally a plain ZodObject (no `.superRefine`).
+// Astro 5's content collection layer is known to be picky about ZodEffects
+// schemas wrapped in `.optional()`, occasionally surfacing errors like
+// "Content config not loaded" or "Cannot read properties of undefined".
+// The XOR validation (must have featureId OR match, not both) is enforced
+// at build time inside `buildFeatureMapConfig` and via the helper function
+// `assertValidFeatureRef` exported below.
 
 /** Inferred type for FeatureRef. */
 export type FeatureRef = z.infer<typeof FeatureRefSchema>;
+
+/**
+ * Validates the XOR constraint on a FeatureRef: must have `featureId` OR
+ * `match` (not both, not neither). Throws a Zod-style error if invalid.
+ *
+ * @remarks
+ * Called automatically inside `buildFeatureMapConfig`. Exposed for
+ * advanced consumers who want to validate refs at content-collection-parse
+ * time alongside their own schema.
+ *
+ * @example In a content-collection schema with custom refinement
+ * ```typescript
+ * import { FeatureRefSchema, assertValidFeatureRef } from "@maplibre-yaml/astro";
+ *
+ * const customSchema = z.object({
+ *   feature_ref: FeatureRefSchema.optional(),
+ * }).superRefine((data, ctx) => {
+ *   if (data.feature_ref) {
+ *     try {
+ *       assertValidFeatureRef(data.feature_ref);
+ *     } catch (err) {
+ *       ctx.addIssue({ code: "custom", message: (err as Error).message });
+ *     }
+ *   }
+ * });
+ * ```
+ */
+export function assertValidFeatureRef(ref: FeatureRef): void {
+  const hasId = ref.featureId !== undefined;
+  const hasMatch = ref.match !== undefined;
+
+  if (!hasId && !hasMatch) {
+    throw new Error(
+      "feature_ref must specify either 'featureId' or 'match: { property, equals }'",
+    );
+  }
+  if (hasId && hasMatch) {
+    throw new Error(
+      "feature_ref must specify exactly one of 'featureId' or 'match', not both",
+    );
+  }
+}
 
 /**
  * Creates a schema for collection items where geometry can come from inline

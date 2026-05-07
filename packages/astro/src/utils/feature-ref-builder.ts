@@ -46,6 +46,7 @@ import {
   buildRouteMapConfig,
 } from "./map-builders";
 import type { FeatureRef } from "./feature-ref-schema";
+import { assertValidFeatureRef } from "./feature-ref-schema";
 import {
   GeoJSONLoadError,
   findFeature,
@@ -143,6 +144,21 @@ export async function buildFeatureMapConfig(
   ensureBuildTimeContext(options.ref.source);
 
   const { ref } = options;
+
+  // Enforce the featureId-XOR-match constraint at build time.
+  // (FeatureRefSchema itself is a plain ZodObject for Astro 5 compatibility,
+  // so this check runs here rather than inside the schema.)
+  try {
+    assertValidFeatureRef(ref);
+  } catch (cause) {
+    throw new GeoJSONLoadError(
+      cause instanceof Error ? cause.message : String(cause),
+      ref.source,
+      [],
+      { cause },
+    );
+  }
+
   const fc = await loadFeatureFile(ref.source);
   const feature = findFeature(fc, ref);
   return dispatchByGeometry(feature, ref, globalConfig);

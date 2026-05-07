@@ -92,6 +92,7 @@ export type {
 // Feature reference schema and collection-helper factory
 export {
   FeatureRefSchema,
+  assertValidFeatureRef,
   getCollectionItemWithFeatureRefSchema,
 } from "./utils/feature-ref-schema";
 

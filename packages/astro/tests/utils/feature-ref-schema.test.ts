@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import {
   FeatureRefSchema,
+  assertValidFeatureRef,
   getCollectionItemWithFeatureRefSchema,
   type FeatureRef,
 } from "../../src/utils/feature-ref-schema";
@@ -110,20 +111,23 @@ describe("FeatureRefSchema", () => {
   });
 
   describe("error paths", () => {
-    it("rejects when neither featureId nor match is provided", () => {
-      expect(() =>
-        FeatureRefSchema.parse({ source: "./data.geojson" }),
-      ).toThrow(/either.+featureId.+or.+match/);
+    // NOTE: The XOR check (featureId vs match) is enforced by
+    // `assertValidFeatureRef` and runs inside `buildFeatureMapConfig` --
+    // not by the schema itself. The schema is a plain ZodObject (no
+    // .superRefine) for Astro 5 content-layer compatibility.
+    it("schema accepts a ref with neither featureId nor match (XOR enforced at build time)", () => {
+      const result = FeatureRefSchema.parse({ source: "./data.geojson" });
+      expect(result).toMatchObject({ source: "./data.geojson" });
     });
 
-    it("rejects when both featureId and match are provided", () => {
-      expect(() =>
-        FeatureRefSchema.parse({
-          source: "./data.geojson",
-          featureId: "x",
-          match: { property: "y", equals: 1 },
-        }),
-      ).toThrow(/exactly one of.+featureId.+or.+match/);
+    it("schema accepts a ref with both featureId and match (XOR enforced at build time)", () => {
+      const result = FeatureRefSchema.parse({
+        source: "./data.geojson",
+        featureId: "x",
+        match: { property: "y", equals: 1 },
+      });
+      expect(result).toMatchObject({ featureId: "x" });
+      expect(result).toMatchObject({ match: { property: "y", equals: 1 } });
     });
 
     it("rejects zoom outside [0, 24]", () => {
@@ -200,6 +204,39 @@ describe("FeatureRefSchema", () => {
       };
       expect(ref.source).toBe("./x.geojson");
     });
+  });
+});
+
+describe("assertValidFeatureRef", () => {
+  it("accepts a ref with only featureId", () => {
+    expect(() =>
+      assertValidFeatureRef({ source: "x", featureId: "a" }),
+    ).not.toThrow();
+  });
+
+  it("accepts a ref with only match", () => {
+    expect(() =>
+      assertValidFeatureRef({
+        source: "x",
+        match: { property: "p", equals: 1 },
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects a ref with neither featureId nor match", () => {
+    expect(() =>
+      assertValidFeatureRef({ source: "x" } as FeatureRef),
+    ).toThrow(/either.+featureId.+or.+match/);
+  });
+
+  it("rejects a ref with both featureId and match", () => {
+    expect(() =>
+      assertValidFeatureRef({
+        source: "x",
+        featureId: "a",
+        match: { property: "p", equals: 1 },
+      }),
+    ).toThrow(/exactly one of.+featureId.+or.+match/);
   });
 });
 
