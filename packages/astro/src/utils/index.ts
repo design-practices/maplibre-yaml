@@ -88,6 +88,12 @@ export {
 
 export type { FeatureRef } from "./feature-ref-schema";
 
+// Feature reference loader and lookup helpers
+export {
+  GeoJSONLoadError,
+  findFeature,
+} from "./feature-ref-loader";
+
 // Map builder utilities
 export {
   buildPointMapConfig,

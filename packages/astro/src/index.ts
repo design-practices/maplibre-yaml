@@ -97,6 +97,12 @@ export {
 
 export type { FeatureRef } from "./utils/feature-ref-schema";
 
+// Feature reference loader and lookup helpers
+export {
+  GeoJSONLoadError,
+  findFeature,
+} from "./utils/feature-ref-loader";
+
 export {
   buildPointMapConfig,
   buildMultiPointMapConfig,
