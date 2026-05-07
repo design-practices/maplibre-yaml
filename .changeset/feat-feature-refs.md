@@ -30,3 +30,4 @@ A new `feature_ref` field lets a collection item reference a feature in an exter
 
 - New "GeoJSON Feature References" section in `packages/astro/README.md`
 - New section in `docs/src/content/docs/integrations/astro.mdx` with quick start, match strategies, performance budget, and HMR caveats
+- New guidance: when importing schemas in `src/content/config.ts`, use `@maplibre-yaml/astro/utils` rather than `@maplibre-yaml/astro`. The main entry re-exports Astro components which can't be loaded outside the component pipeline; the `/utils` subpath is safe in any Node context. All existing content-config examples in the README and docs site are updated to follow this convention.

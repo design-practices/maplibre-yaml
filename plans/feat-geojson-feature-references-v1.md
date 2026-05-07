@@ -1,6 +1,8 @@
 # feat: GeoJSON feature references for Astro collections (V1)
 
 > **Deepened: 2026-05-06** -- Added Key Technical Decisions, Open Questions, dependency-ordered Implementation Units, Performance Budget, and expanded Risks based on parallel review by repo-research-analyst, pattern-recognition-specialist, architecture-strategist, and performance-oracle.
+>
+> **Implementation learnings (2026-05-07)** added below in "Implementation Notes" section.
 
 ## Overview
 
@@ -422,6 +424,43 @@ Documented file size guidance for V1. Files outside these bounds either warn or 
 | Deployed SSR adapter contexts (Vercel, Cloudflare) will fail silently if builder runs at request time | Runtime-environment guard throws actionable error directing users to `getStaticPaths` or inline configs. |
 | GeoJSON file edits during `astro dev` require manual page refresh | mtime cache invalidates correctly on edit, but Vite doesn't trigger HMR for files outside the module graph. Documented as known V1 limitation; V2 may add Vite plugin. |
 
+## Implementation Notes (post-build)
+
+Two adjustments made during implementation that the plan did not anticipate:
+
+### 1. `FeatureRefSchema` is a plain `ZodObject`, not `ZodEffects`
+
+Originally I implemented `FeatureRefSchema` as `z.object({...}).superRefine(...)` to enforce the `featureId` XOR `match` constraint at parse time. This produced a `ZodEffects` wrapping a `ZodObject`. When users referenced `FeatureRefSchema.optional()` in their Astro 5 content collection schemas, the dev server failed with:
+
+```
+[content] Content config not loaded
+[ERROR] Cannot read properties of undefined (reading 'get')
+```
+
+Astro 5's content layer is incompatible with `ZodEffects.optional()` in some flow paths. Refactor:
+
+- `FeatureRefSchema` is now a plain `ZodObject` (no `.superRefine`)
+- The XOR check moved to a new exported helper, `assertValidFeatureRef(ref)`
+- `buildFeatureMapConfig` calls `assertValidFeatureRef` automatically before loading the file
+- Tests for "rejects neither" / "rejects both" moved from schema tests to builder tests
+- Schema-level tests now confirm the bare schema accepts both invalid forms (XOR is enforced at build time)
+
+This is a behavior change vs the plan's spec, but functionally equivalent: invalid refs still produce clear errors, just at build time rather than content-collection-parse time. Advanced consumers who want parse-time enforcement can call `assertValidFeatureRef` in their own `.superRefine()`.
+
+### 2. Content configs must import from `@maplibre-yaml/astro/utils`, not the main barrel
+
+The package's main entry (`@maplibre-yaml/astro`) re-exports both Astro components (`Map`, `FullPageMap`, `Scrollytelling`) and utility functions. When `src/content/config.ts` imports from the main entry, Astro's content layer (running in a Node context) tries to evaluate the `.astro` component files and fails -- producing the same `Cannot read properties of undefined (reading 'get')` error.
+
+The fix is to import schemas from the `@maplibre-yaml/astro/utils` subpath (which already exists in `package.json` exports). This subpath includes all schemas, builders, loaders, and helpers but excludes the Astro components. Astro pages (`.astro` files) continue to import components from the main entry.
+
+This guidance was added to:
+
+- `packages/astro/README.md` -- new "Two import paths" section near the top, plus updates to all `src/content/config.ts` code examples
+- `docs/src/content/docs/integrations/astro.mdx` -- Aside callouts at relevant content-config examples
+- The changeset for this release
+
+Existing content-config examples in the docs that imported from `@maplibre-yaml/astro` were updated to use `@maplibre-yaml/astro/utils`. This is technically a documentation change, not a code change -- the `/utils` subpath has always existed -- but it's now the recommended path for content configs.
+
 ## Forward Compatibility (V1 → V2)
 
 V1 ships intentionally narrow, but the V2 candidate list is the long-term goal. This section audits each V1 decision against the V2 candidate list to confirm V1 doesn't paint future implementations into a corner. **The implementer must honor these constraints** — they are V2-enabling guardrails, not just notes.
@@ -710,7 +749,7 @@ Six dependency-ordered units. Each can land as an atomic commit. Unit 5 may be m
 **Dependencies:** Units 1, 4 (everything observable downstream of the schema and the builder).
 
 **Files:**
-- Modify: `examples/astro/otf/src/content/config.ts` (use `getCollectionItemWithFeatureRefSchema()` factory or add `feature_ref: FeatureRefSchema.optional()` plus a `.refine()` for mutual exclusivity — pick whichever is simpler given the existing schema shape)
+- Modify: `examples/astro/otf/src/content/config.ts` (use `getCollectionItemWithFeatureRefSchema()` factory or add `feature_ref: FeatureRefSchema.optional()` plus a `.refine()` for mutual exclusivity — pick whichever is simpler given the existing schema shape). **Important:** import schemas from `@maplibre-yaml/astro/utils` (NOT `@maplibre-yaml/astro`) -- see Implementation Notes section above.
 - Modify: `examples/astro/otf/src/pages/poas/[poas].astro` (insert `feature_ref` branch first in dispatch chain at lines 61-91; that branch must `await buildFeatureMapConfig`)
 - Create: `examples/astro/otf/src/data/gowanus.geojson` (sample file)
 - Modify: at least one POA markdown file under `examples/astro/otf/src/content/poas/` to use `feature_ref` instead of inline coordinates

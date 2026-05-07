@@ -302,10 +302,14 @@ Use Astro Content Collections for managing map configurations:
 
 **1. Define collection schema:**
 
+<Aside type="caution" title="Use the /utils subpath in content config">
+  When importing schemas in `src/content/config.ts`, use `@maplibre-yaml/astro/utils` rather than `@maplibre-yaml/astro`. The main entry re-exports Astro components (`Map`, `FullPageMap`, `Scrollytelling`) which can't be loaded outside the Astro component pipeline. Importing them in a content-config file produces errors like `Content config not loaded` or `Cannot read properties of undefined (reading 'get')`. The `/utils` subpath contains only the schemas and builders -- safe everywhere.
+</Aside>
+
 ```typescript
 // src/content/config.ts
 import { defineCollection } from 'astro:content';
-import { getMapSchema } from '@maplibre-yaml/astro';
+import { getMapSchema } from '@maplibre-yaml/astro/utils';
 
 export const collections = {
   maps: defineCollection({
@@ -394,7 +398,7 @@ Add custom metadata to your map configurations:
 ```typescript
 // src/content/config.ts
 import { defineCollection } from 'astro:content';
-import { extendSchema, getMapSchema } from '@maplibre-yaml/astro';
+import { extendSchema, getMapSchema } from '@maplibre-yaml/astro/utils';
 import { z } from 'zod';
 
 export const collections = {
@@ -1133,7 +1137,7 @@ import {
   LocationPointSchema,
   RegionPolygonSchema,
   RouteLineSchema,
-} from "@maplibre-yaml/astro";
+} from "@maplibre-yaml/astro/utils";  // /utils subpath -- see "Use the /utils subpath" note above
 
 const projects = defineCollection({
   loader: glob({ pattern: "**/*.md", base: "./src/content/projects" }),
@@ -1276,7 +1280,7 @@ When multiple collection items share geometry from a single source-of-truth GeoJ
      LocationPointSchema,
      RegionPolygonSchema,
      RouteLineSchema,
-   } from "@maplibre-yaml/astro";
+   } from "@maplibre-yaml/astro/utils";
 
    export const collections = {
      poas: defineCollection({
@@ -1293,6 +1297,10 @@ When multiple collection items share geometry from a single source-of-truth GeoJ
      }),
    };
    ```
+
+   <Aside type="tip">
+     Always use `@maplibre-yaml/astro/utils` (not `@maplibre-yaml/astro`) inside `src/content/config.ts`. The main package entry re-exports Astro components which can't be loaded outside the component pipeline.
+   </Aside>
 
    For automatic mutual-exclusivity validation, use `getCollectionItemWithFeatureRefSchema()` instead. It rejects items declaring both `feature_ref` and inline geometry at content-collection-parse time.
 
