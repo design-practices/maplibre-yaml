@@ -80,6 +80,14 @@ export type {
   RouteLine,
 } from "./collections-schemas";
 
+// Feature reference schema and collection-helper factory
+export {
+  FeatureRefSchema,
+  getCollectionItemWithFeatureRefSchema,
+} from "./feature-ref-schema";
+
+export type { FeatureRef } from "./feature-ref-schema";
+
 // Map builder utilities
 export {
   buildPointMapConfig,

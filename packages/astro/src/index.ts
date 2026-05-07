@@ -89,6 +89,14 @@ export type {
   RouteLine,
 } from "./utils/collections-schemas";
 
+// Feature reference schema and collection-helper factory
+export {
+  FeatureRefSchema,
+  getCollectionItemWithFeatureRefSchema,
+} from "./utils/feature-ref-schema";
+
+export type { FeatureRef } from "./utils/feature-ref-schema";
+
 export {
   buildPointMapConfig,
   buildMultiPointMapConfig,
