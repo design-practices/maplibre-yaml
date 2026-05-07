@@ -286,6 +286,167 @@ if (data.region) {
 
 Items without any geographic data gracefully fall back to the global default center.
 
+## GeoJSON Feature References
+
+When multiple collection items share geometry from a single source-of-truth GeoJSON file, copying coordinates into each frontmatter is fragile and verbose. The `feature_ref` field lets a collection item point at a feature in an external GeoJSON file (matched by `featureId` or by property equality). At build time, the loader reads the file, finds the matching feature, detects its geometry type, and dispatches to the appropriate builder.
+
+### Quick start
+
+**1. Add `feature_ref` to your collection schema**
+
+```typescript
+// src/content/config.ts
+import { defineCollection, z } from "astro:content";
+import { glob } from "astro/loaders";
+import {
+  FeatureRefSchema,
+  LocationPointSchema,
+  RegionPolygonSchema,
+  RouteLineSchema,
+} from "@maplibre-yaml/astro";
+
+export const collections = {
+  poas: defineCollection({
+    loader: glob({ pattern: "**/*.md", base: "./src/content/poas" }),
+    schema: z.object({
+      title: z.string(),
+      gotf_id: z.number(),
+      // Either feature_ref OR inline geometry -- not both
+      feature_ref: FeatureRefSchema.optional(),
+      location: LocationPointSchema.optional(),
+      region: RegionPolygonSchema.optional(),
+      route: RouteLineSchema.optional(),
+    }),
+  }),
+};
+```
+
+For automatic mutual-exclusivity validation (rejects items declaring both `feature_ref` and inline geometry), use `getCollectionItemWithFeatureRefSchema()` instead.
+
+**2. Reference features from frontmatter**
+
+```yaml
+# Match by feature.id (when GeoJSON has top-level id fields)
+feature_ref:
+  source: "./src/data/gowanus.geojson"
+  featureId: "poa-1.1"
+
+# Match by property equality (more common)
+feature_ref:
+  source: "./src/data/gowanus.geojson"
+  match:
+    property: "gotf_id"
+    equals: 1.1
+  fillColor: "#3388ff"
+  fillOpacity: 0.25
+```
+
+**3. Build the map in your dynamic page**
+
+```astro
+---
+import {
+  Map,
+  buildFeatureMapConfig,
+  buildPointMapConfig,
+  buildPolygonMapConfig,
+  buildRouteMapConfig,
+} from "@maplibre-yaml/astro";
+import type { MapBlock } from "@maplibre-yaml/core";
+import { globalMapConfig } from "../lib/map-config";
+
+const { entry } = Astro.props;
+const data = entry.data;
+
+let mapConfig: MapBlock;
+if (data.feature_ref) {
+  // Async branch: loads the GeoJSON file at build time
+  mapConfig = await buildFeatureMapConfig(
+    { ref: data.feature_ref },
+    globalMapConfig,
+  );
+} else if (data.region) {
+  mapConfig = buildPolygonMapConfig({ region: data.region }, globalMapConfig);
+} else if (data.route) {
+  mapConfig = buildRouteMapConfig({ route: data.route }, globalMapConfig);
+} else if (data.location) {
+  mapConfig = buildPointMapConfig({ location: data.location }, globalMapConfig);
+} else {
+  mapConfig = buildPointMapConfig(
+    {
+      location: {
+        coordinates: globalMapConfig.defaultCenter!,
+        name: data.title,
+      },
+    },
+    globalMapConfig,
+  );
+}
+---
+<Map config={mapConfig} height="300px" />
+```
+
+### Match strategies
+
+Two ways to identify which feature to use:
+
+| Form | When to use |
+|------|------------|
+| `featureId: <string \| number>` | When your GeoJSON features have stable top-level `id` fields (RFC 7946) |
+| `match: { property, equals }` | When IDs live in `feature.properties` (common -- mirrors MapLibre's `promoteId`) |
+
+Exactly one match must be returned. Zero matches or multiple matches throw `GeoJSONLoadError` with details (file path, total feature count, sample IDs/values).
+
+### Override fields
+
+Frontmatter can override `feature.properties.name` and `feature.properties.description`, plus all style fields (`markerColor`, `fillColor`, `strokeColor`, `fillOpacity`, `color`, `width`, `zoom`). Overrides take priority; properties are the fallback.
+
+### Supported geometry types
+
+| Type | Builder dispatched |
+|------|-------------------|
+| `Point` | `buildPointMapConfig` |
+| `MultiPoint` | `buildMultiPointMapConfig` |
+| `LineString` | `buildRouteMapConfig` |
+| `Polygon` | `buildPolygonMapConfig` |
+| `MultiPolygon` | `buildPolygonMapConfig` (uses first polygon ring set) |
+
+`MultiLineString` and `GeometryCollection` throw clear `GeoJSONLoadError`s in V1.
+
+### Build-time only
+
+`buildFeatureMapConfig` reads from the local filesystem via `process.cwd()`. It is **build-time only** -- invoking it in a deployed SSR adapter context throws a `GeoJSONLoadError` with guidance to resolve at build time. Runtime resolution is a planned V2 feature.
+
+### Performance budget (V1)
+
+| File size | Behavior |
+|-----------|---------|
+| < 10MB | Fully supported, no caveats |
+| 10-50MB | Supported; one-time parse cost noted |
+| 50-100MB | Build-time warning |
+| > 100MB | Hard error directing toward PMTiles or splitting |
+
+Files referenced multiple times across collection items are parsed once via an mtime-aware cache. Editing the GeoJSON in `astro dev` invalidates the cache on next page render -- no server restart needed (Vite HMR integration is V2). For files with 200+ features, a per-property index is built lazily on the second access for that property.
+
+### Lower-level primitives
+
+For advanced cases (e.g., loading one file once and dispatching to many features manually):
+
+```typescript
+import {
+  loadFeatureFile,
+  findFeature,
+  GeoJSONLoadError,
+  clearFeatureCache,
+} from "@maplibre-yaml/astro";
+
+const fc = await loadFeatureFile("./src/data/gowanus.geojson");
+const feature = findFeature(fc, { source: "...", featureId: "poa-1.1" });
+// Then dispatch manually with the existing sync builders
+```
+
+`clearFeatureCache()` is exported for test isolation between files that share absolute paths.
+
 ## Important Notes
 
 > **Do NOT import `@maplibre-yaml/core/register` in Astro frontmatter.**
