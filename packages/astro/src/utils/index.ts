@@ -84,6 +84,7 @@ export type {
 export {
   FeatureRefSchema,
   assertValidFeatureRef,
+  InvalidFeatureRefError,
   getCollectionItemWithFeatureRefSchema,
 } from "./feature-ref-schema";
 

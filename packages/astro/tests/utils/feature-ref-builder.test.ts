@@ -5,10 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { resolve } from "path";
-import {
-  buildFeatureMapConfig,
-  _setInternalAllowRuntime,
-} from "../../src/utils/feature-ref-builder";
+import { buildFeatureMapConfig } from "../../src/utils/feature-ref-builder";
 import {
   GeoJSONLoadError,
   clearFeatureCache,
@@ -333,23 +330,96 @@ describe("buildFeatureMapConfig", () => {
     });
   });
 
-  describe("runtime-environment guard", () => {
-    it("guard does not throw under normal build-time invocation", async () => {
-      // When running as a Node test, process.cwd() is defined; guard passes
-      const config = await buildFeatureMapConfig({
-        ref: { source: FIXTURE_PATH, featureId: "point-1" },
-      }, { defaultMapStyle: "https://example.com/style.json" });
-      expect(config).toBeDefined();
-    });
+  describe("input validation", () => {
+    it("throws clear error for LineString with 1 coordinate", async () => {
+      // Synthetic test FC with degenerate LineString
+      const { writeFile, mkdir, rm } = await import("fs/promises");
+      const { join } = await import("path");
+      const { tmpdir } = await import("os");
+      const tmp = join(tmpdir(), `feature-ref-degen-${Date.now()}`);
+      await mkdir(tmp, { recursive: true });
+      const path = join(tmp, "degen.geojson");
+      try {
+        await writeFile(
+          path,
+          JSON.stringify({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                id: "degen",
+                geometry: { type: "LineString", coordinates: [[0, 0]] },
+                properties: {},
+              },
+            ],
+          }),
+        );
 
-    it("internal opt-out flag is functional (forward-compat constraint #2)", () => {
-      // The internal flag exists and can be toggled. Actually triggering
-      // the guard requires a context where process.cwd is unavailable, which
-      // is hard to simulate in vitest; the existence and toggleability of
-      // the flag is what matters for V2 forward-compat.
-      _setInternalAllowRuntime(true);
-      _setInternalAllowRuntime(false);
-      // No assertion needed -- absence of error is the contract
+        await expect(
+          buildFeatureMapConfig(
+            { ref: { source: path, featureId: "degen" } },
+            { defaultMapStyle: "https://example.com/style.json" },
+          ),
+        ).rejects.toThrow(/fewer than 2 coordinates/);
+      } finally {
+        await rm(tmp, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("Z-coordinate handling", () => {
+    it("drops Z (altitude) coordinates from 3D Position arrays", async () => {
+      const { writeFile, mkdir, rm } = await import("fs/promises");
+      const { join } = await import("path");
+      const { tmpdir } = await import("os");
+      const tmp = join(tmpdir(), `feature-ref-3d-${Date.now()}`);
+      await mkdir(tmp, { recursive: true });
+      const path = join(tmp, "3d.geojson");
+      try {
+        await writeFile(
+          path,
+          JSON.stringify({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                id: "3d",
+                geometry: { type: "Point", coordinates: [10, 20, 999] },
+                properties: {},
+              },
+            ],
+          }),
+        );
+
+        const config = await buildFeatureMapConfig(
+          { ref: { source: path, featureId: "3d" } },
+          { defaultMapStyle: "https://example.com/style.json" },
+        );
+
+        // Map center should be 2D, no altitude
+        expect(config.config.center).toEqual([10, 20]);
+        // Layer source data should also be 2D
+        const layer = config.layers[0] as {
+          source: { data: { features: { geometry: { coordinates: number[] } }[] } };
+        };
+        expect(layer.source.data.features[0]!.geometry.coordinates).toEqual([10, 20]);
+      } finally {
+        await rm(tmp, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("build-time context", () => {
+    it("works under normal Node invocation", async () => {
+      // The previous V1 implementation had a runtime-environment guard
+      // (`ensureBuildTimeContext`) plus a mutable opt-out flag. Both were
+      // removed -- runtime-context detection now lives in the loader's
+      // ENOENT path, where it produces deployment-context hints.
+      const config = await buildFeatureMapConfig(
+        { ref: { source: FIXTURE_PATH, featureId: "point-1" } },
+        { defaultMapStyle: "https://example.com/style.json" },
+      );
+      expect(config).toBeDefined();
     });
   });
 });

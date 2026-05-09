@@ -12,8 +12,8 @@
  * testable with synthetic inputs.
  */
 
-import { readFile, stat } from "fs/promises";
-import { resolve } from "path";
+import { readFile, realpath, stat } from "fs/promises";
+import { isAbsolute, relative, resolve } from "path";
 import type { Feature, FeatureCollection } from "geojson";
 import type { FeatureRef } from "./feature-ref-schema";
 
@@ -24,6 +24,23 @@ import type { FeatureRef } from "./feature-ref-schema";
  * @internal
  */
 const INDEX_THRESHOLD = 200;
+
+/**
+ * File-size budget (bytes). Files exceeding this throw a clear error
+ * before `readFile` is called -- prevents OOM on memory-constrained CI.
+ *
+ * @internal
+ */
+const HARD_ERROR_BYTES = 100 * 1024 * 1024;
+
+/**
+ * File-size at which a build-time warning is emitted. Files between this
+ * threshold and the hard error still load, but the warning suggests
+ * splitting or switching to a tile-based source.
+ *
+ * @internal
+ */
+const SOFT_WARN_BYTES = 50 * 1024 * 1024;
 
 /**
  * Cache entry: parsed FeatureCollection plus metadata for invalidation
@@ -51,7 +68,8 @@ interface CacheEntry {
 }
 
 /**
- * Module-level cache, keyed by absolute path. Lifetime = process lifetime.
+ * Module-level cache, keyed by canonicalized absolute path (realpath).
+ * Lifetime = process lifetime.
  *
  * Forward-compatibility constraint #6: this cache is module-private. Only
  * `clearFeatureCache` is exported. V2 may swap this implementation (e.g.,
@@ -60,6 +78,15 @@ interface CacheEntry {
  * @internal
  */
 const fileCache = new Map<string, CacheEntry>();
+
+/**
+ * In-flight load tracking. Concurrent `loadFeatureFile` calls for the same
+ * canonical path share a single Promise -- prevents double-parse on cache
+ * misses under parallel page builds.
+ *
+ * @internal
+ */
+const inFlight = new Map<string, Promise<FeatureCollection>>();
 
 /**
  * Test-only debug accessor for the cache entry at a given absolute path.
@@ -86,6 +113,53 @@ export function _getCacheEntryDebug(absPath: string): CacheEntry | undefined {
  */
 export function clearFeatureCache(): void {
   fileCache.clear();
+  inFlight.clear();
+}
+
+/**
+ * Resolve `srcPath` to a canonical absolute path inside the project root.
+ *
+ * Throws `GeoJSONLoadError` if the resolved path escapes the project root
+ * (path traversal protection) or if the file does not exist.
+ *
+ * Uses `realpath` to canonicalize symlinks so two refs pointing at the
+ * same physical file via different paths share a cache entry.
+ *
+ * @internal
+ */
+async function resolveSourcePath(srcPath: string): Promise<string> {
+  const projectRoot = process.cwd();
+
+  // Path-traversal containment check: reject RELATIVE paths that escape the
+  // project root via `..`. Absolute paths require deliberate intent and are
+  // allowed (e.g., for tests using tmpdir, or monorepo data in a sibling
+  // package). Consumers exposing frontmatter to untrusted user content
+  // should validate `source` values themselves -- absolute paths in
+  // frontmatter are unusual and worth flagging at the application layer.
+  if (!isAbsolute(srcPath)) {
+    const resolved = resolve(projectRoot, srcPath);
+    const rel = relative(projectRoot, resolved);
+    if (rel.startsWith("..")) {
+      throw new GeoJSONLoadError(
+        `feature_ref.source resolves outside the project root. ` +
+          `Got: "${srcPath}" -> "${resolved}". ` +
+          `Project root: ${projectRoot}. ` +
+          `If this is intentional, use an absolute path.`,
+        resolved,
+      );
+    }
+  }
+
+  const resolved = resolve(projectRoot, srcPath);
+
+  // Canonicalize via realpath so symlinks share cache entries.
+  // Falls back to the resolved path if realpath fails (e.g., file doesn't
+  // exist yet -- the subsequent stat call will produce a clearer error).
+  try {
+    return await realpath(resolved);
+  } catch {
+    return resolved;
+  }
 }
 
 /**
@@ -115,20 +189,57 @@ export function clearFeatureCache(): void {
 export async function loadFeatureFile(
   srcPath: string,
 ): Promise<FeatureCollection> {
-  const absPath = resolve(process.cwd(), srcPath);
+  const absPath = await resolveSourcePath(srcPath);
 
+  // In-flight dedupe: parallel calls for the same path share a single read.
+  // Without this, parallel page builds can both miss the cache and double-parse
+  // a 50MB file, OOMing the build worker.
+  const pending = inFlight.get(absPath);
+  if (pending) return pending;
+
+  const promise = doLoadFeatureFile(absPath).finally(() => {
+    inFlight.delete(absPath);
+  });
+  inFlight.set(absPath, promise);
+  return promise;
+}
+
+async function doLoadFeatureFile(absPath: string): Promise<FeatureCollection> {
   let mtimeMs: number;
+  let sizeBytes: number;
   try {
     const stats = await stat(absPath);
     mtimeMs = stats.mtimeMs;
+    sizeBytes = stats.size;
   } catch (cause) {
+    const isENOENT = cause instanceof Error && /ENOENT/.test(cause.message);
+    const hint = isENOENT
+      ? deploymentHint()
+      : `Path resolved to: ${absPath}. ` +
+        `Project root: ${process.cwd()}.`;
     throw new GeoJSONLoadError(
-      `Cannot find GeoJSON file: ${absPath}. ` +
-        `Path is resolved from project root (${process.cwd()}). ` +
-        `Check that the file exists and the path is correct.`,
+      `Cannot find GeoJSON file: ${absPath}. ${hint}`,
       absPath,
       [],
       { cause },
+    );
+  }
+
+  // Enforce documented file-size budget BEFORE readFile to prevent OOM.
+  if (sizeBytes > HARD_ERROR_BYTES) {
+    throw new GeoJSONLoadError(
+      `GeoJSON file ${absPath} is ${formatMB(sizeBytes)}MB, ` +
+        `which exceeds the ${formatMB(HARD_ERROR_BYTES)}MB build-time limit. ` +
+        `Pre-process to a smaller file or use a runtime tile/vector source ` +
+        `(e.g., PMTiles, vector tiles).`,
+      absPath,
+    );
+  }
+  if (sizeBytes > SOFT_WARN_BYTES) {
+    console.warn(
+      `[maplibre-yaml] Large GeoJSON file: ${absPath} ` +
+        `(${formatMB(sizeBytes)}MB). May slow build and spike memory; ` +
+        `consider splitting or switching to a tile-based source.`,
     );
   }
 
@@ -195,6 +306,43 @@ export async function loadFeatureFile(
   });
 
   return fc;
+}
+
+function formatMB(bytes: number): string {
+  return (bytes / 1024 / 1024).toFixed(1);
+}
+
+/**
+ * Detects deployment contexts where build-time file resolution won't work
+ * and dresses the ENOENT error with an actionable hint. Covers the
+ * Vercel/Netlify/Lambda/Cloudflare cases where `process.cwd()` is defined
+ * but doesn't contain the project's source files.
+ *
+ * @internal
+ */
+function deploymentHint(): string {
+  const cwd = process.cwd();
+  const looksServerless =
+    cwd === "/var/task" ||
+    cwd === "/var/runtime" ||
+    cwd === "/tmp" ||
+    process.env.VERCEL === "1" ||
+    process.env.NETLIFY === "true" ||
+    !!process.env.LAMBDA_TASK_ROOT ||
+    !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+  if (looksServerless) {
+    return (
+      `This appears to be a deployed serverless context (cwd=${cwd}). ` +
+      `buildFeatureMapConfig is build-time only. Resolve the feature ref at ` +
+      `build time (e.g., via getStaticPaths or in your Astro frontmatter), ` +
+      `then pass the resulting MapBlock to <Map config={...} />.`
+    );
+  }
+  return (
+    `Path is resolved from project root (cwd=${cwd}). ` +
+    `Check that the file exists and the path is correct.`
+  );
 }
 
 /**
@@ -339,20 +487,26 @@ function matchByProperty(
   fc: FeatureCollection,
   property: string,
   equals: string | number | boolean,
-  sourceLabel: string,
+  _sourceLabel: string,
 ): Feature[] {
   // Below threshold: always linear-scan, do not maintain index
   if (fc.features.length < INDEX_THRESHOLD) {
     return linearScanByProperty(fc, property, equals);
   }
 
-  // Try to use the cache entry for this file (resolve to absolute path
-  // since the cache is keyed by absolute paths)
-  const absPath = resolve(process.cwd(), sourceLabel);
-  const entry = fileCache.get(absPath);
-  if (!entry || entry.fc !== fc) {
-    // Not the same FC instance the cache holds (e.g., synthetic input):
-    // linear-scan with no caching
+  // The cache is keyed by canonicalized realpath, but this sync function
+  // can't await `realpath`. Instead, find the cache entry whose `fc` matches
+  // by reference. Cache typically holds 1-3 entries so this is cheap, and
+  // it's robust against any path-canonicalization differences.
+  let entry: CacheEntry | undefined;
+  for (const e of fileCache.values()) {
+    if (e.fc === fc) {
+      entry = e;
+      break;
+    }
+  }
+  if (!entry) {
+    // Synthetic input that didn't come from `loadFeatureFile`: linear scan
     return linearScanByProperty(fc, property, equals);
   }
 

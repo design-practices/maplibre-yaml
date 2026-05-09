@@ -160,8 +160,27 @@ export const FeatureRefSchema = z
 export type FeatureRef = z.infer<typeof FeatureRefSchema>;
 
 /**
+ * Error thrown when a FeatureRef fails the XOR constraint
+ * (must have `featureId` or `match`, not both, not neither).
+ *
+ * @remarks
+ * Discriminable via `instanceof InvalidFeatureRefError` so consumers
+ * who call `assertValidFeatureRef` directly can distinguish validation
+ * failures from other errors.
+ */
+export class InvalidFeatureRefError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidFeatureRefError";
+  }
+}
+
+/**
  * Validates the XOR constraint on a FeatureRef: must have `featureId` OR
- * `match` (not both, not neither). Throws a Zod-style error if invalid.
+ * `match` (not both, not neither).
+ *
+ * @param ref - The FeatureRef to validate
+ * @throws {InvalidFeatureRefError} when neither or both fields are set
  *
  * @remarks
  * Called automatically inside `buildFeatureMapConfig`. Exposed for
@@ -170,7 +189,7 @@ export type FeatureRef = z.infer<typeof FeatureRefSchema>;
  *
  * @example In a content-collection schema with custom refinement
  * ```typescript
- * import { FeatureRefSchema, assertValidFeatureRef } from "@maplibre-yaml/astro";
+ * import { FeatureRefSchema, assertValidFeatureRef, InvalidFeatureRefError } from "@maplibre-yaml/astro";
  *
  * const customSchema = z.object({
  *   feature_ref: FeatureRefSchema.optional(),
@@ -179,7 +198,9 @@ export type FeatureRef = z.infer<typeof FeatureRefSchema>;
  *     try {
  *       assertValidFeatureRef(data.feature_ref);
  *     } catch (err) {
- *       ctx.addIssue({ code: "custom", message: (err as Error).message });
+ *       if (err instanceof InvalidFeatureRefError) {
+ *         ctx.addIssue({ code: "custom", message: err.message });
+ *       } else throw err;
  *     }
  *   }
  * });
@@ -190,12 +211,12 @@ export function assertValidFeatureRef(ref: FeatureRef): void {
   const hasMatch = ref.match !== undefined;
 
   if (!hasId && !hasMatch) {
-    throw new Error(
+    throw new InvalidFeatureRefError(
       "feature_ref must specify either 'featureId' or 'match: { property, equals }'",
     );
   }
   if (hasId && hasMatch) {
-    throw new Error(
+    throw new InvalidFeatureRefError(
       "feature_ref must specify exactly one of 'featureId' or 'match', not both",
     );
   }

@@ -93,6 +93,7 @@ export type {
 export {
   FeatureRefSchema,
   assertValidFeatureRef,
+  InvalidFeatureRefError,
   getCollectionItemWithFeatureRefSchema,
 } from "./utils/feature-ref-schema";
 

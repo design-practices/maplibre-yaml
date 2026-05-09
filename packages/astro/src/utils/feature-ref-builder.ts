@@ -30,14 +30,6 @@
 
 import type {
   Feature,
-  GeoJsonProperties,
-  GeometryCollection,
-  LineString,
-  MultiLineString,
-  MultiPoint,
-  MultiPolygon,
-  Point,
-  Polygon,
   Position,
 } from "geojson";
 import type { GlobalConfig, MapBlock } from "@maplibre-yaml/core";
@@ -57,27 +49,19 @@ import {
   loadFeatureFile,
 } from "./feature-ref-loader";
 
-/**
- * Internal flag that lets V2 runtime resolution variants opt out of the
- * build-time-only guard without re-implementing the entire builder.
- *
- * Forward-compatibility constraint #2: keep this module-private and
- * @internal. Do NOT export from `index.ts`.
- *
- * @internal
- */
-let INTERNAL_ALLOW_RUNTIME = false;
-
-/**
- * Test-only opt-out for the runtime-environment guard. Lets tests verify
- * the guard fires without requiring an actual deployed SSR adapter
- * environment. Marked @internal; not exported from the package barrel.
- *
- * @internal
- */
-export function _setInternalAllowRuntime(value: boolean): void {
-  INTERNAL_ALLOW_RUNTIME = value;
-}
+// Note: the previous V1 implementation maintained an `INTERNAL_ALLOW_RUNTIME`
+// module-level flag with an exported `_setInternalAllowRuntime` setter
+// intended to let V2 runtime variants opt out of the build-time guard.
+// That pattern is unsafe under concurrent calls (the flag leaks across
+// `await` boundaries) and the test that exercised it asserted nothing
+// meaningful. Removed in V1.x.
+//
+// V2 runtime resolution should ship as a separate builder (e.g.,
+// `buildFeatureMapConfigRuntime`) rather than reusing this one with a
+// global mode switch. The forward-compat path remains additive:
+// runtime-deployment failures are now surfaced via the `loadFeatureFile`
+// ENOENT path, which detects serverless contexts (cwd=/var/task, etc.)
+// and includes deployment-hint text in the error message.
 
 /**
  * Options for `buildFeatureMapConfig`.
@@ -145,8 +129,6 @@ export async function buildFeatureMapConfig(
   options: BuildFeatureMapOptions,
   globalConfig?: GlobalConfig,
 ): Promise<MapBlock> {
-  ensureBuildTimeContext(options.ref.source);
-
   const { ref } = options;
 
   // Enforce the featureId-XOR-match constraint at build time.
@@ -169,34 +151,34 @@ export async function buildFeatureMapConfig(
 }
 
 /**
- * Throw an actionable error if `buildFeatureMapConfig` appears to be
- * running outside a build-time context. The signal we use is
- * `process.cwd()` -- in deployed SSR adapters (Vercel, Cloudflare,
- * Node serverless), cwd is the platform sandbox, not the project root,
- * so file paths won't resolve.
+ * Project a GeoJSON Position to a 2D `[lng, lat]` tuple.
  *
- * Forward-compatibility constraint #2: the guard is skippable via
- * `INTERNAL_ALLOW_RUNTIME`. V2 runtime variants set this flag internally
- * before calling the loader, then unset it after.
+ * GeoJSON Position is `[lng, lat]` OR `[lng, lat, altitude]` (RFC 7946 §3.1.1).
+ * This helper:
+ * 1. Drops Z/altitude explicitly (rather than via unsound `as` cast).
+ * 2. Allocates a fresh tuple, breaking the reference to the cached source
+ *    array. This means downstream mutation of the returned MapBlock cannot
+ *    poison the file cache.
  *
  * @internal
  */
-function ensureBuildTimeContext(source: string): void {
-  if (INTERNAL_ALLOW_RUNTIME) return;
-  if (typeof process === "undefined" || typeof process.cwd !== "function") {
-    throw new GeoJSONLoadError(
-      `buildFeatureMapConfig is build-time only and cannot run in this environment. ` +
-        `Resolve the feature ref at build time (e.g., via getStaticPaths or in your Astro frontmatter), ` +
-        `then pass the resulting MapBlock to <Map config={...} />. ` +
-        `Source: ${source}`,
-      source,
-    );
-  }
+function to2D(p: Position): [number, number] {
+  return [p[0]!, p[1]!];
 }
+
+/**
+ * Maximum recursion depth for `GeometryCollection` unwrapping. Bounds
+ * potential stack overflow on pathologically nested input.
+ *
+ * @internal
+ */
+const MAX_GEOMETRY_COLLECTION_DEPTH = 8;
 
 /**
  * Dispatch a found feature to the appropriate sync builder based on its
  * geometry type. Applies frontmatter overrides over feature.properties.
+ *
+ * The `depth` parameter tracks GeometryCollection unwrapping recursion.
  *
  * @internal
  */
@@ -204,24 +186,22 @@ function dispatchByGeometry(
   feature: Feature,
   ref: FeatureRef,
   globalConfig?: GlobalConfig,
+  depth = 0,
 ): MapBlock {
   const geom = feature.geometry;
-  const props = (feature.properties ?? {}) as GeoJsonProperties as Record<
-    string,
-    unknown
-  >;
-  const name = ref.name ?? (typeof props.name === "string" ? props.name : undefined);
+  const props: Record<string, unknown> = feature.properties ?? {};
+  const name =
+    ref.name ?? (typeof props.name === "string" ? props.name : undefined);
   const description =
     ref.description ??
     (typeof props.description === "string" ? props.description : undefined);
 
   switch (geom.type) {
-    case "Point": {
-      const point = geom as Point;
+    case "Point":
       return buildPointMapConfig(
         {
           location: {
-            coordinates: point.coordinates as [number, number],
+            coordinates: to2D(geom.coordinates),
             name,
             description,
             zoom: ref.zoom,
@@ -230,31 +210,36 @@ function dispatchByGeometry(
         },
         globalConfig,
       );
-    }
-    case "MultiPoint": {
-      const mp = geom as MultiPoint;
+
+    case "MultiPoint":
+      // Note (intentional divergence from entry-builder's `locations` branch):
+      // GeoJSON MultiPoint has no per-point properties, so all markers share
+      // the feature-level name/description/markerColor. For per-point control,
+      // use inline `locations: LocationPoint[]` instead.
       return buildMultiPointMapConfig(
         {
-          locations: (mp.coordinates as Position[]).map(
-            (coord) => ({
-              coordinates: coord as [number, number],
-              name,
-              description,
-              markerColor: ref.markerColor,
-            }),
-          ),
+          locations: geom.coordinates.map((coord) => ({
+            coordinates: to2D(coord),
+            name,
+            description,
+            markerColor: ref.markerColor,
+          })),
         },
         globalConfig,
       );
-    }
-    case "LineString": {
-      const line = geom as LineString;
+
+    case "LineString":
+      if (geom.coordinates.length < 2) {
+        throw new GeoJSONLoadError(
+          `LineString feature in ${ref.source} has fewer than 2 coordinates ` +
+            `(got ${geom.coordinates.length}); cannot render a degenerate line.`,
+          ref.source,
+        );
+      }
       return buildRouteMapConfig(
         {
           route: {
-            coordinates: (line.coordinates as Position[]).map(
-              (c) => c as [number, number],
-            ),
+            coordinates: geom.coordinates.map(to2D),
             name,
             description,
             color: ref.color,
@@ -263,15 +248,12 @@ function dispatchByGeometry(
         },
         globalConfig,
       );
-    }
-    case "Polygon": {
-      const polygon = geom as Polygon;
+
+    case "Polygon":
       return buildPolygonMapConfig(
         {
           region: {
-            coordinates: (polygon.coordinates as Position[][]).map((ring) =>
-              ring.map((c) => c as [number, number]),
-            ),
+            coordinates: geom.coordinates.map((ring) => ring.map(to2D)),
             name,
             description,
             fillColor: ref.fillColor,
@@ -281,11 +263,9 @@ function dispatchByGeometry(
         },
         globalConfig,
       );
-    }
-    case "MultiPolygon": {
-      // Render ALL polygons via the dedicated multi-builder
-      const mpoly = geom as MultiPolygon;
-      if (mpoly.coordinates.length === 0) {
+
+    case "MultiPolygon":
+      if (geom.coordinates.length === 0) {
         throw new GeoJSONLoadError(
           `MultiPolygon feature in ${ref.source} has no polygon coordinates`,
           ref.source,
@@ -294,8 +274,8 @@ function dispatchByGeometry(
       return buildMultiPolygonMapConfig(
         {
           region: {
-            coordinates: (mpoly.coordinates as Position[][][]).map((polygon) =>
-              polygon.map((ring) => ring.map((c) => c as [number, number])),
+            coordinates: geom.coordinates.map((polygon) =>
+              polygon.map((ring) => ring.map(to2D)),
             ),
             name,
             description,
@@ -306,22 +286,28 @@ function dispatchByGeometry(
         },
         globalConfig,
       );
-    }
+
     case "MultiLineString": {
-      // Render ALL lines via the dedicated multi-builder
-      const mline = geom as MultiLineString;
-      if (mline.coordinates.length === 0) {
+      if (geom.coordinates.length === 0) {
         throw new GeoJSONLoadError(
           `MultiLineString feature in ${ref.source} has no line coordinates`,
+          ref.source,
+        );
+      }
+      // Reject MultiLineStrings that contain any degenerate (<2 coord) segment,
+      // matching the LineString single-geometry contract.
+      const badSegment = geom.coordinates.findIndex((seg) => seg.length < 2);
+      if (badSegment !== -1) {
+        throw new GeoJSONLoadError(
+          `MultiLineString feature in ${ref.source} has a segment at index ` +
+            `${badSegment} with fewer than 2 coordinates; cannot render.`,
           ref.source,
         );
       }
       return buildMultiLineStringMapConfig(
         {
           route: {
-            coordinates: (mline.coordinates as Position[][]).map((line) =>
-              line.map((c) => c as [number, number]),
-            ),
+            coordinates: geom.coordinates.map((line) => line.map(to2D)),
             name,
             description,
             color: ref.color,
@@ -331,21 +317,29 @@ function dispatchByGeometry(
         globalConfig,
       );
     }
+
     case "GeometryCollection": {
       // Dispatch to the inner geometry when the collection has exactly one
       // member. Heterogeneous collections (multiple geometries) are not
       // supported in V1 -- split them into separate features.
-      const gc = geom as GeometryCollection;
-      if (gc.geometries.length === 0) {
+      if (depth >= MAX_GEOMETRY_COLLECTION_DEPTH) {
+        throw new GeoJSONLoadError(
+          `GeometryCollection nesting in ${ref.source} exceeds maximum depth ` +
+            `(${MAX_GEOMETRY_COLLECTION_DEPTH}). Flatten the geometry to a ` +
+            `single Point/LineString/Polygon.`,
+          ref.source,
+        );
+      }
+      if (geom.geometries.length === 0) {
         throw new GeoJSONLoadError(
           `GeometryCollection feature in ${ref.source} is empty`,
           ref.source,
         );
       }
-      if (gc.geometries.length > 1) {
-        const types = gc.geometries.map((g) => g.type).join(", ");
+      if (geom.geometries.length > 1) {
+        const types = geom.geometries.map((g) => g.type).join(", ");
         throw new GeoJSONLoadError(
-          `GeometryCollection feature in ${ref.source} has ${gc.geometries.length} geometries (${types}). ` +
+          `GeometryCollection feature in ${ref.source} has ${geom.geometries.length} geometries (${types}). ` +
             `V1 supports single-geometry collections only. Split into separate features ` +
             `or simplify to a single Point/LineString/Polygon.`,
           ref.source,
@@ -354,18 +348,23 @@ function dispatchByGeometry(
       // Recurse with a synthetic Feature wrapping the inner geometry
       const innerFeature: Feature = {
         type: "Feature",
-        geometry: gc.geometries[0]!,
+        geometry: geom.geometries[0]!,
         properties: feature.properties,
       };
       if (feature.id !== undefined) innerFeature.id = feature.id;
-      return dispatchByGeometry(innerFeature, ref, globalConfig);
+      return dispatchByGeometry(innerFeature, ref, globalConfig, depth + 1);
     }
-    default:
+
+    default: {
+      // Exhaustiveness check: TypeScript's `geom` is now `never` here.
+      // If a future GeoJSON type is added, this triggers a compile error,
+      // forcing a deliberate handling decision.
+      const _exhaustive: never = geom;
+      void _exhaustive;
       throw new GeoJSONLoadError(
-        `Unsupported geometry type "${geom.type}" in feature ref ${ref.source}. ` +
-          `Supported: Point, MultiPoint, LineString, MultiLineString, Polygon, ` +
-          `MultiPolygon, single-geometry GeometryCollection.`,
+        `Unsupported geometry type "${(geom as { type: string }).type}" in feature ref ${ref.source}.`,
         ref.source,
       );
+    }
   }
 }

@@ -8,6 +8,7 @@ import { z } from "zod";
 import {
   FeatureRefSchema,
   assertValidFeatureRef,
+  InvalidFeatureRefError,
   getCollectionItemWithFeatureRefSchema,
   type FeatureRef,
 } from "../../src/utils/feature-ref-schema";
@@ -237,6 +238,17 @@ describe("assertValidFeatureRef", () => {
         match: { property: "p", equals: 1 },
       }),
     ).toThrow(/exactly one of.+featureId.+or.+match/);
+  });
+
+  it("throws InvalidFeatureRefError (discriminable subclass)", () => {
+    try {
+      assertValidFeatureRef({ source: "x" } as FeatureRef);
+      expect.fail("should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(InvalidFeatureRefError);
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).name).toBe("InvalidFeatureRefError");
+    }
   });
 });
 

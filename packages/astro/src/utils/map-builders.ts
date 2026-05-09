@@ -173,7 +173,6 @@ export interface MultiLineStringMapOptions {
   /** MultiLineString route data */
   route: MultiRouteLine;
   mapStyle?: string;
-  padding?: number;
   id?: string;
   interactive?: boolean;
 }
