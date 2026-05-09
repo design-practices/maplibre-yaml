@@ -113,7 +113,7 @@
       },
       "properties": {
         "gotf_id": 6.1,
-        "name": "Unsupported MultiLineString"
+        "name": "Two-segment MultiLineString"
       }
     },
     {
@@ -128,7 +128,21 @@
       },
       "properties": {
         "gotf_id": 7.1,
-        "name": "Unsupported GeometryCollection"
+        "name": "Multi-geometry GeometryCollection (V1 unsupported)"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "geomcoll-single-7b",
+      "geometry": {
+        "type": "GeometryCollection",
+        "geometries": [
+          { "type": "Point", "coordinates": [-73.985, 40.674] }
+        ]
+      },
+      "properties": {
+        "gotf_id": 7.2,
+        "name": "Single-geometry GeometryCollection"
       }
     },
     {

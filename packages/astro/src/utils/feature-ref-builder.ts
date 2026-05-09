@@ -31,7 +31,9 @@
 import type {
   Feature,
   GeoJsonProperties,
+  GeometryCollection,
   LineString,
+  MultiLineString,
   MultiPoint,
   MultiPolygon,
   Point,
@@ -40,7 +42,9 @@ import type {
 } from "geojson";
 import type { GlobalConfig, MapBlock } from "@maplibre-yaml/core";
 import {
+  buildMultiLineStringMapConfig,
   buildMultiPointMapConfig,
+  buildMultiPolygonMapConfig,
   buildPointMapConfig,
   buildPolygonMapConfig,
   buildRouteMapConfig,
@@ -279,20 +283,19 @@ function dispatchByGeometry(
       );
     }
     case "MultiPolygon": {
-      // V1: use the first polygon's rings. Documented limitation in plan.
+      // Render ALL polygons via the dedicated multi-builder
       const mpoly = geom as MultiPolygon;
-      const firstPolygon = mpoly.coordinates[0];
-      if (!firstPolygon || firstPolygon.length === 0) {
+      if (mpoly.coordinates.length === 0) {
         throw new GeoJSONLoadError(
           `MultiPolygon feature in ${ref.source} has no polygon coordinates`,
           ref.source,
         );
       }
-      return buildPolygonMapConfig(
+      return buildMultiPolygonMapConfig(
         {
           region: {
-            coordinates: (firstPolygon as Position[][]).map((ring) =>
-              ring.map((c) => c as [number, number]),
+            coordinates: (mpoly.coordinates as Position[][][]).map((polygon) =>
+              polygon.map((ring) => ring.map((c) => c as [number, number])),
             ),
             name,
             description,
@@ -304,11 +307,64 @@ function dispatchByGeometry(
         globalConfig,
       );
     }
+    case "MultiLineString": {
+      // Render ALL lines via the dedicated multi-builder
+      const mline = geom as MultiLineString;
+      if (mline.coordinates.length === 0) {
+        throw new GeoJSONLoadError(
+          `MultiLineString feature in ${ref.source} has no line coordinates`,
+          ref.source,
+        );
+      }
+      return buildMultiLineStringMapConfig(
+        {
+          route: {
+            coordinates: (mline.coordinates as Position[][]).map((line) =>
+              line.map((c) => c as [number, number]),
+            ),
+            name,
+            description,
+            color: ref.color,
+            width: ref.width,
+          },
+        },
+        globalConfig,
+      );
+    }
+    case "GeometryCollection": {
+      // Dispatch to the inner geometry when the collection has exactly one
+      // member. Heterogeneous collections (multiple geometries) are not
+      // supported in V1 -- split them into separate features.
+      const gc = geom as GeometryCollection;
+      if (gc.geometries.length === 0) {
+        throw new GeoJSONLoadError(
+          `GeometryCollection feature in ${ref.source} is empty`,
+          ref.source,
+        );
+      }
+      if (gc.geometries.length > 1) {
+        const types = gc.geometries.map((g) => g.type).join(", ");
+        throw new GeoJSONLoadError(
+          `GeometryCollection feature in ${ref.source} has ${gc.geometries.length} geometries (${types}). ` +
+            `V1 supports single-geometry collections only. Split into separate features ` +
+            `or simplify to a single Point/LineString/Polygon.`,
+          ref.source,
+        );
+      }
+      // Recurse with a synthetic Feature wrapping the inner geometry
+      const innerFeature: Feature = {
+        type: "Feature",
+        geometry: gc.geometries[0]!,
+        properties: feature.properties,
+      };
+      if (feature.id !== undefined) innerFeature.id = feature.id;
+      return dispatchByGeometry(innerFeature, ref, globalConfig);
+    }
     default:
       throw new GeoJSONLoadError(
-        `Unsupported geometry type "${geom.type}" in feature ref. ` +
-          `V1 supports: Point, MultiPoint, LineString, Polygon, MultiPolygon. ` +
-          `Open an issue if you need MultiLineString or GeometryCollection.`,
+        `Unsupported geometry type "${geom.type}" in feature ref ${ref.source}. ` +
+          `Supported: Point, MultiPoint, LineString, MultiLineString, Polygon, ` +
+          `MultiPolygon, single-geometry GeometryCollection.`,
         ref.source,
       );
   }

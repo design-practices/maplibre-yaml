@@ -101,12 +101,21 @@ export {
 export { buildFeatureMapConfig } from "./feature-ref-builder";
 export type { BuildFeatureMapOptions } from "./feature-ref-builder";
 
+// Convenience: build a MapBlock by inspecting a content-collection entry
+export { buildMapConfigFromEntry } from "./entry-builder";
+export type {
+  EntryGeometryFields,
+  BuildMapConfigFromEntryOptions,
+} from "./entry-builder";
+
 // Map builder utilities
 export {
   buildPointMapConfig,
   buildMultiPointMapConfig,
   buildPolygonMapConfig,
+  buildMultiPolygonMapConfig,
   buildRouteMapConfig,
+  buildMultiLineStringMapConfig,
   calculateCenter,
   calculateBounds,
 } from "./map-builders";
@@ -115,5 +124,9 @@ export type {
   PointMapOptions,
   MultiPointMapOptions,
   PolygonMapOptions,
+  MultiPolygonMapOptions,
+  MultiRegionPolygon,
   RouteMapOptions,
+  MultiLineStringMapOptions,
+  MultiRouteLine,
 } from "./map-builders";

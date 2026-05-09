@@ -126,6 +126,59 @@ export interface RouteMapOptions {
 }
 
 /**
+ * Polygon-style metadata for a MultiPolygon. Coordinates follow the GeoJSON
+ * MultiPolygon shape: an array of polygons, each polygon being an array of
+ * linear rings (first ring is exterior, subsequent rings are holes).
+ */
+export interface MultiRegionPolygon {
+  /** GeoJSON MultiPolygon coordinates */
+  coordinates: [number, number][][][];
+  name?: string;
+  description?: string;
+  fillColor?: string;
+  strokeColor?: string;
+  fillOpacity?: number;
+}
+
+/**
+ * Options for building MultiPolygon map configurations.
+ */
+export interface MultiPolygonMapOptions {
+  /** MultiPolygon region data */
+  region: MultiRegionPolygon;
+  mapStyle?: string;
+  zoom?: number;
+  id?: string;
+  interactive?: boolean;
+}
+
+/**
+ * Line metadata for a MultiLineString. Coordinates follow the GeoJSON
+ * MultiLineString shape: an array of LineStrings, each being an array of
+ * coordinates.
+ */
+export interface MultiRouteLine {
+  /** GeoJSON MultiLineString coordinates */
+  coordinates: [number, number][][];
+  name?: string;
+  description?: string;
+  color?: string;
+  width?: number;
+}
+
+/**
+ * Options for building MultiLineString map configurations.
+ */
+export interface MultiLineStringMapOptions {
+  /** MultiLineString route data */
+  route: MultiRouteLine;
+  mapStyle?: string;
+  padding?: number;
+  id?: string;
+  interactive?: boolean;
+}
+
+/**
  * Calculates the center point of an array of coordinates.
  *
  * @param coordinates - Array of [lng, lat] coordinate pairs
@@ -649,6 +702,282 @@ export function buildRouteMapConfig(
                 properties: { type: "end" },
               },
             ],
+          },
+        },
+        paint: {
+          "circle-radius": 6,
+          "circle-color": lineColor,
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * Builds a MapBlock configuration for a MultiPolygon region.
+ *
+ * @param options - MultiPolygon map options
+ * @param globalConfig - Optional global map config
+ * @returns Complete MapBlock configuration
+ *
+ * @remarks
+ * Renders ALL polygons in the MultiPolygon as a single feature with
+ * `geometry.type === "MultiPolygon"`. This is preferred over splitting
+ * into multiple features because MapLibre handles MultiPolygon natively
+ * and a single feature keeps interaction (popups, hover) cohesive.
+ *
+ * Bounds are computed across all rings in all polygons, so the map fits
+ * the entire multi-region by default.
+ *
+ * @example
+ * ```typescript
+ * const config = buildMultiPolygonMapConfig({
+ *   region: {
+ *     coordinates: [
+ *       [[[-73.99, 40.68], [-73.98, 40.68], [-73.98, 40.67], [-73.99, 40.68]]],
+ *       [[[-73.97, 40.66], [-73.96, 40.66], [-73.96, 40.65], [-73.97, 40.66]]],
+ *     ],
+ *     name: "Two zones",
+ *     fillColor: "#3388ff",
+ *   },
+ * });
+ * ```
+ */
+export function buildMultiPolygonMapConfig(
+  options: MultiPolygonMapOptions,
+  globalConfig?: GlobalConfig,
+): MapBlock {
+  const { region, mapStyle, zoom, id, interactive = true } = options;
+
+  // Flatten all polygons' rings to compute center/bounds across the entire MultiPolygon
+  const allCoords = region.coordinates.flatMap((polygon) =>
+    polygon.flatMap((ring) => ring),
+  );
+  if (allCoords.length === 0) {
+    throw new Error(
+      "buildMultiPolygonMapConfig: region.coordinates is empty",
+    );
+  }
+  const center = calculateCenter(allCoords);
+  const bounds = calculateBounds(allCoords);
+
+  const fillColor = region.fillColor ?? DEFAULT_FILL_COLOR;
+  const strokeColor = region.strokeColor ?? fillColor;
+  const fillOpacity = region.fillOpacity ?? DEFAULT_FILL_OPACITY;
+
+  const popupContent =
+    region.name || region.description
+      ? [
+          ...(region.name ? [{ h3: [{ str: region.name }] }] : []),
+          ...(region.description ? [{ p: [{ str: region.description }] }] : []),
+        ]
+      : undefined;
+
+  const config = resolveMapConfig(
+    {
+      center,
+      zoom: zoom ?? 12,
+      bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
+      mapStyle,
+      interactive,
+    },
+    globalConfig,
+  );
+
+  return {
+    type: "map",
+    id: id ?? generateMapId("multi-polygon-map"),
+    config,
+    layers: [
+      {
+        id: "region-fill",
+        type: "fill",
+        source: {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: {
+                  type: "MultiPolygon",
+                  coordinates: region.coordinates,
+                },
+                properties: {
+                  name: region.name ?? "",
+                  description: region.description ?? "",
+                },
+              },
+            ],
+          },
+        },
+        paint: {
+          "fill-color": fillColor,
+          "fill-opacity": fillOpacity,
+        },
+        ...(popupContent
+          ? {
+              interactive: {
+                hover: { cursor: "pointer" },
+                click: { popup: popupContent },
+              },
+            }
+          : {}),
+      },
+      {
+        id: "region-outline",
+        type: "line",
+        source: "region-fill",
+        paint: {
+          "line-color": strokeColor,
+          "line-width": 2,
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * Builds a MapBlock configuration for a MultiLineString route.
+ *
+ * @param options - MultiLineString map options
+ * @param globalConfig - Optional global map config
+ * @returns Complete MapBlock configuration
+ *
+ * @remarks
+ * Renders ALL line segments in the MultiLineString as a single feature
+ * with `geometry.type === "MultiLineString"`. The endpoints layer marks
+ * the start/end of each segment.
+ *
+ * Bounds are computed across all segments.
+ *
+ * @example
+ * ```typescript
+ * const config = buildMultiLineStringMapConfig({
+ *   route: {
+ *     coordinates: [
+ *       [[-73.99, 40.68], [-73.98, 40.68]],
+ *       [[-73.97, 40.66], [-73.96, 40.66]],
+ *     ],
+ *     name: "Two paths",
+ *     color: "#3498db",
+ *   },
+ * });
+ * ```
+ */
+export function buildMultiLineStringMapConfig(
+  options: MultiLineStringMapOptions,
+  globalConfig?: GlobalConfig,
+): MapBlock {
+  const { route, mapStyle, id, interactive = true } = options;
+
+  // Flatten all segments' coordinates for center/bounds
+  const allCoords = route.coordinates.flatMap((line) => line);
+  if (allCoords.length === 0) {
+    throw new Error(
+      "buildMultiLineStringMapConfig: route.coordinates is empty",
+    );
+  }
+  const center = calculateCenter(allCoords);
+  const bounds = calculateBounds(allCoords);
+
+  const lineColor = route.color ?? DEFAULT_LINE_COLOR;
+  const lineWidth = route.width ?? DEFAULT_LINE_WIDTH;
+
+  const popupContent =
+    route.name || route.description
+      ? [
+          ...(route.name ? [{ h3: [{ str: route.name }] }] : []),
+          ...(route.description ? [{ p: [{ str: route.description }] }] : []),
+        ]
+      : undefined;
+
+  const config = resolveMapConfig(
+    {
+      center,
+      zoom: 10,
+      bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
+      mapStyle,
+      interactive,
+    },
+    globalConfig,
+  );
+
+  // Endpoint markers: start and end of each segment
+  const endpointFeatures = route.coordinates.flatMap((segment) => {
+    if (segment.length === 0) return [];
+    return [
+      {
+        type: "Feature" as const,
+        geometry: {
+          type: "Point" as const,
+          coordinates: segment[0],
+        },
+        properties: { type: "start" },
+      },
+      {
+        type: "Feature" as const,
+        geometry: {
+          type: "Point" as const,
+          coordinates: segment[segment.length - 1],
+        },
+        properties: { type: "end" },
+      },
+    ];
+  });
+
+  return {
+    type: "map",
+    id: id ?? generateMapId("multi-route-map"),
+    config,
+    layers: [
+      {
+        id: "route-line",
+        type: "line",
+        source: {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: {
+                  type: "MultiLineString",
+                  coordinates: route.coordinates,
+                },
+                properties: {
+                  name: route.name ?? "",
+                  description: route.description ?? "",
+                },
+              },
+            ],
+          },
+        },
+        paint: {
+          "line-color": lineColor,
+          "line-width": lineWidth,
+          "line-cap": "round",
+          "line-join": "round",
+        },
+        ...(popupContent
+          ? {
+              interactive: {
+                hover: { cursor: "pointer" },
+                click: { popup: popupContent },
+              },
+            }
+          : {}),
+      },
+      {
+        id: "route-endpoints",
+        type: "circle",
+        source: {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: endpointFeatures,
           },
         },
         paint: {

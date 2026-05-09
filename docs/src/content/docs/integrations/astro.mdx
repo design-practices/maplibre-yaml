@@ -1218,7 +1218,44 @@ route:
 
 ### Dynamic map per collection item
 
-In a dynamic route page (`[slug].astro`), detect which geometry type is present and call the matching builder:
+Use `buildMapConfigFromEntry` in your dynamic route page (`[slug].astro`). The helper inspects the entry data, dispatches to the appropriate builder by geometry type, and falls back to a supplied default if no geometry is set.
+
+```astro
+---
+import { Map, buildMapConfigFromEntry } from "@maplibre-yaml/astro";
+import { globalMapConfig } from "../lib/map-config";
+
+const { entry } = Astro.props;
+const mapConfig = await buildMapConfigFromEntry(entry.data, globalMapConfig, {
+  label: entry.data.title,
+  description: entry.data.summary,
+  fallback: {
+    coordinates: globalMapConfig.defaultCenter!,
+    name: entry.data.title,
+  },
+});
+---
+<Map config={mapConfig} height="300px" />
+```
+
+The helper recognizes these fields in this precedence order:
+
+1. `feature_ref` — external GeoJSON file reference
+2. `region` — inline polygon
+3. `route` — inline line
+4. `locations` — inline multi-point
+5. `location` — inline single point
+6. `options.fallback` — supplied default
+
+The first set field wins; later fields are ignored. The helper is always async because `feature_ref` requires file I/O at build time.
+
+<Aside type="note" title="Field names are library conventions">
+  These field names (`location`, `region`, `route`, `feature_ref`) are not GeoJSON canonicals — they're conventions established by the library's `getCollectionItemWith*Schema` helpers. If your collection uses different field names, call the underlying builders (`buildPointMapConfig`, `buildPolygonMapConfig`, etc.) directly instead of the helper.
+</Aside>
+
+#### Manual dispatch (when you need custom per-type logic)
+
+If you need to handle each geometry type explicitly (e.g., custom popup or styling per type), call the builders directly:
 
 ```astro
 ---
@@ -1231,7 +1268,6 @@ import {
 import type { MapBlock } from "@maplibre-yaml/core";
 import { globalMapConfig } from "../lib/map-config";
 
-// `entry` is a collection item from getStaticPaths
 const { entry } = Astro.props;
 const data = entry.data;
 
@@ -1244,22 +1280,14 @@ if (data.region) {
 } else if (data.location) {
   mapConfig = buildPointMapConfig({ location: data.location }, globalMapConfig);
 } else {
-  // Fallback: default area map from global config
   mapConfig = buildPointMapConfig(
-    {
-      location: {
-        coordinates: globalMapConfig.defaultCenter!,
-        name: data.title,
-      },
-    },
+    { location: { coordinates: globalMapConfig.defaultCenter! } },
     globalMapConfig,
   );
 }
 ---
 <Map config={mapConfig} height="300px" />
 ```
-
-Items without any geographic data gracefully fall back to the global default center.
 
 ## GeoJSON Feature References
 
@@ -1341,38 +1369,23 @@ When multiple collection items share geometry from a single source-of-truth GeoJ
 
 3. **Build the map in your dynamic page**
 
+   The simplest path is `buildMapConfigFromEntry` — it inspects the entry data, dispatches by geometry type (including `feature_ref`), and produces a `MapBlock`:
+
    ```astro
    ---
-   import {
-     Map,
-     buildFeatureMapConfig,
-     buildPointMapConfig,
-     buildPolygonMapConfig,
-     buildRouteMapConfig,
-   } from "@maplibre-yaml/astro";
-   import type { MapBlock } from "@maplibre-yaml/core";
+   import { Map, buildMapConfigFromEntry } from "@maplibre-yaml/astro";
    import { globalMapConfig } from "../lib/map-config";
 
    const { entry } = Astro.props;
-   const data = entry.data;
-
-   let mapConfig: MapBlock;
-   if (data.feature_ref) {
-     // Async branch: loads the GeoJSON file at build time
-     mapConfig = await buildFeatureMapConfig(
-       { ref: data.feature_ref },
-       globalMapConfig,
-     );
-   } else if (data.region) {
-     mapConfig = buildPolygonMapConfig({ region: data.region }, globalMapConfig);
-   } else if (data.route) {
-     mapConfig = buildRouteMapConfig({ route: data.route }, globalMapConfig);
-   } else if (data.location) {
-     mapConfig = buildPointMapConfig({ location: data.location }, globalMapConfig);
-   }
+   const mapConfig = await buildMapConfigFromEntry(entry.data, globalMapConfig, {
+     label: entry.data.title,
+     fallback: { coordinates: globalMapConfig.defaultCenter! },
+   });
    ---
    <Map config={mapConfig} height="300px" />
    ```
+
+   If you need custom per-type behavior, call the underlying builders directly (`buildFeatureMapConfig`, `buildPolygonMapConfig`, etc.) instead. See "Manual dispatch" above.
 
 </Steps>
 
@@ -1398,10 +1411,11 @@ Frontmatter can override `feature.properties.name` and `feature.properties.descr
 | `Point` | `buildPointMapConfig` |
 | `MultiPoint` | `buildMultiPointMapConfig` |
 | `LineString` | `buildRouteMapConfig` |
+| `MultiLineString` | `buildMultiLineStringMapConfig` (renders all segments) |
 | `Polygon` | `buildPolygonMapConfig` |
-| `MultiPolygon` | `buildPolygonMapConfig` (uses first polygon ring set) |
-
-`MultiLineString` and `GeometryCollection` throw clear `GeoJSONLoadError`s in V1.
+| `MultiPolygon` | `buildMultiPolygonMapConfig` (renders all polygons) |
+| `GeometryCollection` (single member) | dispatches to the inner geometry type |
+| `GeometryCollection` (multiple members) | throws `GeoJSONLoadError` -- split into separate features |
 
 ### Build-time only
 

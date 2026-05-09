@@ -84,7 +84,7 @@ describe("buildFeatureMapConfig", () => {
       expect(config.layers[1]!.type).toBe("line");
     });
 
-    it("MultiPolygon feature → uses first polygon (documented limitation)", async () => {
+    it("MultiPolygon feature → renders ALL polygons (single MultiPolygon Feature)", async () => {
       const config = await buildFeatureMapConfig({
         ref: { source: FIXTURE_PATH, featureId: "multipolygon-5" },
       }, { defaultMapStyle: "https://example.com/style.json" });
@@ -92,35 +92,76 @@ describe("buildFeatureMapConfig", () => {
       expect(config.type).toBe("map");
       expect(config.layers).toHaveLength(2);
       expect(config.layers[0]!.type).toBe("fill");
+
+      // Verify the underlying source data contains the FULL MultiPolygon,
+      // not just the first ring set
+      const fillLayer = config.layers[0] as {
+        source: { data: { features: { geometry: { type: string; coordinates: unknown[] } }[] } };
+      };
+      const feature = fillLayer.source.data.features[0]!;
+      expect(feature.geometry.type).toBe("MultiPolygon");
+      // Fixture has 2 polygons in the MultiPolygon -- all should be present
+      expect(feature.geometry.coordinates).toHaveLength(2);
     });
   });
 
-  describe("unsupported geometry types", () => {
-    it("MultiLineString → throws GeoJSONLoadError with actionable message", async () => {
-      await expect(
-        buildFeatureMapConfig({
-          ref: { source: FIXTURE_PATH, featureId: "multiline-6" },
-        }, { defaultMapStyle: "https://example.com/style.json" }),
-      ).rejects.toThrow(GeoJSONLoadError);
+  describe("MultiLineString and GeometryCollection support", () => {
+    it("MultiLineString → renders ALL line segments (single MultiLineString Feature)", async () => {
+      const config = await buildFeatureMapConfig({
+        ref: { source: FIXTURE_PATH, featureId: "multiline-6" },
+      }, { defaultMapStyle: "https://example.com/style.json" });
 
-      try {
-        await buildFeatureMapConfig({
-          ref: { source: FIXTURE_PATH, featureId: "multiline-6" },
-        }, { defaultMapStyle: "https://example.com/style.json" });
-        expect.fail("should have thrown");
-      } catch (err) {
-        const message = (err as Error).message;
-        expect(message).toMatch(/MultiLineString/);
-        expect(message).toMatch(/V1 supports/);
-      }
+      expect(config.type).toBe("map");
+      // Should have produced 2 layers: line + endpoints
+      expect(config.layers).toHaveLength(2);
+      expect(config.layers[0]!.type).toBe("line");
+      expect(config.layers[1]!.type).toBe("circle");
+
+      // Verify the line layer source contains the FULL MultiLineString
+      const lineLayer = config.layers[0] as {
+        source: { data: { features: { geometry: { type: string; coordinates: unknown[] } }[] } };
+      };
+      const feature = lineLayer.source.data.features[0]!;
+      expect(feature.geometry.type).toBe("MultiLineString");
+      // Fixture has 2 segments
+      expect(feature.geometry.coordinates).toHaveLength(2);
+
+      // Endpoints layer should mark start+end of each segment (4 points total)
+      const endpointsLayer = config.layers[1] as {
+        source: { data: { features: unknown[] } };
+      };
+      expect(endpointsLayer.source.data.features).toHaveLength(4);
     });
 
-    it("GeometryCollection → throws GeoJSONLoadError", async () => {
+    it("GeometryCollection with single geometry → dispatches to inner geometry", async () => {
+      const config = await buildFeatureMapConfig({
+        ref: { source: FIXTURE_PATH, featureId: "geomcoll-single-7b" },
+      }, { defaultMapStyle: "https://example.com/style.json" });
+
+      expect(config.type).toBe("map");
+      // Inner geometry is a Point, so should dispatch to point builder (1 circle layer)
+      expect(config.layers).toHaveLength(1);
+      expect(config.layers[0]!.type).toBe("circle");
+      expect(config.config.center).toEqual([-73.985, 40.674]);
+    });
+
+    it("GeometryCollection with multiple geometries → throws clear error", async () => {
       await expect(
         buildFeatureMapConfig({
           ref: { source: FIXTURE_PATH, featureId: "geomcoll-7" },
         }, { defaultMapStyle: "https://example.com/style.json" }),
-      ).rejects.toThrow(/GeometryCollection/);
+      ).rejects.toThrow(/2 geometries/);
+
+      try {
+        await buildFeatureMapConfig({
+          ref: { source: FIXTURE_PATH, featureId: "geomcoll-7" },
+        }, { defaultMapStyle: "https://example.com/style.json" });
+        expect.fail("should have thrown");
+      } catch (err) {
+        const message = (err as Error).message;
+        expect(message).toMatch(/single-geometry/);
+        expect(message).toMatch(/Split into separate features/);
+      }
     });
   });
 

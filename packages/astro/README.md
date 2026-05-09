@@ -266,46 +266,57 @@ route:
 
 ### Dynamic map per collection item
 
+Use `buildMapConfigFromEntry` to absorb the geometry-type dispatch in one call. The helper inspects the entry data, finds the first set geometry field by precedence (`feature_ref` > `region` > `route` > `locations` > `location`), and dispatches to the appropriate builder. Falls back to the supplied `options.fallback` if none are set.
+
 ```astro
 ---
-import {
-  Map,
-  buildPointMapConfig,
-  buildPolygonMapConfig,
-  buildRouteMapConfig,
-} from "@maplibre-yaml/astro";
-import type { MapBlock } from "@maplibre-yaml/core";
+import { Map, buildMapConfigFromEntry } from "@maplibre-yaml/astro";
 import { globalMapConfig } from "../lib/map-config";
 
-// Assuming `entry` is a collection item with optional geo fields
 const { entry } = Astro.props;
 const data = entry.data;
 
-let mapConfig: MapBlock;
-
-if (data.region) {
-  mapConfig = buildPolygonMapConfig({ region: data.region }, globalMapConfig);
-} else if (data.route) {
-  mapConfig = buildRouteMapConfig({ route: data.route }, globalMapConfig);
-} else if (data.location) {
-  mapConfig = buildPointMapConfig({ location: data.location }, globalMapConfig);
-} else {
-  // Fallback: default area map from global config
-  mapConfig = buildPointMapConfig(
-    {
-      location: {
-        coordinates: globalMapConfig.defaultCenter!,
-        name: data.title,
-      },
-    },
-    globalMapConfig,
-  );
-}
+const mapConfig = await buildMapConfigFromEntry(data, globalMapConfig, {
+  label: data.title,
+  description: data.summary,
+  fallback: {
+    coordinates: globalMapConfig.defaultCenter!,
+    name: data.title,
+  },
+});
 ---
 <Map config={mapConfig} height="300px" />
 ```
 
-Items without any geographic data gracefully fall back to the global default center.
+The helper is always async (because `feature_ref` requires file I/O at build time). When the entry uses inline geometry, the underlying builder call is sync but the helper still returns a Promise for API consistency.
+
+#### Field precedence
+
+If multiple geometry fields are set on the same entry, the helper takes the first one in this order:
+
+1. `feature_ref` -- external GeoJSON file reference
+2. `region` -- inline polygon
+3. `route` -- inline line
+4. `locations` -- inline multi-point
+5. `location` -- inline single point
+6. `options.fallback` -- supplied default
+7. Throws if none of the above are set
+
+#### Override defaults: `label` and `description`
+
+Each geometry's own `name` and `description` fields take priority. If they're unset, `options.label` and `options.description` fill in. This is useful for content collections where each entry has a page-level title that should appear in popups by default.
+
+#### When to skip the helper
+
+The helper assumes library-convention field names (`feature_ref`, `location`, `region`, `route`, `locations`). If your collection uses different field names (e.g., `boundary` instead of `region`), call the underlying builders directly instead:
+
+```astro
+---
+import { Map, buildPolygonMapConfig } from "@maplibre-yaml/astro";
+
+const mapConfig = buildPolygonMapConfig({ region: entry.data.boundary }, globalMapConfig);
+---
+```
 
 ## GeoJSON Feature References
 
@@ -363,6 +374,24 @@ feature_ref:
 ```
 
 **3. Build the map in your dynamic page**
+
+The simplest path is `buildMapConfigFromEntry`, which dispatches to the right builder by inspecting the entry data:
+
+```astro
+---
+import { Map, buildMapConfigFromEntry } from "@maplibre-yaml/astro";
+import { globalMapConfig } from "../lib/map-config";
+
+const { entry } = Astro.props;
+const mapConfig = await buildMapConfigFromEntry(entry.data, globalMapConfig, {
+  label: entry.data.title,
+  fallback: { coordinates: globalMapConfig.defaultCenter! },
+});
+---
+<Map config={mapConfig} height="300px" />
+```
+
+If you need to handle each geometry type explicitly (e.g., custom popup or styling per type), call the builders directly:
 
 ```astro
 ---
@@ -429,10 +458,11 @@ Frontmatter can override `feature.properties.name` and `feature.properties.descr
 | `Point` | `buildPointMapConfig` |
 | `MultiPoint` | `buildMultiPointMapConfig` |
 | `LineString` | `buildRouteMapConfig` |
+| `MultiLineString` | `buildMultiLineStringMapConfig` (renders all segments) |
 | `Polygon` | `buildPolygonMapConfig` |
-| `MultiPolygon` | `buildPolygonMapConfig` (uses first polygon ring set) |
-
-`MultiLineString` and `GeometryCollection` throw clear `GeoJSONLoadError`s in V1.
+| `MultiPolygon` | `buildMultiPolygonMapConfig` (renders all polygons) |
+| `GeometryCollection` (single member) | dispatches to inner geometry type |
+| `GeometryCollection` (multiple members) | throws clear error -- split into separate features |
 
 ### Build-time only
 
