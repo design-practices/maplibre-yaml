@@ -465,6 +465,33 @@ describe("loadFeatureFile", () => {
       const result = await loadFeatureFile(absPath);
       expect(result.type).toBe("FeatureCollection");
     });
+
+    it("rejects relative symlink that points OUTSIDE the project root", async () => {
+      // Symlink lives INSIDE cwd (so the pre-realpath relative-only check
+      // passes) but points OUTSIDE cwd (so realpath escapes containment).
+      // Regression test for the bypass where containment was checked only
+      // before realpath canonicalization.
+      const target: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [pointFeature("a", {})],
+      };
+      const outsideTarget = await writeFC("outside.geojson", target);
+
+      // Place the symlink at a known cwd-relative path so we can pass it
+      // relatively to loadFeatureFile.
+      const cwd = process.cwd();
+      const symlinkBaseName = `escape-link-${Date.now()}-${Math.random().toString(36).slice(2)}.geojson`;
+      const symlinkAbs = join(cwd, symlinkBaseName);
+      await symlink(outsideTarget, symlinkAbs);
+
+      try {
+        await expect(loadFeatureFile(`./${symlinkBaseName}`)).rejects.toThrow(
+          /symlink resolves outside the project root/,
+        );
+      } finally {
+        await rm(symlinkAbs, { force: true });
+      }
+    });
   });
 
   describe("file size cap", () => {

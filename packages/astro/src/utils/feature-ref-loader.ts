@@ -174,37 +174,53 @@ export function clearFeatureCache(): void {
  */
 async function resolveSourcePath(srcPath: string): Promise<string> {
   const projectRoot = process.cwd();
-
-  // Path-traversal containment check: reject RELATIVE paths that escape the
-  // project root via `..`. Absolute paths require deliberate intent and are
-  // allowed (e.g., for tests using tmpdir, or monorepo data in a sibling
-  // package). Consumers exposing frontmatter to untrusted user content
-  // should validate `source` values themselves -- absolute paths in
-  // frontmatter are unusual and worth flagging at the application layer.
-  if (!isAbsolute(srcPath)) {
-    const resolved = resolve(projectRoot, srcPath);
-    const rel = relative(projectRoot, resolved);
-    if (rel.startsWith("..")) {
-      throw new GeoJSONLoadError(
-        `feature_ref.source resolves outside the project root. ` +
-          `Got: "${srcPath}" -> "${resolved}". ` +
-          `Project root: ${projectRoot}. ` +
-          `If this is intentional, use an absolute path.`,
-        resolved,
-      );
-    }
-  }
-
   const resolved = resolve(projectRoot, srcPath);
+
+  // Path-traversal containment check (pre-realpath): reject RELATIVE paths
+  // that escape the project root via `..`. Absolute paths require deliberate
+  // intent and are allowed at this stage (e.g., for tests using tmpdir, or
+  // monorepo data in a sibling package). Consumers exposing frontmatter to
+  // untrusted user content should validate `source` values themselves --
+  // absolute paths in frontmatter are unusual and worth flagging at the
+  // application layer.
+  if (!isAbsolute(srcPath) && relative(projectRoot, resolved).startsWith("..")) {
+    throw new GeoJSONLoadError(
+      `feature_ref.source resolves outside the project root. ` +
+        `Got: "${srcPath}" -> "${resolved}". ` +
+        `Project root: ${projectRoot}. ` +
+        `If this is intentional, use an absolute path.`,
+      resolved,
+    );
+  }
 
   // Canonicalize via realpath so symlinks share cache entries.
   // Falls back to the resolved path if realpath fails (e.g., file doesn't
   // exist yet -- the subsequent stat call will produce a clearer error).
+  let canonical: string;
   try {
-    return await realpath(resolved);
+    canonical = await realpath(resolved);
   } catch {
     return resolved;
   }
+
+  // Post-realpath containment re-check: a symlink that lives INSIDE the
+  // project root may point OUTSIDE it. The pre-realpath check above cannot
+  // catch this. Apply only to relative paths (the absolute-path carve-out
+  // stays intentional for tests/monorepos).
+  if (
+    !isAbsolute(srcPath) &&
+    relative(projectRoot, canonical).startsWith("..")
+  ) {
+    throw new GeoJSONLoadError(
+      `feature_ref.source symlink resolves outside the project root. ` +
+        `Got: "${srcPath}" -> "${canonical}". ` +
+        `Project root: ${projectRoot}. ` +
+        `Reject the symlink or use an absolute path.`,
+      canonical,
+    );
+  }
+
+  return canonical;
 }
 
 /**

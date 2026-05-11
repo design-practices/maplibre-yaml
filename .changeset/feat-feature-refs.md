@@ -37,7 +37,7 @@ A new `feature_ref` field lets a collection item reference a feature in an exter
 
 After a multi-agent code review surfaced 9 P1 issues, the following hardening landed before merge:
 
-- **Path traversal protection**: relative `feature_ref.source` paths that escape the project root via `..` are rejected before any filesystem I/O. Absolute paths are still allowed (deliberate user intent — tests, monorepos).
+- **Path traversal protection**: relative `feature_ref.source` paths that escape the project root via `..` are rejected before any filesystem I/O. Symlinks that live inside the project root but point OUTSIDE it are also rejected, with a post-realpath containment re-check that catches the bypass where a symlink-internal path passes the pre-realpath check but resolves outward. Absolute paths are still allowed (deliberate user intent — tests, monorepos).
 - **File-size cap**: files exceeding 100MB throw a clear error before `readFile`; files between 50MB and 100MB log a warning. Prevents OOM on memory-constrained CI runners.
 - **Symlink canonicalization**: cache key uses `realpath` so symlinks pointing at the same file share a single cache entry and the lazy property index works correctly across them.
 - **Concurrent-load dedupe**: parallel `loadFeatureFile` calls for the same file share an in-flight Promise, preventing double-parse of large files under parallel page builds.
