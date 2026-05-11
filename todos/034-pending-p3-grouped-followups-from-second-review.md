@@ -83,3 +83,14 @@ Each sub-item closed individually; PR includes test updates and docs where appli
 ## Work Log
 
 - 2026-05-11: Created from second multi-agent code review (kieran-typescript, security-sentinel, performance-oracle, architecture-strategist, code-simplicity)
+- 2026-05-11: Resolved the cheap-win subset in PR #20:
+  - **34-A**: `to2D` JSDoc trimmed
+  - **34-B**: `CacheDebugSnapshot.mtimeMs` removed
+  - **34-C**: `indexSizeFor` `undefined`-vs-`number` semantics locked in via JSDoc
+  - **34-J**: `resolveSourcePath` resolve-call dedupe (folded into the projectRoot-canonicalization rewrite)
+  - **34-K**: `flatMap(r => r)` → `flat()`/`flat(2)` across `map-builders.ts`
+  - **34-M**: load-bearing `.optional()` comments on `PointStyleFields` / `PolygonStyleFields` / `LineStyleFields`
+  - **34-N**: cause-chain security note on `GeoJSONLoadError` and `YAMLLoadError` JSDoc
+  - **34-O**: `TODO(v2)` comment for WeakMap sidetable on the linear cache scan
+  - **34-L**: empty-segment guard in `buildMultiLineStringMapConfig` verified intentional (defends direct callers of the public builder), kept as-is
+- Remaining sub-items (deferred to a separate PR): **34-D** (drop phantom tagged-union in builder helpers), **34-E** (use `Feature<Point>` from geojson lib for endpointFeatures), **34-F** (share field list between superRefine and EntryGeometryFields), **34-G** (gate `_getCacheEntryDebug` to test-only entry), **34-H** (closure-returning lookup API for matchByProperty), **34-I** (invert serverless detection to "path-not-inside-cwd"), **34-P** (vitest bench for to2D under large MultiPolygon).
