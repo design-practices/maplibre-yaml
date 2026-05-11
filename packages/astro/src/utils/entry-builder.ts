@@ -89,6 +89,14 @@ export interface BuildMapConfigFromEntryOptions {
  * Only the first set field is honored; later fields are ignored if an earlier
  * one is present.
  *
+ * **Relationship to `getCollectionItemWithFeatureRefSchema`:** the strict
+ * schema rejects entries with `feature_ref` AND inline geometry at parse
+ * time; this builder accepts them and applies precedence. Two policies for
+ * two audiences: the schema is opinionated (early error in `astro dev`) for
+ * authors who opt in, the builder is permissive for callers using the basic
+ * `getCollectionItemSchema` or rolling their own. When the strict schema is
+ * in use, only one geometry field will be set and precedence is moot.
+ *
  * **Async always:** the helper is async because `feature_ref` requires file
  * I/O. When the entry uses inline geometry, the underlying call is sync but
  * the helper still returns a Promise for API consistency.

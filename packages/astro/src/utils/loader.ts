@@ -71,8 +71,13 @@ export class YAMLLoadError extends Error {
    */
   public filePath: string;
 
-  constructor(message: string, filePath: string, errors: ParseError[] = []) {
-    super(message);
+  constructor(
+    message: string,
+    filePath: string,
+    errors: ParseError[] = [],
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
     this.name = "YAMLLoadError";
     this.filePath = filePath;
     this.errors = errors;
@@ -138,7 +143,9 @@ export async function loadYAML<T = unknown>(
     } catch (error) {
       throw new YAMLLoadError(
         `YAML syntax error: ${error instanceof Error ? error.message : String(error)}`,
-        path
+        path,
+        [],
+        { cause: error },
       );
     }
 
@@ -150,7 +157,8 @@ export async function loadYAML<T = unknown>(
         throw new YAMLLoadError(
           `Validation failed for ${path}`,
           path,
-          error instanceof Error ? [{ path: "", message: error.message }] : []
+          error instanceof Error ? [{ path: "", message: error.message }] : [],
+          { cause: error },
         );
       }
     }
@@ -165,7 +173,9 @@ export async function loadYAML<T = unknown>(
     // Wrap other errors
     throw new YAMLLoadError(
       `Failed to load ${path}: ${error instanceof Error ? error.message : String(error)}`,
-      path
+      path,
+      [],
+      { cause: error },
     );
   }
 }
@@ -245,7 +255,9 @@ export async function loadMapConfig(path: string): Promise<MapBlock> {
       `Failed to load map config from ${path}: ${
         error instanceof Error ? error.message : String(error)
       }`,
-      path
+      path,
+      [],
+      { cause: error },
     );
   }
 }
@@ -322,7 +334,9 @@ export async function loadScrollytellingConfig(
       `Failed to load scrollytelling config from ${path}: ${
         error instanceof Error ? error.message : String(error)
       }`,
-      path
+      path,
+      [],
+      { cause: error },
     );
   }
 }
@@ -396,7 +410,9 @@ export async function loadFromGlob<T = unknown>(
       } catch (error) {
         throw new YAMLLoadError(
           `YAML syntax error: ${error instanceof Error ? error.message : String(error)}`,
-          path
+          path,
+          [],
+          { cause: error },
         );
       }
 

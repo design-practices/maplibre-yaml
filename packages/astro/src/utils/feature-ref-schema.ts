@@ -44,7 +44,10 @@
 
 import { z } from "zod";
 import {
+  LineStyleFields,
   LocationPointSchema,
+  PointStyleFields,
+  PolygonStyleFields,
   RegionPolygonSchema,
   RouteLineSchema,
 } from "./collections-schemas";
@@ -118,33 +121,12 @@ export const FeatureRefSchema = z
       .max(24)
       .optional()
       .describe("Override map zoom level"),
-    markerColor: z
-      .string()
-      .optional()
-      .describe("Marker color for Point/MultiPoint features"),
-    fillColor: z
-      .string()
-      .optional()
-      .describe("Fill color for Polygon/MultiPolygon features"),
-    strokeColor: z
-      .string()
-      .optional()
-      .describe("Stroke color for Polygon/MultiPolygon features"),
-    fillOpacity: z
-      .number()
-      .min(0)
-      .max(1)
-      .optional()
-      .describe("Fill opacity for Polygon/MultiPolygon features"),
-    color: z
-      .string()
-      .optional()
-      .describe("Line color for LineString features"),
-    width: z
-      .number()
-      .positive()
-      .optional()
-      .describe("Line width in pixels for LineString features"),
+    // Style overrides reused from the per-geometry schemas in
+    // `collections-schemas.ts`. Single source of truth: add a new style
+    // field there and it lights up here automatically.
+    ...PointStyleFields,
+    ...PolygonStyleFields,
+    ...LineStyleFields,
   })
   .describe("Reference to a feature in an external GeoJSON file");
 
@@ -294,6 +276,14 @@ export function assertValidFeatureRef(ref: FeatureRef): void {
  *   coordinates: [0, 0]
  * ---
  * ```
+ */
+/**
+ * Schema-level XOR enforcement. Intentionally stricter than the runtime
+ * `buildMapConfigFromEntry` precedence chain: this schema rejects ambiguous
+ * frontmatter at content-collection-parse time so authors see a clear error
+ * in `astro dev`, while the entry builder accepts any field combination and
+ * applies precedence for callers using the basic
+ * `getCollectionItemSchema` or rolling their own collection shape.
  */
 function applyMutualExclusivityRefinement<T extends z.ZodTypeAny>(schema: T) {
   return schema.superRefine((data: Record<string, unknown>, ctx) => {

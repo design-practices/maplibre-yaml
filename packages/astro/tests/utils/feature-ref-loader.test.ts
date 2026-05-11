@@ -577,7 +577,7 @@ describe("loadFeatureFile", () => {
       // to look it up correctly.
       const entry = _getCacheEntryDebug(await realpath(path));
       expect(entry).toBeDefined();
-      expect(entry!.indexByProperty.size).toBe(0);
+      expect(entry!.indexedPropertyCount).toBe(0);
     });
 
     it("does not build an index on first access for a large file", async () => {
@@ -593,8 +593,8 @@ describe("loadFeatureFile", () => {
       });
 
       const entry = _getCacheEntryDebug(await realpath(path));
-      expect(entry!.indexByProperty.size).toBe(0); // not yet built
-      expect(entry!.propertyAccessCount.get("gotf_id")).toBe(1);
+      expect(entry!.indexedPropertyCount).toBe(0); // not yet built
+      expect(entry!.accessCountFor("gotf_id")).toBe(1);
     });
 
     it("builds an index on second access for a large file", async () => {
@@ -614,9 +614,9 @@ describe("loadFeatureFile", () => {
       });
 
       const entry = _getCacheEntryDebug(await realpath(path));
-      expect(entry!.indexByProperty.has("gotf_id")).toBe(true);
-      expect(entry!.indexByProperty.get("gotf_id")!.size).toBeGreaterThan(0);
-      expect(entry!.propertyAccessCount.get("gotf_id")).toBe(2);
+      expect(entry!.hasIndexForProperty("gotf_id")).toBe(true);
+      expect(entry!.indexSizeFor("gotf_id")).toBeGreaterThan(0);
+      expect(entry!.accessCountFor("gotf_id")).toBe(2);
     });
 
     it("does not build an index for properties accessed only once", async () => {
@@ -645,8 +645,8 @@ describe("loadFeatureFile", () => {
       });
 
       const entry = _getCacheEntryDebug(await realpath(path));
-      expect(entry!.indexByProperty.has("gotf_id")).toBe(true);
-      expect(entry!.indexByProperty.has("code")).toBe(false);
+      expect(entry!.hasIndexForProperty("gotf_id")).toBe(true);
+      expect(entry!.hasIndexForProperty("code")).toBe(false);
     });
 
     it("indexed lookups still surface multi-match errors correctly", async () => {

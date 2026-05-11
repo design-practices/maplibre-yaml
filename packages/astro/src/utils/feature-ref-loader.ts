@@ -89,14 +89,59 @@ const fileCache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<FeatureCollection>>();
 
 /**
- * Test-only debug accessor for the cache entry at a given absolute path.
- * Marked `@internal` and NOT exported from the package barrel
- * (forward-compat constraint #3).
+ * Stable test-only view of a cache entry. Exposes observable behaviors
+ * (mtime, which properties are indexed, access counts) without leaking the
+ * internal Map-of-Maps shape. V2 may swap the underlying storage for an
+ * LRU, WeakMap, or external cache; this snapshot interface stays stable.
  *
  * @internal
  */
-export function _getCacheEntryDebug(absPath: string): CacheEntry | undefined {
-  return fileCache.get(absPath);
+export interface CacheDebugSnapshot {
+  /** File mtime in ms (used for cache-invalidation checks). */
+  mtimeMs: number;
+  /** Number of properties that currently have a built index. */
+  indexedPropertyCount: number;
+  /** Whether an index exists for the given property name. */
+  hasIndexForProperty(property: string): boolean;
+  /**
+   * Number of indexed values for the given property, or `undefined` if no
+   * index has been built. Useful for cardinality assertions.
+   */
+  indexSizeFor(property: string): number | undefined;
+  /** Number of times the given property has been queried (0 if never). */
+  accessCountFor(property: string): number;
+}
+
+/**
+ * Test-only debug accessor for the cache entry at a given absolute path.
+ * Marked `@internal` and NOT exported from the package barrel
+ * (forward-compat constraint #3 + #6).
+ *
+ * Returns a `CacheDebugSnapshot` (stable test API) rather than the raw
+ * `CacheEntry` (implementation detail).
+ *
+ * @internal
+ */
+export function _getCacheEntryDebug(
+  absPath: string,
+): CacheDebugSnapshot | undefined {
+  const entry = fileCache.get(absPath);
+  if (!entry) return undefined;
+  return {
+    mtimeMs: entry.mtimeMs,
+    get indexedPropertyCount() {
+      return entry.indexByProperty.size;
+    },
+    hasIndexForProperty(property) {
+      return entry.indexByProperty.has(property);
+    },
+    indexSizeFor(property) {
+      return entry.indexByProperty.get(property)?.size;
+    },
+    accessCountFor(property) {
+      return entry.propertyAccessCount.get(property) ?? 0;
+    },
+  };
 }
 
 /**

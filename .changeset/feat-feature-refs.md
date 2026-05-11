@@ -48,6 +48,23 @@ After a multi-agent code review surfaced 9 P1 issues, the following hardening la
 - **Removed**: vestigial `INTERNAL_ALLOW_RUNTIME` mutable module-level flag and the `_setInternalAllowRuntime` setter (V2 runtime resolution should ship as a separate builder, not via global mode switch).
 - **Removed**: vestigial `padding` field from `MultiLineStringMapOptions` (declared but never consumed).
 
+### Internal cleanup (post code-review, P2 batch)
+
+Lower-priority code-review findings that landed in the same PR:
+
+- **YAMLLoadError parity**: `YAMLLoadError` now accepts an ES2022 `cause` field for parity with `GeoJSONLoadError`. Both classes still satisfy the same forward-compat constraint (#4): a shared base class can be introduced later without breaking the `cause` contract. All `YAMLLoadError` throw sites in `loader.ts` now thread `{ cause: error }` so the original parse/IO error is preserved as `.cause`.
+- **Stable cache debug interface**: `_getCacheEntryDebug` now returns a `CacheDebugSnapshot` (with `mtimeMs`, `indexedPropertyCount`, `hasIndexForProperty()`, `indexSizeFor()`, `accessCountFor()`) instead of the raw `CacheEntry`. Tests no longer assert on internal Map shapes -- swapping the cache storage in V2 stays internal.
+- **Schema XOR vs builder precedence**: documented that `getCollectionItemWithFeatureRefSchema`'s strict XOR check and `buildMapConfigFromEntry`'s precedence chain are intentionally different. Schema-strict is for opt-in authors who want early errors in `astro dev`; the precedence chain serves callers using the basic `getCollectionItemSchema` or rolling their own.
+- **Style-field dedupe**: introduced `PointStyleFields`, `PolygonStyleFields`, `LineStyleFields` in `collections-schemas.ts` as single source of truth. `LocationPointSchema`, `RegionPolygonSchema`, `RouteLineSchema`, and `FeatureRefSchema` all spread these now -- adding a new style field (e.g., `lineDashArray`) is a one-place edit. The `MultiRegionPolygon` and `MultiRouteLine` TS interfaces extend `Omit<RegionPolygon | RouteLine, "coordinates">` so they pick up new style fields automatically.
+- **Builder body dedupe**: extracted `buildPopupContent`, `buildPolygonLayers`, and `buildRouteLayers` as internal helpers. `buildPolygonMapConfig` + `buildMultiPolygonMapConfig` and `buildRouteMapConfig` + `buildMultiLineStringMapConfig` now share their layer construction (-~250 LOC). Public function signatures, output shape, and `MapBlock` `layers[]` structure are unchanged -- existing snapshot tests pass.
+
+### Deferred (tracked as pending todos)
+
+- **P2-024**: `as`-casts in test files indicate weak public layer types. Fixing requires a typed-test-helper module and a substantial test rewrite (~20 sites). Tracked for a follow-up PR.
+- **P2-025**: The module-level `fileCache` has no eviction policy. Bounded growth is fine for build (process exits) but accumulates in `astro dev` sessions referencing many distinct files. `clearFeatureCache()` is the existing escape hatch. LRU/size-cap implementation tracked for a follow-up PR if growth becomes observable in practice.
+- **P2-026**: Large MultiPolygon/MultiLineString MapBlocks serialize into the `<ml-map>` HTML attribute; the right place to warn is the rendering component, not the builder utilities. Tracked for a follow-up PR alongside any other component-side telemetry.
+- **P3-028**: Grouped minor polish items (typos, JSDoc nits, etc.). Tracked for a follow-up PR.
+
 ### Documentation
 
 - New "GeoJSON Feature References" section in `packages/astro/README.md`
