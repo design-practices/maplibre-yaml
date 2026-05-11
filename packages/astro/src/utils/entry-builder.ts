@@ -29,6 +29,7 @@ import type {
   RouteLine,
 } from "./collections-schemas";
 import type { FeatureRef } from "./feature-ref-schema";
+import type { FeatureLoadOptions } from "./feature-ref-loader";
 import {
   buildMultiPointMapConfig,
   buildPointMapConfig,
@@ -69,6 +70,13 @@ export interface BuildMapConfigFromEntryOptions {
    * when the geometry's own `description` field is unset.
    */
   description?: string;
+  /**
+   * Path-resolution options forwarded to `loadFeatureFile` when the entry's
+   * `feature_ref` triggers a file load. Use to set `projectRoot` for
+   * monorepo builds or to opt into `allowAbsolutePaths` for trusted
+   * callers. See `FeatureLoadOptions`.
+   */
+  loadOptions?: FeatureLoadOptions;
 }
 
 /**
@@ -142,6 +150,7 @@ export async function buildMapConfigFromEntry(
           name: data.feature_ref.name ?? label,
           description: data.feature_ref.description ?? description,
         },
+        loadOptions: options?.loadOptions,
       },
       globalConfig,
     );

@@ -37,7 +37,7 @@ A new `feature_ref` field lets a collection item reference a feature in an exter
 
 After a multi-agent code review surfaced 9 P1 issues, the following hardening landed before merge:
 
-- **Path traversal protection**: relative `feature_ref.source` paths that escape the project root via `..` are rejected before any filesystem I/O. Symlinks that live inside the project root but point OUTSIDE it are also rejected, with a post-realpath containment re-check that catches the bypass where a symlink-internal path passes the pre-realpath check but resolves outward. Absolute paths are still allowed (deliberate user intent — tests, monorepos).
+- **Path traversal protection**: relative `feature_ref.source` paths that escape the project root via `..` are rejected before any filesystem I/O. Symlinks that live inside the project root but point OUTSIDE it are also rejected, with a post-realpath containment re-check that catches the bypass where a symlink-internal path passes the pre-realpath check but resolves outward. Absolute paths are now **rejected by default** -- pass `{ allowAbsolutePaths: true }` in `FeatureLoadOptions` for trusted callers (tests, monorepo data, controlled scripts). This secures the schema for UGC contexts where frontmatter values are not author-controlled.
 - **File-size cap**: files exceeding 100MB throw a clear error before `readFile`; files between 50MB and 100MB log a warning. Prevents OOM on memory-constrained CI runners.
 - **Symlink canonicalization**: cache key uses `realpath` so symlinks pointing at the same file share a single cache entry and the lazy property index works correctly across them.
 - **Concurrent-load dedupe**: parallel `loadFeatureFile` calls for the same file share an in-flight Promise, preventing double-parse of large files under parallel page builds.
@@ -51,6 +51,12 @@ After a multi-agent code review surfaced 9 P1 issues, the following hardening la
 ### Internal cleanup (post code-review, P2 batch)
 
 Lower-priority code-review findings that landed in the same PR:
+
+- **`FeatureLoadOptions` (new)**: exported from `@maplibre-yaml/astro` and `/utils`. Threaded through `loadFeatureFile`, `buildFeatureMapConfig`, and `buildMapConfigFromEntry`. Two fields:
+  - `projectRoot?: string` — override the boundary used for relative-path resolution and containment checks. Defaults to `process.cwd()`. Use this in monorepos when the build runs from a different directory than the Astro project root. The root is canonicalized via `realpath` so macOS `/var` → `/private/var` and similar symlinked-workspace shapes are handled.
+  - `allowAbsolutePaths?: boolean` — opt-in to accept absolute `source` values. Defaults to `false`. Trusted callers can opt in; do NOT enable when frontmatter comes from untrusted content.
+- **`InvalidFeatureRefError` discrimination preserved**: `buildFeatureMapConfig` no longer wraps the XOR-violation error in `GeoJSONLoadError`. Callers can now correctly check `err instanceof InvalidFeatureRefError`, matching the contract advertised on the class.
+- **Irrelevant style-override warnings**: when a `feature_ref` sets a style field that doesn't apply to the resolved geometry (e.g., `markerColor` on a Polygon, `fillColor` on a Point), `buildFeatureMapConfig` now emits a deduplicated `console.warn` so authors can fix the mistake. Silent ignore-and-drop behavior is gone.
 
 - **YAMLLoadError parity**: `YAMLLoadError` now accepts an ES2022 `cause` field for parity with `GeoJSONLoadError`. Both classes still satisfy the same forward-compat constraint (#4): a shared base class can be introduced later without breaking the `cause` contract. All `YAMLLoadError` throw sites in `loader.ts` now thread `{ cause: error }` so the original parse/IO error is preserved as `.cause`.
 - **Stable cache debug interface**: `_getCacheEntryDebug` now returns a `CacheDebugSnapshot` (with `mtimeMs`, `indexedPropertyCount`, `hasIndexForProperty()`, `indexSizeFor()`, `accessCountFor()`) instead of the raw `CacheEntry`. Tests no longer assert on internal Map shapes -- swapping the cache storage in V2 stays internal.

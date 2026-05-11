@@ -49,6 +49,10 @@ import type { MapBlock, ScrollytellingBlock, ParseError } from "@maplibre-yaml/c
  * This error includes detailed validation errors with paths to help
  * developers identify and fix configuration issues.
  *
+ * **Security note:** the optional ES2022 `cause` field may include
+ * filesystem paths or parser internals. Strip `.cause` before forwarding
+ * these errors to user-facing HTTP responses.
+ *
  * @example
  * ```typescript
  * try {

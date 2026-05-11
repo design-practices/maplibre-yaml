@@ -5,12 +5,27 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { resolve } from "path";
-import { buildMapConfigFromEntry } from "../../src/utils/entry-builder";
+import { buildMapConfigFromEntry as _buildMapConfigFromEntryRaw } from "../../src/utils/entry-builder";
 import { clearFeatureCache } from "../../src/utils/feature-ref-loader";
 
 const FIXTURE_PATH = resolve(__dirname, "../fixtures/sample.geojson");
 const STYLE_URL = "https://example.com/style.json";
 const STYLE = { defaultMapStyle: STYLE_URL };
+
+
+// Tests use absolute tmpdir paths; opt into the documented trust gate.
+const TEST_LOAD_OPTS = { allowAbsolutePaths: true } as const;
+// __opts_aliased__
+type _EntryArgs = Parameters<typeof _buildMapConfigFromEntryRaw>;
+const buildMapConfigFromEntry = (
+  data: _EntryArgs[0],
+  globalConfig?: _EntryArgs[1],
+  options?: _EntryArgs[2],
+) =>
+  _buildMapConfigFromEntryRaw(data, globalConfig, {
+    ...options,
+    loadOptions: options?.loadOptions ?? TEST_LOAD_OPTS,
+  });
 
 describe("buildMapConfigFromEntry", () => {
   beforeEach(() => clearFeatureCache());

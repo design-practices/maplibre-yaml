@@ -3,23 +3,42 @@
  * @module @maplibre-yaml/astro/tests/utils/feature-ref-builder
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { resolve } from "path";
-import { buildFeatureMapConfig } from "../../src/utils/feature-ref-builder";
+import {
+  _clearStyleWarningCache,
+  buildFeatureMapConfig as _buildFeatureMapConfigRaw,
+} from "../../src/utils/feature-ref-builder";
 import {
   GeoJSONLoadError,
   clearFeatureCache,
 } from "../../src/utils/feature-ref-loader";
+
+
+// Tests use absolute tmpdir paths; opt into the documented trust gate.
+const TEST_LOAD_OPTS = { allowAbsolutePaths: true } as const;
+// __opts_aliased__
+type _BuildArgs = Parameters<typeof _buildFeatureMapConfigRaw>;
+const buildFeatureMapConfig = (
+  options: _BuildArgs[0],
+  globalConfig?: _BuildArgs[1],
+) =>
+  _buildFeatureMapConfigRaw(
+    { ...options, loadOptions: options.loadOptions ?? TEST_LOAD_OPTS },
+    globalConfig,
+  );
 
 const FIXTURE_PATH = resolve(__dirname, "../fixtures/sample.geojson");
 
 describe("buildFeatureMapConfig", () => {
   beforeEach(() => {
     clearFeatureCache();
+    _clearStyleWarningCache();
   });
 
   afterEach(() => {
     clearFeatureCache();
+    _clearStyleWarningCache();
   });
 
   describe("geometry dispatch (happy paths)", () => {
@@ -296,6 +315,26 @@ describe("buildFeatureMapConfig", () => {
         }),
       ).rejects.toThrow(/exactly one of.+featureId.+or.+match/);
     });
+
+    it("XOR violation surfaces as InvalidFeatureRefError (instanceof preserved)", async () => {
+      // Regression: buildFeatureMapConfig used to wrap assertValidFeatureRef's
+      // InvalidFeatureRefError in GeoJSONLoadError, defeating the class's
+      // documented `instanceof` discrimination contract.
+      const { InvalidFeatureRefError } = await import(
+        "../../src/utils/feature-ref-schema"
+      );
+      try {
+        await buildFeatureMapConfig({
+          ref: { source: FIXTURE_PATH } as Parameters<
+            typeof buildFeatureMapConfig
+          >[0]["ref"],
+        });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(InvalidFeatureRefError);
+        expect((err as Error).name).toBe("InvalidFeatureRefError");
+      }
+    });
   });
 
   describe("error: file not found", () => {
@@ -420,6 +459,91 @@ describe("buildFeatureMapConfig", () => {
         { defaultMapStyle: "https://example.com/style.json" },
       );
       expect(config).toBeDefined();
+    });
+  });
+
+  describe("irrelevant style override warnings", () => {
+    const GLOBAL = { defaultMapStyle: "https://example.com/style.json" };
+
+    it("warns when markerColor is set on a Polygon ref", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        await buildFeatureMapConfig(
+          {
+            ref: {
+              source: FIXTURE_PATH,
+              featureId: "polygon-4",
+              markerColor: "#ff0000",
+            },
+          },
+          GLOBAL,
+        );
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0]![0]).toMatch(/\[markerColor\]/);
+        expect(warn.mock.calls[0]![0]).toMatch(/Polygon/);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("warns when fillColor / width are set on a Point ref", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        await buildFeatureMapConfig(
+          {
+            ref: {
+              source: FIXTURE_PATH,
+              featureId: "point-1",
+              fillColor: "#abc",
+              width: 5,
+            },
+          },
+          GLOBAL,
+        );
+        expect(warn).toHaveBeenCalledTimes(1);
+        const msg = warn.mock.calls[0]![0];
+        expect(msg).toMatch(/fillColor/);
+        expect(msg).toMatch(/width/);
+        expect(msg).toMatch(/Point/);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("does NOT warn when style fields match the geometry family", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        await buildFeatureMapConfig(
+          {
+            ref: {
+              source: FIXTURE_PATH,
+              featureId: "point-1",
+              markerColor: "#00ff00",
+            },
+          },
+          GLOBAL,
+        );
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("dedupes warnings per (source, geomType, irrelevant-keys)", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const ref = {
+          source: FIXTURE_PATH,
+          featureId: "polygon-4",
+          markerColor: "#ff0000",
+        } as const;
+        await buildFeatureMapConfig({ ref }, GLOBAL);
+        await buildFeatureMapConfig({ ref }, GLOBAL);
+        await buildFeatureMapConfig({ ref }, GLOBAL);
+        expect(warn).toHaveBeenCalledTimes(1);
+      } finally {
+        warn.mockRestore();
+      }
     });
   });
 });

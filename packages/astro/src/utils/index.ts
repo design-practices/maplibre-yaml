@@ -97,6 +97,7 @@ export {
   loadFeatureFile,
   clearFeatureCache,
 } from "./feature-ref-loader";
+export type { FeatureLoadOptions } from "./feature-ref-loader";
 
 // Feature reference builder
 export { buildFeatureMapConfig } from "./feature-ref-builder";

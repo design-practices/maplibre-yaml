@@ -663,7 +663,7 @@ export function buildPolygonMapConfig(
 ): MapBlock {
   const { region, mapStyle, zoom, id, interactive = true } = options;
 
-  const allCoords = region.coordinates.flatMap((ring) => ring);
+  const allCoords = region.coordinates.flat();
   const center = calculateCenter(allCoords);
   const bounds = calculateBounds(allCoords);
 
@@ -803,9 +803,7 @@ export function buildMultiPolygonMapConfig(
 ): MapBlock {
   const { region, mapStyle, zoom, id, interactive = true } = options;
 
-  const allCoords = region.coordinates.flatMap((polygon) =>
-    polygon.flatMap((ring) => ring),
-  );
+  const allCoords = region.coordinates.flat(2);
   if (allCoords.length === 0) {
     throw new Error("buildMultiPolygonMapConfig: region.coordinates is empty");
   }
@@ -868,7 +866,7 @@ export function buildMultiLineStringMapConfig(
 ): MapBlock {
   const { route, mapStyle, id, interactive = true } = options;
 
-  const allCoords = route.coordinates.flatMap((line) => line);
+  const allCoords = route.coordinates.flat();
   if (allCoords.length === 0) {
     throw new Error("buildMultiLineStringMapConfig: route.coordinates is empty");
   }

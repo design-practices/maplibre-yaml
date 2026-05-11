@@ -90,22 +90,23 @@ const inFlight = new Map<string, Promise<FeatureCollection>>();
 
 /**
  * Stable test-only view of a cache entry. Exposes observable behaviors
- * (mtime, which properties are indexed, access counts) without leaking the
+ * (which properties are indexed, access counts) without leaking the
  * internal Map-of-Maps shape. V2 may swap the underlying storage for an
  * LRU, WeakMap, or external cache; this snapshot interface stays stable.
  *
  * @internal
  */
 export interface CacheDebugSnapshot {
-  /** File mtime in ms (used for cache-invalidation checks). */
-  mtimeMs: number;
   /** Number of properties that currently have a built index. */
   indexedPropertyCount: number;
   /** Whether an index exists for the given property name. */
   hasIndexForProperty(property: string): boolean;
   /**
-   * Number of indexed values for the given property, or `undefined` if no
-   * index has been built. Useful for cardinality assertions.
+   * Number of indexed values for the given property, or `undefined` when
+   * no index has been built for it. `undefined` is part of the stable
+   * contract: it distinguishes "never indexed" from "indexed but empty"
+   * for cardinality assertions. V2 storage implementations must preserve
+   * this distinction.
    */
   indexSizeFor(property: string): number | undefined;
   /** Number of times the given property has been queried (0 if never). */
@@ -128,7 +129,6 @@ export function _getCacheEntryDebug(
   const entry = fileCache.get(absPath);
   if (!entry) return undefined;
   return {
-    mtimeMs: entry.mtimeMs,
     get indexedPropertyCount() {
       return entry.indexByProperty.size;
     },
@@ -162,33 +162,90 @@ export function clearFeatureCache(): void {
 }
 
 /**
+ * Options that control how `feature_ref.source` is resolved and which paths
+ * are accepted. Threaded through `loadFeatureFile`, `buildFeatureMapConfig`,
+ * and `buildMapConfigFromEntry`.
+ */
+export interface FeatureLoadOptions {
+  /**
+   * Directory to resolve relative `feature_ref.source` values against, and
+   * the containment boundary for path-traversal protection. Defaults to
+   * `process.cwd()`. Set this explicitly in monorepos where the build is
+   * invoked from a different directory than the Astro project root (e.g.,
+   * `pnpm --filter site build` runs with cwd at the repo root rather than
+   * `packages/site/`).
+   */
+  projectRoot?: string;
+  /**
+   * Allow `feature_ref.source` values that are absolute paths.
+   *
+   * Default: `false`. Absolute paths bypass the project-root containment
+   * check entirely, so the secure-by-default behavior rejects them. Set
+   * this to `true` from trusted callers that legitimately need absolute
+   * paths (e.g., test fixtures using `tmpdir`, monorepo data in a sibling
+   * package, scripts pointing at user-config directories).
+   *
+   * **Do NOT enable this when frontmatter comes from untrusted content**
+   * (CMS-supplied entries, user uploads). An attacker could submit
+   * `source: "/etc/passwd"` and use the resulting error message as a
+   * filesystem oracle.
+   */
+  allowAbsolutePaths?: boolean;
+}
+
+/**
  * Resolve `srcPath` to a canonical absolute path inside the project root.
  *
  * Throws `GeoJSONLoadError` if the resolved path escapes the project root
- * (path traversal protection) or if the file does not exist.
+ * (path traversal protection), if the source is an absolute path and the
+ * caller has not opted in via `allowAbsolutePaths`, or if the file does
+ * not exist.
  *
  * Uses `realpath` to canonicalize symlinks so two refs pointing at the
  * same physical file via different paths share a cache entry.
  *
  * @internal
  */
-async function resolveSourcePath(srcPath: string): Promise<string> {
-  const projectRoot = process.cwd();
+async function resolveSourcePath(
+  srcPath: string,
+  options: FeatureLoadOptions = {},
+): Promise<string> {
+  const rawProjectRoot = options.projectRoot ?? process.cwd();
+  // Canonicalize the project root via realpath so the containment check
+  // compares the canonical source path against an equally canonical root.
+  // Without this, platforms where tmpdir/symlinked workspaces yield
+  // different prefixes (e.g., macOS `/var` -> `/private/var`) cause
+  // false-positive "outside project root" errors.
+  let projectRoot: string;
+  try {
+    projectRoot = await realpath(rawProjectRoot);
+  } catch {
+    projectRoot = rawProjectRoot;
+  }
+  const allowAbsolute = options.allowAbsolutePaths ?? false;
+
+  if (isAbsolute(srcPath) && !allowAbsolute) {
+    throw new GeoJSONLoadError(
+      `feature_ref.source is an absolute path ("${srcPath}"), which is ` +
+        `rejected by default for security. If this caller is trusted ` +
+        `(tests, monorepo data, controlled scripts), pass ` +
+        `{ allowAbsolutePaths: true } in the loader options. Do NOT enable ` +
+        `this when frontmatter comes from untrusted content.`,
+      srcPath,
+    );
+  }
+
   const resolved = resolve(projectRoot, srcPath);
 
   // Path-traversal containment check (pre-realpath): reject RELATIVE paths
-  // that escape the project root via `..`. Absolute paths require deliberate
-  // intent and are allowed at this stage (e.g., for tests using tmpdir, or
-  // monorepo data in a sibling package). Consumers exposing frontmatter to
-  // untrusted user content should validate `source` values themselves --
-  // absolute paths in frontmatter are unusual and worth flagging at the
-  // application layer.
+  // that escape the project root via `..`. Absolute paths already passed
+  // the opt-in check above and skip containment by design.
   if (!isAbsolute(srcPath) && relative(projectRoot, resolved).startsWith("..")) {
     throw new GeoJSONLoadError(
       `feature_ref.source resolves outside the project root. ` +
         `Got: "${srcPath}" -> "${resolved}". ` +
         `Project root: ${projectRoot}. ` +
-        `If this is intentional, use an absolute path.`,
+        `If this is intentional, use an absolute path with allowAbsolutePaths.`,
       resolved,
     );
   }
@@ -206,7 +263,7 @@ async function resolveSourcePath(srcPath: string): Promise<string> {
   // Post-realpath containment re-check: a symlink that lives INSIDE the
   // project root may point OUTSIDE it. The pre-realpath check above cannot
   // catch this. Apply only to relative paths (the absolute-path carve-out
-  // stays intentional for tests/monorepos).
+  // stays intentional for opted-in callers).
   if (
     !isAbsolute(srcPath) &&
     relative(projectRoot, canonical).startsWith("..")
@@ -215,7 +272,7 @@ async function resolveSourcePath(srcPath: string): Promise<string> {
       `feature_ref.source symlink resolves outside the project root. ` +
         `Got: "${srcPath}" -> "${canonical}". ` +
         `Project root: ${projectRoot}. ` +
-        `Reject the symlink or use an absolute path.`,
+        `Reject the symlink or use an absolute path with allowAbsolutePaths.`,
       canonical,
     );
   }
@@ -249,8 +306,9 @@ async function resolveSourcePath(srcPath: string): Promise<string> {
  */
 export async function loadFeatureFile(
   srcPath: string,
+  options?: FeatureLoadOptions,
 ): Promise<FeatureCollection> {
-  const absPath = await resolveSourcePath(srcPath);
+  const absPath = await resolveSourcePath(srcPath, options);
 
   // In-flight dedupe: parallel calls for the same path share a single read.
   // Without this, parallel page builds can both miss the cache and double-parse
@@ -422,6 +480,13 @@ function deploymentHint(): string {
  * ES2022 `cause` field via the `options` parameter. This keeps the future
  * shared-base-class introduction (`MaplibreYamlLoadError`) purely additive.
  *
+ * **Security note:** the `cause` chain may include filesystem paths,
+ * `JSON.parse` byte offsets, or other internal state. Build-time errors
+ * are normally surfaced in build logs only; if you forward `.cause` (or
+ * the full error) to an HTTP response in any custom error handler or dev
+ * overlay shared via a tunnel, you may leak project layout to clients.
+ * Strip `.cause` before user-facing surfaces.
+ *
  * @example Catch and inspect
  * ```typescript
  * try {
@@ -559,6 +624,9 @@ function matchByProperty(
   // can't await `realpath`. Instead, find the cache entry whose `fc` matches
   // by reference. Cache typically holds 1-3 entries so this is cheap, and
   // it's robust against any path-canonicalization differences.
+  // TODO(v2): if cache size grows past ~20 entries in practice, swap to a
+  // `WeakMap<FeatureCollection, CacheEntry>` sidetable populated when
+  // `fileCache.set` runs. O(1), no extra retention.
   let entry: CacheEntry | undefined;
   for (const e of fileCache.values()) {
     if (e.fc === fc) {

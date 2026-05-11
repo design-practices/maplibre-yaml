@@ -11,7 +11,7 @@ import type { Feature, FeatureCollection } from "geojson";
 import {
   GeoJSONLoadError,
   findFeature,
-  loadFeatureFile,
+  loadFeatureFile as _loadFeatureFileRaw,
   clearFeatureCache,
   _getCacheEntryDebug,
 } from "../../src/utils/feature-ref-loader";
@@ -34,6 +34,13 @@ function pointFeature(
   if (id !== undefined) f.id = id;
   return f;
 }
+
+
+// Tests use absolute tmpdir paths; opt into the documented trust gate.
+const TEST_LOAD_OPTS = { allowAbsolutePaths: true } as const;
+// __opts_aliased__
+const loadFeatureFile = (path: string) =>
+  _loadFeatureFileRaw(path, TEST_LOAD_OPTS);
 
 describe("GeoJSONLoadError", () => {
   it("is instanceof Error", () => {
@@ -455,7 +462,7 @@ describe("loadFeatureFile", () => {
       expect(fc.type).toBe("FeatureCollection");
     });
 
-    it("allows absolute paths (deliberate user intent)", async () => {
+    it("allows absolute paths when allowAbsolutePaths is opted in", async () => {
       // tmpdir absolute paths -- common for tests, monorepo data, etc.
       const fc: FeatureCollection = {
         type: "FeatureCollection",
@@ -464,6 +471,39 @@ describe("loadFeatureFile", () => {
       const absPath = await writeFC("absolute.geojson", fc);
       const result = await loadFeatureFile(absPath);
       expect(result.type).toBe("FeatureCollection");
+    });
+
+    it("rejects absolute paths by default (no allowAbsolutePaths opt-in)", async () => {
+      // Regression: the secure-by-default behavior must reject absolute
+      // paths so untrusted frontmatter (CMS-supplied, user uploads) can't
+      // be used as a filesystem oracle.
+      const fc: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [pointFeature("a", {})],
+      };
+      const absPath = await writeFC("default-reject.geojson", fc);
+      // Note: this test calls the raw import to bypass the test-wrapper
+      // that auto-applies allowAbsolutePaths.
+      await expect(_loadFeatureFileRaw(absPath)).rejects.toThrow(
+        /absolute path.*rejected by default/,
+      );
+    });
+
+    it("honors a custom projectRoot for relative-path resolution", async () => {
+      const fc: FeatureCollection = {
+        type: "FeatureCollection",
+        features: [pointFeature("a", {})],
+      };
+      const absPath = await writeFC("custom-root.geojson", fc);
+      const customRoot = testDir; // tmpdir subdir from writeFC
+      // Pass a relative path; project-root override resolves it inside the
+      // custom root rather than process.cwd().
+      const relName = "custom-root.geojson";
+      const result = await _loadFeatureFileRaw(relName, {
+        projectRoot: customRoot,
+      });
+      expect(result.type).toBe("FeatureCollection");
+      expect(absPath).toContain(relName);
     });
 
     it("rejects relative symlink that points OUTSIDE the project root", async () => {

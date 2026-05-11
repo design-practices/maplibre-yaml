@@ -57,6 +57,13 @@ const CoordinatesSchema = z
  * `LocationPointSchema` and `FeatureRefSchema` so adding a new field
  * (e.g., `markerIcon`) only requires editing one place.
  *
+ * **All fields here MUST be `.optional()`.** They are spread into multiple
+ * schemas with different required-ness semantics (a location point treats
+ * styles as optional overrides; a feature ref treats them as optional
+ * overrides over `feature.properties`). Making any field required here
+ * would force authors to declare it on every collection item, breaking
+ * the schema's permissive shape.
+ *
  * @internal
  */
 export const PointStyleFields = {
@@ -65,6 +72,8 @@ export const PointStyleFields = {
 
 /**
  * Style fields applicable to polygon geometries (fill + stroke).
+ *
+ * **All fields here MUST be `.optional()`** -- see `PointStyleFields`.
  *
  * @internal
  */
@@ -81,6 +90,8 @@ export const PolygonStyleFields = {
 
 /**
  * Style fields applicable to line/route geometries.
+ *
+ * **All fields here MUST be `.optional()`** -- see `PointStyleFields`.
  *
  * @internal
  */
