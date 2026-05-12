@@ -1,5 +1,11 @@
 # @maplibre-yaml/astro
 
+## 0.2.1
+
+### Patch Changes
+
+- Republish of 0.2.0. The 0.2.0 manifest on npm shipped with unresolved `workspace:^` references in `peerDependencies` and `devDependencies` because the prior release went out via `npm publish` (which doesn't rewrite the workspace protocol). Consumers running `npm install @maplibre-yaml/astro@0.2.0` hit `EUNSUPPORTEDPROTOCOL`. 0.2.1 fixes the manifest by republishing via `pnpm publish`, which rewrites `workspace:^` to a concrete version. No behavior change vs 0.2.0; 0.2.0 has been deprecated on npm.
+
 ## 0.2.0
 
 ### Minor Changes
