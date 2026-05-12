@@ -1,0 +1,367 @@
+---
+/**
+ * Showcase page — feature_ref scenarios.
+ *
+ * Each section maps 1:1 to a checkbox in `testing-criteria-pr20.md` (section C).
+ * Walk top-to-bottom; the anchor IDs match the checklist scenario IDs.
+ *
+ * To exercise an error case (sections C.4 + C.5), uncomment ONE of the
+ * `errorRefs.*` blocks plus its matching `buildFeatureMapConfig` call below,
+ * save, and reload. Errors are intentional — the page will fail to render,
+ * which is the expected outcome.
+ */
+import Layout from "../layouts/Layout.astro";
+import {
+  Map,
+  buildFeatureMapConfig,
+  type FeatureRef,
+} from "@maplibre-yaml/astro";
+import { globalMapConfig } from "../lib/map-config";
+
+const SOURCE = "./src/data/sample.geojson";
+
+// ---- Happy-path refs (C.1) -------------------------------------------------
+
+const pointRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "point-1",
+};
+
+const multiPointRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "multipoint-1",
+  markerColor: "#9b59b6",
+};
+
+const lineRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "linestring-1",
+  color: "#34495e",
+  width: 3,
+};
+
+const multiLineRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "multilinestring-1",
+  color: "#27ae60",
+  width: 4,
+};
+
+const polygonRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "polygon-1",
+  fillColor: "#3388ff",
+  fillOpacity: 0.3,
+};
+
+const multiPolygonRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "multipolygon-1",
+  fillColor: "#e74c3c",
+  fillOpacity: 0.35,
+};
+
+const geomCollSingleRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "geomcoll-single",
+};
+
+const altitude3dRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "altitude-3d",
+  markerColor: "#f39c12",
+};
+
+// ---- Match-by-property (C.1) ----------------------------------------------
+
+const matchRef: FeatureRef = {
+  source: SOURCE,
+  match: { property: "ref_id", equals: 1 },
+};
+
+// ---- Override precedence (C.3) --------------------------------------------
+
+const overrideRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "polygon-1",
+  name: "OVERRIDE: name set on the ref",
+  description: "OVERRIDE: description set on the ref",
+  fillColor: "#1abc9c",
+};
+
+// ---- Style-warning trigger (C.6) ------------------------------------------
+
+const styleWarnRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "polygon-1",
+  markerColor: "#ff0000", // ignored on Polygon
+  width: 5,                // ignored on Polygon
+  fillColor: "#2980b9",   // applied
+};
+
+// ---- Error refs (commented out — uncomment to exercise) ------------------
+//
+// Each one is a known-bad ref. Uncomment exactly ONE plus its
+// corresponding `await buildFeatureMapConfig(...)` line below.
+
+// const errorMultiGeomColl: FeatureRef = {
+//   source: SOURCE,
+//   featureId: "geomcoll-multi",
+// };
+// // Expected: "GeometryCollection ... has 2 geometries ... single-geometry only"
+
+// const errorDegenerateLine: FeatureRef = {
+//   source: SOURCE,
+//   featureId: "degenerate-line",
+// };
+// // Expected: "LineString feature in ... has fewer than 2 coordinates"
+
+// const errorMissingFeature: FeatureRef = {
+//   source: SOURCE,
+//   featureId: "does-not-exist",
+// };
+// // Expected: "No feature with id ..."
+
+// const errorMissingFile: FeatureRef = {
+//   source: "./src/data/missing.geojson",
+//   featureId: "point-1",
+// };
+// // Expected: "Cannot find GeoJSON file: ..."
+
+// const errorXorBoth: FeatureRef = {
+//   source: SOURCE,
+//   featureId: "point-1",
+//   match: { property: "ref_id", equals: 1 },
+// };
+// // Expected: InvalidFeatureRefError, message contains "exactly one of"
+
+// const errorXorNeither = { source: SOURCE } as FeatureRef;
+// // Expected: InvalidFeatureRefError, message contains "either ... or"
+
+// const errorTraversalUp: FeatureRef = {
+//   source: "../../../../../../etc/passwd.geojson",
+//   featureId: "x",
+// };
+// // Expected: "resolves outside the project root"
+
+// const errorAbsoluteDefault: FeatureRef = {
+//   source: "/etc/passwd",
+//   featureId: "x",
+// };
+// // Expected: "absolute path ... rejected by default for security"
+
+// ---- Build happy-path configs ---------------------------------------------
+
+const [
+  pointMap,
+  multiPointMap,
+  lineMap,
+  multiLineMap,
+  polyMap,
+  multiPolyMap,
+  geomCollSingleMap,
+  altitude3dMap,
+  matchMap,
+  overrideMap,
+  styleWarnMap,
+] = await Promise.all([
+  buildFeatureMapConfig({ ref: pointRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: multiPointRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: lineRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: multiLineRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: polygonRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: multiPolygonRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: geomCollSingleRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: altitude3dRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: matchRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: overrideRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: styleWarnRef }, globalMapConfig),
+]);
+
+const sections = [
+  { id: "c1-point", label: "C.1 Point" },
+  { id: "c1-multipoint", label: "C.1 MultiPoint" },
+  { id: "c1-line", label: "C.1 LineString" },
+  { id: "c1-multiline", label: "C.1 MultiLineString (ALL segments)" },
+  { id: "c1-polygon", label: "C.1 Polygon" },
+  { id: "c1-multipolygon", label: "C.1 MultiPolygon (ALL polygons)" },
+  { id: "c1-geomcoll-single", label: "C.1 GeometryCollection (single inner)" },
+  { id: "c1-altitude", label: "C.1 3D position (Z drop)" },
+  { id: "c1-match", label: "C.1 Match-by-property" },
+  { id: "c3-override", label: "C.3 Override precedence" },
+  { id: "c6-style-warn", label: "C.6 Style-warning (check console)" },
+];
+---
+
+<Layout title="Showcase — @maplibre-yaml/astro">
+  <main>
+    <h1>Feature-ref showcase</h1>
+    <p>
+      Each section maps to a checkbox in <code>testing-criteria-pr20.md</code>.
+      Walk top-to-bottom and verify the expected behavior.
+    </p>
+    <p>
+      Fixture: <code>{SOURCE}</code> — 11 features covering every GeoJSON
+      geometry type plus edge cases. Source:
+      <a
+        href="https://github.com/design-practices/maplibre-yaml/blob/feat/geojson-feature-references/examples/astro/minimal/src/pages/showcase.astro"
+        >src/pages/showcase.astro</a
+      >.
+    </p>
+
+    <nav class="toc">
+      <h2>Scenarios</h2>
+      <ol>
+        {sections.map((s) => <li><a href={`#${s.id}`}>{s.label}</a></li>)}
+      </ol>
+    </nav>
+
+    <section id="c1-point" class="section">
+      <h2>Point</h2>
+      <p class="meta">
+        Ref: <code>featureId: "point-1"</code>. Expect a single circle marker.
+      </p>
+      <div class="map-frame"><Map config={pointMap} height="320px" /></div>
+    </section>
+
+    <section id="c1-multipoint" class="section">
+      <h2>MultiPoint</h2>
+      <p class="meta">
+        Ref: <code>featureId: "multipoint-1"</code>,
+        <code>markerColor: "#9b59b6"</code>. Expect <strong>three</strong>
+        purple markers.
+      </p>
+      <div class="map-frame"><Map config={multiPointMap} height="320px" /></div>
+    </section>
+
+    <section id="c1-line" class="section">
+      <h2>LineString</h2>
+      <p class="meta">
+        Ref: <code>featureId: "linestring-1"</code>. Expect a 5-point line with
+        two endpoint markers.
+      </p>
+      <div class="map-frame"><Map config={lineMap} height="320px" /></div>
+    </section>
+
+    <section id="c1-multiline" class="section">
+      <h2>MultiLineString — renders ALL segments</h2>
+      <p class="meta">
+        Ref: <code>featureId: "multilinestring-1"</code>. Expect
+        <strong>two</strong> green line segments and <strong>four</strong>
+        endpoint markers (not one segment, not two endpoints).
+      </p>
+      <div class="map-frame"><Map config={multiLineMap} height="320px" /></div>
+    </section>
+
+    <section id="c1-polygon" class="section">
+      <h2>Polygon</h2>
+      <p class="meta">
+        Ref: <code>featureId: "polygon-1"</code>. Expect blue fill + outline.
+      </p>
+      <div class="map-frame"><Map config={polyMap} height="320px" /></div>
+    </section>
+
+    <section id="c1-multipolygon" class="section">
+      <h2>MultiPolygon — renders ALL polygons</h2>
+      <p class="meta">
+        Ref: <code>featureId: "multipolygon-1"</code>. Expect
+        <strong>two</strong> red polygons (NOT just the first).
+      </p>
+      <div class="map-frame"><Map config={multiPolyMap} height="320px" /></div>
+    </section>
+
+    <section id="c1-geomcoll-single" class="section">
+      <h2>GeometryCollection — single inner geometry</h2>
+      <p class="meta">
+        Ref: <code>featureId: "geomcoll-single"</code>. Dispatches to the
+        inner Point; single circle marker.
+      </p>
+      <div class="map-frame"><Map config={geomCollSingleMap} height="320px" /></div>
+    </section>
+
+    <section id="c1-altitude" class="section">
+      <h2>3D position handling — Z drop</h2>
+      <p class="meta">
+        Ref: <code>featureId: "altitude-3d"</code>. Source coord is
+        <code>[-73.9826, 40.6725, 42]</code>. Computed center is
+        <strong>2D</strong> — no altitude leaked.
+      </p>
+      <p class="meta">
+        Computed center: <code>{JSON.stringify(altitude3dMap.config.center)}</code>
+      </p>
+      <div class="map-frame"><Map config={altitude3dMap} height="320px" /></div>
+    </section>
+
+    <section id="c1-match" class="section">
+      <h2>Match-by-property</h2>
+      <p class="meta">
+        Ref: <code>match: &#123; property: "ref_id", equals: 1 &#125;</code>.
+        Resolves to the same Polygon as the
+        <code>featureId: "polygon-1"</code> section above.
+      </p>
+      <div class="map-frame"><Map config={matchMap} height="320px" /></div>
+    </section>
+
+    <section id="c3-override" class="section">
+      <h2>Override precedence</h2>
+      <p class="meta">
+        Click the polygon. Popup title should read
+        <strong>"OVERRIDE: name set on the ref"</strong>, NOT
+        <code>feature.properties.name</code>. Fill is teal, not blue.
+      </p>
+      <div class="map-frame"><Map config={overrideMap} height="320px" /></div>
+    </section>
+
+    <section id="c6-style-warn" class="section">
+      <h2>Irrelevant style overrides — check build console</h2>
+      <p class="meta">
+        Ref sets <code>markerColor</code> + <code>width</code> on a Polygon
+        (both ignored) plus <code>fillColor</code> (applied). Your
+        <code>astro dev</code> terminal should show exactly ONE warning:
+      </p>
+      <pre>feature_ref: style override(s) [markerColor, width] do not apply to Polygon geometry from "..."; they will be ignored.</pre>
+      <p class="meta">
+        Reloading this page should NOT re-emit the warning (dedupe). Stopping
+        and restarting <code>astro dev</code> clears the dedupe cache.
+      </p>
+      <div class="map-frame"><Map config={styleWarnMap} height="320px" /></div>
+    </section>
+
+    <section class="section">
+      <h2>C.2 HMR check — manual</h2>
+      <ol>
+        <li>Edit <code>./src/data/sample.geojson</code> while this page is open in <code>astro dev</code>.</li>
+        <li>
+          Move the <code>polygon-1</code> feature by a small amount (change one
+          coord by 0.001).
+        </li>
+        <li>
+          Reload the Polygon section — the polygon moves <strong>without</strong>
+          restarting the dev server.
+        </li>
+      </ol>
+    </section>
+
+    <section class="section">
+      <h2>C.4 / C.5 Error cases — uncomment-and-reload</h2>
+      <p>
+        Open <code>src/pages/showcase.astro</code> in your editor. Each
+        <code>errorRefs.*</code> block at the top is commented out. To trigger
+        one, uncomment the const AND add a corresponding
+        <code>await buildFeatureMapConfig(&#123; ref: errorMultiGeomColl &#125;, globalMapConfig)</code>
+        line near the existing <code>Promise.all</code>. Save. The dev server
+        should reject with the documented error message. Revert after each.
+      </p>
+      <ul>
+        <li><strong>errorMultiGeomColl</strong> — heterogeneous GeometryCollection</li>
+        <li><strong>errorDegenerateLine</strong> — LineString with 1 coordinate</li>
+        <li><strong>errorMissingFeature</strong> — <code>featureId</code> not in file</li>
+        <li><strong>errorMissingFile</strong> — source path doesn't exist</li>
+        <li><strong>errorXorBoth</strong> — both <code>featureId</code> and <code>match</code> (InvalidFeatureRefError)</li>
+        <li><strong>errorXorNeither</strong> — neither <code>featureId</code> nor <code>match</code> (InvalidFeatureRefError)</li>
+        <li><strong>errorTraversalUp</strong> — relative path escapes project root via <code>..</code></li>
+        <li><strong>errorAbsoluteDefault</strong> — absolute path without <code>allowAbsolutePaths</code> opt-in</li>
+      </ul>
+    </section>
+  </main>
+</Layout>

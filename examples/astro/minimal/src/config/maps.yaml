@@ -1,0 +1,5 @@
+title: "MapLibre YAML — minimal example"
+defaultMapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+defaultCenter: [-73.985, 40.674]
+defaultZoom: 14
+theme: light

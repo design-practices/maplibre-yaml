@@ -1,0 +1,38 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { Map, buildMapConfigFromEntry } from "@maplibre-yaml/astro";
+import { getCollection, render } from "astro:content";
+import { globalMapConfig } from "../../lib/map-config";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("poas");
+  return entries.map((entry) => ({
+    params: { slug: entry.id.replace(/\.md$/, "") },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+
+const mapConfig = await buildMapConfigFromEntry(entry.data, globalMapConfig, {
+  label: entry.data.title,
+  description: entry.data.summary,
+});
+---
+
+<Layout title={entry.data.title}>
+  <main>
+    <p><a href="/">&larr; Home</a></p>
+    <h1>{entry.data.title}</h1>
+    {entry.data.summary && <p class="meta">{entry.data.summary}</p>}
+
+    <div class="map-frame" style="margin-bottom: 1.5rem;">
+      <Map config={mapConfig} height="360px" />
+    </div>
+
+    <article>
+      <Content />
+    </article>
+  </main>
+</Layout>

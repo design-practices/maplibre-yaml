@@ -1,0 +1,208 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "point-1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.9826, 40.6725]
+      },
+      "properties": {
+        "kind": "point",
+        "name": "Sample Point",
+        "description": "Single Point feature"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "multipoint-1",
+      "geometry": {
+        "type": "MultiPoint",
+        "coordinates": [
+          [-73.9890, 40.6750],
+          [-73.9860, 40.6740],
+          [-73.9830, 40.6730]
+        ]
+      },
+      "properties": {
+        "kind": "multipoint",
+        "name": "Sample MultiPoint (3 markers)",
+        "description": "Tests MultiPoint dispatch"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "linestring-1",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.9890, 40.6790],
+          [-73.9870, 40.6760],
+          [-73.9855, 40.6730],
+          [-73.9840, 40.6700],
+          [-73.9825, 40.6680]
+        ]
+      },
+      "properties": {
+        "kind": "linestring",
+        "name": "Sample LineString",
+        "description": "Five-point line with endpoint markers"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "multilinestring-1",
+      "geometry": {
+        "type": "MultiLineString",
+        "coordinates": [
+          [
+            [-73.9890, 40.6790],
+            [-73.9870, 40.6770]
+          ],
+          [
+            [-73.9850, 40.6750],
+            [-73.9820, 40.6720]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "multilinestring",
+        "name": "Sample MultiLineString (2 segments)",
+        "description": "BOTH segments must render; FOUR endpoint markers"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "polygon-1",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-73.9890, 40.6790],
+            [-73.9810, 40.6790],
+            [-73.9810, 40.6700],
+            [-73.9890, 40.6700],
+            [-73.9890, 40.6790]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "polygon",
+        "ref_id": 1,
+        "name": "Sample Polygon",
+        "description": "Single Polygon with fill + outline"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "multipolygon-1",
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [
+            [
+              [-73.9890, 40.6790],
+              [-73.9870, 40.6790],
+              [-73.9870, 40.6770],
+              [-73.9890, 40.6770],
+              [-73.9890, 40.6790]
+            ]
+          ],
+          [
+            [
+              [-73.9830, 40.6730],
+              [-73.9810, 40.6730],
+              [-73.9810, 40.6710],
+              [-73.9830, 40.6710],
+              [-73.9830, 40.6730]
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "multipolygon",
+        "name": "Sample MultiPolygon (2 polygons)",
+        "description": "BOTH polygons must render -- not just the first"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "geomcoll-single",
+      "geometry": {
+        "type": "GeometryCollection",
+        "geometries": [
+          {
+            "type": "Point",
+            "coordinates": [-73.9826, 40.6725]
+          }
+        ]
+      },
+      "properties": {
+        "kind": "geometrycollection-single",
+        "name": "GeometryCollection with one inner geometry",
+        "description": "Dispatches to the inner Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "geomcoll-multi",
+      "geometry": {
+        "type": "GeometryCollection",
+        "geometries": [
+          {
+            "type": "Point",
+            "coordinates": [-73.9826, 40.6725]
+          },
+          {
+            "type": "LineString",
+            "coordinates": [
+              [-73.9890, 40.6790],
+              [-73.9810, 40.6700]
+            ]
+          }
+        ]
+      },
+      "properties": {
+        "kind": "geometrycollection-multi",
+        "name": "Heterogeneous GeometryCollection",
+        "description": "ERROR path -- builder must reject with a clear message"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "altitude-3d",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.9826, 40.6725, 42]
+      },
+      "properties": {
+        "kind": "altitude-3d",
+        "name": "3D point at 42m altitude",
+        "description": "RFC 7946 Z must be dropped -- map center stays 2D"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "no-props",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.9826, 40.6750]
+      },
+      "properties": null
+    },
+    {
+      "type": "Feature",
+      "id": "degenerate-line",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[-73.9826, 40.6725]]
+      },
+      "properties": {
+        "kind": "degenerate-line",
+        "name": "Single-coord LineString",
+        "description": "ERROR path -- fewer than 2 coordinates"
+      }
+    }
+  ]
+}
