@@ -223,7 +223,7 @@ config:
       expect(error).toBeInstanceOf(YAMLLoadError);
       const loadError = error as YAMLLoadError;
       expect(loadError.errors).toBeDefined();
-      expect(loadError.errors.length).toBeGreaterThan(0);
+      expect(loadError.errors!.length).toBeGreaterThan(0);
       expect(loadError.filePath).toBe(yamlPath);
     }
   });

@@ -1,0 +1,21 @@
+{
+  "name": "@maplibre-yaml/example-astro-minimal",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@maplibre-yaml/astro": "workspace:*",
+    "@maplibre-yaml/core": "workspace:*",
+    "astro": "^5.4.3",
+    "maplibre-gl": "^5.18.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

@@ -50,6 +50,57 @@ const CoordinatesSchema = z
   .describe("Geographic coordinates [longitude, latitude]");
 
 /**
+ * Style fields applicable to point/marker geometries.
+ *
+ * @remarks
+ * Single source of truth for point-style overrides. Reused by
+ * `LocationPointSchema` and `FeatureRefSchema` so adding a new field
+ * (e.g., `markerIcon`) only requires editing one place.
+ *
+ * **All fields here MUST be `.optional()`.** They are spread into multiple
+ * schemas with different required-ness semantics (a location point treats
+ * styles as optional overrides; a feature ref treats them as optional
+ * overrides over `feature.properties`). Making any field required here
+ * would force authors to declare it on every collection item, breaking
+ * the schema's permissive shape.
+ *
+ * @internal
+ */
+export const PointStyleFields = {
+  markerColor: z.string().optional().describe("Marker color (CSS color value)"),
+};
+
+/**
+ * Style fields applicable to polygon geometries (fill + stroke).
+ *
+ * **All fields here MUST be `.optional()`** -- see `PointStyleFields`.
+ *
+ * @internal
+ */
+export const PolygonStyleFields = {
+  fillColor: z.string().optional().describe("Fill color (CSS color value)"),
+  strokeColor: z.string().optional().describe("Stroke color (CSS color value)"),
+  fillOpacity: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Fill opacity (0-1)"),
+};
+
+/**
+ * Style fields applicable to line/route geometries.
+ *
+ * **All fields here MUST be `.optional()`** -- see `PointStyleFields`.
+ *
+ * @internal
+ */
+export const LineStyleFields = {
+  color: z.string().optional().describe("Line color (CSS color value)"),
+  width: z.number().positive().optional().describe("Line width in pixels"),
+};
+
+/**
  * Single location point schema.
  *
  * @remarks
@@ -60,7 +111,7 @@ export const LocationPointSchema = z.object({
   name: z.string().optional().describe("Location name for display"),
   description: z.string().optional().describe("Location description"),
   zoom: z.number().min(0).max(24).optional().describe("Suggested zoom level"),
-  markerColor: z.string().optional().describe("Marker color (CSS color value)"),
+  ...PointStyleFields,
 });
 
 /** Type for location point data. */
@@ -80,14 +131,7 @@ export const RegionPolygonSchema = z.object({
     .describe("Polygon coordinates (GeoJSON format)"),
   name: z.string().optional().describe("Region name"),
   description: z.string().optional().describe("Region description"),
-  fillColor: z.string().optional().describe("Fill color (CSS color value)"),
-  strokeColor: z.string().optional().describe("Stroke color (CSS color value)"),
-  fillOpacity: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .describe("Fill opacity (0-1)"),
+  ...PolygonStyleFields,
 });
 
 /** Type for region polygon data. */
@@ -106,8 +150,7 @@ export const RouteLineSchema = z.object({
     .describe("Route coordinates (array of [lng, lat] pairs)"),
   name: z.string().optional().describe("Route name"),
   description: z.string().optional().describe("Route description"),
-  color: z.string().optional().describe("Line color (CSS color value)"),
-  width: z.number().positive().optional().describe("Line width in pixels"),
+  ...LineStyleFields,
 });
 
 /** Type for route line data. */

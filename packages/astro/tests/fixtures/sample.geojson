@@ -1,0 +1,180 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "point-1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.985, 40.674]
+      },
+      "properties": {
+        "gotf_id": 1.1,
+        "name": "Library Site",
+        "description": "Proposed library branch location"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "multipoint-2",
+      "geometry": {
+        "type": "MultiPoint",
+        "coordinates": [
+          [-73.985, 40.674],
+          [-73.984, 40.675],
+          [-73.983, 40.673]
+        ]
+      },
+      "properties": {
+        "gotf_id": 2.1,
+        "name": "Cluster of Sites",
+        "description": "Three related sites"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "linestring-3",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.989, 40.679],
+          [-73.987, 40.676],
+          [-73.985, 40.673],
+          [-73.984, 40.670]
+        ]
+      },
+      "properties": {
+        "gotf_id": 3.1,
+        "name": "Canal Path",
+        "description": "Stormwater route"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "polygon-4",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-73.9848, 40.6748],
+            [-73.9833, 40.6748],
+            [-73.9833, 40.6738],
+            [-73.9848, 40.6738],
+            [-73.9848, 40.6748]
+          ]
+        ]
+      },
+      "properties": {
+        "gotf_id": 4.1,
+        "name": "Greene Park",
+        "description": "Park boundary"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "multipolygon-5",
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [
+            [
+              [-73.9870, 40.6760],
+              [-73.9860, 40.6760],
+              [-73.9860, 40.6750],
+              [-73.9870, 40.6750],
+              [-73.9870, 40.6760]
+            ]
+          ],
+          [
+            [
+              [-73.9840, 40.6740],
+              [-73.9830, 40.6740],
+              [-73.9830, 40.6730],
+              [-73.9840, 40.6730],
+              [-73.9840, 40.6740]
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "gotf_id": 5.1,
+        "name": "Multi-zone Region"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "multiline-6",
+      "geometry": {
+        "type": "MultiLineString",
+        "coordinates": [
+          [[0, 0], [1, 1]],
+          [[2, 2], [3, 3]]
+        ]
+      },
+      "properties": {
+        "gotf_id": 6.1,
+        "name": "Two-segment MultiLineString"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "geomcoll-7",
+      "geometry": {
+        "type": "GeometryCollection",
+        "geometries": [
+          { "type": "Point", "coordinates": [0, 0] },
+          { "type": "LineString", "coordinates": [[0, 0], [1, 1]] }
+        ]
+      },
+      "properties": {
+        "gotf_id": 7.1,
+        "name": "Multi-geometry GeometryCollection (V1 unsupported)"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "geomcoll-single-7b",
+      "geometry": {
+        "type": "GeometryCollection",
+        "geometries": [
+          { "type": "Point", "coordinates": [-73.985, 40.674] }
+        ]
+      },
+      "properties": {
+        "gotf_id": 7.2,
+        "name": "Single-geometry GeometryCollection"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "no-props",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [0, 0]
+      },
+      "properties": null
+    },
+    {
+      "type": "Feature",
+      "id": "dup-a",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [10, 10]
+      },
+      "properties": {
+        "shared_id": "duplicate"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "dup-b",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [11, 11]
+      },
+      "properties": {
+        "shared_id": "duplicate"
+      }
+    }
+  ]
+}

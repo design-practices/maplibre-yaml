@@ -1,0 +1,426 @@
+---
+/**
+ * Feature-ref showcase — one runnable example per scenario.
+ *
+ * Each section pairs a small `FeatureRef` snippet with the map it
+ * produces, so you can read the input and see the output side-by-side.
+ * The fixture (`src/data/sample.geojson`) contains one feature per
+ * GeoJSON geometry type plus a couple of edge cases.
+ */
+import Layout from "../layouts/Layout.astro";
+import {
+  Map,
+  buildFeatureMapConfig,
+  type FeatureRef,
+} from "@maplibre-yaml/astro";
+import { globalMapConfig } from "../lib/map-config";
+
+const SOURCE = "./src/data/sample.geojson";
+
+// ---- Geometry types --------------------------------------------------------
+
+const pointRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "point-1",
+};
+
+const multiPointRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "multipoint-1",
+  markerColor: "#9b59b6",
+};
+
+const lineRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "linestring-1",
+  color: "#34495e",
+  width: 3,
+};
+
+const multiLineRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "multilinestring-1",
+  color: "#27ae60",
+  width: 4,
+};
+
+const polygonRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "polygon-1",
+  fillColor: "#3388ff",
+  fillOpacity: 0.3,
+};
+
+const multiPolygonRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "multipolygon-1",
+  fillColor: "#e74c3c",
+  fillOpacity: 0.35,
+};
+
+const geomCollSingleRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "geomcoll-single",
+};
+
+const altitude3dRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "altitude-3d",
+  markerColor: "#f39c12",
+};
+
+// ---- Match strategies ------------------------------------------------------
+
+const matchRef: FeatureRef = {
+  source: SOURCE,
+  match: { property: "ref_id", equals: 1 },
+};
+
+// ---- Override behavior -----------------------------------------------------
+
+const overrideRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "polygon-1",
+  name: "Override name (set on the ref)",
+  description: "Override description (set on the ref)",
+  fillColor: "#1abc9c",
+};
+
+// ---- Style overrides on the wrong geometry family --------------------------
+//
+// `feature_ref` accepts every style field because the geometry type is
+// not known at schema-parse time -- it's resolved when the file loads.
+// Style fields that don't apply to the resolved geometry are ignored,
+// and a one-time `console.warn` flags the mistake during `astro dev`.
+
+const styleWarnRef: FeatureRef = {
+  source: SOURCE,
+  featureId: "polygon-1",
+  markerColor: "#ff0000", // ignored on Polygon
+  width: 5,                // ignored on Polygon
+  fillColor: "#2980b9",   // applied
+};
+
+// ---- Error references ------------------------------------------------------
+//
+// These are commented out so the example builds clean. Uncomment any
+// single block and add a matching `buildFeatureMapConfig({ ref: ... })`
+// call below to see the documented error in your `astro dev` overlay.
+
+// const errorMultiGeomColl: FeatureRef = {
+//   source: SOURCE,
+//   featureId: "geomcoll-multi",
+// };
+// // -> GeoJSONLoadError: GeometryCollection ... has 2 geometries ... single-geometry only
+
+// const errorDegenerateLine: FeatureRef = {
+//   source: SOURCE,
+//   featureId: "degenerate-line",
+// };
+// // -> GeoJSONLoadError: LineString feature in ... has fewer than 2 coordinates
+
+// const errorMissingFeature: FeatureRef = {
+//   source: SOURCE,
+//   featureId: "does-not-exist",
+// };
+// // -> GeoJSONLoadError: No feature with id ...
+
+// const errorMissingFile: FeatureRef = {
+//   source: "./src/data/missing.geojson",
+//   featureId: "point-1",
+// };
+// // -> GeoJSONLoadError: Cannot find GeoJSON file: ...
+
+// const errorXorBoth: FeatureRef = {
+//   source: SOURCE,
+//   featureId: "point-1",
+//   match: { property: "ref_id", equals: 1 },
+// };
+// // -> InvalidFeatureRefError: exactly one of featureId or match
+
+// const errorXorNeither = { source: SOURCE } as FeatureRef;
+// // -> InvalidFeatureRefError: either featureId or match
+
+// const errorTraversalUp: FeatureRef = {
+//   source: "../../../../../../etc/passwd.geojson",
+//   featureId: "x",
+// };
+// // -> GeoJSONLoadError: resolves outside the project root
+
+// const errorAbsoluteDefault: FeatureRef = {
+//   source: "/etc/passwd",
+//   featureId: "x",
+// };
+// // -> GeoJSONLoadError: absolute path ... rejected by default for security
+
+// ---- Build configs ---------------------------------------------------------
+
+const [
+  pointMap,
+  multiPointMap,
+  lineMap,
+  multiLineMap,
+  polyMap,
+  multiPolyMap,
+  geomCollSingleMap,
+  altitude3dMap,
+  matchMap,
+  overrideMap,
+  styleWarnMap,
+] = await Promise.all([
+  buildFeatureMapConfig({ ref: pointRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: multiPointRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: lineRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: multiLineRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: polygonRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: multiPolygonRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: geomCollSingleRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: altitude3dRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: matchRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: overrideRef }, globalMapConfig),
+  buildFeatureMapConfig({ ref: styleWarnRef }, globalMapConfig),
+]);
+
+const sections = [
+  { id: "point", label: "Point" },
+  { id: "multipoint", label: "MultiPoint" },
+  { id: "linestring", label: "LineString" },
+  { id: "multilinestring", label: "MultiLineString" },
+  { id: "polygon", label: "Polygon" },
+  { id: "multipolygon", label: "MultiPolygon" },
+  { id: "geometrycollection", label: "GeometryCollection" },
+  { id: "altitude", label: "3D coordinates" },
+  { id: "match", label: "Match by property" },
+  { id: "overrides", label: "Display overrides" },
+  { id: "style-warning", label: "Ignored style overrides" },
+];
+---
+
+<Layout title="Showcase — @maplibre-yaml/astro">
+  <main>
+    <h1>Feature-ref showcase</h1>
+    <p>
+      <code>buildFeatureMapConfig</code> loads a feature from an external
+      GeoJSON file and dispatches to the appropriate map builder based
+      on the geometry type. Each section below pairs a
+      <code>FeatureRef</code> snippet with the map it produces. Full
+      source: <a
+        href="https://github.com/design-practices/maplibre-yaml/blob/main/examples/astro/minimal/src/pages/showcase.astro"
+        >src/pages/showcase.astro</a
+      >.
+    </p>
+
+    <nav class="toc">
+      <h2>On this page</h2>
+      <ol>
+        {sections.map((s) => <li><a href={`#${s.id}`}>{s.label}</a></li>)}
+      </ol>
+    </nav>
+
+    <section id="point" class="section">
+      <h2>Point</h2>
+      <p class="meta">A single Point feature renders as a circle marker.</p>
+      <pre><code>{`const ref: FeatureRef = {
+  source: "./src/data/sample.geojson",
+  featureId: "point-1",
+};`}</code></pre>
+      <div class="map-frame"><Map config={pointMap} height="320px" /></div>
+    </section>
+
+    <section id="multipoint" class="section">
+      <h2>MultiPoint</h2>
+      <p class="meta">
+        A MultiPoint renders as one marker per coordinate. The
+        ref-level <code>markerColor</code> applies to every marker — for
+        per-marker styling, use inline <code>locations</code> on the
+        content entry instead.
+      </p>
+      <pre><code>{`const ref: FeatureRef = {
+  source: "./src/data/sample.geojson",
+  featureId: "multipoint-1",
+  markerColor: "#9b59b6",
+};`}</code></pre>
+      <div class="map-frame"><Map config={multiPointMap} height="320px" /></div>
+    </section>
+
+    <section id="linestring" class="section">
+      <h2>LineString</h2>
+      <p class="meta">
+        A LineString renders as a single line with circles at the start
+        and end coordinates. <code>color</code> and <code>width</code>
+        flow through to the MapLibre paint.
+      </p>
+      <pre><code>{`const ref: FeatureRef = {
+  source: "./src/data/sample.geojson",
+  featureId: "linestring-1",
+  color: "#34495e",
+  width: 3,
+};`}</code></pre>
+      <div class="map-frame"><Map config={lineMap} height="320px" /></div>
+    </section>
+
+    <section id="multilinestring" class="section">
+      <h2>MultiLineString</h2>
+      <p class="meta">
+        Every segment is drawn (as a single <code>MultiLineString</code>
+        feature so interactions stay cohesive) with start/end markers on
+        each.
+      </p>
+      <pre><code>{`const ref: FeatureRef = {
+  source: "./src/data/sample.geojson",
+  featureId: "multilinestring-1",
+  color: "#27ae60",
+  width: 4,
+};`}</code></pre>
+      <div class="map-frame"><Map config={multiLineMap} height="320px" /></div>
+    </section>
+
+    <section id="polygon" class="section">
+      <h2>Polygon</h2>
+      <p class="meta">
+        A Polygon renders as a fill layer with an outline.
+        <code>fillColor</code>, <code>strokeColor</code>, and
+        <code>fillOpacity</code> control the styling.
+      </p>
+      <pre><code>{`const ref: FeatureRef = {
+  source: "./src/data/sample.geojson",
+  featureId: "polygon-1",
+  fillColor: "#3388ff",
+  fillOpacity: 0.3,
+};`}</code></pre>
+      <div class="map-frame"><Map config={polyMap} height="320px" /></div>
+    </section>
+
+    <section id="multipolygon" class="section">
+      <h2>MultiPolygon</h2>
+      <p class="meta">
+        Every polygon renders together as a single
+        <code>MultiPolygon</code> feature — so a click anywhere in the
+        feature opens one popup, and the bounds fit all parts.
+      </p>
+      <pre><code>{`const ref: FeatureRef = {
+  source: "./src/data/sample.geojson",
+  featureId: "multipolygon-1",
+  fillColor: "#e74c3c",
+  fillOpacity: 0.35,
+};`}</code></pre>
+      <div class="map-frame"><Map config={multiPolyMap} height="320px" /></div>
+    </section>
+
+    <section id="geometrycollection" class="section">
+      <h2>GeometryCollection (single inner geometry)</h2>
+      <p class="meta">
+        A <code>GeometryCollection</code> with exactly one inner geometry
+        is unwrapped and dispatched to the inner geometry's builder.
+        Heterogeneous collections (multiple inner geometries of different
+        types) are rejected — split them into separate features in your
+        source data.
+      </p>
+      <pre><code>{`const ref: FeatureRef = {
+  source: "./src/data/sample.geojson",
+  featureId: "geomcoll-single",
+};`}</code></pre>
+      <div class="map-frame"><Map config={geomCollSingleMap} height="320px" /></div>
+    </section>
+
+    <section id="altitude" class="section">
+      <h2>3D coordinates (altitude is dropped)</h2>
+      <p class="meta">
+        GeoJSON positions may carry an optional altitude component
+        (<code>[lng, lat, altitude]</code>, RFC 7946 §3.1.1). The
+        builder projects to 2D explicitly, so altitude never leaks into
+        the rendered <code>MapBlock</code>.
+      </p>
+      <p class="meta">
+        Source coordinate: <code>[-73.9826, 40.6725, 42]</code>.
+        Computed map center: <code>{JSON.stringify(altitude3dMap.config.center)}</code>.
+      </p>
+      <div class="map-frame"><Map config={altitude3dMap} height="320px" /></div>
+    </section>
+
+    <section id="match" class="section">
+      <h2>Match by property</h2>
+      <p class="meta">
+        Instead of <code>featureId</code>, you can match by an arbitrary
+        property value. Useful when your GeoJSON uses a separate id
+        scheme that maps to your content entries.
+      </p>
+      <pre><code>{`const ref: FeatureRef = {
+  source: "./src/data/sample.geojson",
+  match: { property: "ref_id", equals: 1 },
+};`}</code></pre>
+      <div class="map-frame"><Map config={matchMap} height="320px" /></div>
+    </section>
+
+    <section id="overrides" class="section">
+      <h2>Display overrides</h2>
+      <p class="meta">
+        Ref-level <code>name</code> and <code>description</code> win
+        over the feature's own <code>properties.name</code> /
+        <code>properties.description</code>. Style fields
+        (<code>fillColor</code>, etc.) flow through to the builder.
+        Click the polygon to see the override in the popup.
+      </p>
+      <pre><code>{`const ref: FeatureRef = {
+  source: "./src/data/sample.geojson",
+  featureId: "polygon-1",
+  name: "Override name (set on the ref)",
+  description: "Override description (set on the ref)",
+  fillColor: "#1abc9c",
+};`}</code></pre>
+      <div class="map-frame"><Map config={overrideMap} height="320px" /></div>
+    </section>
+
+    <section id="style-warning" class="section">
+      <h2>Ignored style overrides</h2>
+      <p class="meta">
+        <code>FeatureRef</code> accepts every style field because the
+        geometry type isn't known until the file loads. When a field
+        doesn't apply to the resolved geometry, the builder ignores it
+        and emits a one-time <code>console.warn</code> during
+        <code>astro dev</code> so you notice the mistake. Below: a
+        Polygon ref sets <code>markerColor</code> and <code>width</code>
+        (both ignored) plus <code>fillColor</code> (applied). Check your
+        terminal for:
+      </p>
+      <pre>feature_ref: style override(s) [markerColor, width] do not apply to Polygon geometry from "..."; they will be ignored.</pre>
+      <p class="meta">
+        The warning is deduplicated per (source, geometry-type, ignored
+        keys), so reloading the page won't re-emit it.
+      </p>
+      <div class="map-frame"><Map config={styleWarnMap} height="320px" /></div>
+    </section>
+
+    <section class="section">
+      <h2>Live editing</h2>
+      <p class="meta">
+        Edit <code>src/data/sample.geojson</code> while
+        <code>astro dev</code> is running — the mtime-aware cache
+        invalidates automatically. Manually reload the page (the file
+        isn't part of Vite's module graph, so HMR doesn't auto-refresh),
+        and the new contents appear without a dev-server restart.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>Errors you might see</h2>
+      <p class="meta">
+        The builder raises distinct error classes for distinct failures.
+        To exercise any of these in the example, uncomment the matching
+        <code>error*</code> block at the top of this file (the comments
+        list the exact message you should see).
+      </p>
+      <ul>
+        <li><code>GeoJSONLoadError</code> — missing file, missing feature, unsupported geometry, heterogeneous <code>GeometryCollection</code>, degenerate <code>LineString</code>, path-traversal violations, absolute-path rejection</li>
+        <li><code>InvalidFeatureRefError</code> — discriminable subclass thrown when the ref has neither or both of <code>featureId</code> and <code>match</code></li>
+      </ul>
+      <p class="meta">
+        Path-traversal protection rejects relative <code>source</code>
+        values that escape the project root, including symlinks that
+        canonicalize outward. Absolute paths are rejected by default —
+        pass <code>loadOptions: &#123; allowAbsolutePaths: true &#125;</code> from
+        trusted call sites only.
+      </p>
+    </section>
+  </main>
+</Layout>

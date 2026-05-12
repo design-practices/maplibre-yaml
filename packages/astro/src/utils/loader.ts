@@ -49,6 +49,10 @@ import type { MapBlock, ScrollytellingBlock, ParseError } from "@maplibre-yaml/c
  * This error includes detailed validation errors with paths to help
  * developers identify and fix configuration issues.
  *
+ * **Security note:** the optional ES2022 `cause` field may include
+ * filesystem paths or parser internals. Strip `.cause` before forwarding
+ * these errors to user-facing HTTP responses.
+ *
  * @example
  * ```typescript
  * try {
@@ -62,20 +66,31 @@ import type { MapBlock, ScrollytellingBlock, ParseError } from "@maplibre-yaml/c
  */
 export class YAMLLoadError extends Error {
   /**
-   * Array of validation errors with paths and messages
+   * Array of validation errors with paths and messages.
+   *
+   * **Only assigned when non-empty** -- Astro's `collectErrorMetadata`
+   * treats any thrown error with `Array.isArray(e.errors)` as an aggregate
+   * and unpacks it; an empty array crashes the dev-overlay formatter.
+   * Omitting the property when there are no structured errors keeps
+   * single-message throws compatible with Astro's error pipeline.
    */
-  public errors: ParseError[];
+  public errors?: ParseError[];
 
   /**
    * Path to the YAML file that failed to load
    */
   public filePath: string;
 
-  constructor(message: string, filePath: string, errors: ParseError[] = []) {
-    super(message);
+  constructor(
+    message: string,
+    filePath: string,
+    errors: ParseError[] = [],
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
     this.name = "YAMLLoadError";
     this.filePath = filePath;
-    this.errors = errors;
+    if (errors.length > 0) this.errors = errors;
   }
 }
 
@@ -138,7 +153,9 @@ export async function loadYAML<T = unknown>(
     } catch (error) {
       throw new YAMLLoadError(
         `YAML syntax error: ${error instanceof Error ? error.message : String(error)}`,
-        path
+        path,
+        [],
+        { cause: error },
       );
     }
 
@@ -150,7 +167,8 @@ export async function loadYAML<T = unknown>(
         throw new YAMLLoadError(
           `Validation failed for ${path}`,
           path,
-          error instanceof Error ? [{ path: "", message: error.message }] : []
+          error instanceof Error ? [{ path: "", message: error.message }] : [],
+          { cause: error },
         );
       }
     }
@@ -165,7 +183,9 @@ export async function loadYAML<T = unknown>(
     // Wrap other errors
     throw new YAMLLoadError(
       `Failed to load ${path}: ${error instanceof Error ? error.message : String(error)}`,
-      path
+      path,
+      [],
+      { cause: error },
     );
   }
 }
@@ -245,7 +265,9 @@ export async function loadMapConfig(path: string): Promise<MapBlock> {
       `Failed to load map config from ${path}: ${
         error instanceof Error ? error.message : String(error)
       }`,
-      path
+      path,
+      [],
+      { cause: error },
     );
   }
 }
@@ -322,7 +344,9 @@ export async function loadScrollytellingConfig(
       `Failed to load scrollytelling config from ${path}: ${
         error instanceof Error ? error.message : String(error)
       }`,
-      path
+      path,
+      [],
+      { cause: error },
     );
   }
 }
@@ -396,7 +420,9 @@ export async function loadFromGlob<T = unknown>(
       } catch (error) {
         throw new YAMLLoadError(
           `YAML syntax error: ${error instanceof Error ? error.message : String(error)}`,
-          path
+          path,
+          [],
+          { cause: error },
         );
       }
 
@@ -416,7 +442,7 @@ export async function loadFromGlob<T = unknown>(
       }
     } catch (error) {
       if (error instanceof YAMLLoadError) {
-        errors.push({ path: error.filePath, errors: error.errors });
+        errors.push({ path: error.filePath, errors: error.errors ?? [] });
       } else {
         errors.push({
           path,
