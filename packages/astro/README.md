@@ -322,6 +322,8 @@ const mapConfig = buildPolygonMapConfig({ region: entry.data.boundary }, globalM
 
 When multiple collection items share geometry from a single source-of-truth GeoJSON file, copying coordinates into each frontmatter is fragile and verbose. The `feature_ref` field lets a collection item point at a feature in an external GeoJSON file (matched by `featureId` or by property equality). At build time, the loader reads the file, finds the matching feature, detects its geometry type, and dispatches to the appropriate builder.
 
+> **Runnable example:** [`examples/astro/minimal`](../../examples/astro/minimal) contains a bare-bones Astro app exercising every scenario in this section. The `/showcase` page pairs each `FeatureRef` snippet with the map it produces; `/poas/sample` demonstrates `buildMapConfigFromEntry` with a markdown entry.
+
 ### Quick start
 
 **1. Add `feature_ref` to your collection schema**
@@ -464,9 +466,67 @@ Frontmatter can override `feature.properties.name` and `feature.properties.descr
 | `GeometryCollection` (single member) | dispatches to inner geometry type |
 | `GeometryCollection` (multiple members) | throws clear error -- split into separate features |
 
+### Path resolution and security defaults
+
+The `source` value is resolved against `process.cwd()` by default. Two settings on `FeatureLoadOptions` adjust this:
+
+```typescript
+import {
+  buildFeatureMapConfig,
+  type FeatureLoadOptions,
+} from "@maplibre-yaml/astro";
+
+const loadOptions: FeatureLoadOptions = {
+  // Use a custom project root for monorepo builds where cwd != Astro project dir.
+  // Canonicalized via realpath so macOS `/var` -> `/private/var` doesn't trip
+  // the containment check.
+  projectRoot: "/absolute/path/to/astro/project",
+
+  // Opt in to absolute `source` paths. Default: false.
+  // Required for tests using tmpdir, monorepo data outside the project root,
+  // or any controlled call site. Do NOT enable when frontmatter values can
+  // come from untrusted content (CMS-supplied entries, user uploads).
+  allowAbsolutePaths: true,
+};
+
+await buildFeatureMapConfig({ ref, loadOptions }, globalConfig);
+```
+
+The same `loadOptions` flows through `buildMapConfigFromEntry` and `loadFeatureFile`.
+
+Path-traversal protection rejects relative `source` values that escape the project root via `..`. Symlinks that live inside the project root but canonicalize OUTSIDE it are also rejected (a post-realpath containment re-check catches this). Absolute paths are rejected unless `allowAbsolutePaths: true` is passed.
+
+### Error classes
+
+The builder throws one of two error classes:
+
+```typescript
+import {
+  buildFeatureMapConfig,
+  GeoJSONLoadError,
+  InvalidFeatureRefError,
+} from "@maplibre-yaml/astro";
+
+try {
+  await buildFeatureMapConfig({ ref }, globalConfig);
+} catch (err) {
+  if (err instanceof InvalidFeatureRefError) {
+    // Thrown when the ref has neither or both of `featureId` and `match`.
+    // Discriminable via instanceof (not wrapped by buildFeatureMapConfig).
+  } else if (err instanceof GeoJSONLoadError) {
+    // Thrown for everything else: missing file/feature, malformed JSON,
+    // unsupported geometry, path-traversal violation, absolute-path
+    // rejection, file too large, degenerate LineString, heterogeneous
+    // GeometryCollection. `.message` carries the actionable message;
+    // `.filePath` carries the resolved path; ES2022 `.cause` carries the
+    // underlying fs/parse error when applicable.
+  }
+}
+```
+
 ### Build-time only
 
-`buildFeatureMapConfig` reads from the local filesystem via `process.cwd()`. It is **build-time only** -- invoking it in a deployed SSR adapter context throws a `GeoJSONLoadError` with guidance to resolve at build time. Runtime resolution is a planned V2 feature.
+`buildFeatureMapConfig` reads from the local filesystem via `process.cwd()` (or the configured `projectRoot`). It is **build-time only** -- invoking it in a deployed SSR adapter context throws a `GeoJSONLoadError` whose ENOENT message includes deployment-context hints. Runtime resolution is a planned V2 feature.
 
 ### Performance budget (V1)
 
@@ -477,7 +537,17 @@ Frontmatter can override `feature.properties.name` and `feature.properties.descr
 | 50-100MB | Build-time warning |
 | > 100MB | Hard error directing toward PMTiles or splitting |
 
-Files referenced multiple times across collection items are parsed once via an mtime-aware cache. Editing the GeoJSON in `astro dev` invalidates the cache on next page render -- no server restart needed (Vite HMR integration is V2). For files with 200+ features, a per-property index is built lazily on the second access for that property.
+Files referenced multiple times across collection items are parsed once via an mtime-aware cache. Editing the GeoJSON in `astro dev` invalidates the cache so the next page request picks up the new contents -- no server restart needed. **Manual page refresh is still required**: the file is read via `fs.readFile`, not imported through Vite's module graph, so Vite cannot auto-trigger an HMR re-render. Full Vite-graph integration is planned for V2. For files with 200+ features, a per-property index is built lazily on the second access for that property.
+
+### Ignored style overrides
+
+`FeatureRef` accepts every style field (`markerColor`, `fillColor`, `strokeColor`, `fillOpacity`, `color`, `width`) because the geometry type is not known when the schema parses -- it's resolved when the file loads. When a field doesn't apply to the resolved geometry (e.g., `markerColor` on a Polygon ref), the builder ignores it and emits a one-time `console.warn` during `astro dev`:
+
+```
+feature_ref: style override(s) [markerColor, width] do not apply to Polygon geometry from "./src/data/sample.geojson"; they will be ignored.
+```
+
+Warnings are deduplicated per `(source, geometryType, ignored-keys)` so reloading the page won't re-emit them. Restarting `astro dev` clears the dedupe cache.
 
 ### Lower-level primitives
 
