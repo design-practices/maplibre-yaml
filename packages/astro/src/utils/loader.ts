@@ -66,9 +66,15 @@ import type { MapBlock, ScrollytellingBlock, ParseError } from "@maplibre-yaml/c
  */
 export class YAMLLoadError extends Error {
   /**
-   * Array of validation errors with paths and messages
+   * Array of validation errors with paths and messages.
+   *
+   * **Only assigned when non-empty** -- Astro's `collectErrorMetadata`
+   * treats any thrown error with `Array.isArray(e.errors)` as an aggregate
+   * and unpacks it; an empty array crashes the dev-overlay formatter.
+   * Omitting the property when there are no structured errors keeps
+   * single-message throws compatible with Astro's error pipeline.
    */
-  public errors: ParseError[];
+  public errors?: ParseError[];
 
   /**
    * Path to the YAML file that failed to load
@@ -84,7 +90,7 @@ export class YAMLLoadError extends Error {
     super(message, options);
     this.name = "YAMLLoadError";
     this.filePath = filePath;
-    this.errors = errors;
+    if (errors.length > 0) this.errors = errors;
   }
 }
 
@@ -436,7 +442,7 @@ export async function loadFromGlob<T = unknown>(
       }
     } catch (error) {
       if (error instanceof YAMLLoadError) {
-        errors.push({ path: error.filePath, errors: error.errors });
+        errors.push({ path: error.filePath, errors: error.errors ?? [] });
       } else {
         errors.push({
           path,

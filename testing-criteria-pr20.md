@@ -62,9 +62,14 @@ All sections pre-wired in [the test page](examples/astro/otf/src/pages/test/feat
 - [ ] **3D position handling** (`#c1-altitude`) — section displays the computed center; verify it is `[-73.9826, 40.6725]` with NO altitude leak (source coord is `[-73.9826, 40.6725, 42]`)
 - [ ] **Match-by-property** (`#c1-match`) — resolves the same feature as the Polygon section above
 
-### C.2 HMR & cache invalidation
+### C.2 mtime-aware cache invalidation (NOT Vite HMR)
 
-- [ ] Edit `sample.geojson` while `astro dev` is running. **Next page render shows the new data without restarting the server.** (mtime-aware cache invalidation.)
+The GeoJSON file is read via `fs.readFile` at build time, not imported through Vite's module graph. Vite cannot watch it; what's actually guaranteed is mtime-cache invalidation on the next request.
+
+- [ ] Edit `examples/astro/minimal/src/data/sample.geojson` while `astro dev` is running (e.g., shift `polygon-1`'s coords by 0.001).
+- [ ] **Manually reload** the showcase page in the browser. The polygon should appear in the new location.
+- [ ] The dev server should NOT need a restart — mtime change alone is enough to invalidate the cache.
+- [ ] (Not blocking, but note for future PRs: Vite-graph integration for true HMR auto-refresh would be a feature add. Tracked in todo P3-034 / new follow-up.)
 
 ### C.3 Override precedence — `/showcase#c3-override` + `/poas/sample`
 

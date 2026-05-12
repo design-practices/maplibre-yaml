@@ -504,8 +504,16 @@ export class GeoJSONLoadError extends Error {
   /** Path to the GeoJSON file that failed (absolute when possible) */
   public filePath: string;
 
-  /** Optional structured details about validation failures */
-  public errors: { path: string; message: string }[];
+  /**
+   * Structured details about validation failures. **Only assigned when
+   * non-empty.** Astro's `collectErrorMetadata` treats any thrown error
+   * with `Array.isArray(e.errors)` as an aggregate-style error and unpacks
+   * it; with an empty array, the dev-overlay formatter then crashes
+   * trying to read `.message` on a non-existent inner error. Omitting the
+   * property when there are no structured errors keeps single-message
+   * throws compatible with Astro's error pipeline.
+   */
+  public errors?: { path: string; message: string }[];
 
   constructor(
     message: string,
@@ -516,7 +524,7 @@ export class GeoJSONLoadError extends Error {
     super(message);
     this.name = "GeoJSONLoadError";
     this.filePath = filePath;
-    this.errors = errors;
+    if (errors.length > 0) this.errors = errors;
     if (options?.cause !== undefined) {
       // ES2022 Error.cause; setting via property assignment to be compatible
       // with both modern Node and any consumer that polyfills Error.

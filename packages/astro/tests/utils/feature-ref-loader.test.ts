@@ -65,9 +65,15 @@ describe("GeoJSONLoadError", () => {
     expect(err.errors).toEqual(errors);
   });
 
-  it("defaults errors to empty array when omitted", () => {
+  it("omits the errors property entirely when no structured errors are passed", () => {
+    // Astro's collectErrorMetadata unpacks any error with
+    // `Array.isArray(e.errors)` as an aggregate, then formatErrorMessage
+    // crashes on the empty result. We dodge that by not setting the
+    // property at all when there's nothing to unpack -- this regression
+    // test pins the behavior.
     const err = new GeoJSONLoadError("msg", "/p");
-    expect(err.errors).toEqual([]);
+    expect(err.errors).toBeUndefined();
+    expect(Array.isArray((err as { errors?: unknown }).errors)).toBe(false);
   });
 
   it("accepts ES2022 cause via options (forward-compat constraint #4)", () => {
