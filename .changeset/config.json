@@ -10,5 +10,8 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": []
+  "ignore": [
+    "minimal",
+    "@maplibre-yaml/example-astro-minimal"
+  ]
 }
