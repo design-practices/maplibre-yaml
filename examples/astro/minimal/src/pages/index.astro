@@ -6,22 +6,24 @@ import Layout from "../layouts/Layout.astro";
   <main>
     <h1>@maplibre-yaml/astro — minimal example</h1>
     <p>
-      A bare Astro app demonstrating <code>@maplibre-yaml/astro</code>: GeoJSON
-      feature references, content-collection map dispatch, and direct builder
-      use. No styling frameworks, no extra integrations — just the API.
+      A bare Astro app demonstrating <code>@maplibre-yaml/astro</code>:
+      loading features from GeoJSON files, rendering them through
+      content collections, and configuring maps with YAML. No styling
+      frameworks, no extra integrations — just the API.
     </p>
 
     <h2>Demos</h2>
     <ul>
       <li>
-        <a href="/showcase">Feature-ref showcase</a> — every GeoJSON geometry
-        type plus edge cases, error scenarios, and override precedence.
-        Each section maps 1:1 to a checkbox in
-        <code>testing-criteria-pr20.md</code>.
+        <a href="/showcase">Feature-ref showcase</a> — one example per
+        GeoJSON geometry type, plus match strategies, display overrides,
+        and the most common error paths. Each section shows the
+        <code>FeatureRef</code> snippet and the map it produces.
       </li>
       <li>
-        <a href="/poas/sample">Content collection example</a> — a single
-        markdown entry with a <code>feature_ref</code>, rendered via
+        <a href="/poas/sample">Content collection example</a> — a
+        markdown entry with a <code>feature_ref</code> in its
+        frontmatter, rendered through
         <code>buildMapConfigFromEntry</code>.
       </li>
     </ul>
@@ -29,19 +31,23 @@ import Layout from "../layouts/Layout.astro";
     <h2>How this example is wired</h2>
     <ul>
       <li>
-        Global map config: <code>src/config/maps.yaml</code> loaded by
-        <code>loadGlobalMapConfig</code> in <code>src/lib/map-config.ts</code>.
+        Global map config:
+        <code>src/config/maps.yaml</code> loaded by
+        <code>loadGlobalMapConfig</code> in
+        <code>src/lib/map-config.ts</code>.
       </li>
       <li>
-        Fixture: <code>src/data/sample.geojson</code> — 11 features covering
-        Point, MultiPoint, LineString, MultiLineString, Polygon, MultiPolygon,
-        GeometryCollection (single inner + heterogeneous), 3D coords, no-properties,
-        and a degenerate-line edge case.
+        Fixture: <code>src/data/sample.geojson</code> — one feature per
+        GeoJSON geometry type (Point, MultiPoint, LineString,
+        MultiLineString, Polygon, MultiPolygon, GeometryCollection)
+        plus a few edge cases (3D coordinate, no-properties feature,
+        single-coord LineString).
       </li>
       <li>
-        Content collection: <code>src/content/poas/</code> with
-        <code>getCollectionItemWithFeatureRefSchema</code> (strict XOR between
-        <code>feature_ref</code> and inline geometry).
+        Content collection: <code>src/content/poas/</code> validated by
+        <code>getCollectionItemWithFeatureRefSchema</code>, which
+        enforces mutual exclusivity between <code>feature_ref</code> and
+        inline geometry fields.
       </li>
     </ul>
 
