@@ -155,8 +155,31 @@ describe("buildRouteMapConfig", () => {
     expect(result.type).toBe("map");
     expect(result.id).toMatch(/^route-map-/);
     expect(result.layers).toHaveLength(2); // line + endpoints
-    expect(result.layers[0].type).toBe("line");
-    expect(result.layers[1].type).toBe("circle");
+    expect(result.layers[0]!.type).toBe("line");
+    expect(result.layers[1]!.type).toBe("circle");
+  });
+
+  it("places line-cap and line-join in layout (NOT paint)", () => {
+    // Regression: MapLibre v5 rejects unknown paint properties; line-cap and
+    // line-join are layout properties per the style spec. Putting them in
+    // paint causes the line layer to render with degraded styling (or, in
+    // some versions, not at all -- the user reported "renders as two points
+    // instead of a line" on the showcase page).
+    const result = buildRouteMapConfig({ route, mapStyle: STYLE_URL });
+    const lineLayer = result.layers[0] as {
+      paint?: Record<string, unknown>;
+      layout?: Record<string, unknown>;
+    };
+
+    expect(lineLayer.paint).toBeDefined();
+    expect(lineLayer.paint!["line-color"]).toBeDefined();
+    expect(lineLayer.paint!["line-width"]).toBeDefined();
+    expect(lineLayer.paint!["line-cap"]).toBeUndefined();
+    expect(lineLayer.paint!["line-join"]).toBeUndefined();
+
+    expect(lineLayer.layout).toBeDefined();
+    expect(lineLayer.layout!["line-cap"]).toBe("round");
+    expect(lineLayer.layout!["line-join"]).toBe("round");
   });
 });
 

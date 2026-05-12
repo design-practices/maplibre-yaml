@@ -80,7 +80,10 @@ a {
   color: var(--accent);
 }
 
-code {
+/* Inline <code> only — scope the background away from Shiki's syntax-
+   highlighted code blocks, where the inner <code> already inherits the
+   theme background from <pre>. */
+:not(pre) > code {
   background: var(--code-bg);
   padding: 0.1rem 0.3rem;
   border-radius: 0.25rem;
@@ -93,6 +96,17 @@ pre {
   border-radius: 0.5rem;
   overflow-x: auto;
   font-size: 0.85rem;
+}
+
+/* Shiki / Astro syntax-highlighted code blocks: let the inline theme
+   background-color come through unchanged. */
+pre.astro-code {
+  padding: 1rem;
+}
+
+pre.astro-code code {
+  background: transparent;
+  padding: 0;
 }
 
 .section {

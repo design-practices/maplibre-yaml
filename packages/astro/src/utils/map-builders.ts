@@ -398,6 +398,8 @@ function buildRouteLayers(
       paint: {
         "line-color": lineColor,
         "line-width": lineWidth,
+      },
+      layout: {
         "line-cap": "round",
         "line-join": "round",
       },
