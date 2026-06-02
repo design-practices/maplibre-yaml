@@ -348,11 +348,31 @@ export const GeoJSONSourceSchema = z
     attribution: z.string().optional(),
   })
   .passthrough()
-  .refine((data) => data.url || data.data || data.prefetchedData, {
-    message:
-      "GeoJSON source requires at least one of: url, data, or prefetchedData. " +
-      'Use "url" to fetch from an endpoint, "data" for inline GeoJSON, ' +
-      'or "prefetchedData" for build-time fetched data.',
+  // DX guard, not a security check. Both validations live in a single
+  // superRefine to keep the schema's chained-method depth shallow -- adding
+  // a second chained refine blows the inferred LayerSchema union past
+  // TypeScript's serialization buffer (TS7056 on layer.schema.ts:856,911).
+  .superRefine((d, ctx) => {
+    if (!d.url && !d.data && !d.prefetchedData) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "GeoJSON source requires at least one of: url, data, or prefetchedData. " +
+          'Use "url" to fetch from an endpoint, "data" for inline GeoJSON, ' +
+          'or "prefetchedData" for build-time fetched data.',
+      });
+      return;
+    }
+    if (typeof d.data === "string" && /^(\.\.?|\/?src)\//.test(d.data)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["data"],
+        message:
+          `GeoJSON source.data must be an inline GeoJSON object or a remote URL. ` +
+          `"${d.data}" is a local path; move the file to public/ and use ` +
+          `url: "/data/<filename>.geojson", or inline the parsed contents in data:.`,
+      });
+    }
   });
 
 /** Inferred type for GeoJSON source. */

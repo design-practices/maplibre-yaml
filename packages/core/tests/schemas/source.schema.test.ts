@@ -160,6 +160,67 @@ describe('GeoJSONSourceSchema', () => {
     });
   });
 
+  // Regression guard: it's easy for an author to write
+  //   source: { type: geojson, data: "./src/data/foo.geojson" }
+  // expecting build-time inlining. MapLibre interprets a string `data`
+  // as a URL and fetches at runtime, which 404s on deployed sites where
+  // `src/` isn't served. The schema rejects the obvious local-path
+  // shapes with an actionable error pointing at `url:` and `public/`.
+  describe('rejects path-like strings in data:', () => {
+    const cases: { name: string; data: string }[] = [
+      { name: 'relative ./', data: './src/data/foo.geojson' },
+      { name: 'relative ../', data: '../shared/foo.geojson' },
+      { name: 'absolute /src/', data: '/src/data/foo.geojson' },
+      { name: 'bare src/', data: 'src/data/foo.geojson' },
+    ];
+    for (const c of cases) {
+      it(c.name, () => {
+        const result = GeoJSONSourceSchema.safeParse({
+          type: 'geojson',
+          data: c.data,
+        });
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          // Assert on the structured issue, not the JSON-stringified
+          // `error.message`. This catches a regression where path: ["data"]
+          // gets dropped, which the previous .message-substring check
+          // would have silently allowed.
+          const issue = result.error.errors.find((e) => e.path[0] === 'data');
+          expect(issue).toBeDefined();
+          expect(issue!.message).toMatch(/local path/);
+          expect(issue!.message).toMatch(/url:/);
+          expect(issue!.message).toMatch(/public\//);
+        }
+      });
+    }
+
+    it('still accepts a remote URL string in data (MapLibre spec-legal)', () => {
+      // MapLibre allows a URL string as `data` (treats it as a URL).
+      // We only reject obviously-local paths, not remote URLs.
+      const result = GeoJSONSourceSchema.safeParse({
+        type: 'geojson',
+        data: 'https://example.com/data.geojson',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts a URL in url: field unchanged', () => {
+      const result = GeoJSONSourceSchema.safeParse({
+        type: 'geojson',
+        url: 'https://example.com/data.geojson',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts an inline FeatureCollection in data', () => {
+      const result = GeoJSONSourceSchema.safeParse({
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+
   describe('streaming source', () => {
     it('accepts WebSocket streaming', () => {
       const source = {
