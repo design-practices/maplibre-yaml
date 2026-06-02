@@ -348,11 +348,48 @@ export const GeoJSONSourceSchema = z
     attribution: z.string().optional(),
   })
   .passthrough()
-  .refine((data) => data.url || data.data || data.prefetchedData, {
-    message:
-      "GeoJSON source requires at least one of: url, data, or prefetchedData. " +
-      'Use "url" to fetch from an endpoint, "data" for inline GeoJSON, ' +
-      'or "prefetchedData" for build-time fetched data.',
+  // Both validations live in a single superRefine to keep the schema's
+  // chained-method depth shallow -- otherwise TypeScript's inferred type
+  // for the discriminated LayerSchema union blows past the compiler's
+  // serialization buffer (see TS7056 on layer.schema.ts:856,911).
+  .superRefine((d, ctx) => {
+    // 1) Require at least one data-source field.
+    if (!d.url && !d.data && !d.prefetchedData) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "GeoJSON source requires at least one of: url, data, or prefetchedData. " +
+          'Use "url" to fetch from an endpoint, "data" for inline GeoJSON, ' +
+          'or "prefetchedData" for build-time fetched data.',
+      });
+      return;
+    }
+    // 2) Reject path-like strings in `data:` -- they're almost always a
+    // misuse where the author meant `url:`. MapLibre's GeoJSONSource spec
+    // accepts a string for `data` (interpreting it as a URL), but a path
+    // like "./src/data/foo.geojson" or "src/foo.geojson" is never a valid
+    // runtime URL -- it 404s silently in production because Astro and
+    // most static-site frameworks don't serve `src/` at runtime.
+    if (typeof d.data === "string") {
+      const v = d.data;
+      const looksLikeLocalPath =
+        /^\.\.?\//.test(v) || // ./foo, ../foo
+        /^\/?src\//.test(v); // src/foo, /src/foo
+      if (looksLikeLocalPath) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["data"],
+          message:
+            `GeoJSON source.data must be either an inline GeoJSON object or a remote URL. ` +
+            `A local path like "${v}" cannot be fetched from a deployed site -- ` +
+            `the framework does not serve source-directory files at runtime. ` +
+            `Fix one of:\n` +
+            `  - Move the file to public/ and use:\n` +
+            `      url: "/data/<filename>.geojson"\n` +
+            `  - Or load the file at build time and inline the parsed contents in data:`,
+        });
+      }
+    }
   });
 
 /** Inferred type for GeoJSON source. */
