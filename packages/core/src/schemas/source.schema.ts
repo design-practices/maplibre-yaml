@@ -367,10 +367,20 @@ export const GeoJSONSourceSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["data"],
+        // Recommends `data: "/data/..."` rather than `url:` because the
+        // `url:` field is schema-validated with z.string().url(), which
+        // requires a fully-qualified URL (`https://...`) and rejects
+        // root-relative paths. MapLibre treats a string in `data:` as a
+        // URL and fetches it correctly. Until url: relaxes to accept
+        // root-relative paths (see follow-up), `data: "/path"` is the
+        // working pattern for files served from public/.
         message:
-          `GeoJSON source.data must be an inline GeoJSON object or a remote URL. ` +
-          `"${d.data}" is a local path; move the file to public/ and use ` +
-          `url: "/data/<filename>.geojson", or inline the parsed contents in data:.`,
+          `GeoJSON source.data must be an inline GeoJSON object or a URL. ` +
+          `"${d.data}" is a local source-directory path that won't resolve at runtime. ` +
+          `Move the file to public/ and reference the public-served URL:\n` +
+          `  data: "/data/<filename>.geojson"\n` +
+          `(\`url:\` requires a fully-qualified https:// URL and won't accept ` +
+          `root-relative paths; use \`data:\` for runtime URLs to public assets.)`,
       });
     }
   });

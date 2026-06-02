@@ -187,8 +187,12 @@ describe('GeoJSONSourceSchema', () => {
           // would have silently allowed.
           const issue = result.error.errors.find((e) => e.path[0] === 'data');
           expect(issue).toBeDefined();
-          expect(issue!.message).toMatch(/local path/);
-          expect(issue!.message).toMatch(/url:/);
+          expect(issue!.message).toMatch(/local source-directory path/);
+          // Recommends `data:` with a public-served URL, NOT `url:`.
+          // `url: z.string().url()` rejects root-relative paths, so steering
+          // users at `url:` here was a dead-end -- this test guards against
+          // that regression.
+          expect(issue!.message).toMatch(/data: "\/data\//);
           expect(issue!.message).toMatch(/public\//);
         }
       });
@@ -216,6 +220,19 @@ describe('GeoJSONSourceSchema', () => {
       const result = GeoJSONSourceSchema.safeParse({
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    // Round-trip guard: the rejection-message-recommended pattern must
+    // itself validate. This catches the class of bug where the schema's
+    // error message points users at a config that the schema then ALSO
+    // rejects (the original 0.2.3 candidate recommended `url:`, which
+    // z.string().url() rejects for root-relative paths -- a dead-end).
+    it("accepts the pattern the rejection message recommends (data: '/data/...')", () => {
+      const result = GeoJSONSourceSchema.safeParse({
+        type: 'geojson',
+        data: '/data/sample.geojson',
       });
       expect(result.success).toBe(true);
     });
