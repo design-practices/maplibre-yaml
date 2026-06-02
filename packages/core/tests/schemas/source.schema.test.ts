@@ -181,10 +181,15 @@ describe('GeoJSONSourceSchema', () => {
         });
         expect(result.success).toBe(false);
         if (!result.success) {
-          const msg = result.error.message;
-          expect(msg).toMatch(/local path/);
-          expect(msg).toMatch(/url:/);
-          expect(msg).toMatch(/public\//);
+          // Assert on the structured issue, not the JSON-stringified
+          // `error.message`. This catches a regression where path: ["data"]
+          // gets dropped, which the previous .message-substring check
+          // would have silently allowed.
+          const issue = result.error.errors.find((e) => e.path[0] === 'data');
+          expect(issue).toBeDefined();
+          expect(issue!.message).toMatch(/local path/);
+          expect(issue!.message).toMatch(/url:/);
+          expect(issue!.message).toMatch(/public\//);
         }
       });
     }
