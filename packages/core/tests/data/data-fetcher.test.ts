@@ -531,4 +531,89 @@ describe("DataFetcher", () => {
       await expect(shortTimeoutFetcher.fetch(testUrl)).rejects.toThrow();
     });
   });
+
+  describe("external abort signal", () => {
+    const abortAwareFetch = () =>
+      mockFetch.mockImplementation(
+        (url: string, options?: { signal?: AbortSignal }) =>
+          new Promise((resolve, reject) => {
+            const signal = options?.signal;
+            if (signal?.aborted) {
+              reject(new Error("The operation was aborted"));
+              return;
+            }
+            signal?.addEventListener("abort", () => {
+              reject(new Error("The operation was aborted"));
+            });
+            // Slow response that only completes if not aborted first
+            setTimeout(
+              () =>
+                resolve({
+                  ok: true,
+                  status: 200,
+                  json: async () => validGeoJSON,
+                  headers: new Headers(),
+                }),
+              1000
+            );
+          })
+      );
+
+    const noRetryFetcher = () =>
+      new DataFetcher({
+        retry: { enabled: false, maxRetries: 0, initialDelay: 0, maxDelay: 0 },
+      });
+
+    it("aborts the request when a caller-provided signal aborts", async () => {
+      abortAwareFetch();
+
+      const external = new AbortController();
+      const promise = noRetryFetcher().fetch(testUrl, {
+        signal: external.signal,
+      });
+
+      external.abort();
+
+      await expect(promise).rejects.toThrow("aborted");
+      // The signal handed to fetch (the internal one) must be aborted too
+      const passedSignal = mockFetch.mock.calls[0][1].signal as AbortSignal;
+      expect(passedSignal.aborted).toBe(true);
+    });
+
+    it("rejects immediately when the caller-provided signal is already aborted", async () => {
+      abortAwareFetch();
+
+      const external = new AbortController();
+      external.abort();
+
+      await expect(
+        noRetryFetcher().fetch(testUrl, { signal: external.signal })
+      ).rejects.toThrow("aborted");
+
+      const passedSignal = mockFetch.mock.calls[0][1].signal as AbortSignal;
+      expect(passedSignal.aborted).toBe(true);
+    });
+
+    it("removes its abort listener from the external signal after the fetch settles", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => validGeoJSON,
+        headers: new Headers(),
+      });
+
+      const external = new AbortController();
+      const removeSpy = vi.spyOn(external.signal, "removeEventListener");
+
+      const result = await noRetryFetcher().fetch(testUrl, {
+        signal: external.signal,
+      });
+
+      expect(result.fromCache).toBe(false);
+      expect(removeSpy).toHaveBeenCalledWith("abort", expect.any(Function));
+
+      // Aborting after completion must not affect anything
+      expect(() => external.abort()).not.toThrow();
+    });
+  });
 });
