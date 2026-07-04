@@ -3,10 +3,13 @@
  * @module @maplibre-yaml/core/renderer
  */
 
-import maplibregl, {
-  type Map as MapLibreMap,
-  type IControl,
-} from "maplibre-gl";
+import type { Map as MapLibreMap, IControl } from "maplibre-gl";
+import {
+  NavigationControl,
+  GeolocateControl,
+  ScaleControl,
+  FullscreenControl,
+} from "./maplibre-interop";
 import type { z } from "zod";
 import { ControlsConfigSchema } from "../schemas";
 
@@ -34,7 +37,7 @@ export class ControlsManager {
       const options =
         typeof config.navigation === "object" ? config.navigation : {};
       const position = (options as any).position || "top-right";
-      const control = new maplibregl.NavigationControl();
+      const control = new NavigationControl();
       this.map.addControl(control, position as any);
       this.addedControls.push(control);
     }
@@ -43,7 +46,7 @@ export class ControlsManager {
       const options =
         typeof config.geolocate === "object" ? config.geolocate : {};
       const position = (options as any).position || "top-right";
-      const control = new maplibregl.GeolocateControl({
+      const control = new GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
         trackUserLocation: true,
       });
@@ -54,7 +57,7 @@ export class ControlsManager {
     if (config.scale) {
       const options = typeof config.scale === "object" ? config.scale : {};
       const position = (options as any).position || "bottom-left";
-      const control = new maplibregl.ScaleControl();
+      const control = new ScaleControl();
       this.map.addControl(control, position as any);
       this.addedControls.push(control);
     }
@@ -63,7 +66,7 @@ export class ControlsManager {
       const options =
         typeof config.fullscreen === "object" ? config.fullscreen : {};
       const position = (options as any).position || "top-right";
-      const control = new maplibregl.FullscreenControl();
+      const control = new FullscreenControl();
       this.map.addControl(control, position as any);
       this.addedControls.push(control);
     }

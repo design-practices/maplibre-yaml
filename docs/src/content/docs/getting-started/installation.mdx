@@ -39,7 +39,7 @@ MapLibre GL JS requires its CSS for proper rendering. Add it to your HTML or imp
 
 ## Browser usage (CDN)
 
-For quick prototypes or simple pages, you can use maplibre-yaml directly from a CDN:
+For quick prototypes or simple pages, you can use maplibre-yaml directly from a CDN — no build tools needed. An [import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap) tells the browser where to find `maplibre-gl`, which is kept external (not bundled):
 
 ```html
 <!DOCTYPE html>
@@ -49,19 +49,36 @@ For quick prototypes or simple pages, you can use maplibre-yaml directly from a 
       href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
       rel="stylesheet"
     />
-    <script type="module">
-      import {
-        parseYAML,
-        MapRenderer,
-      } from "https://unpkg.com/@maplibre-yaml/core";
-
-      // Your map code here
+    <style>
+      ml-map {
+        display: block;
+        height: 400px;
+      }
+    </style>
+    <!-- Tell the browser where to find maplibre-gl -->
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
     </script>
+    <!-- Register the <ml-map> web component -->
+    <script
+      type="module"
+      src="https://unpkg.com/@maplibre-yaml/core/register.js"
+    ></script>
   </head>
   <body>
-    <div id="map" style="width: 100%; height: 400px;"></div>
+    <ml-map src="/map.yaml"></ml-map>
   </body>
 </html>
+```
+
+To use the JavaScript API (`YAMLParser`, `MapRenderer`) from a CDN instead of the web component, import the package from esm.sh, which resolves its dependencies automatically:
+
+```html
+<script type="module">
+  import { YAMLParser, MapRenderer } from "https://esm.sh/@maplibre-yaml/core";
+
+  // Your map code here
+</script>
 ```
 
 ## Web component registration
@@ -69,7 +86,7 @@ For quick prototypes or simple pages, you can use maplibre-yaml directly from a 
 To use the `<ml-map>` web component, import the registration module:
 
 ```javascript
-import "@maplibre-yaml/core/web-components";
+import "@maplibre-yaml/core/register";
 ```
 
 Then use it in your HTML:
@@ -87,10 +104,11 @@ Then use it in your HTML:
 maplibre-yaml is written in TypeScript and includes type definitions. No additional `@types` packages are needed.
 
 ```typescript
-import { parseYAML, MapRenderer } from "@maplibre-yaml/core";
-import type { MapBlock, LayerConfig } from "@maplibre-yaml/core";
+import { YAMLParser, MapRenderer } from "@maplibre-yaml/core";
+import type { MapBlock } from "@maplibre-yaml/core";
 
-const config: MapBlock = parseYAML(yamlString);
+// For a single `type: map` document:
+const mapBlock: MapBlock = YAMLParser.parseMapBlock(yamlString);
 ```
 
 ## Verify installation
@@ -98,7 +116,7 @@ const config: MapBlock = parseYAML(yamlString);
 Create a simple test to verify everything is working:
 
 ```javascript
-import { parseYAML } from "@maplibre-yaml/core";
+import { YAMLParser } from "@maplibre-yaml/core";
 
 const yaml = `
 type: map
@@ -110,12 +128,15 @@ config:
 layers: []
 `;
 
-try {
-  const config = parseYAML(yaml);
+const result = YAMLParser.safeParseMapBlock(yaml);
+
+if (result.success) {
   console.log("✓ maplibre-yaml is working!");
-  console.log("  Map ID:", config.id);
-} catch (error) {
-  console.error("✗ Installation issue:", error.message);
+  console.log("  Map ID:", result.data.id);
+} else {
+  for (const error of result.errors) {
+    console.error(`✗ ${error.path}: ${error.message}`);
+  }
 }
 ```
 

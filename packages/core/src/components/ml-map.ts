@@ -283,6 +283,23 @@ export class MLMap extends HTMLElement {
    * Render the map with the given configuration
    */
   private renderMap(mapBlock: MapBlock): void {
+    // Standalone <ml-map> has no global config to inherit defaultMapStyle from,
+    // so a missing mapStyle would die inside MapLibre with an opaque error.
+    // Surface a friendly error card instead. (Schema keeps mapStyle optional
+    // because the Astro builders legitimately resolve it from globalConfig.)
+    if (!mapBlock.config?.mapStyle) {
+      this.handleError([
+        {
+          path: "config.mapStyle",
+          message:
+            "mapStyle is required for standalone maps. Add it to your config, for example: " +
+            'mapStyle: "https://demotiles.maplibre.org/style.json" ' +
+            "(inheriting a defaultMapStyle is a feature of the Astro builders, not the standalone <ml-map> element).",
+        },
+      ]);
+      return;
+    }
+
     // Destroy existing renderer
     if (this.renderer) {
       this.renderer.destroy();
@@ -300,11 +317,13 @@ export class MLMap extends HTMLElement {
     this.appendChild(this.mapContainer);
 
     try {
-      // Extract config, sources, and layers from MapBlock
-      const { config, sources, layers = [] } = mapBlock;
+      // Extract config, sources, layers, controls, and legend from MapBlock
+      const { config, sources, layers = [], controls, legend } = mapBlock;
 
       // Create renderer with config, layers, and named sources
       this.renderer = new MapRenderer(this.mapContainer, config, layers, {
+        controls,
+        legend,
         onLoad: () => {
           // Load event is also emitted via the event system
         },

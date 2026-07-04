@@ -603,7 +603,7 @@ layers:
     type: circle
     source:
       type: geojson
-      url: "/data/points.geojson"
+      url: "https://example.com/data/points.geojson"
     paint:
       circle-radius: 8
       circle-color: "#3b82f6"
@@ -623,20 +623,18 @@ chapters:
   - id: intro
     title: "Introduction"
     description: "<p>Welcome to the story.</p>"
-    location:
-      center: [0, 0]
-      zoom: 2
+    center: [0, 0]
+    zoom: 2
     alignment: center
 
   - id: detail
     title: "The Details"
     description: "<p>Here's what happened.</p>"
-    image: "/images/detail.jpg"
-    location:
-      center: [10, 10]
-      zoom: 8
-      pitch: 45
-      bearing: 30
+    image: "https://example.com/images/detail.jpg"
+    center: [10, 10]
+    zoom: 8
+    pitch: 45
+    bearing: 30
     alignment: left
     onChapterEnter:
       - action: setPaintProperty

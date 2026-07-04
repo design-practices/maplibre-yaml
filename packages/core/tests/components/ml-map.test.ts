@@ -1,32 +1,39 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // Mock maplibre-gl before any imports
-vi.mock("maplibre-gl", () => ({
-  default: {
-    Map: vi.fn(() => ({
-      on: vi.fn(),
-      off: vi.fn(),
-      remove: vi.fn(),
-      addSource: vi.fn(),
-      addLayer: vi.fn(),
-      getSource: vi.fn(),
-      getLayer: vi.fn(),
-      getCanvas: vi.fn(() => ({
-        style: { cursor: "" },
-      })),
+vi.mock("maplibre-gl", () => {
+  const Map = vi.fn(() => ({
+    on: vi.fn(),
+    off: vi.fn(),
+    remove: vi.fn(),
+    addSource: vi.fn(),
+    addLayer: vi.fn(),
+    getSource: vi.fn(),
+    getLayer: vi.fn(),
+    getCanvas: vi.fn(() => ({
+      style: { cursor: "" },
     })),
-    Popup: vi.fn(() => ({
-      setLngLat: vi.fn().mockReturnThis(),
-      setHTML: vi.fn().mockReturnThis(),
-      addTo: vi.fn().mockReturnThis(),
-      remove: vi.fn(),
-    })),
-    NavigationControl: vi.fn(),
-    GeolocateControl: vi.fn(),
-    ScaleControl: vi.fn(),
-    FullscreenControl: vi.fn(),
-  },
-}));
+  }));
+  const Popup = vi.fn(() => ({
+    setLngLat: vi.fn().mockReturnThis(),
+    setHTML: vi.fn().mockReturnThis(),
+    addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
+  }));
+  const NavigationControl = vi.fn();
+  const GeolocateControl = vi.fn();
+  const ScaleControl = vi.fn();
+  const FullscreenControl = vi.fn();
+  return {
+    default: { Map, Popup, NavigationControl, GeolocateControl, ScaleControl, FullscreenControl },
+    Map,
+    Popup,
+    NavigationControl,
+    GeolocateControl,
+    ScaleControl,
+    FullscreenControl,
+  };
+});
 
 // Mock MapRenderer before import
 vi.mock("../../src/renderer/map-renderer", () => ({
@@ -380,8 +387,11 @@ layers:
 
       const renderer = element.getRenderer();
       expect(renderer).toBeTruthy();
-      // Controls are passed to MapRenderer constructor, not via addControls
-      // The MapRenderer mock receives controls in the options parameter
+      // Controls are threaded through to MapRenderer via the options parameter,
+      // where the renderer applies them on map load
+      expect((renderer as any)?.options.controls).toEqual({
+        navigation: { enabled: true, position: "top-right" },
+      });
     });
   });
 
@@ -410,7 +420,46 @@ layers:
 
       const renderer = element.getRenderer();
       expect(renderer).toBeTruthy();
-      // Legend is handled internally by MapRenderer, just verify no errors
+      // Legend config is threaded through to MapRenderer via the options
+      // parameter, where the renderer builds it on map load
+      expect((renderer as any)?.options.legend).toEqual({
+        position: "top-left",
+        title: "Test Legend",
+      });
+    });
+  });
+
+  describe("missing mapStyle", () => {
+    it("shows the error card instead of constructing MapRenderer", async () => {
+      const element = document.createElement("ml-map") as MLMap;
+      const script = document.createElement("script");
+      script.type = "text/yaml";
+      // Valid per schema (mapStyle is optional for Astro-builder inheritance),
+      // but a standalone <ml-map> has no global config to inherit from
+      script.textContent = `
+type: map
+id: test-map
+config:
+  center: [0, 0]
+  zoom: 1
+layers: []
+`;
+      element.appendChild(script);
+
+      document.body.appendChild(element);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(element.getRenderer()).toBeNull();
+
+      const errorCard = element.querySelector(".ml-map-error");
+      expect(errorCard).toBeTruthy();
+      expect(errorCard!.textContent).toContain(
+        "mapStyle is required for standalone maps"
+      );
+      expect(errorCard!.textContent).toContain(
+        'mapStyle: "https://demotiles.maplibre.org/style.json"'
+      );
+      expect(errorCard!.textContent).toContain("Astro builders");
     });
   });
 

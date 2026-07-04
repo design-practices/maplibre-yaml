@@ -23,10 +23,15 @@ Get a map on your page in 3 steps.
        rel="stylesheet"
      />
 
-     <!-- Register the web component -->
-     <script type="module">
-       import "https://unpkg.com/@maplibre-yaml/core/register";
+     <!-- Tell the browser where to find maplibre-gl -->
+     <script type="importmap">
+       { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
      </script>
+     <!-- Register the web component -->
+     <script
+       type="module"
+       src="https://unpkg.com/@maplibre-yaml/core/register.js"
+     ></script>
    </head>
    ```
 
@@ -82,10 +87,16 @@ Get a map on your page in 3 steps.
 
 ### CDN (Recommended for Quick Start)
 
+The import map is required: it tells the browser where to find `maplibre-gl`, which the register bundle keeps external.
+
 ```html
-<script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core/register";
+<script type="importmap">
+  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
 </script>
+<script
+  type="module"
+  src="https://unpkg.com/@maplibre-yaml/core/register.js"
+></script>
 ```
 
 ### npm (With Build Tools)
@@ -103,6 +114,13 @@ import "maplibre-gl/dist/maplibre-gl.css";
 ## Configuration Methods
 
 There are three ways to configure `<ml-map>`, each suited for different use cases.
+
+<Aside type="note">
+  `<ml-map>` expects a **single map block document** — a YAML file whose top
+  level is `type: map`. It does not accept a root document (one with a
+  `pages:` key); those are multi-page site configurations meant for the Astro
+  integration and will fail validation if passed to `<ml-map>`.
+</Aside>
 
 ### Method 1: External YAML File (Recommended)
 
@@ -190,8 +208,11 @@ For dynamic or generated configurations:
   style="height: 400px; display: block;"
 ></ml-map>
 
+<script type="importmap">
+  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+</script>
 <script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core/register";
+  import "https://unpkg.com/@maplibre-yaml/core/register.js";
 
   const config = {
     type: "map",
@@ -337,9 +358,13 @@ This example demonstrates a complete implementation using the `src` attribute wi
       href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
       rel="stylesheet"
     />
-    <script type="module">
-      import "https://unpkg.com/@maplibre-yaml/core/register";
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
     </script>
+    <script
+      type="module"
+      src="https://unpkg.com/@maplibre-yaml/core/register.js"
+    ></script>
     <style>
       * {
         margin: 0;
@@ -511,8 +536,11 @@ Each `<ml-map>` is independent:
   <ml-map id="map-2" style="display: block;"></ml-map>
 </div>
 
+<script type="importmap">
+  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+</script>
 <script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core/register";
+  import "https://unpkg.com/@maplibre-yaml/core/register.js";
 
   // Configure each map independently
   document.getElementById("map-1").config = {
@@ -722,4 +750,3 @@ mapEl.addEventListener("ml-map:error", (event) => {
 - [Vanilla JavaScript Integration](/integrations/vanilla-js/) - More control with direct API usage
 - [Astro Integration](/integrations/astro/) - For Astro-based sites
 - [Live Data Guide](/guides/live-data/) - Polling and streaming configuration
-- [API Reference](/api/) - Complete API documentation

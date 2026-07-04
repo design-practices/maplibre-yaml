@@ -3,7 +3,8 @@
  * @module @maplibre-yaml/core/renderer
  */
 
-import maplibregl, { type Map as MapLibreMap, type LngLat } from 'maplibre-gl';
+import type { LngLat } from 'maplibre-gl';
+import { Map as MapLibreMap } from './maplibre-interop';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
@@ -23,6 +24,10 @@ type LegendConfig = z.infer<typeof LegendConfigSchema>;
 export interface MapRendererOptions {
   onLoad?: () => void;
   onError?: (error: Error) => void;
+  /** Controls declared in the YAML `controls:` block — added automatically on map load */
+  controls?: ControlsConfig;
+  /** Legend declared in the YAML `legend:` block — built automatically on map load */
+  legend?: LegendConfig;
 }
 
 /**
@@ -50,13 +55,21 @@ export class MapRenderer {
   private controlsManager: ControlsManager;
   private eventListeners: Map<string, Set<Function>>;
   private isLoaded: boolean;
+  private containerEl: HTMLElement | null;
+  private controlsAdded: boolean;
+  private legendBuilt: boolean;
+  private autoLegendContainer: HTMLElement | null;
 
   constructor(container: string | HTMLElement, config: MapConfig, layers: Layer[] = [], options: MapRendererOptions = {}, sources?: Record<string, LayerSource>) {
     this.eventListeners = new Map();
     this.isLoaded = false;
+    this.containerEl = typeof container === 'string' ? document.getElementById(container) : container;
+    this.controlsAdded = false;
+    this.legendBuilt = false;
+    this.autoLegendContainer = null;
 
     // Initialize MapLibre map
-    this.map = new maplibregl.Map({
+    this.map = new MapLibreMap({
       ...config,
       container: typeof container === 'string' ? container : container,
       style: config.mapStyle as any,
@@ -95,6 +108,19 @@ export class MapRenderer {
             this.map.addSource(id, sourceSpec as any);
           }
         }
+      }
+
+      // Apply YAML-declared controls and legend once the map is ready.
+      // The guards keep manual addControls()/buildLegend() calls made before
+      // load from being duplicated here.
+      // NOTE: packages/astro/src/components/FullPageMap.astro has its own
+      // hand-rolled controls/legend implementation; consolidating the two is
+      // tracked in the perf/hygiene backlog.
+      if (options.controls && !this.controlsAdded) {
+        this.addControls(options.controls);
+      }
+      if (options.legend && !this.legendBuilt) {
+        this.buildLegend(this.createLegendContainer(options.legend), layers, options.legend);
       }
 
       // Add layers
@@ -162,16 +188,44 @@ export class MapRenderer {
 
   /**
    * Add controls to the map
+   *
+   * @remarks
+   * Called automatically on map load when a `controls:` config was passed via
+   * {@link MapRendererOptions}. Calling it manually marks controls as added so
+   * the automatic invocation is skipped (no double-add).
    */
   addControls(config: ControlsConfig): void {
+    this.controlsAdded = true;
     this.controlsManager.addControls(config);
   }
 
   /**
    * Build legend in container
+   *
+   * @remarks
+   * Called automatically on map load when a `legend:` config was passed via
+   * {@link MapRendererOptions}. Calling it manually marks the legend as built
+   * so the automatic invocation is skipped (no double-build).
    */
   buildLegend(container: string | HTMLElement, layers: Layer[], config?: LegendConfig): void {
+    this.legendBuilt = true;
     this.legendBuilder.build(container, layers, config);
+  }
+
+  /**
+   * Create a positioned container inside the map element for the auto legend
+   */
+  private createLegendContainer(config: LegendConfig): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'ml-map-legend';
+    const position = config.position ?? 'top-left';
+    el.style.position = 'absolute';
+    el.style.zIndex = '1';
+    el.style[position.includes('top') ? 'top' : 'bottom'] = '10px';
+    el.style[position.includes('left') ? 'left' : 'right'] = '10px';
+    (this.containerEl ?? this.map.getContainer()).appendChild(el);
+    this.autoLegendContainer = el;
+    return el;
   }
 
   /**
@@ -220,6 +274,8 @@ export class MapRenderer {
     this.eventHandler.destroy();
     this.layerManager.destroy();
     this.controlsManager.removeAllControls();
+    this.autoLegendContainer?.remove();
+    this.autoLegendContainer = null;
     this.eventListeners.clear();
     this.map.remove();
   }

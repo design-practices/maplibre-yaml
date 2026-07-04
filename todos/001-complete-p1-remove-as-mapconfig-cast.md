@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "001"
 tags: [code-review, typescript, type-safety]
@@ -58,10 +58,22 @@ function isValidMapConfig(obj: Record<string, unknown>): obj is MapConfig {
 
 ## Acceptance Criteria
 
-- [ ] No `as MapConfig` cast in config-resolver.ts
-- [ ] TypeScript compiles without errors
-- [ ] All 1,001 tests still pass
-- [ ] If a new required field is added to MapConfig, the return site fails to compile
+- [x] No `as MapConfig` cast in config-resolver.ts
+- [x] TypeScript compiles without errors
+- [x] All tests still pass (core 795 passed / 10 skipped, astro 266 passed)
+- [x] If a new required field is added to MapConfig, the return site fails to compile
+
+## Work Log
+
+- 2026-07-04: Fixed via a variant of Option A. Resolution now assigns `center`,
+  `zoom`, and `mapStyle` to locals, guards them directly
+  (`!mapStyle || center === undefined || zoom === undefined`) before throwing
+  `ConfigResolutionError`, and returns a spread object with the narrowed locals
+  overriding the partial input. TypeScript narrows the locals after the guard,
+  so the return satisfies `MapConfig` structurally — no cast, no non-null
+  assertions, and extra optional fields (bounds, minZoom, etc.) still pass
+  through via the spread. Shipped alongside todo 002 on branch
+  `fix/global-config-runtime-inheritance`.
 
 ## Resources
 

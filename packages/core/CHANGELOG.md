@@ -1,5 +1,16 @@
 # @maplibre-yaml/core
 
+## 0.2.2
+
+### Patch Changes
+
+- a053545: Revert the named-import change from 0.2.1 and update tests
+
+  ### Bug fixes
+
+  - **`@maplibre-yaml/core`**: reverted `map-renderer`, `controls-manager`, and `event-handler` from named `maplibre-gl` imports back to the default `maplibregl` import (e.g. `new maplibregl.Map(...)`), because the named-import build broke existing consumers. The maplibre-gl v5 peer range widening from 0.2.1 remains in place.
+  - Updated the renderer, component, and integration tests to match the reverted import style.
+
 ## 0.2.1
 
 ### Patch Changes

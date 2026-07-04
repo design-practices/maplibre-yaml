@@ -6,12 +6,12 @@ import { YAMLParser } from "../../src/parser/yaml-parser";
 import { MapRenderer } from "../../src/renderer/map-renderer";
 
 // Mock maplibre-gl before imports
-vi.mock("maplibre-gl", () => ({
-  default: {
-    Map: vi.fn().mockImplementation((options) => {
-      const events = new Map<string, Set<Function>>();
-      const sources = new Map<string, any>();
-      const layers = new Map<string, any>();
+vi.mock("maplibre-gl", () => {
+  const NativeMap = globalThis.Map;
+  const MaplibreMap = vi.fn().mockImplementation((options) => {
+      const events = new NativeMap<string, Set<Function>>();
+      const sources = new NativeMap<string, any>();
+      const layers = new NativeMap<string, any>();
 
       const map = {
         options,
@@ -59,19 +59,27 @@ vi.mock("maplibre-gl", () => ({
       };
 
       return map;
-    }),
-    NavigationControl: vi.fn(),
-    GeolocateControl: vi.fn(),
-    ScaleControl: vi.fn(),
-    FullscreenControl: vi.fn(),
-    Popup: vi.fn(() => ({
-      setLngLat: vi.fn().mockReturnThis(),
-      setHTML: vi.fn().mockReturnThis(),
-      addTo: vi.fn().mockReturnThis(),
-      remove: vi.fn(),
-    })),
-  },
-}));
+    });
+  const NavigationControl = vi.fn();
+  const GeolocateControl = vi.fn();
+  const ScaleControl = vi.fn();
+  const FullscreenControl = vi.fn();
+  const Popup = vi.fn(() => ({
+    setLngLat: vi.fn().mockReturnThis(),
+    setHTML: vi.fn().mockReturnThis(),
+    addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
+  }));
+  return {
+    default: { Map: MaplibreMap, NavigationControl, GeolocateControl, ScaleControl, FullscreenControl, Popup },
+    Map: MaplibreMap,
+    NavigationControl,
+    GeolocateControl,
+    ScaleControl,
+    FullscreenControl,
+    Popup,
+  };
+});
 
 /**
  * Integration tests for map rendering from YAML configs
@@ -385,6 +393,109 @@ pages:
 `;
 
       expect(() => YAMLParser.parse(yaml)).not.toThrow();
+    });
+  });
+
+  describe("Controls and Legend", () => {
+    const baseConfig = {
+      center: [0, 0] as [number, number],
+      zoom: 1,
+      mapStyle: "https://demotiles.maplibre.org/style.json",
+    };
+
+    it("adds controls on load when a controls config is provided", async () => {
+      const renderer = new MapRenderer(container, baseConfig, [], {
+        controls: { navigation: true },
+      });
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      expect(map.addControl).toHaveBeenCalledTimes(1);
+
+      renderer.destroy();
+    });
+
+    it("does not double-add controls when addControls was called manually", async () => {
+      const renderer = new MapRenderer(container, baseConfig, [], {
+        controls: { navigation: true },
+      });
+
+      // Manual call before the load event fires
+      renderer.addControls({ navigation: true });
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      expect(map.addControl).toHaveBeenCalledTimes(1);
+
+      renderer.destroy();
+    });
+
+    it("builds the legend container on load when a legend config is provided", async () => {
+      const renderer = new MapRenderer(container, baseConfig, [], {
+        legend: {
+          title: "Test Legend",
+          position: "top-left" as const,
+          collapsed: false,
+          items: [{ color: "#ff0000", label: "Red Points", shape: "circle" as const }],
+        },
+      });
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const legendEl = container.querySelector(".ml-map-legend");
+      expect(legendEl).toBeTruthy();
+      expect(legendEl!.innerHTML).toContain("Test Legend");
+      expect(legendEl!.innerHTML).toContain("Red Points");
+
+      renderer.destroy();
+      expect(container.querySelector(".ml-map-legend")).toBeNull();
+    });
+
+    it("renders controls and legend from a parsed YAML block", async () => {
+      const yaml = `
+pages:
+  - id: test
+    path: "/"
+    title: "Test"
+    blocks:
+      - type: map
+        id: test-map
+        config:
+          center: [0, 0]
+          zoom: 1
+          mapStyle: "https://demotiles.maplibre.org/style.json"
+        controls:
+          navigation: true
+        legend:
+          title: "Legend"
+          items:
+            - color: "#00ff00"
+              label: "Green Areas"
+        layers: []
+`;
+
+      const config = YAMLParser.parse(yaml);
+      const mapBlock = config.pages[0].blocks[0];
+
+      const renderer = new MapRenderer(
+        container,
+        mapBlock.config,
+        mapBlock.layers || [],
+        { controls: mapBlock.controls, legend: mapBlock.legend }
+      );
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      expect(map.addControl).toHaveBeenCalledTimes(1);
+
+      const legendEl = container.querySelector(".ml-map-legend");
+      expect(legendEl).toBeTruthy();
+      expect(legendEl!.innerHTML).toContain("Green Areas");
+
+      renderer.destroy();
     });
   });
 

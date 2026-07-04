@@ -25,23 +25,32 @@ The simplest way to use maplibre-yaml is with the `<ml-map>` web component:
   <style>
     ml-map { display: block; height: 400px; }
   </style>
+  <!-- Tell the browser where to find maplibre-gl (kept external, not bundled) -->
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+  </script>
+  <!-- Register the <ml-map> web component -->
+  <script
+    type="module"
+    src="https://unpkg.com/@maplibre-yaml/core/register.js"
+  ></script>
 </head>
 <body>
   <ml-map src="/map.yaml"></ml-map>
-  <script type="module">
-    import '@maplibre-yaml/core/register';
-  </script>
 </body>
 </html>
 ```
 
+With a bundler (Vite, Webpack, etc.) skip the import map and CDN script — `import '@maplibre-yaml/core/register'` in your entry point instead.
+
 ### JavaScript API
 
 ```typescript
-import { parseYAMLConfig, MapRenderer } from '@maplibre-yaml/core';
+import { YAMLParser, MapRenderer } from '@maplibre-yaml/core';
 
 const yaml = `
 type: map
+id: my-map
 config:
   center: [-122.4, 37.8]
   zoom: 12
@@ -57,10 +66,21 @@ layers:
       circle-color: "#3b82f6"
 `;
 
-const config = parseYAMLConfig(yaml);
+const mapBlock = YAMLParser.parseMapBlock(yaml);
 const container = document.getElementById('map');
-const renderer = new MapRenderer(container, config);
+const renderer = new MapRenderer(
+  container,
+  mapBlock.config,
+  mapBlock.layers,
+  {
+    onLoad: () => console.log('Map loaded'),
+    onError: (error) => console.error(error),
+  },
+  mapBlock.sources
+);
 ```
+
+Use `YAMLParser.parseMapBlock` for single `type: map` documents. `parseYAMLConfig` parses full root documents (a `pages:` array of pages and blocks) and will reject a bare map block.
 
 ## Entry Points
 
@@ -197,6 +217,8 @@ layers:
 
 ### Interactive Popups
 
+Popup content is a list of HTML elements, where each element maps a tag name to an array of static (`str`) or dynamic (`property`) content items:
+
 ```yaml
 layers:
   - id: locations
@@ -206,12 +228,16 @@ layers:
       url: https://example.com/locations.geojson
     layout:
       icon-image: marker
-    interactions:
-      - type: click
+    interactive:
+      hover:
+        cursor: pointer
+      click:
         popup:
-          content: |
-            <h3>{{name}}</h3>
-            <p>{{description}}</p>
+          - h3:
+              - property: name
+                else: "Unknown"
+          - p:
+              - property: description
 ```
 
 ## API Reference
@@ -229,12 +255,13 @@ const result = safeParseYAMLConfig(yamlString);
 if (result.success) {
   console.log(result.data);
 } else {
-  console.error(result.error);
+  console.error(result.errors);
 }
 
-// Using the class
-const parser = new YAMLParser();
-const config = parser.parse(yamlString);
+// Single-block documents (all methods are static)
+const mapBlock = YAMLParser.parseMapBlock(mapYaml);
+const story = YAMLParser.parseScrollytellingBlock(storyYaml);
+const safe = YAMLParser.safeParseMapBlock(mapYaml);
 ```
 
 ### Renderer
@@ -242,7 +269,8 @@ const config = parser.parse(yamlString);
 ```typescript
 import { MapRenderer } from '@maplibre-yaml/core';
 
-const renderer = new MapRenderer(container, config, {
+// new MapRenderer(container, config, layers?, options?, sources?)
+const renderer = new MapRenderer(container, config, layers, {
   onLoad: () => console.log('Map loaded'),
   onError: (error) => console.error(error),
 });

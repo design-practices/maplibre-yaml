@@ -4,11 +4,13 @@ import { LayerManager } from "../../src/renderer/layer-manager";
 import type { FeatureCollection } from "geojson";
 
 // Mock maplibre-gl
-vi.mock("maplibre-gl", () => ({
-  default: {
-    Map: vi.fn(),
-  },
-}));
+vi.mock("maplibre-gl", () => {
+  const Map = vi.fn();
+  return {
+    default: { Map },
+    Map,
+  };
+});
 
 /**
  * Integration tests for data flow

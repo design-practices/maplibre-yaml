@@ -12,7 +12,8 @@ jobs:
 
         strategy:
             matrix:
-                node-version: [18, 20]
+                # 22 matches the Node version release.yml publishes with
+                node-version: [18, 20, 22]
 
         steps:
             - name: Checkout
@@ -39,7 +40,12 @@ jobs:
             - name: Run tests
               run: pnpm test
 
-    lint:
+            - name: Validate doc YAML snippets
+              run: pnpm docs:validate-snippets
+
+    # No linter is configured in this repo (yet) -- this job builds and
+    # typechecks on a single Node version, so it is named for what it does.
+    typecheck:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout

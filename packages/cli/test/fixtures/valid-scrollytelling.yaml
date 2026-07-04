@@ -1,0 +1,25 @@
+type: scrollytelling
+id: example-story
+config:
+  center: [-74.006, 40.7128]
+  zoom: 10
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+  theme: "light"
+chapters:
+  - id: intro
+    title: "Introduction"
+    center: [-74.006, 40.7128]
+    zoom: 10
+    pitch: 0
+    bearing: 0
+    description: "Welcome to an example story map."
+    alignment: "left"
+
+  - id: chapter-1
+    title: "Chapter 1"
+    center: [-118.2437, 34.0522]
+    zoom: 11
+    pitch: 0
+    bearing: 0
+    description: "The first chapter of our story."
+    alignment: "left"

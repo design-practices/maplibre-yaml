@@ -41,7 +41,6 @@ export default defineConfig({
             { label: "Working with Layers", link: "/guides/layers/" },
             { label: "Data Sources", link: "/guides/data-sources/" },
             { label: "Live Data & Streaming", link: "/guides/live-data/" },
-            { label: "Styling & Theming", link: "/guides/styling/" },
           ],
         },
         {
@@ -72,10 +71,6 @@ export default defineConfig({
             { label: "VSCode Integration", link: "/cli/vscode/" },
             { label: "Command Reference", link: "/cli/reference/" },
           ],
-        },
-        {
-          label: "API Reference",
-          autogenerate: { directory: "api" },
         },
         {
           label: "Examples",

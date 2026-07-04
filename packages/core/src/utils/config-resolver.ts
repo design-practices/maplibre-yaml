@@ -94,31 +94,22 @@ export function resolveMapConfig(
 ): MapConfig {
   const center = mapConfig.center ?? globalConfig?.defaultCenter;
   const zoom = mapConfig.zoom ?? globalConfig?.defaultZoom;
-
-  const resolved = {
-    ...mapConfig,
-    center,
-    zoom,
-    mapStyle: mapConfig.mapStyle ?? globalConfig?.defaultMapStyle,
-    interactive: mapConfig.interactive ?? true,
-    pitch: mapConfig.pitch ?? 0,
-    bearing: mapConfig.bearing ?? 0,
-  };
+  const mapStyle = mapConfig.mapStyle ?? globalConfig?.defaultMapStyle;
 
   // Validate all required fields -- no silent fallbacks
-  const missingFields: string[] = [];
+  if (!mapStyle || center === undefined || zoom === undefined) {
+    const missingFields: string[] = [];
 
-  if (!resolved.mapStyle) {
-    missingFields.push("mapStyle");
-  }
-  if (resolved.center === undefined) {
-    missingFields.push("center");
-  }
-  if (resolved.zoom === undefined) {
-    missingFields.push("zoom");
-  }
+    if (!mapStyle) {
+      missingFields.push("mapStyle");
+    }
+    if (center === undefined) {
+      missingFields.push("center");
+    }
+    if (zoom === undefined) {
+      missingFields.push("zoom");
+    }
 
-  if (missingFields.length > 0) {
     throw new ConfigResolutionError(
       `Map configuration is missing required fields: ${missingFields.join(
         ", ",
@@ -129,7 +120,17 @@ export function resolveMapConfig(
     );
   }
 
-  return resolved as MapConfig;
+  // `center`, `zoom`, and `mapStyle` are narrowed to non-undefined by the
+  // guard above, so this object satisfies MapConfig without a type cast.
+  return {
+    ...mapConfig,
+    center,
+    zoom,
+    mapStyle,
+    interactive: mapConfig.interactive ?? true,
+    pitch: mapConfig.pitch ?? 0,
+    bearing: mapConfig.bearing ?? 0,
+  };
 }
 
 /**

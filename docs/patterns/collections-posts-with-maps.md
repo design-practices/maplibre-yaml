@@ -123,10 +123,10 @@ const mapConfig = post.data.location ? {
         "circle-stroke-color": "#ffffff"
       },
       interactive: {
-        popup: {
-          content: [
-            { tag: "h3", content: "{title}" },
-            { tag: "p", content: "{description}" }
+        click: {
+          popup: [
+            { h3: [{ property: "title" }] },
+            { p: [{ property: "description" }] }
           ]
         }
       }
@@ -249,12 +249,12 @@ layers:
       circle-stroke-width: 2
       circle-stroke-color: "#ffffff"
     interactive:
-      popup:
-        content:
-          - tag: h3
-            content: "{title}"
-          - tag: p
-            content: "{description}"
+      click:
+        popup:
+          - h3:
+              - property: title
+          - p:
+              - property: description
 ```
 
 ### Blog Post Example
@@ -430,10 +430,10 @@ export function createLocationMap(options: LocationMapOptions): MapBlock {
           "text-color": markerColor
         },
         interactive: {
-          popup: {
-            content: [
-              { tag: "h3", content: "{title}" },
-              ...(description ? [{ tag: "p", content: "{description}" }] : [])
+          click: {
+            popup: [
+              { h3: [{ property: "title" }] },
+              ...(description ? [{ p: [{ property: "description" }] }] : [])
             ]
           }
         }
@@ -490,10 +490,10 @@ export function createMultiLocationMap(
           "circle-stroke-color": "#ffffff"
         },
         interactive: {
-          popup: {
-            content: [
-              { tag: "h3", content: "{title}" },
-              { tag: "p", content: "{description}" }
+          click: {
+            popup: [
+              { h3: [{ property: "title" }] },
+              { p: [{ property: "description" }] }
             ]
           }
         }
@@ -820,7 +820,7 @@ import BlogMap from '@/components/BlogMap.astro';
 ## Additional Resources
 
 - [Astro Content Collections](https://docs.astro.build/en/guides/content-collections/)
-- [@maplibre-yaml/astro Documentation](https://maplibre-yaml.design-practices.com/integrations/astro/)
+- [@maplibre-yaml/astro Documentation](https://docs.maplibre-yaml.org/integrations/astro/)
 - [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/)
 - [GeoJSON Specification](https://geojson.org/)
 

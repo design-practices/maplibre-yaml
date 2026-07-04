@@ -17,14 +17,55 @@ type: map # Required: identifies this as a map block
 id: my-map # Required: unique identifier
 
 config: # Map settings
-  center: [lng, lat]
-  zoom: number
-  mapStyle: "url"
+  center: [-74.006, 40.7128] # [longitude, latitude]
+  zoom: 12 # Zoom level
+  mapStyle: "https://demotiles.maplibre.org/style.json" # Style URL
 
 layers: [] # Array of layer configurations
 
 controls: {} # Optional: map controls
 ```
+
+## The host page
+
+The YAML on its own doesn't render anything — it needs a host page with the `<ml-map>` element, the MapLibre CSS, and the web component registered:
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <link
+      href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <!-- Tell the browser where to find maplibre-gl -->
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+    </script>
+    <!-- Register the <ml-map> web component -->
+    <script
+      type="module"
+      src="https://unpkg.com/@maplibre-yaml/core/register.js"
+    ></script>
+    <style>
+      ml-map {
+        display: block;
+        height: 400px;
+      }
+    </style>
+  </head>
+  <body>
+    <ml-map src="/my-map.yaml"></ml-map>
+  </body>
+</html>
+```
+
+<Aside type="caution">
+  `<ml-map>` has no intrinsic size. If you don't give it `display: block` and
+  an explicit height (via CSS or an inline `style` attribute), the map renders
+  into a zero-height element and you'll see nothing — even though the YAML is
+  valid.
+</Aside>
 
 ## The config section
 

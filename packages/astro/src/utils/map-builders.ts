@@ -69,7 +69,7 @@ export interface PointMapOptions {
   location: LocationPoint;
   /** MapLibre style URL (required if no global default) */
   mapStyle?: string;
-  /** Override zoom level (defaults to location.zoom or 12) */
+  /** Override zoom level (defaults to location.zoom, then globalConfig.defaultZoom, then 12) */
   zoom?: number;
   /** Map ID for the block */
   id?: string;
@@ -483,7 +483,10 @@ export function buildPointMapConfig(
   const config = resolveMapConfig(
     {
       center: location.coordinates,
-      zoom: zoom ?? location.zoom ?? 12,
+      // Explicit zoom > location.zoom > globalConfig.defaultZoom > builder
+      // default (12). The literal 12 only fires when no other source
+      // provides a zoom, preserving pre-globalConfig behavior.
+      zoom: zoom ?? location.zoom ?? globalConfig?.defaultZoom ?? 12,
       mapStyle,
       interactive,
     },
@@ -589,7 +592,7 @@ export function buildMultiPointMapConfig(
   const config = resolveMapConfig(
     {
       center,
-      zoom: 10, // Will be overridden by bounds
+      zoom: globalConfig?.defaultZoom ?? 10, // Will be overridden by bounds
       bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
       mapStyle,
       interactive,
@@ -672,7 +675,8 @@ export function buildPolygonMapConfig(
   const config = resolveMapConfig(
     {
       center,
-      zoom: zoom ?? 12,
+      // Explicit zoom > globalConfig.defaultZoom > builder default (12).
+      zoom: zoom ?? globalConfig?.defaultZoom ?? 12,
       bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
       mapStyle,
       interactive,
@@ -730,7 +734,7 @@ export function buildRouteMapConfig(
   const config = resolveMapConfig(
     {
       center,
-      zoom: 10,
+      zoom: globalConfig?.defaultZoom ?? 10, // Will be overridden by bounds
       bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
       mapStyle,
       interactive,
@@ -815,7 +819,8 @@ export function buildMultiPolygonMapConfig(
   const config = resolveMapConfig(
     {
       center,
-      zoom: zoom ?? 12,
+      // Explicit zoom > globalConfig.defaultZoom > builder default (12).
+      zoom: zoom ?? globalConfig?.defaultZoom ?? 12,
       bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
       mapStyle,
       interactive,
@@ -878,7 +883,7 @@ export function buildMultiLineStringMapConfig(
   const config = resolveMapConfig(
     {
       center,
-      zoom: 10,
+      zoom: globalConfig?.defaultZoom ?? 10, // Will be overridden by bounds
       bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
       mapStyle,
       interactive,

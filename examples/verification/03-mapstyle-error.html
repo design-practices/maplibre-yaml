@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Workstream D: missing mapStyle shows a friendly error</title>
+  <!--
+    Assertion: a config with no mapStyle shows the in-page error card telling
+    you what to add. Previously it passed validation and died inside MapLibre
+    with an opaque runtime error / blank map.
+
+    Serve from the repo root:
+      cd examples/verification && pnpm serve
+      open http://localhost:4174/examples/verification/03-mapstyle-error.html
+  -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 14px; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+  </script>
+</head>
+<body>
+  <header>PASS = an error card mentioning config.mapStyle with a copy-pasteable example URL. FAIL = blank map or an uncaught MapLibre exception in the console.</header>
+  <ml-map src="./configs/missing-mapstyle.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>
