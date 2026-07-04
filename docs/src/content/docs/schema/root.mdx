@@ -102,39 +102,35 @@ pages:
 
 ## Named Source Definitions
 
-Define sources once and reference them in layer definitions.
+Define sources once at the map block level and reference them by name across multiple layers.
 
 ### Example
 
 ```yaml
-sources:
-  earthquakeData:
-    type: geojson
-    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    refresh:
-      refreshInterval: 300000  # 5 minutes
-      updateStrategy: merge
-
-  tileSource:
-    type: vector
-    tiles:
-      - "https://example.com/tiles/{z}/{x}/{y}.pbf"
-    minzoom: 0
-    maxzoom: 14
-
 pages:
   - path: "/"
+    title: "Home"
     blocks:
       - type: map
         id: map1
         config: {...}
+        sources:
+          earthquakeData:
+            type: geojson
+            url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+            refresh:
+              refreshInterval: 300000  # 5 minutes
+              updateStrategy: merge
+              updateKey: id
         layers:
           - id: quakes
             type: circle
-            source: "#/sources/earthquakeData"
+            source: earthquakeData
             paint:
               circle-radius: 6
 ```
+
+Layers reference a named source with its bare name (`source: earthquakeData`). The string path form `source: "#/sources/name"` is **not** resolved — it validates as a plain string but the source will never be found at render time. To share a full layer (including its source) across maps, use a named layer definition with a `$ref` object instead (see above).
 
 ## Pages
 
@@ -199,12 +195,6 @@ layers:
         - "#800026"
       circle-opacity: 0.8
 
-# Reusable source definitions
-sources:
-  tectonicPlates:
-    type: geojson
-    url: "https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_plates.json"
-
 # Pages
 pages:
   - path: "/"
@@ -221,11 +211,15 @@ pages:
           center: [0, 20]
           zoom: 2
           pitch: 0
+        sources:
+          tectonicPlates:
+            type: geojson
+            url: "https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_plates.json"
         layers:
           - $ref: "#/layers/earthquakes"
           - id: plates
             type: line
-            source: "#/sources/tectonicPlates"
+            source: tectonicPlates
             paint:
               line-color: "#ffffff"
               line-width: 2
@@ -266,12 +260,11 @@ pages:
 
 ## Reference Resolution
 
-When using `$ref`, the format is:
+When using `$ref` (as an object, e.g. `- $ref: "#/layers/layerName"` in a block's `layers` array), the format is:
 
 - `#/layers/layerName` - Reference a named layer
-- `#/sources/sourceName` - Reference a named source
 
-References are resolved at parse time and replaced with the actual definition.
+References are resolved at parse time and replaced with the actual definition. Note that `$ref` must always be a YAML mapping with a `$ref` key — a plain string like `"#/layers/layerName"` is not treated as a reference. For sources, use block-level `sources:` definitions and reference them by bare name from `source:`.
 
 ## Validation
 

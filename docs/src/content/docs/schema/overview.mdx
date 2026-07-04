@@ -79,14 +79,17 @@ config:
   center: [0, 0]
   zoom: 2
   mapStyle: "https://example.com/style.json"
+```
 
-# ❌ Invalid - missing required 'mapStyle'
+```yaml no-validate
+# ❌ Invalid - missing required 'center' and 'zoom'
 type: map
 id: my-map
 config:
-  center: [0, 0]
-  zoom: 2
+  mapStyle: "https://example.com/style.json"
 ```
+
+Note that `mapStyle` itself is optional in the schema: the Astro integration can inherit it from a global `defaultMapStyle`. Standalone `<ml-map>` usage still needs it at render time.
 
 ## Validation
 

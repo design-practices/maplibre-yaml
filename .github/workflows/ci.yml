@@ -39,6 +39,9 @@ jobs:
             - name: Run tests
               run: pnpm test
 
+            - name: Validate doc YAML snippets
+              run: pnpm docs:validate-snippets
+
     lint:
         runs-on: ubuntu-latest
         steps:

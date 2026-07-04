@@ -511,7 +511,7 @@ config:
 sources:
   boundary:
     type: geojson
-    url: "/data/boundary.geojson"
+    url: "https://example.com/data/boundary.geojson"
   parcels:
     type: vector
     url: "https://example.com/tiles.json"
@@ -539,18 +539,24 @@ layers:
 
 Block-level sources are added to the map before layers are processed, so any layer in that block can reference them by name. This avoids duplicating source definitions when multiple layers use the same data.
 
-### Root-Level Sources (Multi-Page)
+### Sharing Sources Across Pages (Multi-Page)
 
-For multi-page applications, sources can also be defined at the root level and referenced across pages using `$ref`:
+To reuse the same data on multiple pages of a root document, define a named **layer** (with its source inline) at the root level and pull it into blocks with a `$ref` object:
 
 ```yaml
-sources:
-  earthquakeData:
-    type: geojson
-    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    refresh:
-      refreshInterval: 300000
-      updateStrategy: replace
+layers:
+  quakes:
+    id: quakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+      refresh:
+        refreshInterval: 300000
+        updateStrategy: replace
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
 
 pages:
   - path: "/"
@@ -561,15 +567,12 @@ pages:
         config:
           center: [0, 0]
           zoom: 2
-          mapStyle: "..."
+          mapStyle: "https://demotiles.maplibre.org/style.json"
         layers:
-          - id: quakes
-            type: circle
-            source: "#/sources/earthquakeData"
-            paint:
-              circle-radius: 6
-              circle-color: "#e74c3c"
+          - $ref: "#/layers/quakes"
 ```
+
+Note that a layer's `source:` field cannot reference root-level definitions: the string form `source: "#/sources/name"` is never resolved, and bare names (`source: quakes`) only resolve against the map block's own `sources:` section.
 
 ### Inline Sources
 
@@ -589,7 +592,7 @@ layers:
       circle-color: "#3b82f6"
 ```
 
-All three patterns (block-level, root-level, inline) can be mixed freely within a configuration.
+All three patterns (block-level named sources, shared named layers, inline sources) can be mixed freely within a configuration.
 
 ## Complete Examples
 
