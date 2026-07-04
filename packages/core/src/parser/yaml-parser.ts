@@ -131,6 +131,26 @@ export interface ParseResult<T = RootConfig> {
 }
 
 /**
+ * Discriminated result returned by {@link YAMLParser.safeParseAny}
+ *
+ * @remarks
+ * The `blockType` field identifies which schema the document was validated
+ * against, and `result` carries the corresponding safeParse result:
+ *
+ * - `'map'` — document had `type: map`, validated with {@link YAMLParser.safeParseMapBlock}
+ * - `'scrollytelling'` — document had `type: scrollytelling`, validated with {@link YAMLParser.safeParseScrollytellingBlock}
+ * - `'root'` — document had no `type:` but a `pages:` array, validated with {@link YAMLParser.safeParse}
+ * - `'unknown'` — the document type could not be determined (unrecognized
+ *   `type:` value, YAML syntax error, or a document that is neither a block
+ *   nor a root config); `result` is always a failure with a descriptive error
+ */
+export type SafeParseAnyResult =
+  | { blockType: "map"; result: ParseResult<MapBlock> }
+  | { blockType: "scrollytelling"; result: ParseResult<ScrollytellingBlock> }
+  | { blockType: "root"; result: ParseResult<RootConfig> }
+  | { blockType: "unknown"; result: ParseResult<never> };
+
+/**
  * YAML parser with schema validation and reference resolution
  *
  * @remarks
@@ -487,6 +507,109 @@ export class YAMLParser {
   }
 
   /**
+   * Detect the document type of a YAML string and validate it against the
+   * matching schema
+   *
+   * @param yaml - YAML string to parse (a map block, a scrollytelling block, or a root document)
+   * @returns Discriminated result with the detected block type and the corresponding safeParse result
+   *
+   * @remarks
+   * Dispatches on the document's top-level `type:` field:
+   *
+   * - `type: map` → {@link safeParseMapBlock}
+   * - `type: scrollytelling` → {@link safeParseScrollytellingBlock}
+   * - no `type:` but a `pages:` key → {@link safeParse} (root document)
+   *
+   * Any other `type:` value produces a failure result listing the valid
+   * values, as does a document that has neither `type:` nor `pages:`.
+   * This method never throws.
+   *
+   * @example
+   * ```typescript
+   * const { blockType, result } = YAMLParser.safeParseAny(yamlString);
+   * if (!result.success) {
+   *   result.errors.forEach(err => console.error(`${err.path}: ${err.message}`));
+   * } else if (blockType === 'map') {
+   *   renderMap(result.data);
+   * }
+   * ```
+   */
+  static safeParseAny(yaml: string): SafeParseAnyResult {
+    // Parse YAML once to inspect the top-level `type:` discriminator
+    let parsed: unknown;
+    try {
+      parsed = parseYAML(yaml);
+    } catch (error) {
+      return {
+        blockType: "unknown",
+        result: {
+          success: false,
+          errors: [
+            {
+              path: "",
+              message: `YAML syntax error: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            },
+          ],
+        },
+      };
+    }
+
+    const doc =
+      parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    const type = doc?.type;
+
+    if (type === "map") {
+      return { blockType: "map", result: this.safeParseMapBlock(yaml) };
+    }
+
+    if (type === "scrollytelling") {
+      return {
+        blockType: "scrollytelling",
+        result: this.safeParseScrollytellingBlock(yaml),
+      };
+    }
+
+    if (type !== undefined) {
+      return {
+        blockType: "unknown",
+        result: {
+          success: false,
+          errors: [
+            {
+              path: "type",
+              message: `Unknown block type: ${JSON.stringify(
+                type
+              )}. Expected one of: map, scrollytelling. Root documents omit "type" and use a top-level "pages:" array instead.`,
+            },
+          ],
+        },
+      };
+    }
+
+    if (doc !== null && "pages" in doc) {
+      return { blockType: "root", result: this.safeParse(yaml) };
+    }
+
+    return {
+      blockType: "unknown",
+      result: {
+        success: false,
+        errors: [
+          {
+            path: "",
+            message:
+              'Unable to determine document type. Expected a block with "type: map" or "type: scrollytelling", or a root document with a top-level "pages:" array.',
+          },
+        ],
+      },
+    };
+  }
+
+  /**
    * Resolve $ref references to global layers and sources
    *
    * @param config - Configuration object with potential references
@@ -716,3 +839,20 @@ export const parseYAMLConfig = YAMLParser.parse.bind(YAMLParser);
  * ```
  */
 export const safeParseYAMLConfig = YAMLParser.safeParse.bind(YAMLParser);
+
+/**
+ * Convenience function to detect and validate any supported document type
+ *
+ * @param yaml - YAML string to parse (map block, scrollytelling block, or root document)
+ * @returns Discriminated result with the detected block type and safeParse result
+ *
+ * @remarks
+ * This is an alias for {@link YAMLParser.safeParseAny} for convenient imports.
+ *
+ * @example
+ * ```typescript
+ * import { safeParseAny } from '@maplibre-yaml/core/parser';
+ * const { blockType, result } = safeParseAny(yamlString);
+ * ```
+ */
+export const safeParseAny = YAMLParser.safeParseAny.bind(YAMLParser);

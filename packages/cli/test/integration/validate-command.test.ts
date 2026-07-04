@@ -26,6 +26,49 @@ describe('validate command (integration)', () => {
     ).rejects.toThrow();
   });
 
+  it('exits with 0 for valid scrollytelling config', async () => {
+    const { stdout } = await execAsync(
+      `node "${CLI}" validate "test/fixtures/valid-scrollytelling.yaml"`
+    );
+    expect(stdout).toContain('✓');
+    expect(stdout).toContain('valid-scrollytelling.yaml');
+  });
+
+  it('exits with 0 for root pages document', async () => {
+    const { stdout } = await execAsync(
+      `node "${CLI}" validate "test/fixtures/valid-root.yaml"`
+    );
+    expect(stdout).toContain('✓');
+    expect(stdout).toContain('valid-root.yaml');
+  });
+
+  it('exits with 1 and lists valid types for unknown block type', async () => {
+    try {
+      await execAsync(`node "${CLI}" validate "test/fixtures/invalid-unknown-type.yaml"`);
+      expect.unreachable('should have exited non-zero');
+    } catch (error: any) {
+      expect(error.code).toBe(1);
+      expect(error.stdout).toContain('map, scrollytelling');
+    }
+  });
+
+  it('validates a scaffolded story template end-to-end', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const dir = await mkdtemp(join(tmpdir(), 'mlym-story-'));
+    try {
+      await execAsync(
+        `node "${CLI}" init "${dir}/story" --template story --name test-story`
+      );
+      const { stdout } = await execAsync(
+        `node "${CLI}" validate "${dir}/story/story.yaml"`
+      );
+      expect(stdout).toContain('✓');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('validates multiple files with glob pattern', async () => {
     const { stdout } = await execAsync(
       `node "${CLI}" validate "test/fixtures/valid-*.yaml"`

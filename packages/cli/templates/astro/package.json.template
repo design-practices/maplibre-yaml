@@ -9,7 +9,7 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@maplibre-yaml/core": "latest",
+    "@maplibre-yaml/core": "^0.2.0",
     "astro": "^4.0.0",
     "maplibre-gl": "^4.0.0"
   }

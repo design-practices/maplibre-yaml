@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolveGlobPatterns } from '../../src/lib/glob.js';
-import { resolve } from 'pathe';
+import { resolve, relative } from 'pathe';
 
 describe('glob', () => {
   describe('resolveGlobPatterns', () => {
@@ -76,7 +76,9 @@ describe('glob', () => {
     it('does not return hidden files by default', async () => {
       const files = await resolveGlobPatterns(['test/**/*']);
       expect(files.every(f => {
-        const parts = f.split('/');
+        // Only inspect segments below the working directory -- the absolute
+        // prefix may legitimately contain dot-directories (e.g. worktrees)
+        const parts = relative(process.cwd(), f).split('/');
         return !parts.some(part => part.startsWith('.') && part !== '.');
       })).toBe(true);
     });

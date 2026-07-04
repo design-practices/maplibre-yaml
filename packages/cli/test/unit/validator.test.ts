@@ -16,6 +16,26 @@ describe('validator', () => {
       expect(result.errors).toHaveLength(0);
     });
 
+    it('returns valid for scrollytelling config', async () => {
+      const result = await validateFile('./test/fixtures/valid-scrollytelling.yaml');
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('returns valid for root pages document', async () => {
+      const result = await validateFile('./test/fixtures/valid-root.yaml');
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('returns clear error for unknown block type', async () => {
+      const result = await validateFile('./test/fixtures/invalid-unknown-type.yaml');
+      expect(result.valid).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].path).toBe('type');
+      expect(result.errors[0].message).toContain('map, scrollytelling');
+    });
+
     it('returns errors for complex invalid config', async () => {
       const result = await validateFile('./test/fixtures/invalid-complex.yaml');
       expect(result.valid).toBe(false);

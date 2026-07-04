@@ -3,6 +3,9 @@
  */
 
 import { defineCommand } from 'citty';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import consola from 'consola';
 import pc from 'picocolors';
 import { validateFile, validateFilesParallel } from '../lib/validator.js';
@@ -17,8 +20,14 @@ import { createProgress } from '../lib/progress.js';
 import { validateWithCache, clearCache } from '../lib/cache.js';
 import { EXIT_CODES } from '../types.js';
 
-// Get version from package.json
-const version = '0.1.0';
+// Get version from package.json (same lazy-read mechanism as cli.ts:
+// the compiled chunk lives in dist/, package.json at the package root)
+const packageJsonPath = join(dirname(fileURLToPath(import.meta.url)), '../package.json');
+let cachedVersion: string | undefined;
+function getVersion(): string {
+  cachedVersion ??= JSON.parse(readFileSync(packageJsonPath, 'utf-8')).version as string;
+  return cachedVersion;
+}
 
 export const validateCommand = defineCommand({
   meta: {
@@ -129,7 +138,7 @@ export const validateCommand = defineCommand({
             output = formatJSON(results);
             break;
           case 'sarif':
-            output = formatSARIF(results, version);
+            output = formatSARIF(results, getVersion());
             break;
           case 'vscode':
             output = formatVSCode(results);

@@ -3,6 +3,7 @@ import {
   YAMLParser,
   parseYAMLConfig,
   safeParseYAMLConfig,
+  safeParseAny,
 } from "../../src/parser/yaml-parser";
 
 describe("YAMLParser", () => {
@@ -836,6 +837,139 @@ chapters: []
       expect(result.errors.length).toBeGreaterThan(0);
       const error = result.errors.find((e) => e.path.includes("chapters"));
       expect(error).toBeDefined();
+    });
+  });
+
+  describe("safeParseAny()", () => {
+    it("dispatches type: map documents to the map block schema", () => {
+      const yaml = `
+type: map
+id: test-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+`;
+
+      const { blockType, result } = YAMLParser.safeParseAny(yaml);
+
+      expect(blockType).toBe("map");
+      expect(result.success).toBe(true);
+      expect(result.errors).toHaveLength(0);
+      expect((result.data as any)?.type).toBe("map");
+    });
+
+    it("dispatches type: scrollytelling documents to the scrollytelling schema", () => {
+      const yaml = `
+type: scrollytelling
+id: story
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+chapters:
+  - id: intro
+    title: "Introduction"
+    center: [0, 0]
+    zoom: 3
+`;
+
+      const { blockType, result } = YAMLParser.safeParseAny(yaml);
+
+      expect(blockType).toBe("scrollytelling");
+      expect(result.success).toBe(true);
+      expect((result.data as any)?.chapters).toHaveLength(1);
+    });
+
+    it("dispatches documents with pages: to the root schema", () => {
+      const yaml = `
+pages:
+  - path: "/"
+    title: "Test Page"
+    blocks:
+      - type: map
+        id: test-map
+        config:
+          center: [-74.006, 40.7128]
+          zoom: 12
+          mapStyle: "https://demotiles.maplibre.org/style.json"
+`;
+
+      const { blockType, result } = YAMLParser.safeParseAny(yaml);
+
+      expect(blockType).toBe("root");
+      expect(result.success).toBe(true);
+      expect((result.data as any)?.pages).toHaveLength(1);
+    });
+
+    it("returns validation errors from the dispatched schema", () => {
+      const yaml = `
+type: map
+id: test-map
+config:
+  center: [999, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+`;
+
+      const { blockType, result } = YAMLParser.safeParseAny(yaml);
+
+      expect(blockType).toBe("map");
+      expect(result.success).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    it("reports unknown type values with the list of valid values", () => {
+      const yaml = `
+type: carousel
+id: nope
+`;
+
+      const { blockType, result } = YAMLParser.safeParseAny(yaml);
+
+      expect(blockType).toBe("unknown");
+      expect(result.success).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].path).toBe("type");
+      expect(result.errors[0].message).toContain('"carousel"');
+      expect(result.errors[0].message).toContain("map, scrollytelling");
+      expect(result.errors[0].message).toContain("pages");
+    });
+
+    it("reports documents with neither type: nor pages:", () => {
+      const yaml = `
+id: mystery
+config:
+  zoom: 3
+`;
+
+      const { blockType, result } = YAMLParser.safeParseAny(yaml);
+
+      expect(blockType).toBe("unknown");
+      expect(result.success).toBe(false);
+      expect(result.errors[0].message).toContain("type: map");
+      expect(result.errors[0].message).toContain("pages");
+    });
+
+    it("returns YAML syntax errors without throwing", () => {
+      const invalidYaml = `
+type: map
+config:
+  center: [0, 0
+`;
+
+      const { blockType, result } = YAMLParser.safeParseAny(invalidYaml);
+
+      expect(blockType).toBe("unknown");
+      expect(result.success).toBe(false);
+      expect(result.errors[0].message).toContain("YAML syntax error");
+    });
+
+    it("is exported as a bound convenience function", () => {
+      const { blockType, result } = safeParseAny("type: map\nid: x\n");
+
+      expect(blockType).toBe("map");
+      expect(result.success).toBe(false); // missing config
     });
   });
 });
