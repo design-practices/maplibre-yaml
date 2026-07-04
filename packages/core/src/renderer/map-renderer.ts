@@ -3,7 +3,8 @@
  * @module @maplibre-yaml/core/renderer
  */
 
-import maplibregl, { type Map as MapLibreMap, type LngLat } from 'maplibre-gl';
+import type { LngLat } from 'maplibre-gl';
+import { Map as MapLibreMap } from './maplibre-interop';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
@@ -56,7 +57,7 @@ export class MapRenderer {
     this.isLoaded = false;
 
     // Initialize MapLibre map
-    this.map = new maplibregl.Map({
+    this.map = new MapLibreMap({
       ...config,
       container: typeof container === 'string' ? container : container,
       style: config.mapStyle as any,

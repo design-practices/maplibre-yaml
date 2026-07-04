@@ -32,10 +32,18 @@ maplibre-yaml lets you create interactive web maps using simple YAML configurati
 
 <ml-map src="/map.yaml"></ml-map>
 
-<script type="module">
-  import '@maplibre-yaml/core/register';
+<!-- Tell the browser where to find maplibre-gl (kept external, not bundled) -->
+<script type="importmap">
+  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
 </script>
+<!-- Register the <ml-map> web component -->
+<script
+  type="module"
+  src="https://unpkg.com/@maplibre-yaml/core/register.js"
+></script>
 ```
+
+With a bundler (Vite, Webpack, etc.) skip the import map and CDN script — install `@maplibre-yaml/core maplibre-gl` and `import '@maplibre-yaml/core/register'` instead.
 
 ### YAML Configuration
 

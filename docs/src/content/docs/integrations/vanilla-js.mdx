@@ -28,9 +28,15 @@ The fastest way to get started - no JavaScript code needed!
          href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
          rel="stylesheet"
        />
-       <script type="module">
-         import "https://unpkg.com/@maplibre-yaml/core/register";
+       <!-- Tell the browser where to find maplibre-gl -->
+       <script type="importmap">
+         { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
        </script>
+       <!-- Register the <ml-map> web component -->
+       <script
+         type="module"
+         src="https://unpkg.com/@maplibre-yaml/core/register.js"
+       ></script>
        <style>
          body {
            margin: 0;
@@ -136,7 +142,7 @@ For cases where you need programmatic control or want to use the lower-level API
    Create `map.js`:
 
    ```javascript
-   import { YAMLParser, MapRenderer } from "https://unpkg.com/@maplibre-yaml/core";
+   import { YAMLParser, MapRenderer } from "https://esm.sh/@maplibre-yaml/core";
 
    // Fetch and parse YAML configuration
    const response = await fetch("map.yaml");
@@ -196,14 +202,26 @@ For cases where you need programmatic control or want to use the lower-level API
 
 ### CDN (No Build Tools)
 
-For quick prototypes or simple projects:
+For quick prototypes or simple projects. To use the web component, provide `maplibre-gl` via an import map and load the register bundle:
+
+```html
+<script type="importmap">
+  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+</script>
+<script
+  type="module"
+  src="https://unpkg.com/@maplibre-yaml/core/register.js"
+></script>
+```
+
+To use the JavaScript API, import the package from esm.sh, which resolves its dependencies automatically:
 
 ```html
 <script type="module">
   import {
     YAMLParser,
     MapRenderer,
-  } from "https://unpkg.com/@maplibre-yaml/core";
+  } from "https://esm.sh/@maplibre-yaml/core";
   // Your code here
 </script>
 ```
@@ -562,7 +580,7 @@ layers:
 **dashboard.js:**
 
 ```javascript
-import { YAMLParser, MapRenderer } from "https://unpkg.com/@maplibre-yaml/core";
+import { YAMLParser, MapRenderer } from "https://esm.sh/@maplibre-yaml/core";
 
 // State
 let isPaused = false;

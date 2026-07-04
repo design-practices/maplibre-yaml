@@ -6,7 +6,9 @@
 # Checks:
 #   1. npm install @maplibre-yaml/core@alpha resolves cleanly (no
 #      EUNSUPPORTEDPROTOCOL or peer-dep errors)
-#   2. The new top-level register.js is reachable via unpkg with CORS
+#   2. The new top-level register.js is reachable via unpkg with CORS,
+#      and its module body has no bare specifiers other than maplibre-gl
+#      (bare 'yaml'/'zod' imports are unresolvable in a plain browser)
 #   3. The data-vs-url schema validation rejects path strings
 #   4. The schema still accepts inline FCs + remote URLs
 #
@@ -63,6 +65,30 @@ if [ "$PKG" = "@maplibre-yaml/core" ]; then
     exit 1
   fi
   echo "    ✓ unpkg serves /register with CORS"
+
+  # Reachable != resolvable: a plain <script type="module"> cannot resolve
+  # bare specifiers, so the served module must not bare-import yaml/zod.
+  # Only maplibre-gl is allowed (provided by the documented import map).
+  # The /register shim only holds a relative re-export, so follow it and
+  # check the module it points at as well.
+  echo "    checking module bodies for bare import specifiers..."
+  SHIM_BODY=$(curl -s -L "https://unpkg.com/${PKG}@${ALPHA_VERSION}/register")
+  RELATIVE_SPECIFIERS=$(echo "$SHIM_BODY" | grep -oE "(from|import)[[:space:]]*[\"']\./[^\"']*[\"']" | grep -oE "[\"'][^\"']+[\"']" | tr -d "\"'" | sort -u || true)
+  MODULE_BODY="$SHIM_BODY"
+  for REL in $RELATIVE_SPECIFIERS; do
+    echo "    following re-export: $REL"
+    MODULE_BODY="$MODULE_BODY
+$(curl -s -L "https://unpkg.com/${PKG}@${ALPHA_VERSION}/${REL#./}")"
+  done
+  BARE_SPECIFIERS=$(echo "$MODULE_BODY" | grep -oE "(from|import)[[:space:]]*[\"'][^./\"'][^\"']*[\"']" | grep -oE "[\"'][^\"']+[\"']" | tr -d "\"'" | sort -u | grep -v "^maplibre-gl$" || true)
+  if [ -n "$BARE_SPECIFIERS" ]; then
+    echo "❌ FAIL: register module bare-imports unresolvable specifiers:" >&2
+    echo "$BARE_SPECIFIERS" | sed 's/^/      /' >&2
+    echo "   A plain browser cannot resolve these. register.js must point at" >&2
+    echo "   dist/register.browser.js (yaml + zod inlined, maplibre-gl external)." >&2
+    exit 1
+  fi
+  echo "    ✓ no bare specifiers other than maplibre-gl"
 else
   echo
   echo "==> Step 2/4: skipped (not core)"

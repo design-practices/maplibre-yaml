@@ -38,9 +38,15 @@ The YAML on its own doesn't render anything — it needs a host page with the `<
       href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
       rel="stylesheet"
     />
-    <script type="module">
-      import "https://unpkg.com/@maplibre-yaml/core/register";
+    <!-- Tell the browser where to find maplibre-gl -->
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
     </script>
+    <!-- Register the <ml-map> web component -->
+    <script
+      type="module"
+      src="https://unpkg.com/@maplibre-yaml/core/register.js"
+    ></script>
     <style>
       ml-map {
         display: block;

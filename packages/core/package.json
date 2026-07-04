@@ -15,6 +15,10 @@
       "types": "./dist/register.d.ts",
       "import": "./dist/register.js"
     },
+    "./register.browser": {
+      "types": "./dist/register.d.ts",
+      "import": "./dist/register.browser.js"
+    },
     "./schemas": {
       "types": "./dist/schemas/index.d.ts",
       "import": "./dist/schemas/index.js"
