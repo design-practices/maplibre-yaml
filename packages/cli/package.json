@@ -20,7 +20,7 @@
     "prepack": "chmod +x dist/cli.js"
   },
   "dependencies": {
-    "@maplibre-yaml/core": "^0.2.0",
+    "@maplibre-yaml/core": "workspace:^",
     "chokidar": "^3.5.3",
     "citty": "^0.1.6",
     "consola": "^3.2.3",

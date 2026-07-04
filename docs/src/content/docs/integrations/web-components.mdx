@@ -104,6 +104,13 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 There are three ways to configure `<ml-map>`, each suited for different use cases.
 
+<Aside type="note">
+  `<ml-map>` expects a **single map block document** — a YAML file whose top
+  level is `type: map`. It does not accept a root document (one with a
+  `pages:` key); those are multi-page site configurations meant for the Astro
+  integration and will fail validation if passed to `<ml-map>`.
+</Aside>
+
 ### Method 1: External YAML File (Recommended)
 
 The simplest and cleanest approach - keep your configuration in a separate YAML file:
@@ -722,4 +729,3 @@ mapEl.addEventListener("ml-map:error", (event) => {
 - [Vanilla JavaScript Integration](/integrations/vanilla-js/) - More control with direct API usage
 - [Astro Integration](/integrations/astro/) - For Astro-based sites
 - [Live Data Guide](/guides/live-data/) - Polling and streaming configuration
-- [API Reference](/api/) - Complete API documentation

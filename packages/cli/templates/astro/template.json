@@ -1,6 +1,6 @@
 {
   "name": "astro",
-  "description": "Astro project with maplibre-yaml integration",
+  "description": "Astro project rendering maps with the maplibre-yaml web component (<ml-map>)",
   "version": "1.0.0",
   "variables": [
     {

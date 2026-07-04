@@ -45,8 +45,9 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
     };
   }
 
-  // Parse and validate
-  const result = YAMLParser.safeParseMapBlock(content);
+  // Detect the document type (map, scrollytelling, or root) and validate
+  // against the matching schema
+  const { result } = YAMLParser.safeParseAny(content);
 
   if (result.success) {
     return {

@@ -1,5 +1,5 @@
 type: scrollytelling
-id: {{projectName}}
+id: example-story
 config:
   center: [-74.006, 40.7128]
   zoom: 10
@@ -12,7 +12,7 @@ chapters:
     zoom: 10
     pitch: 0
     bearing: 0
-    description: "Welcome to {{title}}. This is an example story map showcasing different locations."
+    description: "Welcome to an example story map."
     alignment: "left"
 
   - id: chapter-1
@@ -21,5 +21,5 @@ chapters:
     zoom: 11
     pitch: 0
     bearing: 0
-    description: "This is the first chapter of our story. Each chapter can have its own viewpoint and description."
+    description: "The first chapter of our story."
     alignment: "left"

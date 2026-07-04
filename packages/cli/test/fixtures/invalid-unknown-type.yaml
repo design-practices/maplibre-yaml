@@ -1,0 +1,5 @@
+type: carousel
+id: not-a-real-block
+config:
+  center: [0, 0]
+  zoom: 2

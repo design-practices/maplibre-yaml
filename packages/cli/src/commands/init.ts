@@ -118,8 +118,17 @@ export const initCommand = defineCommand({
       if (template === 'astro') {
         console.log(`  ${pc.cyan('npm install')}`);
         console.log(`  ${pc.cyan('npm run dev')}`);
+        console.log();
+        console.log(`  ${pc.dim('This template renders the <ml-map> web component from @maplibre-yaml/core.')}`);
+        console.log(`  ${pc.dim('Edit public/configs/map.yaml to change the map.')}`);
+      } else if (template === 'story') {
+        console.log(`  ${pc.cyan('maplibre-yaml validate')} story.yaml`);
+        console.log(`  ${pc.cyan('maplibre-yaml preview')} story.yaml`);
+        console.log();
+        console.log(`  ${pc.dim('Visual preview of scrollytelling blocks is not available yet --')}`);
+        console.log(`  ${pc.dim('preview will report validation status for story.yaml.')}`);
       } else {
-        console.log(`  ${pc.cyan('maplibre-yaml preview')} ${template === 'story' ? 'story.yaml' : 'map.yaml'}`);
+        console.log(`  ${pc.cyan('maplibre-yaml preview')} map.yaml`);
       }
       console.log();
 
