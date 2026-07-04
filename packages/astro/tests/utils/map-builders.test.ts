@@ -14,6 +14,7 @@ import {
 } from "../../src/utils/map-builders";
 import type { LocationPoint, RegionPolygon, RouteLine } from "../../src/utils/collections-schemas";
 import type { GlobalConfig } from "@maplibre-yaml/core";
+import { ConfigResolutionError } from "@maplibre-yaml/core";
 
 // ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -231,9 +232,50 @@ describe("buildPointMapConfig with globalConfig", () => {
       globalConfig,
     );
 
-    // Builder defaults to 12 which beats globalConfig's 8
-    // Because the builder sets zoom: zoom ?? location.zoom ?? 12
+    // globalConfig.defaultZoom (8) beats the builder's built-in 12
+    expect(result.config.zoom).toBe(8);
+  });
+
+  it("explicit zoom takes precedence over globalConfig.defaultZoom", () => {
+    const locationNoZoom: LocationPoint = { coordinates: [2.3522, 48.8566] };
+
+    const result = buildPointMapConfig(
+      { location: locationNoZoom, zoom: 15 },
+      globalConfig,
+    );
+
+    expect(result.config.zoom).toBe(15);
+  });
+
+  it("falls back to 12 when neither location nor globalConfig provide zoom", () => {
+    const locationNoZoom: LocationPoint = { coordinates: [2.3522, 48.8566] };
+    const globalNoZoom: GlobalConfig = {
+      theme: "light",
+      defaultMapStyle: "https://global.example.com/style.json",
+    };
+
+    const result = buildPointMapConfig(
+      { location: locationNoZoom },
+      globalNoZoom,
+    );
+
     expect(result.config.zoom).toBe(12);
+  });
+
+  it("location coordinates take precedence over globalConfig.defaultCenter", () => {
+    const result = buildPointMapConfig(
+      { location: singleLocation },
+      globalConfig,
+    );
+
+    // globalConfig.defaultCenter is [-73.0, 41.0]; location wins
+    expect(result.config.center).toEqual([-74.006, 40.7128]);
+  });
+
+  it("throws ConfigResolutionError when mapStyle is missing everywhere", () => {
+    expect(() =>
+      buildPointMapConfig({ location: singleLocation }),
+    ).toThrow(ConfigResolutionError);
   });
 
   it("existing calls without globalConfig produce identical output", () => {
@@ -274,6 +316,17 @@ describe("buildMultiPointMapConfig with globalConfig", () => {
 
     expect(result.config.mapStyle).toBe(STYLE_URL);
   });
+
+  it("inherits zoom from globalConfig.defaultZoom", () => {
+    const result = buildMultiPointMapConfig(
+      { locations: locationsArray },
+      globalConfig,
+    );
+
+    // bounds still take precedence when rendering, but the config value
+    // inherits the global default rather than the hardcoded 10
+    expect(result.config.zoom).toBe(8);
+  });
 });
 
 describe("buildPolygonMapConfig with globalConfig", () => {
@@ -284,6 +337,24 @@ describe("buildPolygonMapConfig with globalConfig", () => {
       "https://global.example.com/style.json",
     );
   });
+
+  it("inherits zoom from globalConfig.defaultZoom", () => {
+    const result = buildPolygonMapConfig({ region }, globalConfig);
+
+    expect(result.config.zoom).toBe(8);
+  });
+
+  it("explicit zoom takes precedence over globalConfig.defaultZoom", () => {
+    const result = buildPolygonMapConfig({ region, zoom: 14 }, globalConfig);
+
+    expect(result.config.zoom).toBe(14);
+  });
+
+  it("falls back to 12 when neither options nor globalConfig provide zoom", () => {
+    const result = buildPolygonMapConfig({ region, mapStyle: STYLE_URL });
+
+    expect(result.config.zoom).toBe(12);
+  });
 });
 
 describe("buildRouteMapConfig with globalConfig", () => {
@@ -293,6 +364,12 @@ describe("buildRouteMapConfig with globalConfig", () => {
     expect(result.config.mapStyle).toBe(
       "https://global.example.com/style.json",
     );
+  });
+
+  it("inherits zoom from globalConfig.defaultZoom", () => {
+    const result = buildRouteMapConfig({ route }, globalConfig);
+
+    expect(result.config.zoom).toBe(8);
   });
 });
 

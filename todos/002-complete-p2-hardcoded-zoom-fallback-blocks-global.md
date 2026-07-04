@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "002"
 tags: [code-review, design, global-config]
@@ -51,9 +51,24 @@ The `?? 12` is intentional "builder convenience" -- document that builders have 
 
 ## Acceptance Criteria
 
-- [ ] Decision made on whether builders should respect globalConfig.defaultZoom
-- [ ] If Option A: update builders + fix test assertion at map-builders.test.ts:213
-- [ ] If Option B: add JSDoc noting that builders have their own zoom defaults
+- [x] Decision made on whether builders should respect globalConfig.defaultZoom
+- [x] Option A (with a safety net): update builders + fix test assertion at map-builders.test.ts
+- [ ] ~~If Option B: add JSDoc noting that builders have their own zoom defaults~~ (not chosen)
+
+## Work Log
+
+- 2026-07-04: Fixed via Option A, keeping the builder default as a last-resort
+  fallback so no existing call site starts throwing. All six builders in
+  `map-builders.ts` now resolve zoom as
+  `explicit > location.zoom (point) > globalConfig.defaultZoom > builder default`
+  (12 for point/polygon/multi-polygon, 10 for the bounds-driven multi-point/
+  route/multi-linestring builders). The misnamed test "inherits zoom from
+  globalConfig when location has no zoom" now actually asserts inheritance
+  (expects 8, the global default), plus new precedence tests: explicit beats
+  global, global beats built-in default, built-in default holds when neither is
+  set, location coordinates beat defaultCenter, and missing mapStyle everywhere
+  throws ConfigResolutionError. Shipped alongside todo 001 on branch
+  `fix/global-config-runtime-inheritance`.
 
 ## Resources
 
