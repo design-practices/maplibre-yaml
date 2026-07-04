@@ -28,6 +28,11 @@ export default defineConfig([
       "register.browser": "src/register.ts",
     },
     format: ["esm"],
+    // Resolve bundled deps via their browser conditions: without this,
+    // esbuild pulls in yaml's Node CJS entry, which calls require("process")
+    // and throws "Dynamic require of 'process' is not supported" the moment
+    // a real browser loads the bundle.
+    platform: "browser",
     dts: false,
     clean: false,
     sourcemap: true,

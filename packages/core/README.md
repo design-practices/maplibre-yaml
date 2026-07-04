@@ -25,15 +25,23 @@ The simplest way to use maplibre-yaml is with the `<ml-map>` web component:
   <style>
     ml-map { display: block; height: 400px; }
   </style>
+  <!-- Tell the browser where to find maplibre-gl (kept external, not bundled) -->
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+  </script>
+  <!-- Register the <ml-map> web component -->
+  <script
+    type="module"
+    src="https://unpkg.com/@maplibre-yaml/core/register.js"
+  ></script>
 </head>
 <body>
   <ml-map src="/map.yaml"></ml-map>
-  <script type="module">
-    import '@maplibre-yaml/core/register';
-  </script>
 </body>
 </html>
 ```
+
+With a bundler (Vite, Webpack, etc.) skip the import map and CDN script — `import '@maplibre-yaml/core/register'` in your entry point instead.
 
 ### JavaScript API
 
