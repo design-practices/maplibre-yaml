@@ -1,0 +1,7 @@
+# Workstream E assertion: an unknown block type must produce a clear error
+# listing the valid types (exit 1), not "Invalid literal value, expected map".
+type: scrollytale
+id: typo-check
+config:
+  center: [0, 0]
+  zoom: 2

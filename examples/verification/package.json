@@ -1,0 +1,18 @@
+{
+  "name": "@maplibre-yaml/example-verification",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Bare assertion files for manually verifying Phase 1 (fix-shipped-but-broken) features",
+  "scripts": {
+    "verify:inheritance": "tsx 04-global-config-inheritance.ts",
+    "serve": "python3 -m http.server 4174 --directory ../.."
+  },
+  "dependencies": {
+    "@maplibre-yaml/astro": "workspace:*",
+    "@maplibre-yaml/core": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}

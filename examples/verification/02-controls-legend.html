@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Workstream C: controls + legend render</title>
+  <!--
+    Assertion: YAML `controls:` and `legend:` blocks produce visible UI.
+    Previously both keys validated and were silently dropped.
+
+    Serve from the repo root:
+      cd examples/verification && pnpm serve
+      open http://localhost:4174/examples/verification/02-controls-legend.html
+  -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 14px; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+  </script>
+</head>
+<body>
+  <header>PASS = zoom +/- buttons (top-right), a scale bar (bottom-left), and a "Legend renders!" box (top-left). FAIL = map without any of those.</header>
+  <ml-map src="./configs/controls-legend.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

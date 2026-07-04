@@ -1,0 +1,21 @@
+# Workstream D assertion: omitting mapStyle in a standalone <ml-map> must show
+# the friendly in-page error card, NOT a cryptic MapLibre crash or a blank map.
+type: map
+id: missing-mapstyle-check
+config:
+  center: [-74.006, 40.7128]
+  zoom: 11
+layers:
+  - id: points
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: {}
+    paint:
+      circle-radius: 8
+      circle-color: "#457b9d"

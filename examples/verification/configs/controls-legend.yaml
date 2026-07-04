@@ -1,0 +1,34 @@
+# Workstream C assertion: controls: and legend: blocks must actually render.
+type: map
+id: controls-legend-check
+config:
+  center: [-74.006, 40.7128]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+controls:
+  navigation: true
+  scale: true
+legend:
+  position: top-left
+  title: "Legend renders!"
+  items:
+    - color: "#e63946"
+      label: "Red points"
+      shape: circle
+layers:
+  - id: points
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: { name: "Manhattan" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-73.95, 40.65] }
+            properties: { name: "Brooklyn" }
+    paint:
+      circle-radius: 8
+      circle-color: "#e63946"
