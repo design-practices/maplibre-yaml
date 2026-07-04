@@ -51,10 +51,6 @@ export class LayerManager {
   private sourceData: Map<string, FeatureCollection>;
   private layerToSource: Map<string, string>;
 
-  // Legacy support (deprecated)
-  private refreshIntervals: Map<string, NodeJS.Timeout>;
-  private abortControllers: Map<string, AbortController>;
-
   constructor(map: MapLibreMap, callbacks?: LayerManagerCallbacks) {
     this.map = map;
     this.callbacks = callbacks || {};
@@ -65,10 +61,6 @@ export class LayerManager {
     this.loadingManager = new LoadingManager({ showUI: false });
     this.sourceData = new Map();
     this.layerToSource = new Map();
-
-    // Legacy support
-    this.refreshIntervals = new Map();
-    this.abortControllers = new Map();
   }
 
   async addLayer(layer: Layer): Promise<void> {
@@ -398,15 +390,6 @@ export class LayerManager {
     this.streamManager.disconnect(layerId);
     this.loadingManager.hideLoading(layerId);
 
-    // Legacy support
-    this.stopRefreshInterval(layerId);
-
-    const controller = this.abortControllers.get(layerId);
-    if (controller) {
-      controller.abort();
-      this.abortControllers.delete(layerId);
-    }
-
     if (this.map.getLayer(layerId)) this.map.removeLayer(layerId);
 
     const sourceId = this.layerToSource.get(layerId) || `${layerId}-source`;
@@ -438,70 +421,6 @@ export class LayerManager {
     if (source && source.setData) source.setData(data as any);
   }
 
-  /**
-   * @deprecated Legacy refresh method - use PollingManager instead
-   */
-  startRefreshInterval(layer: Layer): void {
-    // Legacy method kept for backward compatibility
-    // New code should use setupDataUpdates() which is called automatically from addLayer
-    if (typeof layer.source !== "object" || layer.source === null) {
-      return;
-    }
-
-    const sourceObj = layer.source as {
-      type: string;
-      url?: string;
-      refreshInterval?: number;
-    };
-    if (
-      sourceObj.type !== "geojson" ||
-      !sourceObj.url ||
-      !sourceObj.refreshInterval
-    ) {
-      return;
-    }
-
-    const geojsonSource = layer.source as unknown as GeoJSONSourceConfig;
-    const interval = setInterval(async () => {
-      const sourceId = `${layer.id}-source`;
-      try {
-        const cacheEnabled = geojsonSource.cache?.enabled ?? true;
-        const cacheTTL = geojsonSource.cache?.ttl;
-
-        const result = await this.dataFetcher.fetch(geojsonSource.url!, {
-          skipCache: !cacheEnabled,
-          ttl: cacheTTL,
-        });
-        const data = result.data as FeatureCollection;
-        this.sourceData.set(sourceId, data);
-
-        const source = this.map.getSource(sourceId) as GeoJSONSource;
-        if (source?.setData) {
-          source.setData(data);
-        }
-        this.callbacks.onDataLoaded?.(layer.id, data.features.length);
-      } catch (error: any) {
-        this.callbacks.onDataError?.(layer.id, error);
-      }
-    }, geojsonSource.refreshInterval!);
-
-    this.refreshIntervals.set(layer.id, interval);
-  }
-
-  stopRefreshInterval(layerId: string): void {
-    const interval = this.refreshIntervals.get(layerId);
-    if (interval) {
-      clearInterval(interval);
-      this.refreshIntervals.delete(layerId);
-    }
-  }
-
-  clearAllIntervals(): void {
-    for (const interval of this.refreshIntervals.values())
-      clearInterval(interval);
-    this.refreshIntervals.clear();
-  }
-
   destroy(): void {
     // Clean up all data management components
     this.pollingManager.destroy();
@@ -511,10 +430,5 @@ export class LayerManager {
     // Clear data references
     this.sourceData.clear();
     this.layerToSource.clear();
-
-    // Legacy cleanup
-    this.clearAllIntervals();
-    for (const controller of this.abortControllers.values()) controller.abort();
-    this.abortControllers.clear();
   }
 }

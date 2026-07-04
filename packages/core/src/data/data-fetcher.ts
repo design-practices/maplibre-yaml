@@ -347,14 +347,22 @@ export class DataFetcher {
     url: string,
     options: FetchOptions
   ): Promise<FeatureCollection> {
-    // Create abort controller with timeout
-    const controller = options.signal
-      ? new AbortController()
-      : new AbortController();
+    // Internal controller drives the actual fetch; it aborts on timeout,
+    // on abortAll(), or when a caller-provided signal aborts.
+    const controller = new AbortController();
 
-    // Link external signal if provided
-    if (options.signal) {
-      options.signal.addEventListener("abort", () => controller.abort());
+    // Honor a caller-provided signal by linking it to the internal controller.
+    const externalSignal = options.signal;
+    const onExternalAbort = () => controller.abort(externalSignal?.reason);
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        // Already aborted: the "abort" event will never fire, abort directly.
+        controller.abort(externalSignal.reason);
+      } else {
+        externalSignal.addEventListener("abort", onExternalAbort, {
+          once: true,
+        });
+      }
     }
 
     // Set timeout
@@ -436,6 +444,9 @@ export class DataFetcher {
       return data as FeatureCollection;
     } finally {
       clearTimeout(timeoutId);
+      // Avoid accumulating listeners on a long-lived external signal
+      // across retries / multiple fetches.
+      externalSignal?.removeEventListener("abort", onExternalAbort);
       this.activeRequests.delete(url);
     }
   }

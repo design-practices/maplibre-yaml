@@ -43,6 +43,15 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      # Dry-run gate: pack each publishable package and fail if the
+      # resulting manifest still contains workspace: refs (the bug that
+      # shipped in 0.2.0). See scripts/check-publish.sh (issue #28).
+      - name: "Check publish manifests (workspace: guard)"
+        run: |
+          for pkg in packages/core packages/cli packages/astro; do
+            ./scripts/check-publish.sh "$pkg"
+          done
+
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
