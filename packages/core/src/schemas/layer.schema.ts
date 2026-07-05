@@ -22,6 +22,42 @@ import {
 import { LayerSourceSchema } from "./source.schema";
 
 /**
+ * Reference to a root-level named source.
+ *
+ * @remarks
+ * A layer's `source:` may point at a source declared in the root document's
+ * top-level `sources:` map using JSON-pointer syntax. The reference is resolved
+ * at parse time (see {@link YAMLParser.resolveReferences}); a dangling
+ * reference produces a clear error with a did-you-mean suggestion.
+ *
+ * @example
+ * ```yaml
+ * sources:
+ *   boundaries:
+ *     type: geojson
+ *     url: "https://example.com/boundaries.geojson"
+ *
+ * pages:
+ *   - blocks:
+ *       - type: map
+ *         layers:
+ *           - id: outline
+ *             type: line
+ *             source: { $ref: "#/sources/boundaries" }
+ * ```
+ */
+export const SourceReferenceSchema = z
+  .object({
+    $ref: z
+      .string()
+      .describe('Reference to a root-level source (e.g., "#/sources/name")'),
+  })
+  .describe("Source reference");
+
+/** Inferred type for source reference. */
+export type SourceReference = z.infer<typeof SourceReferenceSchema>;
+
+/**
  * Content item for popup or dynamic text rendering.
  *
  * @remarks
@@ -247,8 +283,10 @@ export const BaseLayerPropertiesSchema = z.object({
   id: z.string().describe("Unique layer identifier"),
   label: z.string().optional().describe("Human-readable layer label"),
   source: z
-    .union([LayerSourceSchema, z.string()])
-    .describe("Layer source (inline definition or source ID reference)"),
+    .union([LayerSourceSchema, SourceReferenceSchema, z.string()])
+    .describe(
+      "Layer source: inline definition, { $ref: '#/sources/name' } reference, or named-source string"
+    ),
   "source-layer": z
     .string()
     .optional()
@@ -853,7 +891,7 @@ export type BackgroundLayer = z.infer<typeof BackgroundLayerSchema>;
  * };
  * ```
  */
-export const LayerSchema = z.union([
+export const LayerSchema = z.discriminatedUnion("type", [
   CircleLayerSchema,
   LineLayerSchema,
   FillLayerSchema,
