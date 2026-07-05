@@ -54,6 +54,10 @@ Two detections for the classic silent-blank-map failures, shown as console warni
 - Host element height is 0 after mount → "your `<ml-map>` has zero height; add e.g. `ml-map { height: 400px }`".
 - `maplibregl` canvas present but no MapLibre CSS detected (probe a known class's computed style) → "MapLibre CSS is not loaded".
 
+### 7. Root-level sources become reachable (todo 035)
+
+Per the recorded decision below: accept `{$ref: "#/sources/<name>"}` in a layer's `source:` field (schema change: add the `$ref` object shape to the `source` union), and run reference resolution so it resolves against root-level `sources:` before layer rendering. Today the `$ref` object fails validation because validation runs before `resolveReferences` (the source union has no `$ref` shape), making root-level `sources:` dead weight. Includes: schema shape, parser ordering fix, error message for a dangling `$ref` (unknown source name, with did-you-mean), docs update in `schema/root.mdx`, and closing `todos/035`.
+
 ## Testing strategy
 
 - Fixture-driven: a directory of bad YAML files, each with expected `{line, column, message}` snapshots — doubles as regression corpus and documentation of error quality.
@@ -67,7 +71,8 @@ Two detections for the classic silent-blank-map failures, shown as console warni
 - Removing legacy refresh fields — same gate.
 - Full expression type-checking.
 
-## Open questions for review
+## Decisions (recorded — Mario, 2026-07-05)
 
-1. Warning UX in the browser: console-only, or a dismissible dev badge on the map? (Recommend console-only; badge risks shipping to production pages.)
-2. Should `--strict` become the default in CI contexts (detect `CI=true`)? Recommend yes — warnings that only humans see never get fixed.
+1. **Console-only browser warnings** — no on-map badge (badge risks shipping to production pages).
+2. **`--strict` is the default when `CI=true`** — warnings block in CI, overridable with `--no-strict`; interactive behavior unchanged.
+3. **Todo 035 resolution: make `$ref` work.** A layer's `source:` may be a `{$ref: "#/sources/name"}` object resolving against root-level `sources:` — fix the validation-before-resolution ordering so the schema accepts it and `resolveReferences` fulfills it. Root-level named sources become real instead of unreachable. (Added to this plan as solution item 7; block-level bare-name sources remain the documented default.)
