@@ -52,12 +52,14 @@ if [ "$PKG" = "@maplibre-yaml/core" ]; then
   echo
   echo "==> Step 2/4: GET https://unpkg.com/$PKG@$ALPHA_VERSION/register"
   HEADERS=$(curl -sI -L "https://unpkg.com/${PKG}@${ALPHA_VERSION}/register" 2>&1)
-  STATUS=$(echo "$HEADERS" | head -1 | grep -oE "[0-9]{3}" | head -1)
-  ACAO=$(echo "$HEADERS" | grep -i "access-control-allow-origin" | head -1 || true)
-  echo "    status: $STATUS"
+  # curl -L emits one header block per hop; unpkg 301-redirects the
+  # extensionless /register to /register.js, so assert the FINAL status.
+  STATUS=$(echo "$HEADERS" | grep -iE "^HTTP" | tail -1 | grep -oE "[0-9]{3}" | head -1)
+  ACAO=$(echo "$HEADERS" | grep -i "access-control-allow-origin" | tail -1 || true)
+  echo "    final status: $STATUS"
   echo "    $ACAO"
   if [ "$STATUS" != "200" ]; then
-    echo "❌ FAIL: expected 200, got $STATUS. The top-level register.js shim isn't being served." >&2
+    echo "❌ FAIL: expected final 200 (redirects are fine), got $STATUS. The top-level register.js shim isn't being served." >&2
     exit 1
   fi
   if [ -z "$ACAO" ]; then
@@ -152,10 +154,9 @@ echo "========================================"
 echo "✓ All checks passed for $PKG@$ALPHA_VERSION"
 echo "========================================"
 echo
-echo "Safe to proceed:"
-echo "  cd /Users/marioag/Documents/GitHub/maplibre-yaml"
-echo "  pnpm changeset pre exit"
-echo "  pnpm changeset version          # collapses to stable 0.2.3"
-echo "  git add . && git commit -m 'release: @maplibre-yaml/core v0.2.3' && git push"
-echo "  ./scripts/check-publish.sh packages/core   # final dry-run gate"
-echo "  cd packages/core && pnpm publish --access public"
+echo "Safe to proceed with the stable release:"
+echo "  1. Delete the throwaway alpha branch (never merge it — it carries .changeset/pre.json)"
+echo "  2. Merge the 'chore: version packages' PR on main"
+echo "  3. The Release workflow publishes via OIDC (gated by check-publish.sh)"
+echo "  4. Re-run this script's checks against @latest, or load"
+echo "     examples/verification/01-cdn-map.html against the published unpkg URL"
