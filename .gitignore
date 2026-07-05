@@ -6,6 +6,12 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Generated JSON Schema + agent affordances (generate-on-build; D7)
+packages/core/schemas/*.json
+docs/public/schema/
+docs/public/llms.txt
+docs/public/llms-full.txt
+
 # IDE
 .vscode/
 .idea/

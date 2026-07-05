@@ -239,6 +239,54 @@ maplibre-yaml init --template advanced
 
 ---
 
+### schema
+
+Print the JSON Schema for a block, resolved from the installed
+`@maplibre-yaml/core` package — so it always matches the version `validate`
+enforces. Useful for offline editor integration and AI agents.
+
+```bash
+maplibre-yaml schema [block] [options]
+```
+
+#### Arguments
+
+| Argument | Required | Default | Description                                          |
+| -------- | -------- | ------- | ---------------------------------------------------- |
+| `block`  | No       | `map`   | One of `map`, `scrollytelling`, `root`, `any`        |
+
+#### Options
+
+| Option  | Alias | Type   | Description                                     |
+| ------- | ----- | ------ | ----------------------------------------------- |
+| `--out` | `-o`  | string | Write the schema to a file instead of stdout    |
+
+#### Examples
+
+Print the map schema to stdout:
+
+```bash
+maplibre-yaml schema map
+```
+
+Write the combined (`any`) schema to a file for offline use:
+
+```bash
+maplibre-yaml schema any --out any.schema.json
+```
+
+Reference the written file from a config with a modeline:
+
+```yaml
+# yaml-language-server: $schema=./any.schema.json
+```
+
+See [Editor Setup](/guides/editor-setup/) and
+[Using AI Agents](/guides/ai-agents/) for how these schemas power in-editor
+validation and agent workflows.
+
+---
+
 ## Configuration File
 
 Create `.maplibre-yaml.config.json` in your project root to set default options:
