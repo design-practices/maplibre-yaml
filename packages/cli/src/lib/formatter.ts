@@ -18,10 +18,10 @@ export function formatHuman(results: ValidationResult[]): string {
   for (const result of results) {
     if (!result.valid) {
       filesWithErrors++;
-      
+
       lines.push('');
       lines.push(pc.red(`✗ ${result.file}`));
-      
+
       for (const error of result.errors) {
         totalErrors++;
         const location = formatLocation(error);
@@ -31,18 +31,23 @@ export function formatHuman(results: ValidationResult[]): string {
           lines.push(`    ${pc.dim(location)}`);
         }
       }
-
-      for (const warning of result.warnings) {
-        totalWarnings++;
-        const location = formatLocation(warning);
-        const path = warning.path ? pc.yellow(warning.path) + ': ' : '';
-        lines.push(`  ${pc.yellow('warning')} ${path}${warning.message}`);
-        if (location) {
-          lines.push(`    ${pc.dim(location)}`);
-        }
-      }
+    } else if (result.warnings.length > 0) {
+      // Valid, but has advisory warnings worth surfacing.
+      lines.push('');
+      lines.push(pc.yellow(`⚠ ${result.file}`));
     } else {
       lines.push(pc.green(`✓ ${result.file}`));
+    }
+
+    // Warnings are surfaced whether or not the file also has errors.
+    for (const warning of result.warnings) {
+      totalWarnings++;
+      const location = formatLocation(warning);
+      const path = warning.path ? pc.yellow(warning.path) + ': ' : '';
+      lines.push(`  ${pc.yellow('warning')} ${path}${warning.message}`);
+      if (location) {
+        lines.push(`    ${pc.dim(location)}`);
+      }
     }
   }
 
