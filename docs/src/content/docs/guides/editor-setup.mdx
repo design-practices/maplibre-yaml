@@ -1,0 +1,128 @@
+---
+title: Editor Setup
+description: In-editor autocomplete, hover docs, and validation for maplibre-yaml via yaml-language-server and JSON Schema
+---
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+maplibre-yaml publishes its contract as **JSON Schema**, so any editor backed by
+the [YAML Language Server](https://github.com/redhat-developer/yaml-language-server)
+(the engine behind the Red Hat **YAML** extension for VS Code, and available in
+Neovim, JetBrains IDEs, and others) gives you autocomplete, hover documentation,
+and inline validation — with **zero project install**.
+
+<Aside type="note">
+The JSON Schema is authoring assistance. `mlym validate` (Zod) remains the
+source of truth: it enforces cross-field rules the JSON Schema cannot express.
+See [Using maplibre-yaml with an AI agent](/guides/ai-agents/).
+</Aside>
+
+## Stable schema URLs
+
+Each block type has a stable, versioned schema URL:
+
+| Block            | Schema URL                                                        |
+| ---------------- | ----------------------------------------------------------------- |
+| `map`            | `https://docs.maplibre-yaml.org/schema/latest/map.schema.json`             |
+| `scrollytelling` | `https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json`  |
+| `root` (pages)   | `https://docs.maplibre-yaml.org/schema/latest/root.schema.json`            |
+| any of the above | `https://docs.maplibre-yaml.org/schema/latest/any.schema.json`             |
+
+`latest/` always tracks the newest release. Version-pinned copies live at
+`https://docs.maplibre-yaml.org/schema/v<major.minor>/<block>.schema.json`.
+
+## Option 1: The modeline (recommended)
+
+Add a `yaml-language-server` **modeline** as the first line of your file. It
+travels with the file, so anyone who opens it gets validation — no shared
+settings required. This is the first line of every config the CLI scaffolds:
+
+```yaml
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+type: map
+id: my-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+Use the schema that matches the file's block type:
+
+<Tabs>
+  <TabItem label="map">
+    ```yaml
+    # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+    type: map
+    ```
+  </TabItem>
+  <TabItem label="scrollytelling">
+    ```yaml
+    # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json
+    type: scrollytelling
+    ```
+  </TabItem>
+  <TabItem label="root (pages)">
+    ```yaml
+    # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/root.schema.json
+    pages:
+      - path: "/"
+    ```
+  </TabItem>
+</Tabs>
+
+## Option 2: VS Code `yaml.schemas` settings
+
+If you would rather not put a modeline in every file, map globs to schemas in
+your project's `.vscode/settings.json` (requires the Red Hat **YAML**
+extension). This is the no-modeline alternative:
+
+```json
+{
+  "yaml.schemas": {
+    "https://docs.maplibre-yaml.org/schema/latest/map.schema.json": [
+      "**/*.map.yaml",
+      "configs/**/*.yaml"
+    ],
+    "https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json": [
+      "**/*.story.yaml"
+    ]
+  }
+}
+```
+
+<Aside type="tip">
+Modelines win over `yaml.schemas` when both are present, so you can set a broad
+glob default and override per-file with a modeline.
+</Aside>
+
+## Offline / air-gapped
+
+The same schemas ship inside the `@maplibre-yaml/core` npm package (under
+`@maplibre-yaml/core/schemas/json/`). Point at a local copy, or write one out
+with the CLI:
+
+```bash
+npx @maplibre-yaml/cli schema map --out map.schema.json
+```
+
+Then reference the local file:
+
+```yaml
+# yaml-language-server: $schema=./map.schema.json
+type: map
+```
+
+`mlym schema` reads the schema from the installed core package, so it always
+matches the version `mlym validate` enforces.
+
+## What you get
+
+- **Autocomplete** for every field, layer type, control, and source type.
+- **Hover documentation** sourced from the same `.describe()` annotations that
+  drive the docs.
+- **Inline validation** for structure, enums, and types as you type.
+
+Unknown top-level keys are flagged; `x-*` keys are always allowed as an
+extension escape hatch. Arbitrary MapLibre GL options inside `config:` and
+extra source options stay permissive, matching the runtime.
