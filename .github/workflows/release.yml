@@ -61,3 +61,9 @@ jobs:
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Granular npm automation token (packages: @maplibre-yaml/*).
+          # The pinned pnpm 9 cannot mint npm OIDC trusted-publishing tokens
+          # (support landed in pnpm 10.13) -- without this, the publish PUT
+          # goes out unauthenticated and npm masks it as E404. See todo 038
+          # for the migration to true OIDC.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
