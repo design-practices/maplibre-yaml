@@ -51,13 +51,13 @@ Use the schema that matches the file's block type:
 
 <Tabs>
   <TabItem label="map">
-    ```yaml
+    ```yaml no-validate
     # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
     type: map
     ```
   </TabItem>
   <TabItem label="scrollytelling">
-    ```yaml
+    ```yaml no-validate
     # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json
     type: scrollytelling
     ```
@@ -108,7 +108,7 @@ npx @maplibre-yaml/cli schema map --out map.schema.json
 
 Then reference the local file:
 
-```yaml
+```yaml no-validate
 # yaml-language-server: $schema=./map.schema.json
 type: map
 ```

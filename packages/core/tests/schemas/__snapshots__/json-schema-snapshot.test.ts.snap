@@ -248,7 +248,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                 "zoom"
               ],
               "additionalProperties": true,
-              "description": "Map configuration"
+              "description": "Map configuration with MapLibre options"
             },
             "sources": {
               "type": "object",
@@ -808,10 +808,27 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties"
                               },
                               {
+                                "type": "object",
+                                "properties": {
+                                  "$ref": {
+                                    "type": "string",
+                                    "description": "Reference to a root-level source (e.g., \\"#/sources/name\\")"
+                                  }
+                                },
+                                "required": [
+                                  "$ref"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Source reference",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
+                              },
+                              {
                                 "type": "string"
                               }
                             ],
-                            "description": "Layer source (inline definition or source ID reference)"
+                            "description": "Layer source: inline definition, { $ref: '#/sources/name' } reference, or named-source string"
                           },
                           "source-layer": {
                             "type": "string",
@@ -2428,117 +2445,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               "description": "Inline CSS styles for container"
             },
             "config": {
-              "type": "object",
-              "properties": {
-                "center": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center"
-                },
-                "zoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/zoom"
-                },
-                "mapStyle": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/mapStyle"
-                },
-                "pitch": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/pitch"
-                },
-                "bearing": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bearing"
-                },
-                "bounds": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds"
-                },
-                "minZoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/minZoom"
-                },
-                "maxZoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxZoom"
-                },
-                "minPitch": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/minPitch"
-                },
-                "maxPitch": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxPitch"
-                },
-                "maxBounds": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxBounds"
-                },
-                "interactive": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/interactive"
-                },
-                "scrollZoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/scrollZoom"
-                },
-                "boxZoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/boxZoom"
-                },
-                "dragRotate": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/dragRotate"
-                },
-                "dragPan": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/dragPan"
-                },
-                "keyboard": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/keyboard"
-                },
-                "doubleClickZoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/doubleClickZoom"
-                },
-                "touchZoomRotate": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/touchZoomRotate"
-                },
-                "touchPitch": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/touchPitch"
-                },
-                "hash": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/hash"
-                },
-                "attributionControl": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/attributionControl"
-                },
-                "logoPosition": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/logoPosition"
-                },
-                "fadeDuration": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fadeDuration"
-                },
-                "crossSourceCollisions": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/crossSourceCollisions"
-                },
-                "antialias": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/antialias"
-                },
-                "refreshExpiredTiles": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/refreshExpiredTiles"
-                },
-                "renderWorldCopies": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/renderWorldCopies"
-                },
-                "locale": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/locale"
-                },
-                "maxTileCacheSize": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxTileCacheSize"
-                },
-                "localIdeographFontFamily": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/localIdeographFontFamily"
-                },
-                "trackResize": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/trackResize"
-                },
-                "preserveDrawingBuffer": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/preserveDrawingBuffer"
-                },
-                "failIfMajorPerformanceCaveat": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/failIfMajorPerformanceCaveat"
-                }
-              },
-              "required": [
-                "center",
-                "zoom"
-              ],
-              "additionalProperties": true,
-              "description": "Base map configuration"
+              "$ref": "#/$defs/any/oneOf/0/properties/config"
             },
             "theme": {
               "type": "string",
@@ -3087,117 +2994,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "description": "Inline CSS styles for container"
                             },
                             "config": {
-                              "type": "object",
-                              "properties": {
-                                "center": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center"
-                                },
-                                "zoom": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/zoom"
-                                },
-                                "mapStyle": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/mapStyle"
-                                },
-                                "pitch": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/pitch"
-                                },
-                                "bearing": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bearing"
-                                },
-                                "bounds": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds"
-                                },
-                                "minZoom": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/minZoom"
-                                },
-                                "maxZoom": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxZoom"
-                                },
-                                "minPitch": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/minPitch"
-                                },
-                                "maxPitch": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxPitch"
-                                },
-                                "maxBounds": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxBounds"
-                                },
-                                "interactive": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/interactive"
-                                },
-                                "scrollZoom": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/scrollZoom"
-                                },
-                                "boxZoom": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/boxZoom"
-                                },
-                                "dragRotate": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/dragRotate"
-                                },
-                                "dragPan": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/dragPan"
-                                },
-                                "keyboard": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/keyboard"
-                                },
-                                "doubleClickZoom": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/doubleClickZoom"
-                                },
-                                "touchZoomRotate": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/touchZoomRotate"
-                                },
-                                "touchPitch": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/touchPitch"
-                                },
-                                "hash": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/hash"
-                                },
-                                "attributionControl": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/attributionControl"
-                                },
-                                "logoPosition": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/logoPosition"
-                                },
-                                "fadeDuration": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fadeDuration"
-                                },
-                                "crossSourceCollisions": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/crossSourceCollisions"
-                                },
-                                "antialias": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/antialias"
-                                },
-                                "refreshExpiredTiles": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/refreshExpiredTiles"
-                                },
-                                "renderWorldCopies": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/renderWorldCopies"
-                                },
-                                "locale": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/locale"
-                                },
-                                "maxTileCacheSize": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/maxTileCacheSize"
-                                },
-                                "localIdeographFontFamily": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/localIdeographFontFamily"
-                                },
-                                "trackResize": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/trackResize"
-                                },
-                                "preserveDrawingBuffer": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/preserveDrawingBuffer"
-                                },
-                                "failIfMajorPerformanceCaveat": {
-                                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/failIfMajorPerformanceCaveat"
-                                }
-                              },
-                              "required": [
-                                "center",
-                                "zoom"
-                              ],
-                              "additionalProperties": true,
-                              "description": "Map configuration"
+                              "$ref": "#/$defs/any/oneOf/0/properties/config"
                             },
                             "sources": {
                               "type": "object",
@@ -3571,7 +3368,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
             "zoom"
           ],
           "additionalProperties": true,
-          "description": "Map configuration"
+          "description": "Map configuration with MapLibre options"
         },
         "sources": {
           "type": "object",
@@ -4131,10 +3928,27 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             "$ref": "#/$defs/map/properties/sources/additionalProperties"
                           },
                           {
+                            "type": "object",
+                            "properties": {
+                              "$ref": {
+                                "type": "string",
+                                "description": "Reference to a root-level source (e.g., \\"#/sources/name\\")"
+                              }
+                            },
+                            "required": [
+                              "$ref"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Source reference",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          },
+                          {
                             "type": "string"
                           }
                         ],
-                        "description": "Layer source (inline definition or source ID reference)"
+                        "description": "Layer source: inline definition, { $ref: '#/sources/name' } reference, or named-source string"
                       },
                       "source-layer": {
                         "type": "string",
@@ -6374,10 +6188,27 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         ]
                       },
                       {
+                        "type": "object",
+                        "properties": {
+                          "$ref": {
+                            "type": "string",
+                            "description": "Reference to a root-level source (e.g., \\"#/sources/name\\")"
+                          }
+                        },
+                        "required": [
+                          "$ref"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Source reference",
+                        "patternProperties": {
+                          "^x-": {}
+                        }
+                      },
+                      {
                         "type": "string"
                       }
                     ],
-                    "description": "Layer source (inline definition or source ID reference)"
+                    "description": "Layer source: inline definition, { $ref: '#/sources/name' } reference, or named-source string"
                   },
                   "source-layer": {
                     "type": "string",
@@ -8224,7 +8055,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                             "zoom"
                           ],
                           "additionalProperties": true,
-                          "description": "Map configuration"
+                          "description": "Map configuration with MapLibre options"
                         },
                         "sources": {
                           "type": "object",
@@ -8413,117 +8244,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "description": "Inline CSS styles for container"
                         },
                         "config": {
-                          "type": "object",
-                          "properties": {
-                            "center": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/center"
-                            },
-                            "zoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/zoom"
-                            },
-                            "mapStyle": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/mapStyle"
-                            },
-                            "pitch": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/pitch"
-                            },
-                            "bearing": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bearing"
-                            },
-                            "bounds": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds"
-                            },
-                            "minZoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/minZoom"
-                            },
-                            "maxZoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxZoom"
-                            },
-                            "minPitch": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/minPitch"
-                            },
-                            "maxPitch": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxPitch"
-                            },
-                            "maxBounds": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxBounds"
-                            },
-                            "interactive": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/interactive"
-                            },
-                            "scrollZoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/scrollZoom"
-                            },
-                            "boxZoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/boxZoom"
-                            },
-                            "dragRotate": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/dragRotate"
-                            },
-                            "dragPan": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/dragPan"
-                            },
-                            "keyboard": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/keyboard"
-                            },
-                            "doubleClickZoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/doubleClickZoom"
-                            },
-                            "touchZoomRotate": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/touchZoomRotate"
-                            },
-                            "touchPitch": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/touchPitch"
-                            },
-                            "hash": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/hash"
-                            },
-                            "attributionControl": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/attributionControl"
-                            },
-                            "logoPosition": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/logoPosition"
-                            },
-                            "fadeDuration": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/fadeDuration"
-                            },
-                            "crossSourceCollisions": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/crossSourceCollisions"
-                            },
-                            "antialias": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/antialias"
-                            },
-                            "refreshExpiredTiles": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/refreshExpiredTiles"
-                            },
-                            "renderWorldCopies": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/renderWorldCopies"
-                            },
-                            "locale": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/locale"
-                            },
-                            "maxTileCacheSize": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxTileCacheSize"
-                            },
-                            "localIdeographFontFamily": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/localIdeographFontFamily"
-                            },
-                            "trackResize": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/trackResize"
-                            },
-                            "preserveDrawingBuffer": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/preserveDrawingBuffer"
-                            },
-                            "failIfMajorPerformanceCaveat": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/failIfMajorPerformanceCaveat"
-                            }
-                          },
-                          "required": [
-                            "center",
-                            "zoom"
-                          ],
-                          "additionalProperties": true,
-                          "description": "Map configuration"
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config"
                         },
                         "sources": {
                           "type": "object",
@@ -8581,117 +8302,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "description": "Inline CSS styles for container"
                         },
                         "config": {
-                          "type": "object",
-                          "properties": {
-                            "center": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/center"
-                            },
-                            "zoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/zoom"
-                            },
-                            "mapStyle": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/mapStyle"
-                            },
-                            "pitch": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/pitch"
-                            },
-                            "bearing": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bearing"
-                            },
-                            "bounds": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds"
-                            },
-                            "minZoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/minZoom"
-                            },
-                            "maxZoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxZoom"
-                            },
-                            "minPitch": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/minPitch"
-                            },
-                            "maxPitch": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxPitch"
-                            },
-                            "maxBounds": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxBounds"
-                            },
-                            "interactive": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/interactive"
-                            },
-                            "scrollZoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/scrollZoom"
-                            },
-                            "boxZoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/boxZoom"
-                            },
-                            "dragRotate": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/dragRotate"
-                            },
-                            "dragPan": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/dragPan"
-                            },
-                            "keyboard": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/keyboard"
-                            },
-                            "doubleClickZoom": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/doubleClickZoom"
-                            },
-                            "touchZoomRotate": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/touchZoomRotate"
-                            },
-                            "touchPitch": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/touchPitch"
-                            },
-                            "hash": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/hash"
-                            },
-                            "attributionControl": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/attributionControl"
-                            },
-                            "logoPosition": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/logoPosition"
-                            },
-                            "fadeDuration": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/fadeDuration"
-                            },
-                            "crossSourceCollisions": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/crossSourceCollisions"
-                            },
-                            "antialias": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/antialias"
-                            },
-                            "refreshExpiredTiles": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/refreshExpiredTiles"
-                            },
-                            "renderWorldCopies": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/renderWorldCopies"
-                            },
-                            "locale": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/locale"
-                            },
-                            "maxTileCacheSize": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/maxTileCacheSize"
-                            },
-                            "localIdeographFontFamily": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/localIdeographFontFamily"
-                            },
-                            "trackResize": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/trackResize"
-                            },
-                            "preserveDrawingBuffer": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/preserveDrawingBuffer"
-                            },
-                            "failIfMajorPerformanceCaveat": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/failIfMajorPerformanceCaveat"
-                            }
-                          },
-                          "required": [
-                            "center",
-                            "zoom"
-                          ],
-                          "additionalProperties": true,
-                          "description": "Base map configuration"
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config"
                         },
                         "theme": {
                           "type": "string",
@@ -9295,7 +8906,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
             "zoom"
           ],
           "additionalProperties": true,
-          "description": "Base map configuration"
+          "description": "Map configuration with MapLibre options"
         },
         "theme": {
           "type": "string",
@@ -9867,10 +9478,27 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                             ]
                           },
                           {
+                            "type": "object",
+                            "properties": {
+                              "$ref": {
+                                "type": "string",
+                                "description": "Reference to a root-level source (e.g., \\"#/sources/name\\")"
+                              }
+                            },
+                            "required": [
+                              "$ref"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Source reference",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          },
+                          {
                             "type": "string"
                           }
                         ],
-                        "description": "Layer source (inline definition or source ID reference)"
+                        "description": "Layer source: inline definition, { $ref: '#/sources/name' } reference, or named-source string"
                       },
                       "source-layer": {
                         "type": "string",
