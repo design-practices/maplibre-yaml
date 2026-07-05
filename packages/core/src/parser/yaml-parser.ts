@@ -605,7 +605,10 @@ export class YAMLParser {
       };
     }
 
-    if (type !== undefined) {
+    // Treat a present-but-null `type:` (e.g. `type:` with no value) the same as
+    // a missing one, so it falls through to `pages`-based root detection rather
+    // than being reported as `Unknown block type: null`.
+    if (type != null) {
       const hint =
         typeof type === "string" ? suggest(type, BLOCK_TYPES) : undefined;
       return {
@@ -939,7 +942,23 @@ export class YAMLParser {
 
     if (sourceTypePath) {
       const received = valueAtPath(value, sourceTypePath);
-      return unknownTypeMessage("source", received, SOURCE_TYPES);
+      // Only a *genuinely unknown* type gets the "Unknown source type" message.
+      // A source with a VALID type that fails for another reason (e.g. a
+      // geojson source missing url/data, or an image source missing
+      // coordinates) makes every *sibling* branch emit an `invalid_literal`
+      // on `type` — mining those would wrongly report the valid type as
+      // unknown AND hide the real failure. Surface the real error instead.
+      if (
+        typeof received !== "string" ||
+        !(SOURCE_TYPES as readonly string[]).includes(received)
+      ) {
+        return unknownTypeMessage("source", received, SOURCE_TYPES);
+      }
+      const match = findMatchingSourceBranch(err.unionErrors);
+      if (match) {
+        const real = this.formatZodErrors(match)[0];
+        if (real) return real.message;
+      }
     }
 
     return fallback;
@@ -1001,16 +1020,53 @@ function findSourceTypeIssuePath(
 ): (string | number)[] | undefined {
   for (const unionError of unionErrors) {
     for (const issue of unionError.issues) {
-      if (
-        issue.code === "invalid_literal" &&
-        issue.path.length > 0 &&
-        issue.path[issue.path.length - 1] === "type" &&
-        looksLikeSourcePath(issue.path.slice(0, -1))
-      ) {
+      if (isSourceTypeLiteralIssue(issue)) {
         return issue.path;
       }
       if (issue.code === "invalid_union") {
         const nested = findSourceTypeIssuePath(issue.unionErrors);
+        if (nested) return nested;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Whether an issue is an `invalid_literal` on a source's `type` discriminator. */
+function isSourceTypeLiteralIssue(issue: ZodIssue): boolean {
+  return (
+    issue.code === "invalid_literal" &&
+    issue.path.length > 0 &&
+    issue.path[issue.path.length - 1] === "type" &&
+    looksLikeSourcePath(issue.path.slice(0, -1))
+  );
+}
+
+/**
+ * Locate the source-union member whose `type` discriminator matched — i.e. the
+ * branch that failed for a *real* reason (missing url/data/coordinates, ...)
+ * rather than a `type` mismatch — so its genuine error can be surfaced instead
+ * of a self-contradictory "Unknown source type <valid type>". Recurses through
+ * nested unions to find the source union first.
+ *
+ * @internal
+ */
+function findMatchingSourceBranch(
+  unionErrors: ZodError[]
+): ZodError | undefined {
+  // If this union level is the source union, at least one branch fails on
+  // `type`; the matching branch is the one that does not.
+  if (unionErrors.some((ue) => ue.issues.some(isSourceTypeLiteralIssue))) {
+    const match = unionErrors.find(
+      (ue) =>
+        ue.issues.length > 0 && !ue.issues.some(isSourceTypeLiteralIssue)
+    );
+    if (match) return match;
+  }
+  for (const unionError of unionErrors) {
+    for (const issue of unionError.issues) {
+      if (issue.code === "invalid_union") {
+        const nested = findMatchingSourceBranch(issue.unionErrors);
         if (nested) return nested;
       }
     }

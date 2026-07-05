@@ -68,7 +68,7 @@ type JsonSchema = Record<string, unknown>;
  *    `MapConfigSchema` and the source schemas) — kept permissive so real
  *    MapLibre options validate. `true` already permits `x-*` keys.
  */
-function enforceStrict(node: unknown): void {
+export function enforceStrict(node: unknown): void {
   if (Array.isArray(node)) {
     for (const item of node) enforceStrict(item);
     return;
@@ -77,10 +77,16 @@ function enforceStrict(node: unknown): void {
 
   const obj = node as JsonSchema;
 
-  // Only tighten plain enumerated object schemas. Records
+  // Only tighten genuine JSON-Schema *object* nodes: `type: "object"` with a
+  // `properties` map. Requiring `type: "object"` — rather than merely a truthy
+  // `.properties` member — is what keeps a DATA field literally named
+  // `properties`/`items`/`additionalProperties` from being mistaken for a
+  // schema node and corrupted (every GeoJSON Feature carries a `properties`
+  // object; Phase-5 GeoJSON schemas will exercise this). Records
   // (additionalProperties: <schema>) and passthrough objects
   // (additionalProperties: true) are left as the generator produced them.
   if (
+    obj.type === "object" &&
     obj.properties &&
     typeof obj.properties === "object" &&
     obj.additionalProperties !== true &&
@@ -94,9 +100,43 @@ function enforceStrict(node: unknown): void {
     obj.patternProperties = { ...existingPattern, "^x-": {} };
   }
 
-  // Recurse into every value (covers $defs, properties, anyOf/oneOf/allOf,
-  // items, patternProperties, and schema-valued additionalProperties).
-  for (const value of Object.values(obj)) enforceStrict(value);
+  // Recurse ONLY into genuine schema-holding positions — never into arbitrary
+  // data (enum / const / default / examples / required / ...). This keeps the
+  // walk faithful to JSON-Schema structure and prevents descending into user
+  // data values that happen to resemble a schema.
+  recurseSchemaChildren(obj);
+}
+
+/**
+ * Recurse {@link enforceStrict} into every nested-schema position of a JSON
+ * Schema node: the value of each `properties`/`patternProperties`/`$defs`
+ * entry, `items` (schema or tuple array), `additionalProperties`/
+ * `additionalItems`/`propertyNames` when they are schema objects, and each
+ * member of `allOf`/`anyOf`/`oneOf`. Data-bearing keywords are skipped.
+ */
+function recurseSchemaChildren(obj: JsonSchema): void {
+  // Maps of key -> schema.
+  for (const key of ["properties", "patternProperties", "$defs", "definitions"]) {
+    const map = obj[key];
+    if (map && typeof map === "object" && !Array.isArray(map)) {
+      for (const child of Object.values(map as JsonSchema)) enforceStrict(child);
+    }
+  }
+  // Single nested schemas (skip boolean `additionalProperties`/`additionalItems`).
+  for (const key of [
+    "additionalProperties",
+    "additionalItems",
+    "propertyNames",
+    "items",
+  ]) {
+    const child = obj[key];
+    if (child && typeof child === "object") enforceStrict(child);
+  }
+  // Schema arrays.
+  for (const key of ["allOf", "anyOf", "oneOf"]) {
+    const arr = obj[key];
+    if (Array.isArray(arr)) for (const child of arr) enforceStrict(child);
+  }
 }
 
 /** Rewrite every `$ref` string prefixed with `from` to use `to` instead. */

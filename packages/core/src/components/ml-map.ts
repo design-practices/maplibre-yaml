@@ -71,6 +71,13 @@ export class MLMap extends HTMLElement {
   private _config: MapBlock | null = null;
 
   /**
+   * Whether the one-time dev diagnostics have already run for this element.
+   * Repeated `config`/`src` updates and `reload()` re-render the map but must
+   * not re-spam the same console warnings.
+   */
+  private diagnosticsRun = false;
+
+  /**
    * Observed attributes that trigger attributeChangedCallback
    */
   static get observedAttributes(): string[] {
@@ -393,9 +400,18 @@ export class MLMap extends HTMLElement {
   private checkEnvironment(): void {
     if (typeof window === "undefined") return;
 
-    // (a) Zero-height host: the single most common "blank map" cause.
+    // Run at most once per element: re-renders (config/src updates, reload())
+    // must not re-emit identical warnings.
+    if (this.diagnosticsRun) return;
+    this.diagnosticsRun = true;
+
+    // (a) Zero-height host: the single most common "blank map" cause. Only
+    // flag it when the element is actually laid out and visible — a hidden or
+    // not-yet-mounted map (`offsetParent === null`, e.g. an ancestor is
+    // `display: none`) legitimately has zero height and must not warn.
+    const isLaidOut = this.offsetParent !== null;
     const rect = this.getBoundingClientRect();
-    if (rect.height === 0) {
+    if (isLaidOut && rect.height === 0) {
       console.warn(
         "[ml-map] The <ml-map> host element has zero height, so the map will " +
           "not be visible. Give it a height, for example: `ml-map { height: 400px; }`."
