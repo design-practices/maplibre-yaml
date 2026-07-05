@@ -10,8 +10,9 @@ layers:
     source:
       type: geojson
       url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-      refreshInterval: 60000
-      updateStrategy: replace
+      refresh:
+        refreshInterval: 60000
+        updateStrategy: replace
       cache:
         enabled: false
     paint:

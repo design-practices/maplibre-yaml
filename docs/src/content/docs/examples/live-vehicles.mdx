@@ -27,9 +27,10 @@ layers:
     source:
       type: geojson
       url: "https://api.example.com/vehicles"
-      refreshInterval: 5000        # Poll every 5 seconds
-      updateStrategy: merge        # Update existing, add new
-      updateKey: "vehicleId"       # Match by this property
+      refresh:
+        refreshInterval: 5000        # Poll every 5 seconds
+        updateStrategy: merge        # Update existing, add new
+        updateKey: "vehicleId"       # Match by this property
       cache:
         enabled: false
       loading:
@@ -82,9 +83,10 @@ Unlike `replace` which clears all data on each update, `merge`:
 source:
   type: geojson
   url: "https://api.example.com/vehicles"
-  refreshInterval: 5000
-  updateStrategy: merge
-  updateKey: "vehicleId"    # Feature property used for matching
+  refresh:
+    refreshInterval: 5000
+    updateStrategy: merge
+    updateKey: "vehicleId"    # Feature property used for matching
 ```
 
 ### Status-based colors
@@ -184,7 +186,8 @@ For comparison, `replace` strategy would:
 
 ```yaml
 source:
-  updateStrategy: replace    # Different behavior
+  refresh:
+    updateStrategy: replace    # Different behavior
 ```
 
 Use `replace` when your API returns the complete current state each time.

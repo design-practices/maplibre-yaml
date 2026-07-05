@@ -30,8 +30,9 @@ Data is fetched from a URL and automatically refreshes:
 source:
   type: geojson
   url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-  refreshInterval: 60000     # Refresh every 60 seconds
-  updateStrategy: replace    # Replace all data on each refresh
+  refresh:
+    refreshInterval: 60000     # Refresh every 60 seconds
+    updateStrategy: replace    # Replace all data on each refresh
   cache:
     enabled: false          # Don't cache live data
 ```
