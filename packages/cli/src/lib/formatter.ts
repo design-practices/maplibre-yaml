@@ -14,8 +14,13 @@ export function formatHuman(results: ValidationResult[]): string {
   let totalErrors = 0;
   let totalWarnings = 0;
   let filesWithErrors = 0;
+  let filesWithWarnings = 0;
 
   for (const result of results) {
+    if (result.warnings.length > 0) {
+      filesWithWarnings++;
+    }
+
     if (!result.valid) {
       filesWithErrors++;
 
@@ -55,10 +60,16 @@ export function formatHuman(results: ValidationResult[]): string {
   lines.push('');
   if (totalErrors === 0 && totalWarnings === 0) {
     lines.push(pc.green(`✓ ${results.length} file(s) valid`));
+  } else if (totalErrors === 0) {
+    // Warnings only: the run still exits 0, so use a warning glyph and accurate
+    // wording rather than a red ✗ over "0 file(s) with issues".
+    lines.push(
+      pc.yellow(`⚠ ${filesWithWarnings} file(s) with warnings: ${totalWarnings} warning(s)`)
+    );
   } else {
-    const errorText = totalErrors > 0 ? pc.red(`${totalErrors} error(s)`) : '';
+    const errorText = pc.red(`${totalErrors} error(s)`);
     const warningText = totalWarnings > 0 ? pc.yellow(`${totalWarnings} warning(s)`) : '';
-    const separator = totalErrors > 0 && totalWarnings > 0 ? ', ' : '';
+    const separator = totalWarnings > 0 ? ', ' : '';
     lines.push(`✗ ${filesWithErrors} file(s) with issues: ${errorText}${separator}${warningText}`);
   }
 

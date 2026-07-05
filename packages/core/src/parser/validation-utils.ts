@@ -86,6 +86,8 @@ export const EXPRESSION_OPERATORS = new Set<string>([
   // Decision
   "!", "!=", "<", "<=", "==", ">", ">=", "all", "any", "case", "coalesce",
   "match", "within",
+  // Legacy filter operators (still supported by MapLibre for filters)
+  "!in", "!has", "none",
   // Ramps, scales, curves
   "interpolate", "interpolate-hcl", "interpolate-lab", "step",
   // Variable binding
@@ -319,9 +321,17 @@ interface WalkContext {
  */
 const OPEN_SCHEMAS = new WeakSet<object>();
 
-/** Register a schema as an intentional open-passthrough object. */
+/**
+ * Register a schema as an intentional open-passthrough object.
+ *
+ * @remarks
+ * Records the *fully-unwrapped* underlying `ZodObject` — the exact instance the
+ * warning walker reaches after peeling Effects/Optional/Lazy wrappers — so the
+ * WeakSet identity match succeeds even when the schema is wrapped in
+ * `.superRefine()`/`.refine()` (a `ZodEffects`), as the source schemas are.
+ */
 export function markOpenSchema(schema: z.ZodTypeAny): void {
-  OPEN_SCHEMAS.add(schema as unknown as object);
+  OPEN_SCHEMAS.add(fullyUnwrap(schema) as unknown as object);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

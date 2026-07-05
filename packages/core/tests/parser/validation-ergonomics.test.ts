@@ -148,6 +148,93 @@ id: x
   });
 });
 
+describe("block dispatch — empty/null top-level type", () => {
+  it("routes a present-but-null `type:` with `pages:` to the root document", () => {
+    const { blockType, result } = YAMLParser.safeParseAny(`type:
+pages: []
+`);
+    // Falls through to pages-based root detection, not "Unknown block type".
+    expect(blockType).toBe("root");
+    expect(
+      result.errors.every((e) => !e.message.includes("Unknown block type"))
+    ).toBe(true);
+  });
+
+  it("validates a null-type root document with real pages", () => {
+    const { blockType, result } = YAMLParser.safeParseAny(`type:
+pages:
+  - path: "/"
+    title: "Home"
+    blocks: []
+`);
+    expect(blockType).toBe("root");
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("valid source type failing for another reason (not 'unknown type')", () => {
+  // A source with a VALID type that fails for a different reason must surface
+  // the real failure — never a self-contradictory "Unknown source type
+  // <valid-type>. Valid types: ..., <valid-type>, ...".
+  it("reports the real url/data error for a block-level geojson source missing url/data", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson }`)
+    );
+    expect(result.success).toBe(false);
+    const err = result.errors.find((e) => e.path.includes("source"));
+    expect(err).toBeDefined();
+    expect(err!.message).toContain("url");
+    expect(err!.message).toContain("data");
+    expect(err!.message).not.toContain("Unknown source type");
+  });
+
+  it("reports the real url/data error for a root-level geojson source missing url/data", () => {
+    const result = YAMLParser.safeParse(`sources:
+  s:
+    type: geojson
+pages:
+  - path: "/"
+    title: "T"
+    blocks: []
+`);
+    expect(result.success).toBe(false);
+    expect(result.errors[0].path).toBe("sources.s");
+    expect(result.errors[0].message).toContain("url");
+    expect(result.errors[0].message).toContain("data");
+    expect(result.errors[0].message).not.toContain("Unknown source type");
+  });
+
+  it("does not mislabel an image source (valid type) missing coordinates as unknown", () => {
+    // image/video sources abort the parse on required fields, so no union
+    // branch is 'dirty' and the sibling `invalid_literal` type mismatches would
+    // otherwise be mined into 'Unknown source type "image"'.
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: image }`)
+    );
+    expect(result.success).toBe(false);
+    expect(
+      result.errors.every((e) => !e.message.includes("Unknown source type"))
+    ).toBe(true);
+  });
+
+  it("still reports a genuinely unknown source type", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojsn, url: "https://example.com/d.geojson" }`)
+    );
+    expect(result.success).toBe(false);
+    const err = result.errors.find((e) => e.message.includes("source type"));
+    expect(err!.message).toBe(
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, image, video. Did you mean "geojson"?'
+    );
+  });
+});
+
 describe("warnings channel — unknown keys", () => {
   it("warns on an unknown paint key with a suggestion", () => {
     const result = YAMLParser.safeParseMapBlock(
@@ -180,6 +267,39 @@ describe("warnings channel — unknown keys", () => {
     );
     expect(result.success).toBe(true);
     expect(result.warnings).toHaveLength(0);
+  });
+
+  it("does not warn on intentional MapLibre source passthrough options", () => {
+    // Sources are `.passthrough()` — valid-but-unlisted MapLibre options like
+    // maxzoom/cluster/buffer must not be flagged as unknown keys.
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source:
+      type: geojson
+      url: "https://example.com/d.geojson"
+      maxzoom: 12
+      buffer: 64
+      tolerance: 0.5`)
+    );
+    expect(result.success).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it("still warns on paint-object typos even though sources are open", () => {
+    // Sources being open must NOT relax paint/layout typo detection.
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson", maxzoom: 12 }
+    paint:
+      circle-radis: 8`)
+    );
+    expect(result.success).toBe(true);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0].message).toBe(
+      'Unknown key "circle-radis". Did you mean "circle-radius"?'
+    );
   });
 
   it("does not warn on intentional MapLibre map-config passthrough options", () => {
@@ -273,6 +393,25 @@ describe("warnings channel — bounded expression checks", () => {
     expect(result.warnings[0].message).toBe(
       'Expression operator "get" expects at least one argument.'
     );
+  });
+
+  it("does not flag legacy MapLibre filter operators as unknown", () => {
+    for (const filter of [
+      '["!in", "type", "a", "b"]',
+      '["!has", "x"]',
+      '["none", ["==", "t", "a"]]',
+    ]) {
+      const result = YAMLParser.safeParseMapBlock(
+        mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    filter: ${filter}`)
+      );
+      expect(result.success).toBe(true);
+      expect(
+        result.warnings.some((w) => w.message.includes("Unknown expression operator"))
+      ).toBe(false);
+    }
   });
 
   it("does not warn on valid expressions or zero-arg operators", () => {

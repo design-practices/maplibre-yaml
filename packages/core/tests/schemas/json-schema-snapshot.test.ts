@@ -15,8 +15,56 @@ import { describe, it, expect } from "vitest";
 import {
   buildSchemas,
   serializeSchema,
+  enforceStrict,
   SCHEMA_NAMES,
 } from "../../scripts/emit-json-schema";
+
+describe("enforceStrict — schema-node detection (no data-field corruption)", () => {
+  it("does not inject strict keywords into a DATA field named `properties`", () => {
+    // A JSON Schema for an object that has a data field literally named
+    // `properties` (as every GeoJSON Feature does). The outer object is a real
+    // schema node and is tightened, but its `properties` *map* is a container
+    // of field schemas — it must NOT be mistaken for a schema node and have
+    // `additionalProperties`/`patternProperties` injected into it.
+    const node: Record<string, any> = {
+      type: "object",
+      properties: {
+        type: { type: "string", const: "Feature" },
+        properties: {
+          type: "object",
+          properties: { name: { type: "string" } },
+        },
+      },
+      required: ["type", "properties"],
+    };
+
+    enforceStrict(node);
+
+    const propsMap = node.properties as Record<string, unknown>;
+    // The container map still holds exactly the declared data fields...
+    expect(Object.keys(propsMap).sort()).toEqual(["properties", "type"]);
+    // ...and was NOT corrupted with schema keywords.
+    expect(propsMap).not.toHaveProperty("additionalProperties");
+    expect(propsMap).not.toHaveProperty("patternProperties");
+    // The outer object IS tightened (it is a genuine schema node).
+    expect(node.additionalProperties).toBe(false);
+    // The real inner object schema (the `properties` field's own shape) IS
+    // tightened too.
+    const inner = propsMap.properties as Record<string, unknown>;
+    expect(inner.additionalProperties).toBe(false);
+  });
+
+  it("does not treat a bare property-name map (no `type`) as a schema", () => {
+    // A node with a truthy `.properties` member but no `type: "object"` is not
+    // a schema object and must be left untouched.
+    const node: Record<string, any> = {
+      properties: { foo: { type: "string" } },
+    };
+    enforceStrict(node);
+    expect(node).not.toHaveProperty("additionalProperties");
+    expect(node).not.toHaveProperty("patternProperties");
+  });
+});
 
 describe("emitted JSON Schema artifacts", () => {
   const schemas = buildSchemas();

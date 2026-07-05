@@ -85,6 +85,44 @@ describe('formatter', () => {
       expect(output).toContain('1 error');
     });
 
+    it('summarizes a warnings-only run with a warning glyph, not a red ✗', () => {
+      const results: ValidationResult[] = [{
+        file: 'test.yaml',
+        valid: true,
+        errors: [],
+        warnings: [
+          { path: 'layers[0]', message: 'Deprecated property', severity: 'warning' },
+        ],
+      }];
+
+      const output = formatHuman(results);
+      const summary = output.trim().split('\n').pop() ?? '';
+      // Warnings-only runs exit 0 — the summary must not read like a failure.
+      expect(summary).not.toContain('✗');
+      expect(summary).not.toContain('0 file(s)');
+      expect(summary).toContain('⚠');
+      expect(summary).toContain('1 file(s) with warnings');
+      expect(summary).toContain('1 warning');
+    });
+
+    it('counts files-with-warnings across multiple files', () => {
+      const results: ValidationResult[] = [
+        { file: 'a.yaml', valid: true, errors: [], warnings: [
+          { path: '', message: 'W1', severity: 'warning' },
+        ] },
+        { file: 'b.yaml', valid: true, errors: [], warnings: [
+          { path: '', message: 'W2', severity: 'warning' },
+        ] },
+        { file: 'c.yaml', valid: true, errors: [], warnings: [] },
+      ];
+
+      const output = formatHuman(results);
+      const summary = output.trim().split('\n').pop() ?? '';
+      expect(summary).toContain('2 file(s) with warnings');
+      expect(summary).toContain('2 warning');
+      expect(summary).not.toContain('✗');
+    });
+
     it('shows error and warning counts', () => {
       const results: ValidationResult[] = [{
         file: 'test.yaml',

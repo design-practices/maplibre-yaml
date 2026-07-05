@@ -34,11 +34,14 @@ function getVersion(): string {
  *
  * @remarks
  * Most CI providers set `CI=true` (or `1`). We treat any set value other than
- * the explicit falsy strings `""`, `"0"`, and `"false"` as CI (decision D9).
+ * the explicit falsy strings `""`, `"0"`, `"false"`, `"no"`, and `"off"` as CI
+ * (decision D9). The comparison is case-insensitive so `CI=False`/`CI=No` are
+ * correctly treated as *not* in CI.
  */
-function isRunningInCI(): boolean {
+const CI_FALSY_VALUES = new Set(['', '0', 'false', 'no', 'off']);
+export function isRunningInCI(): boolean {
   const ci = process.env.CI;
-  return ci !== undefined && ci !== '' && ci !== '0' && ci !== 'false';
+  return ci !== undefined && !CI_FALSY_VALUES.has(ci.toLowerCase());
 }
 
 export const validateCommand = defineCommand({

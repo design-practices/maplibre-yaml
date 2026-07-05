@@ -14,6 +14,7 @@
 
 import { z } from "zod";
 import { LngLatSchema } from "./base.schema";
+import { markOpenSchema } from "../parser/validation-utils";
 
 /**
  * WebSocket or Server-Sent Events streaming configuration.
@@ -635,3 +636,15 @@ export const LayerSourceSchema = z.union([
 
 /** Inferred type for any layer source. */
 export type LayerSource = z.infer<typeof LayerSourceSchema>;
+
+// Source schemas are intentional MapLibre passthrough objects (`.passthrough()`):
+// they accept arbitrary valid source options (maxzoom, minzoom, cluster,
+// clusterRadius, buffer, tolerance, promoteId, attribution, ...). Exempt them
+// from unknown-key warnings so valid-but-unlisted options are not flagged.
+// (Authored styling objects — layers/paint/layout — are deliberately NOT
+// exempt so paint-key typos like `circle-radis` keep being caught.)
+markOpenSchema(GeoJSONSourceSchema);
+markOpenSchema(VectorSourceSchema);
+markOpenSchema(RasterSourceSchema);
+markOpenSchema(ImageSourceSchema);
+markOpenSchema(VideoSourceSchema);
