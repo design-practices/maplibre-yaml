@@ -1,5 +1,29 @@
 # @maplibre-yaml/astro
 
+## 0.3.0-alpha.0
+
+### Minor Changes
+
+- afe9a22: Track `@maplibre-yaml/core` 0.3: the peer dependency range is now an explicit `^0.2.0 || ^0.3.0` (previously `workspace:^`, which forced spurious major bumps in the release tooling and pinned consumers to a single core minor at publish time). The astro package uses core's runtime-inheritance fixes shipped in 0.3.0.
+
+### Patch Changes
+
+- d87a7c5: Global config inheritance now actually flows into built map configs.
+
+  **Astro map builders respect `globalConfig.defaultZoom`.** All six builders (`buildPointMapConfig`, `buildMultiPointMapConfig`, `buildPolygonMapConfig`, `buildRouteMapConfig`, `buildMultiPolygonMapConfig`, `buildMultiLineStringMapConfig`) previously hardcoded a zoom fallback (`zoom ?? location.zoom ?? 12`, or a literal `10`/`12`) that fired _before_ `resolveMapConfig` could apply the global default — so setting `defaultZoom` in your global config had no effect on built maps. Zoom now resolves as: explicit option > `location.zoom` (point builder) > `globalConfig.defaultZoom` > builder default. Behavior without a global config is unchanged: the builders' built-in defaults (12 for point/polygon, 10 for bounds-fitted builders) still apply as the last resort, so no existing call site starts throwing. `defaultCenter` and `defaultMapStyle` inheritance continue to be handled by core's `resolveMapConfig`, with explicit values always winning.
+
+  **Core `resolveMapConfig` no longer uses an unsafe `as MapConfig` cast.** The return value is now structurally verified by TypeScript via narrowed locals after the missing-fields guard, so if a new required field is ever added to `MapConfig`, the resolver fails to compile instead of silently passing invalid data. Runtime behavior (resolution precedence, `ConfigResolutionError` on missing `mapStyle`/`center`/`zoom`) is unchanged.
+
+- f716577: README corrections: fix the core JavaScript API example to use `YAMLParser.parseMapBlock` and the real `MapRenderer` constructor signature (`container, config, layers, options, sources`), replace the fictional `interactions:`/HTML-string popup format with the actual `interactive.click.popup` tag-array DSL, and fix the astro README scrollytelling example to use flat chapter `center`/`zoom` (matching `ChapterSchema`) instead of a nested `location:` object. Source `url` examples now use absolute URLs, which is what the schema validates.
+- Updated dependencies [ab8ba89]
+- Updated dependencies [8511427]
+- Updated dependencies [4ed6c5e]
+- Updated dependencies [1daaee2]
+- Updated dependencies [291f852]
+- Updated dependencies [d87a7c5]
+- Updated dependencies [f716577]
+  - @maplibre-yaml/core@0.3.0-alpha.0
+
 ## 0.2.1
 
 ### Patch Changes

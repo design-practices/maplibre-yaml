@@ -1,0 +1,23 @@
+{
+  "mode": "pre",
+  "tag": "alpha",
+  "initialVersions": {
+    "@maplibre-yaml/docs": "0.1.1",
+    "@maplibre-yaml/example-astro-minimal": "0.0.1",
+    "otf": "0.0.1",
+    "@maplibre-yaml/example-verification": "0.0.0",
+    "@maplibre-yaml/astro": "0.2.1",
+    "@maplibre-yaml/cli": "0.1.12",
+    "@maplibre-yaml/core": "0.2.2"
+  },
+  "changesets": [
+    "astro-align-with-core-0-3",
+    "cdn-register-browser-and-v5-named-imports",
+    "cli-block-dispatch-and-local-preview",
+    "controls-legend-render-and-mapstyle-error",
+    "core-0-2-3-validation-and-unpkg",
+    "core-hygiene-dead-refresh-and-signal",
+    "global-config-runtime-inheritance",
+    "readme-first-touch-corrections"
+  ]
+}
