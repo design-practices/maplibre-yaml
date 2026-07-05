@@ -1,0 +1,26 @@
+# Phase 2 (validation ergonomics) assertion: a mistyped property produces a
+# WARNING with a did-you-mean suggestion AND a line/column position — not a
+# silent pass (the old .passthrough() behavior) and not a hard error.
+#
+#   node packages/cli/dist/cli.js validate examples/verification/configs/typo-warning.yaml
+#
+# PASS: exit 0, one warning:
+#   layers.0.paint.circle-radis: Unknown key "circle-radis". Did you mean "circle-radius"?
+#     at line N, column M
+# Under CI=true it becomes a hard error (exit 1); CI=true --no-strict is exit 0.
+type: map
+id: typo-warning-check
+config:
+  center: [-74.006, 40.7128]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: points
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features: []
+    paint:
+      circle-radis: 8   # <-- intentional typo: should warn "did you mean circle-radius"
