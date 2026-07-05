@@ -1,5 +1,21 @@
 # @maplibre-yaml/astro
 
+## 0.3.0
+
+### Minor Changes
+
+- afe9a22: Track `@maplibre-yaml/core` 0.3: the peer dependency range is now an explicit `^0.2.0 || ^0.3.0` (previously `workspace:^`, which forced spurious major bumps in the release tooling and pinned consumers to a single core minor at publish time). The astro package uses core's runtime-inheritance fixes shipped in 0.3.0.
+
+### Patch Changes
+
+- d87a7c5: Global config inheritance now actually flows into built map configs.
+
+  **Astro map builders respect `globalConfig.defaultZoom`.** All six builders (`buildPointMapConfig`, `buildMultiPointMapConfig`, `buildPolygonMapConfig`, `buildRouteMapConfig`, `buildMultiPolygonMapConfig`, `buildMultiLineStringMapConfig`) previously hardcoded a zoom fallback (`zoom ?? location.zoom ?? 12`, or a literal `10`/`12`) that fired _before_ `resolveMapConfig` could apply the global default — so setting `defaultZoom` in your global config had no effect on built maps. Zoom now resolves as: explicit option > `location.zoom` (point builder) > `globalConfig.defaultZoom` > builder default. Behavior without a global config is unchanged: the builders' built-in defaults (12 for point/polygon, 10 for bounds-fitted builders) still apply as the last resort, so no existing call site starts throwing. `defaultCenter` and `defaultMapStyle` inheritance continue to be handled by core's `resolveMapConfig`, with explicit values always winning.
+
+  **Core `resolveMapConfig` no longer uses an unsafe `as MapConfig` cast.** The return value is now structurally verified by TypeScript via narrowed locals after the missing-fields guard, so if a new required field is ever added to `MapConfig`, the resolver fails to compile instead of silently passing invalid data. Runtime behavior (resolution precedence, `ConfigResolutionError` on missing `mapStyle`/`center`/`zoom`) is unchanged.
+
+- f716577: README corrections: fix the core JavaScript API example to use `YAMLParser.parseMapBlock` and the real `MapRenderer` constructor signature (`container, config, layers, options, sources`), replace the fictional `interactions:`/HTML-string popup format with the actual `interactive.click.popup` tag-array DSL, and fix the astro README scrollytelling example to use flat chapter `center`/`zoom` (matching `ChapterSchema`) instead of a nested `location:` object. Source `url` examples now use absolute URLs, which is what the schema validates.
+
 ## 0.2.1
 
 ### Patch Changes
@@ -15,7 +31,6 @@
   A new `feature_ref` field lets a collection item reference a feature in an external GeoJSON file (matched by `featureId` or `match: { property, equals }`) instead of inlining geometry coordinates in frontmatter. At build time, the loader reads the file, finds the matching feature, detects its geometry type, and dispatches to the existing point/polygon/route builders.
 
   ### New exports
-
   - `FeatureRefSchema` -- Zod schema for the `feature_ref` field
   - `FeatureRef` -- inferred type
   - `assertValidFeatureRef(ref)` -- validates the `featureId` XOR `match` constraint at build time
@@ -31,7 +46,6 @@
   - `clearFeatureCache()` -- test-isolation helper
 
   ### Features
-
   - **mtime-aware cache**: editing the GeoJSON file in `astro dev` invalidates the cache on next page render, no server restart needed
   - **Lazy per-property index**: built on second access for properties on files with 200+ features
   - **Full multi-geometry support**: all five geometry types (`Point`, `MultiPoint`, `LineString`, `MultiLineString`, `Polygon`, `MultiPolygon`) render fully via dedicated builders -- multi-types use `MultiPolygon`/`MultiLineString` GeoJSON Features so all rings/segments appear, not just the first
@@ -44,7 +58,6 @@
   ### Hardening (post code-review)
 
   After a multi-agent code review surfaced 9 P1 issues, the following hardening landed before merge:
-
   - **Path traversal protection**: relative `feature_ref.source` paths that escape the project root via `..` are rejected before any filesystem I/O. Symlinks that live inside the project root but point OUTSIDE it are also rejected, with a post-realpath containment re-check that catches the bypass where a symlink-internal path passes the pre-realpath check but resolves outward. Absolute paths are now **rejected by default** -- pass `{ allowAbsolutePaths: true }` in `FeatureLoadOptions` for trusted callers (tests, monorepo data, controlled scripts). This secures the schema for UGC contexts where frontmatter values are not author-controlled.
   - **File-size cap**: files exceeding 100MB throw a clear error before `readFile`; files between 50MB and 100MB log a warning. Prevents OOM on memory-constrained CI runners.
   - **Symlink canonicalization**: cache key uses `realpath` so symlinks pointing at the same file share a single cache entry and the lazy property index works correctly across them.
@@ -59,7 +72,6 @@
   ### Internal cleanup (post code-review, P2 batch)
 
   Lower-priority code-review findings that landed in the same PR:
-
   - **`FeatureLoadOptions` (new)**: exported from `@maplibre-yaml/astro` and `/utils`. Threaded through `loadFeatureFile`, `buildFeatureMapConfig`, and `buildMapConfigFromEntry`. Two fields:
     - `projectRoot?: string` — override the boundary used for relative-path resolution and containment checks. Defaults to `process.cwd()`. Use this in monorepos when the build runs from a different directory than the Astro project root. The root is canonicalized via `realpath` so macOS `/var` → `/private/var` and similar symlinked-workspace shapes are handled.
     - `allowAbsolutePaths?: boolean` — opt-in to accept absolute `source` values. Defaults to `false`. Trusted callers can opt in; do NOT enable when frontmatter comes from untrusted content.
@@ -73,14 +85,12 @@
   - **Builder body dedupe**: extracted `buildPopupContent`, `buildPolygonLayers`, and `buildRouteLayers` as internal helpers. `buildPolygonMapConfig` + `buildMultiPolygonMapConfig` and `buildRouteMapConfig` + `buildMultiLineStringMapConfig` now share their layer construction (-~250 LOC). Public function signatures, output shape, and `MapBlock` `layers[]` structure are unchanged -- existing snapshot tests pass.
 
   ### Deferred (tracked as pending todos)
-
   - **P2-024**: `as`-casts in test files indicate weak public layer types. Fixing requires a typed-test-helper module and a substantial test rewrite (~20 sites). Tracked for a follow-up PR.
   - **P2-025**: The module-level `fileCache` has no eviction policy. Bounded growth is fine for build (process exits) but accumulates in `astro dev` sessions referencing many distinct files. `clearFeatureCache()` is the existing escape hatch. LRU/size-cap implementation tracked for a follow-up PR if growth becomes observable in practice.
   - **P2-026**: Large MultiPolygon/MultiLineString MapBlocks serialize into the `<ml-map>` HTML attribute; the right place to warn is the rendering component, not the builder utilities. Tracked for a follow-up PR alongside any other component-side telemetry.
   - **P3-028**: Grouped minor polish items (typos, JSDoc nits, etc.). Tracked for a follow-up PR.
 
   ### Documentation
-
   - New "GeoJSON Feature References" section in `packages/astro/README.md`
   - New section in `docs/src/content/docs/integrations/astro.mdx` with quick start, match strategies, performance budget, and HMR caveats
   - New guidance: when importing schemas in `src/content/config.ts`, use `@maplibre-yaml/astro/utils` rather than `@maplibre-yaml/astro`. The main entry re-exports Astro components which can't be loaded outside the component pipeline; the `/utils` subpath is safe in any Node context. All existing content-config examples in the README and docs site are updated to follow this convention.
@@ -92,7 +102,6 @@
 - c24084a: Fix maplibre-gl v5 compatibility and peer dependency ranges
 
   ### Bug fixes
-
   - **`@maplibre-yaml/core`**: replaced default imports of `maplibre-gl` with named imports in `map-renderer`, `controls-manager`, and `event-handler`. maplibre-gl v5 removed the default export, which caused `SyntaxError: The requested module 'maplibre-gl' does not provide an export named 'default'` for consumers on v5. Named imports work for both v4 and v5.
   - **`@maplibre-yaml/core`**: widened `maplibre-gl` peer range from `^3.0.0 || ^4.0.0` to `^3.0.0 || ^4.0.0 || ^5.0.0`.
   - **`@maplibre-yaml/astro`**: peer dependency on `@maplibre-yaml/core` was pinned to the exact version `0.1.3-beta.1` because of `workspace:*` resolution at publish time. Changed to `workspace:^` so it resolves to a caret range (`^0.2.0`) and accepts current and future minor versions of core.
@@ -117,11 +126,9 @@
 - Fix HTMLElement SSR crash by moving custom element registration from Astro frontmatter to client-side script tag. Add global config inheritance, map builder, and geographic collection schema documentation.
 
   ### Bug Fix
-
   - **Fix `ReferenceError: HTMLElement is not defined` during Astro SSR** — The `Map`, `FullPageMap`, and `Scrollytelling` components previously imported `@maplibre-yaml/core/register` in their frontmatter, which runs server-side where `HTMLElement` does not exist. Registration is now handled via a bundled `<script>` tag that only executes in the browser.
 
   ### Documentation
-
   - Added Global Configuration guide with `loadGlobalMapConfig` pattern
   - Added guide for adding geographic data (points, polygons, lines) to existing content collections using `LocationPointSchema`, `RegionPolygonSchema`, and `RouteLineSchema`
   - Added dynamic map-per-collection-item example with geometry type detection
