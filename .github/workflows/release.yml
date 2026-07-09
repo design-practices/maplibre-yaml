@@ -56,7 +56,11 @@ jobs:
         uses: changesets/action@v1
         with:
           version: pnpm changeset version
-          publish: pnpm publish -r --access public
+          # pnpm publish (not `changeset publish`, which bypasses pnpm's
+          # workspace:-protocol rewriting — issue #28) does not create git
+          # tags; `changeset tag` creates them and emits the "New tag" lines
+          # the changesets action parses and pushes. See todo 038 / U16.
+          publish: pnpm publish -r --access public && pnpm changeset tag
           commit: "chore: version packages"
           title: "chore: version packages"
         env:
