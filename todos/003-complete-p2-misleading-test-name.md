@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "003"
 tags: [code-review, testing]
@@ -46,3 +46,11 @@ If #002 Option A is chosen (remove `?? 12`), the test assertion changes to `toBe
 
 - PR #17: https://github.com/design-practices/maplibre-yaml/pull/17
 - File: `packages/astro/tests/utils/map-builders.test.ts:203-214`
+
+## Resolution (2026-07-24, beads-migration audit)
+
+Already shipped: resolved as part of todo #002 — the builders now honor
+`globalConfig.defaultZoom` before the hardcoded 12 fallback, and the test
+(now at map-builders.test.ts:227) asserts `toBe(8)`, making the name
+accurate. This is Option B. Found during the pre-import ledger audit;
+not imported into beads.

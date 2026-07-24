@@ -18,6 +18,8 @@
   "author": "mariogiampieri",
   "license": "MIT",
   "scripts": {
+    "prepare": "sh scripts/beads-sync.sh",
+    "presubmit": "pnpm build && pnpm typecheck && pnpm lint && pnpm test && pnpm docs:validate-snippets",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
     "test": "pnpm -r test",
