@@ -1,0 +1,12 @@
+type: map
+id: typo-layer
+config:
+  center: [0, 0]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: points
+    type: circl
+    source:
+      type: geojson
+      url: "https://example.com/points.geojson"

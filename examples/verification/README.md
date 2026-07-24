@@ -88,3 +88,59 @@ node -e "import('@maplibre-yaml/core').then(m => console.log('core imports under
 ```
 
 **PASS:** `OK` — the named-import interop works against maplibre-gl v5 (this exact pattern broke both previous attempts).
+
+---
+
+# Phase 2 verification (validation ergonomics + JSON Schema)
+
+Setup: `pnpm install && pnpm --filter @maplibre-yaml/core build && pnpm --filter @maplibre-yaml/cli build` (the core build emits the JSON schemas). `CLI=node packages/cli/dist/cli.js` from the repo root.
+
+## Validation ergonomics
+
+**Typo → warning with did-you-mean + line/column:**
+```bash
+$CLI validate examples/verification/configs/typo-warning.yaml
+```
+PASS: exit 0, one warning `Unknown key "circle-radis". Did you mean "circle-radius"?` with `at line 26, column 7`.
+
+**CI promotes warnings to errors (D9):**
+```bash
+CI=true $CLI validate examples/verification/configs/typo-warning.yaml   # exit 1
+CI=true $CLI validate --no-strict examples/verification/configs/typo-warning.yaml  # exit 0
+```
+
+**Unknown layer type lists valid types + suggestion:** change a layer's `type:` to `circl` in any config and validate — expect `Unknown layer type "circl". Valid types: circle, line, ... Did you mean "circle"?`.
+
+**`$ref` sources resolve (todo 035):**
+```bash
+$CLI validate examples/verification/configs/ref-sources.yaml   # exit 0, valid
+```
+Change `#/sources/quakes` to a missing name and re-run → `Source reference not found ... Did you mean ...? Defined sources: quakes.`
+
+**Legacy refresh fields warn:** a source using top-level `refreshInterval:` (instead of the `refresh:` block) now emits a deprecation warning naming the replacement.
+
+**Browser diagnostics (D11, console-only):** load `01-cdn-map.html` but remove the `ml-map { height }` CSS → console warns about zero height; remove the MapLibre CSS `<link>` → console warns CSS is missing. No on-map badge.
+
+## JSON Schema + agent affordances
+
+**`mlym schema` prints the schema for each block type:**
+```bash
+$CLI schema map | head -5          # draft-07 JSON, title "maplibre-yaml map block"
+$CLI schema scrollytelling --out /tmp/s.schema.json && head -3 /tmp/s.schema.json
+```
+
+**Schemas ship in the core package (generate-on-build, D7):**
+```bash
+ls packages/core/schemas/*.json                    # map/scrollytelling/root/any (gitignored, built)
+git check-ignore packages/core/schemas/map.schema.json   # confirms it's ignored, not committed
+```
+
+**Docs publish stable URLs + llms.txt:**
+```bash
+pnpm --filter docs build
+ls docs/dist/schema/latest/*.schema.json docs/dist/llms*.txt
+```
+
+**Editor autocomplete:** open any `docs/public/configs/*.yaml` (or a CLI-scaffolded file) in VS Code with the Red Hat YAML extension — the `# yaml-language-server: $schema=` modeline gives autocomplete + inline validation. See `docs` guide "Editor setup".
+
+**ajv round-trip (converter fidelity):** `pnpm --filter @maplibre-yaml/core test` includes 26 tests validating every docs config + CLI template against BOTH the Zod parser and the generated JSON Schema.

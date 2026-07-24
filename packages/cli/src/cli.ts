@@ -26,6 +26,7 @@ const main = defineCommand({
     validate: () => import('./commands/validate.js').then(m => m.validateCommand),
     preview: () => import('./commands/preview.js').then(m => m.previewCommand),
     init: () => import('./commands/init.js').then(m => m.initCommand),
+    schema: () => import('./commands/schema.js').then(m => m.schemaCommand),
   },
 });
 
