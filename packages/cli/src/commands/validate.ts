@@ -29,6 +29,21 @@ function getVersion(): string {
   return cachedVersion;
 }
 
+/**
+ * Whether we are running in a CI environment.
+ *
+ * @remarks
+ * Most CI providers set `CI=true` (or `1`). We treat any set value other than
+ * the explicit falsy strings `""`, `"0"`, `"false"`, `"no"`, and `"off"` as CI
+ * (decision D9). The comparison is case-insensitive so `CI=False`/`CI=No` are
+ * correctly treated as *not* in CI.
+ */
+const CI_FALSY_VALUES = new Set(['', '0', 'false', 'no', 'off']);
+export function isRunningInCI(): boolean {
+  const ci = process.env.CI;
+  return ci !== undefined && !CI_FALSY_VALUES.has(ci.toLowerCase());
+}
+
 export const validateCommand = defineCommand({
   meta: {
     name: 'validate',
@@ -47,8 +62,10 @@ export const validateCommand = defineCommand({
     },
     strict: {
       type: 'boolean',
-      default: false,
-      description: 'Treat warnings as errors',
+      // No default: distinguishes an explicit `--strict` (true) / `--no-strict`
+      // (false) from "unset" (undefined), so CI can promote warnings by default
+      // while `--no-strict` still overrides it. (decision D9)
+      description: 'Treat warnings as errors (default: on in CI, use --no-strict to disable)',
     },
     watch: {
       type: 'boolean',
@@ -67,6 +84,15 @@ export const validateCommand = defineCommand({
       : args;
 
     const { patterns, format, strict, watch: watchMode } = mergedArgs;
+
+    // Strict resolution (decision D9): an explicit `--strict`/`--no-strict`
+    // always wins; otherwise warnings are promoted to errors when running in CI.
+    const strictMode =
+      strict === true
+        ? true
+        : strict === false
+          ? false
+          : isRunningInCI();
 
     // Parse patterns (space-separated or single)
     const patternList = patterns.includes(' ')
@@ -120,8 +146,8 @@ export const validateCommand = defineCommand({
           }
         }
 
-        // Apply strict mode
-        if (strict) {
+        // Apply strict mode (explicit flag or CI default; see strictMode above)
+        if (strictMode) {
           for (const r of results) {
             if (r.warnings.length > 0) {
               r.valid = false;

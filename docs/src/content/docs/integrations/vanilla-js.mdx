@@ -397,8 +397,9 @@ layers:
     source:
       type: geojson
       url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-      refreshInterval: 60000 # Refresh every 60 seconds
-      updateStrategy: replace
+      refresh:
+        refreshInterval: 60000 # Refresh every 60 seconds
+        updateStrategy: replace
     paint:
       circle-radius: 8
       circle-color: "#ef4444"
@@ -543,8 +544,9 @@ layers:
     source:
       type: geojson
       url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
-      refreshInterval: 60000
-      updateStrategy: replace
+      refresh:
+        refreshInterval: 60000
+        updateStrategy: replace
     paint:
       circle-radius:
         - interpolate

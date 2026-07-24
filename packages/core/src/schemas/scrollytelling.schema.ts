@@ -425,8 +425,10 @@ export const ScrollytellingBlockSchema: z.ZodObject<any> = z
     className: z.string().optional().describe("CSS class name for container"),
     style: z.string().optional().describe("Inline CSS styles for container"),
 
-    // Base config
-    config: MapConfigSchema.describe("Base map configuration"),
+    // Base config. Use MapConfigSchema directly (no re-describe) so its
+    // open-passthrough identity is preserved and MapLibre options passed
+    // through the map config are not flagged as unknown keys.
+    config: MapConfigSchema,
 
     // Theme
     theme: z.enum(["light", "dark"]).default("light").describe("Visual theme"),

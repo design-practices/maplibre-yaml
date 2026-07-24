@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Workstream B: CDN path loads in a plain browser</title>
-  <!--
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workstream B: CDN path loads in a plain browser</title>
+    <!--
     Assertion: the documented zero-build CDN pattern renders a live map.
     Previously register.js pointed at the Node build (bare yaml/zod imports),
     which no browser can resolve, and the browser bundle embedded yaml's Node
@@ -19,42 +19,62 @@
       cd examples/verification && pnpm serve
       open http://localhost:4174/examples/verification/01-cdn-map.html
   -->
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" />
-  <style>
-    body { margin: 0; font-family: system-ui, sans-serif; }
-    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 14px; }
-    ml-map { display: block; height: 420px; }
-  </style>
-  <script type="importmap">
-    { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
-  </script>
-</head>
-<body>
-  <header>PASS = a rendered world map with a red dot near New York. FAIL = blank area or console module-resolution errors.</header>
-  <ml-map id="cdn-check">
-    <script type="text/yaml">
-type: map
-id: cdn-check
-config:
-  center: [-74.006, 40.7128]
-  zoom: 3
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: dot
-    type: circle
-    source:
-      type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
-            properties: {}
-    paint:
-      circle-radius: 8
-      circle-color: "#e63946"
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css"
+    />
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+      }
+      header {
+        padding: 8px 16px;
+        background: #1d3557;
+        color: white;
+        font-size: 14px;
+      }
+      ml-map {
+        display: block;
+        height: 420px;
+      }
+    </style>
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
     </script>
-  </ml-map>
-  <script type="module" src="../../packages/core/register.js"></script>
-</body>
+  </head>
+  <body>
+    <header>
+      PASS = a rendered world map with a red dot near New York. FAIL = blank
+      area or console module-resolution errors.
+    </header>
+    <ml-map id="cdn-check">
+      <script type="text/yaml">
+        type: map
+        id: cdn-check
+        config:
+          center: [-74.006, 40.7128]
+          zoom: 3
+          mapStyle: "https://demotiles.maplibre.org/style.json"
+        layers:
+          - id: dot
+            type: circle
+            source:
+              type: geojson
+              data:
+                type: FeatureCollection
+                features:
+                  - type: Feature
+                    geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+                    properties: {}
+            paint:
+              circle-radius: 8
+              circle-color: "#e63946"
+      </script>
+    </ml-map>
+    <script
+      type="module"
+      src="https://unpkg.com/@maplibre-yaml/core/register.js"
+    ></script>
+  </body>
 </html>

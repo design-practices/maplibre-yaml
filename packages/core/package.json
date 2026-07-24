@@ -23,6 +23,7 @@
       "types": "./dist/schemas/index.d.ts",
       "import": "./dist/schemas/index.js"
     },
+    "./schemas/json/*": "./schemas/*",
     "./components": {
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
@@ -30,17 +31,19 @@
   },
   "files": [
     "dist",
+    "schemas",
     "register.js",
     "README.md"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && pnpm run emit-schema",
+    "emit-schema": "tsx scripts/emit-json-schema.ts",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist *.tsbuildinfo"
+    "clean": "rm -rf dist schemas *.tsbuildinfo"
   },
   "dependencies": {
     "maplibre-gl": "^4.1.0",
@@ -51,10 +54,14 @@
     "@types/geojson": "^7946.0.14",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^1.4.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "jsdom": "^24.0.0",
     "tsup": "^8.0.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.4.0",
-    "vitest": "^1.4.0"
+    "vitest": "^1.4.0",
+    "zod-to-json-schema": "^3.24.0"
   },
   "peerDependencies": {
     "maplibre-gl": "^3.0.0 || ^4.0.0 || ^5.0.0"

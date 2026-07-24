@@ -102,9 +102,11 @@ pages:
 
 ## Named Source Definitions
 
-Define sources once at the map block level and reference them by name across multiple layers.
+You can define named sources in two places and reference them from layers.
 
-### Example
+### Block-level sources (bare name)
+
+Define sources at the map block level and reference them by their bare name across multiple layers in that block.
 
 ```yaml
 pages:
@@ -130,7 +132,40 @@ pages:
               circle-radius: 6
 ```
 
-Layers reference a named source with its bare name (`source: earthquakeData`). The string path form `source: "#/sources/name"` is **not** resolved — it validates as a plain string but the source will never be found at render time. To share a full layer (including its source) across maps, use a named layer definition with a `$ref` object instead (see above).
+Layers reference a block-level named source with its bare name (`source: earthquakeData`).
+
+### Root-level sources (`$ref`)
+
+Sources declared in the **root** `sources:` map (next to `pages:`) can be shared across maps and reached from a layer's `source:` using a `$ref` object:
+
+```yaml
+sources:
+  boundaries:
+    type: geojson
+    url: "https://example.com/boundaries.geojson"
+
+pages:
+  - path: "/"
+    title: "Home"
+    blocks:
+      - type: map
+        id: map1
+        config: {...}
+        layers:
+          - id: outline
+            type: line
+            source: { $ref: "#/sources/boundaries" }
+            paint:
+              line-color: "#333"
+```
+
+The `$ref` is resolved at parse time against the root `sources:` map. A dangling reference (unknown source name) produces a clear error with a did-you-mean suggestion, for example:
+
+```
+Source reference not found: #/sources/boundary. Did you mean "#/sources/boundaries"? Defined sources: boundaries.
+```
+
+The bare-string path form `source: "#/sources/name"` is **not** resolved — it validates as a plain string but the source will never be found at render time. Use the `{ $ref: "#/sources/name" }` object form for root-level sources, or a bare name for block-level sources.
 
 ## Pages
 
@@ -260,11 +295,12 @@ pages:
 
 ## Reference Resolution
 
-When using `$ref` (as an object, e.g. `- $ref: "#/layers/layerName"` in a block's `layers` array), the format is:
+When using `$ref` (as an object), the supported formats are:
 
-- `#/layers/layerName` - Reference a named layer
+- `#/layers/layerName` - Reference a named layer (in a block's `layers` array)
+- `#/sources/sourceName` - Reference a root-level named source (in a layer's `source:` field)
 
-References are resolved at parse time and replaced with the actual definition. Note that `$ref` must always be a YAML mapping with a `$ref` key — a plain string like `"#/layers/layerName"` is not treated as a reference. For sources, use block-level `sources:` definitions and reference them by bare name from `source:`.
+References are resolved at parse time and replaced with the actual definition. Note that `$ref` must always be a YAML mapping with a `$ref` key — a plain string like `"#/layers/layerName"` is not treated as a reference. For sources you can either reference a root-level source with `source: { $ref: "#/sources/name" }` or reference a block-level source by its bare name (`source: name`).
 
 ## Validation
 

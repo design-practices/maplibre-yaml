@@ -19,6 +19,7 @@ import {
 } from "./base.schema";
 import { LayerOrReferenceSchema } from "./layer.schema";
 import { LayerSourceSchema } from "./source.schema";
+import { markOpenSchema } from "../parser/validation-utils";
 
 /**
  * Control position on the map.
@@ -347,6 +348,11 @@ export const MapConfigSchema = z
   .passthrough()
   .describe("Map configuration with MapLibre options");
 
+// The map `config` block is an intentional MapLibre `MapOptions` passthrough:
+// exempt it from unknown-key warnings so unlisted-but-valid options are not
+// flagged. Authored styling objects (layers/paint/sources/...) are NOT exempt.
+markOpenSchema(MapConfigSchema);
+
 /** Inferred type for map config. */
 export type MapConfig = z.infer<typeof MapConfigSchema>;
 
@@ -413,7 +419,7 @@ export const MapBlockSchema: z.ZodObject<any> = z
     id: z.string().describe("Unique block identifier"),
     className: z.string().optional().describe("CSS class name for container"),
     style: z.string().optional().describe("Inline CSS styles for container"),
-    config: MapConfigSchema.describe("Map configuration"),
+    config: MapConfigSchema,
     sources: z
       .record(z.string(), LayerSourceSchema)
       .optional()
@@ -464,7 +470,7 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     id: z.string().describe("Unique block identifier"),
     className: z.string().optional().describe("CSS class name for container"),
     style: z.string().optional().describe("Inline CSS styles for container"),
-    config: MapConfigSchema.describe("Map configuration"),
+    config: MapConfigSchema,
     sources: z
       .record(z.string(), LayerSourceSchema)
       .optional()

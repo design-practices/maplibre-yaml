@@ -68,7 +68,7 @@ The schemas exist only as Zod-in-TypeScript. A YAML author gets zero editor feed
 - Strictness changes to the Zod schemas themselves → [feat-validation-ergonomics.md](./feat-validation-ergonomics.md).
 - Schema version negotiation / migration tooling → [rfc-schema-versioning.md](./rfc-schema-versioning.md).
 
-## Open questions for review
+## Decisions (recorded — Mario, 2026-07-05)
 
-1. Do we commit the generated `.schema.json` files or generate-on-build only? (Recommend: generate-on-build, publish in package + site; committing invites drift.)
-2. Should `map.schema.json` describe the *strict* shape (`additionalProperties: false` + `x-` escape) from day one, even while Zod is still passthrough? Editor UX is better with strict; recommend yes, since JSON Schema is advisory.
+1. **Generate-on-build.** The `.schema.json` files are never committed; they are emitted during core build and docs build, shipped in the npm package and on the docs site. Snapshot tests catch contract changes in PR diffs.
+2. **Strict shape from day one.** Published JSON Schemas use `additionalProperties: false` + `patternProperties: {"^x-": {}}` even while the Zod runtime is still passthrough — editors squiggle typos immediately; JSON Schema is advisory so nothing breaks.

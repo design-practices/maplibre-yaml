@@ -1,0 +1,174 @@
+---
+title: Using maplibre-yaml with an AI agent
+description: The generate → validate → repair loop, the structured JSON error contract, and the machine-readable resources agents need
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Because a maplibre-yaml config _is_ the product, an LLM agent can author a
+complete, working map with nothing but the schema and a validation loop. This
+page is the whole agent story: a stable contract to read, and a structured
+error format to repair against.
+
+## The loop
+
+```
+generate  →  mlym validate -f json  →  repair  →  repeat until valid
+```
+
+1. **Generate** a YAML config from the schema and examples below.
+2. **Validate** it with the CLI in JSON mode.
+3. **Repair** using the structured `{ path, message, line, column }` errors.
+4. **Repeat** until `valid: true`.
+
+```bash
+npx @maplibre-yaml/cli validate my-map.yaml -f json
+```
+
+<Aside type="note">
+`mlym validate` runs the Zod schemas — the source of truth. The JSON Schema
+(for [editor integration](/guides/editor-setup/)) is advisory and intentionally
+looser, since some cross-field rules cannot be expressed in JSON Schema.
+</Aside>
+
+## The machine error contract
+
+`-f json` prints a stable, machine-readable object. On success:
+
+```json
+{
+  "valid": true,
+  "files": [{ "file": "my-map.yaml", "valid": true, "errors": [], "warnings": [] }]
+}
+```
+
+On failure, each error carries a `path`, a human-readable `message`, and
+(where the YAML source allows) `line` and `column`:
+
+```json
+{
+  "valid": false,
+  "files": [
+    {
+      "file": "my-map.yaml",
+      "valid": false,
+      "errors": [
+        {
+          "path": "config.center",
+          "message": "Expected array, got string",
+          "line": 5,
+          "column": 11
+        }
+      ],
+      "warnings": []
+    }
+  ]
+}
+```
+
+Repair by walking each `errors[]` entry: `path` is a dotted pointer into the
+document (`config.center`, `layers.0.paint.circle-radius`), `message` describes
+the violation, and `line`/`column` locate it in the source. Re-run after each
+edit; exit code `0` means all files are valid, `1` means at least one failed.
+
+<Aside type="tip">
+`-f sarif` emits the same findings as SARIF 2.1.0 for CI annotations;
+`-f vscode` emits editor-parseable `file:line:col: severity: message` lines.
+</Aside>
+
+## Resources an agent should load
+
+| Resource | URL |
+| --- | --- |
+| Agent index (`llms.txt`) | `https://docs.maplibre-yaml.org/llms.txt` |
+| Full reference (`llms-full.txt`) | `https://docs.maplibre-yaml.org/llms-full.txt` |
+| `map` JSON Schema | `https://docs.maplibre-yaml.org/schema/latest/map.schema.json` |
+| `scrollytelling` JSON Schema | `https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json` |
+| `root` (pages) JSON Schema | `https://docs.maplibre-yaml.org/schema/latest/root.schema.json` |
+| `any` (dispatch) JSON Schema | `https://docs.maplibre-yaml.org/schema/latest/any.schema.json` |
+
+`llms.txt` is a short index; `llms-full.txt` inlines the complete JSON Schemas
+and canonical example configs in one self-contained document. Both are
+generated from the same sources as these docs, so they never drift.
+
+Prefer the schema for the version you target. `mlym schema <block>` prints the
+schema bundled with the installed core package:
+
+```bash
+npx @maplibre-yaml/cli schema map            # print to stdout
+npx @maplibre-yaml/cli schema any --out any.schema.json
+```
+
+## Three things agents get wrong
+
+These are the most common failure modes. Get them right up front.
+
+### 1. `<ml-map src>` wants a `type: map` block, not a `pages:` document
+
+A single map file starts with `type: map`. Reserve the top-level `pages:` array
+for multi-page apps rendered by a framework integration — never as the `src` of
+`<ml-map>`.
+
+```yaml
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+type: map
+id: my-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+```
+
+### 2. Popups use the tag-array DSL
+
+`popup` is an **array of single-key `{ tag: [items] }` objects** — not an HTML
+string and not a `{ title, description }` object. Each item is `{ str }` (a
+literal) or `{ property }` (a feature field), optionally with `else` (fallback)
+and `format` (number format).
+
+```yaml
+interactive:
+  click:
+    popup:
+      - h3:
+          - property: name
+      - p:
+          - str: "Rating: "
+          - property: rating
+            format: ".1f"
+          - str: " / 5"
+```
+
+### 3. Named sources are referenced by bare name
+
+Define sources once under a block-level `sources:` map, then set a layer's
+`source:` to the source's name as a plain string.
+
+```yaml
+type: map
+id: quakes
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  quakes:
+    type: geojson
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
+layers:
+  - id: quake-points
+    type: circle
+    source: quakes # bare name, not an inline object
+    paint:
+      circle-radius: 6
+      circle-color: "#e55e5e"
+```
+
+## In CI
+
+The same JSON/SARIF output doubles as CI documentation — fail the build on
+invalid configs and surface findings as annotations:
+
+```bash
+npx @maplibre-yaml/cli validate "configs/**/*.yaml" -f sarif > results.sarif
+```

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: 035
 tags: [core, schema, validation, sources, docs]
@@ -34,3 +34,19 @@ Either a layer can reference a root-level named source end-to-end (validate + re
 ## Work Log
 
 - 2026-07-04: Created during Workstream G (repo hygiene) of plans/fix-shipped-but-broken.md.
+- 2026-07-05: **Resolved** via Option 1 (decision D10) in
+  `plans/feat-validation-ergonomics.md` (item 7). Changes:
+  - Added `SourceReferenceSchema` (`{ $ref: string }`) and admitted it into the
+    layer `source:` union in `packages/core/src/schemas/layer.schema.ts`, so a
+    layer-level `source: { $ref: "#/sources/name" }` now validates.
+  - `YAMLParser.resolveReferences` already walks and resolves
+    `{ $ref: "#/sources/name" }` against the root `sources:` map; a dangling
+    reference now throws a clear error with a did-you-mean suggestion and the
+    list of defined source names (`packages/core/src/parser/yaml-parser.ts`).
+  - Documented the root-level `$ref` source path and the dangling-ref error in
+    `docs/src/content/docs/schema/root.mdx`.
+  - Tests: `packages/core/tests/parser/validation-ergonomics.test.ts` covers a
+    valid root-level `$ref` source resolving end-to-end and a dangling `$ref`
+    erroring with a suggestion.
+  A layer can now reference a root-level named source end-to-end (validate +
+  resolve), satisfying the acceptance criteria.

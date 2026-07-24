@@ -1,0 +1,12 @@
+type: map
+id: warns
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    paint:
+      circle-radis: 8
