@@ -38,6 +38,7 @@ export default defineConfig([
     sourcemap: true,
     splitting: false,
     treeshake: true,
+    minify: true, // CDN-served raw from unpkg — ship it minified
     external: ["maplibre-gl"],
     noExternal: ["yaml", "zod"], // Bundle these for browser
     esbuildOptions(options) {
