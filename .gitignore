@@ -46,3 +46,7 @@ EOF
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Beads ledger content stays out of the public tree (sync rides refs/dolt/data)
+.beads/issues.jsonl
+.beads/interactions.jsonl
