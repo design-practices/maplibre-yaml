@@ -14,6 +14,7 @@ import {
   ImageSourceSchema,
   VideoSourceSchema,
 } from "../schemas";
+import { HOVER_FEATURE_STATE_KEY } from "./interactions";
 import { DataFetcher } from "../data/data-fetcher";
 import { PollingManager } from "../data/polling-manager";
 import { StreamManager } from "../data/streaming/stream-manager";
@@ -27,6 +28,79 @@ type VectorSourceConfig = z.infer<typeof VectorSourceSchema>;
 type RasterSourceConfig = z.infer<typeof RasterSourceSchema>;
 type ImageSourceConfig = z.infer<typeof ImageSourceSchema>;
 type VideoSourceConfig = z.infer<typeof VideoSourceSchema>;
+
+/**
+ * The paint property each layer type highlights through.
+ *
+ * @remarks
+ * Types absent here (heatmap, raster, hillshade, background) have no
+ * per-feature color to drive, so highlight does not apply to them.
+ */
+const HIGHLIGHT_PAINT_PROPERTY: Record<string, string> = {
+  circle: "circle-color",
+  line: "line-color",
+  fill: "fill-color",
+  "fill-extrusion": "fill-extrusion-color",
+  symbol: "text-color",
+};
+
+/**
+ * Colour a highlighted feature takes.
+ *
+ * @remarks
+ * `hover.highlight` is a boolean, so the colour cannot be authored. Authors who
+ * want control write their own `["feature-state", "hover"]` paint expression
+ * instead, which this rewrite deliberately leaves untouched.
+ */
+const HIGHLIGHT_COLOR = "#ffd700";
+
+/** Whether a layer asks for hover highlighting. */
+function isHighlightEnabled(layer: Layer): boolean {
+  const interactive = (layer as { interactive?: { hover?: { highlight?: unknown } } })
+    .interactive;
+  return interactive?.hover?.highlight === true;
+}
+
+/**
+ * Wrap the layer's primary colour in a feature-state `case`, so a highlighted
+ * feature renders differently.
+ *
+ * @remarks
+ * Only rewrites a plain literal colour. An authored expression is left alone
+ * and warned about: overwriting it would silently discard data-driven styling,
+ * and merging arbitrary expressions is not something we can do correctly.
+ */
+function applyHighlightPaint(layerSpec: any, layerType: string): void {
+  const property = HIGHLIGHT_PAINT_PROPERTY[layerType];
+  if (!property) {
+    console.warn(
+      `[maplibre-yaml] hover.highlight is not supported on "${layerType}" ` +
+        "layers — they have no per-feature colour to drive."
+    );
+    return;
+  }
+
+  const paint = (layerSpec.paint ??= {});
+  const authored = paint[property];
+
+  if (Array.isArray(authored)) {
+    console.warn(
+      `[maplibre-yaml] hover.highlight left "${property}" on layer ` +
+        `"${layerSpec.id}" untouched because it is already an expression. ` +
+        'Reference ["feature-state", "hover"] in that expression to style the ' +
+        "highlight yourself."
+    );
+    return;
+  }
+
+  paint[property] = [
+    "case",
+    ["boolean", ["feature-state", HOVER_FEATURE_STATE_KEY], false],
+    HIGHLIGHT_COLOR,
+    // MapLibre's default for every colour paint property we highlight through.
+    authored ?? "#000000",
+  ];
+}
 
 /**
  * Callbacks for layer data loading events
@@ -86,6 +160,12 @@ export class LayerManager {
     };
 
     if ("paint" in layer && layer.paint) layerSpec.paint = layer.paint;
+
+    // `hover.highlight` is only visible if some paint property reads the hover
+    // feature-state, so wire it into the layer's primary color here.
+    if (isHighlightEnabled(layer)) {
+      applyHighlightPaint(layerSpec, layer.type);
+    }
     if ("layout" in layer && layer.layout) layerSpec.layout = layer.layout;
     if ("source-layer" in layer && layer["source-layer"])
       layerSpec["source-layer"] = layer["source-layer"];
@@ -126,6 +206,27 @@ export class LayerManager {
           type: "geojson",
           data: geojsonSource.data,
         };
+
+        // Authored id strategy first — it always wins over the fallback below.
+        if (geojsonSource.generateId !== undefined) sourceSpec.generateId = geojsonSource.generateId;
+        if (geojsonSource.promoteId !== undefined) sourceSpec.promoteId = geojsonSource.promoteId;
+
+        // Feature-state is addressed by feature id. Without one, highlight has
+        // nothing to target — so opt the source into generated ids rather than
+        // leaving the configured highlight silently dead.
+        if (
+          isHighlightEnabled(layer) &&
+          !geojsonSource.generateId &&
+          !geojsonSource.promoteId
+        ) {
+          sourceSpec.generateId = true;
+          console.warn(
+            `[maplibre-yaml] hover.highlight on layer "${layer.id}" enabled ` +
+              "`generateId` on its source, because feature-state needs ids. " +
+              "Set `promoteId` if a property should be the id instead — " +
+              "generated ids are not stable across data refreshes."
+          );
+        }
 
         // Only add clustering properties if they are defined
         if (geojsonSource.cluster !== undefined) sourceSpec.cluster = geojsonSource.cluster;

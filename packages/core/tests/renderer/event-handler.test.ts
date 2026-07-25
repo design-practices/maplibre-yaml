@@ -30,6 +30,8 @@ describe("EventHandler", () => {
       on: vi.fn(),
       off: vi.fn(),
       flyTo: vi.fn(),
+      setFeatureState: vi.fn(),
+      removeFeatureState: vi.fn(),
       getCanvas: vi.fn(() => ({
         style: { cursor: "" },
       })),
@@ -135,6 +137,145 @@ describe("EventHandler", () => {
       handler.attachEvents(layer);
 
       expect(mockMap.on).toHaveBeenCalledTimes(3); // mouseenter, mouseleave, click
+    });
+  });
+
+  describe("hover.highlight", () => {
+    const LNGLAT = { lng: 1, lat: 2 } as any;
+
+    const hoverLayer = (hover: any, source: any = {
+      type: "geojson" as const,
+      data: { type: "FeatureCollection" as const, features: [] },
+    }) => ({
+      id: "test-layer",
+      type: "circle" as const,
+      source,
+      interactive: { hover },
+    });
+
+    /** Fire the listener registered for `event` with a synthetic feature. */
+    const fire = (event: string, feature: any) => {
+      const registered = mockMap.on.mock.calls.find(
+        (call: any[]) => call[0] === event
+      );
+      registered?.[2]?.({ features: feature ? [feature] : [], lngLat: LNGLAT });
+    };
+
+    it("sets hover feature-state for the hovered feature", () => {
+      handler.attachEvents(hoverLayer({ highlight: true }) as any);
+      fire("mousemove", { id: 7, properties: {} });
+
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "test-layer-source", id: 7 },
+        { hover: true }
+      );
+    });
+
+    it("clears the previous feature when moving to an adjacent one", () => {
+      handler.attachEvents(hoverLayer({ highlight: true }) as any);
+      fire("mousemove", { id: 7, properties: {} });
+      mockMap.setFeatureState.mockClear();
+      fire("mousemove", { id: 8, properties: {} });
+
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "test-layer-source", id: 7 },
+        { hover: false }
+      );
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "test-layer-source", id: 8 },
+        { hover: true }
+      );
+    });
+
+    it("does not re-set state while hovering the same feature", () => {
+      handler.attachEvents(hoverLayer({ highlight: true }) as any);
+      fire("mousemove", { id: 7, properties: {} });
+      mockMap.setFeatureState.mockClear();
+      fire("mousemove", { id: 7, properties: {} });
+
+      expect(mockMap.setFeatureState).not.toHaveBeenCalled();
+    });
+
+    it("clears highlight on mouseleave", () => {
+      handler.attachEvents(hoverLayer({ highlight: true }) as any);
+      fire("mousemove", { id: 7, properties: {} });
+      mockMap.setFeatureState.mockClear();
+
+      const leave = mockMap.on.mock.calls.find((c: any[]) => c[0] === "mouseleave");
+      leave?.[2]?.({});
+
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "test-layer-source", id: 7 },
+        { hover: false }
+      );
+    });
+
+    it("clears highlight on detachEvents and on destroy", () => {
+      handler.attachEvents(hoverLayer({ highlight: true }) as any);
+      fire("mousemove", { id: 7, properties: {} });
+      mockMap.setFeatureState.mockClear();
+
+      handler.detachEvents("test-layer");
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "test-layer-source", id: 7 },
+        { hover: false }
+      );
+
+      // Re-attach, hover again, then destroy.
+      handler.attachEvents(hoverLayer({ highlight: true }) as any);
+      fire("mousemove", { id: 9, properties: {} });
+      mockMap.setFeatureState.mockClear();
+      handler.destroy();
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "test-layer-source", id: 9 },
+        { hover: false }
+      );
+    });
+
+    it("resolves a named source by name, matching LayerManager", () => {
+      handler.attachEvents(hoverLayer({ highlight: true }, "shared-src") as any);
+      fire("mousemove", { id: 3, properties: {} });
+
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "shared-src", id: 3 },
+        { hover: true }
+      );
+    });
+
+    it("warns once and skips features with no id", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      handler.attachEvents(hoverLayer({ highlight: true }) as any);
+
+      fire("mousemove", { properties: {} });
+      fire("mousemove", { properties: {} });
+
+      expect(mockMap.setFeatureState).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toMatch(/id/i);
+      warn.mockRestore();
+    });
+
+    it("does not highlight when highlight is false", () => {
+      handler.attachEvents(hoverLayer({ highlight: false, cursor: "pointer" }) as any);
+      fire("mousemove", { id: 7, properties: {} });
+
+      expect(mockMap.setFeatureState).not.toHaveBeenCalled();
+    });
+
+    it("leaves hover.cursor behavior intact when highlight is also configured", () => {
+      const canvas = { style: { cursor: "" } };
+      mockMap.getCanvas = vi.fn(() => canvas);
+      handler.attachEvents(
+        hoverLayer({ highlight: true, cursor: "pointer" }) as any
+      );
+
+      const enter = mockMap.on.mock.calls.find((c: any[]) => c[0] === "mouseenter");
+      enter?.[2]?.({ features: [{ id: 1, properties: {} }], lngLat: LNGLAT });
+      expect(canvas.style.cursor).toBe("pointer");
+
+      const leave = mockMap.on.mock.calls.find((c: any[]) => c[0] === "mouseleave");
+      leave?.[2]?.({});
+      expect(canvas.style.cursor).toBe("");
     });
   });
 
