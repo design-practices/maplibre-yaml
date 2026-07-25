@@ -14,7 +14,7 @@ issues that replaced them.
 
 | | |
 |---|---|
-| Files here | 39 (`001`–`041`; **039 and 040 never existed** — see below) |
+| Files here | 41 (`001`–`041`; **039 and 040 arrived after retirement** — see below) |
 | Open at migration | 14 pending |
 | Flipped complete by the pre-import audit | 1 (`003` — shipped with `002`) |
 | Imported into beads | **13** (as issues under themed epics) |
@@ -42,12 +42,16 @@ mirrors carry `gh-NN` external refs.
 
 ## Three things worth knowing
 
-**Numbers 039 and 040 were cited but never existed.** The release-train
-plan (`docs/plans/2026-07-08-001`) refers to "todo 039" (standalone-block
-`$ref`) and "todo 040" (nested `$ref` resolution) as if filed; the files
-were never created — the ledger skipped from 038 to 041. Both are now
-beads (under the schema-truthfulness and feature-refs-v2 epics). If you
-meet a bare "todo 039/040" reference in old prose, it means those beads.
+**Numbers 039 and 040 post-date the retirement.** At migration time these
+files did not exist — the release-train plan (`docs/plans/2026-07-08-001`)
+cited them as if filed, and beads were created from that prose (under the
+schema-truthfulness and feature-refs-v2 epics). PR #47, in flight during
+the migration and merged the same day, then landed the actual files. They
+are kept here as historical record like the rest; their live trackers are
+`ml-itz.5` (039) and, for 040's five findings, `ml-7jc.7` (item 1),
+`ml-ohh.13`–`.15` (items 2–4), `ml-ohh.16` + `ml-a50` (item 5). PR #47
+also flipped `035` to complete (resolved by decision D10); its bead
+`ml-pgb` is closed.
 
 **The ledger was never the whole picture.** The migration sweep found an
 entire *active release-train plan* — 13 fully-specified work units gating
