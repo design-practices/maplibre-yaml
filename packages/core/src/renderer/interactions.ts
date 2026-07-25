@@ -149,6 +149,19 @@ export const CLICK_INTERACTIONS: readonly Interaction[] = [
 ];
 
 /**
+ * The feature-state key `highlight` writes.
+ *
+ * @remarks
+ * Shared with the paint rewrite in `LayerManager`, which reads the same key
+ * back out via `["feature-state", ...]`. These are two halves of one contract:
+ * if the written key and the read key drift apart, both sides stay individually
+ * valid — the expression still compiles, the state write still succeeds — and
+ * highlighting silently stops working. Importing one constant makes that
+ * drift impossible rather than merely tested for.
+ */
+export const HOVER_FEATURE_STATE_KEY = "hover";
+
+/**
  * Hover interactions, in dispatch order.
  *
  * @remarks
@@ -172,7 +185,7 @@ export const HOVER_INTERACTIONS: readonly Interaction[] = [
       ) => {
         map.setFeatureState(
           { source: entry.sourceId, id: entry.featureId },
-          { hover: false }
+          { [HOVER_FEATURE_STATE_KEY]: false }
         );
       };
 
@@ -200,7 +213,7 @@ export const HOVER_INTERACTIONS: readonly Interaction[] = [
           if (current) unset(ctx.map, current);
           ctx.map.setFeatureState(
             { source: ctx.sourceId, id: featureId },
-            { hover: true }
+            { [HOVER_FEATURE_STATE_KEY]: true }
           );
           lit.set(ctx.layerId, { sourceId: ctx.sourceId, featureId });
         },

@@ -14,6 +14,7 @@ import {
   ImageSourceSchema,
   VideoSourceSchema,
 } from "../schemas";
+import { HOVER_FEATURE_STATE_KEY } from "./interactions";
 import { DataFetcher } from "../data/data-fetcher";
 import { PollingManager } from "../data/polling-manager";
 import { StreamManager } from "../data/streaming/stream-manager";
@@ -94,7 +95,7 @@ function applyHighlightPaint(layerSpec: any, layerType: string): void {
 
   paint[property] = [
     "case",
-    ["boolean", ["feature-state", "hover"], false],
+    ["boolean", ["feature-state", HOVER_FEATURE_STATE_KEY], false],
     HIGHLIGHT_COLOR,
     // MapLibre's default for every colour paint property we highlight through.
     authored ?? "#000000",
