@@ -8,6 +8,12 @@ import { Popup } from "./maplibre-interop";
 import type { z } from "zod";
 import { LayerSchema, PopupContentSchema } from "../schemas";
 import { PopupBuilder } from "./popup-builder";
+import {
+  CLICK_INTERACTIONS,
+  type Interaction,
+  type InteractionContext,
+  type InteractionDeps,
+} from "./interactions";
 
 type Layer = z.infer<typeof LayerSchema>;
 type PopupContent = z.infer<typeof PopupContentSchema>;
@@ -19,6 +25,12 @@ export interface EventHandlerCallbacks {
   onClick?: (layerId: string, feature: any, lngLat: LngLat) => void;
   onHover?: (layerId: string, feature: any, lngLat: LngLat) => void;
 }
+
+export type {
+  Interaction,
+  InteractionContext,
+  InteractionDeps,
+} from "./interactions";
 
 /**
  * Handles click, hover, and other interactive events on layers
@@ -33,6 +45,7 @@ export class EventHandler {
     string,
     { click?: Function; mouseenter?: Function; mouseleave?: Function }
   >;
+  private interactionDeps: InteractionDeps;
 
   constructor(map: MapLibreMap, callbacks?: EventHandlerCallbacks) {
     this.map = map;
@@ -41,6 +54,12 @@ export class EventHandler {
     this.activePopup = null;
     this.attachedLayers = new Set();
     this.boundHandlers = new Map();
+    // Bound late so interactions reach the live method (and any test spy on it)
+    // rather than a copy captured at construction.
+    this.interactionDeps = {
+      showPopup: (content, feature, lngLat) =>
+        this.showPopup(content, feature, lngLat),
+    };
   }
 
   /**
@@ -76,12 +95,16 @@ export class EventHandler {
     // Click handling
     if (click) {
       handlers.click = (e: MapMouseEvent & { features?: any[] }) => {
+        // Multi-feature clicks resolve to the topmost feature, matching hover.
         const feature = e.features?.[0];
         if (!feature) return;
 
-        if (click.popup) {
-          this.showPopup(click.popup, feature, e.lngLat);
-        }
+        this.dispatch(CLICK_INTERACTIONS, click, {
+          map: this.map,
+          layerId: layer.id,
+          feature,
+          lngLat: e.lngLat,
+        });
 
         this.callbacks.onClick?.(layer.id, feature, e.lngLat);
       };
@@ -91,6 +114,29 @@ export class EventHandler {
 
     this.boundHandlers.set(layer.id, handlers);
     this.attachedLayers.add(layer.id);
+  }
+
+  /**
+   * Run every configured interaction for a trigger, in registry order.
+   *
+   * @remarks
+   * The single dispatch path for all triggers: `click` today, `hover` when
+   * highlight lands. An interaction whose `select` finds no config is skipped.
+   */
+  private dispatch(
+    interactions: readonly Interaction[],
+    trigger: any,
+    ctx: InteractionContext
+  ): void {
+    for (const interaction of interactions) {
+      const config = interaction.select(trigger);
+      // Falsy means not configured, matching the `if (click.popup)` check this
+      // replaced. Not a nullish check: `hover.highlight` is a plain boolean, so
+      // `false` is present-but-off and must not run.
+      if (!config) continue;
+
+      interaction.run(config, ctx, this.interactionDeps);
+    }
   }
 
   /**
