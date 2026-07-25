@@ -119,7 +119,7 @@ pages:
 `);
     expect(result.success).toBe(false);
     expect(result.errors[0].message).toBe(
-      'Unknown source type "geojsn". Valid types: geojson, vector, raster, image, video. Did you mean "geojson"?'
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video. Did you mean "geojson"?'
     );
   });
 
@@ -133,8 +133,47 @@ pages:
     const err = result.errors.find((e) => e.message.includes("source type"));
     expect(err).toBeDefined();
     expect(err!.message).toBe(
-      'Unknown source type "geojsn". Valid types: geojson, vector, raster, image, video. Did you mean "geojson"?'
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video. Did you mean "geojson"?'
     );
+  });
+
+  it('unknown source type "raster-dme" suggests raster-dem', () => {
+    const result = YAMLParser.safeParse(`sources:
+  terrain:
+    type: raster-dme
+    url: "https://example.com/terrain.json"
+pages:
+  - path: "/"
+    title: "T"
+    blocks: []
+`);
+    expect(result.success).toBe(false);
+    expect(result.errors[0].message).toContain('Did you mean "raster-dem"?');
+  });
+
+  it("mines the real failure for a malformed raster-dem source", () => {
+    // Guards the two registration points a new source type must hit: drop
+    // raster-dem from SOURCE_TYPES and this reports "Unknown source type";
+    // drop it from LayerSourceSchema and union mining falls back to the
+    // generic "does not match any of the expected formats".
+    const result = YAMLParser.safeParse(`sources:
+  terrain:
+    type: raster-dem
+    encoding: srtm
+    url: "https://example.com/terrain.json"
+pages:
+  - path: "/"
+    title: "T"
+    blocks: []
+`);
+    expect(result.success).toBe(false);
+    const err = result.errors.find((e) => e.path === "sources.terrain");
+    expect(err).toBeDefined();
+    // The real per-field failure, not a generic "matched no union member".
+    expect(err!.message).toBe(
+      "Invalid enum value. Expected 'terrarium' | 'mapbox' | 'custom', received 'srtm'"
+    );
+    expect(err!.line).toBe(3);
   });
 
   it("unknown block type via safeParseAny includes a did-you-mean", () => {
@@ -230,7 +269,7 @@ pages:
     expect(result.success).toBe(false);
     const err = result.errors.find((e) => e.message.includes("source type"));
     expect(err!.message).toBe(
-      'Unknown source type "geojsn". Valid types: geojson, vector, raster, image, video. Did you mean "geojson"?'
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video. Did you mean "geojson"?'
     );
   });
 });
@@ -281,6 +320,25 @@ describe("warnings channel — unknown keys", () => {
       maxzoom: 12
       buffer: 64
       tolerance: 0.5`)
+    );
+    expect(result.success).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it("does not warn on raster-dem custom-encoding factors", () => {
+    // Pins markOpenSchema(RasterDEMSourceSchema): without that registration
+    // the documented custom-encoding factors would be flagged as unknown keys.
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: hills
+    type: hillshade
+    source:
+      type: raster-dem
+      url: "https://example.com/terrain.json"
+      encoding: custom
+      redFactor: 256
+      greenFactor: 1
+      blueFactor: 0.00390625
+      baseShift: 32768`)
     );
     expect(result.success).toBe(true);
     expect(result.warnings).toHaveLength(0);

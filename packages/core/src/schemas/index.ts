@@ -92,6 +92,7 @@ export {
   GeoJSONSourceSchema,
   VectorSourceSchema,
   RasterSourceSchema,
+  RasterDEMSourceSchema,
   ImageSourceSchema,
   VideoSourceSchema,
   LayerSourceSchema,
