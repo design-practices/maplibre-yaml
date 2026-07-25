@@ -192,7 +192,7 @@ flowchart LR
 - **Requirements:** R4.
 - **Dependencies:** PR #47 merged.
 - **Files:** `packages/core/src/renderer/event-handler.ts`, `packages/core/tests/renderer/event-handler.test.ts`.
-- **Approach:** In the click handler after the popup branch: `map.flyTo` with `center` defaulting to the clicked `lngLat`, honoring configured `zoom`/`duration`. Popup (when both configured) opens before the animation and travels with the map — pinned, documented behavior. Multi-feature clicks use the first feature, matching the existing popup behavior.
+- **Approach:** In the click handler after the popup branch: `map.flyTo` with `center` defaulting to the clicked `lngLat`, honoring configured `zoom`/`duration`. Popup (when both configured) opens before the animation and travels with the map — pinned, documented behavior. Multi-feature clicks use the first feature, matching the existing popup behavior. Structure the handler dispatch registry-shaped (named action → handler map, not new if-branches) per the 2026-07-24 direction doc — the future interactions package extraction must be a move, not a rewrite.
 - **Test scenarios:**
   - `click.flyTo: { zoom: 12 }` → `flyTo` called with clicked lngLat and zoom 12.
   - Explicit `center` overrides clicked point.
@@ -207,7 +207,7 @@ flowchart LR
 - **Requirements:** R4.
 - **Dependencies:** PR #47 merged.
 - **Files:** `packages/core/src/renderer/event-handler.ts`, `packages/core/src/renderer/layer-manager.ts`, `packages/core/src/schemas/source.schema.ts`, `packages/core/tests/renderer/event-handler.test.ts`, `packages/core/tests/schemas/source.schema.test.ts`.
-- **Approach:** Per the KTD: `mousemove` + tracked feature id + `setFeatureState`; clear on `mouseleave`, `detachEvents`, `removeLayer`, `destroy`, and on refresh `setData` (stale ids re-highlight wrong features after data replacement). EventHandler derives the source id the same way LayerManager records `layerToSource`. Literal paint values get wrapped in a feature-state `case`; expression paints warn and skip the rewrite. Sources lacking ids: enable id generation with a warning; ensure `promoteId`/`generateId` exist on the geojson source schema (add whichever is missing). Shared-source caveat documented: feature-state is per-source, so highlight on layer A can restyle layer B if B also uses feature-state paint.
+- **Approach:** Per the KTD: `mousemove` + tracked feature id + `setFeatureState`; clear on `mouseleave`, `detachEvents`, `removeLayer`, `destroy`, and on refresh `setData` (stale ids re-highlight wrong features after data replacement). Register through the same registry-shaped dispatch as U4 (2026-07-24 direction doc) so highlight extracts to the interactions package as a move. EventHandler derives the source id the same way LayerManager records `layerToSource`. Literal paint values get wrapped in a feature-state `case`; expression paints warn and skip the rewrite. Sources lacking ids: enable id generation with a warning; ensure `promoteId`/`generateId` exist on the geojson source schema (add whichever is missing). Shared-source caveat documented: feature-state is per-source, so highlight on layer A can restyle layer B if B also uses feature-state paint.
 - **Execution note:** Start with a failing test that asserts `hover.highlight: true` produces a `setFeatureState` call — the field is a silent no-op today.
 - **Test scenarios:**
   - Hover over feature with id → `setFeatureState({hover: true})`; move to adjacent feature → previous cleared, new set.
