@@ -39,6 +39,9 @@ interface SarifResult {
   level: 'error' | 'warning' | 'note';
   message: { text: string };
   locations: SarifLocation[];
+  /** SARIF property bag — carries our warning `kind` so deprecations are
+   * distinguishable in code-scanning output, not just in the message text. */
+  properties?: { kind: string };
 }
 
 interface SarifLocation {
@@ -127,6 +130,7 @@ export function formatSARIF(results: ValidationResult[], version: string): strin
             },
           },
         ],
+        ...(warning.kind ? { properties: { kind: warning.kind } } : {}),
       });
     }
   }

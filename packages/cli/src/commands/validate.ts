@@ -67,6 +67,11 @@ export const validateCommand = defineCommand({
       // while `--no-strict` still overrides it. (decision D9)
       description: 'Treat warnings as errors (default: on in CI, use --no-strict to disable)',
     },
+    'strict-deprecations': {
+      type: 'boolean',
+      default: false,
+      description: 'Also treat deprecation warnings as errors (exempt from --strict by default)',
+    },
     watch: {
       type: 'boolean',
       alias: 'w',
@@ -83,7 +88,13 @@ export const validateCommand = defineCommand({
       ? mergeConfig(args, projectConfig.validate)
       : args;
 
-    const { patterns, format, strict, watch: watchMode } = mergedArgs;
+    const {
+      patterns,
+      format,
+      strict,
+      'strict-deprecations': strictDeprecations,
+      watch: watchMode,
+    } = mergedArgs;
 
     // Strict resolution (decision D9): an explicit `--strict`/`--no-strict`
     // always wins; otherwise warnings are promoted to errors when running in CI.
@@ -146,13 +157,20 @@ export const validateCommand = defineCommand({
           }
         }
 
-        // Apply strict mode (explicit flag or CI default; see strictMode above)
-        if (strictMode) {
+        // Apply strict mode (explicit flag or CI default; see strictMode above).
+        // Deprecations are exempt unless --strict-deprecations: promoting them
+        // would hard-fail every existing user of a newly-deprecated field on
+        // the release that deprecates it, which defeats the warning window.
+        if (strictMode || strictDeprecations) {
+          const shouldPromote = (w: { kind?: string }) =>
+            w.kind === 'deprecation' ? strictDeprecations : strictMode;
+
           for (const r of results) {
-            if (r.warnings.length > 0) {
+            const promoted = r.warnings.filter(shouldPromote);
+            if (promoted.length > 0) {
               r.valid = false;
-              r.errors.push(...r.warnings.map(w => ({ ...w, severity: 'error' as const })));
-              r.warnings = [];
+              r.errors.push(...promoted.map(w => ({ ...w, severity: 'error' as const })));
+              r.warnings = r.warnings.filter(w => !shouldPromote(w));
             }
           }
         }
