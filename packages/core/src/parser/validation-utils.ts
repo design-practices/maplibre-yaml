@@ -38,6 +38,18 @@ export interface ValidationWarning {
   line?: number;
   column?: number;
   suggestion?: string;
+  /**
+   * Marks a warning about a field that is accepted today but scheduled for
+   * removal.
+   *
+   * @remarks
+   * A distinct class because it is exempt from strict promotion: `mlym
+   * validate` turns warnings into errors under CI, and without this exemption
+   * a newly-deprecated field would hard-fail every existing user's build the
+   * moment they upgrade. `--strict-deprecations` opts back in. Absent on
+   * unknown-key and expression warnings, which promote as before.
+   */
+  kind?: "deprecation";
 }
 
 /** Valid MapLibre layer `type` values, in the order surfaced to users. */
@@ -427,8 +439,8 @@ function walk(
       const knownKeys = Object.keys(shape);
       const open = OPEN_SCHEMAS.has(s);
 
-      // Deprecation: legacy top-level refresh fields on a GeoJSON source.
-      if (value.type === "geojson") checkLegacyRefresh(value, path, ctx);
+      // Deprecated fields — each rule decides whether it applies here.
+      checkDeprecations(value, path, ctx);
 
       for (const key of Object.keys(value)) {
         if (key.startsWith("x-")) continue; // extension escape hatch
@@ -511,21 +523,78 @@ const LEGACY_REFRESH_FIELDS = [
   "updateKey",
 ] as const;
 
-function checkLegacyRefresh(
+/** Triggers whose `action` field is accepted by the schema but never dispatched. */
+const DEPRECATED_ACTION_TRIGGERS = [
+  "click",
+  "mouseenter",
+  "mouseleave",
+] as const;
+
+/**
+ * One deprecated field: where it lives, and what to say about it.
+ */
+interface DeprecationRule {
+  /** The deprecated key on the matched object. */
+  field: string;
+  /** Whether this rule applies to the object currently being walked. */
+  applies: (
+    value: Record<string, unknown>,
+    path: (string | number)[]
+  ) => boolean;
+  message: string;
+  suggestion?: string;
+}
+
+/**
+ * The deprecation registry.
+ *
+ * @remarks
+ * A table rather than a chain of special-case checks, so deprecating a field
+ * is a data change. Every entry produces a `kind: "deprecation"` warning,
+ * which is exempt from CI strict promotion for one minor — see
+ * {@link ValidationWarning.kind}.
+ */
+const DEPRECATIONS: DeprecationRule[] = [
+  ...LEGACY_REFRESH_FIELDS.map((field) => ({
+    field,
+    applies: (value: Record<string, unknown>) => value.type === "geojson",
+    message:
+      `The top-level "${field}" field on a GeoJSON source is deprecated. ` +
+      `Move it into a "refresh:" block (refresh.${field}).`,
+    suggestion: "refresh",
+  })),
+  ...DEPRECATED_ACTION_TRIGGERS.map((trigger) => ({
+    field: "action",
+    applies: (_value: Record<string, unknown>, path: (string | number)[]) =>
+      path[path.length - 1] === trigger &&
+      path[path.length - 2] === "interactive",
+    message:
+      `"${trigger}.action" is deprecated: it is accepted by the schema but ` +
+      `never dispatched at runtime. Listen for the "ml-map:layer-${
+        trigger === "click" ? "click" : "hover"
+      }" event instead. It will be removed in v2.`,
+  })),
+];
+
+/**
+ * Record a deprecation warning for every rule matching the walked object.
+ */
+function checkDeprecations(
   value: Record<string, unknown>,
   path: (string | number)[],
   ctx: WalkContext
 ): void {
-  for (const field of LEGACY_REFRESH_FIELDS) {
-    if (value[field] === undefined) continue;
-    const pos = positionForKey(ctx.doc, ctx.lineCounter, path, field);
+  for (const rule of DEPRECATIONS) {
+    if (value[rule.field] === undefined) continue;
+    if (!rule.applies(value, path)) continue;
+
+    const pos = positionForKey(ctx.doc, ctx.lineCounter, path, rule.field);
     ctx.warnings.push({
-      path: [...path, field].join("."),
-      message:
-        `The top-level "${field}" field on a GeoJSON source is deprecated. ` +
-        `Move it into a "refresh:" block (refresh.${field}).`,
+      path: [...path, rule.field].join("."),
+      message: rule.message,
       ...(pos ? { line: pos.line, column: pos.column } : {}),
-      suggestion: "refresh",
+      ...(rule.suggestion ? { suggestion: rule.suggestion } : {}),
+      kind: "deprecation",
     });
   }
 }
