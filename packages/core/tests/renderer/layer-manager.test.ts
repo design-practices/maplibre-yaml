@@ -204,6 +204,79 @@ describe("LayerManager", () => {
       expect(spec.generateId).toBeUndefined();
     });
 
+    it("adds a hillshade layer with a raster-dem source", async () => {
+      const layer = {
+        id: "terrain",
+        type: "hillshade" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "raster-dem" as const,
+          tiles: ["https://example.com/dem/{z}/{x}/{y}.png"],
+          encoding: "terrarium" as const,
+          tileSize: 256,
+        },
+      };
+
+      await manager.addLayer(layer as any);
+
+      expect(mockMap.addSource).toHaveBeenCalledWith(
+        "terrain-source",
+        expect.objectContaining({
+          type: "raster-dem",
+          tiles: ["https://example.com/dem/{z}/{x}/{y}.png"],
+          encoding: "terrarium",
+          tileSize: 256,
+        })
+      );
+      expect(mockMap.addLayer).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "terrain", type: "hillshade" }),
+        undefined
+      );
+    });
+
+    it("forwards every raster-dem field, including custom-encoding factors", async () => {
+      const layer = {
+        id: "terrain",
+        type: "hillshade" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "raster-dem" as const,
+          url: "https://example.com/terrain.json",
+          encoding: "custom" as const,
+          redFactor: 256,
+          greenFactor: 1,
+          blueFactor: 1 / 256,
+          baseShift: 32768,
+          tileSize: 512,
+          minzoom: 2,
+          maxzoom: 14,
+          bounds: [-180, -85, 180, 85],
+          attribution: "© Example Terrain",
+        },
+      };
+
+      await manager.addLayer(layer as any);
+
+      // Exact equality, not objectContaining: a dropped field would make
+      // `encoding: custom` decode as mapbox with no diagnostic.
+      expect(mockMap.addSource).toHaveBeenCalledWith("terrain-source", {
+        type: "raster-dem",
+        url: "https://example.com/terrain.json",
+        encoding: "custom",
+        redFactor: 256,
+        greenFactor: 1,
+        blueFactor: 1 / 256,
+        baseShift: 32768,
+        tileSize: 512,
+        minzoom: 2,
+        maxzoom: 14,
+        bounds: [-180, -85, 180, 85],
+        attribution: "© Example Terrain",
+      });
+    });
+
     it("sets initial visibility to none when visible is false", async () => {
       const layer = {
         id: "hidden-layer",

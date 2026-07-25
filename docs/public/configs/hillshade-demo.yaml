@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+type: map
+id: hillshade-demo
+config:
+  center: [-121.7, 46.85]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: hills
+    type: hillshade
+    source:
+      type: raster-dem
+      tiles:
+        - "https://example.com/dem/{z}/{x}/{y}.png"
+      encoding: terrarium
+      tileSize: 256
+      maxzoom: 14
+      attribution: "Elevation data © Example"
+    paint:
+      hillshade-exaggeration: 0.6
+      hillshade-shadow-color: "#2a3d4f"

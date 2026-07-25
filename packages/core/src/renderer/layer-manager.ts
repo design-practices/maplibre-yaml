@@ -11,6 +11,7 @@ import {
   GeoJSONSourceSchema,
   VectorSourceSchema,
   RasterSourceSchema,
+  RasterDEMSourceSchema,
   ImageSourceSchema,
   VideoSourceSchema,
 } from "../schemas";
@@ -26,6 +27,7 @@ type Layer = z.infer<typeof LayerSchema>;
 type GeoJSONSourceConfig = z.infer<typeof GeoJSONSourceSchema>;
 type VectorSourceConfig = z.infer<typeof VectorSourceSchema>;
 type RasterSourceConfig = z.infer<typeof RasterSourceSchema>;
+type RasterDEMSourceConfig = z.infer<typeof RasterDEMSourceSchema>;
 type ImageSourceConfig = z.infer<typeof ImageSourceSchema>;
 type VideoSourceConfig = z.infer<typeof VideoSourceSchema>;
 
@@ -270,6 +272,19 @@ export class LayerManager {
       if (rasterSource.attribution)
         rasterSpec.attribution = rasterSource.attribution;
       this.map.addSource(sourceId, rasterSpec);
+    } else if (source.type === "raster-dem") {
+      // Forwarded whole rather than field-by-field: the schema is passthrough,
+      // and `encoding: custom` is meaningless without the redFactor/
+      // greenFactor/blueFactor/baseShift that come with it. A whitelist would
+      // drop those silently and leave custom encodings decoding as mapbox.
+      // Safe to spread — raster-dem carries no YAML-only keys to scrub (unlike
+      // geojson's refresh/cache/prefetchedData). This also matches how
+      // block-level named sources reach MapLibre.
+      const demSource = source as unknown as RasterDEMSourceConfig;
+      this.map.addSource(sourceId, {
+        ...demSource,
+        type: "raster-dem",
+      } as any);
     } else if (source.type === "image") {
       const imageSource = source as unknown as ImageSourceConfig;
       this.map.addSource(sourceId, {
