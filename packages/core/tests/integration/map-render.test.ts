@@ -457,9 +457,12 @@ pages:
       await new Promise((resolve) => renderer.on("load", resolve));
 
       const map = renderer.getMap() as any;
-      // Absent config → pass the config value through untouched (undefined here),
-      // so MapLibre shows its default rather than being force-disabled.
-      expect(map.options.attributionControl).toBeUndefined();
+      // The key must be ABSENT, not present-and-undefined. MapLibre merges
+      // options over its defaults, so passing `attributionControl: undefined`
+      // overwrites the default and the map renders no attribution at all.
+      // Asserting `toBeUndefined()` here cannot tell those apart and passed
+      // while attribution was silently missing from every map.
+      expect("attributionControl" in map.options).toBe(false);
 
       renderer.destroy();
     });

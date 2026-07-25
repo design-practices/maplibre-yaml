@@ -1,0 +1,26 @@
+# U4 assertion: clicking the feature flies the camera to zoom 14.
+type: map
+id: u4-flyto
+config:
+  center: [-74.006, 40.7128]
+  zoom: 10
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: targets
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: { name: "Click me" }
+    paint:
+      circle-radius: 20
+      circle-color: "#1d3557"
+    interactive:
+      click:
+        flyTo:
+          zoom: 14
+          duration: 300

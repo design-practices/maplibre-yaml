@@ -144,3 +144,36 @@ ls docs/dist/schema/latest/*.schema.json docs/dist/llms*.txt
 **Editor autocomplete:** open any `docs/public/configs/*.yaml` (or a CLI-scaffolded file) in VS Code with the Red Hat YAML extension — the `# yaml-language-server: $schema=` modeline gives autocomplete + inline validation. See `docs` guide "Editor setup".
 
 **ajv round-trip (converter fidelity):** `pnpm --filter @maplibre-yaml/core test` includes 26 tests validating every docs config + CLI template against BOTH the Zod parser and the generated JSON Schema.
+
+---
+
+## Phase 1 — schema truthfulness (browser verification)
+
+Automated. From the repo root:
+
+```bash
+pnpm --filter @maplibre-yaml/core build
+pnpm verify:browser            # headless
+pnpm verify:browser:headed     # watch it run
+```
+
+Screenshots land in `e2e/screenshots/`. To poke at the fixtures by hand:
+
+```bash
+pnpm verify:serve
+# http://localhost:4174/examples/verification/05-u3-attribution.html
+```
+
+| Fixture | Unit | PASS condition |
+|---|---|---|
+| `05-u3-attribution.html` | U3 | exactly ONE attribution control, bottom-right, reading "U3 ATTRIBUTION OK" |
+| `06-u4-click-flyto.html` | U4 | clicking the dark circle flies the camera to zoom 14 |
+| `07-u5-hover-highlight.html` | U5 | hovering the red circle repaints it gold |
+| `08-u6-hillshade.html` | U6 | hillshade layer added from a raster-dem source, no console error |
+| `02-controls-legend.html` | U3 regression | a map configuring NO attribution still shows MapLibre's own |
+
+The last row is load-bearing: an earlier form of the U3 guard always set
+`attributionControl`, so an unconfigured map received `undefined`, which MapLibre
+merges over its default — leaving every map with no attribution at all. The unit
+test could not see it, because it asserted the option value rather than what
+rendered.

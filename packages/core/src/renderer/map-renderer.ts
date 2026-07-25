@@ -105,7 +105,13 @@ export class MapRenderer {
       pitch: config.pitch ?? 0,
       bearing: config.bearing ?? 0,
       interactive: config.interactive ?? true,
-      attributionControl: attributionControlConfigured ? false : config.attributionControl,
+      // Set ONLY when we need to suppress the built-in control. Passing the key
+      // with an undefined value is not the same as omitting it: MapLibre merges
+      // options over its defaults, so `attributionControl: undefined` overwrites
+      // the default and the map ends up with no attribution at all — a
+      // licensing problem, not just a cosmetic one. When unconfigured, the key
+      // comes from `...config` alone (i.e. only if the author set it).
+      ...(attributionControlConfigured ? { attributionControl: false } : {}),
     } as any);
 
     // Initialize managers

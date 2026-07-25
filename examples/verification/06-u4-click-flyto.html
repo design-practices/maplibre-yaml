@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>U4: click.flyTo</title>
+  <!--
+    PASS = clicking the dark circle flies the camera in to zoom 14. FAIL = click does nothing.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/06-u4-click-flyto.html
+  -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 460px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+  </script>
+</head>
+<body>
+  <header>PASS = clicking the dark circle flies the camera in to zoom 14. FAIL = click does nothing.</header>
+  <ml-map src="./configs/phase1-flyto.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

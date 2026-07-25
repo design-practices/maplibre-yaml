@@ -1,0 +1,27 @@
+# U5 assertion: hovering the feature changes its rendered colour via
+# feature-state. The authored colour is red; highlight repaints it.
+type: map
+id: u5-highlight
+config:
+  center: [-74.006, 40.7128]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: hoverable
+    type: circle
+    source:
+      type: geojson
+      generateId: true
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: { name: "Hover me" }
+    paint:
+      circle-radius: 30
+      circle-color: "#e63946"
+    interactive:
+      hover:
+        highlight: true
+        cursor: pointer
