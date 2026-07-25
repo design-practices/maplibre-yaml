@@ -22,8 +22,18 @@ async function openMap(page: Page, file: string) {
     if (m.type() === "error") errors.push(`console: ${m.text()}`);
   });
 
-  await page.goto(`${FIXTURES}/${file}`, { waitUntil: "networkidle" });
+  // Not `networkidle`: a tiled layer keeps fetching as the map renders, so the
+  // network never goes quiet and the wait times out. Wait on the map itself.
+  await page.goto(`${FIXTURES}/${file}`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("canvas.maplibregl-canvas", { timeout: 30_000 });
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector("ml-map") as any;
+      return !!el?.getMap?.()?.isStyleLoaded?.();
+    },
+    undefined,
+    { timeout: 30_000 }
+  );
   return errors;
 }
 

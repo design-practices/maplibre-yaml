@@ -44,8 +44,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "python3 -m http.server 4174",
-    url: "http://localhost:4174/examples/verification/README.md",
+    command: "node e2e/server.mjs",
+    url: "http://localhost:4174/vendor/maplibre-gl.esm.js",
     reuseExistingServer: true,
     timeout: 30_000,
   },

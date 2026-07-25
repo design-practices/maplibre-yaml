@@ -5,14 +5,14 @@ id: u6-hillshade
 config:
   center: [-121.7, 46.85]
   zoom: 10
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "/examples/verification/configs/local-style.json"
 layers:
   - id: hills
     type: hillshade
     source:
       type: raster-dem
       tiles:
-        - "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+        - "/dem/{z}/{x}/{y}.png"
       encoding: terrarium
       tileSize: 256
       maxzoom: 14

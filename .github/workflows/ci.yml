@@ -67,3 +67,65 @@ jobs:
 
             - name: Type check
               run: pnpm typecheck
+
+    # Drives the Phase 1 fixtures against a real MapLibre instance in headless
+    # Chromium. The unit suites can only prove we handed MapLibre a given
+    # object; these prove a user sees the result. Added after a change meant to
+    # fix attribution silently removed attribution from every map -- green
+    # across 911 unit tests, caught only in a browser.
+    #
+    # Every asset (maplibre-gl, its CSS, the basemap style, the DEM tiles) is
+    # served locally by e2e/server.mjs, so no external service can turn this
+    # red. That is what makes it safe as a required check.
+    browser-verification:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v3
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Resolve Playwright version
+              id: pw
+              run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+            - name: Cache Playwright browsers
+              uses: actions/cache@v4
+              id: pw-cache
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+            # --with-deps only on a cache miss: it needs apt and is the slow part.
+            - name: Install Chromium
+              run: pnpm exec playwright install --with-deps chromium
+              if: steps.pw-cache.outputs.cache-hit != 'true'
+
+            - name: Install Chromium system deps
+              run: pnpm exec playwright install-deps chromium
+              if: steps.pw-cache.outputs.cache-hit == 'true'
+
+            - name: Build
+              run: pnpm build
+
+            - name: Run browser verification
+              run: pnpm verify:browser
+
+            - name: Upload report on failure
+              uses: actions/upload-artifact@v4
+              if: failure()
+              with:
+                  name: browser-verification-report
+                  path: |
+                      e2e/report
+                      e2e/results
+                  retention-days: 7

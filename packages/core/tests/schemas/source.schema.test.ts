@@ -516,6 +516,31 @@ describe('RasterDEMSourceSchema', () => {
     });
   });
 
+  describe('tile URL templates', () => {
+    it.each([
+      ['absolute', 'https://example.com/dem/{z}/{x}/{y}.png'],
+      ['root-relative', '/dem/{z}/{x}/{y}.png'],
+      ['explicitly relative', './dem/{z}/{x}/{y}.png'],
+    ])('accepts a %s tile template', (_label, tile) => {
+      // Self-hosting tiles beside the page is ordinary and MapLibre resolves
+      // relative URLs; rejecting them is the defect tracked for
+      // GeoJSONSourceSchema.url, which must not be repeated here.
+      expect(
+        RasterDEMSourceSchema.safeParse({ type: 'raster-dem', tiles: [tile] })
+          .success
+      ).toBe(true);
+    });
+
+    it('still rejects a string that is not a URL or path', () => {
+      expect(
+        RasterDEMSourceSchema.safeParse({
+          type: 'raster-dem',
+          tiles: ['not a url at all'],
+        }).success
+      ).toBe(false);
+    });
+  });
+
   describe('union membership', () => {
     it('parses through LayerSourceSchema', () => {
       const source = {

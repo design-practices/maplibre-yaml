@@ -29,7 +29,7 @@
     "changeset": "changeset",
     "version": "changeset version",
     "release": "pnpm build && changeset publish",
-    "verify:serve": "python3 -m http.server 4174",
+    "verify:serve": "node e2e/server.mjs",
     "verify:browser": "playwright test",
     "verify:browser:headed": "playwright test --headed"
   },

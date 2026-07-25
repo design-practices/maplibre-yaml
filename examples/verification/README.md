@@ -164,6 +164,12 @@ pnpm verify:serve
 # http://localhost:4174/examples/verification/05-u3-attribution.html
 ```
 
+These run as a **required CI check** (`browser-verification`), which is why the
+Phase 1 fixtures reach no external service: maplibre-gl, its CSS, the basemap
+style, and the DEM tiles are all served by `e2e/server.mjs`. Serve them through
+that script rather than any static server — the `/vendor/*` and `/dem/*` routes
+are synthesised, not files on disk.
+
 | Fixture | Unit | PASS condition |
 |---|---|---|
 | `05-u3-attribution.html` | U3 | exactly ONE attribution control, bottom-right, reading "U3 ATTRIBUTION OK" |

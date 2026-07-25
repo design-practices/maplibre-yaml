@@ -27,13 +27,21 @@ import { markOpenSchema } from "../parser/validation-utils";
  * — is flagged as invalid in editors and by agents generating configs, even
  * though the parser accepts them. Validating with placeholders substituted
  * keeps the runtime check meaningful while emitting a plain string.
+ *
+ * Same-origin tiles are accepted too (`/tiles/{z}/{x}/{y}.png`). Self-hosting
+ * tiles alongside the page is ordinary, and MapLibre resolves relative URLs
+ * fine — rejecting them is the same defect already tracked for
+ * `GeoJSONSourceSchema.url`, so it is not repeated here.
  */
 const TileURLTemplateSchema = z
   .string()
   .refine(
     (value) => {
+      const concrete = value.replace(/\{[^}]+\}/g, "0");
+      // Root- or explicitly-relative paths resolve against the page.
+      if (/^(\/|\.\.?\/)/.test(concrete)) return true;
       try {
-        new URL(value.replace(/\{[^}]+\}/g, "0"));
+        new URL(concrete);
         return true;
       } catch {
         return false;
@@ -41,7 +49,7 @@ const TileURLTemplateSchema = z
     },
     {
       message:
-        "Must be a valid tile URL, optionally with {z}/{x}/{y} placeholders",
+        "Must be a tile URL or same-origin path, optionally with {z}/{x}/{y} placeholders",
     }
   )
   .describe("Tile URL template");
