@@ -22,6 +22,19 @@ async function openMap(page: Page, file: string) {
     if (m.type() === "error") errors.push(`console: ${m.text()}`);
   });
 
+  // Hermeticity is enforced, not just intended. This suite is a required CI
+  // check, so a fixture that quietly reaches a CDN would make the build
+  // dependent on someone else's uptime. Any off-origin request fails the test
+  // rather than silently working on a developer machine with a warm cache.
+  await page.route("**/*", (route) => {
+    const url = route.request().url();
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)[:/]/.test(url) || url.startsWith("data:")) {
+      return route.continue();
+    }
+    errors.push(`external request (suite must stay hermetic): ${url}`);
+    return route.abort();
+  });
+
   // Not `networkidle`: a tiled layer keeps fetching as the map renders, so the
   // network never goes quiet and the wait times out. Wait on the map itself.
   await page.goto(`${FIXTURES}/${file}`, { waitUntil: "domcontentloaded" });
