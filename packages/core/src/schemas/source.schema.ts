@@ -4,7 +4,7 @@
  *
  * @description
  * Zod schemas for all MapLibre data source types with runtime-first defaults.
- * Supports GeoJSON, vector, raster, image, and video sources with dynamic data loading.
+ * Supports GeoJSON, vector, raster, raster-dem, image, and video sources with dynamic data loading.
  *
  * @example
  * ```typescript
@@ -15,6 +15,36 @@
 import { z } from "zod";
 import { LngLatSchema } from "./base.schema";
 import { markOpenSchema } from "../parser/validation-utils";
+
+/**
+ * A tile URL template.
+ *
+ * @remarks
+ * Deliberately not `z.string().url()`. Tile templates carry placeholders
+ * (`{z}/{x}/{y}`, `{bbox-epsg-3857}`, `{ratio}`) whose braces are not legal
+ * URI characters, so `.url()` emits `format: "uri"` into the published JSON
+ * Schema and every standard XYZ template — including the ones in our own docs
+ * — is flagged as invalid in editors and by agents generating configs, even
+ * though the parser accepts them. Validating with placeholders substituted
+ * keeps the runtime check meaningful while emitting a plain string.
+ */
+const TileURLTemplateSchema = z
+  .string()
+  .refine(
+    (value) => {
+      try {
+        new URL(value.replace(/\{[^}]+\}/g, "0"));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    {
+      message:
+        "Must be a valid tile URL, optionally with {z}/{x}/{y} placeholders",
+    }
+  )
+  .describe("Tile URL template");
 
 /**
  * WebSocket or Server-Sent Events streaming configuration.
@@ -420,7 +450,7 @@ export const VectorSourceSchema = z
     type: z.literal("vector").describe("Source type"),
     url: z.string().url().optional().describe("TileJSON URL"),
     tiles: z
-      .array(z.string().url())
+      .array(TileURLTemplateSchema)
       .optional()
       .describe("Tile URL template array"),
     minzoom: z
@@ -481,7 +511,7 @@ export const RasterSourceSchema = z
     type: z.literal("raster").describe("Source type"),
     url: z.string().url().optional().describe("TileJSON URL"),
     tiles: z
-      .array(z.string().url())
+      .array(TileURLTemplateSchema)
       .optional()
       .describe("Tile URL template array"),
     tileSize: z
@@ -522,6 +552,78 @@ export const RasterSourceSchema = z
 
 /** Inferred type for raster source. */
 export type RasterSource = z.infer<typeof RasterSourceSchema>;
+
+/**
+ * Raster DEM (digital elevation model) source configuration.
+ *
+ * @remarks
+ * Elevation tiles consumed by `hillshade` layers. Shaped like
+ * {@link RasterSourceSchema} — the same url-or-tiles requirement and
+ * `tileSize` — plus the `encoding` that says how elevation is packed into
+ * RGB. Custom encodings carry `redFactor`/`greenFactor`/`blueFactor`/
+ * `baseShift` through passthrough, matching MapLibre.
+ *
+ * Map-level `terrain:` configuration (3D terrain) is deliberately out of
+ * scope; this covers hillshade sourcing only.
+ *
+ * @example
+ * ```yaml
+ * source:
+ *   type: raster-dem
+ *   tiles:
+ *     - "https://example.com/dem/{z}/{x}/{y}.png"
+ *   encoding: terrarium
+ *   tileSize: 256
+ * ```
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/sources/#raster-dem | MapLibre Raster DEM Source}
+ */
+export const RasterDEMSourceSchema = z
+  .object({
+    type: z.literal("raster-dem").describe("Source type"),
+    url: z.string().url().optional().describe("TileJSON URL"),
+    tiles: z
+      .array(TileURLTemplateSchema)
+      .optional()
+      .describe("Tile URL template array"),
+    tileSize: z
+      .number()
+      .int()
+      .min(1)
+      .default(512)
+      .describe("Tile size in pixels"),
+    encoding: z
+      .enum(["terrarium", "mapbox", "custom"])
+      .default("mapbox")
+      .describe("How elevation is encoded in the tile's RGB channels"),
+    minzoom: z
+      .number()
+      .min(0)
+      .max(24)
+      .optional()
+      .describe("Minimum zoom level"),
+    maxzoom: z
+      .number()
+      .min(0)
+      .max(24)
+      .optional()
+      .describe("Maximum zoom level"),
+    bounds: z
+      .tuple([z.number(), z.number(), z.number(), z.number()])
+      .optional()
+      .describe("Bounding box [west, south, east, north]"),
+    attribution: z.string().optional().describe("Attribution text"),
+    volatile: z.boolean().optional(),
+  })
+  .passthrough()
+  .refine((data) => data.url || data.tiles, {
+    message:
+      'Raster DEM source requires either "url" (TileJSON) or "tiles" (tile URL array). ' +
+      "Provide at least one of these properties.",
+  });
+
+/** Inferred type for raster DEM source. */
+export type RasterDEMSource = z.infer<typeof RasterDEMSourceSchema>;
 
 /**
  * Image source configuration.
@@ -630,6 +732,7 @@ export const LayerSourceSchema = z.union([
   GeoJSONSourceSchema,
   VectorSourceSchema,
   RasterSourceSchema,
+  RasterDEMSourceSchema,
   ImageSourceSchema,
   VideoSourceSchema,
 ]);
@@ -646,5 +749,6 @@ export type LayerSource = z.infer<typeof LayerSourceSchema>;
 markOpenSchema(GeoJSONSourceSchema);
 markOpenSchema(VectorSourceSchema);
 markOpenSchema(RasterSourceSchema);
+markOpenSchema(RasterDEMSourceSchema);
 markOpenSchema(ImageSourceSchema);
 markOpenSchema(VideoSourceSchema);

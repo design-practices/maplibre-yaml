@@ -67,7 +67,7 @@ const CORPUS: Expectation[] = [
     line: 3,
     column: 5,
     messageContains:
-      'Unknown source type "geojsn". Valid types: geojson, vector, raster, image, video. Did you mean "geojson"?',
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video. Did you mean "geojson"?',
   },
   {
     file: "missing-map-config.yaml",

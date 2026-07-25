@@ -10,6 +10,7 @@ import {
   GeoJSONSourceSchema,
   VectorSourceSchema,
   RasterSourceSchema,
+  RasterDEMSourceSchema,
   ImageSourceSchema,
   VideoSourceSchema,
   LayerSourceSchema,
@@ -452,6 +453,76 @@ describe('RasterSourceSchema', () => {
           tileSize: 0,
         })
       ).toThrow();
+    });
+  });
+});
+
+describe('RasterDEMSourceSchema', () => {
+  describe('valid sources', () => {
+    it('accepts a terrarium-encoded tiles array', () => {
+      const source = {
+        type: 'raster-dem' as const,
+        tiles: ['https://example.com/dem/{z}/{x}/{y}.png'],
+        encoding: 'terrarium' as const,
+      };
+      expect(RasterDEMSourceSchema.parse(source)).toMatchObject(source);
+    });
+
+    it('accepts a mapbox-encoded TileJSON URL', () => {
+      const source = {
+        type: 'raster-dem' as const,
+        url: 'https://api.maptiler.com/terrain.json',
+        encoding: 'mapbox' as const,
+      };
+      expect(RasterDEMSourceSchema.parse(source)).toMatchObject(source);
+    });
+
+    it('defaults encoding to mapbox, matching MapLibre', () => {
+      const result = RasterDEMSourceSchema.parse({
+        type: 'raster-dem',
+        url: 'https://example.com/terrain.json',
+      });
+      expect(result.encoding).toBe('mapbox');
+    });
+
+    it('accepts custom encoding for non-standard DEM tiles', () => {
+      const source = {
+        type: 'raster-dem' as const,
+        tiles: ['https://example.com/{z}/{x}/{y}.png'],
+        encoding: 'custom' as const,
+        redFactor: 256,
+        baseShift: 0,
+      };
+      // redFactor/baseShift ride passthrough like other MapLibre source options.
+      expect(RasterDEMSourceSchema.parse(source)).toMatchObject(source);
+    });
+  });
+
+  describe('invalid sources', () => {
+    it('rejects a source with neither url nor tiles', () => {
+      expect(() =>
+        RasterDEMSourceSchema.parse({ type: 'raster-dem' })
+      ).toThrow(/Raster DEM source requires either/);
+    });
+
+    it('rejects an unknown encoding', () => {
+      expect(() =>
+        RasterDEMSourceSchema.parse({
+          type: 'raster-dem',
+          url: 'https://example.com/terrain.json',
+          encoding: 'srtm',
+        })
+      ).toThrow();
+    });
+  });
+
+  describe('union membership', () => {
+    it('parses through LayerSourceSchema', () => {
+      const source = {
+        type: 'raster-dem' as const,
+        tiles: ['https://example.com/dem/{z}/{x}/{y}.png'],
+      };
+      expect(LayerSourceSchema.parse(source)).toMatchObject(source);
     });
   });
 });

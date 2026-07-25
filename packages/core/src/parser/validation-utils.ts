@@ -58,6 +58,7 @@ export const SOURCE_TYPES = [
   "geojson",
   "vector",
   "raster",
+  "raster-dem",
   "image",
   "video",
 ] as const;
