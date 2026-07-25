@@ -19,6 +19,21 @@ type ControlsConfig = z.infer<typeof ControlsConfigSchema>;
 type LegendConfig = z.infer<typeof LegendConfigSchema>;
 
 /**
+ * Whether the YAML `controls.attribution` control is configured.
+ *
+ * Uses the same bare-truthiness convention as every control branch in
+ * `ControlsManager.addControls` — a `true` or any options object enables the
+ * control; `false`/absent disables it. This MUST stay in lockstep with the ADD
+ * decision in `ControlsManager`: if this predicate and that branch disagree
+ * (e.g. one honors `enabled: false` and the other doesn't), a configured
+ * attribution control and MapLibre's built-in default can both render.
+ */
+function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
+  const attribution = controls?.attribution;
+  return attribution != null && attribution !== false;
+}
+
+/**
  * Options for MapRenderer
  */
 export interface MapRendererOptions {
@@ -68,6 +83,18 @@ export class MapRenderer {
     this.legendBuilt = false;
     this.autoLegendContainer = null;
 
+    // When a `controls.attribution` control is configured, MapLibre's built-in
+    // attribution must be disabled at construction time so the two don't
+    // double-render. An explicit `config.attributionControl: true` conflicts;
+    // the configured control wins, with a warning.
+    const attributionControlConfigured = isAttributionControlEnabled(options.controls);
+    if (attributionControlConfigured && config.attributionControl === true) {
+      console.warn(
+        '[maplibre-yaml] `controls.attribution` overrides `attributionControl: true`; ' +
+          "MapLibre's built-in attribution is disabled to avoid a duplicate control.",
+      );
+    }
+
     // Initialize MapLibre map
     this.map = new MapLibreMap({
       ...config,
@@ -78,6 +105,13 @@ export class MapRenderer {
       pitch: config.pitch ?? 0,
       bearing: config.bearing ?? 0,
       interactive: config.interactive ?? true,
+      // Set ONLY when we need to suppress the built-in control. Passing the key
+      // with an undefined value is not the same as omitting it: MapLibre merges
+      // options over its defaults, so `attributionControl: undefined` overwrites
+      // the default and the map ends up with no attribution at all — a
+      // licensing problem, not just a cosmetic one. When unconfigured, the key
+      // comes from `...config` alone (i.e. only if the author set it).
+      ...(attributionControlConfigured ? { attributionControl: false } : {}),
     } as any);
 
     // Initialize managers

@@ -64,6 +64,7 @@ vi.mock("maplibre-gl", () => {
   const GeolocateControl = vi.fn();
   const ScaleControl = vi.fn();
   const FullscreenControl = vi.fn();
+  const AttributionControl = vi.fn();
   const Popup = vi.fn(() => ({
     setLngLat: vi.fn().mockReturnThis(),
     setHTML: vi.fn().mockReturnThis(),
@@ -71,12 +72,13 @@ vi.mock("maplibre-gl", () => {
     remove: vi.fn(),
   }));
   return {
-    default: { Map: MaplibreMap, NavigationControl, GeolocateControl, ScaleControl, FullscreenControl, Popup },
+    default: { Map: MaplibreMap, NavigationControl, GeolocateControl, ScaleControl, FullscreenControl, AttributionControl, Popup },
     Map: MaplibreMap,
     NavigationControl,
     GeolocateControl,
     ScaleControl,
     FullscreenControl,
+    AttributionControl,
     Popup,
   };
 });
@@ -429,6 +431,78 @@ pages:
       const map = renderer.getMap() as any;
       expect(map.addControl).toHaveBeenCalledTimes(1);
 
+      renderer.destroy();
+    });
+
+    it("suppresses the default attribution when controls.attribution is configured", async () => {
+      const renderer = new MapRenderer(container, baseConfig, [], {
+        controls: { attribution: true },
+      });
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      // Constructor must disable MapLibre's built-in attribution so the
+      // configured control is not double-rendered.
+      expect(map.options.attributionControl).toBe(false);
+
+      renderer.destroy();
+    });
+
+    it("leaves the default attribution enabled when no attribution control is configured", async () => {
+      const renderer = new MapRenderer(container, baseConfig, [], {
+        controls: { navigation: true },
+      });
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      // The key must be ABSENT, not present-and-undefined. MapLibre merges
+      // options over its defaults, so passing `attributionControl: undefined`
+      // overwrites the default and the map renders no attribution at all.
+      // Asserting `toBeUndefined()` here cannot tell those apart and passed
+      // while attribution was silently missing from every map.
+      expect("attributionControl" in map.options).toBe(false);
+
+      renderer.destroy();
+    });
+
+    it("keeps the add and disable-default decisions in agreement for an options object", async () => {
+      // `{ enabled: false }` is an options object: the ADD branch (truthy) adds
+      // the control, so the DISABLE branch must also fire, or the built-in
+      // default double-renders. This pins the two decisions in lockstep.
+      const renderer = new MapRenderer(container, baseConfig, [], {
+        controls: { attribution: { enabled: false } },
+      });
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      expect(map.options.attributionControl).toBe(false);
+      // Exactly one attribution control total: the built-in is disabled and the
+      // configured control is added on load.
+      expect(map.addControl).toHaveBeenCalledTimes(1);
+
+      renderer.destroy();
+    });
+
+    it("lets controls.attribution win over config.attributionControl with a warning", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const renderer = new MapRenderer(
+        container,
+        { ...baseConfig, attributionControl: true },
+        [],
+        { controls: { attribution: true } }
+      );
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      expect(map.options.attributionControl).toBe(false);
+      expect(warnSpy).toHaveBeenCalled();
+
+      warnSpy.mockRestore();
       renderer.destroy();
     });
 

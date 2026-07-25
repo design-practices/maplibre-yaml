@@ -52,6 +52,31 @@ const ControlConfigSchema = z.union([
 ]);
 
 /**
+ * Attribution control configuration.
+ *
+ * @remarks
+ * Like {@link ControlConfigSchema} but with the attribution-specific
+ * passthrough options MapLibre's `AttributionControl` accepts. Kept separate so
+ * `compact` and `customAttribution` survive validation instead of being
+ * stripped as unknown keys.
+ */
+const AttributionControlConfigSchema = z.union([
+  z.boolean(),
+  z.object({
+    enabled: z.boolean().optional().describe("Whether control is enabled"),
+    position: ControlPositionSchema.optional().describe("Control position"),
+    compact: z
+      .boolean()
+      .optional()
+      .describe("Render the attribution control in its compact form"),
+    customAttribution: z
+      .union([z.string(), z.array(z.string())])
+      .optional()
+      .describe("Additional attribution string(s) to display"),
+  }),
+]);
+
+/**
  * Map controls configuration.
  *
  * @remarks
@@ -92,7 +117,9 @@ export const ControlsConfigSchema = z
     geolocate: ControlConfigSchema.optional().describe("Geolocation control"),
     scale: ControlConfigSchema.optional().describe("Scale control"),
     fullscreen: ControlConfigSchema.optional().describe("Fullscreen control"),
-    attribution: ControlConfigSchema.optional().describe("Attribution control"),
+    attribution: AttributionControlConfigSchema.optional().describe(
+      "Attribution control",
+    ),
   })
   .describe("Map controls configuration");
 

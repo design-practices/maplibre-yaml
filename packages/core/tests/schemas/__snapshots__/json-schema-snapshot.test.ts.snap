@@ -2338,7 +2338,46 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "description": "Fullscreen control"
                 },
                 "attribution": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/controls/properties/navigation",
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "Whether control is enabled"
+                        },
+                        "position": {
+                          "$ref": "#/$defs/any/oneOf/0/properties/config/properties/logoPosition",
+                          "description": "Control position"
+                        },
+                        "compact": {
+                          "type": "boolean",
+                          "description": "Render the attribution control in its compact form"
+                        },
+                        "customAttribution": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          ],
+                          "description": "Additional attribution string(s) to display"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "patternProperties": {
+                        "^x-": {}
+                      }
+                    }
+                  ],
                   "description": "Attribution control"
                 }
               },
@@ -5458,7 +5497,46 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
               "description": "Fullscreen control"
             },
             "attribution": {
-              "$ref": "#/$defs/map/properties/controls/properties/navigation",
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Whether control is enabled"
+                    },
+                    "position": {
+                      "$ref": "#/$defs/map/properties/config/properties/logoPosition",
+                      "description": "Control position"
+                    },
+                    "compact": {
+                      "type": "boolean",
+                      "description": "Render the attribution control in its compact form"
+                    },
+                    "customAttribution": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ],
+                      "description": "Additional attribution string(s) to display"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "patternProperties": {
+                    "^x-": {}
+                  }
+                }
+              ],
               "description": "Attribution control"
             }
           },
@@ -8137,7 +8215,46 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "description": "Fullscreen control"
                             },
                             "attribution": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/controls/properties/navigation",
+                              "anyOf": [
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "enabled": {
+                                      "type": "boolean",
+                                      "description": "Whether control is enabled"
+                                    },
+                                    "position": {
+                                      "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/logoPosition",
+                                      "description": "Control position"
+                                    },
+                                    "compact": {
+                                      "type": "boolean",
+                                      "description": "Render the attribution control in its compact form"
+                                    },
+                                    "customAttribution": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      ],
+                                      "description": "Additional attribution string(s) to display"
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "patternProperties": {
+                                    "^x-": {}
+                                  }
+                                }
+                              ],
                               "description": "Attribution control"
                             }
                           },
