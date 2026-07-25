@@ -10,10 +10,18 @@ import { LayerSchema, PopupContentSchema } from "../schemas";
 import { PopupBuilder } from "./popup-builder";
 import {
   CLICK_INTERACTIONS,
+  HOVER_INTERACTIONS,
   type Interaction,
   type InteractionContext,
   type InteractionDeps,
+  type InteractionRuntime,
 } from "./interactions";
+
+/** An interaction paired with its per-handler runtime. */
+type BoundInteraction = {
+  interaction: Interaction;
+  runtime: InteractionRuntime;
+};
 
 type Layer = z.infer<typeof LayerSchema>;
 type PopupContent = z.infer<typeof PopupContentSchema>;
@@ -43,9 +51,18 @@ export class EventHandler {
   private attachedLayers: Set<string>;
   private boundHandlers: Map<
     string,
-    { click?: Function; mouseenter?: Function; mouseleave?: Function }
+    {
+      click?: Function;
+      mouseenter?: Function;
+      mouseleave?: Function;
+      mousemove?: Function;
+    }
   >;
   private interactionDeps: InteractionDeps;
+  private clickInteractions: BoundInteraction[];
+  private hoverInteractions: BoundInteraction[];
+  /** Source id per layer, derived as LayerManager derives it. */
+  private layerToSource: Map<string, string>;
 
   constructor(map: MapLibreMap, callbacks?: EventHandlerCallbacks) {
     this.map = map;
@@ -60,6 +77,16 @@ export class EventHandler {
       showPopup: (content, feature, lngLat) =>
         this.showPopup(content, feature, lngLat),
     };
+    this.layerToSource = new Map();
+    // One runtime per interaction per handler, so stateful interactions
+    // (highlight) never share tracked features across map instances.
+    const bind = (interactions: readonly Interaction[]): BoundInteraction[] =>
+      interactions.map((interaction) => ({
+        interaction,
+        runtime: interaction.create(this.interactionDeps),
+      }));
+    this.clickInteractions = bind(CLICK_INTERACTIONS);
+    this.hoverInteractions = bind(HOVER_INTERACTIONS);
   }
 
   /**
@@ -72,6 +99,12 @@ export class EventHandler {
     const interactive = layer.interactive as { hover?: any; click?: any };
     const { hover, click } = interactive;
     const handlers: any = {};
+
+    // Source id, derived exactly as LayerManager derives it, so feature-state
+    // writes address the source the data actually lives in.
+    const sourceId =
+      typeof layer.source === "string" ? layer.source : `${layer.id}-source`;
+    this.layerToSource.set(layer.id, sourceId);
 
     // Hover handling
     if (hover) {
@@ -86,10 +119,30 @@ export class EventHandler {
 
       handlers.mouseleave = () => {
         this.map.getCanvas().style.cursor = "";
+        this.clearInteractionState(layer.id);
       };
 
       this.map.on("mouseenter", layer.id, handlers.mouseenter);
       this.map.on("mouseleave", layer.id, handlers.mouseleave);
+
+      // mousemove only when a hover interaction needs per-feature resolution —
+      // mouseenter fires once for the layer, not once per feature.
+      if (this.hasHoverInteraction(hover)) {
+        handlers.mousemove = (e: MapMouseEvent & { features?: any[] }) => {
+          const feature = e.features?.[0];
+          if (!feature) return;
+
+          this.dispatch(this.hoverInteractions, hover, {
+            map: this.map,
+            layerId: layer.id,
+            sourceId,
+            feature,
+            lngLat: e.lngLat,
+          });
+        };
+
+        this.map.on("mousemove", layer.id, handlers.mousemove);
+      }
     }
 
     // Click handling
@@ -99,9 +152,10 @@ export class EventHandler {
         const feature = e.features?.[0];
         if (!feature) return;
 
-        this.dispatch(CLICK_INTERACTIONS, click, {
+        this.dispatch(this.clickInteractions, click, {
           map: this.map,
           layerId: layer.id,
+          sourceId,
           feature,
           lngLat: e.lngLat,
         });
@@ -124,19 +178,55 @@ export class EventHandler {
    * highlight lands. An interaction whose `select` finds no config is skipped.
    */
   private dispatch(
-    interactions: readonly Interaction[],
+    interactions: BoundInteraction[],
     trigger: any,
     ctx: InteractionContext
   ): void {
-    for (const interaction of interactions) {
+    for (const { interaction, runtime } of interactions) {
       const config = interaction.select(trigger);
       // Falsy means not configured, matching the `if (click.popup)` check this
       // replaced. Not a nullish check: `hover.highlight` is a plain boolean, so
       // `false` is present-but-off and must not run.
       if (!config) continue;
 
-      interaction.run(config, ctx, this.interactionDeps);
+      runtime.run(config, ctx);
     }
+  }
+
+  /** Whether any hover interaction is configured for this trigger. */
+  private hasHoverInteraction(hover: any): boolean {
+    return this.hoverInteractions.some(
+      ({ interaction }) => !!interaction.select(hover)
+    );
+  }
+
+  /**
+   * Release per-layer interaction state.
+   *
+   * @remarks
+   * Called wherever a tracked feature can stop being valid: the pointer leaves
+   * the layer, events are detached, or the handler is destroyed. Stale
+   * feature-state would otherwise leave a feature lit, or re-light the wrong
+   * one after the source data is replaced.
+   */
+  private clearInteractionState(layerId: string): void {
+    for (const { runtime } of this.hoverInteractions) {
+      runtime.clearLayer?.(layerId, this.map);
+    }
+    for (const { runtime } of this.clickInteractions) {
+      runtime.clearLayer?.(layerId, this.map);
+    }
+  }
+
+  /**
+   * Drop highlight state for a layer whose data was replaced.
+   *
+   * @remarks
+   * Feature ids are only meaningful within a given dataset — after a refresh
+   * `setData`, a retained id can address a different feature entirely.
+   */
+  resetFeatureState(layerId: string): void {
+    this.clearInteractionState(layerId);
   }
 
   /**
@@ -169,9 +259,16 @@ export class EventHandler {
     if (handlers.mouseleave) {
       this.map.off("mouseleave", layerId, handlers.mouseleave as any);
     }
+    if (handlers.mousemove) {
+      this.map.off("mousemove", layerId, handlers.mousemove as any);
+    }
+
+    // Before forgetting the layer: a feature left lit here would stay lit.
+    this.clearInteractionState(layerId);
 
     this.boundHandlers.delete(layerId);
     this.attachedLayers.delete(layerId);
+    this.layerToSource.delete(layerId);
   }
 
   /**

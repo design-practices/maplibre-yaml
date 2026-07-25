@@ -37,6 +37,12 @@ type FlyToConfig = NonNullable<ClickConfig["flyTo"]>;
 export interface InteractionContext {
   map: MapLibreMap;
   layerId: string;
+  /**
+   * The MapLibre source backing this layer. Derived the same way
+   * `LayerManager` derives it, so feature-state writes address the same source
+   * the data actually lives in.
+   */
+  sourceId: string;
   feature: any;
   lngLat: LngLat;
 }
@@ -71,15 +77,42 @@ export interface InteractionDeps {
 export interface Interaction<TConfig = unknown> {
   name: string;
   select: (trigger: any) => TConfig | undefined;
-  run: (config: TConfig, ctx: InteractionContext, deps: InteractionDeps) => void;
+  /**
+   * Build this interaction's per-`EventHandler` runtime.
+   *
+   * @remarks
+   * A factory, not a bare `run`, because interactions are not all
+   * fire-and-forget: `highlight` tracks which feature is lit per layer and has
+   * to unset it on several lifecycle events. That state must be per handler
+   * instance — the registry itself is module-level and shared — so each
+   * interaction closes over its own, and nothing leaks into `EventHandler`.
+   */
+  create: (deps: InteractionDeps) => InteractionRuntime<TConfig>;
+}
+
+/** The live half of an interaction, owning whatever state it needs. */
+export interface InteractionRuntime<TConfig = unknown> {
+  run: (config: TConfig, ctx: InteractionContext) => void;
+  /**
+   * Release state held for one layer. Called on mouseleave, `detachEvents`,
+   * and `destroy` — anywhere the tracked feature may no longer be valid.
+   */
+  clearLayer?: (layerId: string, map: MapLibreMap) => void;
 }
 
 /**
- * Identity helper that keeps each entry's `select`/`run` types checked against
- * each other while still allowing a heterogeneous registry array.
+ * Identity helper that keeps each entry's `select` and `run` types checked
+ * against each other while still allowing a heterogeneous registry array.
  */
 const defineInteraction = <T>(interaction: Interaction<T>): Interaction<any> =>
   interaction;
+
+/** Wrap a stateless effect in the runtime shape. */
+const stateless =
+  <T>(run: (config: T, ctx: InteractionContext, deps: InteractionDeps) => void) =>
+  (deps: InteractionDeps): InteractionRuntime<T> => ({
+    run: (config, ctx) => run(config, ctx, deps),
+  });
 
 /**
  * Click interactions, in dispatch order.
@@ -93,12 +126,14 @@ export const CLICK_INTERACTIONS: readonly Interaction[] = [
   defineInteraction<PopupContent>({
     name: "popup",
     select: (trigger) => trigger.popup,
-    run: (content, ctx, deps) => deps.showPopup(content, ctx.feature, ctx.lngLat),
+    create: stateless((content, ctx, deps) =>
+      deps.showPopup(content, ctx.feature, ctx.lngLat)
+    ),
   }),
   defineInteraction<FlyToConfig>({
     name: "flyTo",
     select: (trigger) => trigger.flyTo,
-    run: (config, ctx) => {
+    create: stateless((config: FlyToConfig, ctx) => {
       // Center defaults to the clicked point. zoom/duration are omitted when
       // unset so MapLibre's own defaults apply — `!== undefined` rather than a
       // truthiness check, because 0 is meaningful for both.
@@ -109,6 +144,74 @@ export const CLICK_INTERACTIONS: readonly Interaction[] = [
       if (config.duration !== undefined) options.duration = config.duration;
 
       ctx.map.flyTo(options);
+    }),
+  }),
+];
+
+/**
+ * Hover interactions, in dispatch order.
+ *
+ * @remarks
+ * Driven by `mousemove`, not `mouseenter`: MapLibre fires `mouseenter` once
+ * when the pointer enters the layer, not per feature, so it cannot tell which
+ * feature is under the cursor as you move across them.
+ */
+export const HOVER_INTERACTIONS: readonly Interaction[] = [
+  defineInteraction<boolean>({
+    name: "highlight",
+    select: (trigger) => trigger.highlight,
+    create: () => {
+      /** The lit feature per layer — per handler instance, never shared. */
+      const lit = new Map<string, { sourceId: string; featureId: string | number }>();
+      /** Warn once per layer, not once per mousemove. */
+      const warned = new Set<string>();
+
+      const unset = (
+        map: MapLibreMap,
+        entry: { sourceId: string; featureId: string | number }
+      ) => {
+        map.setFeatureState(
+          { source: entry.sourceId, id: entry.featureId },
+          { hover: false }
+        );
+      };
+
+      return {
+        run(_config, ctx) {
+          const featureId = ctx.feature?.id;
+
+          if (featureId === undefined || featureId === null) {
+            // Feature-state is addressed by id; without one there is nothing to
+            // target. Authors fix this with `generateId: true` or `promoteId`.
+            if (!warned.has(ctx.layerId)) {
+              warned.add(ctx.layerId);
+              console.warn(
+                `[maplibre-yaml] hover.highlight on layer "${ctx.layerId}" ` +
+                  "needs feature ids. Set `generateId: true` on the source, or " +
+                  "`promoteId` to use a property as the id."
+              );
+            }
+            return;
+          }
+
+          const current = lit.get(ctx.layerId);
+          if (current?.featureId === featureId) return; // same feature, no churn
+
+          if (current) unset(ctx.map, current);
+          ctx.map.setFeatureState(
+            { source: ctx.sourceId, id: featureId },
+            { hover: true }
+          );
+          lit.set(ctx.layerId, { sourceId: ctx.sourceId, featureId });
+        },
+
+        clearLayer(layerId, map) {
+          const current = lit.get(layerId);
+          if (!current) return;
+          unset(map, current);
+          lit.delete(layerId);
+        },
+      };
     },
   }),
 ];
