@@ -39,6 +39,7 @@ import {
   YAMLParser,
   type MapBlock,
   type ParseError,
+  type ValidationWarning,
 } from "../parser/yaml-parser.js";
 import { MapRenderer } from "../renderer/map-renderer.js";
 
@@ -68,6 +69,13 @@ export class MLMap extends HTMLElement {
 
   /** Parsed and validated configuration */
   private _config: MapBlock | null = null;
+
+  /**
+   * Whether the one-time dev diagnostics have already run for this element.
+   * Repeated `config`/`src` updates and `reload()` re-render the map but must
+   * not re-spam the same console warnings.
+   */
+  private diagnosticsRun = false;
 
   /**
    * Observed attributes that trigger attributeChangedCallback
@@ -211,6 +219,10 @@ export class MLMap extends HTMLElement {
   private loadFromScriptTag(yamlContent: string): void {
     const result = YAMLParser.safeParseMapBlock(yamlContent);
 
+    // Warnings are advisory (unknown keys, deprecations, expression hints):
+    // surface them on the console, never in the error card (per decision D11).
+    this.logWarnings(result.warnings);
+
     if (result.success && result.data) {
       this._config = result.data;
       this.renderMap(result.data);
@@ -242,6 +254,8 @@ export class MLMap extends HTMLElement {
 
       const yamlContent = await response.text();
       const result = YAMLParser.safeParseMapBlock(yamlContent);
+
+      this.logWarnings(result.warnings);
 
       if (result.success && result.data) {
         this._config = result.data;
@@ -339,6 +353,9 @@ export class MLMap extends HTMLElement {
 
       // Set up event forwarding
       this.setupEventForwarding();
+
+      // Surface the classic silent-blank-map failure modes on the console.
+      this.checkEnvironment();
     } catch (error) {
       this.handleError([
         {
@@ -348,6 +365,87 @@ export class MLMap extends HTMLElement {
           }`,
         },
       ]);
+    }
+  }
+
+  /**
+   * Log parser warnings to the console.
+   *
+   * @remarks
+   * Warnings (unknown keys, deprecated fields, expression hints) are advisory
+   * and console-only per decision D11 — they never appear in the on-map error
+   * card, which is reserved for hard failures.
+   */
+  private logWarnings(warnings: ValidationWarning[] | undefined): void {
+    if (!warnings || warnings.length === 0) return;
+    for (const warning of warnings) {
+      const location =
+        warning.line !== undefined
+          ? ` (line ${warning.line}${
+              warning.column !== undefined ? `, column ${warning.column}` : ""
+            })`
+          : "";
+      const path = warning.path ? `${warning.path}: ` : "";
+      console.warn(`[ml-map] ${path}${warning.message}${location}`);
+    }
+  }
+
+  /**
+   * Detect the two classic silent-blank-map failures and warn (console-only,
+   * no on-map badge per decision D11):
+   *
+   * 1. The host element has zero height, so the map is invisible.
+   * 2. A map was created but MapLibre's CSS is not loaded.
+   */
+  private checkEnvironment(): void {
+    if (typeof window === "undefined") return;
+
+    // Run at most once per element: re-renders (config/src updates, reload())
+    // must not re-emit identical warnings.
+    if (this.diagnosticsRun) return;
+    this.diagnosticsRun = true;
+
+    // (a) Zero-height host: the single most common "blank map" cause. Only
+    // flag it when the element is actually laid out and visible — a hidden or
+    // not-yet-mounted map (`offsetParent === null`, e.g. an ancestor is
+    // `display: none`) legitimately has zero height and must not warn.
+    const isLaidOut = this.offsetParent !== null;
+    const rect = this.getBoundingClientRect();
+    if (isLaidOut && rect.height === 0) {
+      console.warn(
+        "[ml-map] The <ml-map> host element has zero height, so the map will " +
+          "not be visible. Give it a height, for example: `ml-map { height: 400px; }`."
+      );
+    }
+
+    // (b) A map was created but MapLibre's stylesheet is missing.
+    if (this.renderer && !MLMap.isMapLibreCssLoaded()) {
+      console.warn(
+        "[ml-map] MapLibre GL CSS does not appear to be loaded, so the map " +
+          "canvas and controls may render incorrectly. Load it, for example: " +
+          '`<link rel="stylesheet" href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css">`.'
+      );
+    }
+  }
+
+  /**
+   * Probe whether MapLibre's CSS is loaded using the same `.maplibregl-canary`
+   * technique MapLibre GL JS uses internally: the stylesheet paints the canary
+   * salmon (`rgb(250, 128, 114)`); if the computed color differs, the CSS is
+   * absent.
+   */
+  private static isMapLibreCssLoaded(): boolean {
+    try {
+      const canary = document.createElement("div");
+      canary.className = "maplibregl-canary";
+      canary.style.display = "none";
+      document.body.appendChild(canary);
+      const color = window.getComputedStyle(canary).backgroundColor;
+      document.body.removeChild(canary);
+      return color === "rgb(250, 128, 114)";
+    } catch {
+      // If we cannot probe (unusual DOM), do not nag.
+      return true;
     }
   }
 

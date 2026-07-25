@@ -1,11 +1,27 @@
 // docs/astro.config.mjs
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import { generateAgentAssets } from "./scripts/generate-agent-assets.mjs";
+
+/**
+ * Regenerate agent-facing assets (hosted JSON Schemas, llms.txt, llms-full.txt)
+ * on every dev start and production build, from the core schemas + example
+ * configs — so they can never go stale relative to the docs they ship with.
+ */
+const agentAssets = {
+  name: "maplibre-yaml-agent-assets",
+  hooks: {
+    "astro:config:setup": () => {
+      generateAgentAssets();
+    },
+  },
+};
 
 export default defineConfig({
   site: "https://docs.maplibre-yaml.org",
   base: "/",
   integrations: [
+    agentAssets,
     starlight({
       title: "maplibre-yaml",
       description: "Declarative web maps with YAML configuration",
@@ -41,6 +57,8 @@ export default defineConfig({
             { label: "Working with Layers", link: "/guides/layers/" },
             { label: "Data Sources", link: "/guides/data-sources/" },
             { label: "Live Data & Streaming", link: "/guides/live-data/" },
+            { label: "Editor Setup", link: "/guides/editor-setup/" },
+            { label: "Using AI Agents", link: "/guides/ai-agents/" },
           ],
         },
         {

@@ -1,0 +1,10 @@
+pages:
+  - path: "/"
+    title: "Bad longitude"
+    blocks:
+      - type: map
+        id: m
+        config:
+          center: [999, 40]
+          zoom: 12
+          mapStyle: "https://demotiles.maplibre.org/style.json"

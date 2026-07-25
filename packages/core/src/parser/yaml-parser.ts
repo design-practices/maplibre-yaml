@@ -71,12 +71,26 @@
  * ```
  */
 
-import { parse as parseYAML } from "yaml";
-import { ZodError } from "zod";
+import { parse as parseYAML, parseDocument, LineCounter, type Document } from "yaml";
+import { ZodError, type ZodIssue } from "zod";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
 import type { z } from "zod";
+import {
+  collectWarnings,
+  positionForPath,
+  suggest,
+  unknownTypeMessage,
+  typeKindForOptions,
+  valueAtPath,
+  LAYER_TYPES,
+  SOURCE_TYPES,
+  BLOCK_TYPES,
+  type ValidationWarning,
+} from "./validation-utils";
+
+export type { ValidationWarning } from "./validation-utils";
 
 /**
  * Type alias for the root configuration object
@@ -109,12 +123,14 @@ export type ScrollytellingBlock = z.infer<typeof ScrollytellingBlockSchema>;
  * @property message - Human-readable error description
  * @property line - Optional line number in the YAML file where error occurred
  * @property column - Optional column number in the YAML file where error occurred
+ * @property suggestion - Optional nearest valid alternative (did-you-mean)
  */
 export interface ParseError {
   path: string;
   message: string;
   line?: number;
   column?: number;
+  suggestion?: string;
 }
 
 /**
@@ -123,11 +139,14 @@ export interface ParseError {
  * @property success - Whether parsing and validation succeeded
  * @property data - Validated configuration object (only present if success is true)
  * @property errors - Array of errors (only present if success is false)
+ * @property warnings - Non-fatal findings (unknown keys, deprecations, bounded
+ *   expression checks). Present on both success and failure; always an array.
  */
 export interface ParseResult<T = RootConfig> {
   success: boolean;
   data?: T;
   errors: ParseError[];
+  warnings: ValidationWarning[];
 }
 
 /**
@@ -241,33 +260,104 @@ export class YAMLParser {
    * ```
    */
   static safeParse(yaml: string): ParseResult {
-    try {
-      const data = this.parse(yaml);
-      return {
-        success: true,
-        data,
-        errors: [],
-      };
-    } catch (error) {
-      // Handle Zod validation errors
-      if (error instanceof ZodError) {
-        return {
-          success: false,
-          errors: this.formatZodErrors(error),
-        };
-      }
+    return this.safeParseWithSchema(yaml, RootSchema, true) as ParseResult;
+  }
 
-      // Handle other errors (YAML syntax, reference errors, etc.)
+  /**
+   * Parse a YAML document while preserving source positions.
+   *
+   * @internal
+   * @remarks
+   * Uses the `yaml` document API with a {@link LineCounter} so that YAML syntax
+   * errors carry `{ line, column }` and Zod issue paths can be mapped back to
+   * source positions via node ranges.
+   */
+  private static parseToDocument(yaml: string): {
+    doc: Document;
+    lineCounter: LineCounter;
+    syntaxError?: ParseError;
+  } {
+    const lineCounter = new LineCounter();
+    const doc = parseDocument(yaml, { lineCounter });
+
+    if (doc.errors.length > 0) {
+      const err = doc.errors[0]!;
+      const start = err.linePos?.[0];
       return {
-        success: false,
-        errors: [
-          {
-            path: "",
-            message: error instanceof Error ? error.message : String(error),
-          },
-        ],
+        doc,
+        lineCounter,
+        syntaxError: {
+          path: "",
+          message: `YAML syntax error: ${err.message}`,
+          ...(start ? { line: start.line, column: start.col } : {}),
+        },
       };
     }
+
+    return { doc, lineCounter };
+  }
+
+  /**
+   * Shared safe-parse implementation with position mapping and warnings.
+   *
+   * @internal
+   */
+  private static safeParseWithSchema<T>(
+    yaml: string,
+    schema: z.ZodType<T>,
+    resolveRefs: boolean
+  ): ParseResult<T> {
+    const { doc, lineCounter, syntaxError } = this.parseToDocument(yaml);
+    if (syntaxError) {
+      return { success: false, errors: [syntaxError], warnings: [] };
+    }
+
+    const value = doc.toJS() as unknown;
+
+    // Warnings are collected from the raw value regardless of validity so
+    // typos and deprecations still surface when other hard errors are present.
+    const warnings = collectWarnings(
+      value,
+      schema as unknown as z.ZodTypeAny,
+      doc,
+      lineCounter
+    );
+
+    const result = schema.safeParse(value);
+    if (!result.success) {
+      return {
+        success: false,
+        errors: this.formatZodErrors(result.error, { doc, lineCounter, value }),
+        warnings,
+      };
+    }
+
+    if (resolveRefs) {
+      try {
+        const resolved = this.resolveReferences(
+          result.data as unknown as RootConfig
+        );
+        return {
+          success: true,
+          data: resolved as unknown as T,
+          warnings,
+          errors: [],
+        };
+      } catch (error) {
+        return {
+          success: false,
+          errors: [
+            {
+              path: "",
+              message: error instanceof Error ? error.message : String(error),
+            },
+          ],
+          warnings,
+        };
+      }
+    }
+
+    return { success: true, data: result.data, warnings, errors: [] };
   }
 
   /**
@@ -367,33 +457,7 @@ export class YAMLParser {
    * ```
    */
   static safeParseMapBlock(yaml: string): ParseResult<MapBlock> {
-    try {
-      const data = this.parseMapBlock(yaml);
-      return {
-        success: true,
-        data,
-        errors: [],
-      };
-    } catch (error) {
-      // Handle Zod validation errors
-      if (error instanceof ZodError) {
-        return {
-          success: false,
-          errors: this.formatZodErrors(error),
-        };
-      }
-
-      // Handle other errors (YAML syntax, etc.)
-      return {
-        success: false,
-        errors: [
-          {
-            path: "",
-            message: error instanceof Error ? error.message : String(error),
-          },
-        ],
-      };
-    }
+    return this.safeParseWithSchema(yaml, MapBlockSchema, false);
   }
 
   /**
@@ -477,33 +541,11 @@ export class YAMLParser {
   static safeParseScrollytellingBlock(
     yaml: string
   ): ParseResult<ScrollytellingBlock> {
-    try {
-      const data = this.parseScrollytellingBlock(yaml);
-      return {
-        success: true,
-        data,
-        errors: [],
-      };
-    } catch (error) {
-      // Handle Zod validation errors
-      if (error instanceof ZodError) {
-        return {
-          success: false,
-          errors: this.formatZodErrors(error),
-        };
-      }
-
-      // Handle other errors (YAML syntax, etc.)
-      return {
-        success: false,
-        errors: [
-          {
-            path: "",
-            message: error instanceof Error ? error.message : String(error),
-          },
-        ],
-      };
-    }
+    return this.safeParseWithSchema(
+      yaml,
+      ScrollytellingBlockSchema,
+      false
+    );
   }
 
   /**
@@ -535,27 +577,17 @@ export class YAMLParser {
    * ```
    */
   static safeParseAny(yaml: string): SafeParseAnyResult {
-    // Parse YAML once to inspect the top-level `type:` discriminator
-    let parsed: unknown;
-    try {
-      parsed = parseYAML(yaml);
-    } catch (error) {
+    // Parse once (with a LineCounter) to inspect the top-level `type:`
+    // discriminator and surface positioned syntax errors.
+    const { doc: yamlDoc, syntaxError } = this.parseToDocument(yaml);
+    if (syntaxError) {
       return {
         blockType: "unknown",
-        result: {
-          success: false,
-          errors: [
-            {
-              path: "",
-              message: `YAML syntax error: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            },
-          ],
-        },
+        result: { success: false, errors: [syntaxError], warnings: [] },
       };
     }
 
+    const parsed = yamlDoc.toJS() as unknown;
     const doc =
       parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)
@@ -573,7 +605,12 @@ export class YAMLParser {
       };
     }
 
-    if (type !== undefined) {
+    // Treat a present-but-null `type:` (e.g. `type:` with no value) the same as
+    // a missing one, so it falls through to `pages`-based root detection rather
+    // than being reported as `Unknown block type: null`.
+    if (type != null) {
+      const hint =
+        typeof type === "string" ? suggest(type, BLOCK_TYPES) : undefined;
       return {
         blockType: "unknown",
         result: {
@@ -581,11 +618,15 @@ export class YAMLParser {
           errors: [
             {
               path: "type",
-              message: `Unknown block type: ${JSON.stringify(
-                type
-              )}. Expected one of: map, scrollytelling. Root documents omit "type" and use a top-level "pages:" array instead.`,
+              message:
+                `Unknown block type: ${JSON.stringify(type)}. ` +
+                `Expected one of: ${BLOCK_TYPES.join(", ")}. ` +
+                `Root documents omit "type" and use a top-level "pages:" array instead.` +
+                (hint ? ` Did you mean "${hint}"?` : ""),
+              ...(hint ? { suggestion: hint } : {}),
             },
           ],
+          warnings: [],
         },
       };
     }
@@ -605,6 +646,7 @@ export class YAMLParser {
               'Unable to determine document type. Expected a block with "type: map" or "type: scrollytelling", or a root document with a top-level "pages:" array.',
           },
         ],
+        warnings: [],
       },
     };
   }
@@ -677,12 +719,28 @@ export class YAMLParser {
           // Look up the referenced item
           if (section === "layers") {
             if (!config.layers || !(name in config.layers)) {
-              throw new Error(`Layer reference not found: ${ref}`);
+              const defined = Object.keys(config.layers ?? {});
+              const hint = suggest(name, defined);
+              throw new Error(
+                `Layer reference not found: ${ref}.` +
+                  (hint ? ` Did you mean "#/layers/${hint}"?` : "") +
+                  (defined.length
+                    ? ` Defined layers: ${defined.join(", ")}.`
+                    : " No layers are defined at the root level.")
+              );
             }
             return config.layers[name];
           } else if (section === "sources") {
             if (!config.sources || !(name in config.sources)) {
-              throw new Error(`Source reference not found: ${ref}`);
+              const defined = Object.keys(config.sources ?? {});
+              const hint = suggest(name, defined);
+              throw new Error(
+                `Source reference not found: ${ref}.` +
+                  (hint ? ` Did you mean "#/sources/${hint}"?` : "") +
+                  (defined.length
+                    ? ` Defined sources: ${defined.join(", ")}.`
+                    : " No sources are defined at the root level.")
+              );
             }
             return config.sources[name];
           }
@@ -738,7 +796,10 @@ export class YAMLParser {
    * }
    * ```
    */
-  private static formatZodErrors(error: ZodError): ParseError[] {
+  private static formatZodErrors(
+    error: ZodError,
+    ctx?: { doc: Document; lineCounter: LineCounter; value: unknown }
+  ): ParseError[] {
     return error.errors.map((err) => {
       const path = err.path.join(".");
 
@@ -748,12 +809,22 @@ export class YAMLParser {
           message = `Expected ${err.expected}, got ${err.received}`;
           break;
 
-        case "invalid_union_discriminator":
-          message = `Invalid type. Expected one of: ${err.options.join(", ")}`;
+        case "invalid_union_discriminator": {
+          const received = ctx
+            ? valueAtPath(ctx.value, err.path)
+            : undefined;
+          message = this.unknownTypeOrFallback(
+            err.options as unknown[],
+            received,
+            `Invalid type. Expected one of: ${(err.options as unknown[]).join(
+              ", "
+            )}`
+          );
           break;
+        }
 
         case "invalid_union":
-          message = "Value does not match any of the expected formats";
+          message = this.formatUnionError(err, ctx);
           break;
 
         case "too_small":
@@ -794,14 +865,216 @@ export class YAMLParser {
           message = err.message || "Validation error";
       }
 
+      const pos = ctx
+        ? positionForPath(ctx.doc, ctx.lineCounter, err.path)
+        : undefined;
+
       return {
         path,
         message,
+        ...(pos ? { line: pos.line, column: pos.column } : {}),
       };
     });
   }
+
+  /**
+   * Build a friendly "unknown layer/source type" message when a discriminator
+   * option list matches the layer or source vocabulary; otherwise return the
+   * supplied fallback.
+   *
+   * @internal
+   */
+  private static unknownTypeOrFallback(
+    options: unknown[],
+    received: unknown,
+    fallback: string
+  ): string {
+    const kind = typeKindForOptions(options);
+    if (kind === "layer") {
+      return unknownTypeMessage("layer", received, LAYER_TYPES);
+    }
+    if (kind === "source") {
+      return unknownTypeMessage("source", received, SOURCE_TYPES);
+    }
+    return fallback;
+  }
+
+  /**
+   * Format a Zod `invalid_union` issue, surfacing a nested discriminator failure
+   * (e.g. a layer or source object with a bad `type`) as a friendly
+   * unknown-type message with did-you-mean.
+   *
+   * @internal
+   */
+  private static formatUnionError(
+    err: ZodIssue & { code: "invalid_union" },
+    ctx?: { doc: Document; lineCounter: LineCounter; value: unknown }
+  ): string {
+    const fallback = "Value does not match any of the expected formats";
+    const value = ctx?.value;
+
+    // 1) A discriminated union failing on its discriminator (a layer with an
+    //    unknown `type`, wrapped in the layer-or-reference union). Nested Zod
+    //    union issue paths are absolute, so use them as-is.
+    const disc = findDiscriminatorIssue(err.unionErrors);
+    if (disc) {
+      const received = valueAtPath(value, disc.path);
+      const message = this.unknownTypeOrFallback(
+        disc.options as unknown[],
+        received,
+        fallback
+      );
+      if (message !== fallback) return message;
+    }
+
+    // 2) A source object with a bad `type`. The source union is a plain union,
+    //    so its members fail with `invalid_literal` on `type` rather than a
+    //    discriminator issue. This can surface at the source path directly
+    //    (root/block `sources:`) or nested inside a layer error (inline
+    //    `source:`) — search the whole union-error tree for it.
+    const sourceTypePath =
+      findSourceTypeIssuePath(err.unionErrors) ??
+      // ...or the union node itself is the source (e.g. `sources: { s: {...} }`).
+      (looksLikeSourcePath(err.path) &&
+      isObjectWithType(valueAtPath(value, err.path))
+        ? [...err.path, "type"]
+        : undefined);
+
+    if (sourceTypePath) {
+      const received = valueAtPath(value, sourceTypePath);
+      // Only a *genuinely unknown* type gets the "Unknown source type" message.
+      // A source with a VALID type that fails for another reason (e.g. a
+      // geojson source missing url/data, or an image source missing
+      // coordinates) makes every *sibling* branch emit an `invalid_literal`
+      // on `type` — mining those would wrongly report the valid type as
+      // unknown AND hide the real failure. Surface the real error instead.
+      if (
+        typeof received !== "string" ||
+        !(SOURCE_TYPES as readonly string[]).includes(received)
+      ) {
+        return unknownTypeMessage("source", received, SOURCE_TYPES);
+      }
+      const match = findMatchingSourceBranch(err.unionErrors);
+      if (match) {
+        const real = this.formatZodErrors(match)[0];
+        if (real) return real.message;
+      }
+    }
+
+    return fallback;
+  }
 }
 
+/** Whether a JSON path anchors on a source (`.source` or a `sources` record). */
+function looksLikeSourcePath(path: (string | number)[]): boolean {
+  return path.includes("source") || path.includes("sources");
+}
+
+function isObjectWithType(value: unknown): boolean {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "type" in (value as Record<string, unknown>)
+  );
+}
+
+/**
+ * Recursively search a set of Zod union member errors for the first
+ * `invalid_union_discriminator` issue.
+ *
+ * @internal
+ */
+function findDiscriminatorIssue(
+  unionErrors: ZodError[]
+):
+  | (ZodIssue & { code: "invalid_union_discriminator"; options: unknown[] })
+  | undefined {
+  for (const unionError of unionErrors) {
+    for (const issue of unionError.issues) {
+      if (issue.code === "invalid_union_discriminator") {
+        return issue as ZodIssue & {
+          code: "invalid_union_discriminator";
+          options: unknown[];
+        };
+      }
+      if (issue.code === "invalid_union") {
+        const nested = findDiscriminatorIssue(issue.unionErrors);
+        if (nested) return nested;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Recursively search a union-error tree for an `invalid_literal` issue on a
+ * `type` key that sits under a source path, returning the absolute path to that
+ * `type` node. Used to surface inline layer `source:` type typos, whose error
+ * bubbles up at the layer level rather than the source level.
+ *
+ * @internal
+ */
+function findSourceTypeIssuePath(
+  unionErrors: ZodError[]
+): (string | number)[] | undefined {
+  for (const unionError of unionErrors) {
+    for (const issue of unionError.issues) {
+      if (isSourceTypeLiteralIssue(issue)) {
+        return issue.path;
+      }
+      if (issue.code === "invalid_union") {
+        const nested = findSourceTypeIssuePath(issue.unionErrors);
+        if (nested) return nested;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Whether an issue is an `invalid_literal` on a source's `type` discriminator. */
+function isSourceTypeLiteralIssue(issue: ZodIssue): boolean {
+  return (
+    issue.code === "invalid_literal" &&
+    issue.path.length > 0 &&
+    issue.path[issue.path.length - 1] === "type" &&
+    looksLikeSourcePath(issue.path.slice(0, -1))
+  );
+}
+
+/**
+ * Locate the source-union member whose `type` discriminator matched — i.e. the
+ * branch that failed for a *real* reason (missing url/data/coordinates, ...)
+ * rather than a `type` mismatch — so its genuine error can be surfaced instead
+ * of a self-contradictory "Unknown source type <valid type>". Recurses through
+ * nested unions to find the source union first.
+ *
+ * @internal
+ */
+function findMatchingSourceBranch(
+  unionErrors: ZodError[]
+): ZodError | undefined {
+  // If this union level is the source union, at least one branch fails on
+  // `type`; the matching branch is the one that does not.
+  if (unionErrors.some((ue) => ue.issues.some(isSourceTypeLiteralIssue))) {
+    const match = unionErrors.find(
+      (ue) =>
+        ue.issues.length > 0 && !ue.issues.some(isSourceTypeLiteralIssue)
+    );
+    if (match) return match;
+  }
+  for (const unionError of unionErrors) {
+    for (const issue of unionError.issues) {
+      if (issue.code === "invalid_union") {
+        const nested = findMatchingSourceBranch(issue.unionErrors);
+        if (nested) return nested;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
 /**
  * Convenience function to parse YAML config
  *

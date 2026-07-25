@@ -68,6 +68,11 @@ Rationale for the order:
 | D4 | Strict validation rollout: warn-by-default on unknown keys, error under `--strict`, full strict at next minor after GeoJSON alignment | **Decided** (Mario) |
 | D5 | Schema versioning mechanism | **Decided** (Mario): RFC option B + C — optional `version:` field plus versioned `$schema` URLs; parser reads current + previous version with shims; one-minor-cycle deprecation window confirmed |
 | D6 | Scope of GeoJSON conformance (authoring surface vs internal representation vs both; fate of `location`/`region`/`route` sugar) | Open questions in Phase-5 scoping doc; **needs discussion** |
+| D7 | JSON Schema artifacts: generate-on-build, never committed | **Decided** (Mario, 2026-07-05) |
+| D8 | Published JSON Schema describes the strict shape (`additionalProperties: false` + `x-*` escape) even while Zod runtime is warn-only | **Decided** (Mario, 2026-07-05) |
+| D9 | `mlym validate` promotes warnings to errors when `CI=true` (overridable with `--no-strict`) | **Decided** (Mario, 2026-07-05) |
+| D10 | Todo 035: make layer-level `{$ref}` into root-level `sources:` validate and resolve (rather than dropping root sources or deferring) | **Decided** (Mario, 2026-07-05) |
+| D11 | Browser validation warnings are console-only (no on-map badge) | Default applied (validation plan) |
 
 ## Success criteria for the stabilization arc (Phases 1–4)
 

@@ -1,0 +1,8 @@
+sources:
+  quakes:
+    type: geojsn
+    url: "https://example.com/quakes.geojson"
+pages:
+  - path: "/"
+    title: "Bad source type"
+    blocks: []

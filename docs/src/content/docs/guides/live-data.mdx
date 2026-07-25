@@ -16,7 +16,8 @@ The simplest way to keep data current is polling - fetching data at regular inte
 source:
   type: geojson
   url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-  refreshInterval: 60000 # Refresh every 60 seconds (milliseconds)
+  refresh:
+    refreshInterval: 60000 # Refresh every 60 seconds (milliseconds)
 ```
 
 <LiveMap
@@ -57,8 +58,9 @@ New data completely replaces old data:
 source:
   type: geojson
   url: "https://..."
-  refreshInterval: 30000
-  updateStrategy: replace # Default behavior
+  refresh:
+    refreshInterval: 30000
+    updateStrategy: replace # Default behavior
 ```
 
 **Use for:** Complete datasets that are re-fetched in full each time.
@@ -71,9 +73,10 @@ Update existing features, add new ones, keep features not in the update:
 source:
   type: geojson
   url: "https://api.example.com/vehicles"
-  refreshInterval: 5000
-  updateStrategy: merge
-  updateKey: "vehicleId" # Match features by this property
+  refresh:
+    refreshInterval: 5000
+    updateStrategy: merge
+    updateKey: "vehicleId" # Match features by this property
 ```
 
 **Use for:** Entity tracking where each feature has a unique ID.
@@ -94,10 +97,11 @@ source:
   stream:
     type: sse
     url: "https://stream.example.com/events"
-  updateStrategy: append-window
-  windowSize: 100 # Keep latest 100 features
-  windowDuration: 3600000 # Or features from last hour
-  timestampField: "time" # Property containing timestamp
+  refresh:
+    updateStrategy: append-window
+    windowSize: 100 # Keep latest 100 features
+    windowDuration: 3600000 # Or features from last hour
+    timestampField: "time" # Property containing timestamp
 ```
 
 **Use for:** Event streams, activity feeds, time-series data.
@@ -115,8 +119,9 @@ source:
     reconnect: true # Auto-reconnect on disconnect
     reconnectMaxAttempts: 10 # Give up after 10 failures
     reconnectDelay: 1000 # Initial delay (doubles each retry)
-  updateStrategy: merge
-  updateKey: "id"
+  refresh:
+    updateStrategy: merge
+    updateKey: "id"
 ```
 
 ### How SSE works
@@ -147,8 +152,9 @@ source:
     type: websocket
     url: "wss://stream.example.com/data"
     reconnect: true
-  updateStrategy: merge
-  updateKey: "id"
+  refresh:
+    updateStrategy: merge
+    updateKey: "id"
 ```
 
 WebSocket is useful when you need to send messages to the server (e.g., subscribing to specific data channels).
@@ -204,9 +210,10 @@ layers:
     source:
       type: geojson
       url: "https://api.example.com/vehicles"
-      refreshInterval: 5000 # Poll every 5 seconds
-      updateStrategy: merge # Update existing, add new
-      updateKey: "vehicleId" # Match by vehicle ID
+      refresh:
+        refreshInterval: 5000 # Poll every 5 seconds
+        updateStrategy: merge # Update existing, add new
+        updateKey: "vehicleId" # Match by vehicle ID
       cache:
         enabled: false # Don't cache live data
       loading:

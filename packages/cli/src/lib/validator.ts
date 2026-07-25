@@ -49,12 +49,22 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
   // against the matching schema
   const { result } = YAMLParser.safeParseAny(content);
 
+  // Advisory findings (unknown keys, deprecations, expression hints) flow
+  // through the parser's warnings channel in both the valid and invalid cases.
+  const warnings: ValidationError[] = result.warnings.map((warning) => ({
+    path: warning.path,
+    message: warning.message,
+    line: warning.line,
+    column: warning.column,
+    severity: 'warning' as const,
+  }));
+
   if (result.success) {
     return {
       file: filePath,
       valid: true,
       errors: [],
-      warnings: [],
+      warnings,
     };
   }
 
@@ -71,7 +81,7 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
     file: filePath,
     valid: false,
     errors,
-    warnings: [],
+    warnings,
   };
 }
 

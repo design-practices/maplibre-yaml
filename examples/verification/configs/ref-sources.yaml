@@ -1,0 +1,33 @@
+# Phase 2 (todo 035) assertion: a layer can reference a root-level named source
+# with {$ref: "#/sources/<name>"}, and it RESOLVES (previously root-level
+# sources were unreachable from layers).
+#
+#   node packages/cli/dist/cli.js validate examples/verification/configs/ref-sources.yaml   # PASS: exit 0, valid
+#
+# To assert the dangling-ref error, change "quakes" in the $ref to a name that
+# doesn't exist and re-run — expect:
+#   Source reference not found: #/sources/quaks. Did you mean "#/sources/quakes"? Defined sources: quakes.
+sources:
+  quakes:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features: []
+pages:
+  - path: "/"
+    title: "Home"
+    blocks:
+      - type: map
+        id: quake-map
+        config:
+          center: [-74.006, 40.7128]
+          zoom: 6
+          mapStyle: "https://demotiles.maplibre.org/style.json"
+        layers:
+          - id: quake-points
+            type: circle
+            source:
+              $ref: "#/sources/quakes"
+            paint:
+              circle-radius: 6
+              circle-color: "#e63946"
