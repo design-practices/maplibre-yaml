@@ -1,0 +1,13 @@
+{
+  "version": 8,
+  "name": "verification-local",
+  "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#cfe8c9" }
+    }
+  ],
+  "_comment": "Deliberately source-less. The browser fixtures assert on our own layers and controls, not on basemap imagery, so this removes the last network dependency and keeps the suite deterministic in CI."
+}

@@ -18,8 +18,6 @@
   "author": "mariogiampieri",
   "license": "MIT",
   "scripts": {
-    "prepare": "sh scripts/beads-sync.sh",
-    "presubmit": "pnpm build && pnpm typecheck && pnpm lint && pnpm test && pnpm docs:validate-snippets",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
     "test": "pnpm -r test",
@@ -30,10 +28,16 @@
     "docs:validate-snippets": "node scripts/validate-doc-snippets.mjs",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "pnpm build && changeset publish"
+    "release": "pnpm build && changeset publish",
+    "verify:serve": "node e2e/server.mjs",
+    "verify:browser": "playwright test",
+    "verify:browser:headed": "playwright test --headed"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",
+    "@playwright/test": "^1.62.0",
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0",
     "typescript": "^5.4.0"
   },
   "engines": {
