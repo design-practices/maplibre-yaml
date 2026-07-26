@@ -15,18 +15,32 @@ vi.mock("maplibre-gl", () => {
 
       const map = {
         options,
-        on(event: string, callback: Function) {
-          if (!events.has(event)) {
-            events.set(event, new Set());
+        // MapLibre overloads this: on(type, listener) and the layer-scoped
+        // on(type, layerId, listener). Keying only by type meant a layer-scoped
+        // listener was stored under the layer id instead of the handler, so no
+        // test could fire hover/click at all.
+        on(event: string, layerOrCallback: any, maybeCallback?: Function) {
+          const scoped = typeof maybeCallback === "function";
+          const key = scoped ? `${event}:${layerOrCallback}` : event;
+          const callback = scoped ? maybeCallback! : layerOrCallback;
+
+          if (!events.has(key)) {
+            events.set(key, new Set());
           }
-          events.get(event)!.add(callback);
+          events.get(key)!.add(callback);
           // Auto-trigger load event
           if (event === "load") {
             setTimeout(() => callback(), 0);
           }
         },
-        off(event: string, callback: Function) {
-          events.get(event)?.delete(callback);
+        off(event: string, layerOrCallback: any, maybeCallback?: Function) {
+          const scoped = typeof maybeCallback === "function";
+          const key = scoped ? `${event}:${layerOrCallback}` : event;
+          events.get(key)?.delete(scoped ? maybeCallback! : layerOrCallback);
+        },
+        /** Test hook: fire the listeners registered for a (type, layerId). */
+        __fire(key: string, payload: any) {
+          for (const cb of events.get(key) ?? []) cb(payload);
         },
         addSource(id: string, source: any) {
           sources.set(id, source);
@@ -56,6 +70,8 @@ vi.mock("maplibre-gl", () => {
         },
         addControl: vi.fn(),
         removeControl: vi.fn(),
+        setFeatureState: vi.fn(),
+        removeFeatureState: vi.fn(),
       };
 
       return map;
@@ -624,6 +640,58 @@ pages:
 
       expect(eventData).toBeDefined();
       expect(eventData.layerId).toBe("new-layer");
+
+      renderer.destroy();
+    });
+  });
+
+  describe("hover highlight survives data replacement (ml-itz.9)", () => {
+    const baseConfig = {
+      center: [0, 0] as [number, number],
+      zoom: 1,
+      mapStyle: "https://demotiles.maplibre.org/style.json",
+    };
+
+    const highlightLayer = {
+      id: "pts",
+      type: "circle" as const,
+      visible: true,
+      toggleable: false,
+      source: {
+        type: "geojson" as const,
+        data: { type: "FeatureCollection" as const, features: [] },
+      },
+      interactive: { hover: { highlight: true } },
+    };
+
+    /** Hover a feature by firing the mousemove listener the renderer attached. */
+    const hoverFeature = (map: any, id: number) => {
+      map.__fire("mousemove:pts", {
+        features: [{ id, properties: {} }],
+        lngLat: { lng: 0, lat: 0 },
+      });
+    };
+
+    it("clears the highlight when a layer's data is replaced", async () => {
+      const renderer = new MapRenderer(container, baseConfig, [highlightLayer as any]);
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      hoverFeature(map, 7);
+      expect(map.setFeatureState).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 7 }),
+        { hover: true }
+      );
+
+      map.setFeatureState.mockClear();
+      renderer.updateLayerData("pts", { type: "FeatureCollection", features: [] } as any);
+
+      // Feature ids are only meaningful within a dataset. Holding id 7 across a
+      // setData means the next render can light up a different feature.
+      expect(map.setFeatureState).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 7 }),
+        { hover: false }
+      );
 
       renderer.destroy();
     });
