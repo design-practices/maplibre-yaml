@@ -1,0 +1,31 @@
+# U7 assertion: a $ref source resolves, and one named source can back two
+# layers. Previously the $ref reached the renderer unresolved, so the layer
+# had no source type and was silently dropped — config valid, nothing drawn.
+type: map
+id: u7-named-sources
+config:
+  center: [-74.006, 40.7128]
+  zoom: 11
+  mapStyle: /examples/verification/configs/local-style.json
+sources:
+  cities:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+          properties: { name: "Manhattan" }
+layers:
+  - id: via-ref
+    type: circle
+    source: { $ref: "#/sources/cities" }
+    paint:
+      circle-radius: 24
+      circle-color: "#1d3557"
+  - id: via-name
+    type: circle
+    source: cities
+    paint:
+      circle-radius: 10
+      circle-color: "#e63946"
