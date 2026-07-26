@@ -599,6 +599,61 @@ layers:
       fill-color: "#ccc"
 ```
 
+### Live Refresh on a Named Source
+
+A named source refreshes like an inline one, and does so **once** no matter how
+many layers reference it:
+
+```yaml
+sources:
+  vehicles:
+    type: geojson
+    url: "https://api.example.com/vehicles"
+    refresh:
+      refreshInterval: 5000
+      updateStrategy: merge
+      updateKey: vehicleId
+
+layers:
+  - id: vehicle-dots
+    type: circle
+    source: vehicles
+  - id: vehicle-labels
+    type: symbol
+    source: vehicles
+```
+
+One poll feeds both layers, and each still receives its own
+`ml-map:layer-data-loaded` event. Polling stops when the last layer referencing
+the source is removed.
+
+The layer-keyed control APIs resolve to the shared pipeline, so you address it
+through any referencing layer:
+
+```js
+renderer.pauseRefresh("vehicle-dots");   // pauses the shared poll
+renderer.updateLayerData("vehicle-dots", geojson);  // updates both layers
+```
+
+`updateLayerData` writes to the **source**, so every layer drawing from it
+reflects the change. That is intended: one source, one dataset.
+
+### Referencing With `$ref`
+
+A layer can also point at a source with a JSON-pointer style reference, which
+resolves against the block's own `sources:`:
+
+```yaml
+layers:
+  - id: boundary-fill
+    type: fill
+    source: { $ref: "#/sources/boundary" }
+```
+
+This is equivalent to `source: boundary`. Prefer the bare name for readability;
+`$ref` exists for generated documents and tooling. Nested references — a `$ref`
+whose target itself contains a `$ref` — are not resolved.
+
 Block-level sources are added to the map before layers are processed, so any layer in that block can reference them by name. This avoids duplicating source definitions when multiple layers use the same data.
 
 ### Sharing Sources Across Pages (Multi-Page)

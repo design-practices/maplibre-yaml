@@ -399,7 +399,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "refreshInterval": {
                         "type": "number",
                         "minimum": 1000,
-                        "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+                        "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)",
+                        "deprecated": true
                       },
                       "updateStrategy": {
                         "type": "string",
@@ -408,11 +409,13 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "merge",
                           "append-window"
                         ],
-                        "description": "Update strategy (legacy, use refresh.updateStrategy)"
+                        "description": "Update strategy (legacy, use refresh.updateStrategy)",
+                        "deprecated": true
                       },
                       "updateKey": {
                         "type": "string",
-                        "description": "Update key (legacy, use refresh.updateKey)"
+                        "description": "Update key (legacy, use refresh.updateKey)",
+                        "deprecated": true
                       },
                       "loading": {
                         "type": "object",
@@ -1017,7 +1020,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                   },
                                   "action": {
                                     "type": "string",
-                                    "description": "Custom action name to trigger"
+                                    "description": "Custom action name to trigger",
+                                    "deprecated": true
                                   },
                                   "flyTo": {
                                     "type": "object",
@@ -1061,7 +1065,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 "properties": {
                                   "action": {
                                     "type": "string",
-                                    "description": "Custom action on mouse enter"
+                                    "description": "Custom action on mouse enter",
+                                    "deprecated": true
                                   }
                                 },
                                 "additionalProperties": false,
@@ -1074,7 +1079,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 "properties": {
                                   "action": {
                                     "type": "string",
-                                    "description": "Custom action on mouse leave"
+                                    "description": "Custom action on mouse leave",
+                                    "deprecated": true
                                   }
                                 },
                                 "additionalProperties": false,
@@ -3638,7 +3644,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "refreshInterval": {
                     "type": "number",
                     "minimum": 1000,
-                    "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+                    "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)",
+                    "deprecated": true
                   },
                   "updateStrategy": {
                     "type": "string",
@@ -3647,11 +3654,13 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "merge",
                       "append-window"
                     ],
-                    "description": "Update strategy (legacy, use refresh.updateStrategy)"
+                    "description": "Update strategy (legacy, use refresh.updateStrategy)",
+                    "deprecated": true
                   },
                   "updateKey": {
                     "type": "string",
-                    "description": "Update key (legacy, use refresh.updateKey)"
+                    "description": "Update key (legacy, use refresh.updateKey)",
+                    "deprecated": true
                   },
                   "loading": {
                     "type": "object",
@@ -4256,7 +4265,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                               },
                               "action": {
                                 "type": "string",
-                                "description": "Custom action name to trigger"
+                                "description": "Custom action name to trigger",
+                                "deprecated": true
                               },
                               "flyTo": {
                                 "type": "object",
@@ -4300,7 +4310,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             "properties": {
                               "action": {
                                 "type": "string",
-                                "description": "Custom action on mouse enter"
+                                "description": "Custom action on mouse enter",
+                                "deprecated": true
                               }
                             },
                             "additionalProperties": false,
@@ -4313,7 +4324,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             "properties": {
                               "action": {
                                 "type": "string",
-                                "description": "Custom action on mouse leave"
+                                "description": "Custom action on mouse leave",
+                                "deprecated": true
                               }
                             },
                             "additionalProperties": false,
@@ -6052,7 +6064,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "refreshInterval": {
                                 "type": "number",
                                 "minimum": 1000,
-                                "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+                                "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)",
+                                "deprecated": true
                               },
                               "updateStrategy": {
                                 "type": "string",
@@ -6061,11 +6074,13 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "merge",
                                   "append-window"
                                 ],
-                                "description": "Update strategy (legacy, use refresh.updateStrategy)"
+                                "description": "Update strategy (legacy, use refresh.updateStrategy)",
+                                "deprecated": true
                               },
                               "updateKey": {
                                 "type": "string",
-                                "description": "Update key (legacy, use refresh.updateKey)"
+                                "description": "Update key (legacy, use refresh.updateKey)",
+                                "deprecated": true
                               },
                               "loading": {
                                 "type": "object",
@@ -6637,7 +6652,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           },
                           "action": {
                             "type": "string",
-                            "description": "Custom action name to trigger"
+                            "description": "Custom action name to trigger",
+                            "deprecated": true
                           },
                           "flyTo": {
                             "type": "object",
@@ -6681,7 +6697,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "properties": {
                           "action": {
                             "type": "string",
-                            "description": "Custom action on mouse enter"
+                            "description": "Custom action on mouse enter",
+                            "deprecated": true
                           }
                         },
                         "additionalProperties": false,
@@ -6694,7 +6711,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "properties": {
                           "action": {
                             "type": "string",
-                            "description": "Custom action on mouse leave"
+                            "description": "Custom action on mouse leave",
+                            "deprecated": true
                           }
                         },
                         "additionalProperties": false,
@@ -9450,7 +9468,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   "refreshInterval": {
                                     "type": "number",
                                     "minimum": 1000,
-                                    "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+                                    "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)",
+                                    "deprecated": true
                                   },
                                   "updateStrategy": {
                                     "type": "string",
@@ -9459,11 +9478,13 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                       "merge",
                                       "append-window"
                                     ],
-                                    "description": "Update strategy (legacy, use refresh.updateStrategy)"
+                                    "description": "Update strategy (legacy, use refresh.updateStrategy)",
+                                    "deprecated": true
                                   },
                                   "updateKey": {
                                     "type": "string",
-                                    "description": "Update key (legacy, use refresh.updateKey)"
+                                    "description": "Update key (legacy, use refresh.updateKey)",
+                                    "deprecated": true
                                   },
                                   "loading": {
                                     "type": "object",
@@ -10044,7 +10065,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                               },
                               "action": {
                                 "type": "string",
-                                "description": "Custom action name to trigger"
+                                "description": "Custom action name to trigger",
+                                "deprecated": true
                               },
                               "flyTo": {
                                 "type": "object",
@@ -10088,7 +10110,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                             "properties": {
                               "action": {
                                 "type": "string",
-                                "description": "Custom action on mouse enter"
+                                "description": "Custom action on mouse enter",
+                                "deprecated": true
                               }
                             },
                             "additionalProperties": false,
@@ -10101,7 +10124,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                             "properties": {
                               "action": {
                                 "type": "string",
-                                "description": "Custom action on mouse leave"
+                                "description": "Custom action on mouse leave",
+                                "deprecated": true
                               }
                             },
                             "additionalProperties": false,

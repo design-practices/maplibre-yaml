@@ -42,6 +42,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import {
+  DEPRECATED_ACTION_TRIGGERS,
+  LEGACY_REFRESH_FIELDS,
+} from "../src/parser/validation-utils";
 import { MapBlockSchema } from "../src/schemas/map.schema";
 import { ScrollytellingBlockSchema } from "../src/schemas/scrollytelling.schema";
 import { RootSchema } from "../src/schemas/page.schema";
@@ -153,6 +157,60 @@ function rewriteRefs(node: unknown, from: string, to: string): void {
   for (const value of Object.values(obj)) rewriteRefs(value, from, to);
 }
 
+
+/**
+ * Mark deprecated fields with JSON Schema's `deprecated` keyword.
+ *
+ * @remarks
+ * Driven by the same constants the runtime validator uses, so the published
+ * contract cannot claim a field is current after the parser starts warning
+ * about it. Editors grey these out and agents generating configs can avoid
+ * them — which is the point: the fields are accepted, so nothing else in the
+ * schema signals that they do nothing.
+ */
+function annotateDeprecated(node: any, parentKey?: string): void {
+  if (!node || typeof node !== "object") return;
+
+  if (node.properties && typeof node.properties === "object") {
+    const props = node.properties as Record<string, any>;
+    const isGeoJSONSource = props.type?.const === "geojson";
+
+    for (const [key, child] of Object.entries(props)) {
+      const deprecatedAction =
+        key === "action" &&
+        (DEPRECATED_ACTION_TRIGGERS as readonly string[]).includes(
+          parentKey ?? "",
+        );
+      const legacyRefresh =
+        isGeoJSONSource &&
+        (LEGACY_REFRESH_FIELDS as readonly string[]).includes(key);
+
+      if (child && typeof child === "object" && (deprecatedAction || legacyRefresh)) {
+        child.deprecated = true;
+      }
+      annotateDeprecated(child, key);
+    }
+  }
+
+  for (const branch of ["anyOf", "oneOf", "allOf"] as const) {
+    const value = node[branch];
+    if (Array.isArray(value)) value.forEach((c) => annotateDeprecated(c, parentKey));
+  }
+  for (const container of ["$defs", "definitions", "patternProperties"] as const) {
+    const value = node[container];
+    if (value && typeof value === "object") {
+      for (const [key, child] of Object.entries<any>(value)) {
+        annotateDeprecated(child, key);
+      }
+    }
+  }
+  for (const single of ["items", "additionalProperties"] as const) {
+    const value = node[single];
+    if (Array.isArray(value)) value.forEach((c) => annotateDeprecated(c, parentKey));
+    else if (value && typeof value === "object") annotateDeprecated(value, parentKey);
+  }
+}
+
 /** Convert a Zod schema to a strict JSON Schema document with metadata. */
 function emit(
   schema: z.ZodTypeAny,
@@ -167,6 +225,7 @@ function emit(
   }) as JsonSchema;
 
   enforceStrict(json);
+  annotateDeprecated(json);
 
   // Prepend stable metadata. `$schema` (dialect) comes from the generator.
   const { $schema, ...rest } = json;
