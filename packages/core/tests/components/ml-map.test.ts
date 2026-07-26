@@ -245,6 +245,96 @@ describe("MLMap", () => {
     });
   });
 
+  describe("non-YAML config paths are validated (U9)", () => {
+    /** A structurally valid block, minus whatever the caller breaks. */
+    const validBlock = () => ({
+      type: "map" as const,
+      id: "m",
+      config: {
+        mapStyle: "https://demotiles.maplibre.org/style.json",
+        center: [-74.5, 40] as [number, number],
+        zoom: 9,
+      },
+      layers: [],
+    });
+
+    const mount = async (mutate: (b: any) => any) => {
+      const element = document.createElement("ml-map") as MLMap;
+      element.setAttribute("config", JSON.stringify(mutate(validBlock())));
+      document.body.appendChild(element);
+      await new Promise((r) => setTimeout(r, 20));
+      return element;
+    };
+
+    it("renders the error card for well-formed JSON that fails the schema", async () => {
+      // Parsed fine, so the JSON guard let it through — but zoom is not a
+      // string, and previously this reached renderMap unvalidated.
+      const element = await mount((b) => ({ ...b, config: { ...b.config, zoom: "not-a-number" } }));
+
+      expect(element.querySelector(".ml-map-error")).toBeTruthy();
+      expect(element.getRenderer()).toBeFalsy();
+    });
+
+    it("renders the error card when a required field is missing", async () => {
+      const element = await mount((b) => {
+        const { config, ...rest } = b;
+        return { ...rest, config: { center: [0, 0], zoom: 2 } }; // no mapStyle
+      });
+
+      expect(element.querySelector(".ml-map-error")).toBeTruthy();
+    });
+
+    it("warns about a typo'd key instead of dropping it silently", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      await mount((b) => ({
+        ...b,
+        layers: [
+          {
+            id: "p",
+            type: "circle",
+            source: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+            paint: { "circle-radis": 4 },
+          },
+        ],
+      }));
+
+      const messages = warn.mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(messages).toContain("circle-radis");
+      warn.mockRestore();
+    });
+
+    it("surfaces deprecations set programmatically", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const element = document.createElement("ml-map") as MLMap;
+      document.body.appendChild(element);
+      await new Promise((r) => setTimeout(r, 10));
+
+      element.config = {
+        ...validBlock(),
+        layers: [
+          {
+            id: "p",
+            type: "circle",
+            source: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+            interactive: { click: { action: "doThing" } },
+          },
+        ],
+      } as any;
+      await new Promise((r) => setTimeout(r, 20));
+
+      const messages = warn.mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(messages).toContain("deprecated");
+      warn.mockRestore();
+    });
+
+    it("still renders a valid JSON config unchanged", async () => {
+      const element = await mount((b) => b);
+
+      expect(element.querySelector(".ml-map-error")).toBeFalsy();
+      expect(element.getRenderer()).toBeTruthy();
+    });
+  });
+
   describe("config from YAML script", () => {
     it("parses valid YAML script", async () => {
       const element = document.createElement('ml-map') as MLMap;
@@ -422,9 +512,14 @@ layers:
       expect(renderer).toBeTruthy();
       // Legend config is threaded through to MapRenderer via the options
       // parameter, where the renderer builds it on map load
+      // `collapsed` is a schema default. It appears here now that the JSON
+      // attribute is validated like the YAML paths — previously the raw object
+      // reached the renderer with no defaults applied, so the two entry points
+      // produced different configs from the same input.
       expect((renderer as any)?.options.legend).toEqual({
         position: "top-left",
         title: "Test Legend",
+        collapsed: false,
       });
     });
   });
