@@ -104,3 +104,71 @@ describe('CLI validation warnings (integration)', () => {
     expect(stdout).not.toContain('1 error(s)');
   });
 });
+
+describe('CLI deprecation warnings (integration)', () => {
+  const DEPRECATED = 'test/fixtures/warns-deprecated-action.yaml';
+
+  it('warns on a deprecated interaction action and exits 0', async () => {
+    const { stdout } = await execAsync(`node "${CLI}" validate "${DEPRECATED}"`, {
+      env: NO_CI,
+    });
+    expect(stdout).toContain('warning');
+    expect(stdout).toContain('deprecated');
+  });
+
+  it('carries the deprecation kind in JSON output', async () => {
+    const { stdout } = await execAsync(
+      `node "${CLI}" validate "${DEPRECATED}" --format json`,
+      { env: NO_CI }
+    );
+    const parsed = JSON.parse(stdout);
+    const warnings = parsed.files[0].warnings;
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].kind).toBe('deprecation');
+    expect(warnings[0].path).toBe('layers.0.interactive.click.action');
+  });
+
+  it('carries the deprecation kind in SARIF output', async () => {
+    const { stdout } = await execAsync(
+      `node "${CLI}" validate "${DEPRECATED}" --format sarif`,
+      { env: NO_CI }
+    );
+    const sarif = JSON.parse(stdout);
+    const [finding] = sarif.runs[0].results;
+    expect(finding.level).toBe('warning');
+    expect(finding.properties.kind).toBe('deprecation');
+  });
+
+  it('does NOT promote deprecations under CI strict — exits 0', async () => {
+    // The whole point of the exemption: 0.4.0 must not hard-fail the build of
+    // every existing user of click.action the moment they upgrade.
+    const { stdout } = await execAsync(`node "${CLI}" validate "${DEPRECATED}"`, {
+      env: IN_CI,
+    });
+    expect(stdout).toContain('warning');
+  });
+
+  it('--strict-deprecations promotes them to errors (exit 1)', async () => {
+    try {
+      await execAsync(
+        `node "${CLI}" validate "${DEPRECATED}" --strict-deprecations`,
+        { env: NO_CI }
+      );
+      expect.unreachable('should have exited non-zero with --strict-deprecations');
+    } catch (error: any) {
+      expect(error.code).toBe(1);
+      expect(error.stdout).toContain('error');
+      expect(error.stdout).toContain('deprecated');
+    }
+  });
+
+  it('still promotes non-deprecation warnings under CI — the exemption is narrow', async () => {
+    try {
+      await execAsync(`node "${CLI}" validate "${FIXTURE}"`, { env: IN_CI });
+      expect.unreachable('unknown-key warnings must still promote under CI');
+    } catch (error: any) {
+      expect(error.code).toBe(1);
+      expect(error.stdout).toContain('circle-radis');
+    }
+  });
+});

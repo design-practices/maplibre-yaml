@@ -367,6 +367,7 @@ import {
   GeoJSONSourceSchema,
   VectorSourceSchema,
   RasterSourceSchema,
+  RasterDEMSourceSchema,
   ImageSourceSchema,
   VideoSourceSchema,
 
