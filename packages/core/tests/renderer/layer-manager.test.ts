@@ -89,6 +89,121 @@ describe("LayerManager", () => {
       );
     });
 
+    it("wraps a literal colour in a feature-state case for hover.highlight", async () => {
+      const layer = {
+        id: "pts",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+        },
+        paint: { "circle-color": "#ff0000" },
+        interactive: { hover: { highlight: true } },
+      };
+
+      await manager.addLayer(layer as any);
+
+      // Without this, setFeatureState fires but nothing renders differently.
+      const spec = mockMap.addLayer.mock.calls[0][0];
+      expect(spec.paint["circle-color"]).toEqual([
+        "case",
+        ["boolean", ["feature-state", "hover"], false],
+        expect.any(String),
+        "#ff0000",
+      ]);
+    });
+
+    it("leaves an authored expression untouched and warns", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const authored = ["get", "color"];
+      const layer = {
+        id: "pts",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+        },
+        paint: { "circle-color": authored },
+        interactive: { hover: { highlight: true } },
+      };
+
+      await manager.addLayer(layer as any);
+
+      // Overwriting would silently discard the author's data-driven styling.
+      const spec = mockMap.addLayer.mock.calls[0][0];
+      expect(spec.paint["circle-color"]).toEqual(authored);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("expression"));
+      warn.mockRestore();
+    });
+
+    it("does not rewrite paint when highlight is absent", async () => {
+      const layer = {
+        id: "pts",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+        },
+        paint: { "circle-color": "#ff0000" },
+      };
+
+      await manager.addLayer(layer as any);
+
+      const spec = mockMap.addLayer.mock.calls[0][0];
+      expect(spec.paint["circle-color"]).toBe("#ff0000");
+    });
+
+    it("enables generateId with a warning when the source has no id strategy", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const layer = {
+        id: "pts",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+        },
+        interactive: { hover: { highlight: true } },
+      };
+
+      await manager.addLayer(layer as any);
+
+      expect(mockMap.addSource).toHaveBeenCalledWith(
+        "pts-source",
+        expect.objectContaining({ generateId: true })
+      );
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("generateId"));
+      warn.mockRestore();
+    });
+
+    it("respects an authored promoteId instead of generating ids", async () => {
+      const layer = {
+        id: "pts",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+          promoteId: "stationId",
+        },
+        interactive: { hover: { highlight: true } },
+      };
+
+      await manager.addLayer(layer as any);
+
+      const spec = mockMap.addSource.mock.calls[0][1];
+      expect(spec.promoteId).toBe("stationId");
+      expect(spec.generateId).toBeUndefined();
+    });
+
     it("adds a hillshade layer with a raster-dem source", async () => {
       const layer = {
         id: "terrain",

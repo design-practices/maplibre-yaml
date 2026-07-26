@@ -25,19 +25,17 @@ import { CLICK_INTERACTIONS } from "../../src/renderer/interactions";
 /** Drive the real flyTo interaction and capture the options it builds. */
 function optionsFor(flyTo: unknown, clickedAt: LngLat) {
   const entry = CLICK_INTERACTIONS.find((i) => i.name === "flyTo")!;
+  const runtime = entry.create({ showPopup: () => {} });
   const calls: any[] = [];
   const map = { flyTo: (o: any) => calls.push(o) } as any;
 
-  entry.run(
-    entry.select({ flyTo }),
-    {
-      map,
-      layerId: "l",
-      feature: { properties: {} },
-      lngLat: clickedAt,
-    } as any,
-    { showPopup: () => {} }
-  );
+  runtime.run(entry.select({ flyTo }), {
+    map,
+    layerId: "l",
+    sourceId: "l-source",
+    feature: { properties: {} },
+    lngLat: clickedAt,
+  } as any);
 
   return calls[0];
 }
