@@ -8,6 +8,12 @@ export interface ValidationError {
   line?: number;
   column?: number;
   severity: 'error' | 'warning';
+  /**
+   * Carried through from the parser. Deprecations are exempt from strict
+   * promotion unless `--strict-deprecations`, so this must survive the
+   * mapping into CLI shape or the exemption silently stops working.
+   */
+  kind?: 'deprecation';
 }
 
 export interface ValidationResult {

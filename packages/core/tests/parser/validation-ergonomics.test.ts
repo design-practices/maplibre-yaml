@@ -388,6 +388,94 @@ layers: []
   });
 });
 
+describe("warnings channel — deprecated interaction actions", () => {
+  const triggers = ["click", "mouseenter", "mouseleave"] as const;
+
+  it.each(triggers)("warns on %s.action with position and a v2 notice", (trigger) => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    interactive:
+      ${trigger}:
+        action: doSomething`)
+    );
+
+    // Deprecated, not invalid — the config still parses.
+    expect(result.success).toBe(true);
+
+    const dep = result.warnings.find((w) => w.path.endsWith(`${trigger}.action`));
+    expect(dep).toBeDefined();
+    expect(dep!.kind).toBe("deprecation");
+    expect(dep!.message).toContain("deprecated");
+    expect(dep!.message).toContain("v2");
+    expect(typeof dep!.line).toBe("number");
+    expect(typeof dep!.column).toBe("number");
+  });
+
+  it("does not warn on an interaction config without action", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    interactive:
+      click:
+        popup: [{ p: [{ str: "Hi" }] }]`)
+    );
+    expect(result.success).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it("marks legacy refresh warnings as deprecations too", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source:
+      type: geojson
+      url: "https://example.com/d.geojson"
+      refreshInterval: 5000`)
+    );
+    const dep = result.warnings.find((w) => w.message.includes("refreshInterval"));
+    expect(dep!.kind).toBe("deprecation");
+  });
+
+  it("does not flag scrollytelling chapter actions, which share the field name", () => {
+    // `action` also exists on chapter actions, where it is current API. The
+    // rule is scoped to interactive.{click,mouseenter,mouseleave}.action, and
+    // this pins that scoping against the name collision.
+    const result = YAMLParser.safeParseAny(`type: scrollytelling
+id: s
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+chapters:
+  - id: c1
+    title: "One"
+    actions:
+      - action: setFilter
+        layer: p
+        filter: ["==", "kind", "a"]
+`);
+    const falsePositive = result.result.warnings.find(
+      (w) => w.kind === "deprecation"
+    );
+    expect(falsePositive).toBeUndefined();
+  });
+
+  it("does not mark unknown-key warnings as deprecations", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    paint: { circle-radis: 4 }`)
+    );
+    const unknown = result.warnings.find((w) => w.message.includes("circle-radis"));
+    expect(unknown).toBeDefined();
+    expect(unknown!.kind).toBeUndefined();
+  });
+});
+
 describe("warnings channel — deprecated refresh fields", () => {
   it("warns when the legacy top-level refreshInterval is used", () => {
     const result = YAMLParser.safeParseMapBlock(
