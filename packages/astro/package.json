@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "typecheck": "astro check",
-    "test": "vitest",
+    "test": "vitest run",
     "test:watch": "vitest watch",
     "test:ui": "vitest --ui"
   },
