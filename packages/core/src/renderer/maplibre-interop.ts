@@ -41,6 +41,8 @@ export const GeolocateControl: typeof maplibre.GeolocateControl =
 export const ScaleControl: typeof maplibre.ScaleControl = gl.ScaleControl;
 export const FullscreenControl: typeof maplibre.FullscreenControl =
   gl.FullscreenControl;
+export const AttributionControl: typeof maplibre.AttributionControl =
+  gl.AttributionControl;
 
 // Instance types under the same names, so `import { Map }` from this module
 // works in both value and type position (mirroring maplibre-gl's own names).
@@ -50,3 +52,4 @@ export type NavigationControl = maplibre.NavigationControl;
 export type GeolocateControl = maplibre.GeolocateControl;
 export type ScaleControl = maplibre.ScaleControl;
 export type FullscreenControl = maplibre.FullscreenControl;
+export type AttributionControl = maplibre.AttributionControl;

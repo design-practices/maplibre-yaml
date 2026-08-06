@@ -57,6 +57,7 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
     line: warning.line,
     column: warning.column,
     severity: 'warning' as const,
+    ...(warning.kind ? { kind: warning.kind } : {}),
   }));
 
   if (result.success) {

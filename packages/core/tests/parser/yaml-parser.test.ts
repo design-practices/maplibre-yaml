@@ -973,3 +973,54 @@ config:
     });
   });
 });
+
+describe("standalone map block — $ref sources (U7 / todo 039)", () => {
+  const block = (source: string) => `type: map
+id: m
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  cities:
+    type: geojson
+    url: "https://example.com/cities.geojson"
+layers:
+  - id: pts
+    type: circle
+    source: ${source}
+`;
+
+  it("resolves a $ref against the block's own sources", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      block('{ $ref: "#/sources/cities" }')
+    );
+
+    expect(result.success).toBe(true);
+    // Previously the $ref survived parsing untouched, so at render time the
+    // source had no `type` and the layer was silently dropped — accepted
+    // config, no map.
+    expect(result.data!.layers![0].source).toMatchObject({
+      type: "geojson",
+      url: "https://example.com/cities.geojson",
+    });
+  });
+
+  it("reports an unresolvable $ref instead of passing it through", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      block('{ $ref: "#/sources/missing" }')
+    );
+
+    const surfaced =
+      !result.success ||
+      JSON.stringify(result.data!.layers![0].source).includes("$ref") === false;
+    expect(surfaced).toBe(true);
+  });
+
+  it("leaves a bare named-source reference alone", () => {
+    const result = YAMLParser.safeParseMapBlock(block("cities"));
+
+    expect(result.success).toBe(true);
+    expect(result.data!.layers![0].source).toBe("cities");
+  });
+});

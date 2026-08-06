@@ -89,6 +89,194 @@ describe("LayerManager", () => {
       );
     });
 
+    it("wraps a literal colour in a feature-state case for hover.highlight", async () => {
+      const layer = {
+        id: "pts",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+        },
+        paint: { "circle-color": "#ff0000" },
+        interactive: { hover: { highlight: true } },
+      };
+
+      await manager.addLayer(layer as any);
+
+      // Without this, setFeatureState fires but nothing renders differently.
+      const spec = mockMap.addLayer.mock.calls[0][0];
+      expect(spec.paint["circle-color"]).toEqual([
+        "case",
+        ["boolean", ["feature-state", "hover"], false],
+        expect.any(String),
+        "#ff0000",
+      ]);
+    });
+
+    it("leaves an authored expression untouched and warns", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const authored = ["get", "color"];
+      const layer = {
+        id: "pts",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+        },
+        paint: { "circle-color": authored },
+        interactive: { hover: { highlight: true } },
+      };
+
+      await manager.addLayer(layer as any);
+
+      // Overwriting would silently discard the author's data-driven styling.
+      const spec = mockMap.addLayer.mock.calls[0][0];
+      expect(spec.paint["circle-color"]).toEqual(authored);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("expression"));
+      warn.mockRestore();
+    });
+
+    it("does not rewrite paint when highlight is absent", async () => {
+      const layer = {
+        id: "pts",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+        },
+        paint: { "circle-color": "#ff0000" },
+      };
+
+      await manager.addLayer(layer as any);
+
+      const spec = mockMap.addLayer.mock.calls[0][0];
+      expect(spec.paint["circle-color"]).toBe("#ff0000");
+    });
+
+    it("enables generateId with a warning when the source has no id strategy", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const layer = {
+        id: "pts",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+        },
+        interactive: { hover: { highlight: true } },
+      };
+
+      await manager.addLayer(layer as any);
+
+      expect(mockMap.addSource).toHaveBeenCalledWith(
+        "pts-source",
+        expect.objectContaining({ generateId: true })
+      );
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("generateId"));
+      warn.mockRestore();
+    });
+
+    it("respects an authored promoteId instead of generating ids", async () => {
+      const layer = {
+        id: "pts",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+          promoteId: "stationId",
+        },
+        interactive: { hover: { highlight: true } },
+      };
+
+      await manager.addLayer(layer as any);
+
+      const spec = mockMap.addSource.mock.calls[0][1];
+      expect(spec.promoteId).toBe("stationId");
+      expect(spec.generateId).toBeUndefined();
+    });
+
+    it("adds a hillshade layer with a raster-dem source", async () => {
+      const layer = {
+        id: "terrain",
+        type: "hillshade" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "raster-dem" as const,
+          tiles: ["https://example.com/dem/{z}/{x}/{y}.png"],
+          encoding: "terrarium" as const,
+          tileSize: 256,
+        },
+      };
+
+      await manager.addLayer(layer as any);
+
+      expect(mockMap.addSource).toHaveBeenCalledWith(
+        "terrain-source",
+        expect.objectContaining({
+          type: "raster-dem",
+          tiles: ["https://example.com/dem/{z}/{x}/{y}.png"],
+          encoding: "terrarium",
+          tileSize: 256,
+        })
+      );
+      expect(mockMap.addLayer).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "terrain", type: "hillshade" }),
+        undefined
+      );
+    });
+
+    it("forwards every raster-dem field, including custom-encoding factors", async () => {
+      const layer = {
+        id: "terrain",
+        type: "hillshade" as const,
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "raster-dem" as const,
+          url: "https://example.com/terrain.json",
+          encoding: "custom" as const,
+          redFactor: 256,
+          greenFactor: 1,
+          blueFactor: 1 / 256,
+          baseShift: 32768,
+          tileSize: 512,
+          minzoom: 2,
+          maxzoom: 14,
+          bounds: [-180, -85, 180, 85],
+          attribution: "© Example Terrain",
+        },
+      };
+
+      await manager.addLayer(layer as any);
+
+      // Exact equality, not objectContaining: a dropped field would make
+      // `encoding: custom` decode as mapbox with no diagnostic.
+      expect(mockMap.addSource).toHaveBeenCalledWith("terrain-source", {
+        type: "raster-dem",
+        url: "https://example.com/terrain.json",
+        encoding: "custom",
+        redFactor: 256,
+        greenFactor: 1,
+        blueFactor: 1 / 256,
+        baseShift: 32768,
+        tileSize: 512,
+        minzoom: 2,
+        maxzoom: 14,
+        bounds: [-180, -85, 180, 85],
+        attribution: "© Example Terrain",
+      });
+    });
+
     it("sets initial visibility to none when visible is false", async () => {
       const layer = {
         id: "hidden-layer",
@@ -159,6 +347,116 @@ describe("LayerManager", () => {
         }),
         undefined
       );
+    });
+  });
+
+  describe("named sources (U7)", () => {
+    /** A block-level named source, as `sources:` declares it. */
+    const namedGeojson = (extra: Record<string, unknown> = {}) => ({
+      type: "geojson" as const,
+      data: { type: "FeatureCollection" as const, features: [] },
+      ...extra,
+    });
+
+    it("registers a named source once for two referencing layers", async () => {
+      manager.registerSources({ shared: namedGeojson() });
+
+      expect(mockMap.addSource).toHaveBeenCalledTimes(1);
+      expect(mockMap.addSource).toHaveBeenCalledWith(
+        "shared",
+        expect.objectContaining({ type: "geojson" })
+      );
+    });
+
+    it("scrubs YAML-only keys before handing the spec to MapLibre", async () => {
+      manager.registerSources({
+        shared: namedGeojson({
+          refresh: { refreshInterval: 5000, updateStrategy: "replace" },
+          cache: { enabled: true },
+          prefetchedData: { type: "FeatureCollection", features: [] },
+        }),
+      });
+
+      const [, spec] = mockMap.addSource.mock.calls[0];
+      // These drive our own machinery; MapLibre would reject or ignore them.
+      expect(spec).not.toHaveProperty("refresh");
+      expect(spec).not.toHaveProperty("cache");
+      expect(spec).not.toHaveProperty("prefetchedData");
+      expect(spec).toHaveProperty("data");
+    });
+
+    it("updateData reaches a named source, not a derived one", async () => {
+      manager.registerSources({ shared: namedGeojson() });
+      const setData = vi.fn();
+      mockMap.getSource = vi.fn((id: string) =>
+        id === "shared" ? { setData } : undefined
+      );
+
+      await manager.addLayer({
+        id: "a",
+        type: "circle",
+        visible: true,
+        toggleable: false,
+        source: "shared",
+      } as any);
+
+      const next = { type: "FeatureCollection", features: [] } as any;
+      manager.updateData("a", next);
+
+      // Previously resolved `a-source`, which does not exist for a named
+      // source, so the update silently did nothing.
+      expect(setData).toHaveBeenCalledWith(next);
+    });
+
+    it("updating through one layer is visible to its siblings on the same source", async () => {
+      manager.registerSources({ shared: namedGeojson() });
+      const setData = vi.fn();
+      mockMap.getSource = vi.fn((id: string) =>
+        id === "shared" ? { setData } : undefined
+      );
+
+      for (const id of ["a", "b"]) {
+        await manager.addLayer({
+          id,
+          type: "circle",
+          visible: true,
+          toggleable: false,
+          source: "shared",
+        } as any);
+      }
+
+      manager.updateData("a", { type: "FeatureCollection", features: [] } as any);
+
+      // One source backs both layers, so one setData serves both. Documented
+      // behaviour, not an accident.
+      expect(setData).toHaveBeenCalledTimes(1);
+      expect(manager.getSourceIdForLayer("b")).toBe("shared");
+    });
+
+    it("stops polling only when the last referencing layer is removed", async () => {
+      manager.registerSources({
+        shared: namedGeojson({
+          url: "https://example.com/d.geojson",
+          refresh: { refreshInterval: 5000, updateStrategy: "replace" },
+        }),
+      });
+      mockMap.getSource = vi.fn(() => ({ setData: vi.fn() }));
+
+      for (const id of ["a", "b"]) {
+        await manager.addLayer({
+          id,
+          type: "circle",
+          visible: true,
+          toggleable: false,
+          source: "shared",
+        } as any);
+      }
+
+      expect(manager.isRefreshing("shared")).toBe(true);
+      manager.removeLayer("a");
+      expect(manager.isRefreshing("shared")).toBe(true); // b still needs it
+      manager.removeLayer("b");
+      expect(manager.isRefreshing("shared")).toBe(false);
     });
   });
 

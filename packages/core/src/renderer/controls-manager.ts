@@ -9,6 +9,7 @@ import {
   GeolocateControl,
   ScaleControl,
   FullscreenControl,
+  AttributionControl,
 } from "./maplibre-interop";
 import type { z } from "zod";
 import { ControlsConfigSchema } from "../schemas";
@@ -67,6 +68,18 @@ export class ControlsManager {
         typeof config.fullscreen === "object" ? config.fullscreen : {};
       const position = (options as any).position || "top-right";
       const control = new FullscreenControl();
+      this.map.addControl(control, position as any);
+      this.addedControls.push(control);
+    }
+
+    if (config.attribution) {
+      const options =
+        typeof config.attribution === "object" ? config.attribution : {};
+      const position = (options as any).position || "bottom-right";
+      const control = new AttributionControl({
+        compact: (options as any).compact,
+        customAttribution: (options as any).customAttribution,
+      });
       this.map.addControl(control, position as any);
       this.addedControls.push(control);
     }

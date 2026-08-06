@@ -19,6 +19,21 @@ type ControlsConfig = z.infer<typeof ControlsConfigSchema>;
 type LegendConfig = z.infer<typeof LegendConfigSchema>;
 
 /**
+ * Whether the YAML `controls.attribution` control is configured.
+ *
+ * Uses the same bare-truthiness convention as every control branch in
+ * `ControlsManager.addControls` — a `true` or any options object enables the
+ * control; `false`/absent disables it. This MUST stay in lockstep with the ADD
+ * decision in `ControlsManager`: if this predicate and that branch disagree
+ * (e.g. one honors `enabled: false` and the other doesn't), a configured
+ * attribution control and MapLibre's built-in default can both render.
+ */
+function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
+  const attribution = controls?.attribution;
+  return attribution != null && attribution !== false;
+}
+
+/**
  * Options for MapRenderer
  */
 export interface MapRendererOptions {
@@ -68,6 +83,18 @@ export class MapRenderer {
     this.legendBuilt = false;
     this.autoLegendContainer = null;
 
+    // When a `controls.attribution` control is configured, MapLibre's built-in
+    // attribution must be disabled at construction time so the two don't
+    // double-render. An explicit `config.attributionControl: true` conflicts;
+    // the configured control wins, with a warning.
+    const attributionControlConfigured = isAttributionControlEnabled(options.controls);
+    if (attributionControlConfigured && config.attributionControl === true) {
+      console.warn(
+        '[maplibre-yaml] `controls.attribution` overrides `attributionControl: true`; ' +
+          "MapLibre's built-in attribution is disabled to avoid a duplicate control.",
+      );
+    }
+
     // Initialize MapLibre map
     this.map = new MapLibreMap({
       ...config,
@@ -78,12 +105,26 @@ export class MapRenderer {
       pitch: config.pitch ?? 0,
       bearing: config.bearing ?? 0,
       interactive: config.interactive ?? true,
+      // Set ONLY when we need to suppress the built-in control. Passing the key
+      // with an undefined value is not the same as omitting it: MapLibre merges
+      // options over its defaults, so `attributionControl: undefined` overwrites
+      // the default and the map ends up with no attribution at all — a
+      // licensing problem, not just a cosmetic one. When unconfigured, the key
+      // comes from `...config` alone (i.e. only if the author set it).
+      ...(attributionControlConfigured ? { attributionControl: false } : {}),
     } as any);
 
     // Initialize managers
     const layerCallbacks: LayerManagerCallbacks = {
       onDataLoading: (layerId) => this.emit('layer:data-loading', { layerId }),
-      onDataLoaded: (layerId, featureCount) => this.emit('layer:data-loaded', { layerId, featureCount }),
+      onDataLoaded: (layerId, featureCount) => {
+        // Refreshed data means new features. Feature-state is keyed by id and
+        // survives setData, so a retained highlight id would light up whichever
+        // feature now holds it — a different one. Drop it; the next mousemove
+        // re-applies the highlight under the cursor.
+        this.eventHandler.resetFeatureState(layerId);
+        this.emit('layer:data-loaded', { layerId, featureCount });
+      },
       onDataError: (layerId, error) => this.emit('layer:data-error', { layerId, error }),
     };
 
@@ -101,13 +142,11 @@ export class MapRenderer {
     this.map.on('load', () => {
       this.isLoaded = true;
 
-      // Add named sources from block config before processing layers
+      // Named sources are registered through LayerManager rather than added
+      // raw here: it scrubs YAML-only keys and owns the refresh machinery, so
+      // a named source declaring `refresh:` actually polls.
       if (sources) {
-        for (const [id, sourceSpec] of Object.entries(sources)) {
-          if (!this.map.getSource(id)) {
-            this.map.addSource(id, sourceSpec as any);
-          }
-        }
+        this.layerManager.registerSources(sources as Record<string, unknown>);
       }
 
       // Apply YAML-declared controls and legend once the map is ready.
@@ -183,6 +222,9 @@ export class MapRenderer {
    * Update layer data
    */
   updateLayerData(layerId: string, data: GeoJSON.GeoJSON): void {
+    // Same reasoning as the refresh path: replacing the data invalidates any
+    // tracked feature id, so clear before the new features land.
+    this.eventHandler.resetFeatureState(layerId);
     this.layerManager.updateData(layerId, data);
   }
 

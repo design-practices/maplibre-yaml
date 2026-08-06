@@ -7,12 +7,14 @@ vi.mock("maplibre-gl", () => {
   const GeolocateControl = vi.fn(() => ({ type: "geolocate" }));
   const ScaleControl = vi.fn(() => ({ type: "scale" }));
   const FullscreenControl = vi.fn(() => ({ type: "fullscreen" }));
+  const AttributionControl = vi.fn((options) => ({ type: "attribution", options }));
   return {
-    default: { NavigationControl, GeolocateControl, ScaleControl, FullscreenControl },
+    default: { NavigationControl, GeolocateControl, ScaleControl, FullscreenControl, AttributionControl },
     NavigationControl,
     GeolocateControl,
     ScaleControl,
     FullscreenControl,
+    AttributionControl,
   };
 });
 
@@ -113,6 +115,57 @@ describe("ControlsManager", () => {
 
       expect(mockMap.addControl).toHaveBeenCalledWith(
         expect.any(Object),
+        "bottom-right"
+      );
+    });
+
+    it("adds attribution control at bottom-right by default", () => {
+      const config = {
+        attribution: true,
+      };
+
+      manager.addControls(config);
+
+      expect(mockMap.addControl).toHaveBeenCalledTimes(1);
+      expect(mockMap.addControl).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "attribution" }),
+        "bottom-right"
+      );
+    });
+
+    it("respects a custom attribution position", () => {
+      const config = {
+        attribution: {
+          position: "top-left" as const,
+        },
+      };
+
+      manager.addControls(config);
+
+      expect(mockMap.addControl).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "attribution" }),
+        "top-left"
+      );
+    });
+
+    it("passes compact and customAttribution to the attribution control", () => {
+      const config = {
+        attribution: {
+          compact: true,
+          customAttribution: "© Example",
+        },
+      };
+
+      manager.addControls(config);
+
+      expect(mockMap.addControl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "attribution",
+          options: expect.objectContaining({
+            compact: true,
+            customAttribution: "© Example",
+          }),
+        }),
         "bottom-right"
       );
     });

@@ -15,18 +15,32 @@ vi.mock("maplibre-gl", () => {
 
       const map = {
         options,
-        on(event: string, callback: Function) {
-          if (!events.has(event)) {
-            events.set(event, new Set());
+        // MapLibre overloads this: on(type, listener) and the layer-scoped
+        // on(type, layerId, listener). Keying only by type meant a layer-scoped
+        // listener was stored under the layer id instead of the handler, so no
+        // test could fire hover/click at all.
+        on(event: string, layerOrCallback: any, maybeCallback?: Function) {
+          const scoped = typeof maybeCallback === "function";
+          const key = scoped ? `${event}:${layerOrCallback}` : event;
+          const callback = scoped ? maybeCallback! : layerOrCallback;
+
+          if (!events.has(key)) {
+            events.set(key, new Set());
           }
-          events.get(event)!.add(callback);
+          events.get(key)!.add(callback);
           // Auto-trigger load event
           if (event === "load") {
             setTimeout(() => callback(), 0);
           }
         },
-        off(event: string, callback: Function) {
-          events.get(event)?.delete(callback);
+        off(event: string, layerOrCallback: any, maybeCallback?: Function) {
+          const scoped = typeof maybeCallback === "function";
+          const key = scoped ? `${event}:${layerOrCallback}` : event;
+          events.get(key)?.delete(scoped ? maybeCallback! : layerOrCallback);
+        },
+        /** Test hook: fire the listeners registered for a (type, layerId). */
+        __fire(key: string, payload: any) {
+          for (const cb of events.get(key) ?? []) cb(payload);
         },
         addSource(id: string, source: any) {
           sources.set(id, source);
@@ -56,6 +70,8 @@ vi.mock("maplibre-gl", () => {
         },
         addControl: vi.fn(),
         removeControl: vi.fn(),
+        setFeatureState: vi.fn(),
+        removeFeatureState: vi.fn(),
       };
 
       return map;
@@ -64,6 +80,7 @@ vi.mock("maplibre-gl", () => {
   const GeolocateControl = vi.fn();
   const ScaleControl = vi.fn();
   const FullscreenControl = vi.fn();
+  const AttributionControl = vi.fn();
   const Popup = vi.fn(() => ({
     setLngLat: vi.fn().mockReturnThis(),
     setHTML: vi.fn().mockReturnThis(),
@@ -71,12 +88,13 @@ vi.mock("maplibre-gl", () => {
     remove: vi.fn(),
   }));
   return {
-    default: { Map: MaplibreMap, NavigationControl, GeolocateControl, ScaleControl, FullscreenControl, Popup },
+    default: { Map: MaplibreMap, NavigationControl, GeolocateControl, ScaleControl, FullscreenControl, AttributionControl, Popup },
     Map: MaplibreMap,
     NavigationControl,
     GeolocateControl,
     ScaleControl,
     FullscreenControl,
+    AttributionControl,
     Popup,
   };
 });
@@ -432,6 +450,78 @@ pages:
       renderer.destroy();
     });
 
+    it("suppresses the default attribution when controls.attribution is configured", async () => {
+      const renderer = new MapRenderer(container, baseConfig, [], {
+        controls: { attribution: true },
+      });
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      // Constructor must disable MapLibre's built-in attribution so the
+      // configured control is not double-rendered.
+      expect(map.options.attributionControl).toBe(false);
+
+      renderer.destroy();
+    });
+
+    it("leaves the default attribution enabled when no attribution control is configured", async () => {
+      const renderer = new MapRenderer(container, baseConfig, [], {
+        controls: { navigation: true },
+      });
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      // The key must be ABSENT, not present-and-undefined. MapLibre merges
+      // options over its defaults, so passing `attributionControl: undefined`
+      // overwrites the default and the map renders no attribution at all.
+      // Asserting `toBeUndefined()` here cannot tell those apart and passed
+      // while attribution was silently missing from every map.
+      expect("attributionControl" in map.options).toBe(false);
+
+      renderer.destroy();
+    });
+
+    it("keeps the add and disable-default decisions in agreement for an options object", async () => {
+      // `{ enabled: false }` is an options object: the ADD branch (truthy) adds
+      // the control, so the DISABLE branch must also fire, or the built-in
+      // default double-renders. This pins the two decisions in lockstep.
+      const renderer = new MapRenderer(container, baseConfig, [], {
+        controls: { attribution: { enabled: false } },
+      });
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      expect(map.options.attributionControl).toBe(false);
+      // Exactly one attribution control total: the built-in is disabled and the
+      // configured control is added on load.
+      expect(map.addControl).toHaveBeenCalledTimes(1);
+
+      renderer.destroy();
+    });
+
+    it("lets controls.attribution win over config.attributionControl with a warning", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const renderer = new MapRenderer(
+        container,
+        { ...baseConfig, attributionControl: true },
+        [],
+        { controls: { attribution: true } }
+      );
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      expect(map.options.attributionControl).toBe(false);
+      expect(warnSpy).toHaveBeenCalled();
+
+      warnSpy.mockRestore();
+      renderer.destroy();
+    });
+
     it("builds the legend container on load when a legend config is provided", async () => {
       const renderer = new MapRenderer(container, baseConfig, [], {
         legend: {
@@ -550,6 +640,58 @@ pages:
 
       expect(eventData).toBeDefined();
       expect(eventData.layerId).toBe("new-layer");
+
+      renderer.destroy();
+    });
+  });
+
+  describe("hover highlight survives data replacement (ml-itz.9)", () => {
+    const baseConfig = {
+      center: [0, 0] as [number, number],
+      zoom: 1,
+      mapStyle: "https://demotiles.maplibre.org/style.json",
+    };
+
+    const highlightLayer = {
+      id: "pts",
+      type: "circle" as const,
+      visible: true,
+      toggleable: false,
+      source: {
+        type: "geojson" as const,
+        data: { type: "FeatureCollection" as const, features: [] },
+      },
+      interactive: { hover: { highlight: true } },
+    };
+
+    /** Hover a feature by firing the mousemove listener the renderer attached. */
+    const hoverFeature = (map: any, id: number) => {
+      map.__fire("mousemove:pts", {
+        features: [{ id, properties: {} }],
+        lngLat: { lng: 0, lat: 0 },
+      });
+    };
+
+    it("clears the highlight when a layer's data is replaced", async () => {
+      const renderer = new MapRenderer(container, baseConfig, [highlightLayer as any]);
+      await new Promise((resolve) => renderer.on("load", resolve));
+
+      const map = renderer.getMap() as any;
+      hoverFeature(map, 7);
+      expect(map.setFeatureState).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 7 }),
+        { hover: true }
+      );
+
+      map.setFeatureState.mockClear();
+      renderer.updateLayerData("pts", { type: "FeatureCollection", features: [] } as any);
+
+      // Feature ids are only meaningful within a dataset. Holding id 7 across a
+      // setData means the next render can light up a different feature.
+      expect(map.setFeatureState).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 7 }),
+        { hover: false }
+      );
 
       renderer.destroy();
     });

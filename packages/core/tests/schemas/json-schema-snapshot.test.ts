@@ -107,3 +107,56 @@ describe("emitted JSON Schema artifacts", () => {
     expect(anyDef.anyOf).toBeUndefined();
   });
 });
+
+describe("deprecated fields are annotated in the published contract", () => {
+  /** Every property path carrying `deprecated: true`. */
+  const deprecatedPaths = (node: unknown, path: string[] = []): string[] => {
+    if (Array.isArray(node)) return node.flatMap((n) => deprecatedPaths(n, path));
+    if (!node || typeof node !== "object") return [];
+
+    const out: string[] = [];
+    const record = node as Record<string, any>;
+
+    if (record.properties && typeof record.properties === "object") {
+      for (const [key, child] of Object.entries<any>(record.properties)) {
+        if (child?.deprecated === true) out.push([...path, key].join("."));
+        out.push(...deprecatedPaths(child, [...path, key]));
+      }
+    }
+    for (const [key, value] of Object.entries(record)) {
+      if (key === "properties") continue;
+      out.push(...deprecatedPaths(value, path));
+    }
+    return out;
+  };
+
+  it("marks the interaction actions and legacy refresh fields", () => {
+    const schemas = buildSchemas();
+    const found = [...new Set(deprecatedPaths(schemas.map))].sort();
+
+    // Editors grey these out and generating agents avoid them. Without the
+    // annotation nothing in the published contract distinguishes a field that
+    // works from one that is accepted and does nothing.
+    expect(found).toEqual([
+      "layers.interactive.click.action",
+      "layers.interactive.mouseenter.action",
+      "layers.interactive.mouseleave.action",
+      "sources.refreshInterval",
+      "sources.updateKey",
+      "sources.updateStrategy",
+    ]);
+  });
+
+  it("does not mark fields that still work", () => {
+    const schemas = buildSchemas();
+    const found = new Set(deprecatedPaths(schemas.map));
+
+    for (const live of [
+      "layers.interactive.click.popup",
+      "layers.interactive.click.flyTo",
+      "layers.interactive.hover.highlight",
+    ]) {
+      expect(found.has(live)).toBe(false);
+    }
+  });
+});

@@ -4,7 +4,7 @@ id: controls-legend-check
 config:
   center: [-74.006, 40.7128]
   zoom: 11
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "/examples/verification/configs/local-style.json"
 controls:
   navigation: true
   scale: true

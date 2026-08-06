@@ -1,6 +1,6 @@
 ---
 title: Data Sources
-description: GeoJSON, Vector, Raster, Image, and Video sources with real-time updates
+description: GeoJSON, Vector, Raster, Raster DEM, Image, and Video sources with real-time updates
 ---
 
 Data sources provide the data for map layers. maplibre-yaml supports all MapLibre GL JS source types with enhanced features for dynamic data loading, real-time updates, and streaming.
@@ -11,7 +11,8 @@ Data sources provide the data for map layers. maplibre-yaml supports all MapLibr
 |------|-------------|----------|
 | `geojson` | GeoJSON point, line, and polygon data | Primary data source, supports real-time updates |
 | `vector` | Vector tiles (Mapbox Vector Tiles) | Efficient large datasets, base maps |
-| `raster` | Raster tile imagery | Satellite imagery, hillshading |
+| `raster` | Raster tile imagery | Satellite imagery, basemaps |
+| `raster-dem` | Elevation (DEM) tiles | Hillshade layers |
 | `image` | Single image overlay | Map overlays, floor plans |
 | `video` | Video overlay | Animated overlays |
 
@@ -400,6 +401,67 @@ source:
   attribution: "Esri, Maxar, Earthstar Geographics"
 ```
 
+## Raster DEM Source
+
+Elevation tiles for `hillshade` layers. Shaped like a raster source, plus an
+`encoding` describing how elevation is packed into the tile's RGB channels.
+
+### Structure
+
+```yaml
+source:
+  type: raster-dem
+  tiles:
+    - "https://example.com/dem/{z}/{x}/{y}.png"
+  encoding: terrarium
+  tileSize: 256
+```
+
+### Raster DEM Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `url` | string | - | TileJSON URL |
+| `tiles` | string[] | - | Tile URL templates |
+| `tileSize` | number | `512` | Tile size in pixels |
+| `encoding` | `"terrarium"` \| `"mapbox"` \| `"custom"` | `"mapbox"` | Elevation encoding |
+| `minzoom` | number | - | Minimum zoom level |
+| `maxzoom` | number | - | Maximum zoom level |
+| `bounds` | number[] | - | Bounds [west, south, east, north] |
+| `attribution` | string | - | Attribution text |
+
+Either `url` or `tiles` is required. A `custom` encoding also accepts MapLibre's
+`redFactor`, `greenFactor`, `blueFactor`, and `baseShift`.
+
+### Example
+
+A complete hillshade map:
+
+```yaml
+type: map
+id: terrain
+config:
+  center: [-121.7, 46.85]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: hills
+    type: hillshade
+    source:
+      type: raster-dem
+      tiles:
+        - "https://example.com/dem/{z}/{x}/{y}.png"
+      encoding: terrarium
+      tileSize: 256
+    paint:
+      hillshade-exaggeration: 0.6
+```
+
+:::note
+This covers hillshade sourcing. Map-level 3D `terrain:` configuration is not
+part of the format.
+:::
+
 ## Image Source
 
 Single image overlay anchored to geographic coordinates.
@@ -536,6 +598,61 @@ layers:
     paint:
       fill-color: "#ccc"
 ```
+
+### Live Refresh on a Named Source
+
+A named source refreshes like an inline one, and does so **once** no matter how
+many layers reference it:
+
+```yaml
+sources:
+  vehicles:
+    type: geojson
+    url: "https://api.example.com/vehicles"
+    refresh:
+      refreshInterval: 5000
+      updateStrategy: merge
+      updateKey: vehicleId
+
+layers:
+  - id: vehicle-dots
+    type: circle
+    source: vehicles
+  - id: vehicle-labels
+    type: symbol
+    source: vehicles
+```
+
+One poll feeds both layers, and each still receives its own
+`ml-map:layer-data-loaded` event. Polling stops when the last layer referencing
+the source is removed.
+
+The layer-keyed control APIs resolve to the shared pipeline, so you address it
+through any referencing layer:
+
+```js
+renderer.pauseRefresh("vehicle-dots");   // pauses the shared poll
+renderer.updateLayerData("vehicle-dots", geojson);  // updates both layers
+```
+
+`updateLayerData` writes to the **source**, so every layer drawing from it
+reflects the change. That is intended: one source, one dataset.
+
+### Referencing With `$ref`
+
+A layer can also point at a source with a JSON-pointer style reference, which
+resolves against the block's own `sources:`:
+
+```yaml
+layers:
+  - id: boundary-fill
+    type: fill
+    source: { $ref: "#/sources/boundary" }
+```
+
+This is equivalent to `source: boundary`. Prefer the bare name for readability;
+`$ref` exists for generated documents and tooling. Nested references — a `$ref`
+whose target itself contains a `$ref` — are not resolved.
 
 Block-level sources are added to the map before layers are processed, so any layer in that block can reference them by name. This avoids duplicating source definitions when multiple layers use the same data.
 

@@ -1,68 +1,146 @@
-# maplibre-yaml — agent orientation
+# Project Instructions for AI Agents
 
-Declarative MapLibre GL web maps from YAML. pnpm monorepo: `@maplibre-yaml/core`
-(schemas, parser, renderer, `<ml-map>` web component), `@maplibre-yaml/astro`
-(components + content-collection integration), `@maplibre-yaml/cli` (`mlym`).
-Docs site in `docs/` (Starlight).
+maplibre-yaml — declarative MapLibre web maps from YAML. pnpm monorepo
+publishing `@maplibre-yaml/core`, `@maplibre-yaml/astro`, and
+`@maplibre-yaml/cli` to npm. This library is the map engine consumed by
+the sister project **map-party** (`~/dev/map-party` on this box); changes
+here ripple into that product, and both projects share the same tracking
+(beads) and knowledge (vault) infrastructure.
 
-This file is the portable orientation for any machine or fresh session. It is a
-point-in-time snapshot; update it as state moves.
+## Pre-submit checklist
 
-## Current state (as of 2026-07-24)
+Before declaring any task complete:
 
-- Published: core 0.3.1, astro 0.3.1, cli 0.1.13. **Never depend on 0.2.0** — it
-  was deprecated on npm (the issue #28 workspace-refs manifest bug).
-- **0.4.0 is HELD in the open "Version Packages" PR (#51). Do not merge #51**
-  until the schema-truthfulness units land — it ships as one coherent 0.4.0
-  (Phase 2 JSON Schema + validation ergonomics + truthfulness + riders). Ratify
-  decision D8 (JSON-Schema strict-shape) at merge time.
+```bash
+pnpm presubmit
+```
 
-## Ratified direction — read first
+`presubmit` runs `build && typecheck && lint && test &&
+docs:validate-snippets` (as `presubmit:raw`), fail-fast via `&&` — the
+first failure is the diagnostic. On opti it routes through the
+box-wide **test lane** (`scripts/lane-shim.sh` → box-infra
+`test-lane`): only ONE presubmit runs on the box at a time across ALL
+projects — concurrent runs queue on a flock, and a load/memory guard
+aborts fast when the box is too loaded for results to mean anything.
+A guard abort is an environment problem, not a code failure — wait for
+load to decay rather than retrying in a loop. `test-lane status` shows
+who holds the lane without blocking; on machines without the wrapper
+the shim runs the gate directly. There is no browser-e2e suite in this
+repo (no `[no-e2e: ...]` marker convention either — that is a
+map-party mechanism; do not import it into commit messages here). If
+any step fails, fix it before saying "done."
 
-`docs/brainstorms/2026-07-24-library-direction-requirements.md` is canonical and
-supersedes earlier strategic framing. In one line: the library is the YAML
-authoring layer for the MapLibre style spec — an **erasable** core that compiles
-to spec-valid `style.json`, plus optional runtime packages for the experience
-layer. Organizing principle = the **erasability test** (sugar → core / deviation
-→ runtime package / product → app). Load-bearing drivers = document **longevity +
-trust**. The format never carries executable JS, DOM selectors, or user GLSL.
+Releases go through changesets (`pnpm changeset` → release PR); never
+`npm publish` by hand.
 
-- Post-train arc (one body of work): extension registry + round-trip write seam +
-  `style.json` emitter + interactions package. NYC parameterization demo follows.
-  Effects/deck are deferred to a validation tier (reference code in
-  `docs/brainstorms/effects/` is written-but-unrun).
-- Format v2 = one coherent destination (`style:`/`runtime:` split +
-  GeoJSON-canonical sources + `state:`/expression-DSL + Tangram Tier-1/2 sugar),
-  staged behind the accepted versioning RFC. The Phase 5 / D6 scoping session
-  grows into the define-v2 session.
-- Input strategy docs, absorbed with amendments: the two 2026-07-14 proposals,
-  2026-07-15 ADR-001, 2026-07-24 style-parameterization.
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
+## Beads Issue Tracker
 
-## Active plan
+This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
 
-`docs/plans/2026-07-08-001-feat-quality-adoption-release-train-plan.md`. Phase 0
-(0.3.1 — minify, astro runtime deps, release-tag fix) SHIPPED. Phase 1
-(truthfulness U3–U10) + riders (U11–U16) are next and feed #51 → 0.4.0. U4/U5
-interaction units are built registry-shaped so the future interactions package is
-a move, not a rewrite.
+### Quick Reference
 
-## Conventions
+```bash
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --claim  # Claim work
+bd close <id>         # Complete work
+```
 
-- Task tracking is migrating to **beads** (`bd` CLI). File new todos there, not in
-  `todos/`.
-- Route all runtime maplibre-gl symbol access through
-  `packages/core/src/renderer/maplibre-interop.ts` (the v3–v5 ESM interop shim) —
-  never import maplibre-gl symbols directly.
-- `docs/public/schema/`, `docs/public/llms*.txt`, and `packages/core/schemas/` are
-  build-generated (decision D7: generate-on-build, never commit).
-- Two real consumers gate new capability: a client Astro project (trusted,
-  build-time) and mapparty (hostile-input GUI, consumes the library). A capability
-  serving only one is suspect until proven general.
+### Rules
 
-## Session memory (machine-local, not in git)
+- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- Run `bd prime` for detailed command reference and session close protocol
+- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
 
-Prior Claude Code session memory lives at
-`~/.claude/projects/-Users-marioag-Documents-GitHub-maplibre-yaml/memory/` — it is
-machine-local and does not travel with the repo. This file is the portable
-substitute. For exact continuity on another machine, copy that directory to the
-same path there (requires a matching username and clone path).
+**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
+
+## Agent Context Profiles
+
+The managed Beads block is task-tracking guidance, not permission to override repository, user, or orchestrator instructions.
+
+- **Conservative (default)**: Use `bd` for task tracking. Do not run git commits, git pushes, or Dolt remote sync unless explicitly asked. At handoff, report changed files, validation, and suggested next commands.
+- **Minimal**: Keep tool instruction files as pointers to `bd prime`; use the same conservative git policy unless active instructions say otherwise.
+- **Team-maintainer**: Only when the repository explicitly opts in, agents may close beads, run quality gates, commit, and push as part of session close. A current "do not commit" or "do not push" instruction still wins.
+
+## Session Completion
+
+This protocol applies when ending a Beads implementation workflow. It is subordinate to explicit user, repository, and orchestrator instructions.
+
+1. **File issues for remaining work** - Create beads for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **Handle git/sync by active profile**:
+   ```bash
+   # Conservative/minimal/default: report status and proposed commands; wait for approval.
+   git status
+
+   # Team-maintainer opt-in only, unless current instructions forbid it:
+   git pull --rebase
+   git push
+   git status
+   ```
+5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
+
+**Critical rules:**
+- Explicit user or orchestrator instructions override this Beads block.
+- Do not commit or push without clear authority from the active profile or the current user request.
+- If a required sync or push is blocked, stop and report the exact command and error.
+<!-- END BEADS INTEGRATION -->
+
+## Beads conventions specific to this repo
+
+- **The ledger is public in principle.** This is a public GitHub repo and
+  the issue DB syncs to `refs/dolt/data` on it — anyone can fetch and
+  reconstruct it. No secrets, no tokens, no candid references to private
+  parties in bead descriptions. (The JSONL exports are gitignored so
+  ledger content never renders in the tree, but the sync ref is still
+  fetchable.)
+- **`ready-for-agent` is a human-only label.** It is the gate the
+  unattended agent loop dispatches on (box-infra `agent-loop.sh`). Agents
+  never apply it; file discovered work unlabeled for human triage.
+- **GitHub Issues stays the community-facing tracker.** Beads is the
+  internal/agent ledger. When a bead mirrors a GitHub issue (or vice
+  versa), cross-reference both ways (`GH #NN` in the bead, `ml-xxxx` in a
+  GH comment).
+- **Provenance:** beads migrated from the retired `todos/` ledger carry a
+  `Migrated from todos/NNN-...md` line; see `todos/README.md` for the
+  retirement record.
+
+## Knowledge vault (`~/vault`)
+
+Cross-project curated knowledge — decisions and their reversals, entity and
+status pages, concepts — compiled nightly from session transcripts and notes.
+It is **not** a substitute for this repo's own docs: code structure and
+conventions live here and in git history. The vault is for the *why* that
+never got written down — what was decided, when, and what it superseded —
+including decisions made in **map-party** sessions that shape this library
+(map-party is this engine's biggest consumer; its feature requests often
+arrive as beads here).
+
+Consult it when the task turns on a past decision or on context outside this
+repo:
+
+```bash
+cat ~/vault/index.md              # the catalog — always start here
+cat ~/vault/decisions/<page>.md   # then read only the pages the index points at
+```
+
+Cite the pages you used. **Do not write to the vault from a project session** —
+`raw/` is immutable and the derived layer is compiled by the nightly ingest
+(box-infra: `vault-ingest.sh`). Knowledge worth keeping goes into a note under
+`~/vault/raw/notes/`, which the next ingest compiles. Session transcripts from
+this repo are exported to the vault automatically (nightly
+`vault-export-sessions.sh`); you don't need to do anything for that.
+
+## Architecture Overview
+
+- `packages/core` — schemas (zod), YAML parser, renderer, `<ml-map>` web
+  component. maplibre-gl stays a peer/external dep (import map on CDN).
+- `packages/astro` — Astro components (Map, FullPageMap, Scrollytelling)
+  built on core.
+- `packages/cli` — validation, preview, scaffolding.
+- `docs/` — Astro docs site. `examples/` — runnable examples.
+- `plans/` — design plans (historical + active); open work items belong in
+  beads, not in plan prose.
+

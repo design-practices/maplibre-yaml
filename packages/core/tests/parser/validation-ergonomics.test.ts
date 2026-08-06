@@ -119,7 +119,7 @@ pages:
 `);
     expect(result.success).toBe(false);
     expect(result.errors[0].message).toBe(
-      'Unknown source type "geojsn". Valid types: geojson, vector, raster, image, video. Did you mean "geojson"?'
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video. Did you mean "geojson"?'
     );
   });
 
@@ -133,8 +133,47 @@ pages:
     const err = result.errors.find((e) => e.message.includes("source type"));
     expect(err).toBeDefined();
     expect(err!.message).toBe(
-      'Unknown source type "geojsn". Valid types: geojson, vector, raster, image, video. Did you mean "geojson"?'
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video. Did you mean "geojson"?'
     );
+  });
+
+  it('unknown source type "raster-dme" suggests raster-dem', () => {
+    const result = YAMLParser.safeParse(`sources:
+  terrain:
+    type: raster-dme
+    url: "https://example.com/terrain.json"
+pages:
+  - path: "/"
+    title: "T"
+    blocks: []
+`);
+    expect(result.success).toBe(false);
+    expect(result.errors[0].message).toContain('Did you mean "raster-dem"?');
+  });
+
+  it("mines the real failure for a malformed raster-dem source", () => {
+    // Guards the two registration points a new source type must hit: drop
+    // raster-dem from SOURCE_TYPES and this reports "Unknown source type";
+    // drop it from LayerSourceSchema and union mining falls back to the
+    // generic "does not match any of the expected formats".
+    const result = YAMLParser.safeParse(`sources:
+  terrain:
+    type: raster-dem
+    encoding: srtm
+    url: "https://example.com/terrain.json"
+pages:
+  - path: "/"
+    title: "T"
+    blocks: []
+`);
+    expect(result.success).toBe(false);
+    const err = result.errors.find((e) => e.path === "sources.terrain");
+    expect(err).toBeDefined();
+    // The real per-field failure, not a generic "matched no union member".
+    expect(err!.message).toBe(
+      "Invalid enum value. Expected 'terrarium' | 'mapbox' | 'custom', received 'srtm'"
+    );
+    expect(err!.line).toBe(3);
   });
 
   it("unknown block type via safeParseAny includes a did-you-mean", () => {
@@ -230,7 +269,7 @@ pages:
     expect(result.success).toBe(false);
     const err = result.errors.find((e) => e.message.includes("source type"));
     expect(err!.message).toBe(
-      'Unknown source type "geojsn". Valid types: geojson, vector, raster, image, video. Did you mean "geojson"?'
+      'Unknown source type "geojsn". Valid types: geojson, vector, raster, raster-dem, image, video. Did you mean "geojson"?'
     );
   });
 });
@@ -286,6 +325,25 @@ describe("warnings channel — unknown keys", () => {
     expect(result.warnings).toHaveLength(0);
   });
 
+  it("does not warn on raster-dem custom-encoding factors", () => {
+    // Pins markOpenSchema(RasterDEMSourceSchema): without that registration
+    // the documented custom-encoding factors would be flagged as unknown keys.
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: hills
+    type: hillshade
+    source:
+      type: raster-dem
+      url: "https://example.com/terrain.json"
+      encoding: custom
+      redFactor: 256
+      greenFactor: 1
+      blueFactor: 0.00390625
+      baseShift: 32768`)
+    );
+    expect(result.success).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+  });
+
   it("still warns on paint-object typos even though sources are open", () => {
     // Sources being open must NOT relax paint/layout typo detection.
     const result = YAMLParser.safeParseMapBlock(
@@ -327,6 +385,94 @@ layers: []
     );
     expect(result.success).toBe(true);
     expect(result.warnings).toHaveLength(0);
+  });
+});
+
+describe("warnings channel — deprecated interaction actions", () => {
+  const triggers = ["click", "mouseenter", "mouseleave"] as const;
+
+  it.each(triggers)("warns on %s.action with position and a v2 notice", (trigger) => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    interactive:
+      ${trigger}:
+        action: doSomething`)
+    );
+
+    // Deprecated, not invalid — the config still parses.
+    expect(result.success).toBe(true);
+
+    const dep = result.warnings.find((w) => w.path.endsWith(`${trigger}.action`));
+    expect(dep).toBeDefined();
+    expect(dep!.kind).toBe("deprecation");
+    expect(dep!.message).toContain("deprecated");
+    expect(dep!.message).toContain("v2");
+    expect(typeof dep!.line).toBe("number");
+    expect(typeof dep!.column).toBe("number");
+  });
+
+  it("does not warn on an interaction config without action", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    interactive:
+      click:
+        popup: [{ p: [{ str: "Hi" }] }]`)
+    );
+    expect(result.success).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it("marks legacy refresh warnings as deprecations too", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source:
+      type: geojson
+      url: "https://example.com/d.geojson"
+      refreshInterval: 5000`)
+    );
+    const dep = result.warnings.find((w) => w.message.includes("refreshInterval"));
+    expect(dep!.kind).toBe("deprecation");
+  });
+
+  it("does not flag scrollytelling chapter actions, which share the field name", () => {
+    // `action` also exists on chapter actions, where it is current API. The
+    // rule is scoped to interactive.{click,mouseenter,mouseleave}.action, and
+    // this pins that scoping against the name collision.
+    const result = YAMLParser.safeParseAny(`type: scrollytelling
+id: s
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+chapters:
+  - id: c1
+    title: "One"
+    actions:
+      - action: setFilter
+        layer: p
+        filter: ["==", "kind", "a"]
+`);
+    const falsePositive = result.result.warnings.find(
+      (w) => w.kind === "deprecation"
+    );
+    expect(falsePositive).toBeUndefined();
+  });
+
+  it("does not mark unknown-key warnings as deprecations", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    paint: { circle-radis: 4 }`)
+    );
+    const unknown = result.warnings.find((w) => w.message.includes("circle-radis"));
+    expect(unknown).toBeDefined();
+    expect(unknown!.kind).toBeUndefined();
   });
 });
 

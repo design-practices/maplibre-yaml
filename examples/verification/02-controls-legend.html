@@ -12,14 +12,14 @@
       cd examples/verification && pnpm serve
       open http://localhost:4174/examples/verification/02-controls-legend.html
   -->
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
   <style>
     body { margin: 0; font-family: system-ui, sans-serif; }
     header { padding: 8px 16px; background: #1d3557; color: white; font-size: 14px; }
     ml-map { display: block; height: 420px; }
   </style>
   <script type="importmap">
-    { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
   </script>
 </head>
 <body>

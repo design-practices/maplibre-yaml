@@ -399,7 +399,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "refreshInterval": {
                         "type": "number",
                         "minimum": 1000,
-                        "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+                        "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)",
+                        "deprecated": true
                       },
                       "updateStrategy": {
                         "type": "string",
@@ -408,11 +409,13 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "merge",
                           "append-window"
                         ],
-                        "description": "Update strategy (legacy, use refresh.updateStrategy)"
+                        "description": "Update strategy (legacy, use refresh.updateStrategy)",
+                        "deprecated": true
                       },
                       "updateKey": {
                         "type": "string",
-                        "description": "Update key (legacy, use refresh.updateKey)"
+                        "description": "Update key (legacy, use refresh.updateKey)",
+                        "deprecated": true
                       },
                       "loading": {
                         "type": "object",
@@ -534,7 +537,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "type": "array",
                         "items": {
                           "type": "string",
-                          "format": "uri"
+                          "description": "Tile URL template"
                         },
                         "description": "Tile URL template array"
                       },
@@ -620,8 +623,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "tiles": {
                         "type": "array",
                         "items": {
-                          "type": "string",
-                          "format": "uri"
+                          "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/1/properties/tiles/items"
                         },
                         "description": "Tile URL template array"
                       },
@@ -689,6 +691,87 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                     "properties": {
                       "type": {
                         "type": "string",
+                        "const": "raster-dem",
+                        "description": "Source type"
+                      },
+                      "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "TileJSON URL"
+                      },
+                      "tiles": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/1/properties/tiles/items"
+                        },
+                        "description": "Tile URL template array"
+                      },
+                      "tileSize": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "default": 512,
+                        "description": "Tile size in pixels"
+                      },
+                      "encoding": {
+                        "type": "string",
+                        "enum": [
+                          "terrarium",
+                          "mapbox",
+                          "custom"
+                        ],
+                        "default": "mapbox",
+                        "description": "How elevation is encoded in the tile's RGB channels"
+                      },
+                      "minzoom": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 24,
+                        "description": "Minimum zoom level"
+                      },
+                      "maxzoom": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 24,
+                        "description": "Maximum zoom level"
+                      },
+                      "bounds": {
+                        "type": "array",
+                        "minItems": 4,
+                        "maxItems": 4,
+                        "items": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "description": "Bounding box [west, south, east, north]"
+                      },
+                      "attribution": {
+                        "type": "string",
+                        "description": "Attribution text"
+                      },
+                      "volatile": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
                         "const": "image",
                         "description": "Source type"
                       },
@@ -717,13 +800,13 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "description": "Geographic coordinates as [longitude, latitude]"
                           },
                           {
-                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                           },
                           {
-                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                           },
                           {
-                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                           }
                         ],
                         "description": "Four corner coordinates [topLeft, topRight, bottomRight, bottomLeft]"
@@ -759,16 +842,16 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "maxItems": 4,
                         "items": [
                           {
-                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                           },
                           {
-                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                           },
                           {
-                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                           },
                           {
-                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                           }
                         ],
                         "description": "Four corner coordinates [topLeft, topRight, bottomRight, bottomLeft]"
@@ -937,7 +1020,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                   },
                                   "action": {
                                     "type": "string",
-                                    "description": "Custom action name to trigger"
+                                    "description": "Custom action name to trigger",
+                                    "deprecated": true
                                   },
                                   "flyTo": {
                                     "type": "object",
@@ -981,7 +1065,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 "properties": {
                                   "action": {
                                     "type": "string",
-                                    "description": "Custom action on mouse enter"
+                                    "description": "Custom action on mouse enter",
+                                    "deprecated": true
                                   }
                                 },
                                 "additionalProperties": false,
@@ -994,7 +1079,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 "properties": {
                                   "action": {
                                     "type": "string",
-                                    "description": "Custom action on mouse leave"
+                                    "description": "Custom action on mouse leave",
+                                    "deprecated": true
                                   }
                                 },
                                 "additionalProperties": false,
@@ -2338,7 +2424,46 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "description": "Fullscreen control"
                 },
                 "attribution": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/controls/properties/navigation",
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "Whether control is enabled"
+                        },
+                        "position": {
+                          "$ref": "#/$defs/any/oneOf/0/properties/config/properties/logoPosition",
+                          "description": "Control position"
+                        },
+                        "compact": {
+                          "type": "boolean",
+                          "description": "Render the attribution control in its compact form"
+                        },
+                        "customAttribution": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          ],
+                          "description": "Additional attribution string(s) to display"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "patternProperties": {
+                        "^x-": {}
+                      }
+                    }
+                  ],
                   "description": "Attribution control"
                 }
               },
@@ -2752,7 +2877,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "description": "Default zoom level for all maps"
                 },
                 "defaultCenter": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0",
+                  "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0",
                   "description": "Default center [lng, lat] for all maps"
                 },
                 "dataFetching": {
@@ -3519,7 +3644,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "refreshInterval": {
                     "type": "number",
                     "minimum": 1000,
-                    "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+                    "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)",
+                    "deprecated": true
                   },
                   "updateStrategy": {
                     "type": "string",
@@ -3528,11 +3654,13 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "merge",
                       "append-window"
                     ],
-                    "description": "Update strategy (legacy, use refresh.updateStrategy)"
+                    "description": "Update strategy (legacy, use refresh.updateStrategy)",
+                    "deprecated": true
                   },
                   "updateKey": {
                     "type": "string",
-                    "description": "Update key (legacy, use refresh.updateKey)"
+                    "description": "Update key (legacy, use refresh.updateKey)",
+                    "deprecated": true
                   },
                   "loading": {
                     "type": "object",
@@ -3654,7 +3782,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "type": "array",
                     "items": {
                       "type": "string",
-                      "format": "uri"
+                      "description": "Tile URL template"
                     },
                     "description": "Tile URL template array"
                   },
@@ -3740,8 +3868,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "tiles": {
                     "type": "array",
                     "items": {
-                      "type": "string",
-                      "format": "uri"
+                      "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/1/properties/tiles/items"
                     },
                     "description": "Tile URL template array"
                   },
@@ -3809,6 +3936,87 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                 "properties": {
                   "type": {
                     "type": "string",
+                    "const": "raster-dem",
+                    "description": "Source type"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "TileJSON URL"
+                  },
+                  "tiles": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/1/properties/tiles/items"
+                    },
+                    "description": "Tile URL template array"
+                  },
+                  "tileSize": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 512,
+                    "description": "Tile size in pixels"
+                  },
+                  "encoding": {
+                    "type": "string",
+                    "enum": [
+                      "terrarium",
+                      "mapbox",
+                      "custom"
+                    ],
+                    "default": "mapbox",
+                    "description": "How elevation is encoded in the tile's RGB channels"
+                  },
+                  "minzoom": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 24,
+                    "description": "Minimum zoom level"
+                  },
+                  "maxzoom": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 24,
+                    "description": "Maximum zoom level"
+                  },
+                  "bounds": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "items": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "Bounding box [west, south, east, north]"
+                  },
+                  "attribution": {
+                    "type": "string",
+                    "description": "Attribution text"
+                  },
+                  "volatile": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
                     "const": "image",
                     "description": "Source type"
                   },
@@ -3837,13 +4045,13 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         "description": "Geographic coordinates as [longitude, latitude]"
                       },
                       {
-                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                       },
                       {
-                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                       },
                       {
-                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                       }
                     ],
                     "description": "Four corner coordinates [topLeft, topRight, bottomRight, bottomLeft]"
@@ -3879,16 +4087,16 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "maxItems": 4,
                     "items": [
                       {
-                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                       },
                       {
-                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                       },
                       {
-                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                       },
                       {
-                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/3/properties/coordinates/items/0"
+                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/4/properties/coordinates/items/0"
                       }
                     ],
                     "description": "Four corner coordinates [topLeft, topRight, bottomRight, bottomLeft]"
@@ -4057,7 +4265,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                               },
                               "action": {
                                 "type": "string",
-                                "description": "Custom action name to trigger"
+                                "description": "Custom action name to trigger",
+                                "deprecated": true
                               },
                               "flyTo": {
                                 "type": "object",
@@ -4101,7 +4310,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             "properties": {
                               "action": {
                                 "type": "string",
-                                "description": "Custom action on mouse enter"
+                                "description": "Custom action on mouse enter",
+                                "deprecated": true
                               }
                             },
                             "additionalProperties": false,
@@ -4114,7 +4324,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             "properties": {
                               "action": {
                                 "type": "string",
-                                "description": "Custom action on mouse leave"
+                                "description": "Custom action on mouse leave",
+                                "deprecated": true
                               }
                             },
                             "additionalProperties": false,
@@ -5458,7 +5669,46 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
               "description": "Fullscreen control"
             },
             "attribution": {
-              "$ref": "#/$defs/map/properties/controls/properties/navigation",
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Whether control is enabled"
+                    },
+                    "position": {
+                      "$ref": "#/$defs/map/properties/config/properties/logoPosition",
+                      "description": "Control position"
+                    },
+                    "compact": {
+                      "type": "boolean",
+                      "description": "Render the attribution control in its compact form"
+                    },
+                    "customAttribution": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ],
+                      "description": "Additional attribution string(s) to display"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "patternProperties": {
+                    "^x-": {}
+                  }
+                }
+              ],
               "description": "Attribution control"
             }
           },
@@ -5814,7 +6064,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "refreshInterval": {
                                 "type": "number",
                                 "minimum": 1000,
-                                "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+                                "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)",
+                                "deprecated": true
                               },
                               "updateStrategy": {
                                 "type": "string",
@@ -5823,11 +6074,13 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "merge",
                                   "append-window"
                                 ],
-                                "description": "Update strategy (legacy, use refresh.updateStrategy)"
+                                "description": "Update strategy (legacy, use refresh.updateStrategy)",
+                                "deprecated": true
                               },
                               "updateKey": {
                                 "type": "string",
-                                "description": "Update key (legacy, use refresh.updateKey)"
+                                "description": "Update key (legacy, use refresh.updateKey)",
+                                "deprecated": true
                               },
                               "loading": {
                                 "type": "object",
@@ -5949,7 +6202,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "type": "array",
                                 "items": {
                                   "type": "string",
-                                  "format": "uri"
+                                  "description": "Tile URL template"
                                 },
                                 "description": "Tile URL template array"
                               },
@@ -6035,8 +6288,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "tiles": {
                                 "type": "array",
                                 "items": {
-                                  "type": "string",
-                                  "format": "uri"
+                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/1/properties/tiles/items"
                                 },
                                 "description": "Tile URL template array"
                               },
@@ -6085,6 +6337,87 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "tms"
                                 ],
                                 "description": "Tile coordinate scheme"
+                              },
+                              "attribution": {
+                                "type": "string",
+                                "description": "Attribution text"
+                              },
+                              "volatile": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "type"
+                            ],
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "raster-dem",
+                                "description": "Source type"
+                              },
+                              "url": {
+                                "type": "string",
+                                "format": "uri",
+                                "description": "TileJSON URL"
+                              },
+                              "tiles": {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/1/properties/tiles/items"
+                                },
+                                "description": "Tile URL template array"
+                              },
+                              "tileSize": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "default": 512,
+                                "description": "Tile size in pixels"
+                              },
+                              "encoding": {
+                                "type": "string",
+                                "enum": [
+                                  "terrarium",
+                                  "mapbox",
+                                  "custom"
+                                ],
+                                "default": "mapbox",
+                                "description": "How elevation is encoded in the tile's RGB channels"
+                              },
+                              "minzoom": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 24,
+                                "description": "Minimum zoom level"
+                              },
+                              "maxzoom": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 24,
+                                "description": "Maximum zoom level"
+                              },
+                              "bounds": {
+                                "type": "array",
+                                "minItems": 4,
+                                "maxItems": 4,
+                                "items": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "description": "Bounding box [west, south, east, north]"
                               },
                               "attribution": {
                                 "type": "string",
@@ -6319,7 +6652,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           },
                           "action": {
                             "type": "string",
-                            "description": "Custom action name to trigger"
+                            "description": "Custom action name to trigger",
+                            "deprecated": true
                           },
                           "flyTo": {
                             "type": "object",
@@ -6363,7 +6697,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "properties": {
                           "action": {
                             "type": "string",
-                            "description": "Custom action on mouse enter"
+                            "description": "Custom action on mouse enter",
+                            "deprecated": true
                           }
                         },
                         "additionalProperties": false,
@@ -6376,7 +6711,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "properties": {
                           "action": {
                             "type": "string",
-                            "description": "Custom action on mouse leave"
+                            "description": "Custom action on mouse leave",
+                            "deprecated": true
                           }
                         },
                         "additionalProperties": false,
@@ -8137,7 +8473,46 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "description": "Fullscreen control"
                             },
                             "attribution": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/controls/properties/navigation",
+                              "anyOf": [
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "enabled": {
+                                      "type": "boolean",
+                                      "description": "Whether control is enabled"
+                                    },
+                                    "position": {
+                                      "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/logoPosition",
+                                      "description": "Control position"
+                                    },
+                                    "compact": {
+                                      "type": "boolean",
+                                      "description": "Render the attribution control in its compact form"
+                                    },
+                                    "customAttribution": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      ],
+                                      "description": "Additional attribution string(s) to display"
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "patternProperties": {
+                                    "^x-": {}
+                                  }
+                                }
+                              ],
                               "description": "Attribution control"
                             }
                           },
@@ -9093,7 +9468,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   "refreshInterval": {
                                     "type": "number",
                                     "minimum": 1000,
-                                    "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+                                    "description": "Polling interval in milliseconds (legacy, use refresh.refreshInterval)",
+                                    "deprecated": true
                                   },
                                   "updateStrategy": {
                                     "type": "string",
@@ -9102,11 +9478,13 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                       "merge",
                                       "append-window"
                                     ],
-                                    "description": "Update strategy (legacy, use refresh.updateStrategy)"
+                                    "description": "Update strategy (legacy, use refresh.updateStrategy)",
+                                    "deprecated": true
                                   },
                                   "updateKey": {
                                     "type": "string",
-                                    "description": "Update key (legacy, use refresh.updateKey)"
+                                    "description": "Update key (legacy, use refresh.updateKey)",
+                                    "deprecated": true
                                   },
                                   "loading": {
                                     "type": "object",
@@ -9228,7 +9606,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "type": "array",
                                     "items": {
                                       "type": "string",
-                                      "format": "uri"
+                                      "description": "Tile URL template"
                                     },
                                     "description": "Tile URL template array"
                                   },
@@ -9314,8 +9692,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   "tiles": {
                                     "type": "array",
                                     "items": {
-                                      "type": "string",
-                                      "format": "uri"
+                                      "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/1/properties/tiles/items"
                                     },
                                     "description": "Tile URL template array"
                                   },
@@ -9383,6 +9760,87 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                 "properties": {
                                   "type": {
                                     "type": "string",
+                                    "const": "raster-dem",
+                                    "description": "Source type"
+                                  },
+                                  "url": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "description": "TileJSON URL"
+                                  },
+                                  "tiles": {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/1/properties/tiles/items"
+                                    },
+                                    "description": "Tile URL template array"
+                                  },
+                                  "tileSize": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "default": 512,
+                                    "description": "Tile size in pixels"
+                                  },
+                                  "encoding": {
+                                    "type": "string",
+                                    "enum": [
+                                      "terrarium",
+                                      "mapbox",
+                                      "custom"
+                                    ],
+                                    "default": "mapbox",
+                                    "description": "How elevation is encoded in the tile's RGB channels"
+                                  },
+                                  "minzoom": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 24,
+                                    "description": "Minimum zoom level"
+                                  },
+                                  "maxzoom": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 24,
+                                    "description": "Maximum zoom level"
+                                  },
+                                  "bounds": {
+                                    "type": "array",
+                                    "minItems": 4,
+                                    "maxItems": 4,
+                                    "items": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "description": "Bounding box [west, south, east, north]"
+                                  },
+                                  "attribution": {
+                                    "type": "string",
+                                    "description": "Attribution text"
+                                  },
+                                  "volatile": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ],
+                                "additionalProperties": true
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
                                     "const": "image",
                                     "description": "Source type"
                                   },
@@ -9411,13 +9869,13 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                         "description": "Geographic coordinates as [longitude, latitude]"
                                       },
                                       {
-                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/3/properties/coordinates/items/0"
+                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/4/properties/coordinates/items/0"
                                       },
                                       {
-                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/3/properties/coordinates/items/0"
+                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/4/properties/coordinates/items/0"
                                       },
                                       {
-                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/3/properties/coordinates/items/0"
+                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/4/properties/coordinates/items/0"
                                       }
                                     ],
                                     "description": "Four corner coordinates [topLeft, topRight, bottomRight, bottomLeft]"
@@ -9453,16 +9911,16 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "maxItems": 4,
                                     "items": [
                                       {
-                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/3/properties/coordinates/items/0"
+                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/4/properties/coordinates/items/0"
                                       },
                                       {
-                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/3/properties/coordinates/items/0"
+                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/4/properties/coordinates/items/0"
                                       },
                                       {
-                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/3/properties/coordinates/items/0"
+                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/4/properties/coordinates/items/0"
                                       },
                                       {
-                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/3/properties/coordinates/items/0"
+                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/4/properties/coordinates/items/0"
                                       }
                                     ],
                                     "description": "Four corner coordinates [topLeft, topRight, bottomRight, bottomLeft]"
@@ -9607,7 +10065,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                               },
                               "action": {
                                 "type": "string",
-                                "description": "Custom action name to trigger"
+                                "description": "Custom action name to trigger",
+                                "deprecated": true
                               },
                               "flyTo": {
                                 "type": "object",
@@ -9651,7 +10110,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                             "properties": {
                               "action": {
                                 "type": "string",
-                                "description": "Custom action on mouse enter"
+                                "description": "Custom action on mouse enter",
+                                "deprecated": true
                               }
                             },
                             "additionalProperties": false,
@@ -9664,7 +10124,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                             "properties": {
                               "action": {
                                 "type": "string",
-                                "description": "Custom action on mouse leave"
+                                "description": "Custom action on mouse leave",
+                                "deprecated": true
                               }
                             },
                             "additionalProperties": false,

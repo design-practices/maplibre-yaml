@@ -1,0 +1,20 @@
+# U6 assertion: a hillshade layer backed by a raster-dem source is accepted and
+# added to the map. Previously no valid source existed for hillshade at all.
+type: map
+id: u6-hillshade
+config:
+  center: [-121.7, 46.85]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: hills
+    type: hillshade
+    source:
+      type: raster-dem
+      tiles:
+        - "/dem/{z}/{x}/{y}.png"
+      encoding: terrarium
+      tileSize: 256
+      maxzoom: 14
+    paint:
+      hillshade-exaggeration: 0.8
