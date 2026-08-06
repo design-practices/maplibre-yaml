@@ -143,3 +143,4 @@ this repo are exported to the vault automatically (nightly
 - `docs/` — Astro docs site. `examples/` — runnable examples.
 - `plans/` — design plans (historical + active); open work items belong in
   beads, not in plan prose.
+
