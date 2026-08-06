@@ -1,6 +1,6 @@
 {
   "name": "@maplibre-yaml/astro",
-  "version": "1.0.0",
+  "version": "0.3.1",
   "description": "Astro components for maplibre-yaml",
   "type": "module",
   "exports": {
@@ -23,7 +23,7 @@
   },
   "peerDependencies": {
     "astro": "^4.0.0 || ^5.0.0",
-    "@maplibre-yaml/core": "^0.4.0",
+    "@maplibre-yaml/core": ">=0.3.0 <1.0.0",
     "maplibre-gl": "^4.0.0 || ^5.0.0"
   },
   "devDependencies": {
