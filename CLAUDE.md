@@ -15,11 +15,20 @@ Before declaring any task complete:
 pnpm presubmit
 ```
 
-`presubmit` = `build && typecheck && lint && test && docs:validate-snippets`,
-fail-fast via `&&` — the first failure is the diagnostic. There is no
-browser-e2e suite in this repo (no `[no-e2e: ...]` marker convention
-either — that is a map-party mechanism; do not import it into commit
-messages here). If any step fails, fix it before saying "done."
+`presubmit` runs `build && typecheck && lint && test &&
+docs:validate-snippets` (as `presubmit:raw`), fail-fast via `&&` — the
+first failure is the diagnostic. On opti it routes through the
+box-wide **test lane** (`scripts/lane-shim.sh` → box-infra
+`test-lane`): only ONE presubmit runs on the box at a time across ALL
+projects — concurrent runs queue on a flock, and a load/memory guard
+aborts fast when the box is too loaded for results to mean anything.
+A guard abort is an environment problem, not a code failure — wait for
+load to decay rather than retrying in a loop. `test-lane status` shows
+who holds the lane without blocking; on machines without the wrapper
+the shim runs the gate directly. There is no browser-e2e suite in this
+repo (no `[no-e2e: ...]` marker convention either — that is a
+map-party mechanism; do not import it into commit messages here). If
+any step fails, fix it before saying "done."
 
 Releases go through changesets (`pnpm changeset` → release PR); never
 `npm publish` by hand.
