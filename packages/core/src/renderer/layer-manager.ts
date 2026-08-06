@@ -126,6 +126,12 @@ export class LayerManager {
   private loadingManager: LoadingManager;
   private sourceData: Map<string, FeatureCollection>;
   private layerToSource: Map<string, string>;
+  /** Block-level `sources:` specs, kept for their YAML-only refresh config. */
+  private namedSources: Map<string, Record<string, unknown>>;
+  /** How many live layers reference each named source. */
+  private sourceRefCounts: Map<string, number>;
+  /** Named sources with a refresh/stream pipeline currently running. */
+  private activeSourcePipelines: Set<string>;
 
   constructor(map: MapLibreMap, callbacks?: LayerManagerCallbacks) {
     this.map = map;
@@ -137,6 +143,101 @@ export class LayerManager {
     this.loadingManager = new LoadingManager({ showUI: false });
     this.sourceData = new Map();
     this.layerToSource = new Map();
+    this.namedSources = new Map();
+    this.sourceRefCounts = new Map();
+    this.activeSourcePipelines = new Set();
+  }
+
+  /**
+   * Register the block's named `sources:` with MapLibre.
+   *
+   * @remarks
+   * Owned here rather than in `MapRenderer`, which used to call
+   * `map.addSource` directly. That bypassed every piece of refresh machinery,
+   * so a named source could declare `refresh:` and never poll, and it leaked
+   * YAML-only keys straight into MapLibre. Registration is idempotent so a
+   * re-render does not duplicate sources.
+   */
+  registerSources(sources: Record<string, unknown>): void {
+    for (const [id, spec] of Object.entries(sources)) {
+      if (!spec || typeof spec !== "object") continue;
+      this.namedSources.set(id, spec as Record<string, unknown>);
+
+      if (this.map.getSource(id)) continue;
+      this.map.addSource(id, this.toMapLibreSourceSpec(spec as any));
+    }
+  }
+
+  /**
+   * Strip keys that drive our own machinery rather than MapLibre's.
+   *
+   * @remarks
+   * `refresh`, `cache`, `prefetchedData` and the legacy top-level refresh
+   * fields are ours; passing them through leaves unknown keys on the source
+   * spec MapLibre validates.
+   */
+  private toMapLibreSourceSpec(spec: Record<string, unknown>): any {
+    const {
+      refresh,
+      cache,
+      prefetchedData,
+      refreshInterval,
+      updateStrategy,
+      updateKey,
+      loading,
+      stream,
+      fetchStrategy,
+      ...mapLibreSpec
+    } = spec as Record<string, unknown>;
+    return mapLibreSpec;
+  }
+
+  /** The MapLibre source a layer draws from. */
+  getSourceIdForLayer(layerId: string): string | undefined {
+    return this.layerToSource.get(layerId);
+  }
+
+  /**
+   * Start the refresh/stream pipeline for a named source, once.
+   *
+   * @remarks
+   * Keyed by source id, not layer id: two layers over one source share one
+   * poll. `data-loaded`/`data-error` still fire per referencing layer, so
+   * consumers listening on a layer see what they always did.
+   */
+  private async startSourcePipeline(sourceId: string): Promise<void> {
+    const spec = this.namedSources.get(sourceId);
+    if (!spec) return;
+    if (this.activeSourcePipelines.has(sourceId)) return; // already polling
+
+    const source = spec as unknown as GeoJSONSourceConfig;
+    if (source.type !== "geojson") return;
+    if (!source.refresh && !source.refreshInterval) return;
+
+    this.activeSourcePipelines.add(sourceId);
+    // Keyed by source id: one poll serves every layer over this source.
+    await this.setupDataUpdates(sourceId, sourceId, source);
+  }
+
+  /** Stop a named source's pipeline once nothing references it. */
+  private releaseSource(sourceId: string): void {
+    const remaining = (this.sourceRefCounts.get(sourceId) ?? 1) - 1;
+
+    if (remaining > 0) {
+      this.sourceRefCounts.set(sourceId, remaining);
+      return; // siblings still need the data
+    }
+
+    this.sourceRefCounts.delete(sourceId);
+    if (this.activeSourcePipelines.delete(sourceId)) {
+      this.pollingManager.stop(sourceId);
+      this.streamManager.disconnect(sourceId);
+    }
+  }
+
+  /** Whether a refresh/stream pipeline is running for a named source. */
+  isRefreshing(sourceId: string): boolean {
+    return this.activeSourcePipelines.has(sourceId);
   }
 
   async addLayer(layer: Layer): Promise<void> {
@@ -145,6 +246,14 @@ export class LayerManager {
     const isSourceRef = typeof layer.source === "string";
     const sourceId = isSourceRef ? layer.source as string : `${layer.id}-source`;
     this.layerToSource.set(layer.id, sourceId);
+
+    if (isSourceRef) {
+      // One pipeline per source id regardless of how many layers reference it.
+      this.sourceRefCounts.set(
+        sourceId,
+        (this.sourceRefCounts.get(sourceId) ?? 0) + 1
+      );
+    }
 
     if (!isSourceRef) {
       await this.addSource(sourceId, layer);
@@ -181,6 +290,12 @@ export class LayerManager {
     }
 
     this.map.addLayer(layerSpec, layer.before as string | undefined);
+
+    // A named source refreshes once for the whole source, not once per layer.
+    if (isSourceRef) {
+      await this.startSourcePipeline(sourceId);
+      return;
+    }
 
     // Check if this is a GeoJSON source with refresh interval (legacy or new config)
     if (typeof layer.source === "object" && layer.source !== null) {
@@ -469,35 +584,69 @@ export class LayerManager {
       source.setData(mergeResult.data);
     }
 
-    this.callbacks.onDataLoaded?.(layerId, mergeResult.total);
+    // One pipeline can back several layers. Fire per referencing layer so a
+    // consumer listening on its own layer sees what it always did.
+    for (const target of this.layersForPipeline(sourceId, layerId)) {
+      this.callbacks.onDataLoaded?.(target, mergeResult.total);
+    }
+  }
+
+  /**
+   * Which layers a pipeline's events belong to.
+   *
+   * @remarks
+   * For an inline source that is just the owning layer. For a named source it
+   * is every layer drawing from it, so siblings are not left unaware that the
+   * data underneath them changed.
+   */
+  private layersForPipeline(sourceId: string, fallbackLayerId: string): string[] {
+    const referencing = [...this.layerToSource.entries()]
+      .filter(([, id]) => id === sourceId)
+      .map(([layerId]) => layerId);
+    return referencing.length > 0 ? referencing : [fallbackLayerId];
   }
 
   /**
    * Pause data refresh for a layer (polling)
    */
   pauseRefresh(layerId: string): void {
-    this.pollingManager.pause(layerId);
+    this.pollingManager.pause(this.pipelineKeyFor(layerId));
   }
 
   /**
    * Resume data refresh for a layer (polling)
    */
   resumeRefresh(layerId: string): void {
-    this.pollingManager.resume(layerId);
+    this.pollingManager.resume(this.pipelineKeyFor(layerId));
   }
 
   /**
    * Force immediate refresh for a layer (polling)
    */
   async refreshNow(layerId: string): Promise<void> {
-    await this.pollingManager.triggerNow(layerId);
+    await this.pollingManager.triggerNow(this.pipelineKeyFor(layerId));
+  }
+
+  /**
+   * The key a layer's refresh pipeline runs under.
+   *
+   * @remarks
+   * Inline sources run per layer; named sources run once per source id and are
+   * shared. The public API stays layer-keyed either way, so callers never have
+   * to know which shape they configured.
+   */
+  private pipelineKeyFor(layerId: string): string {
+    const sourceId = this.layerToSource.get(layerId);
+    return sourceId && this.activeSourcePipelines.has(sourceId)
+      ? sourceId
+      : layerId;
   }
 
   /**
    * Disconnect streaming connection for a layer
    */
   disconnectStream(layerId: string): void {
-    this.streamManager.disconnect(layerId);
+    this.streamManager.disconnect(this.pipelineKeyFor(layerId));
   }
 
   removeLayer(layerId: string): void {
@@ -517,9 +666,17 @@ export class LayerManager {
       this.map.removeSource(sourceId);
     }
 
-    // Clean up data references
-    this.sourceData.delete(sourceId);
+    // Drop this layer's claim before releasing, so the refcount reflects
+    // reality when releaseSource decides whether the pipeline is still needed.
     this.layerToSource.delete(layerId);
+
+    if (isInlineSource) {
+      this.sourceData.delete(sourceId);
+    } else {
+      // Shared: the data stays as long as a sibling still draws from it.
+      this.releaseSource(sourceId);
+      if (!this.sourceRefCounts.has(sourceId)) this.sourceData.delete(sourceId);
+    }
   }
 
   setVisibility(layerId: string, visible: boolean): void {
@@ -532,7 +689,11 @@ export class LayerManager {
   }
 
   updateData(layerId: string, data: GeoJSON.GeoJSON): void {
-    const sourceId = `${layerId}-source`;
+    // Resolve through the layer→source map rather than assuming the derived
+    // `<layerId>-source` id: a layer over a named source has no such source,
+    // so the update used to silently do nothing. Updating a shared source is
+    // visible to every layer over it — documented, not accidental.
+    const sourceId = this.layerToSource.get(layerId) ?? `${layerId}-source`;
     const source = this.map.getSource(sourceId) as GeoJSONSource;
     if (source && source.setData) source.setData(data as any);
   }

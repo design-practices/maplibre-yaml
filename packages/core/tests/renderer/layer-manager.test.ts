@@ -350,6 +350,116 @@ describe("LayerManager", () => {
     });
   });
 
+  describe("named sources (U7)", () => {
+    /** A block-level named source, as `sources:` declares it. */
+    const namedGeojson = (extra: Record<string, unknown> = {}) => ({
+      type: "geojson" as const,
+      data: { type: "FeatureCollection" as const, features: [] },
+      ...extra,
+    });
+
+    it("registers a named source once for two referencing layers", async () => {
+      manager.registerSources({ shared: namedGeojson() });
+
+      expect(mockMap.addSource).toHaveBeenCalledTimes(1);
+      expect(mockMap.addSource).toHaveBeenCalledWith(
+        "shared",
+        expect.objectContaining({ type: "geojson" })
+      );
+    });
+
+    it("scrubs YAML-only keys before handing the spec to MapLibre", async () => {
+      manager.registerSources({
+        shared: namedGeojson({
+          refresh: { refreshInterval: 5000, updateStrategy: "replace" },
+          cache: { enabled: true },
+          prefetchedData: { type: "FeatureCollection", features: [] },
+        }),
+      });
+
+      const [, spec] = mockMap.addSource.mock.calls[0];
+      // These drive our own machinery; MapLibre would reject or ignore them.
+      expect(spec).not.toHaveProperty("refresh");
+      expect(spec).not.toHaveProperty("cache");
+      expect(spec).not.toHaveProperty("prefetchedData");
+      expect(spec).toHaveProperty("data");
+    });
+
+    it("updateData reaches a named source, not a derived one", async () => {
+      manager.registerSources({ shared: namedGeojson() });
+      const setData = vi.fn();
+      mockMap.getSource = vi.fn((id: string) =>
+        id === "shared" ? { setData } : undefined
+      );
+
+      await manager.addLayer({
+        id: "a",
+        type: "circle",
+        visible: true,
+        toggleable: false,
+        source: "shared",
+      } as any);
+
+      const next = { type: "FeatureCollection", features: [] } as any;
+      manager.updateData("a", next);
+
+      // Previously resolved `a-source`, which does not exist for a named
+      // source, so the update silently did nothing.
+      expect(setData).toHaveBeenCalledWith(next);
+    });
+
+    it("updating through one layer is visible to its siblings on the same source", async () => {
+      manager.registerSources({ shared: namedGeojson() });
+      const setData = vi.fn();
+      mockMap.getSource = vi.fn((id: string) =>
+        id === "shared" ? { setData } : undefined
+      );
+
+      for (const id of ["a", "b"]) {
+        await manager.addLayer({
+          id,
+          type: "circle",
+          visible: true,
+          toggleable: false,
+          source: "shared",
+        } as any);
+      }
+
+      manager.updateData("a", { type: "FeatureCollection", features: [] } as any);
+
+      // One source backs both layers, so one setData serves both. Documented
+      // behaviour, not an accident.
+      expect(setData).toHaveBeenCalledTimes(1);
+      expect(manager.getSourceIdForLayer("b")).toBe("shared");
+    });
+
+    it("stops polling only when the last referencing layer is removed", async () => {
+      manager.registerSources({
+        shared: namedGeojson({
+          url: "https://example.com/d.geojson",
+          refresh: { refreshInterval: 5000, updateStrategy: "replace" },
+        }),
+      });
+      mockMap.getSource = vi.fn(() => ({ setData: vi.fn() }));
+
+      for (const id of ["a", "b"]) {
+        await manager.addLayer({
+          id,
+          type: "circle",
+          visible: true,
+          toggleable: false,
+          source: "shared",
+        } as any);
+      }
+
+      expect(manager.isRefreshing("shared")).toBe(true);
+      manager.removeLayer("a");
+      expect(manager.isRefreshing("shared")).toBe(true); // b still needs it
+      manager.removeLayer("b");
+      expect(manager.isRefreshing("shared")).toBe(false);
+    });
+  });
+
   describe("removeLayer", () => {
     it("removes layer and source", () => {
       mockMap.getLayer.mockReturnValue(true);

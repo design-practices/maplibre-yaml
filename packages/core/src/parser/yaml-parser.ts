@@ -457,7 +457,12 @@ export class YAMLParser {
    * ```
    */
   static safeParseMapBlock(yaml: string): ParseResult<MapBlock> {
-    return this.safeParseWithSchema(yaml, MapBlockSchema, false);
+    // Refs are resolved here too: a standalone block carries its own
+    // `sources:` record, so `{$ref: "#/sources/x"}` is meaningful in the
+    // flagship `<ml-map src>` path. Leaving it unresolved passed the raw
+    // `{$ref}` object to the renderer, which saw no `type` and silently added
+    // nothing — a config that validated and produced no layer.
+    return this.safeParseWithSchema(yaml, MapBlockSchema, true);
   }
 
   /**

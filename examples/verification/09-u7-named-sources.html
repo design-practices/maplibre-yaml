@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>U7: named sources and $ref</title>
+  <!--
+    PASS = both layers render from ONE shared source: a dark circle ($ref) with
+    a red circle ($named) on top. FAIL = either layer missing.
+    Serve with `pnpm verify:serve`.
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 460px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = both layers render from one shared named source ($ref + bare name). FAIL = either missing.</header>
+  <ml-map src="./configs/phase1-named-sources.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

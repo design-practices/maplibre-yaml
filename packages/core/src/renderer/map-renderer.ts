@@ -135,13 +135,11 @@ export class MapRenderer {
     this.map.on('load', () => {
       this.isLoaded = true;
 
-      // Add named sources from block config before processing layers
+      // Named sources are registered through LayerManager rather than added
+      // raw here: it scrubs YAML-only keys and owns the refresh machinery, so
+      // a named source declaring `refresh:` actually polls.
       if (sources) {
-        for (const [id, sourceSpec] of Object.entries(sources)) {
-          if (!this.map.getSource(id)) {
-            this.map.addSource(id, sourceSpec as any);
-          }
-        }
+        this.layerManager.registerSources(sources as Record<string, unknown>);
       }
 
       // Apply YAML-declared controls and legend once the map is ready.

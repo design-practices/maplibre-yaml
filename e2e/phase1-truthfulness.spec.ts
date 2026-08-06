@@ -213,3 +213,36 @@ test.describe("U6 — raster-dem hillshade", () => {
     await page.screenshot({ path: "e2e/screenshots/u6-hillshade.png" });
   });
 });
+
+test.describe("U7 — named sources and $ref", () => {
+  test("a $ref source resolves and one source backs two layers", async ({
+    page,
+  }) => {
+    const errors = await openMap(page, "09-u7-named-sources.html");
+
+    const state = await page.evaluate(() => {
+      const el = document.querySelector("ml-map") as any;
+      const map = el?.getMap?.();
+      if (!map) return null;
+      return {
+        viaRef: !!map.getLayer("via-ref"),
+        viaName: !!map.getLayer("via-name"),
+        // Both layers must resolve to the SAME MapLibre source, not to
+        // per-layer copies — that is what makes it a shared source.
+        refSource: map.getLayer("via-ref")?.source ?? null,
+        nameSource: map.getLayer("via-name")?.source ?? null,
+        sourceIds: Object.keys(map.getStyle().sources),
+      };
+    });
+
+    // The $ref previously reached the renderer unresolved, so the layer had no
+    // source type and was silently dropped: valid config, nothing drawn.
+    expect(state?.viaRef).toBe(true);
+    expect(state?.viaName).toBe(true);
+    expect(state?.nameSource).toBe("cities");
+    expect(state?.sourceIds).toContain("cities");
+
+    expect(errors).toEqual([]);
+    await page.screenshot({ path: "e2e/screenshots/u7-named-sources.png" });
+  });
+});
