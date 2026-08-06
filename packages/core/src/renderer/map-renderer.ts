@@ -117,7 +117,14 @@ export class MapRenderer {
     // Initialize managers
     const layerCallbacks: LayerManagerCallbacks = {
       onDataLoading: (layerId) => this.emit('layer:data-loading', { layerId }),
-      onDataLoaded: (layerId, featureCount) => this.emit('layer:data-loaded', { layerId, featureCount }),
+      onDataLoaded: (layerId, featureCount) => {
+        // Refreshed data means new features. Feature-state is keyed by id and
+        // survives setData, so a retained highlight id would light up whichever
+        // feature now holds it — a different one. Drop it; the next mousemove
+        // re-applies the highlight under the cursor.
+        this.eventHandler.resetFeatureState(layerId);
+        this.emit('layer:data-loaded', { layerId, featureCount });
+      },
       onDataError: (layerId, error) => this.emit('layer:data-error', { layerId, error }),
     };
 
@@ -215,6 +222,9 @@ export class MapRenderer {
    * Update layer data
    */
   updateLayerData(layerId: string, data: GeoJSON.GeoJSON): void {
+    // Same reasoning as the refresh path: replacing the data invalidates any
+    // tracked feature id, so clear before the new features land.
+    this.eventHandler.resetFeatureState(layerId);
     this.layerManager.updateData(layerId, data);
   }
 
