@@ -71,7 +71,7 @@
  * ```
  */
 
-import { parse as parseYAML, parseDocument, LineCounter, type Document } from "yaml";
+import { parse as parseYAML, parseDocument, stringify as stringifyYAML, LineCounter, type Document } from "yaml";
 import { ZodError, type ZodIssue } from "zod";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
@@ -463,6 +463,55 @@ export class YAMLParser {
     // `{$ref}` object to the renderer, which saw no `type` and silently added
     // nothing — a config that validated and produced no layer.
     return this.safeParseWithSchema(yaml, MapBlockSchema, true);
+  }
+
+  /**
+   * Validate an already-parsed map block — a JSON attribute, or a config object
+   * set programmatically.
+   *
+   * @remarks
+   * The YAML entry points validate; these did not, so a well-formed object that
+   * failed the schema went straight to the renderer and produced a broken map
+   * with no diagnostic. Reuses the YAML pipeline by round-tripping through
+   * YAML, so errors, unknown-key suggestions and deprecation warnings are
+   * identical across every entry path.
+   *
+   * Positions are stripped: they would refer to the serialized YAML, not to
+   * anything the caller wrote, and a line number pointing at text the author
+   * never saw is worse than none.
+   */
+  static safeParseMapBlockValue(value: unknown): ParseResult<MapBlock> {
+    let asYaml: string;
+    try {
+      asYaml = stringifyYAML(value);
+    } catch (error) {
+      return {
+        success: false,
+        errors: [
+          {
+            path: "",
+            message: `Config could not be validated: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          },
+        ],
+        warnings: [],
+      };
+    }
+
+    const result = this.safeParseMapBlock(asYaml);
+    const stripPosition = <T extends { line?: number; column?: number }>(
+      entry: T
+    ): T => {
+      const { line, column, ...rest } = entry;
+      return rest as T;
+    };
+
+    return {
+      ...result,
+      errors: result.errors.map(stripPosition),
+      warnings: result.warnings.map(stripPosition),
+    };
   }
 
   /**

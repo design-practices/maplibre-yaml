@@ -119,7 +119,29 @@ export class MLMap extends HTMLElement {
 
     // If already initialized, render with new config
     if (this.initialized) {
-      this.renderMap(parsed);
+      this.applyValidatedConfig(parsed);
+    }
+  }
+
+  /**
+   * Validate a config object, then render it or show the error card.
+   *
+   * @remarks
+   * The shared tail for the non-YAML entry points, so a JSON attribute and a
+   * programmatic assignment get the same errors, unknown-key suggestions and
+   * deprecation warnings the YAML paths have always produced.
+   */
+  private applyValidatedConfig(candidate: unknown): void {
+    const result = YAMLParser.safeParseMapBlockValue(candidate);
+
+    // Advisory, never in the error card (decision D11) — same as YAML.
+    this.logWarnings(result.warnings);
+
+    if (result.success && result.data) {
+      this._config = result.data;
+      this.renderMap(result.data);
+    } else {
+      this.handleError(result.errors);
     }
   }
 
@@ -279,8 +301,11 @@ export class MLMap extends HTMLElement {
   private loadFromJSONAttribute(jsonString: string): void {
     try {
       const parsed = JSON.parse(jsonString);
-      this._config = parsed;
-      this.renderMap(parsed);
+      // Validated like the YAML paths. Well-formed JSON that fails the schema
+      // used to go straight to the renderer, producing a broken map with no
+      // diagnostic — the same "accepted but does not work" shape this release
+      // is closing, on the entry path least likely to be noticed.
+      this.applyValidatedConfig(parsed);
     } catch (error) {
       this.handleError([
         {
