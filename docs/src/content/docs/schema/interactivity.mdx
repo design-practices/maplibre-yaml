@@ -43,6 +43,23 @@ controls:
 - `bottom-left`
 - `bottom-right`
 
+### Attribution
+
+`attribution` renders a real attribution control and additionally accepts
+MapLibre's own options:
+
+```yaml
+controls:
+  attribution:
+    position: bottom-right    # default
+    compact: true             # collapse behind an (i) button
+    customAttribution: "© Example Data"
+```
+
+Configuring it suppresses MapLibre's built-in attribution so only one control
+renders. Leave it unset and the built-in one still appears — attribution is a
+licensing obligation for most tile providers, so it is never removed silently.
+
 ## Interactive Legends
 
 Legends display layer information and can be positioned anywhere on the map.
@@ -145,11 +162,106 @@ config:
 
 ## Layer Interactivity
 
-Layer-level interactivity is configured through MapLibre's event system. While the schema doesn't explicitly define event handlers (as they're runtime JavaScript), you can configure interactive styling.
+Layers declare interactivity through an `interactive:` block. These are real
+schema fields handled by the renderer — not something you wire up yourself.
 
-### Interactive Layer Styling
+```yaml
+- id: stations
+  type: circle
+  source:
+    type: geojson
+    url: "https://example.com/stations.geojson"
+    generateId: true
+  paint:
+    circle-radius: 8
+    circle-color: "#3b82f6"
+  interactive:
+    hover:
+      cursor: pointer
+      highlight: true
+    click:
+      popup:
+        - h3: [{ property: name }]
+        - p: [{ property: description }]
+      flyTo:
+        zoom: 14
+        duration: 600
+```
 
-Use MapLibre expressions to create interactive visual feedback:
+### Hover
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `cursor` | string | CSS cursor while the pointer is over a feature |
+| `highlight` | boolean | Recolour the hovered feature |
+
+`highlight: true` wraps the layer's primary colour in a `feature-state` expression
+for you, so no paint authoring is required. Two things follow from how
+feature-state works:
+
+- **Features need ids.** Set `generateId: true` on the source, or `promoteId` to
+  use a property as the id. If neither is set, `highlight` enables `generateId`
+  and warns — but generated ids are not stable across data refreshes, so
+  `promoteId` is the durable choice.
+- **Already using an expression for that colour?** Then `highlight` leaves your
+  paint alone and warns, rather than overwriting your data-driven styling.
+  Reference `["feature-state", "hover"]` yourself, as in [Custom highlight
+  styling](#custom-highlight-styling) below.
+
+Because feature-state is per *source*, two layers sharing one source share
+highlight state.
+
+### Click
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `popup` | array | Popup content blocks (see [Popups](/schema/layers/#popups)) |
+| `flyTo` | object | Animate the camera to the clicked feature |
+
+`flyTo` accepts `center`, `zoom`, and `duration`. `center` defaults to the
+clicked point, and `zoom`/`duration` fall through to MapLibre's defaults when
+omitted:
+
+```yaml
+interactive:
+  click:
+    flyTo:
+      zoom: 14        # optional
+      duration: 600   # optional, milliseconds
+```
+
+When a layer configures both, the popup opens first and then travels with the
+camera.
+
+### Deprecated: `action`
+
+`click.action`, `mouseenter.action`, and `mouseleave.action` are accepted by the
+schema but have never been dispatched at runtime. They emit a deprecation
+warning and **will be removed in v2**. Listen for the corresponding event
+instead:
+
+```yaml
+# Deprecated — never fired
+interactive:
+  click:
+    action: openDetails
+```
+
+```js
+// Use the event instead
+map.addEventListener("ml-map:layer-click", (e) => {
+  const { layerId, feature } = e.detail;
+});
+```
+
+Deprecation warnings are exempt from `mlym validate`'s CI strict mode for one
+minor release, so upgrading will not fail your build. Opt in early with
+`mlym validate --strict-deprecations`.
+
+### Custom highlight styling
+
+To control the highlight colour yourself, author the paint expression directly
+and leave `highlight` off:
 
 ```yaml
 - id: interactive-fill
@@ -157,6 +269,7 @@ Use MapLibre expressions to create interactive visual feedback:
   source:
     type: geojson
     url: "https://example.com/regions.geojson"
+    generateId: true
   paint:
     fill-color:
       - case
@@ -168,27 +281,9 @@ Use MapLibre expressions to create interactive visual feedback:
       - ["boolean", ["feature-state", "hover"], false]
       - 0.8
       - 0.5
-```
-
-### Clickable Features
-
-Layers with interactive styling can respond to user clicks when implemented in the runtime renderer:
-
-```yaml
-- id: clickable-points
-  type: circle
-  source:
-    type: geojson
-    url: "https://example.com/points.geojson"
-  paint:
-    circle-radius: 8
-    circle-color:
-      - case
-      - ["boolean", ["feature-state", "selected"], false]
-      - "#dc2626"  # Red when selected
-      - "#3b82f6"  # Blue otherwise
-    circle-stroke-width: 2
-    circle-stroke-color: "#ffffff"
+  interactive:
+    hover:
+      cursor: pointer
 ```
 
 ## Keyboard Shortcuts

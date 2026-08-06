@@ -518,14 +518,14 @@ function walk(
   }
 }
 
-const LEGACY_REFRESH_FIELDS = [
+export const LEGACY_REFRESH_FIELDS = [
   "refreshInterval",
   "updateStrategy",
   "updateKey",
 ] as const;
 
 /** Triggers whose `action` field is accepted by the schema but never dispatched. */
-const DEPRECATED_ACTION_TRIGGERS = [
+export const DEPRECATED_ACTION_TRIGGERS = [
   "click",
   "mouseenter",
   "mouseleave",
