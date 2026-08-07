@@ -56,11 +56,22 @@ jobs:
         uses: changesets/action@v1
         with:
           version: pnpm changeset version
-          # pnpm publish (not `changeset publish`, which bypasses pnpm's
+          # MUST be a single command, not a shell line. changesets/action
+          # splits this input on whitespace and runs it through @actions/exec
+          # with no shell, so an `&&` here is passed as a literal argument to
+          # the first command rather than chaining. The previous value,
+          #     pnpm publish -r --access public && pnpm changeset tag
+          # therefore ran `pnpm publish` with the args `&& pnpm changeset tag`
+          # and never tagged anything: 13 releases published, 2 tags in the
+          # repo, 0 GitHub releases (ml-5ym). The chaining now lives in the
+          # `release` script, where a shell does interpret it.
+          #
+          # `pnpm publish` (not `changeset publish`, which bypasses pnpm's
           # workspace:-protocol rewriting — issue #28) does not create git
-          # tags; `changeset tag` creates them and emits the "New tag" lines
-          # the changesets action parses and pushes. See todo 038 / U16.
-          publish: pnpm publish -r --access public && pnpm changeset tag
+          # tags; `changeset tag` creates them, and the script pushes them
+          # itself rather than relying on the action to parse "New tag:" out
+          # of stdout. See todo 038 / U16.
+          publish: pnpm run release
           commit: "chore: version packages"
           title: "chore: version packages"
         env:
