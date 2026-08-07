@@ -195,6 +195,22 @@ const legendPositions = {
 {
   src && !config && (
     <script is:inline define:vars={{ mapId, src }}>
+      // Deliberate duplicate of core's escapeHtml: this script is `is:inline`
+      // (it cannot use a bundled import), and the dynamic import of core below
+      // sits inside the very `try` whose `catch` renders an error card.
+      const escapeHtml = (value) =>
+        String(value).replace(
+          /[&<>"']/g,
+          (char) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[char]
+        );
+
       // Runtime YAML loading for src prop
       (async () => {
         try {
@@ -234,7 +250,7 @@ const legendPositions = {
                   ${result.errors
                     .map(
                       (err) =>
-                        `<li>${err.path ? err.path + ": " : ""}${err.message}</li>`
+                        `<li>${err.path ? escapeHtml(err.path) + ": " : ""}${escapeHtml(err.message)}</li>`
                     )
                     .join("")}
                 </ul>
@@ -259,9 +275,9 @@ const legendPositions = {
                 margin: 20px;
               ">
                 <strong>Map Loading Error</strong>
-                <p style="margin: 10px 0;">${
+                <p style="margin: 10px 0;">${escapeHtml(
                   error instanceof Error ? error.message : String(error)
-                }</p>
+                )}</p>
               </div>
             `;
           }

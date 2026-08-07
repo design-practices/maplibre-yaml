@@ -92,6 +92,24 @@ const serializedConfig = config ? JSON.stringify(config) : null;
 {
   src && !config && (
     <script is:inline define:vars={{ mapId, src }}>
+      // Deliberate duplicate of core's escapeHtml. This script is `is:inline`,
+      // so it cannot use a bundled import, and the only other route -- the
+      // dynamic import of core below -- is inside the very `try` whose `catch`
+      // renders an error card. An error path that depends on the module that
+      // may have just failed to load is not an error path.
+      const escapeHtml = (value) =>
+        String(value).replace(
+          /[&<>"']/g,
+          (char) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[char]
+        );
+
       // Runtime YAML loading for src prop
       (async () => {
         try {
@@ -130,7 +148,7 @@ const serializedConfig = config ? JSON.stringify(config) : null;
                   ${result.errors
                     .map(
                       (err) =>
-                        `<li>${err.path ? err.path + ": " : ""}${err.message}</li>`
+                        `<li>${err.path ? escapeHtml(err.path) + ": " : ""}${escapeHtml(err.message)}</li>`
                     )
                     .join("")}
                 </ul>
@@ -154,9 +172,9 @@ const serializedConfig = config ? JSON.stringify(config) : null;
                 color: #c33;
               ">
                 <strong>Map Loading Error</strong>
-                <p style="margin: 10px 0;">${
+                <p style="margin: 10px 0;">${escapeHtml(
                   error instanceof Error ? error.message : String(error)
-                }</p>
+                )}</p>
               </div>
             `;
           }

@@ -22,6 +22,7 @@ export * from "./data";
 export * from "./ui";
 
 // Utils
+export { escapeHtml, safeUrl, POPUP_TAGS, LINK_TARGETS } from "./utils/html";
 export { EventEmitter } from "./utils/event-emitter";
 export type { EventHandler } from "./utils/event-emitter";
 export {

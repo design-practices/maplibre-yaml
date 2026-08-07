@@ -42,6 +42,7 @@ import {
   type ValidationWarning,
 } from "../parser/yaml-parser.js";
 import { MapRenderer } from "../renderer/map-renderer.js";
+import { escapeHtml } from "../utils/html.js";
 
 /**
  * MLMap custom element for rendering MapLibre maps from YAML/JSON configuration.
@@ -608,12 +609,12 @@ export class MLMap extends HTMLElement {
           <div style="margin-bottom: 8px; padding: 8px; background: #fee2e2; border-radius: 4px;">
             ${
               err.path
-                ? `<strong style="color: #991b1b;">${this.escapeHtml(
+                ? `<strong style="color: #991b1b;">${escapeHtml(
                     err.path
                   )}</strong>: `
                 : ""
             }
-            ${this.escapeHtml(err.message)}
+            ${escapeHtml(err.message)}
           </div>
         `
       )
@@ -645,14 +646,6 @@ export class MLMap extends HTMLElement {
     `;
   }
 
-  /**
-   * Escape HTML special characters for safe innerHTML usage
-   */
-  private escapeHtml(text: string): string {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-  }
 
   /**
    * Clean up resources when component is removed
