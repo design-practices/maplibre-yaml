@@ -16,10 +16,15 @@
  *    at all. Splitting a block by reading each known key and reassembling would
  *    reintroduce exactly that, which is why the split below partitions the
  *    author's own keys rather than enumerating ours.
- * 2. **Never drop a key.** An unrecognized key goes to the style side, where
- *    the schemas are `.passthrough()` and MapLibre may well understand it. The
- *    runtime side is a closed list because it is *ours* — we know every key
- *    that drives our machinery, and anything else belongs to the spec.
+ * 2. **Never drop a key — fail open toward the spec.** An unrecognized key goes
+ *    to the style side. The runtime side is a closed list because it is *ours*:
+ *    we know every key that drives our machinery, so anything else is presumed
+ *    to be MapLibre's. This is forward-compatibility rather than caution — the
+ *    style spec gains keys on its own schedule, and a major MapLibre release
+ *    will bring more, so a key we do not recognize today is more likely to be
+ *    one the spec added than one nobody wants. The failure mode is a misplaced
+ *    key rather than a lost one, and a typo of a runtime key still surfaces
+ *    through the existing unknown-key warning at validation time.
  */
 
 import type { MapConfig, ControlsConfig, LegendConfig } from "../schemas";
@@ -61,17 +66,18 @@ const SOURCE_RUNTIME_KEYS = [
  * Layer keys that describe the experience rather than the cartography.
  *
  * @remarks
- * `visible` is deliberately absent: it erases to `layout.visibility`, so it is
- * style surface even though it reads like chrome. `toggleable` is runtime
- * because nothing in the style spec can express "the user may turn this off".
+ * Two absences are deliberate. `visible` erases to `layout.visibility`, so it
+ * is style surface even though it reads like chrome. `metadata` is a legal
+ * style-spec layer property that MapLibre carries through — authored metadata
+ * reaching the emitted style is a *feature*, since downstream tools read it,
+ * and Maputnik shows it. The consequence to document rather than prevent: a
+ * `metadata` block rides into any redistributed artifact, so it is not a place
+ * for annotations an author would not publish.
+ *
+ * `toggleable` is runtime because nothing in the style spec can express "the
+ * user may turn this off".
  */
-const LAYER_RUNTIME_KEYS = [
-  "interactive",
-  "legend",
-  "label",
-  "toggleable",
-  "metadata",
-] as const;
+const LAYER_RUNTIME_KEYS = ["interactive", "legend", "label", "toggleable"] as const;
 
 /** Partition an object's own keys, preserving presence exactly. */
 function partition(
@@ -115,10 +121,12 @@ export function normalizeLayer(layer: Layer): LayerModel {
  * rest are constructor-only. Any split that keeps `config:` whole on one side
  * contradicts the spec.
  *
- * `state` and `parameters` are accepted here ahead of the rest of v2's surface
- * syntax. `state` is a style-spec root property, so accepting it is additive
- * and breaks nothing — and without it no authored document could exercise R13
- * or AE6 until v0.6.0. This is the only v2 key v0.5.0 accepts, deliberately.
+ * `state:` and `parameters:` are accepted at the document root ahead of the
+ * rest of v2's surface syntax, which is where v2 puts them — so an author who
+ * adopts them today writes them in their final position and has nothing to
+ * migrate. `state` is a style-spec root property, so accepting it is additive
+ * and breaks nothing, and without it no authored document could exercise R13
+ * or AE6 until v0.6.0. These are the only v2 keys v0.5.0 accepts, deliberately.
  */
 export function normalizeMapBlock(input: V1MapInput): MapModel {
   const config = (input.config ?? {}) as Record<string, unknown>;
@@ -129,8 +137,8 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   for (const key of Object.keys(config)) {
     if ((CAMERA_KEYS as readonly string[]).includes(key)) {
       camera[key] = config[key];
-    } else if (key === "mapStyle" || key === "state" || key === "parameters") {
-      // Handled below — hoisted out of `config:` rather than routed within it.
+    } else if (key === "mapStyle") {
+      // Handled below — hoisted out of `config:` and renamed.
     } else {
       runtimeMap[key] = config[key];
     }
@@ -156,9 +164,8 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   // Optional keys are attached only when present, never as `undefined` — the
   // model carries the same presence discipline it enforces on `runtime.map`.
   if ("mapStyle" in config) model.style.basemap = config["mapStyle"] as MapConfig["mapStyle"];
-  if ("state" in config) model.style.state = config["state"] as Record<string, unknown>;
-  if ("parameters" in config)
-    model.runtime.parameters = config["parameters"] as Record<string, unknown>;
+  if (input.state !== undefined) model.style.state = input.state;
+  if (input.parameters !== undefined) model.runtime.parameters = input.parameters;
   if (input.controls !== undefined) model.runtime.controls = input.controls;
   if (input.legend !== undefined) model.runtime.legend = input.legend;
   if (input.className !== undefined || input.style !== undefined) {
@@ -190,8 +197,10 @@ export function denormalizeConfig(model: MapModel): MapConfig {
     ...model.style.camera,
   };
   if (model.style.basemap !== undefined) config["mapStyle"] = model.style.basemap;
-  if (model.style.state !== undefined) config["state"] = model.style.state;
-  if (model.runtime.parameters !== undefined) config["parameters"] = model.runtime.parameters;
+  // `state` and `parameters` are deliberately absent. They are authored at the
+  // document root, not inside `config:`, and nothing in v0.5.0's renderer
+  // consumes them — they are carried in the model for the emitter. Reinjecting
+  // them here would push unknown keys into MapLibre's constructor options.
   return config as unknown as MapConfig;
 }
 

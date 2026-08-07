@@ -204,6 +204,20 @@ describe("normalizeLayer — experience keys split from cartography", () => {
     ]);
   });
 
+  it("keeps `metadata` on the spec side so it reaches the emitted style", () => {
+    // Deliberate: `metadata` is a legal style-spec layer property that MapLibre
+    // carries through, and downstream tools read it. The trade is that it rides
+    // into any redistributed artifact, so it is documented rather than dropped.
+    const model = normalizeLayer({
+      id: "pts",
+      type: "circle",
+      source: "s",
+      metadata: { owner: "planning-dept" },
+    } as never);
+    expect(model.spec["metadata"]).toEqual({ owner: "planning-dept" });
+    expect(model.runtime).not.toHaveProperty("metadata");
+  });
+
   it("keeps `visible` on the spec side — it erases to layout.visibility", () => {
     const model = normalizeLayer({
       id: "pts",
@@ -265,12 +279,8 @@ describe("state: accepted early (R13, AE6)", () => {
   it("puts state on the style side and parameter metadata on the runtime side", () => {
     const model = normalizeMapBlock(
       minimalInput({
-        config: {
-          center: [1, 2],
-          zoom: 5,
-          state: { scenario: "built" },
-          parameters: { scenario: { label: "Scenario", type: "enum" } },
-        },
+        state: { scenario: "built" },
+        parameters: { scenario: { label: "Scenario", type: "enum" } },
       } as Partial<V1MapInput>)
     );
     expect(model.style.state).toEqual({ scenario: "built" });
@@ -278,5 +288,17 @@ describe("state: accepted early (R13, AE6)", () => {
       scenario: { label: "Scenario", type: "enum" },
     });
     expect(model.runtime.map).not.toHaveProperty("state");
+  });
+
+  it("does not leak state or parameters into MapLibre constructor options", () => {
+    const model = normalizeMapBlock(
+      minimalInput({
+        state: { scenario: "built" },
+        parameters: { scenario: { label: "Scenario" } },
+      } as Partial<V1MapInput>)
+    );
+    const reassembled = denormalizeConfig(model) as unknown as Record<string, unknown>;
+    expect("state" in reassembled).toBe(false);
+    expect("parameters" in reassembled).toBe(false);
   });
 });

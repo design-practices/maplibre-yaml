@@ -2536,6 +2536,48 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               "patternProperties": {
                 "^x-": {}
               }
+            },
+            "state": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Runtime-tunable values, readable from expressions via \`global-state\`"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "description": "Human-readable control label"
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "Control type hint, e.g. enum or range"
+                  },
+                  "values": {
+                    "type": "array",
+                    "description": "Allowed values, for enum parameters"
+                  },
+                  "min": {
+                    "type": "number",
+                    "description": "Lower bound, for range parameters"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "Upper bound, for range parameters"
+                  },
+                  "step": {
+                    "type": "number",
+                    "description": "Increment, for range parameters"
+                  },
+                  "default": {
+                    "description": "Default value"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "description": "Presentation metadata for \`state\` keys — label, type, range"
             }
           },
           "required": [
@@ -3143,6 +3185,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "legend": {
                               "$ref": "#/$defs/any/oneOf/0/properties/legend",
                               "description": "Legend configuration"
+                            },
+                            "state": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/state",
+                              "description": "Runtime-tunable values, readable from expressions via \`global-state\`"
+                            },
+                            "parameters": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/parameters",
+                              "description": "Presentation metadata for \`state\` keys — label, type, range"
                             }
                           },
                           "required": [
@@ -5781,6 +5831,48 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
           "patternProperties": {
             "^x-": {}
           }
+        },
+        "state": {
+          "type": "object",
+          "additionalProperties": {},
+          "description": "Runtime-tunable values, readable from expressions via \`global-state\`"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "Human-readable control label"
+              },
+              "type": {
+                "type": "string",
+                "description": "Control type hint, e.g. enum or range"
+              },
+              "values": {
+                "type": "array",
+                "description": "Allowed values, for enum parameters"
+              },
+              "min": {
+                "type": "number",
+                "description": "Lower bound, for range parameters"
+              },
+              "max": {
+                "type": "number",
+                "description": "Upper bound, for range parameters"
+              },
+              "step": {
+                "type": "number",
+                "description": "Increment, for range parameters"
+              },
+              "default": {
+                "description": "Default value"
+              }
+            },
+            "additionalProperties": true
+          },
+          "description": "Presentation metadata for \`state\` keys — label, type, range"
         }
       },
       "required": [
@@ -8585,6 +8677,48 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "patternProperties": {
                             "^x-": {}
                           }
+                        },
+                        "state": {
+                          "type": "object",
+                          "additionalProperties": {},
+                          "description": "Runtime-tunable values, readable from expressions via \`global-state\`"
+                        },
+                        "parameters": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "label": {
+                                "type": "string",
+                                "description": "Human-readable control label"
+                              },
+                              "type": {
+                                "type": "string",
+                                "description": "Control type hint, e.g. enum or range"
+                              },
+                              "values": {
+                                "type": "array",
+                                "description": "Allowed values, for enum parameters"
+                              },
+                              "min": {
+                                "type": "number",
+                                "description": "Lower bound, for range parameters"
+                              },
+                              "max": {
+                                "type": "number",
+                                "description": "Upper bound, for range parameters"
+                              },
+                              "step": {
+                                "type": "number",
+                                "description": "Increment, for range parameters"
+                              },
+                              "default": {
+                                "description": "Default value"
+                              }
+                            },
+                            "additionalProperties": true
+                          },
+                          "description": "Presentation metadata for \`state\` keys — label, type, range"
                         }
                       },
                       "required": [
@@ -8643,6 +8777,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "legend": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend",
                           "description": "Legend configuration"
+                        },
+                        "state": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/state",
+                          "description": "Runtime-tunable values, readable from expressions via \`global-state\`"
+                        },
+                        "parameters": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/parameters",
+                          "description": "Presentation metadata for \`state\` keys — label, type, range"
                         }
                       },
                       "required": [

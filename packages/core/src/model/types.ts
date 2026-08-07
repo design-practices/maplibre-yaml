@@ -129,4 +129,8 @@ export interface V1MapInput {
   legend?: LegendConfig;
   className?: string;
   style?: string;
+  /** Spec-native runtime tunables, authored at the document root as in v2. */
+  state?: Record<string, unknown>;
+  /** Presentation metadata for `state` keys — label, type, range. */
+  parameters?: Record<string, unknown>;
 }
