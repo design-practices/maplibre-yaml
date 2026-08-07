@@ -243,3 +243,64 @@ describe("generated MapLibre specs are spec-valid", () => {
     });
   });
 });
+
+/**
+ * The style-spec floor, asserted rather than assumed.
+ *
+ * @remarks
+ * `state` and the `global-state` expression arrived in style-spec 21 / maplibre-gl
+ * 5.6.0. This package was pinned at style-spec ^20.4.0, whose `$root` carries
+ * neither — so a style the emitter produced for a `state:`-bearing document would
+ * have been rejected by this very suite. These tests pin the capability the bump
+ * exists to unlock, so a future downgrade fails here with an obvious reason
+ * instead of surfacing as an inexplicable emitter failure.
+ */
+describe("style-spec floor", () => {
+  const baseStyle = {
+    version: 8 as const,
+    sources: {},
+    layers: [],
+  };
+
+  it("accepts a `state` root property", () => {
+    const errors = validateStyleMin({
+      ...baseStyle,
+      state: { scenario: { default: "built" } },
+    } as any);
+    expect(errors).toEqual([]);
+  });
+
+  it("accepts a `global-state` expression reading a declared state key", () => {
+    const errors = validateStyleMin({
+      ...baseStyle,
+      state: { scenario: { default: "built" } },
+      sources: {
+        parcels: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+      },
+      layers: [
+        {
+          id: "massing",
+          type: "fill",
+          source: "parcels",
+          paint: {
+            "fill-opacity": [
+              "case",
+              ["==", ["global-state", "scenario"], "built"],
+              1,
+              0.3,
+            ],
+          },
+        },
+      ],
+    } as any);
+    expect(errors).toEqual([]);
+  });
+
+  it("still rejects a genuinely invalid layer", () => {
+    const errors = validateStyleMin({
+      ...baseStyle,
+      layers: [{ id: "bad", type: "not-a-layer-type" }],
+    } as any);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});
