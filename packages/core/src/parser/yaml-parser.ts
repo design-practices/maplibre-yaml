@@ -72,6 +72,27 @@
  */
 
 import { parse as parseYAML, parseDocument, stringify as stringifyYAML, LineCounter, type Document } from "yaml";
+
+/**
+ * Parse options for every map-document parse in the library.
+ *
+ * @remarks
+ * `merge: true` turns on YAML merge keys (`<<: *base`), which is how a document
+ * reuses a layer or source block. Without it the `<<` key survives parsing as a
+ * literal, so `<<: *base` produces `{"<<": {...}}` — the anchored content never
+ * merges, and the stray key then trips unknown-key validation. That is a silent
+ * wrong answer for standard YAML, not a missing feature.
+ *
+ * Merge resolves before validation, so inheritance costs no schema surface, no
+ * JSON Schema representation, and no emitter awareness — the schemas never see
+ * `<<`. Anchors and aliases (`&name` / `*name`) need no option; they already
+ * work, and the library's alias-expansion limit stays on, which is what rejects
+ * an anchor-expansion attack rather than expanding it.
+ *
+ * The Astro loader parses map documents too and carries its own copy of this
+ * option; both must stay in step.
+ */
+const YAML_PARSE_OPTIONS = { merge: true } as const;
 import { ZodError, type ZodIssue } from "zod";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
@@ -220,7 +241,7 @@ export class YAMLParser {
     // Parse YAML string to JavaScript object
     let parsed: unknown;
     try {
-      parsed = parseYAML(yaml);
+      parsed = parseYAML(yaml, YAML_PARSE_OPTIONS);
     } catch (error) {
       throw new Error(
         `YAML syntax error: ${
@@ -278,7 +299,7 @@ export class YAMLParser {
     syntaxError?: ParseError;
   } {
     const lineCounter = new LineCounter();
-    const doc = parseDocument(yaml, { lineCounter });
+    const doc = parseDocument(yaml, { lineCounter, ...YAML_PARSE_OPTIONS });
 
     if (doc.errors.length > 0) {
       const err = doc.errors[0]!;
@@ -312,7 +333,29 @@ export class YAMLParser {
       return { success: false, errors: [syntaxError], warnings: [] };
     }
 
-    const value = doc.toJS() as unknown;
+    // `toJS()` materializes aliases, so this is where an anchor-expansion
+    // attack is caught — the library throws once expansion exceeds its alias
+    // budget. It throws rather than reporting, and a `safeParse*` caller is
+    // entitled to a result rather than an exception: in the hostile-input
+    // context this is the difference between a rejected document and a downed
+    // page. Convert it to the same shape a syntax error takes.
+    let value: unknown;
+    try {
+      value = doc.toJS() as unknown;
+    } catch (e) {
+      return {
+        success: false,
+        errors: [
+          {
+            path: "",
+            message: `YAML could not be expanded: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          },
+        ],
+        warnings: [],
+      };
+    }
 
     // Warnings are collected from the raw value regardless of validity so
     // typos and deprecations still surface when other hard errors are present.
@@ -420,7 +463,7 @@ export class YAMLParser {
     // Parse YAML string to JavaScript object
     let parsed: unknown;
     try {
-      parsed = parseYAML(yaml);
+      parsed = parseYAML(yaml, YAML_PARSE_OPTIONS);
     } catch (error) {
       throw new Error(
         `YAML syntax error: ${
@@ -556,7 +599,7 @@ export class YAMLParser {
     // Parse YAML string to JavaScript object
     let parsed: unknown;
     try {
-      parsed = parseYAML(yaml);
+      parsed = parseYAML(yaml, YAML_PARSE_OPTIONS);
     } catch (error) {
       throw new Error(
         `YAML syntax error: ${

@@ -39,6 +39,18 @@
 
 import { readFile } from "fs/promises";
 import { parse as parseYAML } from "yaml";
+
+/**
+ * Parse options for map documents loaded by the Astro integration.
+ *
+ * @remarks
+ * Mirrors `YAML_PARSE_OPTIONS` in core's parser. This loader calls `yaml`'s
+ * `parse` directly rather than delegating to core, so without its own copy a
+ * merge-key document would resolve correctly through `mlym validate` and
+ * silently produce a literal `"<<"` key here — the same footgun, surviving in
+ * one of the two shipped consumer entry points.
+ */
+const YAML_PARSE_OPTIONS = { merge: true } as const;
 import { YAMLParser } from "@maplibre-yaml/core";
 import type { MapBlock, ScrollytellingBlock, ParseError } from "@maplibre-yaml/core";
 
@@ -149,7 +161,7 @@ export async function loadYAML<T = unknown>(
     // Parse YAML
     let parsed: unknown;
     try {
-      parsed = parseYAML(contents);
+      parsed = parseYAML(contents, YAML_PARSE_OPTIONS);
     } catch (error) {
       throw new YAMLLoadError(
         `YAML syntax error: ${error instanceof Error ? error.message : String(error)}`,
@@ -416,7 +428,7 @@ export async function loadFromGlob<T = unknown>(
       // Parse YAML
       let parsed: unknown;
       try {
-        parsed = parseYAML(contents);
+        parsed = parseYAML(contents, YAML_PARSE_OPTIONS);
       } catch (error) {
         throw new YAMLLoadError(
           `YAML syntax error: ${error instanceof Error ? error.message : String(error)}`,

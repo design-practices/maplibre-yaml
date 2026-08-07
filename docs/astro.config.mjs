@@ -57,6 +57,7 @@ export default defineConfig({
             { label: "Working with Layers", link: "/guides/layers/" },
             { label: "Data Sources", link: "/guides/data-sources/" },
             { label: "Live Data & Streaming", link: "/guides/live-data/" },
+            { label: "Reusing Values & Blocks", link: "/guides/reuse/" },
             { label: "Editor Setup", link: "/guides/editor-setup/" },
             { label: "Using AI Agents", link: "/guides/ai-agents/" },
           ],

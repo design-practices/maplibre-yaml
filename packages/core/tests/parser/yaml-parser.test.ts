@@ -1024,3 +1024,108 @@ layers:
     expect(result.data!.layers![0].source).toBe("cities");
   });
 });
+
+/**
+ * YAML-native reuse: anchors, aliases, and merge keys.
+ *
+ * @remarks
+ * These resolve inside `yaml`'s parse, upstream of validation — so the schemas
+ * never see `<<`, and reuse costs no schema surface. Merge in particular was a
+ * silent wrong answer before it was enabled: `<<: *base` produced a literal
+ * `"<<"` key rather than merging, which then tripped unknown-key validation.
+ */
+describe("YAML-native reuse (U2)", () => {
+  const mapWith = (layers: string) => `
+type: map
+id: reuse
+config:
+  center: [0, 0]
+  zoom: 5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+${layers}`;
+
+  it("merges an anchored mapping via a merge key", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapWith(`  - &base
+      id: a
+      type: circle
+      source: { type: geojson, data: { type: FeatureCollection, features: [] } }
+      paint: { circle-color: "#111" }
+  - <<: *base
+    id: b`)
+    );
+    expect(result.success).toBe(true);
+    const layers = result.data!.layers as any[];
+    expect(layers[1].type).toBe("circle");
+    expect(layers[1].paint["circle-color"]).toBe("#111");
+  });
+
+  it("lets a sibling key override the merged value", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapWith(`  - &base
+      id: a
+      type: circle
+      source: { type: geojson, data: { type: FeatureCollection, features: [] } }
+      paint: { circle-color: "#111" }
+  - <<: *base
+    id: b
+    paint: { circle-color: "#222" }`)
+    );
+    expect(result.success).toBe(true);
+    const layers = result.data!.layers as any[];
+    expect(layers[1].paint["circle-color"]).toBe("#222");
+    expect(layers[0].paint["circle-color"]).toBe("#111");
+  });
+
+  it("never surfaces `<<` to the schema", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapWith(`  - &base
+      id: a
+      type: circle
+      source: { type: geojson, data: { type: FeatureCollection, features: [] } }
+  - <<: *base
+    id: b`)
+    );
+    expect(result.success).toBe(true);
+    expect(Object.keys(result.data!.layers[1] as object)).not.toContain("<<");
+    expect(result.warnings.map((w) => w.message).join(" ")).not.toContain("<<");
+  });
+
+  it("reuses an anchored scalar by alias", () => {
+    const result = YAMLParser.safeParseMapBlock(`
+type: map
+id: reuse
+config:
+  center: [0, 0]
+  zoom: 5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: a
+    type: circle
+    source: { type: geojson, data: { type: FeatureCollection, features: [] } }
+    paint: { circle-color: &brand "#2b6cb0" }
+  - id: b
+    type: circle
+    source: { type: geojson, data: { type: FeatureCollection, features: [] } }
+    paint: { circle-color: *brand }`);
+    expect(result.success).toBe(true);
+    const layers = result.data!.layers as any[];
+    expect(layers[1].paint["circle-color"]).toBe("#2b6cb0");
+  });
+
+  it("rejects an anchor-expansion attack rather than expanding it", () => {
+    const bomb = `
+type: map
+id: bomb
+config: { center: [0, 0], zoom: 5, mapStyle: "https://x.test/s.json" }
+a: &a [x,x,x,x,x,x,x,x,x]
+b: &b [*a,*a,*a,*a,*a,*a,*a,*a,*a]
+c: &c [*b,*b,*b,*b,*b,*b,*b,*b,*b]
+d: [*c,*c,*c,*c,*c,*c,*c,*c,*c]
+layers: []`;
+    const result = YAMLParser.safeParseMapBlock(bomb);
+    expect(result.success).toBe(false);
+    expect(result.errors.map((e) => e.message).join(" ")).toMatch(/could not be expanded/i);
+  });
+});
