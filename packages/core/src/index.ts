@@ -21,6 +21,9 @@ export * from "./data";
 // UI
 export * from "./ui";
 
+// Internal model — the shape the renderer and (from U4) the emitter share
+export * from "./model";
+
 // Utils
 export { EventEmitter } from "./utils/event-emitter";
 export type { EventHandler } from "./utils/event-emitter";

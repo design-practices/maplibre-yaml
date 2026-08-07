@@ -42,6 +42,14 @@ import {
   type ValidationWarning,
 } from "../parser/yaml-parser.js";
 import { MapRenderer } from "../renderer/map-renderer.js";
+import {
+  normalizeMapBlock,
+  denormalizeConfig,
+  denormalizeLayers,
+  denormalizeSources,
+  denormalizeOptions,
+  type V1MapInput,
+} from "../model/index.js";
 
 /**
  * MLMap custom element for rendering MapLibre maps from YAML/JSON configuration.
@@ -356,13 +364,19 @@ export class MLMap extends HTMLElement {
     this.appendChild(this.mapContainer);
 
     try {
-      // Extract config, sources, layers, controls, and legend from MapBlock
-      const { config, sources, layers = [], controls, legend } = mapBlock;
+      // Normalize the v1 document into the v2 internal model, then render from
+      // it. The model is what the emitter is written against (R30); routing the
+      // production path through it here is what proves the normalization loses
+      // nothing — every component and renderer test now exercises the round
+      // trip, so a dropped or invented key fails the suite rather than shipping.
+      const model = normalizeMapBlock(mapBlock as unknown as V1MapInput);
 
-      // Create renderer with config, layers, and named sources
-      this.renderer = new MapRenderer(this.mapContainer, config, layers, {
-        controls,
-        legend,
+      this.renderer = new MapRenderer(
+        this.mapContainer,
+        denormalizeConfig(model),
+        denormalizeLayers(model),
+        {
+          ...denormalizeOptions(model),
         onLoad: () => {
           // Load event is also emitted via the event system
         },
@@ -374,7 +388,9 @@ export class MLMap extends HTMLElement {
             })
           );
         },
-      }, sources);
+        },
+        denormalizeSources(model)
+      );
 
       // Set up event forwarding
       this.setupEventForwarding();

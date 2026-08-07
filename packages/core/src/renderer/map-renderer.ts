@@ -11,6 +11,13 @@ import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
 import { EventHandler, type EventHandlerCallbacks } from './event-handler';
 import { LegendBuilder } from './legend-builder';
 import { ControlsManager } from './controls-manager';
+import {
+  denormalizeConfig,
+  denormalizeLayers,
+  denormalizeSources,
+  denormalizeOptions,
+  type MapModel,
+} from "../model/index.js";
 
 type MapConfig = z.infer<typeof MapConfigSchema>;
 type Layer = z.infer<typeof LayerSchema>;
@@ -74,6 +81,39 @@ export class MapRenderer {
   private controlsAdded: boolean;
   private legendBuilt: boolean;
   private autoLegendContainer: HTMLElement | null;
+
+
+  /**
+   * Construct a renderer from the v2 internal model.
+   *
+   * @remarks
+   * The model is the shape the emitter is written against (R30), and this is
+   * how the renderer consumes the same one. v0.5.0 keeps the v1 constructor as
+   * the compatibility surface — it is public API with external callers, and
+   * breaking it inside a minor is not on the table — so this factory
+   * reassembles the v1 arguments rather than the managers being rewritten onto
+   * new shapes.
+   *
+   * That round trip is deliberate and is the fidelity proof: `<ml-map>` routes
+   * through here, so every existing renderer and component test exercises
+   * normalize-then-denormalize. If the model lost or invented a key, those
+   * tests would fail. Migrating the managers to read the model directly is
+   * later work; the emitter does not need it, and it is the part of the
+   * refactor most likely to change behavior.
+   */
+  static fromModel(
+    container: string | HTMLElement,
+    model: MapModel,
+    options: MapRendererOptions = {}
+  ): MapRenderer {
+    return new MapRenderer(
+      container,
+      denormalizeConfig(model),
+      denormalizeLayers(model),
+      { ...denormalizeOptions(model), ...options },
+      denormalizeSources(model)
+    );
+  }
 
   constructor(container: string | HTMLElement, config: MapConfig, layers: Layer[] = [], options: MapRendererOptions = {}, sources?: Record<string, LayerSource>) {
     this.eventListeners = new Map();
