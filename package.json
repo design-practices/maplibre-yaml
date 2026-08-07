@@ -31,7 +31,7 @@
     "docs:validate-snippets": "node scripts/validate-doc-snippets.mjs",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "pnpm build && changeset publish",
+    "release": "pnpm publish -r --access public && changeset tag && git push origin --tags",
     "verify:serve": "node e2e/server.mjs",
     "verify:browser": "playwright test",
     "verify:browser:headed": "playwright test --headed"

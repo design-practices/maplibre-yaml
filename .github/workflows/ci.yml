@@ -68,6 +68,44 @@ jobs:
             - name: Type check
               run: pnpm typecheck
 
+    # A "chore: version packages" PR must consume EVERY changeset on main, not
+    # just the ones that existed when it was cut. changesets/action only takes
+    # the publish path when .changeset/ holds no changesets; merging a version
+    # PR onto a main that has since accumulated more produces another version
+    # PR instead of a release, silently deferring it.
+    #
+    # That is not hypothetical: PR #51 was cut from 7 changesets on 2026-07-26,
+    # 4 more landed on main, and merging it staged a 0.4.0 missing four of its
+    # own features. It reached main because Actions was not dispatching, so the
+    # action never regenerated the branch. This check is the backstop for
+    # exactly that -- the branch being stale rather than the diff looking stale.
+    #
+    # actions/checkout builds the PR *merge commit* on pull_request events, so
+    # the tree here is the state main will be in after merge. See ml-ook.
+    version-pr-completeness:
+        name: Version PR consumes every changeset
+        if: github.event_name == 'pull_request' && github.head_ref == 'changeset-release/main'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout PR merge commit
+              uses: actions/checkout@v4
+
+            - name: Assert no changeset survives the merge
+              run: |
+                  leftover=$(find .changeset -name '*.md' ! -name 'README.md' | sort)
+                  if [ -n "$leftover" ]; then
+                      echo "::error::This version PR does not consume every changeset on main. Merging it would open another version PR instead of publishing."
+                      echo ""
+                      echo "Changesets that would survive the merge:"
+                      echo "$leftover" | sed 's/^/  /'
+                      echo ""
+                      echo "Fix: push to main (or re-run the Release workflow) so changesets/action"
+                      echo "regenerates changeset-release/main against current main, then merge the"
+                      echo "regenerated PR."
+                      exit 1
+                  fi
+                  echo "No changesets survive the merge -- the publish path will fire."
+
     # Drives the Phase 1 fixtures against a real MapLibre instance in headless
     # Chromium. The unit suites can only prove we handed MapLibre a given
     # object; these prove a user sees the result. Added after a change meant to

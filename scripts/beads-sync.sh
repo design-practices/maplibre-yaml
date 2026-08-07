@@ -39,6 +39,25 @@ ensure_remote() {
   bd dolt remote add origin "$url" >/dev/null 2>&1 || true
 }
 
+# `bd` commits as a side effect of its own git bookkeeping, and it commits the
+# INDEX AS IT FINDS IT. On 2026-08-06 a `bd dolt remote add` from this script
+# swept a staged 15-file `git revert --no-commit` into a commit titled
+# "bd: update sync.remote" that contained no .beads files at all. Because this
+# script runs from `prepare`, that is one `pnpm install` away at any moment:
+# stage work, install, and it lands in someone else's commit under a message
+# that describes none of it. On a branch `git reset --soft HEAD~1` recovers it;
+# on main it is mislabeled public history.
+#
+# Staged changes are therefore a hard stop. The sync is a convenience -- it can
+# always happen on the next install -- and is never worth that trade. See
+# ml-cky. Unstaged edits are left alone: bd's commit only captures the index.
+if ! git diff --cached --quiet 2>/dev/null; then
+  echo "beads: staged changes present — skipping issue-db sync."
+  echo "beads: bd can commit the index as it finds it; commit or unstage first,"
+  echo "beads: then re-run 'pnpm install' (or 'sh scripts/beads-sync.sh')."
+  exit 0
+fi
+
 if [ -d .beads/embeddeddolt ]; then
   # Database already present: just align it with the remote.
   ensure_remote || exit 0
