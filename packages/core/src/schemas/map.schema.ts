@@ -384,6 +384,76 @@ markOpenSchema(MapConfigSchema);
 export type MapConfig = z.infer<typeof MapConfigSchema>;
 
 /**
+ * Runtime-tunable values carried at the document root.
+ *
+ * @remarks
+ * `state` is a style-spec root property — MapLibre carries it natively and
+ * expressions read it via `global-state` — so it compiles through to the
+ * emitted style rather than degrading. It is accepted here ahead of the rest of
+ * format v2's surface syntax, in the position v2 gives it, so an author who
+ * adopts it today has nothing to move later.
+ *
+ * **The authored shape is the spec's own shape**, `{ key: { default: value } }`,
+ * not a flat `{ key: value }`. This is the one place where "the erasable half
+ * *is* the spec" is literally true — `state` compiles through verbatim, with no
+ * transformation at all, unlike `visible` or `before`. Inventing a different
+ * spelling for the single key where that claim is exact would undercut it.
+ *
+ * The sugar precedent set for GeoJSON does not transfer: `location:`/`region:`
+ * exist as sugar to protect content collections people already wrote, and no
+ * `state:` document exists yet. There is nothing to protect, so a second
+ * authored form would cost two-ways-to-author and buy nothing.
+ *
+ * The `{default: ...}` wrapper is not gratuitous either — it is where the spec
+ * expects to add per-key fields, and a flattened form could not follow.
+ *
+ * The spec's `state` carries defaults only: no label, no type, no range. The
+ * metadata a control UI needs to render a picker lives in {@link
+ * ParametersSchema} instead, which does *not* compile through.
+ */
+export const StateSchema = z
+  .record(
+    z
+      .object({
+        default: z.any().describe("Initial value, read by `global-state`"),
+      })
+      .passthrough()
+  )
+  .describe("Runtime-tunable values, keyed by name");
+
+/** Inferred type for the state block. */
+export type State = z.infer<typeof StateSchema>;
+
+/**
+ * Presentation metadata for `state` keys.
+ *
+ * @remarks
+ * The library owns the parameter's shape — type, range, label — and the host
+ * owns how it is presented. Nothing here reaches the compiled style.
+ *
+ * There is deliberately no `default` here: the value lives in {@link
+ * StateSchema}, where the style spec puts it. Carrying it in both places would
+ * be two spellings of one fact with no rule about which wins.
+ */
+export const ParametersSchema = z
+  .record(
+    z
+      .object({
+        label: z.string().optional().describe("Human-readable control label"),
+        type: z.string().optional().describe("Control type hint, e.g. enum or range"),
+        values: z.array(z.any()).optional().describe("Allowed values, for enum parameters"),
+        min: z.number().optional().describe("Lower bound, for range parameters"),
+        max: z.number().optional().describe("Upper bound, for range parameters"),
+        step: z.number().optional().describe("Increment, for range parameters"),
+      })
+      .passthrough()
+  )
+  .describe("Presentation metadata for state keys");
+
+/** Inferred type for the parameters block. */
+export type Parameters = z.infer<typeof ParametersSchema>;
+
+/**
  * Standard map block.
  *
  * @remarks
@@ -454,6 +524,12 @@ export const MapBlockSchema: z.ZodObject<any> = z
     layers: z.array(LayerOrReferenceSchema).default([]).describe("Map layers"),
     controls: ControlsConfigSchema.optional().describe("Map controls"),
     legend: LegendConfigSchema.optional().describe("Legend configuration"),
+    state: StateSchema.optional().describe(
+      "Runtime-tunable values, readable from expressions via `global-state`"
+    ),
+    parameters: ParametersSchema.optional().describe(
+      "Presentation metadata for `state` keys — label, type, range"
+    ),
   })
   .describe("Standard map block");
 
@@ -505,6 +581,12 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     layers: z.array(LayerOrReferenceSchema).default([]).describe("Map layers"),
     controls: ControlsConfigSchema.optional().describe("Map controls"),
     legend: LegendConfigSchema.optional().describe("Legend configuration"),
+    state: StateSchema.optional().describe(
+      "Runtime-tunable values, readable from expressions via `global-state`"
+    ),
+    parameters: ParametersSchema.optional().describe(
+      "Presentation metadata for `state` keys — label, type, range"
+    ),
   })
   .describe("Full-page map block");
 

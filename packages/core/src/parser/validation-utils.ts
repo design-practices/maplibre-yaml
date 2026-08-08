@@ -94,6 +94,12 @@ export const EXPRESSION_OPERATORS = new Set<string>([
   // Feature data
   "accumulated", "feature-state", "geometry-type", "id", "line-progress",
   "properties",
+  // Document state (style-spec 21+). Reads a value from the document's `state:`
+  // block. Registered alongside `state:` becoming authorable — without it the
+  // first document to use the feature warns on every expression, and `mlym
+  // validate` promotes warnings to errors under CI, so adopting `state:` would
+  // break the adopter's own build.
+  "global-state",
   // Lookup
   "at", "get", "has", "in", "index-of", "length", "slice",
   // Decision

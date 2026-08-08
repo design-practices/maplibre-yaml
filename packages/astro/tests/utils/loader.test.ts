@@ -459,3 +459,59 @@ config:
     await expect(loadFromGlob(globResult)).rejects.toThrow(YAMLLoadError);
   });
 });
+
+/**
+ * Merge-key parity: this loader's own parse path.
+ *
+ * @remarks
+ * `loadMapConfig` and `loadScrollytellingConfig` delegate to core's
+ * `YAMLParser`, so they inherit core's options. `loadYAML` and `loadFromGlob`
+ * call `yaml`'s `parse` directly and would otherwise have been left behind —
+ * a merge-key document resolving correctly through `mlym validate` while
+ * silently producing a literal `"<<"` key here. These tests are what keep the
+ * loader's copy of the option in step with core's.
+ */
+describe("YAML-native reuse parity (U2)", () => {
+  let testDir: string;
+
+  beforeEach(async () => {
+    testDir = join(tmpdir(), `astro-merge-test-${Date.now()}`);
+    await mkdir(testDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  const MERGE_DOC = `
+defaults: &defaults
+  color: "#111"
+  weight: 2
+primary:
+  <<: *defaults
+secondary:
+  <<: *defaults
+  color: "#222"
+`;
+
+  it("resolves merge keys through loadYAML", async () => {
+    const yamlPath = join(testDir, "merge.yaml");
+    await writeFile(yamlPath, MERGE_DOC);
+
+    const result = await loadYAML<any>(yamlPath);
+
+    expect(result.primary).toEqual({ color: "#111", weight: 2 });
+    expect(result.secondary).toEqual({ color: "#222", weight: 2 });
+    expect(Object.keys(result.primary)).not.toContain("<<");
+  });
+
+  it("resolves merge keys through loadFromGlob", async () => {
+    const results = await loadFromGlob<any>({
+      "virtual/merge.yaml": () => Promise.resolve(MERGE_DOC),
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.config.secondary).toEqual({ color: "#222", weight: 2 });
+    expect(Object.keys(results[0]!.config.secondary)).not.toContain("<<");
+  });
+});

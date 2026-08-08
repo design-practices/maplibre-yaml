@@ -90,9 +90,25 @@ export type SourceReference = z.infer<typeof SourceReferenceSchema>;
  *   format: ",.0f"
  * ```
  */
-export const PopupContentItemSchema = z
+// Annotated: the `str` union pushes the inferred PopupContentItem type into the
+// LayerSchema discriminated union, whose serialized type then exceeds TS's
+// buffer (TS7056). Stating the type collapses it; the runtime shape is unchanged.
+export const PopupContentItemSchema: z.ZodType<{
+  str?: string | { $html: string };
+  property?: string;
+  else?: string;
+  format?: string;
+  href?: string;
+  text?: string;
+  src?: string;
+  alt?: string;
+  [key: string]: unknown;
+}> = z
   .object({
-    str: z.string().optional().describe("Static text string"),
+    str: z
+      .union([z.string(), z.object({ $html: z.string() }).passthrough()])
+      .optional()
+      .describe("Static text; an `!html`-tagged value carries raw markup"),
     property: z.string().optional().describe("Feature property name"),
     else: z.string().optional().describe("Fallback value if property missing"),
     format: z

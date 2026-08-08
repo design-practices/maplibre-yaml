@@ -71,7 +71,176 @@
  * ```
  */
 
-import { parse as parseYAML, parseDocument, stringify as stringifyYAML, LineCounter, type Document } from "yaml";
+import { parse as parseYAML, parseDocument, stringify as stringifyYAML, visit, isSeq, isScalar, LineCounter, type Document } from "yaml";
+import type { ScalarTag, ParseOptions, DocumentOptions, SchemaOptions } from "yaml";
+import type { HtmlMarker } from "../utils/html.js";
+
+/**
+ * Parse options for every map-document parse in the library.
+ *
+ * @remarks
+ * `merge: true` turns on YAML merge keys (`<<: *base`), which is how a document
+ * reuses a layer or source block. Without it the `<<` key survives parsing as a
+ * literal, so `<<: *base` produces `{"<<": {...}}` — the anchored content never
+ * merges, and the stray key then trips unknown-key validation. That is a silent
+ * wrong answer for standard YAML, not a missing feature.
+ *
+ * Merge resolves before validation, so inheritance costs no schema surface, no
+ * JSON Schema representation, and no emitter awareness — the schemas never see
+ * `<<`. Anchors and aliases (`&name` / `*name`) need no option; they already
+ * work, and the library's alias-expansion limit rejects an anchor-expansion
+ * attack rather than expanding it.
+ *
+ * **That limit does not cover merge keys**, which is why {@link rejectMergeFanOut}
+ * exists. `merge.mergeValue()` resolves its alias through `Alias.resolve()` and
+ * calls `toJSON()` directly, never entering the path where `maxAliasCount` is
+ * counted — so a sequence-valued merge (`<<: [*a, *a, ...]`) expands uncounted
+ * and uncached. Measured on yaml 2.8.2: a 338-byte nested fan-out document took
+ * 13s and kept growing exponentially, while the same shape without merge keys
+ * was rejected in 3ms.
+ *
+ * The Astro loader parses map documents too and carries its own copy of this
+ * option; both must stay in step.
+ */
+/**
+ * The `!html` custom tag.
+ *
+ * @remarks
+ * Resolves `!html "<b>x</b>"` to the structural {@link HtmlMarker} `{ $html }`
+ * rather than a bare string, so raw markup is a request the author made
+ * explicitly, never a guess the parser made about content. Whether it renders
+ * is decided at the sink by the capability policy — the tag grants nothing on
+ * its own.
+ *
+ * A `Scalar` tag: it applies to a string value, and any non-string content is
+ * left as-is (a malformed `!html` on a mapping is not something to coerce).
+ */
+const htmlTag: ScalarTag = {
+  tag: "!html",
+  resolve(value: string): HtmlMarker {
+    return { $html: value };
+  },
+};
+
+const YAML_PARSE_OPTIONS: ParseOptions & DocumentOptions & SchemaOptions = {
+  merge: true,
+  customTags: [htmlTag],
+};
+
+/**
+ * Reject fan-out merge keys before the document is materialized.
+ *
+ * @remarks
+ * Merge expansion is not counted by the library's alias budget, so the guard
+ * has to be here. The distinction that matters is **fan-out, not depth**:
+ * measured on yaml 2.8.2, a single-alias merge chain 40 levels deep resolves in
+ * 92ms, while pulling several aliases into one map compounds exponentially —
+ * 338 bytes took 13 seconds and kept climbing.
+ *
+ * Fan-out has two spellings and both are refused:
+ *
+ * - a sequence value, `<<: [*a, *b]`
+ * - the merge key repeated in one map, `{<<: *a, <<: *a}`
+ *
+ * An earlier version of this guard refused only the sequence and called it "the
+ * entire attack surface". It was not: the repeated-key form reproduces the same
+ * blow-up with no sequence anywhere, and the guard would have shipped green
+ * against the vector it missed.
+ *
+ * What remains legal is exactly what `guides/reuse.mdx` documents — one
+ * `<<: *base` per map, chained to any depth.
+ *
+ * Runs on the parsed AST, because materializing is the expensive step being
+ * guarded.
+ */
+function isMergeKey(key: unknown): boolean {
+  // With `merge: true` the library replaces the `<<` key with a Symbol whose
+  // description is `<<`, so a string comparison silently never matches.
+  if (!isScalar(key)) return false;
+  const value: unknown = key.value;
+  if (typeof value === "symbol") return value.description === "<<";
+  return value === "<<";
+}
+
+function rejectMergeFanOut(doc: Document): string | null {
+  let offending: string | null = null;
+
+  visit(doc, {
+    Map(_, node) {
+      if (offending) return visit.BREAK;
+      let mergeKeys = 0;
+      for (const pair of node.items) {
+        if (!isMergeKey(pair.key)) continue;
+        mergeKeys += 1;
+        if (isSeq(pair.value)) {
+          offending =
+            "a merge key with a sequence of aliases (`<<: [*a, *b]`)";
+          return visit.BREAK;
+        }
+        if (mergeKeys > 1) {
+          offending = "more than one merge key in a single mapping";
+          return visit.BREAK;
+        }
+      }
+      return undefined;
+    },
+  });
+
+  return offending;
+}
+
+/**
+ * Materialize a parsed document, converting expansion failures into errors.
+ *
+ * @remarks
+ * `toJS()` is where aliases are expanded, so it is where an anchor-expansion
+ * attack surfaces — and it *throws* rather than reporting. Every `safeParse*`
+ * entry point documents that it returns errors instead of throwing, so the
+ * conversion belongs here, once, rather than at each call site: an earlier
+ * version guarded only `safeParseWithSchema` and left `safeParseAny` — the
+ * entry point `mlym validate` and the preview server actually use — throwing an
+ * uncaught error on the same input.
+ *
+ * Errors are classified rather than blanket-labelled. Enabling merge keys made
+ * ordinary authoring mistakes (`<<: "not a map"`) reachable from `toJS()`, and
+ * reporting a typo in the wording reserved for a resource-exhaustion attack
+ * helps nobody reading logs or a caret-less CLI error.
+ */
+function toJSSafe(doc: Document): { value: unknown } | { error: ParseError } {
+  const fanOut = rejectMergeFanOut(doc);
+  if (fanOut) {
+    return {
+      error: {
+        path: "",
+        code: "yaml-expansion",
+        message:
+          `Unsupported YAML: ${fanOut}. Merge one map at a time ` +
+          "(`<<: *base`); chain merges to combine several.",
+      },
+    };
+  }
+  try {
+    return { value: doc.toJS() as unknown };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    const isExpansionAttack = /alias count|resource exhaustion/i.test(message);
+    // A merge key pointed at a non-map is an authoring typo, not an attack —
+    // classify it apart so a consumer and a caret-seeking CLI can tell them
+    // apart. Anything else from toJS() is a genuine expansion failure.
+    const isMergeError = /merge sources must be maps/i.test(message);
+    return {
+      error: {
+        path: "",
+        code: isExpansionAttack ? "yaml-expansion" : isMergeError ? "yaml-merge" : "yaml-syntax",
+        message: isExpansionAttack
+          ? `YAML could not be expanded: ${message}`
+          : isMergeError
+            ? `Invalid merge key: ${message}`
+            : `YAML error: ${message}`,
+      },
+    };
+  }
+}
 import { ZodError, type ZodIssue } from "zod";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
@@ -125,9 +294,30 @@ export type ScrollytellingBlock = z.infer<typeof ScrollytellingBlockSchema>;
  * @property column - Optional column number in the YAML file where error occurred
  * @property suggestion - Optional nearest valid alternative (did-you-mean)
  */
+/**
+ * A stable, machine-readable classification of a parse error.
+ *
+ * @remarks
+ * The message is for humans and will be reworded; the code is the contract a
+ * consumer keys on. `yaml-expansion` in particular lets a host treat an
+ * anchor-expansion attack differently from an ordinary typo without matching
+ * prose, which is the whole reason a hostile-input consumer parses at all.
+ */
+export type ParseErrorCode =
+  /** Malformed YAML the library could not parse into a document. */
+  | "yaml-syntax"
+  /** An anchor/merge expansion the library refused as a resource-exhaustion risk. */
+  | "yaml-expansion"
+  /** A merge key pointed at something that is not a map. */
+  | "yaml-merge"
+  /** The document validated against no schema (unknown block type, wrong shape). */
+  | "schema";
+
 export interface ParseError {
   path: string;
   message: string;
+  /** Machine-readable classification. Absent on legacy/schema-issue paths. */
+  code?: ParseErrorCode;
   line?: number;
   column?: number;
   suggestion?: string;
@@ -220,7 +410,7 @@ export class YAMLParser {
     // Parse YAML string to JavaScript object
     let parsed: unknown;
     try {
-      parsed = parseYAML(yaml);
+      parsed = parseYAML(yaml, YAML_PARSE_OPTIONS);
     } catch (error) {
       throw new Error(
         `YAML syntax error: ${
@@ -278,7 +468,7 @@ export class YAMLParser {
     syntaxError?: ParseError;
   } {
     const lineCounter = new LineCounter();
-    const doc = parseDocument(yaml, { lineCounter });
+    const doc = parseDocument(yaml, { lineCounter, ...YAML_PARSE_OPTIONS });
 
     if (doc.errors.length > 0) {
       const err = doc.errors[0]!;
@@ -288,6 +478,7 @@ export class YAMLParser {
         lineCounter,
         syntaxError: {
           path: "",
+          code: "yaml-syntax",
           message: `YAML syntax error: ${err.message}`,
           ...(start ? { line: start.line, column: start.col } : {}),
         },
@@ -312,7 +503,11 @@ export class YAMLParser {
       return { success: false, errors: [syntaxError], warnings: [] };
     }
 
-    const value = doc.toJS() as unknown;
+    const materialized = toJSSafe(doc);
+    if ("error" in materialized) {
+      return { success: false, errors: [materialized.error], warnings: [] };
+    }
+    const value = materialized.value;
 
     // Warnings are collected from the raw value regardless of validity so
     // typos and deprecations still surface when other hard errors are present.
@@ -420,7 +615,7 @@ export class YAMLParser {
     // Parse YAML string to JavaScript object
     let parsed: unknown;
     try {
-      parsed = parseYAML(yaml);
+      parsed = parseYAML(yaml, YAML_PARSE_OPTIONS);
     } catch (error) {
       throw new Error(
         `YAML syntax error: ${
@@ -556,7 +751,7 @@ export class YAMLParser {
     // Parse YAML string to JavaScript object
     let parsed: unknown;
     try {
-      parsed = parseYAML(yaml);
+      parsed = parseYAML(yaml, YAML_PARSE_OPTIONS);
     } catch (error) {
       throw new Error(
         `YAML syntax error: ${
@@ -641,7 +836,17 @@ export class YAMLParser {
       };
     }
 
-    const parsed = yamlDoc.toJS() as unknown;
+    // Same guarded materialization as every other entry point. This is the
+    // dispatcher `mlym validate` and the preview server call, and its own
+    // contract says it never throws — an earlier version left it bare.
+    const materialized = toJSSafe(yamlDoc);
+    if ("error" in materialized) {
+      return {
+        blockType: "unknown",
+        result: { success: false, errors: [materialized.error], warnings: [] },
+      };
+    }
+    const parsed = materialized.value;
     const doc =
       parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)

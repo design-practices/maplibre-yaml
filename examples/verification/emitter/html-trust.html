@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>!html renders as markup only when the context permits it</title>
+    <!--
+    The `!html` trust gate, made visible. Two identical documents, each with an
+    `!html`-tagged popup value. One map is built with a trusted capability
+    policy, the other untrusted. Click a feature on each.
+
+    PASS = the trusted popup shows BOLD rendered markup; the untrusted popup
+    shows the literal tag text, escaped. Same document, different context,
+    different result — which is the whole point of the trust model.
+    -->
+    <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; }
+      .cell { height: 100vh; position: relative; }
+      .cell h1 { position: absolute; z-index: 1; top: 0; left: 0; right: 0; margin: 0; padding: 6px 12px; font-size: 13px; color: #fff; }
+      .trusted h1 { background: #166534; }
+      .untrusted h1 { background: #991b1b; }
+      .map { height: 100%; }
+    </style>
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+    </script>
+  </head>
+  <body>
+    <div class="row">
+      <div class="cell trusted"><h1>trusted — markup renders</h1><div id="map-trusted" class="map"></div></div>
+      <div class="cell untrusted"><h1>untrusted — markup is escaped</h1><div id="map-untrusted" class="map"></div></div>
+    </div>
+
+    <script type="module">
+      import maplibregl from "maplibre-gl";
+      import { YAMLParser, MapRenderer, normalizeMapBlock } from "/packages/core/dist/index.browser.js";
+
+      const DOC = `
+type: map
+id: html-demo
+config:
+  center: [-73.98, 40.75]
+  zoom: 11
+  mapStyle:
+    version: 8
+    sources: {}
+    layers: [{ id: bg, type: background, paint: { background-color: "#e5e7eb" } }]
+sources:
+  pts:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry: { type: Point, coordinates: [-73.98, 40.75] }
+          properties: { name: Site }
+layers:
+  - id: dot
+    type: circle
+    source: pts
+    paint: { circle-radius: 12, circle-color: "#2563eb" }
+    interactive:
+      click:
+        popup:
+          - p:
+              - str: !html "<b>Bold from !html</b>"
+`;
+
+      function build(containerId, trust) {
+        const parsed = YAMLParser.safeParseMapBlock(DOC);
+        if (!parsed.success) { console.error(parsed.errors); return; }
+        // Build from the model, the same shape the emitter consumes — this is
+        // the intended entry point for a caller that already holds a model.
+        const model = normalizeMapBlock(parsed.data);
+        return MapRenderer.fromModel(containerId, model, { capabilities: { trust } });
+      }
+
+      window.__trusted = build("map-trusted", "trusted");
+      window.__untrusted = build("map-untrusted", "untrusted");
+    </script>
+  </body>
+</html>

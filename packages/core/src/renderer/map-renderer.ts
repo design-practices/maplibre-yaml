@@ -11,6 +11,14 @@ import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
 import { EventHandler, type EventHandlerCallbacks } from './event-handler';
 import { LegendBuilder } from './legend-builder';
 import { ControlsManager } from './controls-manager';
+import type { CapabilityPolicy } from "../capabilities.js";
+import {
+  denormalizeConfig,
+  denormalizeLayers,
+  denormalizeSources,
+  denormalizeOptions,
+  type MapModel,
+} from "../model/index.js";
 
 type MapConfig = z.infer<typeof MapConfigSchema>;
 type Layer = z.infer<typeof LayerSchema>;
@@ -43,6 +51,16 @@ export interface MapRendererOptions {
   controls?: ControlsConfig;
   /** Legend declared in the YAML `legend:` block — built automatically on map load */
   legend?: LegendConfig;
+  /**
+   * Trust and runtime capabilities for this map.
+   *
+   * @remarks
+   * Gates render-time behavior an author could otherwise abuse — most directly
+   * whether an `!html` popup value renders as markup or as escaped text.
+   * Omitted means untrusted: a host embedding a document it did not author gets
+   * the safe default without opting into it.
+   */
+  capabilities?: CapabilityPolicy;
 }
 
 /**
@@ -74,6 +92,39 @@ export class MapRenderer {
   private controlsAdded: boolean;
   private legendBuilt: boolean;
   private autoLegendContainer: HTMLElement | null;
+
+
+  /**
+   * Construct a renderer from the v2 internal model.
+   *
+   * @remarks
+   * The model is the shape the emitter is written against (R30), and this is
+   * how the renderer consumes the same one. v0.5.0 keeps the v1 constructor as
+   * the compatibility surface — it is public API with external callers, and
+   * breaking it inside a minor is not on the table — so this factory
+   * reassembles the v1 arguments rather than the managers being rewritten onto
+   * new shapes.
+   *
+   * `<ml-map>` does not call this — it derives the same arguments inline, so
+   * the component test double (which mocks `MapRenderer` as a bare function
+   * with no statics) keeps working. This factory is for callers that already
+   * hold a model. It differs from the inline path in one respect worth knowing:
+   * caller `options` win over the model's `controls`/`legend`, so passing
+   * `{ controls: undefined }` erases them.
+   */
+  static fromModel(
+    container: string | HTMLElement,
+    model: MapModel,
+    options: MapRendererOptions = {}
+  ): MapRenderer {
+    return new MapRenderer(
+      container,
+      denormalizeConfig(model),
+      denormalizeLayers(model),
+      { ...denormalizeOptions(model), ...options },
+      denormalizeSources(model)
+    );
+  }
 
   constructor(container: string | HTMLElement, config: MapConfig, layers: Layer[] = [], options: MapRendererOptions = {}, sources?: Record<string, LayerSource>) {
     this.eventListeners = new Map();
@@ -134,7 +185,7 @@ export class MapRenderer {
     };
 
     this.layerManager = new LayerManager(this.map, layerCallbacks);
-    this.eventHandler = new EventHandler(this.map, eventCallbacks);
+    this.eventHandler = new EventHandler(this.map, eventCallbacks, options.capabilities);
     this.legendBuilder = new LegendBuilder();
     this.controlsManager = new ControlsManager(this.map);
 

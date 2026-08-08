@@ -8,17 +8,31 @@ import { PopupContentSchema, PopupContentItemSchema } from "../schemas";
 import {
   escapeHtml,
   safeUrl,
+  isHtmlMarker,
   POPUP_TAGS,
   LINK_TARGETS,
 } from "../utils/html";
+import { allowsHtml, DEFAULT_POLICY, type CapabilityPolicy } from "../capabilities";
 
 type PopupContent = z.infer<typeof PopupContentSchema>;
 type PopupContentItem = z.infer<typeof PopupContentItemSchema>;
 
 /**
- * Builds popup HTML from configuration and feature properties
+ * Builds popup HTML from configuration and feature properties.
+ *
+ * @remarks
+ * Carries the capability policy, because whether an `!html`-marked value renders
+ * as markup or as escaped text is a trust decision, not a content one. The
+ * default policy is untrusted, so a builder constructed with no policy denies
+ * raw HTML — the safe default a host that has thought about none of this gets.
  */
 export class PopupBuilder {
+  private readonly policy: CapabilityPolicy;
+
+  constructor(policy: CapabilityPolicy = DEFAULT_POLICY) {
+    this.policy = policy;
+  }
+
   /**
    * Build HTML string from popup content config and feature properties
    */
@@ -56,8 +70,19 @@ export class PopupBuilder {
     item: PopupContentItem,
     properties: Record<string, any>
   ): string {
-    // Static string
+    // Static string, or an `!html`-marked one.
     if (item.str) {
+      if (isHtmlMarker(item.str)) {
+        // The marker is a request; the policy is the grant. Denied content is
+        // escaped and shown as text rather than dropped, so an author sees what
+        // they wrote and a warning explains why it is not live markup.
+        if (allowsHtml(this.policy)) return item.str.$html;
+        console.warn(
+          "[maplibre-yaml] An `!html` popup value was authored in a context " +
+            "that does not permit raw markup; rendering it as escaped text."
+        );
+        return escapeHtml(item.str.$html);
+      }
       return escapeHtml(item.str);
     }
 

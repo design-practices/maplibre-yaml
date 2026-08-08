@@ -1,0 +1,97 @@
+---
+title: Reusing values and blocks
+description: Anchors, aliases, and merge keys — YAML's own mechanisms for avoiding repetition in map documents
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Map documents repeat themselves: the same brand colour across six layers, the same source configuration for every layer reading one dataset, the same paint block with one property changed. YAML has native mechanisms for all of it, and maplibre-yaml supports them without adding anything of its own.
+
+These are worth knowing precisely because they cost nothing. They resolve while the file is being parsed, before validation and before anything reaches MapLibre — so the schema never sees them, and neither does the emitted style.
+
+## Anchors and aliases
+
+Name a value with `&name`, reuse it with `*name`.
+
+```yaml
+layers:
+  - id: parks
+    type: fill
+    source: landuse
+    paint:
+      fill-color: &green "#2f7d32"
+  - id: park-outlines
+    type: line
+    source: landuse
+    paint:
+      line-color: *green
+```
+
+Change `&green` and both layers change. The anchor can hold any value — a scalar, a list, or a whole mapping:
+
+```yaml
+sources:
+  parcels: &parcels
+    type: geojson
+    url: /data/parcels.geojson
+    promoteId: bbl
+  parcels_2020:
+    <<: *parcels
+    url: /data/parcels-2020.geojson
+```
+
+An anchor must be defined before it is used, so define shared values near the top of the document.
+
+## Merge keys
+
+`<<: *anchor` merges an anchored mapping into the current one. Keys you write alongside it win:
+
+```yaml
+layers:
+  - &base-parcel
+    id: parcels-built
+    type: fill-extrusion
+    source: parcels
+    paint:
+      fill-extrusion-color: "#8899aa"
+      fill-extrusion-opacity: 0.9
+
+  - <<: *base-parcel
+    id: parcels-proposed
+    paint:
+      fill-extrusion-color: "#cc7744"
+```
+
+This is layer inheritance, and it is ordinary YAML rather than a maplibre-yaml feature.
+
+<Aside type="caution" title="Merge is shallow">
+The merge replaces whole values, it does not merge into them. In the example above, `parcels-proposed` gets the new `fill-extrusion-color` and **loses** `fill-extrusion-opacity`, because the entire `paint` mapping was replaced.
+
+To keep the rest of a nested block, merge inside it too:
+
+```yaml
+  - <<: *base-parcel
+    id: parcels-proposed
+    paint:
+      <<: *base-paint
+      fill-extrusion-color: "#cc7744"
+```
+
+with `&base-paint` anchored on the original `paint` mapping.
+</Aside>
+
+## Why these and not a custom `extends:`
+
+A maplibre-yaml-specific inheritance keyword would need a place in the schema, a representation in the published JSON Schema, support in migration tooling, and awareness in anything that compiles a document. Anchors and merge keys need none of that: they resolve inside the YAML parser, so every downstream consumer sees an already-expanded document and cannot tell the difference.
+
+The trade is that merge is shallow and anchors must precede their use. That explicitness is the cost of the mechanism being free everywhere else.
+
+## Safety
+
+Aliases can be nested to expand a small document into an enormous one — the "billion laughs" attack. maplibre-yaml keeps the YAML library's alias-expansion limit switched on, so a document engineered this way is rejected with a parse error rather than expanded:
+
+```text
+YAML could not be expanded: Excessive alias count indicates a resource exhaustion attack
+```
+
+This matters wherever documents come from somewhere other than your own repository. It is a normal validation error, not a crash, so a collaborative editor or a validation endpoint can report it like any other malformed input.
