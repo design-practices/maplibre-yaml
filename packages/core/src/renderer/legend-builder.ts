@@ -5,6 +5,7 @@
 
 import type { z } from 'zod';
 import { LayerSchema, LegendConfigSchema, LegendItemSchema } from '../schemas';
+import { escapeHtml } from '../utils/html';
 
 type Layer = z.infer<typeof LayerSchema>;
 type LegendConfig = z.infer<typeof LegendConfigSchema>;
@@ -25,7 +26,7 @@ export class LegendBuilder {
 
     let html = '<div class="maplibre-legend">';
     if (config?.title) {
-      html += `<div class="legend-title">${this.escapeHtml(config.title)}</div>`;
+      html += `<div class="legend-title">${escapeHtml(config.title)}</div>`;
     }
     html += '<div class="legend-items">';
     for (const item of items) {
@@ -45,23 +46,23 @@ export class LegendBuilder {
 
     switch (shape) {
       case 'circle':
-        symbol = `<span class="legend-symbol circle" style="background:${this.escapeHtml(item.color)}"></span>`;
+        symbol = `<span class="legend-symbol circle" style="background:${escapeHtml(item.color)}"></span>`;
         break;
       case 'line':
-        symbol = `<span class="legend-symbol line" style="background:${this.escapeHtml(item.color)}"></span>`;
+        symbol = `<span class="legend-symbol line" style="background:${escapeHtml(item.color)}"></span>`;
         break;
       case 'icon':
         if (item.icon) {
-          symbol = `<span class="legend-symbol icon">${this.escapeHtml(item.icon)}</span>`;
+          symbol = `<span class="legend-symbol icon">${escapeHtml(item.icon)}</span>`;
         } else {
-          symbol = `<span class="legend-symbol square" style="background:${this.escapeHtml(item.color)}"></span>`;
+          symbol = `<span class="legend-symbol square" style="background:${escapeHtml(item.color)}"></span>`;
         }
         break;
       default:
-        symbol = `<span class="legend-symbol square" style="background:${this.escapeHtml(item.color)}"></span>`;
+        symbol = `<span class="legend-symbol square" style="background:${escapeHtml(item.color)}"></span>`;
     }
 
-    return `<div class="legend-item">${symbol}<span class="legend-label">${this.escapeHtml(item.label)}</span></div>`;
+    return `<div class="legend-item">${symbol}<span class="legend-label">${escapeHtml(item.label)}</span></div>`;
   }
 
   /**
@@ -73,15 +74,4 @@ export class LegendBuilder {
       .map((l) => l.legend as LegendItem);
   }
 
-  /**
-   * Escape HTML to prevent XSS
-   */
-  private escapeHtml(str: string): string {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
 }

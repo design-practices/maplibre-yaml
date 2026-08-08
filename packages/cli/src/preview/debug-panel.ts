@@ -239,6 +239,20 @@ export function getDebugPanelJS(): string {
     });
   });
 
+  // Event payloads carry feature properties from fetched sources, so they are
+  // untrusted data reaching an innerHTML sink -- escape like core does.
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, function (char) {
+      return {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[char];
+    });
+  }
+
   // Log events
   window.logDebugEvent = function(type, data) {
     eventCount++;
@@ -247,13 +261,14 @@ export function getDebugPanelJS(): string {
     item.className = 'event-item';
 
     const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+    const truncated = dataStr.substring(0, 100) + (dataStr.length > 100 ? '...' : '');
 
     item.innerHTML = \`
       <div>
-        <span class="event-time">\${time}</span>
-        <span class="event-type">\${type}</span>
+        <span class="event-time">\${escapeHtml(time)}</span>
+        <span class="event-type">\${escapeHtml(type)}</span>
       </div>
-      \${data ? '<div class="event-data">' + dataStr.substring(0, 100) + (dataStr.length > 100 ? '...' : '') + '</div>' : ''}
+      \${data ? '<div class="event-data">' + escapeHtml(truncated) + '</div>' : ''}
     \`;
 
     // Remove empty message if exists

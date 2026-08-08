@@ -204,4 +204,111 @@ describe("PopupBuilder", () => {
       expect(html).toBe("<p></p>");
     });
   });
+  // Popups render feature properties from fetched data, in documents that may
+  // have been authored by someone other than the person whose browser renders
+  // them. These are the vectors that were live before the hardening.
+  describe("injection hardening", () => {
+    it("drops a tag that is not on the allowlist", () => {
+      // The tag is a YAML key, so `script:` emitted a real <script> block.
+      const html = builder.build(
+        [{ script: [{ str: "alert(1)" }] }] as never,
+        {}
+      );
+      expect(html).toBe("");
+      expect(html).not.toContain("<script");
+    });
+
+    it("drops a tag carrying smuggled attributes", () => {
+      const html = builder.build(
+        [{ 'img src=x onerror=alert(1)': [{ str: "x" }] }] as never,
+        {}
+      );
+      expect(html).not.toContain("onerror");
+      expect(html).toBe("");
+    });
+
+    it("escapes a script payload arriving in a feature property", () => {
+      const html = builder.build([{ p: [{ property: "name" }] }] as never, {
+        name: '<img src=x onerror="alert(1)">',
+      });
+      expect(html).not.toContain("<img");
+      expect(html).toContain("&lt;img");
+    });
+
+    it("drops a javascript: link but keeps its text", () => {
+      // zod's .url() accepts `javascript:` as well-formed, so validation never
+      // caught this -- escaping does not touch it either.
+      const html = builder.build(
+        [{ a: [{ href: "javascript:alert(1)", text: "Click me" }] }] as never,
+        {}
+      );
+      expect(html).not.toContain("javascript:");
+      expect(html).not.toContain("<a ");
+      expect(html).toContain("Click me");
+    });
+
+    it("drops a data: image", () => {
+      const html = builder.build(
+        [
+          {
+            img: [{ src: "data:text/html,<script>alert(1)</script>" }],
+          },
+        ] as never,
+        {}
+      );
+      expect(html).not.toContain("data:text/html");
+    });
+
+    it("keeps a same-origin link and image", () => {
+      const html = builder.build(
+        [
+          { a: [{ href: "/about", text: "About" }] },
+          { p: [{ src: "/img/pin.png", alt: "Pin" }] },
+        ] as never,
+        {}
+      );
+      expect(html).toContain('href="/about"');
+      expect(html).toContain('src="/img/pin.png"');
+    });
+
+    it("cannot break out of the target attribute", () => {
+      const html = builder.build(
+        [
+          {
+            a: [
+              {
+                href: "https://example.com",
+                text: "x",
+                target: '_blank" onmouseover="alert(1)',
+              },
+            ],
+          },
+        ] as never,
+        {}
+      );
+      expect(html).not.toMatch(/onmouseover=(?!&)/);
+      expect(html).toContain('target="_blank"');
+    });
+
+    it("adds rel=noopener to a _blank link", () => {
+      const html = builder.build(
+        [{ a: [{ href: "https://example.com", text: "x" }] }] as never,
+        {}
+      );
+      expect(html).toContain('rel="noopener noreferrer"');
+    });
+
+    it("omits rel for a same-tab link", () => {
+      const html = builder.build(
+        [
+          {
+            a: [{ href: "https://example.com", text: "x", target: "_self" }],
+          },
+        ] as never,
+        {}
+      );
+      expect(html).toContain('target="_self"');
+      expect(html).not.toContain("rel=");
+    });
+  });
 });
