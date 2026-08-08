@@ -24,3 +24,6 @@ export {
   HOVER_INTERACTIONS,
   HOVER_FEATURE_STATE_KEY,
 } from "./built-ins";
+
+export { InteractionRegistry, createInteractionRegistry } from "./registry";
+export type { InteractionDenial } from "./registry";
