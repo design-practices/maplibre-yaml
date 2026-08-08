@@ -331,16 +331,25 @@ export class MLMap extends HTMLElement {
    */
   private renderMap(mapBlock: MapBlock): void {
     // Standalone <ml-map> has no global config to inherit defaultMapStyle from,
-    // so a missing mapStyle would die inside MapLibre with an opaque error.
-    // Surface a friendly error card instead. (Schema keeps mapStyle optional
-    // because the Astro builders legitimately resolve it from globalConfig.)
-    if (!mapBlock.config?.mapStyle) {
+    // so a missing basemap would die inside MapLibre with an opaque error.
+    // Surface a friendly error card instead. (Schema keeps it optional because
+    // the Astro builders legitimately resolve it from globalConfig.) The base
+    // style is `config.mapStyle` in v1 and `style.basemap` in v2, so the guard
+    // reads whichever the document's version puts it under.
+    const isV2 = (mapBlock as { version?: number }).version === 2;
+    const basemap = isV2
+      ? (mapBlock as unknown as { style?: { basemap?: unknown } }).style?.basemap
+      : mapBlock.config?.mapStyle;
+    if (!basemap) {
+      const path = isV2 ? "style.basemap" : "config.mapStyle";
+      const key = isV2 ? "basemap" : "mapStyle";
+      const where = isV2 ? "your style:" : "your config";
       this.handleError([
         {
-          path: "config.mapStyle",
+          path,
           message:
-            "mapStyle is required for standalone maps. Add it to your config, for example: " +
-            'mapStyle: "https://demotiles.maplibre.org/style.json" ' +
+            `${key} is required for standalone maps. Add it to ${where}, for example: ` +
+            `${key}: "https://demotiles.maplibre.org/style.json" ` +
             "(inheriting a defaultMapStyle is a feature of the Astro builders, not the standalone <ml-map> element).",
         },
       ]);
