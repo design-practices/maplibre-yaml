@@ -1,6 +1,6 @@
 {
   "name": "@maplibre-yaml/core",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Core library for declarative MapLibre maps with YAML",
   "type": "module",
   "main": "./dist/index.js",

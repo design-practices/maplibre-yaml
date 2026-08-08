@@ -1,5 +1,12 @@
 # @maplibre-yaml/cli
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [328661a]
+  - @maplibre-yaml/core@0.5.0
+
 ## 0.2.1
 
 ### Patch Changes
