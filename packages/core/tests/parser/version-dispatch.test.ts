@@ -116,10 +116,17 @@ layers:
   });
 });
 
-describe("toModel (U1)", () => {
-  it("throws the v2 stub error for a version: 2 block", () => {
-    expect(() => toModel({ version: 2 } as never)).toThrow(
-      /readV2Block\).*not yet implemented|not yet implemented/i
+describe("toModel (U3 replaced the v2 stub)", () => {
+  it("routes a version: 2 block to readV2Block, producing a model", () => {
+    const model = toModel({
+      version: 2,
+      type: "map",
+      id: "v2",
+      style: { basemap: "https://demotiles.maplibre.org/style.json" },
+    } as never);
+    expect(model.id).toBe("v2");
+    expect(model.style.basemap).toBe(
+      "https://demotiles.maplibre.org/style.json"
     );
   });
 });

@@ -264,10 +264,16 @@ style:
   });
 });
 
-describe("v2 → model seam is still a stub (U3 owns it)", () => {
-  it("toModel throws the v2 stub for a version: 2 block", () => {
+describe("v2 → model seam (U3 landed readV2Block)", () => {
+  it("toModel turns the appendix v2 block into a model", () => {
     const result = YAMLParser.safeParseMapBlock(APPENDIX_V2);
     expect(result.success).toBe(true);
-    expect(() => toModel(result.data as never)).toThrow(/not yet implemented/i);
+    const model = toModel(result.data as never);
+    expect(model.id).toBe("underbuilt");
+    expect(model.style.basemap).toBe(
+      "https://demotiles.maplibre.org/style.json"
+    );
+    // The v2 runtime.map carries v1's interactive default (AE2).
+    expect(model.runtime.map).toMatchObject({ interactive: true });
   });
 });

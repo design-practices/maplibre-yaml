@@ -130,15 +130,51 @@ export const SourceRuntimeSchema = z
   .passthrough()
   .describe("Per-source live-data configuration (v2 `source.runtime`)");
 
-/** Attach the optional v2 `runtime:` key to a reused source spec object. */
+/** The unwrapped geojson object, reused for both its spec body and runtime. */
+const geojsonBaseObject = baseObject(GeoJSONSourceSchema);
+
+/**
+ * The geojson v2 source runtime — {@link SourceRuntimeSchema} plus a
+ * defaulting `fetchStrategy`.
+ *
+ * @remarks
+ * v1's geojson source materializes `fetchStrategy: "runtime"` (its `.default`)
+ * on *every* source, and `normalizeSource` partitions that into
+ * `source.runtime`. The v2 geojson spec body omits `fetchStrategy`
+ * ({@link SOURCE_RUNTIME_OMIT}) so it never leaks into the emitted `style.json`;
+ * to keep AE2 exact the field is re-introduced *here*, composed from the same v1
+ * definition so it carries the same default. Combined with the defaulted runtime
+ * below, a v2 geojson source normalizes to the identical model as its v1 twin —
+ * even when it omits `runtime:` entirely. `fetchStrategy` is geojson-specific in
+ * v1 (no other source type defaults a runtime key), so only this variant
+ * materializes it.
+ */
+export const GeoJSONSourceRuntimeSchema = SourceRuntimeSchema.extend({
+  // Reuse the exact v1 field definition (carries `.default("runtime")`). The
+  // `.shape` index is typed `ZodTypeAny | undefined`; the key is known-present.
+  fetchStrategy: geojsonBaseObject.shape.fetchStrategy as z.ZodTypeAny,
+})
+  .passthrough()
+  .describe("Per-source live-data configuration (v2 geojson `source.runtime`)");
+
+/**
+ * Attach the v2 `runtime:` key to a reused source spec object.
+ *
+ * @param materialize - when true the runtime `.default({})`s so a source that
+ *   omits `runtime:` still fires the runtime's own field defaults (geojson's
+ *   `fetchStrategy`); otherwise the runtime is simply optional.
+ */
 function withSourceRuntime(
-  spec: z.ZodObject<z.ZodRawShape>
+  spec: z.ZodObject<z.ZodRawShape>,
+  runtimeSchema: z.ZodTypeAny = SourceRuntimeSchema,
+  materialize = false
 ): z.ZodTypeAny {
   return spec
     .extend({
-      runtime: SourceRuntimeSchema.optional().describe(
-        "Per-source live-data configuration"
-      ),
+      runtime: (materialize
+        ? runtimeSchema.default({})
+        : runtimeSchema.optional()
+      ).describe("Per-source live-data configuration"),
     })
     .passthrough();
 }
@@ -154,7 +190,11 @@ function withSourceRuntime(
  * v1 position (`source.refresh`) surfaces as an unknown-key warning.
  */
 export const SourceV2Schema: z.ZodTypeAny = z.union([
-  withSourceRuntime(baseObject(GeoJSONSourceSchema).omit(SOURCE_RUNTIME_OMIT)),
+  withSourceRuntime(
+    geojsonBaseObject.omit(SOURCE_RUNTIME_OMIT),
+    GeoJSONSourceRuntimeSchema,
+    true
+  ),
   withSourceRuntime(baseObject(VectorSourceSchema)),
   withSourceRuntime(baseObject(RasterSourceSchema)),
   withSourceRuntime(baseObject(RasterDEMSourceSchema)),
@@ -261,9 +301,22 @@ export const StyleV2Schema: z.ZodTypeAny = z
   .passthrough()
   .describe("The style half — everything that erases to `style.json`");
 
-/** A passthrough record of MapLibre `Map` constructor options. */
+/**
+ * A passthrough record of MapLibre `Map` constructor options.
+ *
+ * @remarks
+ * `interactive` is composed from the **same** {@link MapConfigSchema} field v1
+ * uses, so it carries v1's `.default(true)`. This is the AE2 linchpin: v1's
+ * `config.interactive` always materializes into `runtime.map.interactive: true`,
+ * so the v2 `runtime.map` must too — otherwise a minimal v1 doc and its v2 twin
+ * diverge on exactly this key. The default fires even when the document omits
+ * `runtime:` entirely, because `runtime` and `runtime.map` default to `{}` up
+ * the chain (see {@link RuntimeV2Schema} and {@link MapBlockV2Schema}).
+ */
 export const RuntimeMapSchema = z
-  .object({})
+  .object({
+    interactive: MapConfigSchema.shape.interactive,
+  })
   .passthrough()
   .describe("MapLibre `Map` constructor options (minZoom, scrollZoom, ...)");
 
@@ -277,7 +330,9 @@ markOpenSchema(RuntimeMapSchema);
  */
 export const RuntimeV2Schema: z.ZodTypeAny = z
   .object({
-    map: RuntimeMapSchema.optional().describe(
+    // `.default({})` so the `interactive` default inside RuntimeMapSchema fires
+    // even when a document writes `runtime:` without a `map:` block.
+    map: RuntimeMapSchema.default({}).describe(
       "MapLibre `Map` constructor options"
     ),
     controls: ControlsConfigSchema.optional().describe("Map controls"),
@@ -324,7 +379,10 @@ export const MapBlockV2Schema: z.ZodObject<any> = z
     type: z.literal("map").describe("Block type"),
     id: z.string().describe("Unique block identifier"),
     style: StyleV2Schema,
-    runtime: RuntimeV2Schema.optional().describe("The runtime half"),
+    // `.default({})` so a document that omits `runtime:` still normalizes to the
+    // same model as its v1 twin — `runtime.map.interactive: true` fires up the
+    // default chain (RuntimeV2Schema.map → RuntimeMapSchema.interactive).
+    runtime: RuntimeV2Schema.default({}).describe("The runtime half"),
     state: StateSchema.optional().describe(
       "Runtime-tunable values (may live here or under `style:`)"
     ),

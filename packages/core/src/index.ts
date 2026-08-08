@@ -28,6 +28,7 @@ export * from "./ui";
 export {
   normalizeMapBlock,
   toModel,
+  readV2Block,
   normalizeLayer,
   normalizeSource,
   denormalizeConfig,

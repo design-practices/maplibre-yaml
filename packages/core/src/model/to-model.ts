@@ -11,7 +11,9 @@
  */
 
 import type { MapModel, V1MapInput } from "./types";
+import type { MapBlockV2 } from "../schemas/map-v2.schema";
 import { normalizeMapBlock } from "./normalize";
+import { readV2Block } from "./read-v2";
 
 /**
  * Turn a parsed block into the internal model, selecting the reader by version.
@@ -20,16 +22,14 @@ import { normalizeMapBlock } from "./normalize";
  * @returns The internal {@link MapModel}.
  *
  * @remarks
- * `version: 2` routes to the v2 reader, which lands in U3; until then the branch
- * is a marked stub that throws. Absent or `version: 1` is the v1 normalizer,
- * unchanged.
+ * `version: 2` routes to {@link readV2Block} (U3). Absent or `version: 1` is the
+ * v1 normalizer, unchanged.
  */
 export function toModel(
   block: { version?: number } & Record<string, unknown>
 ): MapModel {
   if (block.version === 2) {
-    // STUB until U3 lands readV2Block.
-    throw new Error("Format v2 reader (readV2Block) is not yet implemented.");
+    return readV2Block(block as unknown as MapBlockV2);
   }
   return normalizeMapBlock(block as unknown as V1MapInput);
 }
