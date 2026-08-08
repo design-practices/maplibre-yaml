@@ -53,12 +53,16 @@ layers:
     expect(rest).toEqual(b);
   });
 
-  it("routes `version: 2` to the v2 stub branch", () => {
+  it("routes `version: 2` to the v2 schema (U2 replaced the stub)", () => {
+    // The v2 branch now validates against MapBlockV2Schema. A v1-SHAPED doc
+    // (with `config:`, no `style:`) tagged `version: 2` is dispatched there and
+    // fails the v2 shape — the stub "not yet implemented" message is gone.
     const result = YAMLParser.safeParseMapBlock(v1Map("version: 2"));
     expect(result.success).toBe(false);
-    expect(result.errors.map((e) => e.message).join(" ")).toMatch(
-      /v2 parsing is not yet implemented/i
-    );
+    const message = result.errors.map((e) => e.message).join(" ");
+    expect(message).not.toMatch(/not yet implemented/i);
+    // The v2 schema requires a `style:` object; the v1 doc has none.
+    expect(result.errors.some((e) => e.path.startsWith("style"))).toBe(true);
   });
 
   it("rejects a version above the ceiling, naming the version and the max", () => {

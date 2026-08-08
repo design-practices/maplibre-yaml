@@ -244,6 +244,7 @@ function toJSSafe(doc: Document): { value: unknown } | { error: ParseError } {
 import { ZodError, type ZodIssue } from "zod";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
+import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
 import type { z } from "zod";
 import {
@@ -761,7 +762,9 @@ export class YAMLParser {
    * }
    * ```
    */
-  static safeParseMapBlock(yaml: string): ParseResult<MapBlock> {
+  static safeParseMapBlock(
+    yaml: string
+  ): ParseResult<MapBlock | MapBlockV2> {
     // One materialization feeds both version detection and validation, so the
     // fan-out DoS guard (in materialize → toJSSafe) runs before the version tag
     // is ever read — a hostile v2-tagged document is refused, not expanded.
@@ -776,16 +779,18 @@ export class YAMLParser {
     }
 
     if (detected.version === 2) {
-      // STUB until U2/U3 land — detection routes here; the real v2 schema is
-      // wired in U2 and its reader in U3. Detection landing here at all is what
-      // the version-dispatch tests assert.
-      return {
-        success: false,
-        errors: [
-          { path: "", message: "Format v2 parsing is not yet implemented." },
-        ],
-        warnings: [],
-      };
+      // v2 validates against MapBlockV2Schema (U2). `resolveRefs: false`: v2
+      // reuses YAML-native anchors/merge, already resolved at parse via
+      // toJSSafe — the v1 `{$ref}` JSON-pointer resolution is a v1 affordance.
+      // Turning the validated block into a MapModel is U3's job (the `toModel`
+      // v2 branch stays a stub).
+      return this.validateAgainst(
+        m.value,
+        m.doc,
+        m.lineCounter,
+        MapBlockV2Schema,
+        false
+      );
     }
 
     // Refs are resolved here too: a standalone block carries its own

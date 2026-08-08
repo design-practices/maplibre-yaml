@@ -151,6 +151,19 @@ export type {
   Parameters,
 } from "./map.schema";
 
+// Format-v2 map schema (U2 — validation only)
+export {
+  SourceRuntimeSchema,
+  SourceV2Schema,
+  LayerRuntimeSchema,
+  LayerV2Schema,
+  StyleV2Schema,
+  RuntimeMapSchema,
+  RuntimeV2Schema,
+  MapBlockV2Schema,
+} from "./map-v2.schema";
+export type { MapBlockV2 } from "./map-v2.schema";
+
 // Scrollytelling schemas and types
 export {
   ChapterActionSchema,
