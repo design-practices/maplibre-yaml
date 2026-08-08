@@ -25,8 +25,26 @@ export * from "./ui";
 export * from "./model";
 
 // Emitter — projects the model's style half to spec-valid style.json
-export { projectStyle, EmitError, mergeBasemap, resolveBasemap } from "./emitter";
-export type { EmitMode, EmitWarning, EmitResult, LayerPlacement, BasemapFetcher } from "./emitter";
+export { projectStyle, EmitError, mergeBasemap, resolveBasemap, applyRuntimeGate } from "./emitter";
+export type {
+  EmitMode,
+  EmitWarning,
+  EmitWarningKind,
+  EmitResult,
+  LayerPlacement,
+  BasemapFetcher,
+} from "./emitter";
+
+// Capability policy — what a document may do, given where it is compiled
+export {
+  STATE_RUNTIME_FLOOR,
+  DEFAULT_POLICY,
+  meetsVersion,
+  supportsState,
+  allowsHtml,
+  allowsOrigin,
+} from "./capabilities";
+export type { CapabilityPolicy, TrustContext } from "./capabilities";
 
 // Utils
 export { EventEmitter } from "./utils/event-emitter";

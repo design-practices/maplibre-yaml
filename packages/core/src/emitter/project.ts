@@ -29,10 +29,23 @@ import type { MapModel, LayerModel } from "../model/types";
 /** How unrepresentable content is handled. */
 export type EmitMode = "strict" | "with-fallbacks";
 
+/**
+ * Why a piece of the document is not in the emitted style.
+ *
+ * @remarks
+ * The distinction decides what `--strict` does. Dropping `runtime:` content is
+ * the *contract* — it is what emit means, and erroring on it would reject
+ * essentially every real document, including the reference one in this repo's
+ * own plan. A `lossy` warning is different: something the author asked for
+ * could not be represented, and its absence changes what the map shows.
+ */
+export type EmitWarningKind = "contract" | "lossy";
+
 export interface EmitWarning {
   /** Dotted path into the emitted style, where one applies. */
   path: string;
   message: string;
+  kind: EmitWarningKind;
 }
 
 /** Where a document layer wants to sit, by id. */
@@ -196,11 +209,16 @@ export function projectStyle(
   for (const [name, source] of Object.entries(model.style.sources)) {
     sources[name] = isPlainObject(source.spec) ? { ...source.spec } : source.spec;
     if (Object.keys(source.runtime).length > 0) {
+      const hasData = isPlainObject(source.spec) && "data" in source.spec;
       warnings.push({
         path: `sources.${name}`,
-        message:
-          `Live-data configuration (${Object.keys(source.runtime).join(", ")}) ` +
-          "does not compile; the emitted source carries whatever data was present.",
+        kind: hasData ? "contract" : "lossy",
+        message: hasData
+          ? `Live-data configuration (${Object.keys(source.runtime).join(", ")}) ` +
+            "does not compile; the emitted source carries the data present at compile time."
+          : `Live-data configuration (${Object.keys(source.runtime).join(", ")}) ` +
+            "does not compile, and this source has no compile-time data — the " +
+            "emitted style renders it empty.",
       });
     }
   }
@@ -222,6 +240,7 @@ export function projectStyle(
       if (dropped.length > 0) {
         warnings.push({
           path: `layers.${id}`,
+          kind: "contract",
           message: `${dropped.join(", ")} do not compile and are absent from the emitted style.`,
         });
       }
@@ -252,15 +271,22 @@ export function projectStyle(
   if (runtimeKeys.length > 0) {
     warnings.push({
       path: "runtime.map",
+      kind: "contract",
       message:
         `Map options (${runtimeKeys.join(", ")}) are constructor-only and have no ` +
         "style-spec equivalent; the emitted style uses MapLibre's defaults.",
     });
   }
 
-  if (mode === "strict" && warnings.length > 0) {
+  // `--strict` means no *lossy* degradation was required, not "the document
+  // declares no runtime content". The literal second reading would reject
+  // essentially every document ever written in this format, which would make
+  // the flag useless rather than strict.
+  const lossy = warnings.filter((w) => w.kind === "lossy");
+  if (mode === "strict" && lossy.length > 0) {
     throw new EmitError(
-      `Emit failed in strict mode: ${warnings.length} item(s) could not be represented.`,
+      `Emit failed in strict mode: ${lossy.length} item(s) could not be represented ` +
+        "without changing what the map shows.",
       warnings
     );
   }

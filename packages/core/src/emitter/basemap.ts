@@ -86,6 +86,7 @@ export function mergeBasemap(base: unknown, projected: EmitResult): EmitResult {
     if (name in sources) {
       warnings.push({
         path: `sources.${name}`,
+        kind: "lossy",
         message:
           `Source "${name}" shadows one of the same name in the basemap. ` +
           "The document's definition is used.",
@@ -105,6 +106,7 @@ export function mergeBasemap(base: unknown, projected: EmitResult): EmitResult {
     if (byId.has(id)) {
       warnings.push({
         path: `layers.${id}`,
+        kind: "lossy",
         message:
           `Layer "${id}" shadows one of the same name in the basemap. ` +
           "The document's definition replaces it in place.",
@@ -134,6 +136,7 @@ export function mergeBasemap(base: unknown, projected: EmitResult): EmitResult {
     if (index === -1) {
       warnings.push({
         path: `layers.${id}`,
+        kind: "lossy",
         message:
           `\`before: ${before}\` names a layer that is in neither the document ` +
           "nor the basemap; this layer is appended instead.",

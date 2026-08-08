@@ -125,12 +125,29 @@ describe("projectStyle — the runtime half degrades", () => {
     expect(warnings.map((w) => w.message).join(" ")).toMatch(/minZoom|scrollZoom/);
   });
 
-  it("errors in strict mode rather than degrading", () => {
+  it("accepts erasure under --strict, because that is the contract", () => {
+    // A live source that HAS compile-time data degrades to a snapshot, which is
+    // what emit means. Erroring here would reject essentially every document.
+    const { warnings } = emit(
+      {
+        ...base,
+        sources: { s: { ...emptyGeojson, refresh: { refreshInterval: 5000 } } },
+        layers: [{ id: "a", type: "circle", source: "s" }],
+      },
+      "strict"
+    );
+    expect(warnings.every((w) => w.kind === "contract")).toBe(true);
+  });
+
+  it("errors under --strict when the loss changes what the map shows", () => {
+    // No compile-time data to fall back on: the emitted source renders empty.
     expect(() =>
       emit(
         {
           ...base,
-          sources: { s: { ...emptyGeojson, refresh: { refreshInterval: 5000 } } },
+          sources: {
+            s: { type: "geojson", url: "/live.geojson", refresh: { refreshInterval: 5000 } },
+          },
           layers: [{ id: "a", type: "circle", source: "s" }],
         },
         "strict"
