@@ -16,6 +16,7 @@ export type {
   InteractiveConfig,
   ClickConfig,
   FlyToConfig,
+  ZoomToFeatureConfig,
 } from "./types";
 export { defineInteraction, stateless } from "./types";
 
@@ -24,6 +25,9 @@ export {
   HOVER_INTERACTIONS,
   HOVER_FEATURE_STATE_KEY,
 } from "./built-ins";
+
+export { geometryBounds } from "./geometry-bounds";
+export type { Bounds } from "./geometry-bounds";
 
 export { InteractionRegistry, createInteractionRegistry } from "./registry";
 export type { InteractionDenial } from "./registry";

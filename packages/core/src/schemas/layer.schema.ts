@@ -234,6 +234,22 @@ export const InteractiveConfigSchema = z
           })
           .optional()
           .describe("Fly to location on click"),
+        zoomToFeature: z
+          .object({
+            padding: z
+              .number()
+              .optional()
+              .describe("Padding in pixels around the fitted bounds"),
+            maxZoom: ZoomLevelSchema.optional().describe(
+              "Maximum zoom level when fitting the feature's bounds"
+            ),
+            duration: z
+              .number()
+              .optional()
+              .describe("Animation duration in milliseconds"),
+          })
+          .optional()
+          .describe("Fit the camera to the clicked feature's own bounds on click"),
       })
       .optional()
       .describe("Click behavior"),

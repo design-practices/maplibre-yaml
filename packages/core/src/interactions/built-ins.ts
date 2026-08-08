@@ -7,22 +7,32 @@
  * each registry array is behavior — see the per-array remarks.
  */
 
-import type { Map as MapLibreMap, FlyToOptions } from "maplibre-gl";
+import type {
+  Map as MapLibreMap,
+  FlyToOptions,
+  FitBoundsOptions,
+} from "maplibre-gl";
 import {
   defineInteraction,
   stateless,
   type Interaction,
   type PopupContent,
   type FlyToConfig,
+  type ZoomToFeatureConfig,
 } from "./types";
+import { geometryBounds } from "./geometry-bounds";
 
 /**
  * Click interactions, in dispatch order.
  *
  * @remarks
- * Order is behavior: `popup` runs before `flyTo` so the popup opens at the
- * clicked point and then travels with the camera. Adding an interaction means
- * adding an entry here, not another branch in the click handler.
+ * Order is behavior: `popup` runs before the camera interactions (`flyTo`,
+ * `zoomToFeature`) so the popup opens at the clicked point and then travels
+ * with the camera. `flyTo` and `zoomToFeature` are mutually exclusive in
+ * practice — one flies to author-fixed coordinates, the other fits the clicked
+ * feature's own bounds — so their relative order is inert; what matters is that
+ * both follow popup. Adding an interaction means adding an entry here, not
+ * another branch in the click handler.
  */
 export const CLICK_INTERACTIONS: readonly Interaction[] = [
   defineInteraction<PopupContent>({
@@ -46,6 +56,26 @@ export const CLICK_INTERACTIONS: readonly Interaction[] = [
       if (config.duration !== undefined) options.duration = config.duration;
 
       ctx.map.flyTo(options);
+    }),
+  }),
+  defineInteraction<ZoomToFeatureConfig>({
+    name: "zoomToFeature",
+    select: (trigger) => trigger.zoomToFeature,
+    create: stateless((config: ZoomToFeatureConfig, ctx) => {
+      // Fit the camera to the clicked feature's *own* bounds — the flyTo
+      // sibling that reads geometry rather than author-fixed coordinates.
+      const bounds = geometryBounds(ctx.feature?.geometry);
+      // Missing/empty geometry has nothing to fit: no-op, never throw.
+      if (!bounds) return;
+
+      // Omit unset options so MapLibre's own defaults apply. `!== undefined`
+      // rather than truthiness, because 0 is meaningful for padding/duration.
+      const options: FitBoundsOptions = {};
+      if (config.padding !== undefined) options.padding = config.padding;
+      if (config.maxZoom !== undefined) options.maxZoom = config.maxZoom;
+      if (config.duration !== undefined) options.duration = config.duration;
+
+      ctx.map.fitBounds(bounds, options);
     }),
   }),
 ];

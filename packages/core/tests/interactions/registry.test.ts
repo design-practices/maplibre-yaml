@@ -29,7 +29,7 @@ describe("InteractionRegistry — resolution", () => {
   it("resolves each built-in name to its handler", () => {
     const registry = createInteractionRegistry();
 
-    for (const name of ["popup", "flyTo", "highlight"]) {
+    for (const name of ["popup", "flyTo", "zoomToFeature", "highlight"]) {
       const result = registry.resolve(name);
       expect(isDenied(result)).toBe(false);
       expect((result as Interaction).name).toBe(name);
@@ -57,11 +57,12 @@ describe("InteractionRegistry — resolution", () => {
 });
 
 describe("InteractionRegistry — order is behavior", () => {
-  it("preserves click dispatch order: popup before flyTo", () => {
+  it("preserves click dispatch order: popup before the camera interactions", () => {
     const registry = createInteractionRegistry();
     expect(registry.clickInteractions().map((i) => i.name)).toEqual([
       "popup",
       "flyTo",
+      "zoomToFeature",
     ]);
   });
 
@@ -99,7 +100,7 @@ describe("InteractionRegistry — instance, not singleton", () => {
       ...r.clickInteractions().map((i) => i.name),
       ...r.hoverInteractions().map((i) => i.name),
     ];
-    expect(names(a)).toEqual(["popup", "flyTo", "highlight"]);
+    expect(names(a)).toEqual(["popup", "flyTo", "zoomToFeature", "highlight"]);
     expect(names(a)).toEqual(names(b));
   });
 });

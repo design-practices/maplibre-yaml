@@ -26,6 +26,17 @@ export type ClickConfig = NonNullable<NonNullable<InteractiveConfig>["click"]>;
 export type FlyToConfig = NonNullable<ClickConfig["flyTo"]>;
 
 /**
+ * Config for the `zoomToFeature` interaction, derived from the layer schema.
+ *
+ * @remarks
+ * The camera-fitting sibling of {@link FlyToConfig}: `flyTo` flies to
+ * author-fixed coordinates, `zoomToFeature` fits the clicked feature's own
+ * bounds. Deriving the type from the schema keeps a new field there a type
+ * error here rather than a silently dropped option.
+ */
+export type ZoomToFeatureConfig = NonNullable<ClickConfig["zoomToFeature"]>;
+
+/**
  * What every interaction receives when its trigger fires.
  */
 export interface InteractionContext {

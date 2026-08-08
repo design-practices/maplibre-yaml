@@ -1068,6 +1068,28 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                     "patternProperties": {
                                       "^x-": {}
                                     }
+                                  },
+                                  "zoomToFeature": {
+                                    "type": "object",
+                                    "properties": {
+                                      "padding": {
+                                        "type": "number",
+                                        "description": "Padding in pixels around the fitted bounds"
+                                      },
+                                      "maxZoom": {
+                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/minZoom",
+                                        "description": "Maximum zoom level when fitting the feature's bounds"
+                                      },
+                                      "duration": {
+                                        "type": "number",
+                                        "description": "Animation duration in milliseconds"
+                                      }
+                                    },
+                                    "additionalProperties": false,
+                                    "description": "Fit the camera to the clicked feature's own bounds on click",
+                                    "patternProperties": {
+                                      "^x-": {}
+                                    }
                                   }
                                 },
                                 "additionalProperties": false,
@@ -4384,6 +4406,28 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                 "patternProperties": {
                                   "^x-": {}
                                 }
+                              },
+                              "zoomToFeature": {
+                                "type": "object",
+                                "properties": {
+                                  "padding": {
+                                    "type": "number",
+                                    "description": "Padding in pixels around the fitted bounds"
+                                  },
+                                  "maxZoom": {
+                                    "$ref": "#/$defs/map/properties/config/properties/minZoom",
+                                    "description": "Maximum zoom level when fitting the feature's bounds"
+                                  },
+                                  "duration": {
+                                    "type": "number",
+                                    "description": "Animation duration in milliseconds"
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "description": "Fit the camera to the clicked feature's own bounds on click",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
                               }
                             },
                             "additionalProperties": false,
@@ -6826,6 +6870,28 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                             },
                             "additionalProperties": false,
                             "description": "Fly to location on click",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          },
+                          "zoomToFeature": {
+                            "type": "object",
+                            "properties": {
+                              "padding": {
+                                "type": "number",
+                                "description": "Padding in pixels around the fitted bounds"
+                              },
+                              "maxZoom": {
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
+                                "description": "Maximum zoom level when fitting the feature's bounds"
+                              },
+                              "duration": {
+                                "type": "number",
+                                "description": "Animation duration in milliseconds"
+                              }
+                            },
+                            "additionalProperties": false,
+                            "description": "Fit the camera to the clicked feature's own bounds on click",
                             "patternProperties": {
                               "^x-": {}
                             }
@@ -10310,6 +10376,28 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                 },
                                 "additionalProperties": false,
                                 "description": "Fly to location on click",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
+                              },
+                              "zoomToFeature": {
+                                "type": "object",
+                                "properties": {
+                                  "padding": {
+                                    "type": "number",
+                                    "description": "Padding in pixels around the fitted bounds"
+                                  },
+                                  "maxZoom": {
+                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/minZoom",
+                                    "description": "Maximum zoom level when fitting the feature's bounds"
+                                  },
+                                  "duration": {
+                                    "type": "number",
+                                    "description": "Animation duration in milliseconds"
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "description": "Fit the camera to the clicked feature's own bounds on click",
                                 "patternProperties": {
                                   "^x-": {}
                                 }

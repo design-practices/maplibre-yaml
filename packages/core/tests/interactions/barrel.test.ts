@@ -16,7 +16,11 @@ import {
 // the move — that every currently-exported symbol still exports by name.
 describe("interactions barrel", () => {
   it("exposes the built-in registries", () => {
-    expect(CLICK_INTERACTIONS.map((i) => i.name)).toEqual(["popup", "flyTo"]);
+    expect(CLICK_INTERACTIONS.map((i) => i.name)).toEqual([
+      "popup",
+      "flyTo",
+      "zoomToFeature",
+    ]);
     expect(HOVER_INTERACTIONS.map((i) => i.name)).toEqual(["highlight"]);
     expect(HOVER_FEATURE_STATE_KEY).toBe("hover");
   });

@@ -107,12 +107,43 @@ describe("InteractiveConfigSchema", () => {
     expect(InteractiveConfigSchema.parse(config)).toMatchObject(config);
   });
 
-  it("accepts custom actions", () => {
+  it("accepts click with zoomToFeature", () => {
     const config = {
-      mouseenter: { action: "highlight" },
-      mouseleave: { action: "unhighlight" },
+      click: {
+        zoomToFeature: {
+          padding: 40,
+          maxZoom: 15,
+          duration: 800,
+        },
+      },
     };
     expect(InteractiveConfigSchema.parse(config)).toMatchObject(config);
+  });
+
+  it("accepts an empty zoomToFeature (all fields optional)", () => {
+    const config = { click: { zoomToFeature: {} } };
+    expect(InteractiveConfigSchema.parse(config)).toMatchObject(config);
+  });
+
+  it("accepts flyTo and zoomToFeature together with popup", () => {
+    const config = {
+      click: {
+        popup: [{ h3: [{ property: "name" }] }],
+        flyTo: { zoom: 12 },
+        zoomToFeature: { padding: 20 },
+      },
+    };
+    expect(InteractiveConfigSchema.parse(config)).toMatchObject(config);
+  });
+
+  it("strips a code-shaped field from zoomToFeature (declarative only)", () => {
+    // zoomToFeature is declarative — no code/selector fields. The object is not
+    // `.passthrough()`, so an imperative field is stripped rather than carried.
+    const result = InteractiveConfigSchema.parse({
+      click: { zoomToFeature: { padding: 10, code: "map.remove()" } },
+    });
+    expect(result?.click?.zoomToFeature).toEqual({ padding: 10 });
+    expect(result?.click?.zoomToFeature).not.toHaveProperty("code");
   });
 });
 
