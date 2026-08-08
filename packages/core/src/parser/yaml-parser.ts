@@ -489,26 +489,54 @@ export class YAMLParser {
   }
 
   /**
-   * Shared safe-parse implementation with position mapping and warnings.
+   * Parse YAML once and materialize it, converting failures into errors.
    *
    * @internal
+   * @remarks
+   * The two failure modes of the single-parse pipeline — a YAML syntax error
+   * from {@link parseToDocument} and an expansion/merge failure from
+   * {@link toJSSafe} (the merge-fan-out DoS guard) — both come back as
+   * `{ error }`. On success the caller gets the materialized `value` plus the
+   * `doc`/`lineCounter` needed to position schema issues, so a caller that must
+   * inspect the value *before* choosing a schema (version detection) can do so
+   * on this one materialization rather than parsing twice.
    */
-  private static safeParseWithSchema<T>(
-    yaml: string,
-    schema: z.ZodType<T>,
-    resolveRefs: boolean
-  ): ParseResult<T> {
+  private static materialize(
+    yaml: string
+  ):
+    | { value: unknown; doc: Document; lineCounter: LineCounter }
+    | { error: ParseError } {
     const { doc, lineCounter, syntaxError } = this.parseToDocument(yaml);
     if (syntaxError) {
-      return { success: false, errors: [syntaxError], warnings: [] };
+      return { error: syntaxError };
     }
 
     const materialized = toJSSafe(doc);
     if ("error" in materialized) {
-      return { success: false, errors: [materialized.error], warnings: [] };
+      return { error: materialized.error };
     }
-    const value = materialized.value;
 
+    return { value: materialized.value, doc, lineCounter };
+  }
+
+  /**
+   * Validate an already-materialized value against a schema.
+   *
+   * @internal
+   * @remarks
+   * The tail of the single-parse pipeline: collect warnings, run the Zod
+   * schema, format any issues against the source positions, then resolve
+   * references. Split out of {@link safeParseWithSchema} so version detection
+   * can pick the schema after one {@link materialize}; the `doc`/`lineCounter`
+   * are threaded through purely for position mapping.
+   */
+  private static validateAgainst<T>(
+    value: unknown,
+    doc: Document,
+    lineCounter: LineCounter,
+    schema: z.ZodType<T>,
+    resolveRefs: boolean
+  ): ParseResult<T> {
     // Warnings are collected from the raw value regardless of validity so
     // typos and deprecations still surface when other hard errors are present.
     const warnings = collectWarnings(
@@ -553,6 +581,88 @@ export class YAMLParser {
     }
 
     return { success: true, data: result.data, warnings, errors: [] };
+  }
+
+  /**
+   * Shared safe-parse implementation with position mapping and warnings.
+   *
+   * @internal
+   * @remarks
+   * A single {@link materialize} feeding {@link validateAgainst}. Callers that
+   * validate against a fixed schema (RootSchema, scrollytelling) use this;
+   * {@link safeParseMapBlock} inlines the same two steps so it can pick the
+   * schema by version between them.
+   */
+  private static safeParseWithSchema<T>(
+    yaml: string,
+    schema: z.ZodType<T>,
+    resolveRefs: boolean
+  ): ParseResult<T> {
+    const materialized = this.materialize(yaml);
+    if ("error" in materialized) {
+      return { success: false, errors: [materialized.error], warnings: [] };
+    }
+    return this.validateAgainst(
+      materialized.value,
+      materialized.doc,
+      materialized.lineCounter,
+      schema,
+      resolveRefs
+    );
+  }
+
+  /**
+   * Detect the declared format version off a materialized document.
+   *
+   * @internal
+   * @remarks
+   * Runs on the value from {@link materialize}, so the merge-fan-out DoS guard
+   * (in {@link toJSSafe}) has already cleared it before any version tag is read.
+   *
+   * The version tag is a discriminator that routes a document to a whole
+   * different parser front end, so it is validated strictly rather than
+   * coerced — a coercing check (`Number("2")`, truthiness) could route a
+   * hostile document to the wrong reader. An absent tag is v1 (the format
+   * predates versioning); only the exact integers `1` and `2` are accepted, and
+   * anything else — a non-integer, a string `"2"`, a version past the ceiling —
+   * is a hard error.
+   */
+  private static detectMapVersion(
+    value: unknown
+  ): { version: 1 | 2 } | { error: ParseError } {
+    // A non-object (or absent tag) is a v1 document by definition.
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return { version: 1 };
+    }
+    const raw = (value as Record<string, unknown>).version;
+    if (raw === undefined || raw === null) {
+      return { version: 1 };
+    }
+
+    if (typeof raw !== "number" || !Number.isInteger(raw)) {
+      return {
+        error: {
+          path: "version",
+          code: "schema",
+          message: `\`version\` must be the integer 1 or 2, got ${JSON.stringify(
+            raw
+          )}.`,
+        },
+      };
+    }
+
+    if (raw === 1) return { version: 1 };
+    if (raw === 2) return { version: 2 };
+
+    return {
+      error: {
+        path: "version",
+        code: "schema",
+        message:
+          `This document declares version ${raw}, but @maplibre-yaml/core ` +
+          "supports up to version 2. Upgrade @maplibre-yaml/core to read it.",
+      },
+    };
   }
 
   /**
@@ -652,12 +762,44 @@ export class YAMLParser {
    * ```
    */
   static safeParseMapBlock(yaml: string): ParseResult<MapBlock> {
+    // One materialization feeds both version detection and validation, so the
+    // fan-out DoS guard (in materialize → toJSSafe) runs before the version tag
+    // is ever read — a hostile v2-tagged document is refused, not expanded.
+    const m = this.materialize(yaml);
+    if ("error" in m) {
+      return { success: false, errors: [m.error], warnings: [] };
+    }
+
+    const detected = this.detectMapVersion(m.value);
+    if ("error" in detected) {
+      return { success: false, errors: [detected.error], warnings: [] };
+    }
+
+    if (detected.version === 2) {
+      // STUB until U2/U3 land — detection routes here; the real v2 schema is
+      // wired in U2 and its reader in U3. Detection landing here at all is what
+      // the version-dispatch tests assert.
+      return {
+        success: false,
+        errors: [
+          { path: "", message: "Format v2 parsing is not yet implemented." },
+        ],
+        warnings: [],
+      };
+    }
+
     // Refs are resolved here too: a standalone block carries its own
     // `sources:` record, so `{$ref: "#/sources/x"}` is meaningful in the
     // flagship `<ml-map src>` path. Leaving it unresolved passed the raw
     // `{$ref}` object to the renderer, which saw no `type` and silently added
     // nothing — a config that validated and produced no layer.
-    return this.safeParseWithSchema(yaml, MapBlockSchema, true);
+    return this.validateAgainst(
+      m.value,
+      m.doc,
+      m.lineCounter,
+      MapBlockSchema,
+      true
+    );
   }
 
   /**

@@ -514,6 +514,10 @@ export const MapBlockSchema: z.ZodObject<any> = z
   .object({
     type: z.literal("map").describe("Block type"),
     id: z.string().describe("Unique block identifier"),
+    version: z
+      .literal(1)
+      .optional()
+      .describe("Format version — v1 documents may state `version: 1`"),
     className: z.string().optional().describe("CSS class name for container"),
     style: z.string().optional().describe("Inline CSS styles for container"),
     config: MapConfigSchema,

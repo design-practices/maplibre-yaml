@@ -27,6 +27,7 @@ export * from "./ui";
 // of adding a file under model/.
 export {
   normalizeMapBlock,
+  toModel,
   normalizeLayer,
   normalizeSource,
   denormalizeConfig,

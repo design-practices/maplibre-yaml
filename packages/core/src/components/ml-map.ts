@@ -43,12 +43,11 @@ import {
 } from "../parser/yaml-parser.js";
 import { MapRenderer } from "../renderer/map-renderer.js";
 import {
-  normalizeMapBlock,
+  toModel,
   denormalizeConfig,
   denormalizeLayers,
   denormalizeSources,
   denormalizeOptions,
-  type V1MapInput,
 } from "../model/index.js";
 import { escapeHtml } from "../utils/html.js";
 
@@ -370,7 +369,7 @@ export class MLMap extends HTMLElement {
       // production path through it here is what proves the normalization loses
       // nothing — every component and renderer test now exercises the round
       // trip, so a dropped or invented key fails the suite rather than shipping.
-      const model = normalizeMapBlock(mapBlock as unknown as V1MapInput);
+      const model = toModel(mapBlock as never);
 
       this.renderer = new MapRenderer(
         this.mapContainer,

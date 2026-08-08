@@ -25,3 +25,5 @@ export {
   denormalizeSources,
   denormalizeOptions,
 } from "./normalize";
+
+export { toModel } from "./to-model";
