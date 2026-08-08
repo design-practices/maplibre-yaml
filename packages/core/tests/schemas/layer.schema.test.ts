@@ -145,6 +145,60 @@ describe("InteractiveConfigSchema", () => {
     expect(result?.click?.zoomToFeature).toEqual({ padding: 10 });
     expect(result?.click?.zoomToFeature).not.toHaveProperty("code");
   });
+
+  it("accepts click with emit (event + declarative payload)", () => {
+    const config = {
+      click: {
+        emit: {
+          event: "select",
+          payload: {
+            id: { property: "bbl" },
+            label: { property: "name", else: "Unknown" },
+            kind: { str: "feature" },
+          },
+        },
+      },
+    };
+    expect(InteractiveConfigSchema.parse(config)).toMatchObject(config);
+  });
+
+  it("accepts an emit with just an event (payload optional)", () => {
+    const config = { click: { emit: { event: "ping" } } };
+    expect(InteractiveConfigSchema.parse(config)).toMatchObject(config);
+  });
+
+  it("rejects an emit with no event (event is required)", () => {
+    // `event` is the name resolved against the host handler map — an emit that
+    // names nothing cannot resolve, so it is a schema error, not a warning.
+    expect(() =>
+      InteractiveConfigSchema.parse({ click: { emit: { payload: {} } } })
+    ).toThrow();
+  });
+
+  it("strips a code-shaped field from an emit payload item (declarative only)", () => {
+    // The emit payload item is not `.passthrough()`: an executable/selector/GLSL
+    // field is stripped rather than carried. The format law — emit names an
+    // event and projects properties; no field may carry code.
+    const result = InteractiveConfigSchema.parse({
+      click: {
+        emit: {
+          event: "select",
+          payload: { id: { property: "bbl", code: "map.remove()" } },
+        },
+      },
+    });
+    expect(result?.click?.emit?.payload?.id).toEqual({ property: "bbl" });
+    expect(result?.click?.emit?.payload?.id).not.toHaveProperty("code");
+  });
+
+  it("does not accept emit on hover (hover-emit deferred this unit)", () => {
+    // hover.emit is not on the hover shape yet — a `.passthrough()`-free hover
+    // object strips it, so it never reaches the parsed config.
+    const result = InteractiveConfigSchema.parse({
+      hover: { highlight: true, emit: { event: "select" } },
+    });
+    expect(result?.hover).not.toHaveProperty("emit");
+  });
 });
 
 describe("LegendItemSchema", () => {

@@ -63,6 +63,7 @@ describe("InteractionRegistry — order is behavior", () => {
       "popup",
       "flyTo",
       "zoomToFeature",
+      "emit",
     ]);
   });
 
@@ -100,7 +101,13 @@ describe("InteractionRegistry — instance, not singleton", () => {
       ...r.clickInteractions().map((i) => i.name),
       ...r.hoverInteractions().map((i) => i.name),
     ];
-    expect(names(a)).toEqual(["popup", "flyTo", "zoomToFeature", "highlight"]);
+    expect(names(a)).toEqual([
+      "popup",
+      "flyTo",
+      "zoomToFeature",
+      "emit",
+      "highlight",
+    ]);
     expect(names(a)).toEqual(names(b));
   });
 });

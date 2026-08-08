@@ -17,6 +17,9 @@ export type {
   ClickConfig,
   FlyToConfig,
   ZoomToFeatureConfig,
+  EmitConfig,
+  EmitPayload,
+  InteractionHostHandlers,
 } from "./types";
 export { defineInteraction, stateless } from "./types";
 

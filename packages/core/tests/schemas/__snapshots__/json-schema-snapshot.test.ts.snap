@@ -1090,6 +1090,49 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                     "patternProperties": {
                                       "^x-": {}
                                     }
+                                  },
+                                  "emit": {
+                                    "type": "object",
+                                    "properties": {
+                                      "event": {
+                                        "type": "string",
+                                        "description": "Named event dispatched to the host handler map"
+                                      },
+                                      "payload": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                          "type": "object",
+                                          "properties": {
+                                            "property": {
+                                              "type": "string",
+                                              "description": "Feature property name to project"
+                                            },
+                                            "else": {
+                                              "type": "string",
+                                              "description": "Fallback value when the property is missing"
+                                            },
+                                            "str": {
+                                              "type": "string",
+                                              "description": "Static literal value"
+                                            }
+                                          },
+                                          "additionalProperties": false,
+                                          "description": "Declarative payload projection item",
+                                          "patternProperties": {
+                                            "^x-": {}
+                                          }
+                                        },
+                                        "description": "Declarative payload: named keys projected from feature properties"
+                                      }
+                                    },
+                                    "required": [
+                                      "event"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Dispatch a named host event with a declarative payload on click",
+                                    "patternProperties": {
+                                      "^x-": {}
+                                    }
                                   }
                                 },
                                 "additionalProperties": false,
@@ -4428,6 +4471,49 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                 "patternProperties": {
                                   "^x-": {}
                                 }
+                              },
+                              "emit": {
+                                "type": "object",
+                                "properties": {
+                                  "event": {
+                                    "type": "string",
+                                    "description": "Named event dispatched to the host handler map"
+                                  },
+                                  "payload": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "object",
+                                      "properties": {
+                                        "property": {
+                                          "type": "string",
+                                          "description": "Feature property name to project"
+                                        },
+                                        "else": {
+                                          "type": "string",
+                                          "description": "Fallback value when the property is missing"
+                                        },
+                                        "str": {
+                                          "type": "string",
+                                          "description": "Static literal value"
+                                        }
+                                      },
+                                      "additionalProperties": false,
+                                      "description": "Declarative payload projection item",
+                                      "patternProperties": {
+                                        "^x-": {}
+                                      }
+                                    },
+                                    "description": "Declarative payload: named keys projected from feature properties"
+                                  }
+                                },
+                                "required": [
+                                  "event"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Dispatch a named host event with a declarative payload on click",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
                               }
                             },
                             "additionalProperties": false,
@@ -6892,6 +6978,49 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                             },
                             "additionalProperties": false,
                             "description": "Fit the camera to the clicked feature's own bounds on click",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          },
+                          "emit": {
+                            "type": "object",
+                            "properties": {
+                              "event": {
+                                "type": "string",
+                                "description": "Named event dispatched to the host handler map"
+                              },
+                              "payload": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "object",
+                                  "properties": {
+                                    "property": {
+                                      "type": "string",
+                                      "description": "Feature property name to project"
+                                    },
+                                    "else": {
+                                      "type": "string",
+                                      "description": "Fallback value when the property is missing"
+                                    },
+                                    "str": {
+                                      "type": "string",
+                                      "description": "Static literal value"
+                                    }
+                                  },
+                                  "additionalProperties": false,
+                                  "description": "Declarative payload projection item",
+                                  "patternProperties": {
+                                    "^x-": {}
+                                  }
+                                },
+                                "description": "Declarative payload: named keys projected from feature properties"
+                              }
+                            },
+                            "required": [
+                              "event"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Dispatch a named host event with a declarative payload on click",
                             "patternProperties": {
                               "^x-": {}
                             }
@@ -10398,6 +10527,49 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                 },
                                 "additionalProperties": false,
                                 "description": "Fit the camera to the clicked feature's own bounds on click",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
+                              },
+                              "emit": {
+                                "type": "object",
+                                "properties": {
+                                  "event": {
+                                    "type": "string",
+                                    "description": "Named event dispatched to the host handler map"
+                                  },
+                                  "payload": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "object",
+                                      "properties": {
+                                        "property": {
+                                          "type": "string",
+                                          "description": "Feature property name to project"
+                                        },
+                                        "else": {
+                                          "type": "string",
+                                          "description": "Fallback value when the property is missing"
+                                        },
+                                        "str": {
+                                          "type": "string",
+                                          "description": "Static literal value"
+                                        }
+                                      },
+                                      "additionalProperties": false,
+                                      "description": "Declarative payload projection item",
+                                      "patternProperties": {
+                                        "^x-": {}
+                                      }
+                                    },
+                                    "description": "Declarative payload: named keys projected from feature properties"
+                                  }
+                                },
+                                "required": [
+                                  "event"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Dispatch a named host event with a declarative payload on click",
                                 "patternProperties": {
                                   "^x-": {}
                                 }

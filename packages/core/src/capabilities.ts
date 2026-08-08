@@ -108,6 +108,25 @@ export function allowsHtml(policy: CapabilityPolicy): boolean {
   return policy.trust === "trusted";
 }
 
+/**
+ * Whether the document may dispatch a named event to a host-supplied handler
+ * (the `emit` interaction's host hook).
+ *
+ * @remarks
+ * Default-deny, and — unlike {@link allowsHtml} — with no per-policy override
+ * field. A host hook hands control to code the host wrote; the only situation in
+ * which that is safe is one where the document author *is* the host, which is
+ * exactly `trust: "trusted"`. An untrusted document that names an event finds
+ * the gate shut and the interaction inert, so a projected-for-an-untrusted-room
+ * artifact carries no live callback into the page. There is no `allowHostHook`
+ * escape hatch on purpose: an author who could set it could also set
+ * `trust: "trusted"`, and collapsing the two keeps one dial instead of two that
+ * can disagree.
+ */
+export function allowsHostHook(policy: CapabilityPolicy): boolean {
+  return policy.trust === "trusted";
+}
+
 /** Whether a live-data endpoint may point at this URL. */
 export function allowsOrigin(policy: CapabilityPolicy, url: string): boolean {
   if (!policy.allowedOrigins) return true;

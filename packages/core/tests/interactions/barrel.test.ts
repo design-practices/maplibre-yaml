@@ -20,6 +20,7 @@ describe("interactions barrel", () => {
       "popup",
       "flyTo",
       "zoomToFeature",
+      "emit",
     ]);
     expect(HOVER_INTERACTIONS.map((i) => i.name)).toEqual(["highlight"]);
     expect(HOVER_FEATURE_STATE_KEY).toBe("hover");

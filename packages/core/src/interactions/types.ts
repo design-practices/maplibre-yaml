@@ -14,6 +14,7 @@
 import type { Map as MapLibreMap, LngLat } from "maplibre-gl";
 import type { z } from "zod";
 import { PopupContentSchema, InteractiveConfigSchema } from "../schemas";
+import type { CapabilityPolicy } from "../capabilities";
 
 export type PopupContent = z.infer<typeof PopupContentSchema>;
 export type InteractiveConfig = z.infer<typeof InteractiveConfigSchema>;
@@ -35,6 +36,35 @@ export type FlyToConfig = NonNullable<ClickConfig["flyTo"]>;
  * error here rather than a silently dropped option.
  */
 export type ZoomToFeatureConfig = NonNullable<ClickConfig["zoomToFeature"]>;
+
+/**
+ * Config for the `emit` interaction, derived from the layer schema.
+ *
+ * @remarks
+ * `emit` names a host event and projects a declarative payload from the clicked
+ * feature — the epic's host-hook seam. Deriving the type from the schema keeps a
+ * new field there a type error here rather than a silently dropped option.
+ */
+export type EmitConfig = NonNullable<ClickConfig["emit"]>;
+
+/** A resolved, JSON-serializable `emit` payload handed to a host handler. */
+export type EmitPayload = Record<string, unknown>;
+
+/**
+ * The host-supplied handler map an `emit` interaction resolves event names
+ * against — the emit-specific closed world.
+ *
+ * @remarks
+ * Passed at attach time (the wiring that calls it lands in U5). Resolution is
+ * closed-world, default-deny: only an own, registered key is a handler, so an
+ * event name that is absent — or is merely a prototype method like `toString`
+ * — is denied and nothing dispatches. The trust gate ({@link allowsHostHook})
+ * is the outer guard; this map is the inner allowlist.
+ */
+export type InteractionHostHandlers = Record<
+  string,
+  (payload: EmitPayload) => void
+>;
 
 /**
  * What every interaction receives when its trigger fires.
@@ -63,6 +93,25 @@ export interface InteractionContext {
  */
 export interface InteractionDeps {
   showPopup: (content: PopupContent, feature: any, lngLat: LngLat) => void;
+  /**
+   * The host handler map the `emit` interaction resolves event names against.
+   *
+   * @remarks
+   * Optional: an interaction that never emits (popup, flyTo, highlight) ignores
+   * it, and an `emit` with no map supplied resolves every name to a denial —
+   * closed-world default-deny. The wiring that populates this from an
+   * `attachInteractions` call lands in U5; the built-in's *use* of it lands here.
+   */
+  hostHandlers?: InteractionHostHandlers;
+  /**
+   * The capability policy in force, gating the host-hook seam.
+   *
+   * @remarks
+   * Optional so existing deps stubs stay valid; the `emit` built-in falls back
+   * to {@link DEFAULT_POLICY} (untrusted) when it is absent, so a missing policy
+   * denies the hook rather than opening it.
+   */
+  policy?: CapabilityPolicy;
 }
 
 /**
