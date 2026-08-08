@@ -25,8 +25,8 @@ export * from "./ui";
 export * from "./model";
 
 // Emitter — projects the model's style half to spec-valid style.json
-export { projectStyle, EmitError } from "./emitter";
-export type { EmitMode, EmitWarning, EmitResult } from "./emitter";
+export { projectStyle, EmitError, mergeBasemap, resolveBasemap } from "./emitter";
+export type { EmitMode, EmitWarning, EmitResult, LayerPlacement, BasemapFetcher } from "./emitter";
 
 // Utils
 export { EventEmitter } from "./utils/event-emitter";

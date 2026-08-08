@@ -35,9 +35,26 @@ export interface EmitWarning {
   message: string;
 }
 
+/** Where a document layer wants to sit, by id. */
+export interface LayerPlacement {
+  id: string;
+  /** Layer id this one is inserted ahead of; may name a basemap layer. */
+  before?: string;
+}
+
 export interface EmitResult {
   style: Record<string, unknown>;
   warnings: EmitWarning[];
+  /**
+   * Placement intent for the document's own layers.
+   *
+   * @remarks
+   * Carried alongside the style rather than resolved into it, because `before`
+   * may name a layer the basemap supplies — which does not exist until the
+   * merge step. Ordering therefore resolves once, at whichever point the whole
+   * layer list is known: here when there is no basemap, at the merge otherwise.
+   */
+  placements: LayerPlacement[];
 }
 
 export class EmitError extends Error {
@@ -224,6 +241,10 @@ export function projectStyle(
     sources,
     layers: orderLayers(positioned),
   };
+  const placements: LayerPlacement[] = positioned.map((l) => ({
+    id: l.id,
+    ...(l.before !== undefined ? { before: l.before } : {}),
+  }));
 
   if (model.style.state !== undefined) style["state"] = model.style.state;
 
@@ -246,5 +267,5 @@ export function projectStyle(
 
   assertClean(style, "", new Set(["data", "properties", "clusterProperties", "metadata"]));
 
-  return { style, warnings };
+  return { style, warnings, placements };
 }
