@@ -1,5 +1,39 @@
 # @maplibre-yaml/core
 
+## 0.4.1
+
+### Patch Changes
+
+- 95ea3f1: Harden every HTML sink: shared attribute-safe escaping, a popup tag allowlist, and URL scheme guards.
+
+  A document may be authored by someone other than the person whose browser renders it, and feature properties come from fetched data that is never trusted. Escaping was applied unevenly across the sinks, and three vectors were live.
+
+  **New `escapeHtml` / `safeUrl` in core** (exported from the package root). One escaper, attribute-safe — quotes included — and DOM-free, so it works during SSR where the previous `document.createElement` approach did not. It replaces two divergent private copies: the popup builder's regex version escaped quotes, the `<ml-map>` error card's `textContent` version did not, which is exactly the difference between safe and unsafe in attribute position.
+
+  **Popup builder.** Three fixes:
+  - _Tag allowlist._ Popup content is `z.record(...)`, so the tag is a YAML **key** and nothing constrained it: `script:` emitted a real `<script>` block, and a key carrying attributes (`img src=x onerror=...`) injected them wholesale. Only the documented tags render now; anything else is dropped with a console warning. `iframe` is deliberately excluded — the builder never emitted one with a `src`, so nothing that worked stops working.
+  - _URL scheme guards._ `javascript:alert(1)` contains no character escaping touches, and zod's `.url()` accepts it as well-formed, so it reached `href` intact and executed on click. `href` and `src` now pass through a scheme allowlist (http, https, mailto, tel, plus scheme-less relative references); an unsafe link degrades to its text, an unsafe image is dropped. The guard strips control characters first, because browsers do the same before resolving a scheme — `java\nscript:` navigates as `javascript:`.
+  - _`target` and `rel`._ `target` is passthrough in the schema and was raw-interpolated into the attribute, so `_blank" onmouseover="…` broke out. It is now allowlisted to the four legal values, and `_blank` links carry `rel="noopener noreferrer"`.
+
+  **Astro components.** The `Map`, `FullPageMap`, and `Scrollytelling` error cards interpolated validation messages and thrown-error text into `innerHTML` completely unescaped. Scrollytelling additionally interpolated chapter `title`, `id`, `image`, and `video` into markup and attributes. All escaped; media URLs get the scheme guard. These inline scripts carry a small deliberate copy of the escaper rather than importing it — they are `is:inline`, and the only import route sits inside the very `try` whose `catch` renders the error card.
+
+  **CLI preview.** The debug panel rendered event type and payload — which carry feature properties from fetched sources — into `innerHTML` unescaped.
+
+  Not addressed here, and deliberately so: `chapter.description` and `footer` are documented as HTML-bearing (`"HTML/markdown supported"`, `"Footer content (HTML)"`). Escaping them would break documented behavior, and choosing between an allowlist sanitizer and a trusted-author contract is a product decision, tracked separately. Both sites are now commented to say so.
+
+- f4c4bab: Accept same-origin paths in every source URL field (GH #39). `url: "/data/points.geojson"` validates now.
+
+  Source URLs were validated with `z.string().url()`, which demands a fully-qualified URL and therefore rejected `/data/points.geojson` — self-hosting data alongside the page, an ordinary setup that works perfectly at runtime, since the data layer passes the string straight to `fetch()` and MapLibre resolves source URLs relative to the document. A real consumer hit this deploying.
+
+  The fix is one shared predicate, `isFetchableReference`, applied to **every** source URL field rather than only the GeoJSON one the report named: `geojson.url`, the TileJSON `url` on vector/raster/raster-dem, `image.url`, `video.urls`, and the stream endpoint. They all had the identical defect, and fixing one would have left four near-identical reports to file. Absolute URLs, root-relative (`/x`), and explicitly-relative (`./x`, `../x`) references pass; a bare word like `data.geojson` or `example.com/data.geojson` still does not, so the field keeps a meaningful check. Tile templates continue to validate with `{z}/{x}/{y}` placeholders substituted, and now share the same predicate.
+
+  Two consequences worth knowing:
+  - The published JSON Schema carries `pattern` for these fields instead of `format: "uri"`, so editors and agents validate against the rule that actually applies rather than flagging valid same-origin paths. The rule is expressed as a regex rather than a `new URL()` refinement partly for this reason, and partly because a refinement yields a `ZodEffects` whose larger type — multiplied across seven fields inside the layer discriminated union — pushes that union past TypeScript's declaration-serialization limit (TS7056).
+
+    This is a DX guard, not a security boundary: `.url()` accepted `javascript:` all along, since `new URL()` considers it well-formed. Scheme safety is enforced at the render sinks — see the HTML-hardening changeset.
+
+  - The `source.data` rejection message for source-directory paths now recommends `url: "/data/..."`. It previously recommended `data:` _because_ `url:` could not accept root-relative paths — the workaround the message encoded is no longer needed, and `data:` for inline GeoJSON versus `url:` for anything fetched is the distinction that was always intended. `data: "/data/..."` remains legal; MapLibre treats a `data` string as a URL.
+
 ## 0.4.0
 
 ### Minor Changes
