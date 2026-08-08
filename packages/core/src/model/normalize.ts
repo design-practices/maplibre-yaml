@@ -77,15 +77,34 @@ const SOURCE_RUNTIME_KEYS = [
  * `toggleable` is runtime because nothing in the style spec can express "the
  * user may turn this off".
  */
-const LAYER_RUNTIME_KEYS = ["interactive", "legend", "label", "toggleable"] as const;
+const LAYER_RUNTIME_KEYS = [
+  "interactive",
+  "legend",
+  "label",
+  "toggleable",
+  // Not a style-spec layer property: the renderer passes it as the second
+  // argument to `map.addLayer`, and the emitter honors it by ordering the
+  // layers array. Leaving it on the style side would write a key MapLibre
+  // ignores into the emitted style — and `validateStyleMin` accepts unknown
+  // layer properties, so nothing downstream would catch it.
+  "before",
+] as const;
 
 /** Partition an object's own keys, preserving presence exactly. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function partition(
   source: Record<string, unknown> | undefined,
   runtimeKeys: readonly string[]
 ): { spec: Record<string, unknown>; runtime: Record<string, unknown> } {
-  const spec: Record<string, unknown> = {};
-  const runtime: Record<string, unknown> = {};
+  // Null-prototype accumulators: a document key of `__proto__` would otherwise
+  // assign through the prototype setter, reparenting the result and dropping
+  // the key from both halves — silently violating the never-drop invariant on
+  // exactly the input an attacker controls.
+  const spec: Record<string, unknown> = Object.create(null);
+  const runtime: Record<string, unknown> = Object.create(null);
   if (!source) return { spec, runtime };
 
   // Iterating the author's keys rather than ours is what keeps presence
@@ -101,14 +120,52 @@ function partition(
   return { spec, runtime };
 }
 
-/** Normalize one source. */
+/**
+ * Normalize one source.
+ *
+ * @remarks
+ * A non-object source is passed through untouched rather than partitioned. It
+ * is malformed input, and manufacturing `{}` out of it would defeat the
+ * renderer's own `typeof spec !== "object"` guard — turning a value the
+ * renderer used to skip into one MapLibre is asked to add.
+ */
 export function normalizeSource(source: LayerSource): SourceModel {
-  return partition(source as Record<string, unknown>, SOURCE_RUNTIME_KEYS);
+  if (!isPlainObject(source)) {
+    return { spec: source as unknown as Record<string, unknown>, runtime: {} };
+  }
+  return partition(source, SOURCE_RUNTIME_KEYS);
 }
 
-/** Normalize one layer. */
+/**
+ * Normalize one layer, including any source declared inline on it.
+ *
+ * @remarks
+ * A layer may carry its source inline rather than by name, and that object
+ * needs the same split as a named one — otherwise its live-data keys ride into
+ * `layer.spec`, which is the half defined as compiling to `style.json`. That is
+ * the leak the 0.4.0 named-source scrub existed to close, and it is not limited
+ * to live-data documents: the geojson schema materializes `fetchStrategy` by
+ * default on every source, so the emitted style would carry an unknown property
+ * MapLibre's validator rejects for essentially any document.
+ *
+ * A string source is a named reference and stays as-is.
+ */
 export function normalizeLayer(layer: Layer): LayerModel {
-  return partition(layer as unknown as Record<string, unknown>, LAYER_RUNTIME_KEYS);
+  const model = partition(
+    layer as unknown as Record<string, unknown>,
+    LAYER_RUNTIME_KEYS
+  );
+
+  const inlineSource = model.spec["source"];
+  if (isPlainObject(inlineSource)) {
+    const split = partition(inlineSource, SOURCE_RUNTIME_KEYS);
+    model.spec["source"] = split.spec;
+    if (Object.keys(split.runtime).length > 0) {
+      model.runtime["source"] = split.runtime;
+    }
+  }
+
+  return model;
 }
 
 /**
@@ -204,17 +261,33 @@ export function denormalizeConfig(model: MapModel): MapConfig {
   return config as unknown as MapConfig;
 }
 
-/** Reassemble the v1 layer array. */
+/**
+ * Reassemble the v1 layer array.
+ *
+ * @remarks
+ * The inline-source runtime half is merged back into the source object rather
+ * than left as a sibling `runtime.source` key, so the reconstructed layer is
+ * byte-for-byte what the author wrote.
+ */
 export function denormalizeLayers(model: MapModel): Layer[] {
-  return model.style.layers.map(
-    (layer) => ({ ...layer.spec, ...layer.runtime }) as unknown as Layer
-  );
+  return model.style.layers.map((layer) => {
+    const { source: sourceRuntime, ...runtime } = layer.runtime;
+    const merged: Record<string, unknown> = { ...layer.spec, ...runtime };
+    if (isPlainObject(sourceRuntime) && isPlainObject(merged["source"])) {
+      merged["source"] = { ...merged["source"], ...sourceRuntime };
+    }
+    return merged as unknown as Layer;
+  });
 }
 
 /** Reassemble the v1 named-source record. */
 export function denormalizeSources(model: MapModel): Record<string, LayerSource> {
   const sources: Record<string, LayerSource> = {};
   for (const [name, source] of Object.entries(model.style.sources)) {
+    if (!isPlainObject(source.spec)) {
+      sources[name] = source.spec as unknown as LayerSource;
+      continue;
+    }
     sources[name] = { ...source.spec, ...source.runtime } as unknown as LayerSource;
   }
   return sources;

@@ -94,12 +94,12 @@ export class MapRenderer {
    * reassembles the v1 arguments rather than the managers being rewritten onto
    * new shapes.
    *
-   * That round trip is deliberate and is the fidelity proof: `<ml-map>` routes
-   * through here, so every existing renderer and component test exercises
-   * normalize-then-denormalize. If the model lost or invented a key, those
-   * tests would fail. Migrating the managers to read the model directly is
-   * later work; the emitter does not need it, and it is the part of the
-   * refactor most likely to change behavior.
+   * `<ml-map>` does not call this — it derives the same arguments inline, so
+   * the component test double (which mocks `MapRenderer` as a bare function
+   * with no statics) keeps working. This factory is for callers that already
+   * hold a model. It differs from the inline path in one respect worth knowing:
+   * caller `options` win over the model's `controls`/`legend`, so passing
+   * `{ controls: undefined }` erases them.
    */
   static fromModel(
     container: string | HTMLElement,

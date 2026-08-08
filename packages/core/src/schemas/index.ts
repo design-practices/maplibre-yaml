@@ -135,6 +135,9 @@ export {
   MapConfigSchema,
   MapBlockSchema,
   MapFullPageBlockSchema,
+
+  StateSchema,
+  ParametersSchema,
 } from "./map.schema";
 export type {
   ControlPosition,
@@ -143,6 +146,9 @@ export type {
   MapConfig,
   MapBlock,
   MapFullPageBlock,
+
+  State,
+  Parameters,
 } from "./map.schema";
 
 // Scrollytelling schemas and types

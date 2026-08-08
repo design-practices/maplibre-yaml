@@ -1129,3 +1129,86 @@ layers: []`;
     expect(result.errors.map((e) => e.message).join(" ")).toMatch(/could not be expanded/i);
   });
 });
+
+/**
+ * Expansion attacks, both shapes.
+ *
+ * @remarks
+ * The plain-alias bomb is caught by the `yaml` library's own alias budget. The
+ * merge-key bomb is NOT — `merge.mergeValue()` resolves through
+ * `Alias.resolve()` and calls `toJSON()` directly, never entering the path
+ * where the budget is counted. Enabling merge keys therefore walked around the
+ * guard, and a 338-byte document took 13 seconds with no error. The failure
+ * mode is a hang, not a wrong value, so these tests bound elapsed time — an
+ * assertion on the result alone would not catch a regression.
+ */
+describe("expansion attacks (U2 hardening)", () => {
+  const seqMergeBomb = (depth: number, fan: number) => {
+    let s = "type: map\nid: bomb\na0: &a0 { k: v }\n";
+    for (let i = 1; i <= depth; i++) {
+      const items = Array.from({ length: fan }, () => `*a${i - 1}`).join(",");
+      s += `a${i}: &a${i}\n  <<: [${items}]\n`;
+    }
+    return s + "layers: []\n";
+  };
+
+  it("rejects a sequence-valued merge before materializing it", () => {
+    const started = Date.now();
+    const result = YAMLParser.safeParseMapBlock(seqMergeBomb(6, 9));
+    const elapsed = Date.now() - started;
+
+    expect(result.success).toBe(false);
+    expect(result.errors.map((e) => e.message).join(" ")).toMatch(/sequence of aliases/i);
+    // Unguarded this took ~13s; the guard runs on the AST, before expansion.
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it("rejects the repeated-merge-key form, which needs no sequence", () => {
+    // The first version of this guard refused only sequences and called that
+    // the entire attack surface. `{<<: *n, <<: *n, ...}` reproduces the same
+    // exponential expansion with no sequence anywhere.
+    let s = "type: map\nid: rep\nr0: &r0 { k: v }\n";
+    for (let i = 1; i <= 5; i++) {
+      const merges = Array.from({ length: 6 }, () => `  <<: *r${i - 1}`).join("\n");
+      s += `r${i}: &r${i}\n${merges}\n`;
+    }
+    s += "layers: []\n";
+
+    const started = Date.now();
+    const result = YAMLParser.safeParseMapBlock(s);
+    expect(result.success).toBe(false);
+    expect(result.errors.map((e) => e.message).join(" ")).toMatch(/more than one merge key/i);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it("still allows the documented single-alias merge at depth", () => {
+    let s = "type: map\nid: chain\nconfig:\n  center: [0, 0]\n  zoom: 5\n";
+    s += "base: &b0 { k: v }\n";
+    for (let i = 1; i <= 20; i++) s += `l${i}: &b${i}\n  <<: *b${i - 1}\n  k${i}: v\n`;
+    s += "layers: []\n";
+    const result = YAMLParser.safeParseMapBlock(s);
+    expect(result.success).toBe(true);
+  });
+
+  it("returns a result rather than throwing through safeParseAny", () => {
+    // safeParseAny is what `mlym validate` and the preview server call, and it
+    // documents that it never throws. An earlier fix guarded only safeParse*.
+    const bomb =
+      "type: map\nid: b\na: &a [x,x,x,x,x,x,x,x,x]\nb: &b [*a,*a,*a,*a,*a,*a,*a,*a,*a]\n" +
+      "c: &c [*b,*b,*b,*b,*b,*b,*b,*b,*b]\nd: [*c,*c,*c,*c,*c,*c,*c,*c,*c]\nlayers: []\n";
+    expect(() => YAMLParser.safeParseAny(bomb)).not.toThrow();
+    const { result } = YAMLParser.safeParseAny(bomb);
+    expect(result.success).toBe(false);
+    expect(result.errors.map((e) => e.message).join(" ")).toMatch(/could not be expanded/i);
+  });
+
+  it("reports a merge-key typo as an ordinary error, not an attack", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      'type: map\nid: t\nbrand: &brand "#111"\nextra:\n  <<: *brand\nlayers: []\n'
+    );
+    expect(result.success).toBe(false);
+    const messages = result.errors.map((e) => e.message).join(" ");
+    expect(messages).not.toMatch(/could not be expanded/i);
+    expect(messages).toMatch(/merge sources must be maps/i);
+  });
+});
