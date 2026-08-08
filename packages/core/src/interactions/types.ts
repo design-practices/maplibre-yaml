@@ -118,10 +118,11 @@ export interface InteractionDeps {
  * One named interaction: where to find its config on a trigger, and what to do.
  *
  * @remarks
- * `name` is the stable handler id this interaction keeps when the registry
- * moves out of core. It is documentation and future lookup only — nothing
- * resolves handlers by name yet, and the closed-world strict-mode resolution
- * the direction doc calls for is not implemented here.
+ * `name` is the stable handler id this interaction is resolved by. The registry
+ * ({@link InteractionRegistry.resolve}/{@link InteractionRegistry.has}) and the
+ * attach boundary (`attach.ts`'s `validateTrigger`) resolve interactions by this
+ * name, closed-world: a name is either a built-in on the fixed allowlist or it
+ * is denied, never anything in between.
  *
  * `select` is the only coupling to the schema's shape, and it decides
  * *configured-ness*: return `undefined` for absent **or disabled**. Callers

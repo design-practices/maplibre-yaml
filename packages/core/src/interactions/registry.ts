@@ -46,10 +46,17 @@ export interface InteractionDenial {
  * @remarks
  * Deliberately an instance rather than a module singleton, mirroring
  * {@link ExtensionRegistry}: two documents from different trust domains, or two
- * tests, each get their own registry with no shared state. The allowlist itself
- * is fixed — the built-in click and hover sets — and seeded at construction;
- * the library ships no runtime registration hook, because the erasable
- * interaction vocabulary is closed by design.
+ * tests, each get their own registry with no shared state. The allowlist is
+ * seeded once at construction — the built-in click and hover sets by default —
+ * and never mutated after: there is no `register`/`add` method, so the
+ * vocabulary a given registry resolves is fixed for its lifetime.
+ *
+ * The closed-world guarantee is about the *document* trust boundary: an
+ * untrusted document can never introduce a handler, because a document only
+ * *names* interactions and an unknown name is denied — it cannot pass a
+ * function in. Host JS can, of course, construct a registry seeded with its own
+ * interaction sets; that is host code writing host code, outside the document
+ * trust boundary, and is not a path a document can reach.
  */
 export class InteractionRegistry {
   private readonly click: readonly Interaction[];

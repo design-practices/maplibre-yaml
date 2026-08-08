@@ -21,7 +21,6 @@ export type {
   EmitPayload,
   InteractionHostHandlers,
 } from "./types";
-export { defineInteraction, stateless } from "./types";
 
 export {
   CLICK_INTERACTIONS,

@@ -14,13 +14,18 @@ import {
   CLICK_INTERACTIONS,
   HOVER_INTERACTIONS,
   HOVER_FEATURE_STATE_KEY,
-  defineInteraction,
-  stateless,
   type Interaction,
   type InteractionContext,
   type InteractionDeps,
   type InteractionRuntime,
 } from "../../src/interactions";
+import * as barrel from "../../src/interactions";
+// The authoring seam (`defineInteraction`, `stateless`) is deliberately NOT on
+// the public barrel — it is an internal helper `built-ins.ts` imports directly
+// from `./types`. Exposing it from the barrel would hand hosts a custom-
+// interaction registration path the Scope Boundaries deferred as security-
+// sensitive. This import proves the internal path still works.
+import { defineInteraction, stateless } from "../../src/interactions/types";
 
 // Smoke test: the public barrel resolves and its runtime + type surface are
 // present. Behavior is characterized by the renderer suites; this only guards
@@ -37,9 +42,13 @@ describe("interactions barrel", () => {
     expect(HOVER_FEATURE_STATE_KEY).toBe("hover");
   });
 
-  it("exposes the registry helpers", () => {
+  it("keeps the authoring seam off the public barrel", () => {
+    // The helpers exist (imported from the internal path above) but must NOT be
+    // re-exported from the barrel — no host-facing registration path.
     expect(typeof defineInteraction).toBe("function");
     expect(typeof stateless).toBe("function");
+    expect("defineInteraction" in barrel).toBe(false);
+    expect("stateless" in barrel).toBe(false);
   });
 
   it("keeps the type surface importable and structurally usable", () => {

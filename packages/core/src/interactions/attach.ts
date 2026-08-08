@@ -193,7 +193,19 @@ export function attachInteractions(
     }
   };
 
-  /** Bind listeners for one projected layer, reproducing EventHandler.attachLayer. */
+  /**
+   * Bind listeners for one projected layer.
+   *
+   * @remarks
+   * PARALLEL IMPLEMENTATION — keep in sync with `EventHandler.attachEvents`
+   * (`renderer/event-handler.ts`). R9 is deferred, so the `map.on` binding +
+   * `select`-ordered dispatch logic lives in two live copies: this one (driven
+   * by a declarative projection, no `<ml-map>`) and the renderer's (driven by a
+   * raw v1 layer). Any change to which listeners are bound, in what order they
+   * dispatch, or how the context is built must land in BOTH until R9 converges
+   * them. The parity test in `tests/interactions/attach.test.ts` guards the
+   * bound-listener set across several configs; it is the drift alarm.
+   */
   const attachLayer = (
     layerId: string,
     entry: ProjectedLayerInteractions

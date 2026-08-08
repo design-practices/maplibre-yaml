@@ -375,38 +375,76 @@ describe("attachInteractions — AE6: lifecycle, no listener leak", () => {
 });
 
 describe("attachInteractions — parity with EventHandler (R9 go/no-go)", () => {
-  it("binds the same listeners EventHandler wires for the same model", () => {
-    const layer = {
-      id: "parcels",
-      type: "fill",
-      source: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+  // R9 is deferred: attach.ts and event-handler.ts are two live copies of the
+  // map.on binding + dispatch logic. This parity test is the drift alarm.
+  // Parametrized over a spread of interactive configs so the guard catches a
+  // divergence that only shows up under a particular combination of triggers —
+  // not just the one fixed config a single case would pin.
+  const parityCases: Array<{ name: string; interactive: unknown }> = [
+    {
+      name: "click-only popup",
+      interactive: { click: { popup: [{ p: [{ property: "name" }] }] } },
+    },
+    {
+      name: "hover-only highlight",
+      interactive: { hover: { cursor: "pointer", highlight: true } },
+    },
+    {
+      name: "popup + flyTo + zoomToFeature",
+      interactive: {
+        click: {
+          popup: [{ p: [{ property: "name" }] }],
+          flyTo: { zoom: 12 },
+          zoomToFeature: { padding: 40 },
+        },
+      },
+    },
+    {
+      name: "all together (click popup+flyTo, hover cursor+highlight)",
       interactive: {
         hover: { cursor: "pointer", highlight: true },
         click: { popup: [{ p: [{ property: "name" }] }], flyTo: { zoom: 12 } },
       },
-    };
+    },
+  ];
 
-    // EventHandler path: bind the raw v1 layer.
-    const mapA = mockMap();
-    const handler = new EventHandler(mapA, {}, trusted);
-    handler.attachEvents(layer as any);
+  const tuples = (m: any) =>
+    m.on.mock.calls.map((c: any[]) => `${c[0]}:${c[1]}`).sort();
 
-    // attach path: project the model, then attach.
-    const mapB = mockMap();
-    attachInteractions(
-      mapB,
-      projectInteractions(normalizeMapBlock({
-        id: "m",
-        config: { center: [0, 0], zoom: 1 },
-        layers: [layer],
-      } as unknown as V1MapInput), trusted),
-      { policy: trusted }
-    );
+  it.each(parityCases)(
+    "binds the same listeners EventHandler wires: $name",
+    ({ interactive }) => {
+      const layer = {
+        id: "parcels",
+        type: "fill",
+        source: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+        interactive,
+      };
 
-    const tuples = (m: any) =>
-      m.on.mock.calls.map((c: any[]) => `${c[0]}:${c[1]}`).sort();
-    expect(tuples(mapB)).toEqual(tuples(mapA));
-  });
+      // EventHandler path: bind the raw v1 layer.
+      const mapA = mockMap();
+      const handler = new EventHandler(mapA, {}, trusted);
+      handler.attachEvents(layer as any);
+
+      // attach path: project the model, then attach.
+      const mapB = mockMap();
+      attachInteractions(
+        mapB,
+        projectInteractions(normalizeMapBlock({
+          id: "m",
+          config: { center: [0, 0], zoom: 1 },
+          layers: [layer],
+        } as unknown as V1MapInput), trusted),
+        { policy: trusted }
+      );
+
+      // Both paths must bind the identical set of (event:layer) listener tuples.
+      expect(tuples(mapB)).toEqual(tuples(mapA));
+      // And the set must be non-empty — an interactive config binds something,
+      // so an empty-vs-empty match can never masquerade as parity.
+      expect(tuples(mapA).length).toBeGreaterThan(0);
+    }
+  );
 
   it("resolves the same interaction set the registry hands EventHandler", () => {
     const registry = createInteractionRegistry();

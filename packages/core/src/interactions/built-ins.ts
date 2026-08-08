@@ -121,6 +121,14 @@ export const CLICK_INTERACTIONS: readonly Interaction[] = [
       ctx.map.fitBounds(bounds, options);
     }),
   }),
+  // NOTE (emit dispatch surface, R9 deferred): emit only actually dispatches
+  // through `attachInteractions`, which threads `hostHandlers`/`policy` into the
+  // deps it builds. The live `<ml-map>` renderer (`EventHandler`) binds this
+  // built-in — it is in CLICK_INTERACTIONS — but does NOT thread
+  // `hostHandlers`/`policy` into its `interactionDeps`, so under the renderer an
+  // `emit` resolves every event to a denial and is inert (a silent no-op) even
+  // for a trusted document. That is intended, not a latent footgun: emit targets
+  // the attach path this epic added; wiring it into the renderer is R9 work.
   defineInteraction<EmitConfig>({
     name: "emit",
     select: (trigger) => trigger.emit,

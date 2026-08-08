@@ -206,6 +206,35 @@ describe("emit — closed-world default-deny on the event name", () => {
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
+
+  // Regression guard (security): pin that a prototype-chain event name can never
+  // resolve to an inherited function. The code is already correct — the
+  // `hasOwnProperty` + `typeof === "function"` guard denies these — so these
+  // pass immediately; they exist so a future refactor that loosened the guard
+  // (e.g. `handlers[config.event]` without the own-key check) fails loudly.
+  it.each(["toString", "__proto__", "constructor", "hasOwnProperty"])(
+    "denies prototype-chain name %s that no handler registers (no dispatch, warns)",
+    (evtName) => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const registered = vi.fn();
+      const { runtime, ctx } = harness({
+        policy: trusted,
+        // The map registers a benign, unrelated event; the prototype name lives
+        // on the chain but is never an OWN registered key.
+        handlers: { select: registered },
+        properties: {},
+      });
+
+      runtime.run({ event: evtName }, ctx);
+
+      // The inherited name is denied outright: nothing dispatches (not the
+      // registered handler, not the inherited method), and a diagnostic warns.
+      expect(registered).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain(evtName);
+      warn.mockRestore();
+    }
+  );
 });
 
 describe("emit — declarative payload projection", () => {
@@ -270,6 +299,37 @@ describe("emit — declarative payload projection", () => {
     );
 
     expect(handler).toHaveBeenCalledWith({ label: "Unknown" });
+  });
+
+  it("a payload spec with a __proto__ key does not pollute Object.prototype", () => {
+    const handler = vi.fn();
+    const { runtime, ctx } = harness({
+      policy: trusted,
+      handlers: { select: handler },
+      properties: { evil: "pwned" },
+    });
+
+    // A hand-built / tampered payload spec carrying a `__proto__` key. A plain
+    // object literal `{ __proto__: ... }` would SET the prototype rather than
+    // create a key, so use defineProperty to make "__proto__" an OWN enumerable
+    // property — exactly what a maliciously crafted projection would need for
+    // projectEmitPayload to iterate it and assign `payload["__proto__"] = …`.
+    const payloadSpec: Record<string, unknown> = {};
+    Object.defineProperty(payloadSpec, "__proto__", {
+      value: { property: "evil" },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+
+    runtime.run({ event: "select", payload: payloadSpec as any }, ctx);
+
+    // The dispatch must not have injected anything onto Object.prototype: a
+    // fresh object sees no smuggled key, and the global prototype is untouched.
+    expect(({} as any).evil).toBeUndefined();
+    expect(({} as any).pwned).toBeUndefined();
+    expect("pwned" in {}).toBe(false);
+    expect(Object.getOwnPropertyNames(Object.prototype)).not.toContain("pwned");
   });
 
   it("projects a static `str` literal", () => {
