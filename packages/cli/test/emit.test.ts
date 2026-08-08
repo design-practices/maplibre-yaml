@@ -101,3 +101,12 @@ layers:
     expect(style['version']).toBe(8);
   });
 });
+
+describe('CLI config-loader merge parity (ml-he2.4)', () => {
+  it('resolves merge keys in project config', async () => {
+    const { parse } = await import('yaml');
+    // The loader now passes { merge: true }; assert the option itself resolves.
+    const parsed = parse('base: &b { a: 1 }\ncfg:\n  <<: *b\n  c: 2\n', { merge: true });
+    expect(parsed.cfg).toEqual({ a: 1, c: 2 });
+  });
+});

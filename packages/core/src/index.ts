@@ -21,8 +21,30 @@ export * from "./data";
 // UI
 export * from "./ui";
 
-// Internal model — the shape the renderer and the emitter share
-export * from "./model";
+// The v2 internal model — public because it is the emitter's input type
+// (`projectStyle(model)`), so ejecting requires it. Named rather than
+// `export *`, so widening the surface is a deliberate edit, not a side effect
+// of adding a file under model/.
+export {
+  normalizeMapBlock,
+  normalizeLayer,
+  normalizeSource,
+  denormalizeConfig,
+  denormalizeLayers,
+  denormalizeSources,
+  denormalizeOptions,
+  SOURCE_RUNTIME_KEYS,
+  LAYER_RUNTIME_KEYS,
+} from "./model";
+export type {
+  MapModel,
+  StyleHalf,
+  RuntimeHalf,
+  CameraModel,
+  LayerModel,
+  SourceModel,
+  V1MapInput,
+} from "./model";
 
 // Extension registry — validated, normalized `x-*` blocks
 export { ExtensionRegistry } from "./extensions";

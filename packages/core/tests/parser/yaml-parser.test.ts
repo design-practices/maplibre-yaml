@@ -1158,6 +1158,7 @@ describe("expansion attacks (U2 hardening)", () => {
     const elapsed = Date.now() - started;
 
     expect(result.success).toBe(false);
+    expect(result.errors[0]?.code).toBe("yaml-expansion");
     expect(result.errors.map((e) => e.message).join(" ")).toMatch(/sequence of aliases/i);
     // Unguarded this took ~13s; the guard runs on the AST, before expansion.
     expect(elapsed).toBeLessThan(1000);
@@ -1199,6 +1200,7 @@ describe("expansion attacks (U2 hardening)", () => {
     expect(() => YAMLParser.safeParseAny(bomb)).not.toThrow();
     const { result } = YAMLParser.safeParseAny(bomb);
     expect(result.success).toBe(false);
+    expect(result.errors[0]?.code).toBe("yaml-expansion");
     expect(result.errors.map((e) => e.message).join(" ")).toMatch(/could not be expanded/i);
   });
 
@@ -1207,6 +1209,7 @@ describe("expansion attacks (U2 hardening)", () => {
       'type: map\nid: t\nbrand: &brand "#111"\nextra:\n  <<: *brand\nlayers: []\n'
     );
     expect(result.success).toBe(false);
+    expect(result.errors[0]?.code).toBe("yaml-merge");
     const messages = result.errors.map((e) => e.message).join(" ");
     expect(messages).not.toMatch(/could not be expanded/i);
     expect(messages).toMatch(/merge sources must be maps/i);

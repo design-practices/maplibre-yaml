@@ -35,7 +35,7 @@
 
     <script type="module">
       import maplibregl from "maplibre-gl";
-      import { YAMLParser, MapRenderer } from "/packages/core/dist/index.browser.js";
+      import { YAMLParser, MapRenderer, normalizeMapBlock } from "/packages/core/dist/index.browser.js";
 
       const DOC = `
 type: map
@@ -71,10 +71,10 @@ layers:
       function build(containerId, trust) {
         const parsed = YAMLParser.safeParseMapBlock(DOC);
         if (!parsed.success) { console.error(parsed.errors); return; }
-        const { config, sources, layers, controls, legend } = parsed.data;
-        return new MapRenderer(containerId, config, layers, {
-          controls, legend, capabilities: { trust },
-        }, sources);
+        // Build from the model, the same shape the emitter consumes — this is
+        // the intended entry point for a caller that already holds a model.
+        const model = normalizeMapBlock(parsed.data);
+        return MapRenderer.fromModel(containerId, model, { capabilities: { trust } });
       }
 
       window.__trusted = build("map-trusted", "trusted");

@@ -44,7 +44,7 @@ export async function loadProjectConfig(cwd = process.cwd()): Promise<ProjectCon
           return JSON.parse(content);
         } else if (filename.endsWith('.yaml') || filename.endsWith('.yml')) {
           const content = await readFile(configPath, 'utf-8');
-          return parseYAML(content) as ProjectConfig;
+          return parseYAML(content, { merge: true }) as ProjectConfig;
         } else {
           // .js or .mjs files
           const fileUrl = pathToFileURL(configPath).href;

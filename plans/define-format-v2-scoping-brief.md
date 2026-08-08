@@ -213,13 +213,10 @@ deprecation window. What this session must add:
 
 ## Part 4 — Carried open questions
 
-Not for this session, recorded so they are not lost:
+Tracked in beads (open work items belong in the ledger, not plan prose):
 
-- Lighting minimalism, sprite naming, mobile interaction variants — resolve when their
-  features leave the deferred tier.
-- QuickJS-in-WASM sandbox — app-tier, opt-in, on tenant demand.
-- Effects catalog and the deck backend — gated on validating the fallback contract after the
-  arc lands. The ~1,350 lines in `docs/brainstorms/effects/` are **written but unrun**;
-  hypothesis tier, not proof.
-- `ml-a50` (D8 ratification) — independent of v2, but it touches JSON Schema strictness and
-  should be settled before the emitter regenerates contract artifacts.
+- `ml-092` — lighting minimalism, sprite naming, mobile interaction variants.
+- `ml-a5j` — QuickJS-in-WASM sandbox (app-tier, opt-in).
+- `ml-4qy` — effects catalog and deck backend, gated on the fallback-contract validation.
+- `ml-a50` — D8 (JSON Schema strictness) ratification; independent of v2 but should be settled
+  before the emitter regenerates contract artifacts.

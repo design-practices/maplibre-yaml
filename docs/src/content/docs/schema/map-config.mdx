@@ -17,6 +17,8 @@ Map configuration defines the initial view, interaction settings, controls, and 
     pitch: 0
     bearing: 0
     # ... additional options
+  state: {...}         # Runtime-tunable values (optional)
+  parameters: {...}    # Control metadata for state keys (optional)
   layers: [...]        # Map layers
   controls: {...}      # Map controls (optional)
   legend: {...}        # Legend (optional)
@@ -38,6 +40,53 @@ config:
   zoom: 12
   mapStyle: "https://demotiles.maplibre.org/style.json"
 ```
+
+## Runtime state and parameters
+
+`state:` declares runtime-tunable values a map can change after it loads, read
+from expressions via `global-state`. It is a document-root key — a sibling of
+`config:`, not nested inside it — and it uses the MapLibre style spec's own
+shape, `{ key: { default: value } }`:
+
+```yaml
+type: map
+id: massing
+state:
+  scenario:
+    default: built
+config:
+  center: [-73.98, 40.75]
+  zoom: 12
+layers:
+  - id: buildings
+    type: fill-extrusion
+    source: parcels
+    paint:
+      fill-extrusion-height:
+        - case
+        - ["==", ["global-state", "scenario"], "built"]
+        - ["get", "built_height"]
+        - ["get", "zoned_height"]
+```
+
+`parameters:` carries the presentation metadata a control UI needs to render a
+picker for a state key — the library owns the parameter's shape, the host owns
+how it looks. It holds no `default`; the value lives in `state:`.
+
+```yaml
+parameters:
+  scenario:
+    label: Massing scenario
+    type: enum
+    values: [built, potential]
+```
+
+:::note
+`state` and `global-state` require **maplibre-gl 5.6.0 or later**, and are
+supported on maplibre-gl JS only. When a document is compiled with `mlym emit`
+for an older runtime — or for cross-renderer portability — the emitter inlines
+each state key's default and drops the `state` block.
+:::
 
 ## View Options
 

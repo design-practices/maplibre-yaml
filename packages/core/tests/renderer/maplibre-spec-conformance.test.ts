@@ -262,12 +262,20 @@ describe("style-spec floor", () => {
     layers: [],
   };
 
-  it("accepts a `state` root property", () => {
-    const errors = validateStyleMin({
+  it("recognizes `state` as a typed root property, not an unknown key", () => {
+    // The discriminating assertion. `validateStyleMin` ignores unknown root
+    // properties, so `{ state: ... }` returns [] on ANY version — the old test
+    // asserted that and proved nothing. What is version-specific is that on 23+
+    // `state` is a *typed* root property, so a malformed one is rejected; on
+    // 20.4.0 it is unknown and a string sails through. A downgrade fails here.
+    const wellFormed = validateStyleMin({
       ...baseStyle,
       state: { scenario: { default: "built" } },
     } as any);
-    expect(errors).toEqual([]);
+    expect(wellFormed).toEqual([]);
+
+    const malformed = validateStyleMin({ ...baseStyle, state: "not an object" } as any);
+    expect(malformed.length).toBeGreaterThan(0);
   });
 
   it("accepts a `global-state` expression reading a declared state key", () => {

@@ -212,6 +212,7 @@ function toJSSafe(doc: Document): { value: unknown } | { error: ParseError } {
     return {
       error: {
         path: "",
+        code: "yaml-expansion",
         message:
           `Unsupported YAML: ${fanOut}. Merge one map at a time ` +
           "(`<<: *base`); chain merges to combine several.",
@@ -223,12 +224,19 @@ function toJSSafe(doc: Document): { value: unknown } | { error: ParseError } {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     const isExpansionAttack = /alias count|resource exhaustion/i.test(message);
+    // A merge key pointed at a non-map is an authoring typo, not an attack —
+    // classify it apart so a consumer and a caret-seeking CLI can tell them
+    // apart. Anything else from toJS() is a genuine expansion failure.
+    const isMergeError = /merge sources must be maps/i.test(message);
     return {
       error: {
         path: "",
+        code: isExpansionAttack ? "yaml-expansion" : isMergeError ? "yaml-merge" : "yaml-syntax",
         message: isExpansionAttack
           ? `YAML could not be expanded: ${message}`
-          : `YAML error: ${message}`,
+          : isMergeError
+            ? `Invalid merge key: ${message}`
+            : `YAML error: ${message}`,
       },
     };
   }
@@ -286,9 +294,30 @@ export type ScrollytellingBlock = z.infer<typeof ScrollytellingBlockSchema>;
  * @property column - Optional column number in the YAML file where error occurred
  * @property suggestion - Optional nearest valid alternative (did-you-mean)
  */
+/**
+ * A stable, machine-readable classification of a parse error.
+ *
+ * @remarks
+ * The message is for humans and will be reworded; the code is the contract a
+ * consumer keys on. `yaml-expansion` in particular lets a host treat an
+ * anchor-expansion attack differently from an ordinary typo without matching
+ * prose, which is the whole reason a hostile-input consumer parses at all.
+ */
+export type ParseErrorCode =
+  /** Malformed YAML the library could not parse into a document. */
+  | "yaml-syntax"
+  /** An anchor/merge expansion the library refused as a resource-exhaustion risk. */
+  | "yaml-expansion"
+  /** A merge key pointed at something that is not a map. */
+  | "yaml-merge"
+  /** The document validated against no schema (unknown block type, wrong shape). */
+  | "schema";
+
 export interface ParseError {
   path: string;
   message: string;
+  /** Machine-readable classification. Absent on legacy/schema-issue paths. */
+  code?: ParseErrorCode;
   line?: number;
   column?: number;
   suggestion?: string;
@@ -449,6 +478,7 @@ export class YAMLParser {
         lineCounter,
         syntaxError: {
           path: "",
+          code: "yaml-syntax",
           message: `YAML syntax error: ${err.message}`,
           ...(start ? { line: start.line, column: start.col } : {}),
         },

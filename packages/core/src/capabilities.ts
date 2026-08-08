@@ -58,6 +58,19 @@ export interface CapabilityPolicy {
   allowHtml?: boolean;
   /** Origins live-data endpoints may point at. Undefined means unrestricted. */
   allowedOrigins?: string[];
+  /**
+   * Force `state:` to compile away even when the target runtime supports it.
+   *
+   * @remarks
+   * `state` and `global-state` are maplibre-gl JS only — as of style-spec
+   * 24.8.5, Android and iOS are still open issues — so a style emitted with
+   * `state` intact does not render on maplibre-native at any version. A caller
+   * who needs the emitted artifact to be portable across renderers sets this,
+   * and the runtime gate inlines the defaults as it would for an old JS target.
+   * Default is off: keeping `state` is right for the common JS case, and this
+   * makes full portability reachable without making it the default.
+   */
+  inlineState?: boolean;
 }
 
 /** The policy that applies when a host has not supplied one. */
@@ -77,6 +90,7 @@ export function meetsVersion(version: string | undefined, floor: string): boolea
 
 /** Whether the target runtime can carry `state:` through to the emitted style. */
 export function supportsState(policy: CapabilityPolicy): boolean {
+  if (policy.inlineState) return false;
   return meetsVersion(policy.target, STATE_RUNTIME_FLOOR);
 }
 

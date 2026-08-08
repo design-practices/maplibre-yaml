@@ -183,6 +183,14 @@ export function normalizeLayer(layer: Layer): LayerModel {
  * rest are constructor-only. Any split that keeps `config:` whole on one side
  * contradicts the spec.
  *
+ * **The document root is enumerated, not partitioned**, so the never-drop
+ * invariant is scoped to the objects above, not the root. A root key outside
+ * the recognized set (`id`, `config`, `layers`, `sources`, `controls`,
+ * `legend`, `className`, `style`, `state`, `parameters`) does not reach the
+ * model — including `type` (structural) and `x-*` extensions, which the
+ * extension registry reads from the raw parsed document, not from the model.
+ * The emitter strips `x-*` regardless, so nothing is lost that should survive.
+ *
  * `state:` and `parameters:` are accepted at the document root ahead of the
  * rest of v2's surface syntax, which is where v2 puts them — so an author who
  * adopts them today writes them in their final position and has nothing to
@@ -258,7 +266,10 @@ export function denormalizeConfig(model: MapModel): MapConfig {
     ...model.runtime.map,
     ...model.style.camera,
   };
-  if (model.style.basemap !== undefined) config["mapStyle"] = model.style.basemap;
+  // Presence, not value: normalize recorded `basemap` when `"mapStyle" in config`
+  // was true, so a `mapStyle: undefined` the author wrote must round-trip as
+  // present. `"basemap" in model.style` is set only when the key was present.
+  if ("basemap" in model.style) config["mapStyle"] = model.style.basemap;
   // `state` and `parameters` are deliberately absent. They are authored at the
   // document root, not inside `config:`, and nothing in v0.5.0's renderer
   // consumes them — they are carried in the model for the emitter. Reinjecting

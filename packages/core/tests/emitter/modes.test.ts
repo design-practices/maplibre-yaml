@@ -55,6 +55,16 @@ describe("runtime gate on state:", () => {
     expect(validateStyleMin(gated.style as never)).toEqual([]);
   });
 
+  it("inlines state when inlineState is set, even on a supporting runtime", () => {
+    const gated = applyRuntimeGate(project(stateDoc), {
+      trust: "trusted",
+      target: "6.0.0",
+      inlineState: true,
+    });
+    expect(gated.style).not.toHaveProperty("state");
+    expect(validateStyleMin(gated.style as never)).toEqual([]);
+  });
+
   it("treats an undeclared target as not meeting the floor", () => {
     // A caller who has not said which runtime they target has not made a claim
     // about it; guessing generously ships a style that renders blank.
@@ -180,6 +190,13 @@ describe("capability policy", () => {
   it("gates state on the floor", () => {
     expect(supportsState({ trust: "trusted", target: "5.6.0" })).toBe(true);
     expect(supportsState({ trust: "trusted", target: "4.7.1" })).toBe(false);
+  });
+
+  it("inlineState forces state off even on a supporting runtime", () => {
+    // Native portability: state is JS-only, so a caller targeting cross-renderer
+    // output opts into inlining regardless of the JS version.
+    expect(supportsState({ trust: "trusted", target: "5.6.0", inlineState: true })).toBe(false);
+    expect(supportsState({ trust: "trusted", target: "6.0.0", inlineState: true })).toBe(false);
   });
 
   it("denies raw markup by default in an untrusted context", () => {
