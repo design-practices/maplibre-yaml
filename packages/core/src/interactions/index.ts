@@ -34,3 +34,16 @@ export type { Bounds } from "./geometry-bounds";
 
 export { InteractionRegistry, createInteractionRegistry } from "./registry";
 export type { InteractionDenial } from "./registry";
+
+export { projectInteractions } from "./manifest";
+export type {
+  InteractionsProjection,
+  ProjectedLayerInteractions,
+  ProjectedInteractiveConfig,
+} from "./manifest";
+
+export { attachInteractions } from "./attach";
+export type {
+  AttachInteractionsOptions,
+  InteractionsHandle,
+} from "./attach";

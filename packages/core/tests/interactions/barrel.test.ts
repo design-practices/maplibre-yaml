@@ -1,4 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// The interactions barrel now re-exports `attachInteractions`, which imports the
+// maplibre-gl `Popup` value at module load. Polyfill the object-URL API the
+// bundle touches on import so the real module loads under jsdom (same shim the
+// renderer conformance suites use).
+vi.hoisted(() => {
+  const w = globalThis as any;
+  w.URL.createObjectURL ??= () => "blob:barrel-test";
+  w.URL.revokeObjectURL ??= () => {};
+});
+
 import {
   CLICK_INTERACTIONS,
   HOVER_INTERACTIONS,

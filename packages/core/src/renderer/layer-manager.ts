@@ -15,7 +15,10 @@ import {
   ImageSourceSchema,
   VideoSourceSchema,
 } from "../schemas";
-import { HOVER_FEATURE_STATE_KEY } from "../interactions";
+// Import the constant from its submodule rather than the interactions barrel:
+// the barrel now re-exports `attachInteractions`, which eagerly loads the
+// maplibre-gl `Popup` value, and this module needs only a maplibre-free string.
+import { HOVER_FEATURE_STATE_KEY } from "../interactions/built-ins";
 import { DataFetcher } from "../data/data-fetcher";
 import { PollingManager } from "../data/polling-manager";
 import { StreamManager } from "../data/streaming/stream-manager";
