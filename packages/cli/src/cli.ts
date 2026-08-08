@@ -27,6 +27,7 @@ const main = defineCommand({
     preview: () => import('./commands/preview.js').then(m => m.previewCommand),
     init: () => import('./commands/init.js').then(m => m.initCommand),
     schema: () => import('./commands/schema.js').then(m => m.schemaCommand),
+    emit: () => import('./commands/emit.js').then(m => m.emitCommand),
   },
 });
 
