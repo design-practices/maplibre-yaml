@@ -15,7 +15,7 @@ import {
   ImageSourceSchema,
   VideoSourceSchema,
 } from "../schemas";
-import { HOVER_FEATURE_STATE_KEY } from "./interactions";
+import { HOVER_FEATURE_STATE_KEY } from "../interactions";
 import { DataFetcher } from "../data/data-fetcher";
 import { PollingManager } from "../data/polling-manager";
 import { StreamManager } from "../data/streaming/stream-manager";

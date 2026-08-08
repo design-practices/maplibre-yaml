@@ -16,7 +16,7 @@ import {
   type InteractionContext,
   type InteractionDeps,
   type InteractionRuntime,
-} from "./interactions";
+} from "../interactions";
 
 /** An interaction paired with its per-handler runtime. */
 type BoundInteraction = {
@@ -39,7 +39,7 @@ export type {
   Interaction,
   InteractionContext,
   InteractionDeps,
-} from "./interactions";
+} from "../interactions";
 
 /**
  * Handles click, hover, and other interactive events on layers

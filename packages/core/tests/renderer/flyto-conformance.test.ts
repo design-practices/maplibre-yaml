@@ -20,7 +20,7 @@ vi.hoisted(() => {
 });
 
 import { LngLat } from "maplibre-gl";
-import { CLICK_INTERACTIONS } from "../../src/renderer/interactions";
+import { CLICK_INTERACTIONS } from "../../src/interactions";
 
 /** Drive the real flyTo interaction and capture the options it builds. */
 function optionsFor(flyTo: unknown, clickedAt: LngLat) {
