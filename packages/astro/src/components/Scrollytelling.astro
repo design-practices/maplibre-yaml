@@ -138,6 +138,33 @@ const serializedConfig = config ? JSON.stringify(config) : null;
 {
   src && !config && (
     <script is:inline define:vars={{ storyId, src }}>
+      // Deliberate duplicates of core's escapeHtml/safeUrl: this script is
+      // `is:inline` (it cannot use a bundled import), and the dynamic import of
+      // core below sits inside the very `try` whose `catch` renders an error
+      // card. An error path that depends on the module that may have just
+      // failed to load is not an error path.
+      const escapeHtml = (value) =>
+        String(value).replace(
+          /[&<>"']/g,
+          (char) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[char]
+        );
+
+      // Media URLs are schema-validated with zod's `.url()`, which accepts
+      // `javascript:` and `data:` as well-formed. Relative and http(s) only.
+      const safeSrc = (value) => {
+        const cleaned = String(value).replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+        if (/^(\/|\.\.?\/|#|\?)/.test(cleaned)) return cleaned;
+        if (/^https?:\/\//i.test(cleaned)) return cleaned;
+        return /^[^/?#]*:/.test(cleaned) ? null : cleaned;
+      };
+
       // Runtime YAML loading for src prop
       (async () => {
         try {
@@ -161,7 +188,7 @@ const serializedConfig = config ? JSON.stringify(config) : null;
                 <div style="padding: 40px; text-align: center; color: #c33;">
                   <h2>Configuration Error</h2>
                   <ul style="text-align: left; max-width: 600px; margin: 20px auto;">
-                    ${result.errors.map((err) => `<li>${err.path ? err.path + ": " : ""}${err.message}</li>`).join("")}
+                    ${result.errors.map((err) => `<li>${err.path ? escapeHtml(err.path) + ": " : ""}${escapeHtml(err.message)}</li>`).join("")}
                   </ul>
                 </div>
               `;
@@ -192,13 +219,25 @@ const serializedConfig = config ? JSON.stringify(config) : null;
 
               let html = "";
               if (chapter.image) {
-                html += `<div class="chapter-media"><img src="${chapter.image}" alt="${chapter.title}" loading="lazy" decoding="async" /></div>`;
+                const imageSrc = safeSrc(chapter.image);
+                if (imageSrc !== null) {
+                  html += `<div class="chapter-media"><img src="${escapeHtml(imageSrc)}" alt="${escapeHtml(chapter.title)}" loading="lazy" decoding="async" /></div>`;
+                }
               }
               if (chapter.video) {
-                html += `<div class="chapter-media"><video src="${chapter.video}" controls playsinline preload="metadata">Your browser does not support the video element.</video></div>`;
+                const videoSrc = safeSrc(chapter.video);
+                if (videoSrc !== null) {
+                  html += `<div class="chapter-media"><video src="${escapeHtml(videoSrc)}" controls playsinline preload="metadata">Your browser does not support the video element.</video></div>`;
+                }
               }
-              html += `<h2 class="chapter-title" id="chapter-title-${chapter.id}">${chapter.title}</h2>`;
+              html += `<h2 class="chapter-title" id="chapter-title-${escapeHtml(chapter.id)}">${escapeHtml(chapter.title)}</h2>`;
               if (chapter.description) {
+                // NOT escaped: the schema documents this as
+                // "Chapter description (HTML/markdown supported)", so escaping
+                // would break documented behavior. Choosing between an
+                // allowlist sanitizer and a trusted-author contract is a
+                // product decision tracked as ml-2l7.2 (trust model for
+                // HTML-bearing Astro props) -- not an oversight here.
                 html += `<div class="chapter-description">${chapter.description}</div>`;
               }
 
@@ -213,6 +252,8 @@ const serializedConfig = config ? JSON.stringify(config) : null;
           if (result.data.footer) {
             const footer = document.createElement("footer");
             footer.className = "scrolly-footer";
+            // NOT escaped: schema documents this as "Footer content (HTML)".
+            // Same open trust-model decision as chapter.description (ml-2l7.2).
             footer.innerHTML = result.data.footer;
             chaptersContainer?.appendChild(footer);
           }

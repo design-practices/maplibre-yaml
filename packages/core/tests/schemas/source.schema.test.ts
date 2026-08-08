@@ -189,11 +189,13 @@ describe('GeoJSONSourceSchema', () => {
           const issue = result.error.errors.find((e) => e.path[0] === 'data');
           expect(issue).toBeDefined();
           expect(issue!.message).toMatch(/local source-directory path/);
-          // Recommends `data:` with a public-served URL, NOT `url:`.
-          // `url: z.string().url()` rejects root-relative paths, so steering
-          // users at `url:` here was a dead-end -- this test guards against
-          // that regression.
-          expect(issue!.message).toMatch(/data: "\/data\//);
+          // Recommends `url:` with a public-served path. This used to
+          // recommend `data:` instead, because `url: z.string().url()`
+          // rejected root-relative paths and steering users there was a
+          // dead-end. `url:` now accepts same-origin paths, so it is the
+          // right field to name: `data:` means inline GeoJSON, `url:` means
+          // fetched. The round-trip guard below keeps the advice honest.
+          expect(issue!.message).toMatch(/url: "\/data\//);
           expect(issue!.message).toMatch(/public\//);
         }
       });
@@ -228,9 +230,20 @@ describe('GeoJSONSourceSchema', () => {
     // Round-trip guard: the rejection-message-recommended pattern must
     // itself validate. This catches the class of bug where the schema's
     // error message points users at a config that the schema then ALSO
-    // rejects (the original 0.2.3 candidate recommended `url:`, which
-    // z.string().url() rejects for root-relative paths -- a dead-end).
-    it("accepts the pattern the rejection message recommends (data: '/data/...')", () => {
+    // rejects -- which is exactly what happened in 0.2.3, when the message
+    // recommended `url:` while `z.string().url()` still rejected
+    // root-relative paths.
+    it("accepts the pattern the rejection message recommends (url: '/data/...')", () => {
+      const result = GeoJSONSourceSchema.safeParse({
+        type: 'geojson',
+        url: '/data/sample.geojson',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    // Still legal: MapLibre treats a `data` string as a URL, and a
+    // root-relative one resolves. We only reject source-directory paths.
+    it("still accepts data: '/data/...' (spec-legal, just not the advice)", () => {
       const result = GeoJSONSourceSchema.safeParse({
         type: 'geojson',
         data: '/data/sample.geojson',
@@ -747,4 +760,106 @@ describe('LayerSourceSchema', () => {
       })
     ).toThrow();
   });
+});
+
+// GH #39: `z.string().url()` demanded a fully-qualified URL, so self-hosting
+// data alongside the page -- an ordinary, documented setup that works at
+// runtime -- was a validation dead-end. Every source URL field validates
+// against the same predicate now, so the fix cannot regress on one type
+// while holding on another.
+describe('same-origin paths in source URL fields', () => {
+  const accepted = ['/data/points.geojson', './points.geojson', '../shared/points.geojson'];
+
+  describe.each(accepted)('accepts %s', (path) => {
+    it('geojson url', () => {
+      expect(
+        GeoJSONSourceSchema.safeParse({ type: 'geojson', url: path }).success
+      ).toBe(true);
+    });
+
+    it('vector TileJSON url', () => {
+      expect(VectorSourceSchema.safeParse({ type: 'vector', url: path }).success).toBe(
+        true
+      );
+    });
+
+    it('raster TileJSON url', () => {
+      expect(RasterSourceSchema.safeParse({ type: 'raster', url: path }).success).toBe(
+        true
+      );
+    });
+
+    it('raster-dem TileJSON url', () => {
+      expect(
+        RasterDEMSourceSchema.safeParse({ type: 'raster-dem', url: path }).success
+      ).toBe(true);
+    });
+
+    it('stream endpoint url', () => {
+      expect(StreamConfigSchema.safeParse({ type: 'sse', url: path }).success).toBe(
+        true
+      );
+    });
+  });
+
+  it('accepts a same-origin image url', () => {
+    const coordinates = [
+      [-80, 46],
+      [-71, 46],
+      [-71, 37],
+      [-80, 37],
+    ];
+    expect(
+      ImageSourceSchema.safeParse({
+        type: 'image',
+        url: '/overlays/plan.png',
+        coordinates,
+      }).success
+    ).toBe(true);
+  });
+
+  it('accepts same-origin video urls', () => {
+    const coordinates = [
+      [-80, 46],
+      [-71, 46],
+      [-71, 37],
+      [-80, 37],
+    ];
+    expect(
+      VideoSourceSchema.safeParse({
+        type: 'video',
+        urls: ['/media/flyover.mp4', '/media/flyover.webm'],
+        coordinates,
+      }).success
+    ).toBe(true);
+  });
+
+  it('accepts a same-origin tile template', () => {
+    expect(
+      RasterSourceSchema.safeParse({
+        type: 'raster',
+        tiles: ['/tiles/{z}/{x}/{y}.png'],
+      }).success
+    ).toBe(true);
+  });
+
+  // The relaxation is not "accept any string" -- a bare word is still not
+  // something a browser can fetch, and catching it is the point of the field
+  // having a validator at all.
+  describe.each(['not-a-url', 'data.geojson', 'example.com/data.geojson'])(
+    'still rejects %s',
+    (bad) => {
+      it('geojson url', () => {
+        expect(
+          GeoJSONSourceSchema.safeParse({ type: 'geojson', url: bad }).success
+        ).toBe(false);
+      });
+
+      it('vector TileJSON url', () => {
+        expect(VectorSourceSchema.safeParse({ type: 'vector', url: bad }).success).toBe(
+          false
+        );
+      });
+    }
+  );
 });

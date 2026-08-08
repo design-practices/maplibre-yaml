@@ -5,6 +5,12 @@
 
 import type { z } from "zod";
 import { PopupContentSchema, PopupContentItemSchema } from "../schemas";
+import {
+  escapeHtml,
+  safeUrl,
+  POPUP_TAGS,
+  LINK_TARGETS,
+} from "../utils/html";
 
 type PopupContent = z.infer<typeof PopupContentSchema>;
 type PopupContentItem = z.infer<typeof PopupContentItemSchema>;
@@ -25,6 +31,16 @@ export class PopupBuilder {
         if (!entry) return "";
         const [tag, items] = entry;
         if (!Array.isArray(items)) return "";
+        // The tag is a YAML key, so without this check any key at all became
+        // an element -- `script:` emitted a script block, and a key carrying
+        // attributes (`img src=x onerror=...`) injected them wholesale.
+        if (!POPUP_TAGS.has(tag)) {
+          console.warn(
+            `[maplibre-yaml] Ignoring popup element "${tag}": not a supported tag. ` +
+              `Supported: ${[...POPUP_TAGS].join(", ")}.`
+          );
+          return "";
+        }
         const innerHTML = items
           .map((i: PopupContentItem) => this.buildItem(i, properties))
           .join("");
@@ -42,7 +58,7 @@ export class PopupBuilder {
   ): string {
     // Static string
     if (item.str) {
-      return this.escapeHtml(item.str);
+      return escapeHtml(item.str);
     }
 
     // Dynamic property
@@ -53,27 +69,47 @@ export class PopupBuilder {
         if (item.format && typeof value === "number") {
           return this.formatNumber(value, item.format);
         }
-        return this.escapeHtml(String(value));
+        return escapeHtml(String(value));
       }
       // Use fallback
-      return item.else ? this.escapeHtml(item.else) : "";
+      return item.else ? escapeHtml(item.else) : "";
     }
 
     // Link
     if (item.href) {
       const text = (item as any).text || item.href;
-      const target = (item as any).target || "_blank";
-      return `<a href="${this.escapeHtml(
-        item.href
-      )}" target="${target}">${this.escapeHtml(text)}</a>`;
+      // `javascript:` survives escaping untouched and executes on click, and
+      // zod's `.url()` accepts it as well-formed -- so the scheme is checked
+      // here rather than trusted from validation.
+      const href = safeUrl(item.href);
+      if (href === null) {
+        console.warn(
+          `[maplibre-yaml] Dropping popup link with unsafe URL scheme: ${item.href}`
+        );
+        return escapeHtml(text);
+      }
+      // `target` is passthrough in the schema, so it was raw-interpolated into
+      // the attribute -- `_blank" onmouseover="...` escaped the quotes.
+      const requested = (item as any).target ?? "_blank";
+      const target = LINK_TARGETS.has(requested) ? requested : "_blank";
+      // A `_blank` link hands the opener to the destination without this.
+      const rel = target === "_blank" ? ' rel="noopener noreferrer"' : "";
+      return `<a href="${escapeHtml(href)}" target="${escapeHtml(
+        target
+      )}"${rel}>${escapeHtml(text)}</a>`;
     }
 
     // Image
     if (item.src) {
       const alt = (item as any).alt || "";
-      return `<img src="${this.escapeHtml(item.src)}" alt="${this.escapeHtml(
-        alt
-      )}" />`;
+      const src = safeUrl(item.src);
+      if (src === null) {
+        console.warn(
+          `[maplibre-yaml] Dropping popup image with unsafe URL scheme: ${item.src}`
+        );
+        return "";
+      }
+      return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" />`;
     }
 
     return "";
@@ -109,15 +145,4 @@ export class PopupBuilder {
     return result;
   }
 
-  /**
-   * Escape HTML to prevent XSS
-   */
-  private escapeHtml(str: string): string {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
 }

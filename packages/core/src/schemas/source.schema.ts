@@ -17,36 +17,52 @@ import { LngLatSchema } from "./base.schema";
 import { markOpenSchema } from "../parser/validation-utils";
 
 /**
+ * Something a browser can actually fetch: an absolute URL (any scheme), a
+ * root-relative path, or an explicitly-relative path.
+ *
+ * @remarks
+ * This replaces `z.string().url()` on every source URL field. `.url()` demands
+ * a fully-qualified URL, so it rejected `/data/points.geojson` — self-hosting
+ * data alongside the page, an ordinary setup that works at runtime, since the
+ * data layer passes the string straight to `fetch()` and MapLibre resolves
+ * source URLs relative to the document (GH #39).
+ *
+ * A regex rather than a `new URL()` refinement, for two reasons. It keeps the
+ * field a `ZodString`: a `.refine()` yields a `ZodEffects` whose larger type,
+ * multiplied across seven fields inside the layer discriminated union, pushes
+ * that union past TypeScript's serialization buffer (TS7056). And a regex
+ * emits `pattern` into the published JSON Schema, so editors keep a real check
+ * where a refinement would have emitted a bare string.
+ *
+ * Note this is a DX guard, not a security boundary — `.url()` accepted
+ * `javascript:` too, since `new URL()` considers it well-formed. Scheme safety
+ * is enforced where it matters, at the render sinks, by `safeUrl`.
+ */
+const FETCHABLE_REFERENCE = /^(?:[a-zA-Z][a-zA-Z\d+\-.]*:|\/|\.\.?\/)/;
+
+const FETCHABLE_REFERENCE_MESSAGE =
+  "Must be an absolute URL (https://example.com/data.geojson) or a path " +
+  "that resolves against the page (/data/data.geojson)";
+
+const ResourceURLSchema = z
+  .string()
+  .regex(FETCHABLE_REFERENCE, FETCHABLE_REFERENCE_MESSAGE);
+
+/**
  * A tile URL template.
  *
  * @remarks
- * Deliberately not `z.string().url()`. Tile templates carry placeholders
- * (`{z}/{x}/{y}`, `{bbox-epsg-3857}`, `{ratio}`) whose braces are not legal
- * URI characters, so `.url()` emits `format: "uri"` into the published JSON
- * Schema and every standard XYZ template — including the ones in our own docs
- * — is flagged as invalid in editors and by agents generating configs, even
- * though the parser accepts them. Validating with placeholders substituted
- * keeps the runtime check meaningful while emitting a plain string.
- *
- * Same-origin tiles are accepted too (`/tiles/{z}/{x}/{y}.png`). Self-hosting
- * tiles alongside the page is ordinary, and MapLibre resolves relative URLs
- * fine — rejecting them is the same defect already tracked for
- * `GeoJSONSourceSchema.url`, so it is not repeated here.
+ * Tile templates additionally carry placeholders (`{z}/{x}/{y}`,
+ * `{bbox-epsg-3857}`, `{ratio}`) whose braces are not legal URI characters, so
+ * every standard XYZ template — including the ones in our own docs — fails a
+ * literal URL check even though the parser accepts them. Validating with
+ * placeholders substituted keeps the runtime check meaningful, against the
+ * same rule every other source URL uses.
  */
 const TileURLTemplateSchema = z
   .string()
   .refine(
-    (value) => {
-      const concrete = value.replace(/\{[^}]+\}/g, "0");
-      // Root- or explicitly-relative paths resolve against the page.
-      if (/^(\/|\.\.?\/)/.test(concrete)) return true;
-      try {
-        new URL(concrete);
-        return true;
-      } catch {
-        return false;
-      }
-    },
+    (value) => FETCHABLE_REFERENCE.test(value.replace(/\{[^}]+\}/g, "0")),
     {
       message:
         "Must be a tile URL or same-origin path, optionally with {z}/{x}/{y} placeholders",
@@ -84,7 +100,7 @@ const TileURLTemplateSchema = z
  */
 export const StreamConfigSchema = z.object({
   type: z.enum(["websocket", "sse"]).describe("Streaming connection type"),
-  url: z.string().url().optional().describe("WebSocket or SSE endpoint URL"),
+  url: ResourceURLSchema.optional().describe("WebSocket or SSE endpoint URL"),
   reconnect: z
     .boolean()
     .default(true)
@@ -318,7 +334,7 @@ export type RefreshConfig = z.infer<typeof RefreshConfigSchema>;
 export const GeoJSONSourceSchema = z
   .object({
     type: z.literal("geojson").describe("Source type"),
-    url: z.string().url().optional().describe("URL to fetch GeoJSON data"),
+    url: ResourceURLSchema.optional().describe("URL to fetch GeoJSON data"),
     data: z.any().optional().describe("Inline GeoJSON object"),
     prefetchedData: z
       .any()
@@ -406,20 +422,15 @@ export const GeoJSONSourceSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["data"],
-        // Recommends `data: "/data/..."` rather than `url:` because the
-        // `url:` field is schema-validated with z.string().url(), which
-        // requires a fully-qualified URL (`https://...`) and rejects
-        // root-relative paths. MapLibre treats a string in `data:` as a
-        // URL and fetches it correctly. Until url: relaxes to accept
-        // root-relative paths (see follow-up), `data: "/path"` is the
-        // working pattern for files served from public/.
+        // Now that `url:` accepts same-origin paths, it is the field this
+        // should point at: `data:` is for inline GeoJSON, `url:` is for
+        // anything fetched. Both work at runtime, but recommending `url:`
+        // keeps the two fields meaning distinct things.
         message:
-          `GeoJSON source.data must be an inline GeoJSON object or a URL. ` +
+          `GeoJSON source.data must be an inline GeoJSON object, not a path. ` +
           `"${d.data}" is a local source-directory path that won't resolve at runtime. ` +
-          `Move the file to public/ and reference the public-served URL:\n` +
-          `  data: "/data/<filename>.geojson"\n` +
-          `(\`url:\` requires a fully-qualified https:// URL and won't accept ` +
-          `root-relative paths; use \`data:\` for runtime URLs to public assets.)`,
+          `Move the file to public/ and fetch it with "url":\n` +
+          `  url: "/data/<filename>.geojson"`,
       });
     }
   });
@@ -456,7 +467,7 @@ export type GeoJSONSource = z.infer<typeof GeoJSONSourceSchema>;
 export const VectorSourceSchema = z
   .object({
     type: z.literal("vector").describe("Source type"),
-    url: z.string().url().optional().describe("TileJSON URL"),
+    url: ResourceURLSchema.optional().describe("TileJSON URL"),
     tiles: z
       .array(TileURLTemplateSchema)
       .optional()
@@ -517,7 +528,7 @@ export type VectorSource = z.infer<typeof VectorSourceSchema>;
 export const RasterSourceSchema = z
   .object({
     type: z.literal("raster").describe("Source type"),
-    url: z.string().url().optional().describe("TileJSON URL"),
+    url: ResourceURLSchema.optional().describe("TileJSON URL"),
     tiles: z
       .array(TileURLTemplateSchema)
       .optional()
@@ -589,7 +600,7 @@ export type RasterSource = z.infer<typeof RasterSourceSchema>;
 export const RasterDEMSourceSchema = z
   .object({
     type: z.literal("raster-dem").describe("Source type"),
-    url: z.string().url().optional().describe("TileJSON URL"),
+    url: ResourceURLSchema.optional().describe("TileJSON URL"),
     tiles: z
       .array(TileURLTemplateSchema)
       .optional()
@@ -664,7 +675,7 @@ export type RasterDEMSource = z.infer<typeof RasterDEMSourceSchema>;
 export const ImageSourceSchema = z
   .object({
     type: z.literal("image").describe("Source type"),
-    url: z.string().url().describe("Image URL"),
+    url: ResourceURLSchema.describe("Image URL"),
     coordinates: z
       .tuple([LngLatSchema, LngLatSchema, LngLatSchema, LngLatSchema])
       .describe(
@@ -703,7 +714,7 @@ export const VideoSourceSchema = z
   .object({
     type: z.literal("video").describe("Source type"),
     urls: z
-      .array(z.string().url())
+      .array(ResourceURLSchema)
       .min(1)
       .describe("Array of video URLs for browser compatibility"),
     coordinates: z

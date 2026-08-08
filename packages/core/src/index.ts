@@ -47,6 +47,7 @@ export {
 export type { CapabilityPolicy, TrustContext } from "./capabilities";
 
 // Utils
+export { escapeHtml, safeUrl, POPUP_TAGS, LINK_TARGETS } from "./utils/html";
 export { EventEmitter } from "./utils/event-emitter";
 export type { EventHandler } from "./utils/event-emitter";
 export {

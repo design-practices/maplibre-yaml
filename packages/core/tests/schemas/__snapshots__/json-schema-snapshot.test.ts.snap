@@ -264,7 +264,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "type": "string",
-                        "format": "uri",
+                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
                         "description": "URL to fetch GeoJSON data"
                       },
                       "data": {
@@ -295,8 +295,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "description": "Streaming connection type"
                           },
                           "url": {
-                            "type": "string",
-                            "format": "uri",
+                            "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
                             "description": "WebSocket or SSE endpoint URL"
                           },
                           "reconnect": {
@@ -529,8 +528,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "description": "Source type"
                       },
                       "url": {
-                        "type": "string",
-                        "format": "uri",
+                        "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
                         "description": "TileJSON URL"
                       },
                       "tiles": {
@@ -616,8 +614,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "description": "Source type"
                       },
                       "url": {
-                        "type": "string",
-                        "format": "uri",
+                        "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
                         "description": "TileJSON URL"
                       },
                       "tiles": {
@@ -695,8 +692,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "description": "Source type"
                       },
                       "url": {
-                        "type": "string",
-                        "format": "uri",
+                        "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
                         "description": "TileJSON URL"
                       },
                       "tiles": {
@@ -777,7 +773,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "type": "string",
-                        "format": "uri",
+                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
                         "description": "Image URL"
                       },
                       "coordinates": {
@@ -830,8 +826,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "urls": {
                         "type": "array",
                         "items": {
-                          "type": "string",
-                          "format": "uri"
+                          "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url"
                         },
                         "minItems": 1,
                         "description": "Array of video URLs for browser compatibility"
@@ -3564,7 +3559,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "type": "string",
-                    "format": "uri",
+                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
                     "description": "URL to fetch GeoJSON data"
                   },
                   "data": {
@@ -3595,8 +3590,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         "description": "Streaming connection type"
                       },
                       "url": {
-                        "type": "string",
-                        "format": "uri",
+                        "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
                         "description": "WebSocket or SSE endpoint URL"
                       },
                       "reconnect": {
@@ -3829,8 +3823,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "description": "Source type"
                   },
                   "url": {
-                    "type": "string",
-                    "format": "uri",
+                    "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
                     "description": "TileJSON URL"
                   },
                   "tiles": {
@@ -3916,8 +3909,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "description": "Source type"
                   },
                   "url": {
-                    "type": "string",
-                    "format": "uri",
+                    "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
                     "description": "TileJSON URL"
                   },
                   "tiles": {
@@ -3995,8 +3987,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "description": "Source type"
                   },
                   "url": {
-                    "type": "string",
-                    "format": "uri",
+                    "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
                     "description": "TileJSON URL"
                   },
                   "tiles": {
@@ -4077,7 +4068,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "type": "string",
-                    "format": "uri",
+                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
                     "description": "Image URL"
                   },
                   "coordinates": {
@@ -4130,8 +4121,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "urls": {
                     "type": "array",
                     "items": {
-                      "type": "string",
-                      "format": "uri"
+                      "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url"
                     },
                     "minItems": 1,
                     "description": "Array of video URLs for browser compatibility"
@@ -6031,7 +6021,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "type": "string",
-                                "format": "uri",
+                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
                                 "description": "URL to fetch GeoJSON data"
                               },
                               "data": {
@@ -6062,8 +6052,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                     "description": "Streaming connection type"
                                   },
                                   "url": {
-                                    "type": "string",
-                                    "format": "uri",
+                                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
                                     "description": "WebSocket or SSE endpoint URL"
                                   },
                                   "reconnect": {
@@ -6296,8 +6285,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "description": "Source type"
                               },
                               "url": {
-                                "type": "string",
-                                "format": "uri",
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
                                 "description": "TileJSON URL"
                               },
                               "tiles": {
@@ -6383,8 +6371,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "description": "Source type"
                               },
                               "url": {
-                                "type": "string",
-                                "format": "uri",
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
                                 "description": "TileJSON URL"
                               },
                               "tiles": {
@@ -6462,8 +6449,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "description": "Source type"
                               },
                               "url": {
-                                "type": "string",
-                                "format": "uri",
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
                                 "description": "TileJSON URL"
                               },
                               "tiles": {
@@ -6544,7 +6530,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "type": "string",
-                                "format": "uri",
+                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
                                 "description": "Image URL"
                               },
                               "coordinates": {
@@ -6586,8 +6572,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "urls": {
                                 "type": "array",
                                 "items": {
-                                  "type": "string",
-                                  "format": "uri"
+                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url"
                                 },
                                 "minItems": 1,
                                 "description": "Array of video URLs for browser compatibility"
@@ -9490,7 +9475,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "type": "string",
-                                    "format": "uri",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
                                     "description": "URL to fetch GeoJSON data"
                                   },
                                   "data": {
@@ -9521,8 +9506,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                         "description": "Streaming connection type"
                                       },
                                       "url": {
-                                        "type": "string",
-                                        "format": "uri",
+                                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
                                         "description": "WebSocket or SSE endpoint URL"
                                       },
                                       "reconnect": {
@@ -9755,8 +9739,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Source type"
                                   },
                                   "url": {
-                                    "type": "string",
-                                    "format": "uri",
+                                    "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
                                     "description": "TileJSON URL"
                                   },
                                   "tiles": {
@@ -9842,8 +9825,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Source type"
                                   },
                                   "url": {
-                                    "type": "string",
-                                    "format": "uri",
+                                    "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
                                     "description": "TileJSON URL"
                                   },
                                   "tiles": {
@@ -9921,8 +9903,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Source type"
                                   },
                                   "url": {
-                                    "type": "string",
-                                    "format": "uri",
+                                    "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
                                     "description": "TileJSON URL"
                                   },
                                   "tiles": {
@@ -10003,7 +9984,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "type": "string",
-                                    "format": "uri",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
                                     "description": "Image URL"
                                   },
                                   "coordinates": {
@@ -10056,8 +10037,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   "urls": {
                                     "type": "array",
                                     "items": {
-                                      "type": "string",
-                                      "format": "uri"
+                                      "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url"
                                     },
                                     "minItems": 1,
                                     "description": "Array of video URLs for browser compatibility"
