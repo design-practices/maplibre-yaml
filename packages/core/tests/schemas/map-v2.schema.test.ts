@@ -277,3 +277,59 @@ describe("v2 → model seam (U3 landed readV2Block)", () => {
     expect(model.runtime.map).toMatchObject({ interactive: true });
   });
 });
+
+describe("v2 source cross-field guards (FIX C)", () => {
+  const withSource = (sourceBody: string) => `
+version: 2
+type: map
+id: guard
+style:
+  basemap: https://demotiles.maplibre.org/style.json
+  sources:
+    s:
+${sourceBody}
+  layers: []
+`;
+
+  it("rejects a geojson source with no url/data/prefetchedData", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      withSource("      type: geojson")
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a geojson source that carries data", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      withSource(
+        "      type: geojson\n" +
+          "      data: { type: FeatureCollection, features: [] }"
+      )
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a geojson source that carries prefetchedData under runtime", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      withSource(
+        "      type: geojson\n" +
+          "      runtime:\n" +
+          "        prefetchedData: { type: FeatureCollection, features: [] }"
+      )
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a vector source with neither url nor tiles", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      withSource("      type: vector")
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a vector source with a url", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      withSource("      type: vector\n      url: /tiles/v3.json")
+    );
+    expect(result.success).toBe(true);
+  });
+});

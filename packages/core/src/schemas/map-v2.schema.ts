@@ -187,6 +187,34 @@ function withSourceRuntime(
 }
 
 /**
+ * Re-apply the "url or tiles" cross-field guard to a composed v2 tile source.
+ *
+ * @remarks
+ * {@link baseObject} peels the v1 source schema's `ZodEffects` wrapper to reuse
+ * its shape, discarding the cross-field `.refine()`. For vector/raster/raster-dem
+ * the referenced keys (`url`/`tiles`) survive verbatim into the v2 spec body, so
+ * the guard is still applicable and is re-applied here — otherwise a v2 tile
+ * source with neither would validate where its v1 twin is rejected, failing
+ * later with a worse message.
+ */
+function requireUrlOrTiles(
+  schema: z.ZodTypeAny,
+  label: string
+): z.ZodTypeAny {
+  return schema.refine(
+    (d) => {
+      const o = d as Record<string, unknown>;
+      return Boolean(o["url"] || o["tiles"]);
+    },
+    {
+      message:
+        `${label} source requires either "url" (TileJSON) or "tiles" (tile URL array). ` +
+        "Provide at least one of these properties.",
+    }
+  );
+}
+
+/**
  * A v2 source: the v1 spec body plus an optional nested `runtime:`.
  *
  * @remarks
@@ -195,6 +223,13 @@ function withSourceRuntime(
  * `runtime:` key is attached. The others carry no live-data keys and are reused
  * as-is. None of these objects are marked open, so a live-data key left in the
  * v1 position (`source.refresh`) surfaces as an unknown-key warning.
+ *
+ * The v1 source schemas carried cross-field guards in a `ZodEffects` wrapper
+ * that {@link baseObject} peels off. The guards whose referenced keys survive
+ * into the v2 spec are re-applied here so a v2 source is not accepted where its
+ * v1 twin is rejected: geojson's "at least one data source" (now checking
+ * `url`/`data`/`runtime.prefetchedData`, since `prefetchedData` moved under
+ * `runtime:` in v2) and the tile sources' "url or tiles".
  */
 export const SourceV2Schema: z.ZodTypeAny = z.union([
   withSourceRuntime(
@@ -206,10 +241,31 @@ export const SourceV2Schema: z.ZodTypeAny = z.union([
     }),
     GeoJSONSourceRuntimeSchema,
     true
+  ).superRefine((d, ctx) => {
+    // v1's geojson guard: at least one data source. `prefetchedData` moved under
+    // `runtime:` in v2, so check there; `url`/`data` remain in the spec body.
+    const o = d as Record<string, unknown>;
+    const runtime = o["runtime"] as Record<string, unknown> | undefined;
+    if (
+      !o["url"] &&
+      o["data"] === undefined &&
+      (runtime === undefined || runtime["prefetchedData"] === undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "GeoJSON source requires at least one of: url, data, or runtime.prefetchedData. " +
+          'Use "url" to fetch from an endpoint, "data" for inline GeoJSON, ' +
+          'or "runtime.prefetchedData" for build-time fetched data.',
+      });
+    }
+  }),
+  requireUrlOrTiles(withSourceRuntime(baseObject(VectorSourceSchema)), "Vector"),
+  requireUrlOrTiles(withSourceRuntime(baseObject(RasterSourceSchema)), "Raster"),
+  requireUrlOrTiles(
+    withSourceRuntime(baseObject(RasterDEMSourceSchema)),
+    "Raster DEM"
   ),
-  withSourceRuntime(baseObject(VectorSourceSchema)),
-  withSourceRuntime(baseObject(RasterSourceSchema)),
-  withSourceRuntime(baseObject(RasterDEMSourceSchema)),
   withSourceRuntime(baseObject(ImageSourceSchema)),
   withSourceRuntime(baseObject(VideoSourceSchema)),
 ]);
@@ -237,8 +293,23 @@ export const LayerRuntimeSchema = z
   .describe("Per-layer experience configuration (v2 `layer.runtime`)");
 
 /**
- * The extension attached to every v2 layer: a nested `runtime:` plus the
- * reserved-but-unread `extends:` key (V2-D6 / KTD3).
+ * The extension attached to every v2 layer: a nested `runtime:`, the
+ * reserved-but-unread `extends:` key (V2-D6 / KTD3), and a v2-shaped `source:`
+ * override.
+ *
+ * @remarks
+ * The v1 layer bodies validate `source:` with the v1 {@link LayerSourceSchema}
+ * (via `BaseLayerPropertiesSchema`), which for an inline geojson source
+ * materializes `fetchStrategy: "runtime"` **flat** on the source object rather
+ * than under a nested `runtime:`. Left alone, that flat key rides into
+ * `spec.source` (the erasable half) and diverges from the v1 twin, which
+ * partitions it into `runtime.source` — breaking AE2 and leaking a key
+ * MapLibre's validator rejects into the emitted style. Overriding `source:`
+ * here with the v2 source shape (nested `runtime:`, strict RFC 7946 `data`)
+ * makes an inline layer source carry its live-data under `runtime:` exactly as
+ * top-level `style.sources` do, so {@link readV2Source}'s nested-`runtime:` peel
+ * is correct and AE2 holds. The string-reference option is preserved; `source:`
+ * is optional so background layers (which carry none) stay valid.
  */
 const layerV2Extension = {
   runtime: LayerRuntimeSchema.optional().describe(
@@ -250,6 +321,13 @@ const layerV2Extension = {
     .describe(
       "Reserved — layer inheritance (v2). The key name is claimed; the " +
         "semantics are not defined and the value is unread."
+    ),
+  source: z
+    .union([z.string(), SourceV2Schema])
+    .optional()
+    .describe(
+      "Layer source: a named-source string ref, or an inline v2 source " +
+        "(nested `runtime:`, strict RFC 7946 `data`)"
     ),
 } as const;
 

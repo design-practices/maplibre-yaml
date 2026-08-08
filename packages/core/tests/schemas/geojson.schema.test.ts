@@ -241,6 +241,11 @@ describe("GeometryCollection — depth cap (R11 DoS)", () => {
     // At the cap, still valid.
     expect(GeometrySchema.safeParse(chain(MAX_GEOMETRY_COLLECTION_DEPTH)).success).toBe(true);
 
+    // Exactly one past the cap (depth cap+1): the boundary must reject.
+    expect(
+      GeometrySchema.safeParse(chain(MAX_GEOMETRY_COLLECTION_DEPTH + 1)).success
+    ).toBe(false);
+
     // Well beyond the cap: rejected, and rejected quickly (proves the
     // discriminatedUnion short-circuits rather than walking the whole payload).
     const start = performance.now();

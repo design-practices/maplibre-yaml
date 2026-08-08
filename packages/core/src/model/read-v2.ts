@@ -73,6 +73,11 @@ function readV2Source(source: unknown): SourceModel {
  * The inline-source split also mirrors {@link normalizeLayer}: a source authored
  * inline on the layer carries its live-data under a nested `runtime:` (the v2
  * convention), which is lifted to `runtime.source` so `spec.source` stays clean.
+ * That nesting is guaranteed by the schema — a v2 layer's `source:` is validated
+ * by the v2 source shape (`layerV2Extension` in map-v2.schema.ts), so a geojson
+ * inline source materializes `fetchStrategy` under `runtime:`, not flat on the
+ * source; without that override the v1 layer schema would leave it flat and it
+ * would leak into `spec.source`.
  */
 function readV2Layer(layer: unknown): LayerModel {
   const { spec: body, runtime: peeled } = partition(
@@ -142,15 +147,25 @@ export function readV2Block(doc: MapBlockV2): MapModel {
   // TODO(v2 metadata): `style.metadata` (a v2 style-root slot) has no model
   // home yet and is not part of AE2 — leave it unhandled rather than guess one.
 
+  // `state`/`parameters` may be authored under `style:`/`runtime:` OR at the
+  // document root (MapBlockV2Schema accepts both positions). v1's
+  // normalizeMapBlock reads them at the root, so a v2 doc that puts them there
+  // must land in the same model slot — falling through to the root when the
+  // nested position is absent keeps AE2 and honors never-drop. The nested
+  // position wins when both are present.
+  const docState = style["state"] ?? (doc as Record<string, unknown>)["state"];
+  const docParameters =
+    runtime["parameters"] ?? (doc as Record<string, unknown>)["parameters"];
+
   // Presence discipline: optional keys attach only when present, never as
   // `undefined` — the same rule normalizeMapBlock enforces.
   if ("basemap" in style)
     model.style.basemap = style["basemap"] as MapConfig["mapStyle"];
-  if (style["state"] !== undefined)
-    model.style.state = style["state"] as Record<string, unknown>;
+  if (docState !== undefined)
+    model.style.state = docState as Record<string, unknown>;
 
-  if (runtime["parameters"] !== undefined)
-    model.runtime.parameters = runtime["parameters"] as Record<string, unknown>;
+  if (docParameters !== undefined)
+    model.runtime.parameters = docParameters as Record<string, unknown>;
   if (runtime["controls"] !== undefined)
     model.runtime.controls = runtime["controls"] as ControlsConfig;
   if (runtime["legend"] !== undefined)

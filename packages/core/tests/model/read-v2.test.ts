@@ -115,6 +115,90 @@ style:
     expect(v2).toEqual(v1);
   });
 
+  it("inline geojson layer source: fetchStrategy lands in runtime.source, not spec.source (FIX A)", () => {
+    // A geojson source materializes `fetchStrategy: "runtime"` by default. The
+    // v1 twin partitions that into `runtime.source` via normalizeLayer; the v2
+    // inline source must too — otherwise the key leaks into the erasable
+    // `spec.source` (which MapLibre's validator rejects) and AE2 breaks.
+    const v1 = model(`
+type: map
+id: inline
+config:
+  center: [0, 0]
+  zoom: 5
+  mapStyle: ${BASEMAP}
+layers:
+  - id: dots
+    type: circle
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [] }
+    paint:
+      circle-color: "#111"
+`);
+    const v2 = model(`
+version: 2
+type: map
+id: inline
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 5
+  layers:
+    - id: dots
+      type: circle
+      source:
+        type: geojson
+        data: { type: FeatureCollection, features: [] }
+      paint:
+        circle-color: "#111"
+`);
+    expect(v2).toEqual(v1);
+    const layer = v2.style.layers[0]!;
+    expect(layer.spec["source"]).not.toHaveProperty("fetchStrategy");
+    expect(layer.spec["source"]).not.toHaveProperty("runtime");
+    expect(layer.runtime["source"]).toEqual({ fetchStrategy: "runtime" });
+  });
+
+  it("state/parameters authored at the document root match the v1 twin (FIX B)", () => {
+    const v1 = model(`
+type: map
+id: rooted
+config:
+  center: [0, 0]
+  zoom: 5
+  mapStyle: ${BASEMAP}
+state:
+  scenario:
+    default: built
+parameters:
+  scenario:
+    label: Scenario
+    type: enum
+`);
+    const v2 = model(`
+version: 2
+type: map
+id: rooted
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 5
+state:
+  scenario:
+    default: built
+parameters:
+  scenario:
+    label: Scenario
+    type: enum
+`);
+    expect(v2).toEqual(v1);
+    expect(v2.style.state).toEqual({ scenario: { default: "built" } });
+    expect(v2.runtime.parameters).toEqual({
+      scenario: { label: "Scenario", type: "enum" },
+    });
+  });
+
   it("runtime options: config MapLibre options == runtime.map (both carry interactive:true)", () => {
     const v1 = model(`
 type: map

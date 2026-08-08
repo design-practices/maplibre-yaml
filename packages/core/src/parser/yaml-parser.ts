@@ -347,7 +347,9 @@ export interface ParseResult<T = RootConfig> {
  * The `blockType` field identifies which schema the document was validated
  * against, and `result` carries the corresponding safeParse result:
  *
- * - `'map'` — document had `type: map`, validated with {@link YAMLParser.safeParseMapBlock}
+ * - `'map'` — document had `type: map`, validated with {@link YAMLParser.safeParseMapBlock}.
+ *   The `result` may carry either a v1 {@link MapBlock} or a format-v2
+ *   {@link MapBlockV2} block, since `safeParseMapBlock` dispatches on `version:`.
  * - `'scrollytelling'` — document had `type: scrollytelling`, validated with {@link YAMLParser.safeParseScrollytellingBlock}
  * - `'root'` — document had no `type:` but a `pages:` array, validated with {@link YAMLParser.safeParse}
  * - `'unknown'` — the document type could not be determined (unrecognized
@@ -355,7 +357,7 @@ export interface ParseResult<T = RootConfig> {
  *   nor a root config); `result` is always a failure with a descriptive error
  */
 export type SafeParseAnyResult =
-  | { blockType: "map"; result: ParseResult<MapBlock> }
+  | { blockType: "map"; result: ParseResult<MapBlock | MapBlockV2> }
   | { blockType: "scrollytelling"; result: ParseResult<ScrollytellingBlock> }
   | { blockType: "root"; result: ParseResult<RootConfig> }
   | { blockType: "unknown"; result: ParseResult<never> };
@@ -822,7 +824,9 @@ export class YAMLParser {
    * anything the caller wrote, and a line number pointing at text the author
    * never saw is worse than none.
    */
-  static safeParseMapBlockValue(value: unknown): ParseResult<MapBlock> {
+  static safeParseMapBlockValue(
+    value: unknown
+  ): ParseResult<MapBlock | MapBlockV2> {
     let asYaml: string;
     try {
       asYaml = stringifyYAML(value);
