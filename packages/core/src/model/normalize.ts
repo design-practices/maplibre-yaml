@@ -49,7 +49,7 @@ const CAMERA_KEYS = ["center", "zoom", "pitch", "bearing"] as const;
  * destructure to a declared boundary. It is closed by construction: these are
  * the keys *we* invented, so anything not on it is spec surface.
  */
-const SOURCE_RUNTIME_KEYS = [
+export const SOURCE_RUNTIME_KEYS = [
   "refresh",
   "stream",
   "cache",
@@ -77,7 +77,7 @@ const SOURCE_RUNTIME_KEYS = [
  * `toggleable` is runtime because nothing in the style spec can express "the
  * user may turn this off".
  */
-const LAYER_RUNTIME_KEYS = [
+export const LAYER_RUNTIME_KEYS = [
   "interactive",
   "legend",
   "label",
@@ -99,23 +99,28 @@ function partition(
   source: Record<string, unknown> | undefined,
   runtimeKeys: readonly string[]
 ): { spec: Record<string, unknown>; runtime: Record<string, unknown> } {
-  // Null-prototype accumulators: a document key of `__proto__` would otherwise
-  // assign through the prototype setter, reparenting the result and dropping
-  // the key from both halves — silently violating the never-drop invariant on
-  // exactly the input an attacker controls.
-  const spec: Record<string, unknown> = Object.create(null);
-  const runtime: Record<string, unknown> = Object.create(null);
+  const spec: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = {};
   if (!source) return { spec, runtime };
 
   // Iterating the author's keys rather than ours is what keeps presence
   // faithful — a key the author omitted is absent from both halves rather
   // than present-and-undefined in one.
   for (const key of Object.keys(source)) {
-    if (runtimeKeys.includes(key)) {
-      runtime[key] = source[key];
-    } else {
-      spec[key] = source[key];
-    }
+    const target = runtimeKeys.includes(key) ? runtime : spec;
+    // Defined rather than assigned. A document key of `__proto__` would
+    // otherwise go through the prototype setter — reparenting the accumulator
+    // and dropping the key from both halves, silently breaking the never-drop
+    // invariant on exactly the input an attacker controls. A null-prototype
+    // accumulator would also prevent it, but these objects flow into code that
+    // stringifies them (MapLibre's own validator among it), and an object with
+    // no `toString` throws there.
+    Object.defineProperty(target, key, {
+      value: source[key],
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
   }
   return { spec, runtime };
 }

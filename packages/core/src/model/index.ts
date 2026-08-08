@@ -15,6 +15,8 @@ export type {
 } from "./types";
 
 export {
+  SOURCE_RUNTIME_KEYS,
+  LAYER_RUNTIME_KEYS,
   normalizeMapBlock,
   normalizeLayer,
   normalizeSource,
