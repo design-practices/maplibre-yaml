@@ -98,6 +98,23 @@ export {
   LayerSourceSchema,
 } from "./source.schema";
 
+// GeoJSON schema (U4 — RFC 7946, applied as a hard error under format v2)
+export {
+  PositionSchema,
+  BBoxSchema,
+  PointSchema,
+  MultiPointSchema,
+  LineStringSchema,
+  MultiLineStringSchema,
+  PolygonSchema,
+  MultiPolygonSchema,
+  GeometrySchema,
+  FeatureSchema,
+  FeatureCollectionSchema,
+  GeoJSONSchema,
+  MAX_GEOMETRY_COLLECTION_DEPTH,
+} from "./geojson.schema";
+
 // Layer schemas
 export {
   PopupContentItemSchema,
@@ -150,6 +167,19 @@ export type {
   State,
   Parameters,
 } from "./map.schema";
+
+// Format-v2 map schema (U2 — validation only)
+export {
+  SourceRuntimeSchema,
+  SourceV2Schema,
+  LayerRuntimeSchema,
+  LayerV2Schema,
+  StyleV2Schema,
+  RuntimeMapSchema,
+  RuntimeV2Schema,
+  MapBlockV2Schema,
+} from "./map-v2.schema";
+export type { MapBlockV2 } from "./map-v2.schema";
 
 // Scrollytelling schemas and types
 export {

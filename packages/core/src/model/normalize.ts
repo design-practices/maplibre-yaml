@@ -39,7 +39,7 @@ import type { MapModel, LayerModel, SourceModel, V1MapInput } from "./types";
  * Everything else in `config:` is a `Map` constructor option with no style-spec
  * equivalent. `mapStyle` is handled separately because it is also renamed.
  */
-const CAMERA_KEYS = ["center", "zoom", "pitch", "bearing"] as const;
+export const CAMERA_KEYS = ["center", "zoom", "pitch", "bearing"] as const;
 
 /**
  * Source keys that drive our machinery rather than MapLibre's.
@@ -95,7 +95,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function partition(
+export function partition(
   source: Record<string, unknown> | undefined,
   runtimeKeys: readonly string[]
 ): { spec: Record<string, unknown>; runtime: Record<string, unknown> } {

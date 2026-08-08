@@ -243,6 +243,48 @@ describe("MLMap", () => {
 
       document.body.appendChild(element);
     });
+
+    it("renders a format-v2 document (basemap guard reads style.basemap)", async () => {
+      // The flagship <ml-map> path must accept v2: the pre-render basemap guard
+      // reads `style.basemap` under v2 rather than the v1-only `config.mapStyle`,
+      // and dispatch flows through toModel to the same renderer. (AE3 / U1 :338.)
+      const v2 = {
+        version: 2 as const,
+        type: "map" as const,
+        id: "v2-map",
+        style: {
+          basemap: "https://demotiles.maplibre.org/style.json",
+          center: [-74.5, 40] as [number, number],
+          zoom: 9,
+          layers: [
+            {
+              id: "v2-layer",
+              type: "circle" as const,
+              source: {
+                type: "geojson" as const,
+                data: { type: "FeatureCollection" as const, features: [] },
+              },
+              runtime: { toggleable: false },
+            },
+          ],
+        },
+      };
+
+      const element = document.createElement('ml-map') as MLMap;
+      element.setAttribute("config", JSON.stringify(v2));
+
+      document.body.appendChild(element);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // A renderer means the v2 document cleared the guard and reached render —
+      // not the "basemap is required" error card that a v1-only guard produced.
+      const renderer = element.getRenderer();
+      expect(renderer).toBeTruthy();
+      expect(renderer?.config.mapStyle).toBe(v2.style.basemap);
+      expect(renderer?.config.center).toEqual(v2.style.center);
+      expect(renderer?.layers).toHaveLength(1);
+      expect(renderer?.layers[0].id).toBe("v2-layer");
+    });
   });
 
   describe("non-YAML config paths are validated (U9)", () => {

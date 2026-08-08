@@ -19,7 +19,7 @@ import { dirname, resolve } from 'node:path';
 import consola from 'consola';
 import {
   YAMLParser,
-  normalizeMapBlock,
+  toModel,
   projectStyle,
   resolveBasemap,
   mergeBasemap,
@@ -48,7 +48,7 @@ export async function emitStyle(
   mode: EmitMode,
   policy: CapabilityPolicy,
 ): Promise<{ style: Record<string, unknown>; warnings: EmitWarning[] }> {
-  const model = normalizeMapBlock(block as never);
+  const model = toModel(block as never);
   const projected = applyRuntimeGate(projectStyle(model, mode), policy);
 
   const basemap = model.style.basemap;

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Format v2: a document renders through &lt;ml-map&gt; and compiles with the emitter</title>
+    <!--
+    The v0.6.0 format-v2 guarantee, made visible. A full format-v2 document —
+    the `style:`/`runtime:` split, camera at the style root, `style.state`, a
+    source with a nested `runtime:` (refresh), a layer with a nested `runtime:`
+    (interactive/label/toggleable), and a top-level `runtime:` block — is:
+
+      (1) rendered through the flagship <ml-map> element (parse -> toModel ->
+          render). This is the LEFT map. <ml-map> renders v2 documents natively:
+          its guard reads `style.basemap` under v2, and `toModel` selects the v2
+          reader by version tag.
+      (2) compiled with the emitter to a spec-valid style.json, shown in the
+          JSON panel. Nothing from the runtime half survives the compile.
+
+    Alongside it (the RIGHT map) is a v1 <ml-map> expressing the SAME map. Since
+    the renderer reads only the internal model, and AE2 proves the v1 and v2
+    models are deep-equal, the two maps must render indistinguishably. The ONLY
+    difference between the two branches is which reader produced the model
+    (`readV2Block` vs `normalizeMapBlock`, selected by `toModel`). If they ever
+    diverge, the renderer is reading the raw document instead of the model.
+
+    PASS = two identical maps (a blue polygon + a red dot over a grey basemap),
+    a JSON panel showing `version: 8` with no runtime/interactive/refresh keys,
+    and a clean console. FAIL = a blank map, diverging renders, or a parse
+    warning on the well-formed v2 document.
+    -->
+    <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        display: grid;
+        grid-template-columns: 1fr 1fr 380px;
+        grid-template-rows: 24px 1fr;
+        height: 100vh;
+      }
+      .label {
+        font: 600 12px/24px system-ui, sans-serif;
+        padding: 0 10px;
+        color: #fff;
+        background: #0f172a;
+      }
+      .label.v2 { background: #166534; }
+      .label.v1 { background: #1e3a8a; }
+      .label.panel { background: #0f172a; color: #7dd3fc; }
+      .cell { position: relative; }
+      ml-map { display: block; height: 100%; width: 100%; }
+      aside {
+        grid-row: 1 / 3;
+        overflow: auto;
+        background: #0f172a;
+        color: #e2e8f0;
+        font: 12px/1.5 ui-monospace, monospace;
+        padding: 0;
+      }
+      aside pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        padding: 12px;
+      }
+      #err { color: #f87171; }
+    </style>
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+    </script>
+    <!-- Registers <ml-map>. Auto-defines the element on import. -->
+    <script type="module" src="/packages/core/dist/register.browser.js"></script>
+  </head>
+  <body>
+    <div class="label v2">v2 document — rendered from the model</div>
+    <div class="label v1">v1 twin — the model-purity cross-check</div>
+    <div class="label panel">emitted style.json (v2 compiled)</div>
+
+    <div class="cell" id="cell-v2"></div>
+    <div class="cell" id="cell-v1"></div>
+    <aside><pre id="out">compiling…</pre></aside>
+
+    <script type="module">
+      import {
+        YAMLParser,
+        toModel,
+        projectStyle,
+        mergeBasemap,
+      } from "/packages/core/dist/index.browser.js";
+
+      // A hermetic inline basemap — no network. A grey background layer under
+      // whatever the document adds, exactly like the eject fixture.
+      const BASEMAP = `
+    version: 8
+    name: base
+    sources: {}
+    layers:
+      - { id: bg, type: background, paint: { background-color: "#e5e7eb" } }`;
+
+      // Well-formed RFC 7946 inline GeoJSON: one Polygon (the study area) and
+      // one Point (the site). A parallel unit tightens inline-data validation,
+      // so this must stay spec-valid.
+      const FC = `
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry:
+            type: Polygon
+            coordinates: [[[-74.02,40.70],[-73.94,40.70],[-73.94,40.80],[-74.02,40.80],[-74.02,40.70]]]
+          properties: { name: "Study area" }
+        - type: Feature
+          geometry:
+            type: Point
+            coordinates: [-73.98, 40.75]
+          properties: { name: "Site" }`;
+
+      // The format-v2 document: the style/runtime split, camera at the style
+      // root, style.state, a source with a nested runtime (refresh), a layer
+      // with a nested runtime (interactive/label/toggleable), and a top-level
+      // runtime block (map/controls/container.style).
+      const V2 = `
+version: 2
+type: map
+id: parcels-demo
+style:
+  basemap:${BASEMAP.replace(/\n/g, "\n  ")}
+  center: [-73.98, 40.75]
+  zoom: 11
+  state:
+    theme: { default: day }
+  sources:
+    pts:
+      type: geojson
+      data:${FC.replace(/\n/g, "\n    ")}
+      runtime:
+        refresh: { refreshInterval: 30000 }
+  layers:
+    - id: area
+      type: fill
+      source: pts
+      filter: ["==", ["geometry-type"], "Polygon"]
+      paint: { fill-color: "#2563eb", fill-opacity: 0.5 }
+    - id: dot
+      type: circle
+      source: pts
+      filter: ["==", ["geometry-type"], "Point"]
+      paint:
+        circle-radius: 8
+        circle-color: "#dc2626"
+        circle-stroke-width: 2
+        circle-stroke-color: "#ffffff"
+      runtime:
+        label: "Site"
+        toggleable: true
+        interactive:
+          click:
+            popup:
+              - p:
+                  - str: "A point of interest"
+runtime:
+  map: {}
+  controls:
+    navigation: true
+  container:
+    style: "height:100%;width:100%;"
+`;
+
+      // The SAME map, authored in v1: live-data keys inline on the source,
+      // experience keys inline on the layer, camera under config, container
+      // style at the block root. AE2 says this normalizes to the same model.
+      const V1 = `
+type: map
+id: parcels-demo
+style: "height:100%;width:100%;"
+config:
+  mapStyle:${BASEMAP.replace(/\n/g, "\n  ")}
+  center: [-73.98, 40.75]
+  zoom: 11
+state:
+  theme: { default: day }
+sources:
+  pts:
+    type: geojson
+    refresh: { refreshInterval: 30000 }
+    data:${FC.replace(/\n/g, "\n  ")}
+layers:
+  - id: area
+    type: fill
+    source: pts
+    filter: ["==", ["geometry-type"], "Polygon"]
+    paint: { fill-color: "#2563eb", fill-opacity: 0.5 }
+  - id: dot
+    type: circle
+    source: pts
+    filter: ["==", ["geometry-type"], "Point"]
+    paint:
+      circle-radius: 8
+      circle-color: "#dc2626"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+    label: "Site"
+    toggleable: true
+    interactive:
+      click:
+        popup:
+          - p:
+              - str: "A point of interest"
+controls:
+  navigation: true
+`;
+
+      const out = document.getElementById("out");
+
+      // Feed a YAML document to an <ml-map> via its inline `<script type="text/yaml">`
+      // child — the flagship input path. The element reads it on connect and runs
+      // parse -> toModel -> render, forking only at the reader (v1 vs v2) that
+      // `toModel` selects. The script child MUST be attached before the element
+      // enters the DOM, because <ml-map> reads its configuration in
+      // connectedCallback.
+      function mount(cellId, mapId, yaml) {
+        const el = document.createElement("ml-map");
+        el.id = mapId;
+        const script = document.createElement("script");
+        script.type = "text/yaml";
+        script.textContent = yaml;
+        el.appendChild(script);
+        document.getElementById(cellId).appendChild(el);
+        return el;
+      }
+
+      try {
+        // Compute both models with the SAME toModel the component uses. Exposed
+        // for the model-purity guard: the test asserts they are deep-equal, so
+        // any render divergence would be a renderer bug, not a model one.
+        const p2 = YAMLParser.safeParseMapBlock(V2);
+        if (!p2.success) throw new Error("v2 parse: " + JSON.stringify(p2.errors, null, 2));
+        const p1 = YAMLParser.safeParseMapBlock(V1);
+        if (!p1.success) throw new Error("v1 parse: " + JSON.stringify(p1.errors, null, 2));
+
+        window.__v2warnings = p2.warnings ?? [];
+        window.__v1warnings = p1.warnings ?? [];
+        window.__v2model = toModel(p2.data);
+        window.__v1model = toModel(p1.data);
+
+        // Compile the v2 document with the emitter — the same path eject.html
+        // uses. The runtime half must not survive.
+        const projected = projectStyle(window.__v2model, "with-fallbacks");
+        const base = window.__v2model.style.basemap;
+        const result = base ? mergeBasemap(base, projected) : projected;
+        window.__emittedStyle = result.style;
+        out.textContent = JSON.stringify(result.style, null, 2);
+
+        // Render both through the flagship <ml-map> element.
+        window.__v2el = mount("cell-v2", "v2", V2);
+        window.__v1el = mount("cell-v1", "v1", V1);
+      } catch (err) {
+        out.id = "err";
+        out.textContent = "FAILED:\n" + (err?.message ?? String(err));
+      }
+    </script>
+  </body>
+</html>

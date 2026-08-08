@@ -17,6 +17,8 @@ export type {
 export {
   SOURCE_RUNTIME_KEYS,
   LAYER_RUNTIME_KEYS,
+  CAMERA_KEYS,
+  partition,
   normalizeMapBlock,
   normalizeLayer,
   normalizeSource,
@@ -25,3 +27,6 @@ export {
   denormalizeSources,
   denormalizeOptions,
 } from "./normalize";
+
+export { toModel } from "./to-model";
+export { readV2Block } from "./read-v2";

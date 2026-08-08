@@ -22,6 +22,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               "type": "string",
               "description": "Unique block identifier"
             },
+            "version": {
+              "type": "number",
+              "const": 1,
+              "description": "Format version — v1 documents may state \`version: 1\`"
+            },
             "className": {
               "type": "string",
               "description": "CSS class name for container"
@@ -3332,6 +3337,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
         "id": {
           "type": "string",
           "description": "Unique block identifier"
+        },
+        "version": {
+          "type": "number",
+          "const": 1,
+          "description": "Format version — v1 documents may state \`version: 1\`"
         },
         "className": {
           "type": "string",
@@ -8307,6 +8317,11 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "id": {
                           "type": "string",
                           "description": "Unique block identifier"
+                        },
+                        "version": {
+                          "type": "number",
+                          "const": 1,
+                          "description": "Format version — v1 documents may state \`version: 1\`"
                         },
                         "className": {
                           "type": "string",

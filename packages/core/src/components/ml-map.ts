@@ -43,12 +43,11 @@ import {
 } from "../parser/yaml-parser.js";
 import { MapRenderer } from "../renderer/map-renderer.js";
 import {
-  normalizeMapBlock,
+  toModel,
   denormalizeConfig,
   denormalizeLayers,
   denormalizeSources,
   denormalizeOptions,
-  type V1MapInput,
 } from "../model/index.js";
 import { escapeHtml } from "../utils/html.js";
 
@@ -332,16 +331,25 @@ export class MLMap extends HTMLElement {
    */
   private renderMap(mapBlock: MapBlock): void {
     // Standalone <ml-map> has no global config to inherit defaultMapStyle from,
-    // so a missing mapStyle would die inside MapLibre with an opaque error.
-    // Surface a friendly error card instead. (Schema keeps mapStyle optional
-    // because the Astro builders legitimately resolve it from globalConfig.)
-    if (!mapBlock.config?.mapStyle) {
+    // so a missing basemap would die inside MapLibre with an opaque error.
+    // Surface a friendly error card instead. (Schema keeps it optional because
+    // the Astro builders legitimately resolve it from globalConfig.) The base
+    // style is `config.mapStyle` in v1 and `style.basemap` in v2, so the guard
+    // reads whichever the document's version puts it under.
+    const isV2 = (mapBlock as { version?: number }).version === 2;
+    const basemap = isV2
+      ? (mapBlock as unknown as { style?: { basemap?: unknown } }).style?.basemap
+      : mapBlock.config?.mapStyle;
+    if (!basemap) {
+      const path = isV2 ? "style.basemap" : "config.mapStyle";
+      const key = isV2 ? "basemap" : "mapStyle";
+      const where = isV2 ? "your style:" : "your config";
       this.handleError([
         {
-          path: "config.mapStyle",
+          path,
           message:
-            "mapStyle is required for standalone maps. Add it to your config, for example: " +
-            'mapStyle: "https://demotiles.maplibre.org/style.json" ' +
+            `${key} is required for standalone maps. Add it to ${where}, for example: ` +
+            `${key}: "https://demotiles.maplibre.org/style.json" ` +
             "(inheriting a defaultMapStyle is a feature of the Astro builders, not the standalone <ml-map> element).",
         },
       ]);
@@ -370,7 +378,7 @@ export class MLMap extends HTMLElement {
       // production path through it here is what proves the normalization loses
       // nothing — every component and renderer test now exercises the round
       // trip, so a dropped or invented key fails the suite rather than shipping.
-      const model = normalizeMapBlock(mapBlock as unknown as V1MapInput);
+      const model = toModel(mapBlock as never);
 
       this.renderer = new MapRenderer(
         this.mapContainer,
