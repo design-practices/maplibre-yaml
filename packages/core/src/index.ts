@@ -24,6 +24,15 @@ export * from "./ui";
 // Internal model — the shape the renderer and the emitter share
 export * from "./model";
 
+// Extension registry — validated, normalized `x-*` blocks
+export { ExtensionRegistry } from "./extensions";
+export type {
+  ExtensionDefinition,
+  ExtensionBlock,
+  ExtensionWarning,
+  ExtractResult,
+} from "./extensions";
+
 // Emitter — projects the model's style half to spec-valid style.json
 export { projectStyle, EmitError, mergeBasemap, resolveBasemap, applyRuntimeGate } from "./emitter";
 export type {

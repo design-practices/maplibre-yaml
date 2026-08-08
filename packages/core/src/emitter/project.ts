@@ -151,6 +151,29 @@ function orderLayers(
 }
 
 /**
+ * Strip extension namespaces from schema-known structure.
+ *
+ * @remarks
+ * `x-*` keys ride passthrough — the schema admits them so a host can carry its
+ * own data — and the emitter's job (R5) is to remove them, the same recursive
+ * rule that drops `runtime:`. Descent stops at author payloads (`data`,
+ * `properties`), because an `x-` *property name* inside a GeoJSON feature is the
+ * author's data, not an extension block. This returns a cleaned copy rather
+ * than mutating, so the model the caller holds is untouched.
+ */
+function stripExtensions(node: unknown, opaque: Set<string>): unknown {
+  if (Array.isArray(node)) return node.map((item) => stripExtensions(item, opaque));
+  if (!isPlainObject(node)) return node;
+
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (FORBIDDEN_PREFIXES.some((p) => key.startsWith(p))) continue;
+    out[key] = opaque.has(key) ? value : stripExtensions(value, opaque);
+  }
+  return out;
+}
+
+/**
  * Assert no runtime or extension key survived into the output.
  *
  * @remarks
@@ -291,7 +314,12 @@ export function projectStyle(
     );
   }
 
-  assertClean(style, "", new Set(["data", "properties", "clusterProperties", "metadata"]));
+  const opaque = new Set(["data", "properties", "clusterProperties", "metadata"]);
+  const cleaned = stripExtensions(style, opaque) as Record<string, unknown>;
+  // The invariant, now over the stripped output: `x-*` is gone by the strip
+  // above, so anything assertClean still finds — a `runtime` key — is a real
+  // projection bug and fails closed rather than shipping.
+  assertClean(cleaned, "", opaque);
 
-  return { style, warnings, placements };
+  return { style: cleaned, warnings, placements };
 }
