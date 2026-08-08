@@ -98,6 +98,23 @@ export {
   LayerSourceSchema,
 } from "./source.schema";
 
+// GeoJSON schema (U4 — RFC 7946, applied as a hard error under format v2)
+export {
+  PositionSchema,
+  BBoxSchema,
+  PointSchema,
+  MultiPointSchema,
+  LineStringSchema,
+  MultiLineStringSchema,
+  PolygonSchema,
+  MultiPolygonSchema,
+  GeometrySchema,
+  FeatureSchema,
+  FeatureCollectionSchema,
+  GeoJSONSchema,
+  MAX_GEOMETRY_COLLECTION_DEPTH,
+} from "./geojson.schema";
+
 // Layer schemas
 export {
   PopupContentItemSchema,

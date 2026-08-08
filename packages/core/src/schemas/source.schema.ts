@@ -335,6 +335,16 @@ export const GeoJSONSourceSchema = z
   .object({
     type: z.literal("geojson").describe("Source type"),
     url: ResourceURLSchema.optional().describe("URL to fetch GeoJSON data"),
+    // v1 keeps `data` as `z.any()` deliberately (R2/R10 byte-for-byte compat):
+    // MapLibre tolerates loosely-conformant geometry that `z.any()` admits, and
+    // hard-failing existing v1 files would break the compat guarantee. The
+    // strict RFC 7946 schema is applied as a HARD ERROR under format v2 only
+    // (see geojson.schema.ts, composed in map-v2.schema.ts).
+    // TODO(U4-followup): a non-fatal "warn under v1" for malformed inline
+    // geometry is deferred — it needs version-aware geometry checks in the
+    // collectWarnings walker (which does no geometry inspection today), more
+    // than a local change. File as a follow-up bead rather than plumbing the
+    // document version through the warning walker here.
     data: z.any().optional().describe("Inline GeoJSON object"),
     prefetchedData: z
       .any()

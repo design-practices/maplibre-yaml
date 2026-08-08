@@ -70,6 +70,7 @@ import {
   InteractiveConfigSchema,
   LegendItemSchema,
 } from "./layer.schema";
+import { GeoJSONSchema } from "./geojson.schema";
 import { SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { markOpenSchema } from "../parser/validation-utils";
 
@@ -153,6 +154,12 @@ export const GeoJSONSourceRuntimeSchema = SourceRuntimeSchema.extend({
   // Reuse the exact v1 field definition (carries `.default("runtime")`). The
   // `.shape` index is typed `ZodTypeAny | undefined`; the key is known-present.
   fetchStrategy: geojsonBaseObject.shape.fetchStrategy as z.ZodTypeAny,
+  // U4: `prefetchedData` is inline GeoJSON, moved under `source.runtime` in v2.
+  // Validate it with the strict RFC 7946 schema (hard error under v2), the same
+  // treatment `source.data` gets in the spec body below. v1 leaves both z.any().
+  prefetchedData: GeoJSONSchema.optional().describe(
+    "Pre-fetched inline GeoJSON from build time"
+  ),
 })
   .passthrough()
   .describe("Per-source live-data configuration (v2 geojson `source.runtime`)");
@@ -191,7 +198,12 @@ function withSourceRuntime(
  */
 export const SourceV2Schema: z.ZodTypeAny = z.union([
   withSourceRuntime(
-    geojsonBaseObject.omit(SOURCE_RUNTIME_OMIT),
+    // U4: override the v1 `data: z.any()` with the strict RFC 7946 schema, so a
+    // malformed inline geometry is a HARD ERROR under v2. v1's `source.data`
+    // stays `z.any()` (source.schema.ts) — the byte-for-byte compat guarantee.
+    geojsonBaseObject.omit(SOURCE_RUNTIME_OMIT).extend({
+      data: GeoJSONSchema.optional().describe("Inline GeoJSON object"),
+    }),
     GeoJSONSourceRuntimeSchema,
     true
   ),
