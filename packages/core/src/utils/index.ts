@@ -7,7 +7,8 @@
 // HTML escaping and URL guards -- the shared sinks-safety helpers. Exported
 // so consumers rendering their own chrome around a map (the Astro components
 // do exactly this) escape the same way core does.
-export { escapeHtml, safeUrl, POPUP_TAGS, LINK_TARGETS } from "./html";
+export { escapeHtml, safeUrl, POPUP_TAGS, LINK_TARGETS, html, isHtmlMarker } from "./html";
+export type { HtmlMarker } from "./html";
 
 // Event emitter
 export { EventEmitter } from "./event-emitter";

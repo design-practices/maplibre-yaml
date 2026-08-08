@@ -8,6 +8,7 @@ import { Popup } from "./maplibre-interop";
 import type { z } from "zod";
 import { LayerSchema, PopupContentSchema } from "../schemas";
 import { PopupBuilder } from "./popup-builder";
+import type { CapabilityPolicy } from "../capabilities";
 import {
   CLICK_INTERACTIONS,
   HOVER_INTERACTIONS,
@@ -64,10 +65,14 @@ export class EventHandler {
   /** Source id per layer, derived as LayerManager derives it. */
   private layerToSource: Map<string, string>;
 
-  constructor(map: MapLibreMap, callbacks?: EventHandlerCallbacks) {
+  constructor(
+    map: MapLibreMap,
+    callbacks?: EventHandlerCallbacks,
+    policy?: CapabilityPolicy
+  ) {
     this.map = map;
     this.callbacks = callbacks || {};
-    this.popupBuilder = new PopupBuilder();
+    this.popupBuilder = new PopupBuilder(policy);
     this.activePopup = null;
     this.attachedLayers = new Set();
     this.boundHandlers = new Map();

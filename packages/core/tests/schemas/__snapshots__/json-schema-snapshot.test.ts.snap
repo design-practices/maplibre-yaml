@@ -972,8 +972,24 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                           "type": "object",
                                           "properties": {
                                             "str": {
-                                              "type": "string",
-                                              "description": "Static text string"
+                                              "anyOf": [
+                                                {
+                                                  "type": "string"
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "$html": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "$html"
+                                                  ],
+                                                  "additionalProperties": true
+                                                }
+                                              ],
+                                              "description": "Static text; an \`!html\`-tagged value carries raw markup"
                                             },
                                             "property": {
                                               "type": "string",
@@ -4267,8 +4283,24 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                       "type": "object",
                                       "properties": {
                                         "str": {
-                                          "type": "string",
-                                          "description": "Static text string"
+                                          "anyOf": [
+                                            {
+                                              "type": "string"
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "$html": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "required": [
+                                                "$html"
+                                              ],
+                                              "additionalProperties": true
+                                            }
+                                          ],
+                                          "description": "Static text; an \`!html\`-tagged value carries raw markup"
                                         },
                                         "property": {
                                           "type": "string",
@@ -6696,8 +6728,24 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "type": "object",
                                   "properties": {
                                     "str": {
-                                      "type": "string",
-                                      "description": "Static text string"
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "$html": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "$html"
+                                          ],
+                                          "additionalProperties": true
+                                        }
+                                      ],
+                                      "description": "Static text; an \`!html\`-tagged value carries raw markup"
                                     },
                                     "property": {
                                       "type": "string",
@@ -10159,8 +10207,24 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                       "type": "object",
                                       "properties": {
                                         "str": {
-                                          "type": "string",
-                                          "description": "Static text string"
+                                          "anyOf": [
+                                            {
+                                              "type": "string"
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "$html": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "required": [
+                                                "$html"
+                                              ],
+                                              "additionalProperties": true
+                                            }
+                                          ],
+                                          "description": "Static text; an \`!html\`-tagged value carries raw markup"
                                         },
                                         "property": {
                                           "type": "string",

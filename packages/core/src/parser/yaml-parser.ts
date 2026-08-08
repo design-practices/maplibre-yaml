@@ -72,6 +72,8 @@
  */
 
 import { parse as parseYAML, parseDocument, stringify as stringifyYAML, visit, isSeq, isScalar, LineCounter, type Document } from "yaml";
+import type { ScalarTag, ParseOptions, DocumentOptions, SchemaOptions } from "yaml";
+import type { HtmlMarker } from "../utils/html.js";
 
 /**
  * Parse options for every map-document parse in the library.
@@ -100,7 +102,30 @@ import { parse as parseYAML, parseDocument, stringify as stringifyYAML, visit, i
  * The Astro loader parses map documents too and carries its own copy of this
  * option; both must stay in step.
  */
-const YAML_PARSE_OPTIONS = { merge: true } as const;
+/**
+ * The `!html` custom tag.
+ *
+ * @remarks
+ * Resolves `!html "<b>x</b>"` to the structural {@link HtmlMarker} `{ $html }`
+ * rather than a bare string, so raw markup is a request the author made
+ * explicitly, never a guess the parser made about content. Whether it renders
+ * is decided at the sink by the capability policy — the tag grants nothing on
+ * its own.
+ *
+ * A `Scalar` tag: it applies to a string value, and any non-string content is
+ * left as-is (a malformed `!html` on a mapping is not something to coerce).
+ */
+const htmlTag: ScalarTag = {
+  tag: "!html",
+  resolve(value: string): HtmlMarker {
+    return { $html: value };
+  },
+};
+
+const YAML_PARSE_OPTIONS: ParseOptions & DocumentOptions & SchemaOptions = {
+  merge: true,
+  customTags: [htmlTag],
+};
 
 /**
  * Reject fan-out merge keys before the document is materialized.

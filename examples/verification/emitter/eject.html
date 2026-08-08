@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Eject: a compiled style renders in vanilla MapLibre</title>
+    <!--
+    The eject guarantee, made visible. A v1 document is compiled to a
+    style.json by the emitter, and that style is handed to a PLAIN
+    `new maplibregl.Map({ style })` — no <ml-map>, no runtime from this
+    library. If the compiled artifact is self-contained and spec-valid, the map
+    renders; if the emitter left something behind, it does not.
+
+    PASS = a blue polygon over a grey basemap, and the JSON panel shows a style
+    with `version: 8`, a merged basemap layer, and no `runtime`/`interactive`
+    keys. FAIL = blank map or a console error from MapLibre rejecting the style.
+    -->
+    <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; display: grid; grid-template-columns: 1fr 380px; height: 100vh; }
+      #map { height: 100vh; }
+      aside { overflow: auto; background: #0f172a; color: #e2e8f0; font: 12px/1.5 ui-monospace, monospace; padding: 12px; }
+      h1 { font-size: 13px; color: #7dd3fc; margin: 0 0 8px; }
+      pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
+      .warn { color: #fbbf24; }
+    </style>
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+    </script>
+  </head>
+  <body>
+    <div id="map"></div>
+    <aside>
+      <h1>emitted style.json</h1>
+      <div id="warnings"></div>
+      <pre id="out">compiling…</pre>
+    </aside>
+
+    <script type="module">
+      import maplibregl from "maplibre-gl";
+      import {
+        YAMLParser,
+        normalizeMapBlock,
+        projectStyle,
+        mergeBasemap,
+      } from "/packages/core/dist/index.browser.js";
+
+      // A document with an inline basemap, live data, and interactions — so the
+      // compile has real work to do: merge the base, drop the runtime half,
+      // hoist nothing it should not.
+      const DOC = `
+type: map
+id: parcels
+config:
+  mapStyle:
+    version: 8
+    name: base
+    sources: {}
+    layers:
+      - { id: bg, type: background, paint: { background-color: "#e5e7eb" } }
+  center: [-73.98, 40.75]
+  zoom: 11
+sources:
+  parcels:
+    type: geojson
+    refresh: { refreshInterval: 5000 }
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry:
+            type: Polygon
+            coordinates: [[[-74.02,40.70],[-73.94,40.70],[-73.94,40.80],[-74.02,40.80],[-74.02,40.70]]]
+          properties: { name: "Study area" }
+layers:
+  - id: fill
+    type: fill
+    source: parcels
+    paint: { fill-color: "#2563eb", fill-opacity: 0.6 }
+    interactive:
+      click: { popup: [{ p: [{ property: name }] }] }
+`;
+
+      const out = document.getElementById("out");
+      const warnBox = document.getElementById("warnings");
+
+      try {
+        const parsed = YAMLParser.safeParseMapBlock(DOC);
+        if (!parsed.success) throw new Error(JSON.stringify(parsed.errors, null, 2));
+
+        const model = normalizeMapBlock(parsed.data);
+        const projected = projectStyle(model, "with-fallbacks");
+        const base = model.style.basemap;
+        const result = base ? mergeBasemap(base, projected) : projected;
+
+        out.textContent = JSON.stringify(result.style, null, 2);
+        for (const w of result.warnings) {
+          const d = document.createElement("div");
+          d.className = "warn";
+          d.textContent = `⚠ ${w.path}: ${w.message}`;
+          warnBox.appendChild(d);
+        }
+
+        // The proof: a plain MapLibre map over the COMPILED style. Nothing from
+        // this library participates in rendering.
+        const map = new maplibregl.Map({
+          container: "map",
+          style: result.style,
+        });
+        // Expose for the test harness.
+        window.__ejectMap = map;
+        window.__emittedStyle = result.style;
+      } catch (err) {
+        out.textContent = "COMPILE FAILED:\n" + (err?.message ?? String(err));
+        out.style.color = "#f87171";
+      }
+    </script>
+  </body>
+</html>

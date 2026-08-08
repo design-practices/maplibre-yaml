@@ -11,6 +11,7 @@ import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
 import { EventHandler, type EventHandlerCallbacks } from './event-handler';
 import { LegendBuilder } from './legend-builder';
 import { ControlsManager } from './controls-manager';
+import type { CapabilityPolicy } from "../capabilities.js";
 import {
   denormalizeConfig,
   denormalizeLayers,
@@ -50,6 +51,16 @@ export interface MapRendererOptions {
   controls?: ControlsConfig;
   /** Legend declared in the YAML `legend:` block — built automatically on map load */
   legend?: LegendConfig;
+  /**
+   * Trust and runtime capabilities for this map.
+   *
+   * @remarks
+   * Gates render-time behavior an author could otherwise abuse — most directly
+   * whether an `!html` popup value renders as markup or as escaped text.
+   * Omitted means untrusted: a host embedding a document it did not author gets
+   * the safe default without opting into it.
+   */
+  capabilities?: CapabilityPolicy;
 }
 
 /**
@@ -174,7 +185,7 @@ export class MapRenderer {
     };
 
     this.layerManager = new LayerManager(this.map, layerCallbacks);
-    this.eventHandler = new EventHandler(this.map, eventCallbacks);
+    this.eventHandler = new EventHandler(this.map, eventCallbacks, options.capabilities);
     this.legendBuilder = new LegendBuilder();
     this.controlsManager = new ControlsManager(this.map);
 

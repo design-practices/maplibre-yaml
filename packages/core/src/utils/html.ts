@@ -141,3 +141,37 @@ export const LINK_TARGETS: ReadonlySet<string> = new Set([
   "_parent",
   "_top",
 ]);
+
+/**
+ * A string the author explicitly marked as raw HTML.
+ *
+ * @remarks
+ * The shape a `!html` YAML tag resolves to. It is a *structural* marker — an
+ * object with a `$html` key — rather than a sniffed string, which is the
+ * distinction the trust model turns on: the format never decides "this looks
+ * like markup" by inspecting content. Whether the markup actually renders is
+ * gated at the sink by the capability policy, so the marker is only ever a
+ * request, never a grant.
+ *
+ * JSON-serializable on purpose. It survives the `<ml-map config="...">`
+ * attribute path and a round trip, and a YAML parser without the `!html`
+ * handler resolves the tag to the plain string instead — which then escapes,
+ * so an older or handler-less reader degrades to text rather than failing.
+ */
+export interface HtmlMarker {
+  $html: string;
+}
+
+/** Wrap a raw HTML string in the marker. */
+export function html(markup: string): HtmlMarker {
+  return { $html: markup };
+}
+
+/** Whether a value is an {@link HtmlMarker}. */
+export function isHtmlMarker(value: unknown): value is HtmlMarker {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { $html?: unknown }).$html === "string"
+  );
+}

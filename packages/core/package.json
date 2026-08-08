@@ -27,7 +27,8 @@
     "./components": {
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
-    }
+    },
+    "./index.browser": "./dist/index.browser.js"
   },
   "files": [
     "dist",
