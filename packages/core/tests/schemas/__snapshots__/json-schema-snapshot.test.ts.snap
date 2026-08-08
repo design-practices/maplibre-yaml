@@ -2539,7 +2539,15 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
             },
             "state": {
               "type": "object",
-              "additionalProperties": {},
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "default": {
+                    "description": "Initial value, read by \`global-state\`"
+                  }
+                },
+                "additionalProperties": true
+              },
               "description": "Runtime-tunable values, readable from expressions via \`global-state\`"
             },
             "parameters": {
@@ -2570,9 +2578,6 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "step": {
                     "type": "number",
                     "description": "Increment, for range parameters"
-                  },
-                  "default": {
-                    "description": "Default value"
                   }
                 },
                 "additionalProperties": true
@@ -5834,7 +5839,15 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
         },
         "state": {
           "type": "object",
-          "additionalProperties": {},
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "default": {
+                "description": "Initial value, read by \`global-state\`"
+              }
+            },
+            "additionalProperties": true
+          },
           "description": "Runtime-tunable values, readable from expressions via \`global-state\`"
         },
         "parameters": {
@@ -5865,9 +5878,6 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
               "step": {
                 "type": "number",
                 "description": "Increment, for range parameters"
-              },
-              "default": {
-                "description": "Default value"
               }
             },
             "additionalProperties": true
@@ -8680,7 +8690,15 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         },
                         "state": {
                           "type": "object",
-                          "additionalProperties": {},
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "default": {
+                                "description": "Initial value, read by \`global-state\`"
+                              }
+                            },
+                            "additionalProperties": true
+                          },
                           "description": "Runtime-tunable values, readable from expressions via \`global-state\`"
                         },
                         "parameters": {
@@ -8711,9 +8729,6 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "step": {
                                 "type": "number",
                                 "description": "Increment, for range parameters"
-                              },
-                              "default": {
-                                "description": "Default value"
                               }
                             },
                             "additionalProperties": true

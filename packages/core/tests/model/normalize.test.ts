@@ -20,6 +20,7 @@ import {
   denormalizeOptions,
 } from "../../src/model";
 import type { V1MapInput } from "../../src/model";
+import { YAMLParser } from "../../src/parser/yaml-parser";
 
 const minimalInput = (over: Partial<V1MapInput> = {}): V1MapInput =>
   ({
@@ -279,11 +280,11 @@ describe("state: accepted early (R13, AE6)", () => {
   it("puts state on the style side and parameter metadata on the runtime side", () => {
     const model = normalizeMapBlock(
       minimalInput({
-        state: { scenario: "built" },
+        state: { scenario: { default: "built" } },
         parameters: { scenario: { label: "Scenario", type: "enum" } },
       } as Partial<V1MapInput>)
     );
-    expect(model.style.state).toEqual({ scenario: "built" });
+    expect(model.style.state).toEqual({ scenario: { default: "built" } });
     expect(model.runtime.parameters).toEqual({
       scenario: { label: "Scenario", type: "enum" },
     });
@@ -293,12 +294,76 @@ describe("state: accepted early (R13, AE6)", () => {
   it("does not leak state or parameters into MapLibre constructor options", () => {
     const model = normalizeMapBlock(
       minimalInput({
-        state: { scenario: "built" },
+        state: { scenario: { default: "built" } },
         parameters: { scenario: { label: "Scenario" } },
       } as Partial<V1MapInput>)
     );
     const reassembled = denormalizeConfig(model) as unknown as Record<string, unknown>;
     expect("state" in reassembled).toBe(false);
     expect("parameters" in reassembled).toBe(false);
+  });
+});
+
+/**
+ * The authored `state:` shape is the style spec's own shape.
+ *
+ * @remarks
+ * These pin the decision rather than restate it. An earlier draft accepted
+ * `z.record(z.any())`, and the repo's own two suites then disagreed about
+ * whether the authored form was flat or nested — with `validateStyleMin`
+ * checking neither, so nothing caught it. A flat document would have validated
+ * clean and then resolved to `undefined` through `global-state`.
+ */
+describe("state: is authored in the spec's shape", () => {
+  it("accepts the nested form the spec defines", () => {
+    const result = YAMLParser.safeParseMapBlock(`
+type: map
+id: s
+config:
+  center: [0, 0]
+  zoom: 5
+state:
+  scenario:
+    default: built
+layers: []`);
+    expect(result.success).toBe(true);
+    expect((result.data as unknown as Record<string, unknown>)["state"]).toEqual({
+      scenario: { default: "built" },
+    });
+  });
+
+  it("rejects the flat form rather than accepting it as sugar", () => {
+    const result = YAMLParser.safeParseMapBlock(`
+type: map
+id: s
+config:
+  center: [0, 0]
+  zoom: 5
+state:
+  scenario: built
+layers: []`);
+    expect(result.success).toBe(false);
+  });
+
+  it("keeps the value in state: and presentation in parameters:", () => {
+    const result = YAMLParser.safeParseMapBlock(`
+type: map
+id: s
+config:
+  center: [0, 0]
+  zoom: 5
+state:
+  scenario:
+    default: built
+parameters:
+  scenario:
+    label: Massing scenario
+    type: enum
+    values: [built, potential]
+layers: []`);
+    expect(result.success).toBe(true);
+    const block = result.data as unknown as Record<string, Record<string, unknown>>;
+    // The default lives in one place only — `parameters` carries no `default`.
+    expect(block["parameters"]!["scenario"]).not.toHaveProperty("default");
   });
 });

@@ -393,12 +393,32 @@ export type MapConfig = z.infer<typeof MapConfigSchema>;
  * format v2's surface syntax, in the position v2 gives it, so an author who
  * adopts it today has nothing to move later.
  *
+ * **The authored shape is the spec's own shape**, `{ key: { default: value } }`,
+ * not a flat `{ key: value }`. This is the one place where "the erasable half
+ * *is* the spec" is literally true — `state` compiles through verbatim, with no
+ * transformation at all, unlike `visible` or `before`. Inventing a different
+ * spelling for the single key where that claim is exact would undercut it.
+ *
+ * The sugar precedent set for GeoJSON does not transfer: `location:`/`region:`
+ * exist as sugar to protect content collections people already wrote, and no
+ * `state:` document exists yet. There is nothing to protect, so a second
+ * authored form would cost two-ways-to-author and buy nothing.
+ *
+ * The `{default: ...}` wrapper is not gratuitous either — it is where the spec
+ * expects to add per-key fields, and a flattened form could not follow.
+ *
  * The spec's `state` carries defaults only: no label, no type, no range. The
  * metadata a control UI needs to render a picker lives in {@link
  * ParametersSchema} instead, which does *not* compile through.
  */
 export const StateSchema = z
-  .record(z.any())
+  .record(
+    z
+      .object({
+        default: z.any().describe("Initial value, read by `global-state`"),
+      })
+      .passthrough()
+  )
   .describe("Runtime-tunable values, keyed by name");
 
 /** Inferred type for the state block. */
@@ -408,8 +428,12 @@ export type State = z.infer<typeof StateSchema>;
  * Presentation metadata for `state` keys.
  *
  * @remarks
- * The library owns the parameter's shape — type, range, label, default — and
- * the host owns how it is presented. Nothing here reaches the compiled style.
+ * The library owns the parameter's shape — type, range, label — and the host
+ * owns how it is presented. Nothing here reaches the compiled style.
+ *
+ * There is deliberately no `default` here: the value lives in {@link
+ * StateSchema}, where the style spec puts it. Carrying it in both places would
+ * be two spellings of one fact with no rule about which wins.
  */
 export const ParametersSchema = z
   .record(
@@ -421,7 +445,6 @@ export const ParametersSchema = z
         min: z.number().optional().describe("Lower bound, for range parameters"),
         max: z.number().optional().describe("Upper bound, for range parameters"),
         step: z.number().optional().describe("Increment, for range parameters"),
-        default: z.any().optional().describe("Default value"),
       })
       .passthrough()
   )
