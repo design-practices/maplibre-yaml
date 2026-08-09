@@ -33,6 +33,43 @@ any step fails, fix it before saying "done."
 Releases go through changesets (`pnpm changeset` → release PR); never
 `npm publish` by hand.
 
+## Changesets are mandatory — generate them automatically
+
+**Every change that touches the published surface of `@maplibre-yaml/core`,
+`@maplibre-yaml/astro`, or `@maplibre-yaml/cli` MUST land with a changeset in
+the same PR.** "Published surface" means anything a consumer can observe:
+exported API, runtime behavior, validation/parse behavior, schemas, or a
+user-facing bug fix. Internal-only churn (tests, comments, refactors with no
+behavior change, docs, examples, CI, plans) does **not** need one.
+
+Agents generate the changeset **without being asked**, as part of finishing the
+work — do not wait for a human to notice it is missing at review time. Write the
+file directly to `.changeset/<kebab-summary>.md` (equivalent to `pnpm
+changeset`, which is interactive and not agent-friendly):
+
+```markdown
+---
+"@maplibre-yaml/core": minor
+"@maplibre-yaml/astro": patch
+---
+
+One paragraph in the changelog voice: what changed and why it matters to a
+consumer. Lead with the observable change, not the internal mechanism.
+```
+
+- **Bump level:** `patch` for a bug fix or internal-only-but-observable tweak;
+  `minor` for new API or new capability; `major` only for a breaking change
+  (coordinate with a human first). List every package whose *own* changelog
+  should carry the entry — dependents bump automatically via the workspace
+  range, so you do not list a package merely because it depends on a bumped one.
+- **One changeset per logical change**, not per file. A PR that is one feature
+  gets one changeset even if it spans packages.
+- **When closing a Beads implementation workflow that changed a published
+  package, a changeset is part of "done"** — the pre-submit and session-close
+  checks are not complete without it. If a merged PR reaches `main` without one
+  (it happens), backfill the changeset on a follow-up PR rather than leaving the
+  release changelog silently incomplete.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
 ## Beads Issue Tracker
 
