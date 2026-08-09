@@ -492,6 +492,59 @@ Named sources are added to the map before layers are processed, so any layer can
   Use named sources when multiple layers share the same data. Use inline sources for single-layer convenience.
 </Aside>
 
+### GeoJSON Sugar
+
+For hand-authored data, a `type: geojson` source can carry a `location`,
+`locations`, `region`, or `route` shorthand in place of a full `data:` object.
+`loadMapConfig` parses with the core parser, which expands each sugar to
+canonical GeoJSON before validation, so the `config` you hand to `<Map>` is
+already normalized:
+
+```astro
+---
+import { Map, loadMapConfig } from '@maplibre-yaml/astro';
+const config = await loadMapConfig('./src/config/geojson-sugar.yaml');
+---
+<Map config={config} height="480px" />
+```
+
+```yaml
+type: map
+id: sugar-demo
+config:
+  center: [-73.98, 40.75]
+  zoom: 12
+  mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+sources:
+  site:
+    type: geojson
+    location:
+      coordinates: [-73.98, 40.75]
+      name: "Site"
+  path:
+    type: geojson
+    route:
+      coordinates: [[-74.00, 40.73], [-73.98, 40.75], [-73.96, 40.77]]
+      name: "Walking route"
+layers:
+  - id: path-line
+    type: line
+    source: path
+    paint:
+      line-color: "#f59e0b"
+      line-width: 4
+  - id: site-dot
+    type: circle
+    source: site
+    paint:
+      circle-radius: 9
+      circle-color: "#dc2626"
+```
+
+See [GeoJSON Sugar](/schema/sources/#geojson-sugar) for the full reference and
+all four shorthands. A runnable version lives in the minimal example at
+`examples/astro/minimal/src/pages/geojson-sugar.astro`.
+
 ## FullPageMap Component
 
 The `FullPageMap` component creates a full-viewport map with built-in controls and an optional legend. It's perfect for landing pages, dashboards, or dedicated map views.

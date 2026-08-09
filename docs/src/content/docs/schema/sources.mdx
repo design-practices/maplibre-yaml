@@ -90,6 +90,139 @@ source:
   fetchStrategy: build
 ```
 
+## GeoJSON Sugar
+
+For hand-authored data, spelling out `data:` as a full `Feature` or
+`FeatureCollection` is a lot of ceremony for a handful of coordinates. A
+`type: geojson` source may instead carry one of four **sugar** keys in the
+data position. Each normalizes to canonical GeoJSON immediately after parse —
+before validation — so the renderer only ever sees the `Feature` /
+`FeatureCollection` it stands for.
+
+| Sugar | Produces | Coordinates shape |
+|-------|----------|-------------------|
+| `location` | a single Point `Feature` | `[longitude, latitude]` |
+| `locations` | a `FeatureCollection` of Points | array of `{ coordinates, name?, description? }` |
+| `region` | a Polygon `Feature` | array of linear rings (`Position[][]`) |
+| `route` | a LineString `Feature` (≥ 2 positions) | array of positions (`Position[]`) |
+
+Sugar is valid **only** on `type: geojson` sources and is **mutually exclusive**
+with `data:` and `url:` — author exactly one of them. An optional `name` and
+`description` on a sugar node become the Feature's `properties` (each defaulting
+to `""`); styling and camera fields have no home here — they belong on the
+layer's paint or the map's camera.
+
+#### `location` — one point
+
+```yaml
+source:
+  type: geojson
+  location:
+    coordinates: [-73.98, 40.75]
+    name: "Site"
+    description: "A single point of interest"
+```
+
+#### `locations` — many points
+
+```yaml
+source:
+  type: geojson
+  locations:
+    - coordinates: [-74.00, 40.73]
+      name: "Stop A"
+    - coordinates: [-73.96, 40.77]
+      name: "Stop B"
+```
+
+#### `region` — a polygon
+
+`coordinates` is an array of linear rings, exactly as GeoJSON `Polygon`
+coordinates are: the first ring is the outer boundary, and each ring should
+close (its last position repeating its first).
+
+```yaml
+source:
+  type: geojson
+  region:
+    coordinates:
+      - [[-74.02, 40.70], [-73.94, 40.70], [-73.94, 40.80], [-74.02, 40.80], [-74.02, 40.70]]
+    name: "Study district"
+```
+
+#### `route` — a line
+
+```yaml
+source:
+  type: geojson
+  route:
+    coordinates: [[-74.00, 40.73], [-73.98, 40.75], [-73.96, 40.77]]
+    name: "Walking route"
+```
+
+#### A complete map using all four
+
+The sugars compose like any other named source — define them under `sources:`
+and reference each by name from a layer:
+
+```yaml
+type: map
+id: sugar-tour
+config:
+  center: [-73.98, 40.75]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  site:
+    type: geojson
+    location:
+      coordinates: [-73.98, 40.75]
+      name: "Site"
+  stops:
+    type: geojson
+    locations:
+      - coordinates: [-74.00, 40.73]
+        name: "Stop A"
+      - coordinates: [-73.96, 40.77]
+        name: "Stop B"
+  district:
+    type: geojson
+    region:
+      coordinates:
+        - [[-74.02, 40.70], [-73.94, 40.70], [-73.94, 40.80], [-74.02, 40.80], [-74.02, 40.70]]
+      name: "Study district"
+  path:
+    type: geojson
+    route:
+      coordinates: [[-74.00, 40.73], [-73.98, 40.75], [-73.96, 40.77]]
+      name: "Walking route"
+layers:
+  - id: district-fill
+    type: fill
+    source: district
+    paint:
+      fill-color: "#10b981"
+      fill-opacity: 0.3
+  - id: path-line
+    type: line
+    source: path
+    paint:
+      line-color: "#f59e0b"
+      line-width: 4
+  - id: stops-dots
+    type: circle
+    source: stops
+    paint:
+      circle-radius: 7
+      circle-color: "#2563eb"
+  - id: site-dot
+    type: circle
+    source: site
+    paint:
+      circle-radius: 9
+      circle-color: "#dc2626"
+```
+
 ## Real-Time Updates
 
 ### Polling Updates

@@ -30,3 +30,12 @@ export {
 
 export { toModel } from "./to-model";
 export { readV2Block } from "./read-v2";
+
+export type { SugarKey, SugarError, ExpandResult } from "./sugar";
+export {
+  SUGAR_KEYS,
+  detectSugarKey,
+  project,
+  expandGeoSugar,
+  isSugarError,
+} from "./sugar";

@@ -265,6 +265,11 @@ function toJSSafe(doc: Document): { value: unknown } | { error: ParseError } {
   }
 }
 import { ZodError, type ZodIssue } from "zod";
+import {
+  expandSugarInMapBlock,
+  expandSugarInRoot,
+  type SugarRemap,
+} from "./expand-sugar";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
 import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
@@ -445,6 +450,14 @@ export class YAMLParser {
       );
     }
 
+    // Expand geo-sugar before the schema sees the block, so the expanded
+    // `data:` is what validates (mirrors the safeParse seam). A sugar error
+    // becomes a thrown Error here — acceptable on the throwing path.
+    const expansion = expandSugarInRoot(parsed);
+    if ("error" in expansion) {
+      throw new Error(expansion.error.message);
+    }
+
     // Validate against schema
     const validated = RootSchema.parse(parsed);
 
@@ -476,7 +489,12 @@ export class YAMLParser {
    * ```
    */
   static safeParse(yaml: string): ParseResult {
-    return this.safeParseWithSchema(yaml, RootSchema, true) as ParseResult;
+    return this.safeParseWithSchema(
+      yaml,
+      RootSchema,
+      true,
+      expandSugarInRoot
+    ) as ParseResult;
   }
 
   /**
@@ -561,7 +579,8 @@ export class YAMLParser {
     doc: Document,
     lineCounter: LineCounter,
     schema: z.ZodType<T>,
-    resolveRefs: boolean
+    resolveRefs: boolean,
+    remaps: SugarRemap[] = []
   ): ParseResult<T> {
     // Warnings are collected from the raw value regardless of validity so
     // typos and deprecations still surface when other hard errors are present.
@@ -576,7 +595,12 @@ export class YAMLParser {
     if (!result.success) {
       return {
         success: false,
-        errors: this.formatZodErrors(result.error, { doc, lineCounter, value }),
+        errors: this.formatZodErrors(result.error, {
+          doc,
+          lineCounter,
+          value,
+          remaps,
+        }),
         warnings,
       };
     }
@@ -622,18 +646,34 @@ export class YAMLParser {
   private static safeParseWithSchema<T>(
     yaml: string,
     schema: z.ZodType<T>,
-    resolveRefs: boolean
+    resolveRefs: boolean,
+    expand?: (value: unknown) =>
+      | { remaps: SugarRemap[] }
+      | { error: ParseError }
   ): ParseResult<T> {
     const materialized = this.materialize(yaml);
     if ("error" in materialized) {
       return { success: false, errors: [materialized.error], warnings: [] };
+    }
+    // Optional pre-validation seam (RootSchema carries the geo-sugar walker; a
+    // fixed-schema caller like scrollytelling passes none). Runs after
+    // materialize (post DoS-guard) and before validation, exactly as the
+    // map-block path does.
+    let remaps: SugarRemap[] = [];
+    if (expand) {
+      const expansion = expand(materialized.value);
+      if ("error" in expansion) {
+        return { success: false, errors: [expansion.error], warnings: [] };
+      }
+      remaps = expansion.remaps;
     }
     return this.validateAgainst(
       materialized.value,
       materialized.doc,
       materialized.lineCounter,
       schema,
-      resolveRefs
+      resolveRefs,
+      remaps
     );
   }
 
@@ -710,7 +750,17 @@ export class YAMLParser {
    * ```
    */
   static validate(config: unknown): RootConfig {
-    const validated = RootSchema.parse(config);
+    // `expandSugarInRoot` mutates its argument in place (deletes the sugar key,
+    // writes `data`). Every other caller feeds it a freshly-materialized,
+    // disposable value; `validate` receives the *caller's* object, so clone
+    // first — a consumer that reuses its input must not find a sugar key
+    // silently rewritten under it.
+    const cloned = structuredClone(config);
+    const expansion = expandSugarInRoot(cloned);
+    if ("error" in expansion) {
+      throw new Error(expansion.error.message);
+    }
+    const validated = RootSchema.parse(cloned);
     return this.resolveReferences(validated);
   }
 
@@ -760,6 +810,13 @@ export class YAMLParser {
       );
     }
 
+    // Expand geo-sugar (v1 positions) before validation, mirroring the
+    // safeParseMapBlock seam. A sugar error throws on this convenience path.
+    const expansion = expandSugarInMapBlock(parsed, 1);
+    if ("error" in expansion) {
+      throw new Error(expansion.error.message);
+    }
+
     // Validate against MapBlockSchema
     return MapBlockSchema.parse(parsed);
   }
@@ -803,6 +860,17 @@ export class YAMLParser {
       return { success: false, errors: [detected.error], warnings: [] };
     }
 
+    // Pre-validation seam (KTD1): expand geo-sugar on the raw block now that the
+    // version is known (it drives v1 `sources`/inline vs v2 `style.sources`/
+    // inline positions) but before the schema runs — so `GeoJSONSchema` (v2) /
+    // `z.any()` (v1) validate the expanded `data:`, and error positions can
+    // re-anchor to the authored sugar key.
+    const expansion = expandSugarInMapBlock(m.value, detected.version);
+    if ("error" in expansion) {
+      return { success: false, errors: [expansion.error], warnings: [] };
+    }
+    const remaps = expansion.remaps;
+
     if (detected.version === 2) {
       // v2 validates against MapBlockV2Schema (U2). `resolveRefs: false`: v2
       // reuses YAML-native anchors/merge, already resolved at parse via
@@ -814,7 +882,8 @@ export class YAMLParser {
         m.doc,
         m.lineCounter,
         MapBlockV2Schema,
-        false
+        false,
+        remaps
       );
     }
 
@@ -828,7 +897,8 @@ export class YAMLParser {
       m.doc,
       m.lineCounter,
       MapBlockSchema,
-      true
+      true,
+      remaps
     );
   }
 
@@ -1231,10 +1301,22 @@ export class YAMLParser {
    */
   private static formatZodErrors(
     error: ZodError,
-    ctx?: { doc: Document; lineCounter: LineCounter; value: unknown }
+    ctx?: {
+      doc: Document;
+      lineCounter: LineCounter;
+      value: unknown;
+      remaps?: SugarRemap[];
+    }
   ): ParseError[] {
     return error.errors.map((err) => {
-      const path = err.path.join(".");
+      // Re-anchor a schema error on a sugar-synthesized `data:` back to the
+      // authored sugar key (KTD1a). The internal `err.path` is left untouched
+      // for the value lookups below (they index the *mutated* value, which does
+      // carry `data`); only the reported path and position use the sugar key's
+      // real AST node. The deeper Feature sub-path is truncated — it has no node
+      // in the source — so the caret lands on the sugar key.
+      const anchoredPath = remapSugarPath(err.path, ctx?.remaps);
+      const path = anchoredPath.join(".");
 
       let message: string;
       switch (err.code) {
@@ -1299,7 +1381,7 @@ export class YAMLParser {
       }
 
       const pos = ctx
-        ? positionForPath(ctx.doc, ctx.lineCounter, err.path)
+        ? positionForPath(ctx.doc, ctx.lineCounter, anchoredPath)
         : undefined;
 
       return {
@@ -1396,6 +1478,39 @@ export class YAMLParser {
 
     return fallback;
   }
+}
+
+/**
+ * Re-anchor a schema-error path that falls under a sugar-synthesized `data:`
+ * back to the authored sugar key (KTD1a).
+ *
+ * @remarks
+ * A remap's `from` is `<sourcePath>.data`; a Zod error on the expanded Feature
+ * carries `<sourcePath>.data.<deeper Feature path>`. When `path` begins with a
+ * remap's `from`, the whole path collapses to the remap's `to`
+ * (`<sourcePath>.<sugarKey>`) — the deeper Feature sub-path is dropped because
+ * it has no node in the original YAML AST, so `positionForPath` resolves to the
+ * sugar key rather than falling back caret-less. Non-sugar paths are returned
+ * unchanged, so ordinary position mapping is untouched.
+ */
+function remapSugarPath(
+  path: (string | number)[],
+  remaps?: SugarRemap[]
+): (string | number)[] {
+  if (!remaps || remaps.length === 0) return path;
+  for (const remap of remaps) {
+    const { from, to } = remap;
+    if (path.length < from.length) continue;
+    let matches = true;
+    for (let i = 0; i < from.length; i++) {
+      if (path[i] !== from[i]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return [...to];
+  }
+  return path;
 }
 
 /** Whether a JSON path anchors on a source (`.source` or a `sources` record). */

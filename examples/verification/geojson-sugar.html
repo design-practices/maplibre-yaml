@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GeoJSON sugar: the four data-position shorthands render through &lt;ml-map&gt;</title>
+    <!--
+    The v0.5.0 GeoJSON-sugar guarantee, made visible. A `type: geojson`
+    source may author its data with sugar instead of `data:`/`url:`:
+
+      location  -> a single Point Feature
+      locations -> a FeatureCollection of Points
+      region    -> a Polygon Feature (coordinates is an array of linear rings)
+      route     -> a LineString Feature (>= 2 positions)
+
+    Sugar is expanded to canonical GeoJSON *pre-validation*, so <ml-map>
+    renders it natively — the renderer never sees the sugar, only the
+    Feature/FeatureCollection it stands for. This page authors ONE map with
+    all four sugars as named sources and draws each with its own layer.
+
+    PASS = a red dot (location), two blue dots (locations), a green polygon
+    (region), and an amber line (route) over a pale basemap, with a clean
+    console. FAIL = a blank map, a missing layer, or a source whose `data` is
+    empty — which would mean the sugar never expanded.
+
+    Serve with `pnpm verify:serve`; driven by `e2e/geojson-sugar.spec.ts`.
+    -->
+    <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        display: grid;
+        grid-template-rows: 28px 1fr;
+        height: 100vh;
+      }
+      header {
+        font: 600 12px/28px system-ui, sans-serif;
+        padding: 0 12px;
+        color: #fff;
+        background: #0f172a;
+      }
+      ml-map { display: block; height: 100%; width: 100%; }
+      #err {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        max-width: 60ch;
+        color: #f87171;
+        background: #0f172a;
+        font: 12px/1.5 ui-monospace, monospace;
+        white-space: pre-wrap;
+        padding: 8px 10px;
+        border-radius: 4px;
+      }
+    </style>
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+    </script>
+    <!-- Registers <ml-map>. Auto-defines the element on import. -->
+    <script type="module" src="/packages/core/dist/register.browser.js"></script>
+  </head>
+  <body>
+    <header>
+      PASS = red dot (location) + two blue dots (locations) + green polygon
+      (region) + amber line (route). FAIL = blank map or a missing layer.
+    </header>
+    <div id="cell"></div>
+
+    <script type="module">
+      import { YAMLParser } from "/packages/core/dist/index.browser.js";
+
+      // A source-less, hermetic basemap — a pale background, no network. The
+      // demo asserts on OUR four sugar-backed layers, not on basemap imagery.
+      const MAP_STYLE = "/examples/verification/configs/local-style.json";
+
+      // The document: four `type: geojson` sources, one per sugar, drawn by
+      // four layers. Authored the way a user would — no canonical `data:`
+      // anywhere. Sugar expands to Feature/FeatureCollection before validation,
+      // so <ml-map> renders it natively.
+      const YAML = `
+type: map
+id: geojson-sugar-demo
+config:
+  center: [-73.98, 40.75]
+  zoom: 11
+  mapStyle: ${MAP_STYLE}
+sources:
+  site:
+    type: geojson
+    location:
+      coordinates: [-73.98, 40.75]
+      name: "Site"
+      description: "A single point of interest"
+  stops:
+    type: geojson
+    locations:
+      - coordinates: [-74.00, 40.73]
+        name: "Stop A"
+      - coordinates: [-73.96, 40.77]
+        name: "Stop B"
+  district:
+    type: geojson
+    region:
+      coordinates: [[[-74.02, 40.70], [-73.94, 40.70], [-73.94, 40.80], [-74.02, 40.80], [-74.02, 40.70]]]
+      name: "Study district"
+  path:
+    type: geojson
+    route:
+      coordinates: [[-74.00, 40.73], [-73.98, 40.75], [-73.96, 40.77]]
+      name: "Walking route"
+layers:
+  - id: district-fill
+    type: fill
+    source: district
+    paint: { fill-color: "#10b981", fill-opacity: 0.3 }
+  - id: path-line
+    type: line
+    source: path
+    paint: { line-color: "#f59e0b", line-width: 4 }
+  - id: stops-dots
+    type: circle
+    source: stops
+    paint: { circle-radius: 7, circle-color: "#2563eb" }
+  - id: site-dot
+    type: circle
+    source: site
+    paint:
+      circle-radius: 9
+      circle-color: "#dc2626"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+`;
+
+      function fail(message) {
+        const el = document.createElement("pre");
+        el.id = "err";
+        el.textContent = "FAILED:\n" + message;
+        document.body.appendChild(el);
+      }
+
+      try {
+        // Parse with the SAME parser <ml-map> uses. Exposed for the spec's
+        // direct assertion that each sugar expanded to the GeoJSON it stands
+        // for — proving the expansion happened at the parse seam, not just that
+        // the map painted something.
+        const parsed = YAMLParser.safeParseMapBlock(YAML);
+        if (!parsed.success) {
+          throw new Error("parse: " + JSON.stringify(parsed.errors, null, 2));
+        }
+        window.__sugarWarnings = parsed.warnings ?? [];
+        window.__sugarSources = parsed.data.sources;
+
+        // Render through the flagship <ml-map> element, fed via its inline
+        // `<script type="text/yaml">` child — the same input path a user writes.
+        // The child MUST be attached before the element enters the DOM, because
+        // <ml-map> reads its configuration in connectedCallback.
+        const el = document.createElement("ml-map");
+        el.id = "map";
+        const script = document.createElement("script");
+        script.type = "text/yaml";
+        script.textContent = YAML;
+        el.appendChild(script);
+        document.getElementById("cell").appendChild(el);
+      } catch (err) {
+        fail(err?.message ?? String(err));
+      }
+    </script>
+  </body>
+</html>

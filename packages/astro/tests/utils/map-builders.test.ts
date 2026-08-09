@@ -14,7 +14,13 @@ import {
 } from "../../src/utils/map-builders";
 import type { LocationPoint, RegionPolygon, RouteLine } from "../../src/utils/collections-schemas";
 import type { GlobalConfig } from "@maplibre-yaml/core";
-import { ConfigResolutionError } from "@maplibre-yaml/core";
+import {
+  ConfigResolutionError,
+  expandGeoSugar,
+  project,
+  isSugarError,
+} from "@maplibre-yaml/core";
+import type { SugarKey } from "@maplibre-yaml/core";
 
 // ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -181,6 +187,109 @@ describe("buildRouteMapConfig", () => {
     expect(lineLayer.layout).toBeDefined();
     expect(lineLayer.layout!["line-cap"]).toBe("round");
     expect(lineLayer.layout!["line-join"]).toBe("round");
+  });
+});
+
+// ── Core-expander shape agreement (R7 / U4, ml-4jq) ─────────────────
+//
+// Each Astro builder inlines the base Feature that core's `expandGeoSugar`
+// also produces. These tests pin that the two agree on geometry +
+// `{name,description}`, so `location:`/`region:`/`route:` mean the same thing
+// authored in YAML (core) or via the Astro helper. The Astro node carries
+// paint/camera fields the expander rejects (R4/KTD2), so agreement is asserted
+// against the *projected* node — `expandGeoSugar(project(node), key).value` —
+// per KTD4. (Delegation — builders calling the expander — is deferred to a
+// follow-up; the base Feature is entangled with the shared Multi* helpers and
+// the multi-point `markerColor`-in-properties, so a straight substitution is
+// not clean. Coverage-only prevents drift by test, not by construction.)
+
+/** Loose GeoJSON shapes for assertions (core does not re-export geojson types). */
+interface GeoFeature {
+  type: "Feature";
+  geometry: unknown;
+  properties: Record<string, unknown>;
+}
+interface GeoFeatureCollection {
+  type: "FeatureCollection";
+  features: GeoFeature[];
+}
+
+/**
+ * Project a richer Astro node, expand it via core, and return the built
+ * GeoJSON value — throwing if the expander reports a structural error (which
+ * would itself be a real disagreement worth failing on).
+ */
+function expandValue(node: unknown, key: SugarKey): GeoFeature | GeoFeatureCollection {
+  const result = expandGeoSugar(project(node), key);
+  if (isSugarError(result)) {
+    throw new Error(`expandGeoSugar(${key}) unexpectedly errored: ${result.message}`);
+  }
+  return result.value as unknown as GeoFeature | GeoFeatureCollection;
+}
+
+/** Pull the base Feature out of a builder layer's inline geojson source. */
+function baseFeatures(layer: unknown): GeoFeature[] {
+  const source = (layer as { source?: unknown }).source;
+  const data = (source as { data?: { features?: GeoFeature[] } }).data;
+  return data!.features!;
+}
+
+describe("core-expander shape agreement (R7)", () => {
+  it("buildPointMapConfig base Feature equals expandGeoSugar(project(location))", () => {
+    const result = buildPointMapConfig({
+      location: singleLocation,
+      mapStyle: STYLE_URL,
+    });
+
+    const builderFeature = baseFeatures(result.layers[0])[0];
+    expect(builderFeature).toEqual(expandValue(singleLocation, "location"));
+  });
+
+  it("buildPolygonMapConfig region-fill base Feature equals expandGeoSugar(project(region))", () => {
+    const result = buildPolygonMapConfig({ region, mapStyle: STYLE_URL });
+
+    // region-fill is the first layer; region-outline (line) is the second.
+    expect(result.layers[0]!.id).toBe("region-fill");
+    const builderFeature = baseFeatures(result.layers[0])[0];
+    expect(builderFeature).toEqual(expandValue(region, "region"));
+  });
+
+  it("buildRouteMapConfig route-line base Feature equals expandGeoSugar(project(route))", () => {
+    const result = buildRouteMapConfig({ route, mapStyle: STYLE_URL });
+
+    // route-line is the first layer; route-endpoints (circle) is the second.
+    expect(result.layers[0]!.id).toBe("route-line");
+    const builderFeature = baseFeatures(result.layers[0])[0];
+    expect(builderFeature).toEqual(expandValue(route, "route"));
+  });
+
+  it("buildMultiPointMapConfig base Features agree on geometry + name/description; markerColor is a builder-side extra", () => {
+    const result = buildMultiPointMapConfig({
+      locations: locationsArray,
+      mapStyle: STYLE_URL,
+    });
+
+    const builderFeatures = baseFeatures(result.layers[0]);
+    const expanded = expandValue(locationsArray, "locations") as GeoFeatureCollection;
+
+    expect(builderFeatures).toHaveLength(expanded.features.length);
+
+    builderFeatures.forEach((bf, i) => {
+      const ef = expanded.features[i];
+      // Geometry agrees exactly.
+      expect(bf.geometry).toEqual(ef.geometry);
+      // name/description agree; the expander carries only these.
+      expect({
+        name: bf.properties.name,
+        description: bf.properties.description,
+      }).toEqual({
+        name: ef.properties.name,
+        description: ef.properties.description,
+      });
+      // markerColor is a builder-side extra the expander does NOT carry.
+      expect(ef.properties).not.toHaveProperty("markerColor");
+      expect(bf.properties.markerColor).toBe("#3388ff");
+    });
   });
 });
 
