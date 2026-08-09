@@ -1,0 +1,42 @@
+---
+title: Parsing and validating consistently
+description: How a consumer that parses map documents itself keeps parse and validation behaviour identical to the library
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Most integrations never parse YAML themselves — the `<ml-map>` component, the CLI, and the Astro integration all go through the library's own parser. But if you *do* parse a map document yourself — a custom loader, a GUI that reads and writes the file — parse it the way the library does, or your interpretation drifts from what the renderer and validator see.
+
+There are exactly two touchpoints.
+
+## Parse with the library's options
+
+The library parses map documents with two non-default options: YAML merge keys (`<<: *base`) and the `!html` scalar tag. Both change what a document *means* — a document that uses either resolves differently under the plain `yaml` API. Import the canonical options rather than re-declaring them:
+
+```ts
+import { parse } from "yaml";
+import { YAML_PARSE_OPTIONS } from "@maplibre-yaml/core";
+
+const value = parse(source, YAML_PARSE_OPTIONS);
+```
+
+`YAML_PARSE_OPTIONS` (and the `htmlTag` it contains) is the single source of truth. Re-declaring it is how a copy silently drops `!html` to a bare string or mishandles a merge key — importing it makes that impossible.
+
+## Validate through the parser
+
+Validation is already public. `YAMLParser` runs the map schema through the same alias-expansion guard the read path uses, and returns a structured result:
+
+```ts
+import { YAMLParser } from "@maplibre-yaml/core";
+
+const result = YAMLParser.safeParseMapBlock(source);
+if (!result.success) {
+  // result.errors — the same errors the CLI and renderer would report
+}
+```
+
+Use `safeParseMapBlock` for a single map block or `safeParseAny` when the document type is unknown. A value you already hold can be validated with `safeParseMapBlockValue`.
+
+<Aside type="note" title="What this is not">
+The library does not provide a mutation or write handle, and it does not preserve comments or formatting through a programmatic edit. If you edit a document, you own the mutation and serialization; these two touchpoints only keep your *parsing* and *validation* identical to the library's.
+</Aside>
