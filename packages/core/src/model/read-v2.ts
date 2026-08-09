@@ -144,8 +144,12 @@ export function readV2Block(doc: MapBlockV2): MapModel {
     },
   };
 
-  // TODO(v2 metadata): `style.metadata` (a v2 style-root slot) has no model
-  // home yet and is not part of AE2 — leave it unhandled rather than guess one.
+  // `style.metadata` is a style-spec root slot (ml-tay). It has no v1 surface,
+  // so it is not an AE2 pair — but never-drop still applies: carry it on the
+  // model's style half so the emitter compiles it through to the style.json
+  // root rather than dropping it silently.
+  if (isPlainObject(style["metadata"]))
+    model.style.metadata = style["metadata"] as Record<string, unknown>;
 
   // `state`/`parameters` may be authored under `style:`/`runtime:` OR at the
   // document root (MapBlockV2Schema accepts both positions). v1's

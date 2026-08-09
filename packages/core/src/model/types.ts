@@ -89,6 +89,18 @@ export interface StyleHalf {
    * lives in {@link RuntimeHalf.parameters}.
    */
   state?: Record<string, unknown>;
+  /**
+   * Style-spec root `metadata` (a v2 `style.metadata` slot).
+   *
+   * @remarks
+   * The style spec carries a free-form `metadata` object at its root, so this
+   * compiles through to the emitted `style.json` root rather than being dropped
+   * — the never-drop discipline that governs the rest of the style half. It has
+   * no v1 surface (v1 `config.metadata` is a `Map` option that lands in
+   * {@link RuntimeHalf.map}), so it is absent from AE2 pairs and never causes a
+   * v1/v2 divergence.
+   */
+  metadata?: Record<string, unknown>;
   sources: Record<string, SourceModel>;
   layers: LayerModel[];
 }

@@ -289,6 +289,10 @@ export function projectStyle(
   }));
 
   if (model.style.state !== undefined) style["state"] = model.style.state;
+  // `style.metadata` (v2 style-root slot, ml-tay) compiles through to the
+  // style.json root `metadata` — the spec carries it, so it is not dropped.
+  if (model.style.metadata !== undefined)
+    style["metadata"] = model.style.metadata;
 
   const runtimeKeys = Object.keys(model.runtime.map);
   if (runtimeKeys.length > 0) {
