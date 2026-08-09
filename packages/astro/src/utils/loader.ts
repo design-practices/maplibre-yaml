@@ -40,18 +40,13 @@
 import { readFile } from "fs/promises";
 import { parse as parseYAML } from "yaml";
 
-/**
- * Parse options for map documents loaded by the Astro integration.
- *
- * @remarks
- * Mirrors `YAML_PARSE_OPTIONS` in core's parser. This loader calls `yaml`'s
- * `parse` directly rather than delegating to core, so without its own copy a
- * merge-key document would resolve correctly through `mlym validate` and
- * silently produce a literal `"<<"` key here — the same footgun, surviving in
- * one of the two shipped consumer entry points.
- */
-const YAML_PARSE_OPTIONS = { merge: true } as const;
-import { YAMLParser } from "@maplibre-yaml/core";
+// This loader calls `yaml`'s `parse` directly (in `loadYAML`/`loadFromGlob`)
+// rather than delegating to core's `YAMLParser`, so it must parse with core's
+// canonical options — imported, not re-declared. A local copy previously
+// drifted from core: it carried `merge` but not the `!html` tag, so it silently
+// dropped `!html` to a bare string here while core resolved it to `{ $html }`.
+// Importing the single source of truth makes that drift structurally impossible.
+import { YAMLParser, YAML_PARSE_OPTIONS } from "@maplibre-yaml/core";
 import type { MapBlock, ScrollytellingBlock, ParseError } from "@maplibre-yaml/core";
 
 /**
