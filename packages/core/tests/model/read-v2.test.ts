@@ -230,6 +230,161 @@ runtime:
     });
     expect(v2).toEqual(v1);
   });
+
+  it("geo-sugar `location`: v1 and v2 twins expand identically (ml-4jq)", () => {
+    // GeoJSON sugar (V2-D2) is expanded pre-validation by a shared seam both
+    // surfaces flow through, so a v1 sugar doc and its v2 twin must land on the
+    // same model — the source's `location:` becomes a `Feature<Point>` in
+    // `spec.data`, and the geojson `fetchStrategy: "runtime"` default lands in
+    // `runtime` on both sides.
+    const v1 = model(`
+type: map
+id: sugar-loc
+config:
+  center: [0, 0]
+  zoom: 5
+  mapStyle: ${BASEMAP}
+sources:
+  pts:
+    type: geojson
+    location:
+      coordinates: [-73.98, 40.75]
+      name: Midtown
+layers:
+  - id: dot
+    type: circle
+    source: pts
+`);
+    const v2 = model(`
+version: 2
+type: map
+id: sugar-loc
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 5
+  sources:
+    pts:
+      type: geojson
+      location:
+        coordinates: [-73.98, 40.75]
+        name: Midtown
+  layers:
+    - id: dot
+      type: circle
+      source: pts
+`);
+    // The sugar expanded to a real Point Feature in the erasable spec half.
+    expect(v2.style.sources.pts.spec).toMatchObject({
+      type: "geojson",
+      data: {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [-73.98, 40.75] },
+        properties: { name: "Midtown", description: "" },
+      },
+    });
+    expect(v2.style.sources.pts.runtime).toEqual({ fetchStrategy: "runtime" });
+    expect(v2).toEqual(v1);
+  });
+
+  it("geo-sugar `locations`: v1 and v2 twins expand to the same FeatureCollection (ml-4jq)", () => {
+    const v1 = model(`
+type: map
+id: sugar-locs
+config:
+  center: [0, 0]
+  zoom: 5
+  mapStyle: ${BASEMAP}
+sources:
+  pins:
+    type: geojson
+    locations:
+      - coordinates: [-73.98, 40.75]
+        name: NYC
+      - coordinates: [-118.24, 34.05]
+        name: LA
+layers:
+  - id: dots
+    type: circle
+    source: pins
+`);
+    const v2 = model(`
+version: 2
+type: map
+id: sugar-locs
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 5
+  sources:
+    pins:
+      type: geojson
+      locations:
+        - coordinates: [-73.98, 40.75]
+          name: NYC
+        - coordinates: [-118.24, 34.05]
+          name: LA
+  layers:
+    - id: dots
+      type: circle
+      source: pins
+`);
+    expect(v2.style.sources.pins.spec).toMatchObject({
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [{}, {}] },
+    });
+    expect(v2).toEqual(v1);
+  });
+
+  it("geo-sugar is pure shorthand: sugar == the equivalent canonical GeoJSON (ml-4jq)", () => {
+    // Authoring `region:` sugar and authoring the expanded Polygon Feature
+    // directly must produce the identical model — sugar adds no meaning beyond
+    // the GeoJSON it stands for, including the `description: ""` property default.
+    const sugar = model(`
+version: 2
+type: map
+id: sugar-eq
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 5
+  sources:
+    zone:
+      type: geojson
+      region:
+        coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]]
+        name: Triangle
+  layers:
+    - id: fill
+      type: fill
+      source: zone
+`);
+    const canonical = model(`
+version: 2
+type: map
+id: sugar-eq
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 5
+  sources:
+    zone:
+      type: geojson
+      data:
+        type: Feature
+        geometry:
+          type: Polygon
+          coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]]
+        properties:
+          name: Triangle
+          description: ""
+  layers:
+    - id: fill
+      type: fill
+      source: zone
+`);
+    expect(sugar).toEqual(canonical);
+  });
 });
 
 describe("readV2Block — structural placement", () => {
