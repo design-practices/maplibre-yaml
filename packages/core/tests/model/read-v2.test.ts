@@ -480,6 +480,45 @@ style:
 `);
     expect(m.runtime.map).toEqual({ interactive: true });
   });
+
+  it("carries style.metadata on the model and compiles it to the style root (ml-tay)", () => {
+    const m = model(`
+version: 2
+type: map
+id: meta
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 5
+  metadata:
+    "maplibre:renderer": maplibre-gl-js
+    author: cartography-team
+`);
+    // Model home: the style half carries it (never-drop), not runtime.
+    expect(m.style.metadata).toEqual({
+      "maplibre:renderer": "maplibre-gl-js",
+      author: "cartography-team",
+    });
+    // And it compiles through to the emitted style.json root `metadata`.
+    const style = projectStyle(m).style as Record<string, unknown>;
+    expect(style["metadata"]).toEqual({
+      "maplibre:renderer": "maplibre-gl-js",
+      author: "cartography-team",
+    });
+  });
+
+  it("omits style.metadata from the model and emitted style when unauthored", () => {
+    const m = model(`
+version: 2
+type: map
+id: nometa
+style:
+  basemap: ${BASEMAP}
+`);
+    expect(m.style).not.toHaveProperty("metadata");
+    const style = projectStyle(m).style as Record<string, unknown>;
+    expect(style).not.toHaveProperty("metadata");
+  });
 });
 
 describe("AE2 round-trip — the emitter sees only the model", () => {

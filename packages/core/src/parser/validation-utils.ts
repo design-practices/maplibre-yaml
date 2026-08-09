@@ -22,6 +22,7 @@ import { z } from "zod";
 import type { Document, LineCounter } from "yaml";
 import { isMap } from "yaml";
 import { ExpressionSchema } from "../schemas/base.schema";
+import { GeoJSONSchema } from "../schemas/geojson.schema";
 
 /**
  * A non-fatal validation finding surfaced alongside errors.
@@ -421,6 +422,49 @@ export function collectWarnings(
   return ctx.warnings;
 }
 
+/**
+ * Warn on malformed inline GeoJSON `data` on a geojson source, under format v1
+ * only (ml-ldv). v1 keeps `source.data` as `z.any()` for byte-for-byte compat
+ * (R2/R10) — MapLibre tolerates loosely-conformant geometry — so a malformed
+ * inline Feature is not a hard error there. But silent acceptance of genuinely
+ * broken GeoJSON is a poor authoring experience, so this surfaces a *warning*
+ * (the document still parses).
+ *
+ * It is self-gating on the schema: v2 composes the strict {@link GeoJSONSchema}
+ * onto `data` and hard-errors, so the field schema there is not `ZodAny`. Only
+ * the permissive v1 shape (`data: z.any()`) reaches the check, which means the
+ * v2 hard error is never duplicated as a warning — no version flag needed.
+ */
+function checkGeoJSONData(
+  value: Record<string, unknown>,
+  shape: Record<string, z.ZodTypeAny>,
+  path: (string | number)[],
+  ctx: WalkContext
+): void {
+  if (value["type"] !== "geojson") return;
+  const dataSchema = shape["data"];
+  // Only the v1-permissive `z.any()` shape; v2's strict schema hard-errors.
+  if (!dataSchema || fullyUnwrap(dataSchema)?._def?.typeName !== "ZodAny") return;
+  const data = value["data"];
+  // A string `data` is a path mistake the source schema's own refine catches;
+  // a missing `data` is the url/stream case. Only inspect an inline object.
+  if (data == null || typeof data !== "object") return;
+
+  const result = GeoJSONSchema.safeParse(data);
+  if (result.success) return;
+
+  const detail = result.error.issues[0]?.message ?? "malformed geometry";
+  const pos = positionForKey(ctx.doc, ctx.lineCounter, path, "data");
+  ctx.warnings.push({
+    path: [...path, "data"].join("."),
+    message:
+      `Inline "data" is not valid RFC 7946 GeoJSON (${detail}). MapLibre may ` +
+      `still render it, so this is a warning under format v1 — but the same ` +
+      `data is a hard error under format v2.`,
+    ...(pos ? { line: pos.line, column: pos.column } : {}),
+  });
+}
+
 function walk(
   value: unknown,
   schema: z.ZodTypeAny,
@@ -448,6 +492,9 @@ function walk(
 
       // Deprecated fields — each rule decides whether it applies here.
       checkDeprecations(value, path, ctx);
+
+      // v1-lenient GeoJSON check (ml-ldv): warn on malformed inline data.
+      checkGeoJSONData(value, shape, path, ctx);
 
       for (const key of Object.keys(value)) {
         if (key.startsWith("x-")) continue; // extension escape hatch
