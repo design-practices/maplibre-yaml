@@ -141,10 +141,14 @@ export const htmlTag: ScalarTag = {
  * missing `merge` mishandles `<<:` merge keys). Import this rather than mirror
  * it.
  */
-export const YAML_PARSE_OPTIONS: ParseOptions & DocumentOptions & SchemaOptions = {
-  merge: true,
-  customTags: [htmlTag],
-};
+export const YAML_PARSE_OPTIONS: ParseOptions & DocumentOptions & SchemaOptions =
+  Object.freeze({
+    merge: true,
+    // Frozen so it can't drift, but the tag array is frozen too: this object is
+    // now public *and* the object core's own read path parses with, so a
+    // consumer mutating `customTags` would poison the library's parsing.
+    customTags: Object.freeze([htmlTag]) as unknown as ScalarTag[],
+  });
 
 /**
  * Reject fan-out merge keys before the document is materialized.
