@@ -1,0 +1,70 @@
+# GeoJSON sugar: author a map's data with the four data-position shorthands
+# instead of spelling out `data:` as full GeoJSON. Each `type: geojson` source
+# below carries exactly one sugar key, which the parser expands to canonical
+# GeoJSON before validation — so the map renders it natively.
+#
+#   location  -> a single Point Feature
+#   locations -> a FeatureCollection of Points
+#   region    -> a Polygon Feature (coordinates is an array of linear rings)
+#   route     -> a LineString Feature (>= 2 positions)
+#
+# Loaded at build time by src/pages/geojson-sugar.astro via `loadMapConfig`,
+# which parses (and expands) with the core parser and passes the result to <Map>.
+type: map
+id: geojson-sugar-demo
+config:
+  center: [-73.98, 40.75]
+  zoom: 12
+  mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+sources:
+  site:
+    type: geojson
+    location:
+      coordinates: [-73.98, 40.75]
+      name: "Site"
+      description: "A single point of interest"
+  stops:
+    type: geojson
+    locations:
+      - coordinates: [-74.00, 40.73]
+        name: "Stop A"
+      - coordinates: [-73.96, 40.77]
+        name: "Stop B"
+  district:
+    type: geojson
+    region:
+      coordinates:
+        - [[-74.02, 40.70], [-73.94, 40.70], [-73.94, 40.80], [-74.02, 40.80], [-74.02, 40.70]]
+      name: "Study district"
+  path:
+    type: geojson
+    route:
+      coordinates: [[-74.00, 40.73], [-73.98, 40.75], [-73.96, 40.77]]
+      name: "Walking route"
+layers:
+  - id: district-fill
+    type: fill
+    source: district
+    paint:
+      fill-color: "#10b981"
+      fill-opacity: 0.3
+  - id: path-line
+    type: line
+    source: path
+    paint:
+      line-color: "#f59e0b"
+      line-width: 4
+  - id: stops-dots
+    type: circle
+    source: stops
+    paint:
+      circle-radius: 7
+      circle-color: "#2563eb"
+  - id: site-dot
+    type: circle
+    source: site
+    paint:
+      circle-radius: 9
+      circle-color: "#dc2626"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

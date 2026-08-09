@@ -1,0 +1,96 @@
+---
+/**
+ * GeoJSON sugar — authoring a map's data with the four data-position shorthands.
+ *
+ * A `type: geojson` source can carry `location`, `locations`, `region`, or
+ * `route` in place of a full `data:` GeoJSON object. `loadMapConfig` parses the
+ * YAML with the core parser, which expands each sugar to canonical GeoJSON
+ * before validation, and hands the result to <Map config={...}> unchanged.
+ *
+ * Full source: src/config/geojson-sugar.yaml + this page.
+ */
+import Layout from "../layouts/Layout.astro";
+import { Map, loadMapConfig } from "@maplibre-yaml/astro";
+
+const sugarMap = await loadMapConfig("./src/config/geojson-sugar.yaml");
+---
+
+<Layout title="GeoJSON sugar — @maplibre-yaml/astro">
+  <main>
+    <h1>GeoJSON sugar</h1>
+    <p>
+      A <code>type: geojson</code> source can author its data with one of four
+      shorthands instead of a full <code>data:</code> object. The parser expands
+      each to canonical GeoJSON <em>before</em> validation, so the map renders it
+      natively — the same map you would get from spelling the GeoJSON out by
+      hand.
+    </p>
+
+    <ul>
+      <li><code>location</code> → a single Point <code>Feature</code></li>
+      <li><code>locations</code> → a <code>FeatureCollection</code> of Points</li>
+      <li><code>region</code> → a Polygon <code>Feature</code> (coordinates is an array of linear rings)</li>
+      <li><code>route</code> → a LineString <code>Feature</code> (≥ 2 positions)</li>
+    </ul>
+
+    <p class="meta">
+      This map draws all four at once: a red dot (<code>location</code>), two
+      blue dots (<code>locations</code>), a green polygon (<code>region</code>),
+      and an amber line (<code>route</code>). The config lives in
+      <code>src/config/geojson-sugar.yaml</code>.
+    </p>
+
+    <div class="map-frame"><Map config={sugarMap} height="480px" /></div>
+
+    <pre><code>{`sources:
+  site:
+    type: geojson
+    location:
+      coordinates: [-73.98, 40.75]
+      name: "Site"
+  stops:
+    type: geojson
+    locations:
+      - coordinates: [-74.00, 40.73]
+        name: "Stop A"
+      - coordinates: [-73.96, 40.77]
+        name: "Stop B"
+  district:
+    type: geojson
+    region:
+      coordinates:
+        - [[-74.02, 40.70], [-73.94, 40.70], [-73.94, 40.80], [-74.02, 40.80], [-74.02, 40.70]]
+      name: "Study district"
+  path:
+    type: geojson
+    route:
+      coordinates: [[-74.00, 40.73], [-73.98, 40.75], [-73.96, 40.77]]
+      name: "Walking route"`}</code></pre>
+  </main>
+</Layout>
+
+<style>
+  main {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+  }
+  .meta {
+    color: #555;
+  }
+  .map-frame {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 1.5rem 0;
+  }
+  pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 1rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+</style>
