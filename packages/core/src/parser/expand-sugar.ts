@@ -125,8 +125,14 @@ function expandSourceAt(
     };
   }
 
-  // R5 — mutual exclusion with the canonical data positions.
-  const conflicts = ["data", "url"].filter((k) => hasOwn(src, k));
+  // R5 — mutual exclusion with the canonical data positions. `prefetchedData`
+  // is a data position too (GeoJSONSourceSchema requires at least one of
+  // url/data/prefetchedData), so it must conflict — otherwise sugar would
+  // expand `data` alongside an authored `prefetchedData` and the schema, which
+  // only checks "at least one", would pass two competing data positions.
+  const conflicts = ["data", "url", "prefetchedData"].filter((k) =>
+    hasOwn(src, k)
+  );
   if (conflicts.length > 0) {
     return {
       path: pathString(sourcePath),
@@ -134,7 +140,8 @@ function expandSourceAt(
       message:
         `A geojson source using the "${key}" sugar must not also carry ` +
         `${conflicts.map((c) => `"${c}"`).join(" or ")}. The sugar sits in the ` +
-        `"data" position — use exactly one of the sugar key, "data", or "url".`,
+        `"data" position — use exactly one of the sugar key, "data", "url", or ` +
+        `"prefetchedData".`,
     };
   }
 
@@ -260,6 +267,13 @@ export function expandSugarInMapBlock(
  * Walk a `pages[].blocks[]` array, expanding v1-shaped map blocks and recursing
  * into `mixed` containers. Root blocks are v1-shaped (RootSchema nests the v1
  * `MapBlockSchema`).
+ *
+ * `scrollytelling` blocks also carry inline geojson sources on their
+ * `layers[]`, but sugar there is **not** expanded today (nor on the standalone
+ * `safeParseScrollytellingBlock` path, which passes no expander) — sugar on a
+ * scrollytelling layer source surfaces the raw geojson error instead. Tracked
+ * as a follow-up (ml- bead) rather than silently scoped: see the plan's R1
+ * "format-wide" definition.
  */
 function expandBlocks(
   blocks: unknown[],

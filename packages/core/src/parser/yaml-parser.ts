@@ -750,11 +750,17 @@ export class YAMLParser {
    * ```
    */
   static validate(config: unknown): RootConfig {
-    const expansion = expandSugarInRoot(config);
+    // `expandSugarInRoot` mutates its argument in place (deletes the sugar key,
+    // writes `data`). Every other caller feeds it a freshly-materialized,
+    // disposable value; `validate` receives the *caller's* object, so clone
+    // first — a consumer that reuses its input must not find a sugar key
+    // silently rewritten under it.
+    const cloned = structuredClone(config);
+    const expansion = expandSugarInRoot(cloned);
     if ("error" in expansion) {
       throw new Error(expansion.error.message);
     }
-    const validated = RootSchema.parse(config);
+    const validated = RootSchema.parse(cloned);
     return this.resolveReferences(validated);
   }
 

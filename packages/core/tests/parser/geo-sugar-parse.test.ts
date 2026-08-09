@@ -263,4 +263,81 @@ describe("geo-sugar parse seam (U2)", () => {
       [2, 2],
     ]);
   });
+
+  it("mutual exclusion also covers `prefetchedData` (a data position too, R5)", () => {
+    // `prefetchedData` is a valid geojson data position, so sugar alongside it
+    // would ship two competing data positions past the schema's "at least one"
+    // check. It must conflict just like `data`/`url`.
+    const result = YAMLParser.safeParseMapBlock(`
+version: 2
+type: map
+id: conflict
+style:
+  basemap: https://demotiles.maplibre.org/style.json
+  center: [0, 0]
+  zoom: 5
+  sources:
+    pts:
+      type: geojson
+      location:
+        coordinates: [0, 0]
+      prefetchedData:
+        type: FeatureCollection
+        features: []
+  layers:
+    - id: dot
+      type: circle
+      source: pts
+`);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(
+      result.errors.some((e) => /prefetchedData/.test(e.message))
+    ).toBe(true);
+  });
+});
+
+describe("geo-sugar parse seam — validate() does not mutate caller input", () => {
+  it("expanding a sugar source leaves the caller's object untouched", () => {
+    // `validate(config)` receives the caller's own object; expansion must not
+    // silently rewrite the sugar key to `data` under it.
+    const config = {
+      pages: [
+        {
+          blocks: [
+            {
+              type: "map",
+              id: "m",
+              config: {
+                center: [0, 0],
+                zoom: 5,
+                mapStyle: "https://demotiles.maplibre.org/style.json",
+              },
+              sources: {
+                pts: { type: "geojson", location: { coordinates: [0, 0] } },
+              },
+              layers: [{ id: "dot", type: "circle", source: "pts" }],
+            },
+          ],
+        },
+      ],
+    };
+    const before = JSON.parse(JSON.stringify(config));
+    // Expansion runs (on a clone) before schema validation; whether validate()
+    // ultimately succeeds or throws on unrelated schema shape is irrelevant to
+    // the property under test — the caller's object must survive untouched.
+    try {
+      YAMLParser.validate(config);
+    } catch {
+      /* schema validity is not what this test asserts */
+    }
+    // The caller's object is unchanged: the sugar key survives, no `data` added.
+    expect(config).toEqual(before);
+    expect(
+      (config.pages[0].blocks[0] as any).sources.pts.location
+    ).toBeDefined();
+    expect(
+      (config.pages[0].blocks[0] as any).sources.pts.data
+    ).toBeUndefined();
+  });
 });

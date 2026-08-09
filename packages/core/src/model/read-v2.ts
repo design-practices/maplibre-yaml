@@ -17,10 +17,12 @@
  * schema (map-v2.schema.ts), composed from the same field definitions v1 uses,
  * so this reader stays a pure rearrangement and never re-derives a v1 default.
  *
- * GeoJSON sugar (`location`/`region`/`route` → generated source/layer) is a
- * deferred follow-up: v1 does not expand it today, so matching the v1 model
- * means not expanding it here either. When it lands it belongs before this
- * reader, as a pre-pass on the parsed block.
+ * GeoJSON sugar (`location`/`locations`/`region`/`route` → `Feature`/
+ * `FeatureCollection`) is expanded *before* this reader, as a pre-pass on the
+ * parsed block in `../parser/expand-sugar.ts` (wired into the parser seam after
+ * version detection). By the time a block reaches this reader its sugar is
+ * already a plain `data:` source, so the reader stays sugar-unaware — which is
+ * exactly why v1 and v2 stay deep-equal (AE2) for a sugar document.
  */
 
 import type { MapConfig, ControlsConfig, LegendConfig } from "../schemas";
