@@ -119,6 +119,8 @@ export {
 export {
   PopupContentItemSchema,
   PopupContentSchema,
+  EmitPayloadItemSchema,
+  EmitConfigSchema,
   InteractiveConfigSchema,
   LegendItemSchema,
   BaseLayerPropertiesSchema,

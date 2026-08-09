@@ -15,6 +15,10 @@ export * from "./parser";
 // Renderer
 export * from "./renderer";
 
+// Interactions — the named-interaction registry (types + built-in entries).
+// Previously barrel-private inside renderer/; made public here.
+export * from "./interactions";
+
 // Data
 export * from "./data";
 

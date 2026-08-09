@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interactions attach to a map the library did not render</title>
+    <!--
+    The v0.6.0 interactions guarantee, made visible — and the headline proof of
+    the epic. Interactions are projected out of a document into pure declarative
+    data (`projectInteractions`) and then wired onto maps this library never
+    rendered (`attachInteractions`). Four maps, one authored document:
+
+      (1) COMPILED (trusted). The document is compiled to a style.json by the
+          emitter and handed to a PLAIN `new maplibregl.Map({ style })` — no
+          <ml-map>. `attachInteractions` wires the projection onto it. Click a
+          feature: a popup opens, the camera fits the feature, and a host handler
+          fires with the projected payload. Hover: the feature's state is lit.
+
+      (2) HOST-CONSTRUCTED (trusted, the map-party shape). The page builds its
+          OWN map and adds its OWN sources and layers — nothing from a compiled
+          library style — then calls the SAME `attachInteractions`. This is the
+          bring-your-own-map integration. `handle.destroy()` then detaches
+          everything: a later click does nothing.
+
+      (3) UNTRUSTED (default policy). The same document, attached under an
+          untrusted policy. The `!html` popup value renders ESCAPED, a feature
+          property carrying `<script>` is escaped, and `emit` was dropped at
+          projection time so no host hook can fire.
+
+      (4) UNKNOWN INTERACTION. A hand-built projection naming an interaction the
+          registry does not know: it logs a warning at attach and binds no
+          handler for that name (closed-world, default-deny).
+
+    PASS = four maps over grey basemaps, a popup with live <b> markup on the
+    trusted maps and escaped text on the untrusted one, and every window hook the
+    spec reads populated. FAIL = a blank map, a console error, or an off-origin
+    request.
+    -->
+    <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      header { background: #0f172a; color: #e2e8f0; font: 12px/1.5 ui-monospace, monospace; padding: 8px 12px; }
+      header b { color: #7dd3fc; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: calc(100vh - 40px); }
+      .cell { position: relative; border: 1px solid #0f172a; }
+      .cell h1 { position: absolute; z-index: 1; top: 0; left: 0; right: 0; margin: 0; padding: 6px 10px; font: 600 12px/1.4 system-ui, sans-serif; color: #fff; }
+      .compiled h1 { background: #166534; }
+      .host h1 { background: #1e3a8a; }
+      .untrusted h1 { background: #991b1b; }
+      .ae4 h1 { background: #92400e; }
+      .map { height: 100%; width: 100%; }
+    </style>
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+    </script>
+  </head>
+  <body>
+    <header id="status">wiring interactions…</header>
+    <div class="grid">
+      <div class="cell compiled"><h1>1 · compiled style · trusted — popup + zoomToFeature + emit + highlight</h1><div id="map-compiled" class="map"></div></div>
+      <div class="cell host"><h1>2 · host-constructed map · trusted — same interactions, then destroy()</h1><div id="map-host" class="map"></div></div>
+      <div class="cell untrusted"><h1>3 · compiled style · untrusted — !html escaped, emit dropped</h1><div id="map-untrusted" class="map"></div></div>
+      <div class="cell ae4"><h1>4 · unknown interaction — warns, binds nothing</h1><div id="map-ae4" class="map"></div></div>
+    </div>
+
+    <script type="module">
+      import maplibregl from "maplibre-gl";
+      import {
+        YAMLParser,
+        toModel,
+        projectStyle,
+        mergeBasemap,
+        projectInteractions,
+        attachInteractions,
+        createInteractionRegistry,
+        DEFAULT_POLICY,
+      } from "/packages/core/dist/index.browser.js";
+
+      // Every hook the spec reads. Populated as each leg wires up.
+      const demo = {
+        ready: false,
+        error: null,
+        compiledStyle: null,
+        // Recorded emit payloads, one slot per leg. `null` means "handler never
+        // fired" — the untrusted leg must stay null (emit dropped at projection).
+        compiledEmit: null,
+        hostEmit: null,
+        untrustedEmit: null,
+        // The host leg's lifecycle handle, so the spec can call destroy().
+        hostHandle: null,
+        // The live maps, so the spec can fire events and read camera/state.
+        maps: {},
+        warnings: [],
+      };
+      window.__demo = demo;
+
+      // Capture warnings so the spec can assert the closed-world denial (AE4) and
+      // the untrusted-escape notice, while still surfacing them in the console.
+      const origWarn = console.warn.bind(console);
+      console.warn = (...args) => {
+        demo.warnings.push(args.map((a) => String(a)).join(" "));
+        origWarn(...args);
+      };
+
+      // A hermetic grey basemap — no network, exactly like the eject fixture.
+      const BASEMAP_LAYERS = [
+        { id: "bg", type: "background", paint: { "background-color": "#e5e7eb" } },
+      ];
+
+      // One authored v1 document. A named geojson source (`pts`) with
+      // `generateId` so hover.highlight has feature ids to address; a Polygon and
+      // a Point (RFC 7946); and all interaction kinds on the `area` fill layer:
+      //   - popup: an `!html` marker (policy-gated) AND a `name` property whose
+      //     value carries `<script>` markup (always escaped — it is feature data),
+      //   - hover.highlight,
+      //   - click.zoomToFeature (fits the clicked feature's own bounds),
+      //   - click.emit (a named host event with a declarative payload).
+      const DOC = `
+type: map
+id: interactions-demo
+config:
+  center: [-73.98, 40.75]
+  zoom: 9
+  mapStyle:
+    version: 8
+    sources: {}
+    layers: [{ id: bg, type: background, paint: { background-color: "#e5e7eb" } }]
+sources:
+  pts:
+    type: geojson
+    generateId: true
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry:
+            type: Polygon
+            coordinates: [[[-74.02,40.70],[-73.94,40.70],[-73.94,40.80],[-74.02,40.80],[-74.02,40.70]]]
+          properties:
+            pid: "P1"
+            kind: parcel
+            name: "<script>alert('xss')<\/script> Parcel"
+        - type: Feature
+          geometry: { type: Point, coordinates: [-73.98, 40.75] }
+          properties: { pid: "S1", name: "Site" }
+layers:
+  - id: area
+    type: fill
+    source: pts
+    filter: ["==", ["geometry-type"], "Polygon"]
+    paint:
+      fill-color:
+        ["case", ["boolean", ["feature-state", "hover"], false], "#ffd700", "#2563eb"]
+      fill-opacity: 0.6
+    interactive:
+      hover: { cursor: pointer, highlight: true }
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - str: !html "<b>Bold from !html</b>"
+        zoomToFeature: { padding: 40, maxZoom: 16, duration: 300 }
+        emit:
+          event: select-feature
+          payload:
+            id: { property: pid }
+            kind: { str: parcel }
+            name: { property: name }
+  - id: dot
+    type: circle
+    source: pts
+    filter: ["==", ["geometry-type"], "Point"]
+    paint:
+      circle-radius: 8
+      circle-color: "#dc2626"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+`;
+
+      // The GeoJSON the host-constructed maps add themselves (no compiled style).
+      const FEATURES = {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "Polygon",
+              coordinates: [[[-74.02, 40.70], [-73.94, 40.70], [-73.94, 40.80], [-74.02, 40.80], [-74.02, 40.70]]],
+            },
+            properties: { pid: "P1", kind: "parcel", name: "<script>alert('xss')<\/script> Parcel" },
+          },
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [-73.98, 40.75] },
+            properties: { pid: "S1", name: "Site" },
+          },
+        ],
+      };
+
+      const TRUSTED = { trust: "trusted" };
+
+      /** Resolve when a map's style has loaded. */
+      const onLoad = (map) =>
+        new Promise((resolve) => {
+          if (map.isStyleLoaded()) resolve();
+          else map.on("load", () => resolve());
+        });
+
+      /**
+       * A host-constructed map, map-party style: the page owns the map, builds
+       * its own grey basemap, and adds its own `pts` source and `area`/`dot`
+       * layers. Nothing here came from a compiled library style.
+       */
+      async function buildHostMap(containerId) {
+        const map = new maplibregl.Map({
+          container: containerId,
+          style: { version: 8, sources: {}, layers: BASEMAP_LAYERS },
+          center: [-73.98, 40.75],
+          zoom: 9,
+        });
+        await onLoad(map);
+        map.addSource("pts", { type: "geojson", data: FEATURES, generateId: true });
+        map.addLayer({
+          id: "area",
+          type: "fill",
+          source: "pts",
+          filter: ["==", ["geometry-type"], "Polygon"],
+          paint: {
+            "fill-color": ["case", ["boolean", ["feature-state", "hover"], false], "#ffd700", "#2563eb"],
+            "fill-opacity": 0.6,
+          },
+        });
+        map.addLayer({
+          id: "dot",
+          type: "circle",
+          source: "pts",
+          filter: ["==", ["geometry-type"], "Point"],
+          paint: { "circle-radius": 8, "circle-color": "#dc2626" },
+        });
+        return map;
+      }
+
+      try {
+        const parsed = YAMLParser.safeParseMapBlock(DOC);
+        if (!parsed.success) throw new Error(JSON.stringify(parsed.errors, null, 2));
+        if ((parsed.warnings ?? []).length) {
+          throw new Error("unexpected parse warnings: " + JSON.stringify(parsed.warnings));
+        }
+        const model = toModel(parsed.data);
+
+        // Compile the style half exactly as eject.html does. The runtime half
+        // (interactions) is NOT in this style — it travels as the projection.
+        const projected = projectStyle(model, "with-fallbacks");
+        const base = model.style.basemap;
+        const compiledStyle = (base ? mergeBasemap(base, projected) : projected).style;
+        demo.compiledStyle = compiledStyle;
+
+        // ---- Leg (a): compiled style, vanilla maplibre-gl, trusted -----------
+        const compiledMap = new maplibregl.Map({
+          container: "map-compiled",
+          style: compiledStyle,
+        });
+        demo.maps.compiled = compiledMap;
+        await onLoad(compiledMap);
+        attachInteractions(compiledMap, projectInteractions(model, TRUSTED), {
+          registry: createInteractionRegistry(),
+          hostHandlers: { "select-feature": (payload) => { demo.compiledEmit = payload; } },
+          policy: TRUSTED,
+        });
+
+        // ---- Leg (b): host-constructed map (map-party shape), trusted --------
+        const hostMap = await buildHostMap("map-host");
+        demo.maps.host = hostMap;
+        demo.hostHandle = attachInteractions(hostMap, projectInteractions(model, TRUSTED), {
+          registry: createInteractionRegistry(),
+          hostHandlers: { "select-feature": (payload) => { demo.hostEmit = payload; } },
+          policy: TRUSTED,
+        });
+
+        // ---- Security leg: compiled style, untrusted -------------------------
+        // A distinct compiled Map so its popup lives in its own container.
+        const untrustedMap = new maplibregl.Map({
+          container: "map-untrusted",
+          style: JSON.parse(JSON.stringify(compiledStyle)),
+        });
+        demo.maps.untrusted = untrustedMap;
+        await onLoad(untrustedMap);
+        attachInteractions(untrustedMap, projectInteractions(model, DEFAULT_POLICY), {
+          registry: createInteractionRegistry(),
+          // A handler is registered, but the projection dropped `emit` under the
+          // untrusted policy, so it must never be called.
+          hostHandlers: { "select-feature": (payload) => { demo.untrustedEmit = payload; } },
+          policy: DEFAULT_POLICY,
+        });
+
+        // ---- AE4 leg: an unknown interaction name ----------------------------
+        // A hand-built projection (not from `projectInteractions`) naming an
+        // interaction the registry does not know. `attachInteractions` validates
+        // the trigger against the registry at attach time: it warns and binds no
+        // handler for that name.
+        const ae4Map = await buildHostMap("map-ae4");
+        demo.maps.ae4 = ae4Map;
+        const tampered = {
+          layers: {
+            area: {
+              source: "pts",
+              interactive: { click: { doesNotExist: { foo: 1 } } },
+            },
+          },
+        };
+        attachInteractions(ae4Map, tampered, {
+          registry: createInteractionRegistry(),
+          policy: TRUSTED,
+        });
+
+        demo.ready = true;
+        document.getElementById("status").innerHTML =
+          "<b>ready</b> — interactions wired onto a compiled map, a host-built map, " +
+          "an untrusted map, and a tampered projection.";
+      } catch (err) {
+        demo.error = err?.message ?? String(err);
+        const status = document.getElementById("status");
+        status.textContent = "FAILED: " + demo.error;
+        status.style.color = "#f87171";
+      }
+    </script>
+  </body>
+</html>

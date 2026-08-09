@@ -294,6 +294,87 @@ describe("warnings channel — unknown keys", () => {
     expect(typeof result.warnings[0].column).toBe("number");
   });
 
+  it("warns on a code-shaped field inside click.zoomToFeature", () => {
+    // zoomToFeature is declarative (padding/maxZoom/duration only). A code- or
+    // selector-shaped field is not on its shape, so it surfaces as an
+    // unknown-key warning rather than being silently accepted.
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    interactive:
+      click:
+        zoomToFeature:
+          padding: 10
+          code: "map.remove()"`)
+    );
+    expect(result.success).toBe(true);
+    const warning = result.warnings.find((w) =>
+      w.path.endsWith("zoomToFeature.code")
+    );
+    expect(warning).toBeDefined();
+    expect(warning!.message).toMatch(/Unknown key "code"/);
+  });
+
+  it("warns on a code-shaped field inside an emit payload item", () => {
+    // emit is declarative (event + a property-projection payload). A code- or
+    // selector-shaped field on a payload item is not on its shape, so it
+    // surfaces as an unknown-key warning rather than being silently accepted.
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    interactive:
+      click:
+        emit:
+          event: select
+          payload:
+            id:
+              property: bbl
+              code: "map.remove()"`)
+    );
+    expect(result.success).toBe(true);
+    const warning = result.warnings.find((w) => w.path.endsWith("code"));
+    expect(warning).toBeDefined();
+    expect(warning!.message).toMatch(/Unknown key "code"/);
+  });
+
+  it("does not warn on a well-formed emit config", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    interactive:
+      click:
+        emit:
+          event: select
+          payload:
+            id:
+              property: bbl
+            label:
+              property: name
+              else: Unknown`)
+    );
+    expect(result.success).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it("does not warn on a well-formed zoomToFeature config", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      mapBlock(`  - id: p
+    type: circle
+    source: { type: geojson, url: "https://example.com/d.geojson" }
+    interactive:
+      click:
+        zoomToFeature:
+          padding: 40
+          maxZoom: 15
+          duration: 800`)
+    );
+    expect(result.success).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+  });
+
   it("never warns on x-* prefixed extension keys at any level", () => {
     const result = YAMLParser.safeParseMapBlock(
       mapBlock(`  - id: p

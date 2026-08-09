@@ -167,6 +167,82 @@ export const PopupContentSchema = z
 export type PopupContent = z.infer<typeof PopupContentSchema>;
 
 /**
+ * One entry in an `emit` payload: a declarative projection of a feature
+ * property (or a literal) into a named payload key.
+ *
+ * @remarks
+ * This is the popup content item's property-projection vocabulary
+ * ({@link PopupContentItemSchema}) narrowed to the subset that makes sense for a
+ * *data* payload rather than rendered markup:
+ *
+ * - `property` — the feature property to project.
+ * - `else` — the fallback when that property is missing.
+ * - `str` — a static literal value.
+ *
+ * The display- and markup-only fields (`format`, `href`, `src`, `alt`, `$html`)
+ * are deliberately absent: a payload is data handed to a host callback, not HTML
+ * to render, so a consumer formats it however it likes. And unlike the popup
+ * item this schema is **not** `.passthrough()` — an executable, selector, or
+ * GLSL-shaped field is stripped on parse and flagged as an unknown key, which is
+ * the format law for `emit`: it names an event and projects properties, and no
+ * field on it may carry code.
+ */
+// Annotated for the same reason as PopupContentItemSchema: without an explicit
+// type the inferred shape propagates up through the emit config into the
+// LayerSchema discriminated union and tips its serialized type over TS7056.
+// Stating the type collapses it; the runtime shape is unchanged.
+export const EmitPayloadItemSchema: z.ZodType<{
+  property?: string;
+  else?: string;
+  str?: string;
+}> = z
+  .object({
+    property: z.string().optional().describe("Feature property name to project"),
+    else: z
+      .string()
+      .optional()
+      .describe("Fallback value when the property is missing"),
+    str: z.string().optional().describe("Static literal value"),
+  })
+  .describe("Declarative payload projection item");
+
+/** Inferred type for an emit payload item. */
+export type EmitPayloadItem = z.infer<typeof EmitPayloadItemSchema>;
+
+/**
+ * The `emit` interaction: dispatch a named host event with a declarative
+ * payload projected from the clicked feature.
+ *
+ * @remarks
+ * `event` is a required, plain string — the name resolved closed-world against
+ * the host's handler map at attach time (an unregistered name is denied, never
+ * dispatched). `payload` is a record of named keys, each an
+ * {@link EmitPayloadItemSchema} projection. The format law: no field here may
+ * accept executable code, a DOM selector, or GLSL — `emit` names an event and
+ * projects feature properties declaratively.
+ */
+// Annotated for the same TS7056 reason as EmitPayloadItemSchema above.
+export const EmitConfigSchema: z.ZodType<{
+  event: string;
+  payload?: Record<string, EmitPayloadItem>;
+}> = z
+  .object({
+    event: z
+      .string()
+      .describe("Named event dispatched to the host handler map"),
+    payload: z
+      .record(EmitPayloadItemSchema)
+      .optional()
+      .describe(
+        "Declarative payload: named keys projected from feature properties"
+      ),
+  })
+  .describe("Dispatch a named event with a declarative payload to the host");
+
+/** Inferred type for the emit interaction config. */
+export type EmitConfig = z.infer<typeof EmitConfigSchema>;
+
+/**
  * Interactive event configuration for layers.
  *
  * @remarks
@@ -234,6 +310,25 @@ export const InteractiveConfigSchema = z
           })
           .optional()
           .describe("Fly to location on click"),
+        zoomToFeature: z
+          .object({
+            padding: z
+              .number()
+              .optional()
+              .describe("Padding in pixels around the fitted bounds"),
+            maxZoom: ZoomLevelSchema.optional().describe(
+              "Maximum zoom level when fitting the feature's bounds"
+            ),
+            duration: z
+              .number()
+              .optional()
+              .describe("Animation duration in milliseconds"),
+          })
+          .optional()
+          .describe("Fit the camera to the clicked feature's own bounds on click"),
+        emit: EmitConfigSchema.optional().describe(
+          "Dispatch a named host event with a declarative payload on click"
+        ),
       })
       .optional()
       .describe("Click behavior"),

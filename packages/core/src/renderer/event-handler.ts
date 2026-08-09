@@ -16,7 +16,7 @@ import {
   type InteractionContext,
   type InteractionDeps,
   type InteractionRuntime,
-} from "./interactions";
+} from "../interactions";
 
 /** An interaction paired with its per-handler runtime. */
 type BoundInteraction = {
@@ -39,7 +39,7 @@ export type {
   Interaction,
   InteractionContext,
   InteractionDeps,
-} from "./interactions";
+} from "../interactions";
 
 /**
  * Handles click, hover, and other interactive events on layers
@@ -78,6 +78,14 @@ export class EventHandler {
     this.boundHandlers = new Map();
     // Bound late so interactions reach the live method (and any test spy on it)
     // rather than a copy captured at construction.
+    //
+    // NOTE (emit / R9 deferred): these deps intentionally omit `hostHandlers`
+    // and `policy`. The `emit` built-in is bound here (it is in
+    // CLICK_INTERACTIONS) but, with no host handler map and no policy threaded,
+    // it resolves every event to a denial and is inert under the live renderer —
+    // even for a trusted document. `emit` dispatches only through
+    // `attachInteractions`, which supplies both. Threading them here is R9 work;
+    // until then `click.emit` is a documented no-op in `<ml-map>`.
     this.interactionDeps = {
       showPopup: (content, feature, lngLat) =>
         this.showPopup(content, feature, lngLat),
@@ -95,7 +103,18 @@ export class EventHandler {
   }
 
   /**
-   * Attach events for a layer based on its interactive config
+   * Attach events for a layer based on its interactive config.
+   *
+   * @remarks
+   * PARALLEL IMPLEMENTATION — keep in sync with `attachInteractions`'s
+   * `attachLayer` (`interactions/attach.ts`). R9 is deferred, so the `map.on`
+   * binding + `select`-ordered dispatch logic lives in two live copies: this
+   * one (driven by a raw v1 layer inside `<ml-map>`) and the attach path's
+   * (driven by a declarative projection). Any change to which listeners are
+   * bound, in what order they dispatch, or how the context is built must land in
+   * BOTH until R9 converges them. The parity test in
+   * `tests/interactions/attach.test.ts` guards the bound-listener set across
+   * several configs; it is the drift alarm.
    */
   attachEvents(layer: Layer): void {
     if (!layer.interactive) return;

@@ -417,6 +417,53 @@ describe("EventHandler", () => {
     });
   });
 
+  describe("click.emit is inert under the live renderer (R9 deferred)", () => {
+    it("does not dispatch or warn for a click.emit, even with a trusted policy", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      // Constructed trusted, yet `interactionDeps` omits policy + hostHandlers,
+      // so the emit built-in's trust gate falls back to DEFAULT_POLICY
+      // (untrusted) and emit is inert: no dispatch, and no missing-handler
+      // warning (it returns at the gate before touching a host handler map).
+      // This is the documented pre-R9 no-op. When R9 threads policy +
+      // hostHandlers into these deps, this test's expectations must change
+      // consciously — a trusted click.emit with no handler would then WARN.
+      const trustedHandler = new EventHandler(
+        mockMap,
+        callbacks,
+        { trust: "trusted" } as any
+      );
+      const layer = {
+        id: "test-layer",
+        type: "circle" as const,
+        source: {
+          type: "geojson" as const,
+          data: { type: "FeatureCollection" as const, features: [] },
+        },
+        interactive: {
+          click: { emit: { event: "select", payload: { id: { property: "bbl" } } } },
+        },
+      };
+
+      trustedHandler.attachEvents(layer as any);
+      const registered = mockMap.on.mock.calls.find(
+        (c: any[]) => c[0] === "click"
+      );
+      expect(() =>
+        registered?.[2]?.({
+          features: [{ properties: { bbl: "x" } }],
+          lngLat: { lng: 0, lat: 0 },
+        })
+      ).not.toThrow();
+
+      // Inert: no host-hook warning today.
+      expect(warn).not.toHaveBeenCalled();
+      // Dispatch continued past the inert emit — the click callback still ran.
+      expect(callbacks.onClick).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+  });
+
   describe("detachEvents", () => {
     it("removes event listeners", () => {
       const layer = {
