@@ -514,4 +514,31 @@ secondary:
     expect(results[0]!.config.secondary).toEqual({ color: "#222", weight: 2 });
     expect(Object.keys(results[0]!.config.secondary)).not.toContain("<<");
   });
+
+  // The other half of the parse-options parity (ml-0fg): the loader's copy of
+  // the options was missing the `!html` custom tag, so it silently dropped
+  // `!html` to a bare string while core resolved it to `{ $html }`. These pin
+  // that the loader now parses `!html` the way core's read path does.
+  const HTML_DOC = `label: !html "<b>Bold</b>"\n`;
+
+  it("resolves the !html tag through loadYAML (matching core)", async () => {
+    const yamlPath = join(testDir, "html.yaml");
+    await writeFile(yamlPath, HTML_DOC);
+
+    const result = await loadYAML<any>(yamlPath);
+
+    // Core resolves `!html "<b>Bold</b>"` to the structural marker, never a bare
+    // string. A drifted copy missing the tag yields the string "<b>Bold</b>".
+    expect(result.label).toEqual({ $html: "<b>Bold</b>" });
+    expect(typeof result.label).not.toBe("string");
+  });
+
+  it("resolves the !html tag through loadFromGlob (matching core)", async () => {
+    const results = await loadFromGlob<any>({
+      "virtual/html.yaml": () => Promise.resolve(HTML_DOC),
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.config.label).toEqual({ $html: "<b>Bold</b>" });
+  });
 });

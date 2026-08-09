@@ -115,17 +115,40 @@ import type { HtmlMarker } from "../utils/html.js";
  * A `Scalar` tag: it applies to a string value, and any non-string content is
  * left as-is (a malformed `!html` on a mapping is not something to coerce).
  */
-const htmlTag: ScalarTag = {
+/**
+ * The `!html` scalar tag, exported as the canonical definition consumers reuse.
+ *
+ * @remarks
+ * Public so a consumer that parses YAML itself parses `!html` the way the
+ * library does, rather than re-declaring the tag (or omitting it, which drops
+ * `!html` to a bare string). This is the tag half of {@link YAML_PARSE_OPTIONS}.
+ */
+export const htmlTag: ScalarTag = {
   tag: "!html",
   resolve(value: string): HtmlMarker {
     return { $html: value };
   },
 };
 
-const YAML_PARSE_OPTIONS: ParseOptions & DocumentOptions & SchemaOptions = {
-  merge: true,
-  customTags: [htmlTag],
-};
+/**
+ * The library's canonical YAML parse options — `merge: true` and the `!html`
+ * tag — exported as the single source of truth.
+ *
+ * @remarks
+ * A consumer that parses a map document with the bare `yaml` API must use
+ * *these* options, not a re-declared copy, or its parsing drifts from the
+ * library's read path (a copy missing `customTags` silently drops `!html`; one
+ * missing `merge` mishandles `<<:` merge keys). Import this rather than mirror
+ * it.
+ */
+export const YAML_PARSE_OPTIONS: ParseOptions & DocumentOptions & SchemaOptions =
+  Object.freeze({
+    merge: true,
+    // Frozen so it can't drift, but the tag array is frozen too: this object is
+    // now public *and* the object core's own read path parses with, so a
+    // consumer mutating `customTags` would poison the library's parsing.
+    customTags: Object.freeze([htmlTag]) as unknown as ScalarTag[],
+  });
 
 /**
  * Reject fan-out merge keys before the document is materialized.
