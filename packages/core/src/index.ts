@@ -51,6 +51,20 @@ export type {
   SourceModel,
   V1MapInput,
 } from "./model";
+// GeoJSON authoring sugar (location/locations/region/route) — surfaced at the
+// package root so `@maplibre-yaml/astro` can single-source its base-Feature
+// shape against the core expander (U4/ml-4jq). U1 exported these from
+// `./model` but not from the package root, which uses explicit named
+// re-exports rather than `export *`; without this line the API is unreachable
+// from `@maplibre-yaml/core`.
+export {
+  SUGAR_KEYS,
+  detectSugarKey,
+  project,
+  expandGeoSugar,
+  isSugarError,
+} from "./model";
+export type { SugarKey, SugarError, ExpandResult } from "./model";
 
 // Extension registry — validated, normalized `x-*` blocks
 export { ExtensionRegistry } from "./extensions";
