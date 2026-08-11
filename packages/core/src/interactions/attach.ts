@@ -160,7 +160,7 @@ function hasHoverInteraction(
 }
 
 /** Release per-layer interaction state (mouseleave, detach, destroy, reset). */
-function clearInteractionState(
+export function clearInteractionState(
   map: MapLibreMap,
   clickInteractions: BoundInteraction[],
   hoverInteractions: BoundInteraction[],
