@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Eject to a plain map, then reattach interactions</title>
+    <!--
+    The eject → attachInteractions story, in one small page you can copy.
+
+    A maplibre-yaml document carries two kinds of thing: the parts that become a
+    MapLibre `style.json`, and the parts that only exist while the map is
+    running (popups, camera moves, hover). No `style.json` can hold behavior, so
+    when you "eject" — compile the document to a self-contained style and render
+    it in a PLAIN `new maplibregl.Map({ style })` — the map draws your layers but
+    a click does nothing. The style is a *picture* of the map, not its behavior.
+
+    `attachInteractions` gives the behavior back. It takes the declarative
+    interactions your document produced (`projectInteractions`) and binds them
+    onto ANY maplibregl.Map — including one rendering an ejected style, with no
+    <ml-map> anywhere. Below: we eject a document to a style, render it plain,
+    then reattach so clicking the polygon opens a popup built from its data.
+
+    This page is hermetic (offline): maplibre-gl, its CSS, the core bundle, and
+    the GeoJSON are all same-origin. Nothing hits the network.
+    -->
+    <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      header {
+        background: #0f172a; color: #e2e8f0;
+        font: 12px/1.5 ui-monospace, monospace; padding: 8px 12px;
+      }
+      header b { color: #7dd3fc; }
+      #map { height: calc(100vh - 40px); width: 100%; }
+    </style>
+    <!-- Where the browser finds maplibre-gl (same-origin vendored ESM). -->
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+    </script>
+  </head>
+  <body>
+    <header id="status">ejecting…</header>
+    <div id="map"></div>
+
+    <script type="module">
+      import maplibregl from "maplibre-gl";
+      import {
+        YAMLParser,
+        normalizeMapBlock,
+        projectStyle,
+        mergeBasemap,
+        projectInteractions,
+        attachInteractions,
+        createInteractionRegistry,
+      } from "/packages/core/dist/index.browser.js";
+
+      // A readiness hook the test can await, and a place to hand it the live map.
+      const demo = { ready: false, error: null, map: null };
+      window.__ejectAttach = demo;
+
+      // One authored document. A grey basemap (inline, so nothing loads), a
+      // named `parcels` source with INLINE GeoJSON, and a `fill` layer whose
+      // `interactive.click.popup` builds a popup from the clicked feature's
+      // properties. The popup is the behavior that must survive eject.
+      const DOC = `
+type: map
+id: eject-and-attach
+config:
+  mapStyle:
+    version: 8
+    name: base
+    sources: {}
+    layers:
+      - { id: bg, type: background, paint: { background-color: "#e5e7eb" } }
+  center: [-73.98, 40.75]
+  zoom: 11
+sources:
+  parcels:
+    type: geojson
+    generateId: true
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry:
+            type: Polygon
+            coordinates: [[[-74.02,40.70],[-73.94,40.70],[-73.94,40.80],[-74.02,40.80],[-74.02,40.70]]]
+          properties:
+            name: "Study area"
+            status: "under review"
+layers:
+  - id: parcels-fill
+    type: fill
+    source: parcels
+    paint:
+      fill-color: "#2563eb"
+      fill-opacity: 0.6
+    interactive:
+      hover: { cursor: pointer }
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - str: "Status: "
+              - property: status
+`;
+
+      const status = document.getElementById("status");
+
+      try {
+        // 1. Parse and validate the YAML into a document, then normalize it into
+        //    the internal model the emitter and projector both read.
+        const parsed = YAMLParser.safeParseMapBlock(DOC);
+        if (!parsed.success) throw new Error(JSON.stringify(parsed.errors, null, 2));
+        const model = normalizeMapBlock(parsed.data);
+
+        // 2. EJECT: compile the STYLE half of the document to a self-contained
+        //    style.json. `projectStyle` emits the layers/sources; `mergeBasemap`
+        //    folds the inline basemap under them. This style has NO interactions
+        //    in it — behavior cannot live in a MapLibre style.
+        const projected = projectStyle(model, "with-fallbacks");
+        const base = model.style.basemap;
+        const { style } = base ? mergeBasemap(base, projected) : projected;
+
+        // 3. Render the ejected style in a PLAIN maplibre-gl map. No <ml-map>,
+        //    nothing from this library participates in rendering. At this point
+        //    the polygon draws, but clicking it does nothing — the style is inert.
+        const map = new maplibregl.Map({ container: "map", style });
+        demo.map = map;
+        await new Promise((resolve) =>
+          map.isStyleLoaded() ? resolve() : map.on("load", resolve)
+        );
+
+        // 4. REATTACH: extract the declarative interactions from the same model
+        //    (`projectInteractions` — pure data, no behavior yet) and bind them
+        //    onto the ejected map. The default policy is fine here: a popup is
+        //    not trust-gated the way `emit` is. Now a click opens the popup.
+        const projection = projectInteractions(model);
+        attachInteractions(map, projection, {
+          registry: createInteractionRegistry(),
+        });
+
+        demo.ready = true;
+        status.innerHTML =
+          "<b>ready</b> — style ejected to a plain maplibregl.Map, interactions " +
+          "reattached. Click the blue polygon: a popup opens.";
+      } catch (err) {
+        demo.error = err?.message ?? String(err);
+        status.textContent = "FAILED: " + demo.error;
+        status.style.color = "#f87171";
+      }
+    </script>
+  </body>
+</html>
