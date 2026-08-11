@@ -1,0 +1,243 @@
+---
+title: Interactions & Eject
+description: Declarative interactions, the eject guarantee, and reattaching behavior with attachInteractions
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A maplibre-yaml document carries two kinds of thing: the parts that become a
+MapLibre `style.json`, and the parts that only exist while the map is running.
+Interactions — popups, camera moves, hover highlighting, host events — are the
+second kind. They are declared in your YAML but they are **behavior**, and no
+MapLibre style can hold behavior.
+
+This guide is about what that means in practice: how the declarative
+interactions are authored (a recap), why a compiled style is inert on its own
+(the **eject guarantee**), and how `attachInteractions` wires the behavior back
+onto any map so your interactions survive eject.
+
+## Declarative interactions, in one recap
+
+Every interaction lives under a layer's `interactive:` block, split into a
+`hover:` trigger and a `click:` trigger. The named interactions core ships are:
+
+- **`click.popup`** — open a popup built from the clicked feature.
+- **`click.flyTo`** — animate the camera to author-fixed coordinates (defaults
+  to the clicked point).
+- **`click.zoomToFeature`** — fit the camera to the clicked feature's own bounds.
+- **`hover.highlight`** — recolour the hovered feature via `feature-state`.
+
+```yaml
+version: 1
+type: map
+id: stations-map
+config:
+  center: [-73.98, 40.75]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: stations
+    type: circle
+    source:
+      type: geojson
+      url: "https://example.com/stations.geojson"
+      generateId: true
+    paint:
+      circle-radius: 8
+      circle-color: "#3b82f6"
+    interactive:
+      hover:
+        cursor: pointer
+        highlight: true
+      click:
+        popup:
+          - h3: [{ property: name }]
+          - p: [{ property: description }]
+        zoomToFeature:
+          padding: 40
+          maxZoom: 16
+          duration: 300
+```
+
+When a layer configures both a popup and a camera move, the popup opens first
+and then travels with the camera. `highlight` needs feature ids — set
+`generateId: true` on the source, or `promoteId` to use a property.
+
+This is only a recap. Every field, its defaults, and the `emit` interaction are
+documented in full in the [Interactivity schema
+reference](/schema/interactivity/).
+
+## The eject guarantee
+
+`projectStyle(model)` compiles your document into a self-contained, spec-valid
+`style.json`. That artifact renders anywhere MapLibre runs — vanilla
+maplibre-gl, maplibre-native, a third-party tool that eats style JSON — with
+nothing from this library present at runtime. That is the eject guarantee: your
+map is not locked to `<ml-map>`.
+
+The other half of the guarantee is the honest half: **the compiled style is
+inert.** Nothing in the MapLibre style specification can express "open a popup
+on click" or "fly the camera to this feature." Those verbs do not exist in the
+spec. So the compiled style is a *picture* of your map, not its *behavior* — it
+draws the layers, and clicking a feature does nothing.
+
+```js
+import maplibregl from "maplibre-gl";
+import {
+  YAMLParser,
+  normalizeMapBlock,
+  projectStyle,
+  mergeBasemap,
+} from "@maplibre-yaml/core";
+
+const parsed = YAMLParser.safeParseMapBlock(doc);
+const model = normalizeMapBlock(parsed.data);
+
+// Compile the style half. The interactive half is NOT in here.
+const projected = projectStyle(model, "with-fallbacks");
+const base = model.style.basemap;
+const { style } = base ? mergeBasemap(base, projected) : projected;
+
+// A plain MapLibre map over the compiled style. Nothing from this library
+// participates in rendering — and nothing makes the layers interactive.
+new maplibregl.Map({ container: "map", style });
+```
+
+<Aside type="tip">
+  This is not a claim — it is a tested proof. The fixture
+  `examples/verification/emitter/eject.html` hands a compiled style to a plain
+  `new maplibregl.Map({ style })` and asserts it renders with no
+  `runtime`/`interactive` keys left behind. It is driven end-to-end by
+  `e2e/v050-emitter.spec.ts`.
+</Aside>
+
+## Reattachment: `attachInteractions`
+
+If the compiled style is inert, how do interactions survive eject? You wire them
+back on. `attachInteractions(map, projection, options)` takes the declarative
+projection your document produced and binds the built-in handlers onto **any**
+`maplibregl.Map` — a map rendering a compiled/ejected style, *or* a map a host
+built entirely itself with its own sources and layers. No `<ml-map>` is
+involved.
+
+The behavior travels as data, separate from the style. `projectInteractions`
+extracts it; `attachInteractions` binds it:
+
+```js
+import {
+  projectInteractions,
+  attachInteractions,
+  createInteractionRegistry,
+} from "@maplibre-yaml/core";
+
+// The declarative interactions projection — pure data, no behavior yet.
+const projection = projectInteractions(model, { trust: "trusted" });
+
+// Wire it onto ANY maplibregl.Map: a compiled-style map, or the host's own.
+const handle = attachInteractions(map, projection, {
+  registry: createInteractionRegistry(),
+  policy: { trust: "trusted" },
+  hostHandlers: {
+    "select-feature": (payload) => {
+      /* host code runs here */
+    },
+  },
+});
+
+// The returned InteractionsHandle drives the lifecycle:
+handle.resetFeatureState("stations"); // drop hover state after a data refresh
+handle.detach("stations");            // release one layer's listeners
+handle.destroy();                     // release everything, remove any popup
+```
+
+The public API surface from `packages/core/src/interactions/index.ts` is small:
+
+- **`attachInteractions(map, projection, options)`** — bind the projection onto
+  a map; returns an `InteractionsHandle`.
+- **`projectInteractions(model, policy?)`** — extract the declarative projection
+  from a model.
+- **`createInteractionRegistry()`** — a fresh registry resolving interaction
+  names to built-ins (each attach gets its own).
+- **`InteractionsHandle`** — the returned lifecycle handle:
+  `{ resetFeatureState, detach, destroy }`.
+
+<Aside type="tip">
+  Also tested, not asserted. `examples/verification/interactions/compiled-interactions.html`
+  wires one authored document onto four maps — a compiled style, a
+  host-constructed map, an untrusted map, and a tampered projection — and
+  `e2e/interactions.spec.ts` drives it. The host-constructed leg is the
+  bring-your-own-map integration: the page owns the map, adds its own data, and
+  calls the same `attachInteractions`.
+</Aside>
+
+## `emit`: a host event, and what it truthfully requires
+
+`click.emit` is the interaction that hands data to code the host wrote. Unlike
+`popup`, `flyTo`, and `zoomToFeature` — which act on the map itself —
+`emit` dispatches a named event to a host-supplied handler. Because it hands
+control to host code, it is gated, and the gate is the point.
+
+```yaml
+version: 1
+type: map
+id: parcels-map
+config:
+  center: [-73.98, 40.75]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: parcels
+    type: fill
+    source:
+      type: geojson
+      url: "https://example.com/parcels.geojson"
+      generateId: true
+    paint:
+      fill-color: "#2563eb"
+      fill-opacity: 0.6
+    interactive:
+      click:
+        emit:
+          event: select-feature
+          payload:
+            id: { property: pid }
+            kind: { str: parcel }
+```
+
+`emit` fires only through `attachInteractions`, and only when **both** of these
+hold at once:
+
+- **A trusted policy.** `options.policy` must declare `trust: "trusted"`. The
+  host hook is default-deny; an untrusted — or absent — policy shuts the gate
+  and the interaction does nothing. There is no per-policy override for this: a
+  host hook runs host code, and the only situation where that is safe is one
+  where the document author *is* the host.
+- **A matching handler.** `options.hostHandlers` must carry an entry whose key
+  equals the event name. Resolution is closed-world — an unregistered name (or a
+  prototype method like `toString`) is denied, never dispatched.
+
+Both are required. A trusted policy with no registered handler does nothing; a
+registered handler under an untrusted policy does nothing. It **needs BOTH.**
+
+<Aside type="caution">
+  **`emit` is inert under `<ml-map>` today.** The web component defaults to an
+  untrusted policy and registers no host handlers, so every `emit` fails closed
+  — a silent no-op — even in a document you authored yourself. This is
+  intentional fail-closed behavior, not a bug: `emit` targets the
+  `attachInteractions` path, and wiring it into the renderer is tracked
+  follow-up work (bead `ml-1lz`). Do not reach for `emit` expecting it to fire
+  from a plain `<ml-map>` mount.
+</Aside>
+
+The payload projection — `str`, `property`, `else`, and the defined-absent
+rule — is specified in the [`emit` section of the Interactivity
+reference](/schema/interactivity/#emit).
+
+## Next steps
+
+- [Interactivity reference](/schema/interactivity/) — every interaction field,
+  the full `emit` payload vocabulary, and the deprecated `action` key
+- [Format v2](/guides/format-v2/) — the style/runtime split that makes the eject
+  boundary legible
+- [Working with Layers](/guides/layers/) — the paint, layout, and filter that
+  compile straight through to `style.json`
