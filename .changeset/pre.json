@@ -9,5 +9,12 @@
     "@maplibre-yaml/cli": "0.2.2",
     "@maplibre-yaml/core": "0.5.0"
   },
-  "changesets": []
+  "changesets": [
+    "geojson-sugar-normalization",
+    "interactions-registry",
+    "parse-options-consistency",
+    "v1-geojson-warning",
+    "v2-style-metadata",
+    "v2-surface-parser"
+  ]
 }

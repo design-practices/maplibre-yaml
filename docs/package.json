@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "description": "Documentation site for maplibre-yaml",
-  "version": "0.1.4",
+  "version": "0.1.5-alpha.0",
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
