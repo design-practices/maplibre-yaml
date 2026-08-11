@@ -5,6 +5,13 @@ description: How to install maplibre-yaml in your project
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
+## Supported maplibre-gl versions
+
+maplibre-yaml works with maplibre-gl **v4 and v5** (v5 recommended for new
+projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0`. The CDN examples
+below pin `maplibre-gl@^5` because it is the current latest — pin whichever
+major your project already uses.
+
 ## Package installation
 
 <Tabs>
@@ -57,7 +64,7 @@ For quick prototypes or simple pages, you can use maplibre-yaml directly from a 
     </style>
     <!-- Tell the browser where to find maplibre-gl -->
     <script type="importmap">
-      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
     </script>
     <!-- Register the <ml-map> web component -->
     <script

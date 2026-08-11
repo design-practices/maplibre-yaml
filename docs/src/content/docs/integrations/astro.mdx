@@ -545,6 +545,35 @@ See [GeoJSON Sugar](/schema/sources/#geojson-sugar) for the full reference and
 all four shorthands. A runnable version lives in the minimal example at
 `examples/astro/minimal/src/pages/geojson-sugar.astro`.
 
+### Format v2 and interactions
+
+The same `loadMapConfig` / `<Map>` flow shown above works unchanged with
+**Format v2** documents (the additive `style:` / `runtime:` split): a v2
+document parses to the same internal model as its v1 twin, so the `config` you
+hand to `<Map>` is identical either way.
+
+- [Format v2](/guides/format-v2/) — the style/runtime split, key-by-key, with
+  the v1 → v2 relocation table.
+- [Interactions & Eject](/guides/interactions/) — declarative interactions, the
+  eject guarantee, and how `attachInteractions` reattaches behavior (including
+  the trust-gated `emit` interaction).
+
+## Upgrading to 0.6
+
+Three behavior changes matter when you move an Astro project to 0.6:
+
+- **Astro `!html` loader fix (trust-gated).** `loadYAML` / `loadFromGlob` now
+  parse with core's canonical options, so an `!html` tag resolves to the same
+  `{ $html }` marker core produces (previously the Astro loader silently dropped
+  `!html` to a bare string). Rendering is still gated by the popup capability
+  policy: `!html` renders as **raw markup only under a trusted policy**, and is
+  escaped otherwise. It is trust-gated, not "renders HTML unconditionally."
+- **Malformed inline GeoJSON now warns.** A v1 document with malformed inline
+  GeoJSON `data` emits a warning (promoted to an error under `mlym validate
+  --strict` / CI). Pre-check inline geometry.
+- **v2 `style.metadata` flows through.** In Format v2, `style.metadata` is
+  carried to the emitted `style.json` root `metadata` slot.
+
 ## FullPageMap Component
 
 The `FullPageMap` component creates a full-viewport map with built-in controls and an optional legend. It's perfect for landing pages, dashboards, or dedicated map views.

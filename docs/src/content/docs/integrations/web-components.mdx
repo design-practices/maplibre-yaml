@@ -25,7 +25,7 @@ Get a map on your page in 3 steps.
 
      <!-- Tell the browser where to find maplibre-gl -->
      <script type="importmap">
-       { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+       { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
      </script>
      <!-- Register the web component -->
      <script
@@ -91,13 +91,19 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 
 ```html
 <script type="importmap">
-  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
 </script>
 <script
   type="module"
   src="https://unpkg.com/@maplibre-yaml/core/register.js"
 ></script>
 ```
+
+<Aside type="note" title="maplibre-gl version">
+  maplibre-yaml works with maplibre-gl **v4 and v5** (v5 recommended for new
+  projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0`. Pin whichever
+  major your project uses in the import map.
+</Aside>
 
 ### npm (With Build Tools)
 
@@ -120,6 +126,25 @@ There are three ways to configure `<ml-map>`, each suited for different use case
   level is `type: map`. It does not accept a root document (one with a
   `pages:` key); those are multi-page site configurations meant for the Astro
   integration and will fail validation if passed to `<ml-map>`.
+</Aside>
+
+<Aside type="note" title="Format v2 renders identically">
+  A **Format v2** document (one with `version: 2` and the `style:` / `runtime:`
+  split) renders through `<ml-map>` exactly like its v1 twin — the two forms
+  collapse to the same internal model, so nothing on this page changes when you
+  adopt v2. See [Format v2](/guides/format-v2/) for the style/runtime split.
+</Aside>
+
+<Aside type="caution" title="`emit` is inert under `<ml-map>` today">
+  The `click.emit` interaction — which hands feature data to a host-supplied
+  handler — does **not** fire from a plain `<ml-map>` mount. The component
+  defaults to an untrusted capability policy and registers no host handlers, so
+  every `emit` fails closed (a silent no-op), even in a document you authored
+  yourself. This is intentional fail-closed behavior, not a bug: `emit` targets
+  the `attachInteractions` path, and wiring it into the renderer is tracked
+  follow-up work (bead `ml-1lz`). The map-acting interactions (`popup`,
+  `flyTo`, `zoomToFeature`, `hover.highlight`) work under `<ml-map>` as usual.
+  See [Interactions & Eject](/guides/interactions/) for the full `emit` story.
 </Aside>
 
 ### Method 1: External YAML File (Recommended)
@@ -209,7 +234,7 @@ For dynamic or generated configurations:
 ></ml-map>
 
 <script type="importmap">
-  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
 </script>
 <script type="module">
   import "https://unpkg.com/@maplibre-yaml/core/register.js";
@@ -359,7 +384,7 @@ This example demonstrates a complete implementation using the `src` attribute wi
       rel="stylesheet"
     />
     <script type="importmap">
-      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
     </script>
     <script
       type="module"
@@ -538,7 +563,7 @@ Each `<ml-map>` is independent:
 </div>
 
 <script type="importmap">
-  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
 </script>
 <script type="module">
   import "https://unpkg.com/@maplibre-yaml/core/register.js";
@@ -746,8 +771,24 @@ mapEl.addEventListener("ml-map:error", (event) => {
 | `ml-map:layer-loaded`  | `{ layerId: string, featureCount: number }` | Layer data loaded    |
 | `ml-map:layer-error`   | `{ layerId: string, error: Error }`         | Layer data error     |
 
+## Upgrading to 0.6
+
+Three behavior changes are worth knowing when you move to 0.6:
+
+- **`!html` is trust-gated, not unconditional.** A popup `!html` value renders
+  as raw markup only under a **trusted** capability policy; otherwise it is
+  escaped and shown as text. Under `<ml-map>` (untrusted by default) `!html`
+  content is escaped.
+- **Malformed inline GeoJSON now warns.** A v1 document with malformed inline
+  GeoJSON `data` emits a warning (promoted to an error under `mlym validate
+  --strict` / CI). Pre-check inline geometry.
+- **v2 `style.metadata` flows through.** In Format v2, `style.metadata` is
+  carried to the emitted `style.json` root `metadata` slot.
+
 ## Next Steps
 
+- [Format v2](/guides/format-v2/) - The `style:` / `runtime:` split (renders identically here)
+- [Interactions & Eject](/guides/interactions/) - Declarative interactions and the `emit` gate
 - [Vanilla JavaScript Integration](/integrations/vanilla-js/) - More control with direct API usage
 - [Astro Integration](/integrations/astro/) - For Astro-based sites
 - [Live Data Guide](/guides/live-data/) - Polling and streaming configuration
