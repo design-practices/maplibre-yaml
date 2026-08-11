@@ -1,6 +1,6 @@
 {
   "name": "@maplibre-yaml/cli",
-  "version": "0.2.2",
+  "version": "0.3.0-alpha.0",
   "description": "CLI tools for maplibre-yaml",
   "type": "module",
   "bin": {

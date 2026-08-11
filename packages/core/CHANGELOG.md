@@ -1,5 +1,67 @@
 # @maplibre-yaml/core
 
+## 0.6.0-alpha.0
+
+### Minor Changes
+
+- 2692ab0: Add GeoJSON authoring sugar (`location`, `locations`, `region`, `route`) on
+  `type: geojson` sources. A source may carry one of these in place of `data:`/
+  `url:`, and it expands to a `Feature`/`FeatureCollection` immediately after
+  parse — format-wide (v1 and v2, standalone map blocks and multi-page
+  documents), so a sugar document renders through `<ml-map>` and normalizes
+  identically in both formats. The expander is exported from `@maplibre-yaml/core`
+  (`expandGeoSugar`, `project`, `detectSugarKey`, `SUGAR_KEYS`) so
+  `@maplibre-yaml/astro`'s builders share the same base-Feature shape. Malformed
+  sugar reports a clear error re-anchored to the authored sugar key rather than a
+  synthesized `data.*` path.
+- 0972d93: Interactions ship as a registry-backed module with a standalone
+  `attachInteractions` entry point (ml-cbm, PR #73). The declarative interactions
+  (popup, highlight, zoom-to-feature, emit) can now be wired onto **any**
+  `maplibregl.Map` — a bare compiled `style.json`, or a map the host already owns
+  — not just a map the library rendered. Because the emitter strips the runtime
+  half, a compiled style renders but is inert; `attachInteractions` reattaches the
+  behavior over it, so interactions survive eject. Popup `!html` stays
+  capability-gated and emit stays trust-gated and closed-world.
+- 0972d93: Make the library's canonical YAML parse options a supported public export and
+  fix a live Astro `!html` parsing bug (ml-0fg, PR #74). `YAML_PARSE_OPTIONS` and
+  `htmlTag` are now exported (frozen) from `@maplibre-yaml/core` so a consumer that
+  parses YAML itself parses exactly as the library does instead of re-declaring
+  the options and drifting. The Astro loader carried its own drifted copy that had
+  `merge` but not the `!html` tag, so `label: !html "<b>Bold</b>"` resolved to the
+  `{ $html }` marker through core but to a bare string through Astro's
+  `loadYAML`/`loadFromGlob`; the loader now imports the canonical options and the
+  two read paths agree.
+- 43dbb14: Warn on malformed inline GeoJSON `data` under format v1 (ml-ldv). v1 keeps
+  `source.data` as permissive (`z.any()`) for byte-for-byte compatibility —
+  MapLibre tolerates loosely-conformant geometry — so genuinely broken inline
+  GeoJSON used to pass validation silently. It now surfaces a validation
+  **warning** that names the RFC 7946 problem; the document still parses and
+  renders. The check is self-gating on the field schema, so format v2 (where the
+  same data is already a hard error) never double-reports it.
+
+  Note: like other non-deprecation warnings, this promotes to an error under
+  `mlym validate --strict` / CI, so upgrading may surface a CI failure for a
+  document that already contained malformed inline geometry — the fix is to
+  correct the geometry (or move it to a fetched `url:`).
+
+- d595a87: Compile format-v2 `style.metadata` through to the emitted `style.json` root
+  (ml-tay). The v2 schema accepted `style.metadata` but the reader had no model
+  slot for it and dropped it silently — a never-drop-discipline gap. It now lands
+  on the model's style half and the emitter writes it to the style-spec root
+  `metadata` property, so authored style metadata survives eject. It has no v1
+  surface (v1 `config.metadata` is a `Map` option under `runtime.map`), so it is
+  not an AE2 pair and cannot cause a v1/v2 divergence.
+- 0972d93: Parse format-v2 documents into the internal model (ml-dsu, PR #72). A second
+  parser front end reads a `version: 2` document — the explicit `style:` /
+  `runtime:` split, per-source and per-layer `runtime:` blocks, and the v2 renames
+  (`basemap`, root-level camera, `runtime.container.style`) — into the same
+  `MapModel` a v1 document produces. A `toModel(result)` dispatcher selects the v1
+  or v2 front end by the detected version, so the renderer, emitter, and extension
+  registry are untouched: a v2 document is indistinguishable from its v1 twin
+  downstream (AE2). Inline `source.data` is now validated as real RFC 7946 GeoJSON
+  (a hard error under v2, still lenient under v1). `mlym validate` accepts and
+  strictly validates v2 documents through the same path.
+
 ## 0.5.0
 
 ### Minor Changes

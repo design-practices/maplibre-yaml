@@ -1,5 +1,17 @@
 # @maplibre-yaml/docs
 
+## 0.1.5-alpha.0
+
+### Patch Changes
+
+- Updated dependencies [2692ab0]
+- Updated dependencies [0972d93]
+- Updated dependencies [0972d93]
+- Updated dependencies [43dbb14]
+- Updated dependencies [d595a87]
+- Updated dependencies [0972d93]
+  - @maplibre-yaml/core@0.6.0-alpha.0
+
 ## 0.1.4
 
 ### Patch Changes
