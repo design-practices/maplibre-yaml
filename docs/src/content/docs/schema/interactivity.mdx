@@ -217,6 +217,7 @@ highlight state.
 |----------|------|-------------|
 | `popup` | array | Popup content blocks (see [Popups](/schema/layers/#popups)) |
 | `flyTo` | object | Animate the camera to the clicked feature |
+| `emit` | object | Dispatch a named host event with a payload projected from the feature |
 
 `flyTo` accepts `center`, `zoom`, and `duration`. `center` defaults to the
 clicked point, and `zoom`/`duration` fall through to MapLibre's defaults when
@@ -232,6 +233,79 @@ interactive:
 
 When a layer configures both, the popup opens first and then travels with the
 camera.
+
+### Emit
+
+`click.emit` dispatches a **named host event** carrying a declarative payload
+projected from the clicked feature. Unlike `popup` and `flyTo`, which act on the
+map itself, `emit` hands data to code the host wrote — so it is gated on trust
+(see the caveat below).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `event` | string | The event name, resolved against the host's handler map |
+| `payload` | object | Named keys, each a declarative projection from the feature |
+
+Each `payload` key is projected independently:
+
+- `str` — a static literal value.
+- `property` — read a feature property, with an optional `else` fallback.
+
+```yaml
+version: 1
+type: map
+id: parcels-map
+config:
+  center: [-73.98, 40.75]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: parcels
+    type: circle
+    source:
+      type: geojson
+      url: "https://example.com/parcels.geojson"
+      generateId: true
+    paint:
+      circle-radius: 6
+      circle-color: "#3b82f6"
+    interactive:
+      click:
+        emit:
+          event: select
+          payload:
+            id:
+              property: id
+            label:
+              property: name
+              else: "Untitled"
+            kind:
+              str: parcel
+```
+
+A missing or null property yields a **defined-absent** value: the key stays in
+the payload carrying its `else` value, or `null` when no `else` is declared. It
+is never omitted and never throws, so a handler sees a stable payload shape
+across features that carry different properties. Payload fields are data only —
+`str`, `property`, and `else` — with no formatting, markup, or executable
+fields; unlike `popup`, an unrecognised field is stripped as an unknown key
+rather than passed through.
+
+**`emit` needs a trusted host — it is inert under `<ml-map>` today.** It is a
+*host-event* interaction: it fires only when the map is wired up with
+`attachInteractions(map, projection, options)` and **both** of these hold:
+
+- `options.policy` declares `trust: "trusted"`. The host hook is default-deny;
+  an untrusted (or absent) policy shuts the gate and the interaction does
+  nothing.
+- `options.hostHandlers` has a **matching entry** for the event name. Resolution
+  is closed-world — an unregistered name is denied, never dispatched.
+
+Both are required: a trusted policy with no handler does nothing, and a
+registered handler under an untrusted policy does nothing. Because of this,
+`emit` is a silent no-op under the `<ml-map>` web component, which defaults to
+an untrusted policy and registers no host handlers (fail-closed). Making `emit`
+live under `<ml-map>` is tracked as follow-up work (bead `ml-1lz`).
 
 ### Deprecated: `action`
 
