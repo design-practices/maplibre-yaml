@@ -121,14 +121,16 @@ export const CLICK_INTERACTIONS: readonly Interaction[] = [
       ctx.map.fitBounds(bounds, options);
     }),
   }),
-  // NOTE (emit dispatch surface, R9 deferred): emit only actually dispatches
-  // through `attachInteractions`, which threads `hostHandlers`/`policy` into the
-  // deps it builds. The live `<ml-map>` renderer (`EventHandler`) binds this
-  // built-in — it is in CLICK_INTERACTIONS — but does NOT thread
-  // `hostHandlers`/`policy` into its `interactionDeps`, so under the renderer an
-  // `emit` resolves every event to a denial and is inert (a silent no-op) even
-  // for a trusted document. That is intended, not a latent footgun: emit targets
-  // the attach path this epic added; wiring it into the renderer is R9 work.
+  // NOTE (emit dispatch surface): emit dispatches wherever its deps carry a
+  // trusted `policy` and a `hostHandlers` map — now both binding paths, since
+  // they share one core (`bindLayerInteractions`) and both build the
+  // `showPopup`/`hostHandlers`/`policy` deps the same way (ml-wx2 / R9). Under
+  // the live `<ml-map>` renderer emit is *capable* but still *inert* in practice:
+  // `MapRenderer` supplies the default untrusted policy and no `hostHandlers`, so
+  // the trust gate below denies every event — fail-closed by default. Lighting
+  // it up under `<ml-map>` (an embedder trust surface + a DOM-event bridge that
+  // supplies `hostHandlers`) is the deferred follow-up bead; nothing here needs
+  // to change for it.
   defineInteraction<EmitConfig>({
     name: "emit",
     select: (trigger) => trigger.emit,

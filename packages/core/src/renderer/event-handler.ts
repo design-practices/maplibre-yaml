@@ -3,20 +3,26 @@
  * @module @maplibre-yaml/core/renderer
  */
 
-import type { Map as MapLibreMap, MapMouseEvent, LngLat } from "maplibre-gl";
+import type { Map as MapLibreMap, LngLat } from "maplibre-gl";
 import { Popup } from "./maplibre-interop";
 import type { z } from "zod";
 import { LayerSchema, PopupContentSchema } from "../schemas";
 import { PopupBuilder } from "./popup-builder";
 import type { CapabilityPolicy } from "../capabilities";
 import {
-  CLICK_INTERACTIONS,
-  HOVER_INTERACTIONS,
+  createInteractionRegistry,
+  type InteractionRegistry,
   type Interaction,
-  type InteractionContext,
   type InteractionDeps,
   type InteractionRuntime,
+  type InteractionHostHandlers,
 } from "../interactions";
+import {
+  bindLayerInteractions,
+  clearInteractionState,
+  type LayerBindDeps,
+} from "../interactions/attach";
+import type { ProjectedLayerInteractions } from "../interactions/manifest";
 
 /** An interaction paired with its per-handler runtime. */
 type BoundInteraction = {
@@ -42,7 +48,19 @@ export type {
 } from "../interactions";
 
 /**
- * Handles click, hover, and other interactive events on layers
+ * Handles click, hover, and other interactive events on layers.
+ *
+ * @remarks
+ * The per-layer `map.on` binding, `select`-ordered dispatch, cursor handling,
+ * and raw-event callback hook live in ONE shared core —
+ * {@link bindLayerInteractions} in `interactions/attach.ts`. `EventHandler`
+ * drives it incrementally (once per raw v1 layer as `MapRenderer.addLayer`
+ * adds them); `attachInteractions` drives the same core all-at-once from a
+ * declarative projection. There is no second copy to keep in sync.
+ *
+ * The popup lifecycle stays caller-side (this class owns its `PopupBuilder`
+ * and `activePopup`, threaded into the core via `interactionDeps.showPopup`),
+ * exactly as `attachInteractions` does.
  */
 export class EventHandler {
   private map: MapLibreMap;
@@ -50,25 +68,19 @@ export class EventHandler {
   private popupBuilder: PopupBuilder;
   private activePopup: Popup | null;
   private attachedLayers: Set<string>;
-  private boundHandlers: Map<
-    string,
-    {
-      click?: Function;
-      mouseenter?: Function;
-      mouseleave?: Function;
-      mousemove?: Function;
-    }
-  >;
+  private boundHandlers: Map<string, any>;
+  private registry: InteractionRegistry;
   private interactionDeps: InteractionDeps;
   private clickInteractions: BoundInteraction[];
   private hoverInteractions: BoundInteraction[];
-  /** Source id per layer, derived as LayerManager derives it. */
-  private layerToSource: Map<string, string>;
+  /** Per-session state threaded into every per-layer bind (see the core). */
+  private bindDeps: LayerBindDeps;
 
   constructor(
     map: MapLibreMap,
     callbacks?: EventHandlerCallbacks,
-    policy?: CapabilityPolicy
+    policy?: CapabilityPolicy,
+    hostHandlers?: InteractionHostHandlers
   ) {
     this.map = map;
     this.callbacks = callbacks || {};
@@ -76,170 +88,70 @@ export class EventHandler {
     this.activePopup = null;
     this.attachedLayers = new Set();
     this.boundHandlers = new Map();
+    this.registry = createInteractionRegistry();
+
     // Bound late so interactions reach the live method (and any test spy on it)
-    // rather than a copy captured at construction.
-    //
-    // NOTE (emit / R9 deferred): these deps intentionally omit `hostHandlers`
-    // and `policy`. The `emit` built-in is bound here (it is in
-    // CLICK_INTERACTIONS) but, with no host handler map and no policy threaded,
-    // it resolves every event to a denial and is inert under the live renderer —
-    // even for a trusted document. `emit` dispatches only through
-    // `attachInteractions`, which supplies both. Threading them here is R9 work;
-    // until then `click.emit` is a documented no-op in `<ml-map>`.
+    // rather than a copy captured at construction. Policy + hostHandlers are
+    // threaded so the `emit` built-in's trust gate is honored on the shared
+    // path: trusted + registered handler dispatches, trusted + no handler
+    // warns, untrusted (the default, and the only thing `MapRenderer`/`<ml-map>`
+    // supplies today) denies silently. `MapRenderer` passes no `hostHandlers`,
+    // so `click.emit` stays inert under `<ml-map>` — fail-closed by default.
     this.interactionDeps = {
       showPopup: (content, feature, lngLat) =>
         this.showPopup(content, feature, lngLat),
+      hostHandlers,
+      policy,
     };
-    this.layerToSource = new Map();
+
     // One runtime per interaction per handler, so stateful interactions
-    // (highlight) never share tracked features across map instances.
+    // (highlight) never share tracked features across map instances. Built from
+    // the registry so the shared core has the registry for closed-world
+    // validation and the same ordered sets it iterates.
     const bind = (interactions: readonly Interaction[]): BoundInteraction[] =>
       interactions.map((interaction) => ({
         interaction,
         runtime: interaction.create(this.interactionDeps),
       }));
-    this.clickInteractions = bind(CLICK_INTERACTIONS);
-    this.hoverInteractions = bind(HOVER_INTERACTIONS);
+    this.clickInteractions = bind(this.registry.clickInteractions());
+    this.hoverInteractions = bind(this.registry.hoverInteractions());
+
+    this.bindDeps = {
+      registry: this.registry,
+      clickInteractions: this.clickInteractions,
+      hoverInteractions: this.hoverInteractions,
+      boundHandlers: this.boundHandlers,
+      callbacks: this.callbacks,
+    };
   }
 
   /**
    * Attach events for a layer based on its interactive config.
    *
    * @remarks
-   * PARALLEL IMPLEMENTATION — keep in sync with `attachInteractions`'s
-   * `attachLayer` (`interactions/attach.ts`). R9 is deferred, so the `map.on`
-   * binding + `select`-ordered dispatch logic lives in two live copies: this
-   * one (driven by a raw v1 layer inside `<ml-map>`) and the attach path's
-   * (driven by a declarative projection). Any change to which listeners are
-   * bound, in what order they dispatch, or how the context is built must land in
-   * BOTH until R9 converges them. The parity test in
-   * `tests/interactions/attach.test.ts` guards the bound-listener set across
-   * several configs; it is the drift alarm.
+   * Converts the raw v1 `Layer` to the projected `{ source, interactive }`
+   * entry the shared core expects (KD5) and delegates all binding to it. The
+   * source id is derived exactly as `LayerManager` derives it, so feature-state
+   * writes address the source the data actually lives in. This deliberately
+   * does NOT route through `projectInteractions` — that drops `emit` under an
+   * untrusted policy at projection time, which would strip emit before the
+   * runtime trust gate rather than exercising it.
    */
   attachEvents(layer: Layer): void {
     if (!layer.interactive) return;
 
-    // Type guard: interactive is defined, cast to proper type
-    const interactive = layer.interactive as { hover?: any; click?: any };
-    const { hover, click } = interactive;
-    const handlers: any = {};
-
-    // Source id, derived exactly as LayerManager derives it, so feature-state
-    // writes address the source the data actually lives in.
-    const sourceId =
+    // Source id, derived exactly as LayerManager derives it: a string source is
+    // a named reference; an inline source object is backed by `${id}-source`.
+    const source =
       typeof layer.source === "string" ? layer.source : `${layer.id}-source`;
-    this.layerToSource.set(layer.id, sourceId);
 
-    // Hover handling
-    if (hover) {
-      handlers.mouseenter = (e: MapMouseEvent & { features?: any[] }) => {
-        if (hover.cursor) {
-          this.map.getCanvas().style.cursor = hover.cursor;
-        }
-        if (e.features?.[0]) {
-          this.callbacks.onHover?.(layer.id, e.features[0], e.lngLat);
-        }
-      };
+    const entry: ProjectedLayerInteractions = {
+      source,
+      interactive: layer.interactive as ProjectedLayerInteractions["interactive"],
+    };
 
-      handlers.mouseleave = () => {
-        this.map.getCanvas().style.cursor = "";
-        this.clearInteractionState(layer.id);
-      };
-
-      this.map.on("mouseenter", layer.id, handlers.mouseenter);
-      this.map.on("mouseleave", layer.id, handlers.mouseleave);
-
-      // mousemove only when a hover interaction needs per-feature resolution —
-      // mouseenter fires once for the layer, not once per feature.
-      if (this.hasHoverInteraction(hover)) {
-        handlers.mousemove = (e: MapMouseEvent & { features?: any[] }) => {
-          const feature = e.features?.[0];
-          if (!feature) return;
-
-          this.dispatch(this.hoverInteractions, hover, {
-            map: this.map,
-            layerId: layer.id,
-            sourceId,
-            feature,
-            lngLat: e.lngLat,
-          });
-        };
-
-        this.map.on("mousemove", layer.id, handlers.mousemove);
-      }
-    }
-
-    // Click handling
-    if (click) {
-      handlers.click = (e: MapMouseEvent & { features?: any[] }) => {
-        // Multi-feature clicks resolve to the topmost feature, matching hover.
-        const feature = e.features?.[0];
-        if (!feature) return;
-
-        this.dispatch(this.clickInteractions, click, {
-          map: this.map,
-          layerId: layer.id,
-          sourceId,
-          feature,
-          lngLat: e.lngLat,
-        });
-
-        this.callbacks.onClick?.(layer.id, feature, e.lngLat);
-      };
-
-      this.map.on("click", layer.id, handlers.click);
-    }
-
-    this.boundHandlers.set(layer.id, handlers);
+    bindLayerInteractions(this.map, layer.id, entry, this.bindDeps);
     this.attachedLayers.add(layer.id);
-  }
-
-  /**
-   * Run every configured interaction for a trigger, in registry order.
-   *
-   * @remarks
-   * The single dispatch path for all triggers: `click` today, `hover` when
-   * highlight lands. An interaction whose `select` finds no config is skipped.
-   */
-  private dispatch(
-    interactions: BoundInteraction[],
-    trigger: any,
-    ctx: InteractionContext
-  ): void {
-    for (const { interaction, runtime } of interactions) {
-      const config = interaction.select(trigger);
-      // Falsy means not configured, matching the `if (click.popup)` check this
-      // replaced. Not a nullish check: `hover.highlight` is a plain boolean, so
-      // `false` is present-but-off and must not run.
-      if (!config) continue;
-
-      runtime.run(config, ctx);
-    }
-  }
-
-  /** Whether any hover interaction is configured for this trigger. */
-  private hasHoverInteraction(hover: any): boolean {
-    return this.hoverInteractions.some(
-      ({ interaction }) => !!interaction.select(hover)
-    );
-  }
-
-  /**
-   * Release per-layer interaction state.
-   *
-   * @remarks
-   * Called wherever a tracked feature can stop being valid: the pointer leaves
-   * the layer, events are detached, or the handler is destroyed. Stale
-   * feature-state would otherwise leave a feature lit, or re-light the wrong
-   * one after the source data is replaced.
-   */
-  private clearInteractionState(layerId: string): void {
-    for (const { runtime } of this.hoverInteractions) {
-      runtime.clearLayer?.(layerId, this.map);
-    }
-    for (const { runtime } of this.clickInteractions) {
-      runtime.clearLayer?.(layerId, this.map);
-    }
   }
 
   /**
@@ -248,13 +160,24 @@ export class EventHandler {
    * @remarks
    * Feature ids are only meaningful within a given dataset — after a refresh
    * `setData`, a retained id can address a different feature entirely.
+   * Delegates to the shared core's per-layer feature-state clear.
    */
   resetFeatureState(layerId: string): void {
-    this.clearInteractionState(layerId);
+    clearInteractionState(
+      this.map,
+      this.clickInteractions,
+      this.hoverInteractions,
+      layerId
+    );
   }
 
   /**
-   * Show a popup with content
+   * Show a popup with content.
+   *
+   * @remarks
+   * Caller-side popup lifecycle: the shared core never touches the popup
+   * directly — it is absorbed into `interactionDeps.showPopup`, mirroring
+   * `attachInteractions`. The single `PopupBuilder(policy)` gates `!html`.
    */
   private showPopup(content: PopupContent, feature: any, lngLat: LngLat): void {
     this.activePopup?.remove();
@@ -268,7 +191,12 @@ export class EventHandler {
   }
 
   /**
-   * Detach events for a layer
+   * Detach events for a layer.
+   *
+   * @remarks
+   * Mirrors `attachInteractions`'s `detach`: `map.off` each listener the shared
+   * core bound (recorded in `boundHandlers`), then clear the layer's
+   * feature-state so a feature left lit here does not stay lit.
    */
   detachEvents(layerId: string): void {
     const handlers = this.boundHandlers.get(layerId);
@@ -288,11 +216,15 @@ export class EventHandler {
     }
 
     // Before forgetting the layer: a feature left lit here would stay lit.
-    this.clearInteractionState(layerId);
+    clearInteractionState(
+      this.map,
+      this.clickInteractions,
+      this.hoverInteractions,
+      layerId
+    );
 
     this.boundHandlers.delete(layerId);
     this.attachedLayers.delete(layerId);
-    this.layerToSource.delete(layerId);
   }
 
   /**
