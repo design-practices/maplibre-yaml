@@ -16,6 +16,8 @@ import {
   defineInteraction,
   stateless,
   type Interaction,
+  type InteractionContext,
+  type InteractionDeps,
   type PopupContent,
   type FlyToConfig,
   type ZoomToFeatureConfig,
@@ -63,6 +65,51 @@ function projectEmitPayload(
     payload[key] = null;
   }
   return payload;
+}
+
+/**
+ * The shared `emit` dispatch: trust gate, closed-world host-handler resolution,
+ * and payload projection. Both `emit` built-ins — the click one and the hover
+ * one — run this exact seam so the security boundary has a single definition.
+ *
+ * @remarks
+ * The two built-ins differ only in *when* and *how often* they call this: the
+ * click one on every click, the hover one once per feature entered (its own
+ * per-feature dedupe wraps this call). Neither forks the trust gate or the
+ * closed-world resolution — both live here.
+ *
+ * - **Trust gate first.** The host-hook seam is default-deny outside a trusted
+ *   context, so an untrusted document that names an event finds emit inert. A
+ *   missing policy falls back to {@link DEFAULT_POLICY} (untrusted) — absent
+ *   means denied, never open.
+ * - **Closed-world resolution.** Own registered keys only: an unknown name — or
+ *   a prototype method like `toString` — resolves to nothing and is denied with
+ *   a warning, never dispatched.
+ */
+function dispatchEmit(
+  config: EmitConfig,
+  ctx: InteractionContext,
+  deps: InteractionDeps
+): void {
+  if (!allowsHostHook(deps.policy ?? DEFAULT_POLICY)) return;
+
+  const handlers = deps.hostHandlers;
+  const handler =
+    handlers && Object.prototype.hasOwnProperty.call(handlers, config.event)
+      ? handlers[config.event]
+      : undefined;
+
+  if (typeof handler !== "function") {
+    console.warn(
+      `[maplibre-yaml] emit event "${config.event}" has no registered ` +
+        "host handler; it is denied and nothing is dispatched. Register a " +
+        "handler for it in the host handler map to enable this event."
+    );
+    return;
+  }
+
+  const properties = (ctx.feature?.properties ?? {}) as Record<string, unknown>;
+  handler(projectEmitPayload(config.payload, properties));
 }
 
 /**
@@ -134,38 +181,11 @@ export const CLICK_INTERACTIONS: readonly Interaction[] = [
   defineInteraction<EmitConfig>({
     name: "emit",
     select: (trigger) => trigger.emit,
-    create: stateless((config: EmitConfig, ctx, deps) => {
-      // Trust gate first: the host-hook seam is default-deny outside a trusted
-      // context, so an untrusted document that names an event finds emit inert.
-      // A missing policy falls back to DEFAULT_POLICY (untrusted) — absent means
-      // denied, never open.
-      if (!allowsHostHook(deps.policy ?? DEFAULT_POLICY)) return;
-
-      // Closed-world resolution against the host handler map. Own registered
-      // keys only: an unknown name — or a prototype method like `toString` —
-      // resolves to nothing and is denied, never dispatched.
-      const handlers = deps.hostHandlers;
-      const handler =
-        handlers &&
-        Object.prototype.hasOwnProperty.call(handlers, config.event)
-          ? handlers[config.event]
-          : undefined;
-
-      if (typeof handler !== "function") {
-        console.warn(
-          `[maplibre-yaml] emit event "${config.event}" has no registered ` +
-            "host handler; it is denied and nothing is dispatched. Register a " +
-            "handler for it in the host handler map to enable this event."
-        );
-        return;
-      }
-
-      const properties = (ctx.feature?.properties ?? {}) as Record<
-        string,
-        unknown
-      >;
-      handler(projectEmitPayload(config.payload, properties));
-    }),
+    // The click emit: dispatch on every click, no dedupe. The trust gate and
+    // closed-world resolution live in the shared `dispatchEmit` seam.
+    create: stateless((config: EmitConfig, ctx, deps) =>
+      dispatchEmit(config, ctx, deps)
+    ),
   }),
 ];
 
@@ -244,6 +264,61 @@ export const HOVER_INTERACTIONS: readonly Interaction[] = [
           if (!current) return;
           unset(map, current);
           lit.delete(layerId);
+        },
+      };
+    },
+  }),
+  // The hover emit (ml-fn9): the SAME logical `emit` interaction as the click
+  // built-in — same name, same trust gate, same closed-world resolution (both
+  // run the shared `dispatchEmit`) — but driven by `mousemove` and wrapped in
+  // per-feature dedupe. It fires once when a NEW feature is entered and stays
+  // inert on every further mousemove over that same feature, mirroring the
+  // `lit`-map guard `highlight` uses above. The registry allows the shared name
+  // "emit" across the click and hover trigger lists (see InteractionRegistry).
+  defineInteraction<EmitConfig>({
+    name: "emit",
+    select: (trigger) => trigger.emit,
+    create: (deps) => {
+      /** The feature last emitted per layer — per handler instance, never shared. */
+      const lastEmitted = new Map<string, string | number>();
+      /** Warn once per layer about missing ids, not once per mousemove. */
+      const warned = new Set<string>();
+
+      return {
+        run(config: EmitConfig, ctx) {
+          const featureId = ctx.feature?.id;
+
+          if (featureId === undefined || featureId === null) {
+            // Dedupe is addressed by feature id; without one a re-entered feature
+            // is indistinguishable from a new one, so emit would fire on every
+            // mousemove — the firehose this dedupe exists to prevent. Skip, and
+            // point the author at the same remedy `highlight` uses.
+            if (!warned.has(ctx.layerId)) {
+              warned.add(ctx.layerId);
+              console.warn(
+                `[maplibre-yaml] hover.emit on layer "${ctx.layerId}" needs ` +
+                  "feature ids to dedupe. Set `generateId: true` on the source, " +
+                  "or `promoteId` to use a property as the id."
+              );
+            }
+            return;
+          }
+
+          // Same feature since the last dispatch → no churn, mirroring
+          // highlight's `current?.featureId === featureId` guard. Marking the
+          // feature entered before dispatch means a denied/inert emit (untrusted
+          // policy, unknown event) is not retried — and does not re-warn — on
+          // every further mousemove over the same feature.
+          if (lastEmitted.get(ctx.layerId) === featureId) return;
+          lastEmitted.set(ctx.layerId, featureId);
+
+          dispatchEmit(config, ctx, deps);
+        },
+
+        clearLayer(layerId) {
+          // mouseleave/detach/destroy: forget the tracked feature so re-entering
+          // it emits again — the same lifecycle highlight clears its state on.
+          lastEmitted.delete(layerId);
         },
       };
     },

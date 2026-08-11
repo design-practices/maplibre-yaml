@@ -281,7 +281,35 @@ export type EmitConfig = z.infer<typeof EmitConfigSchema>;
  *       duration: 1000
  * ```
  */
-export const InteractiveConfigSchema = z
+// Annotated for the same TS7056 reason as the emit schemas above: `emit` now
+// sits on BOTH the click and hover triggers (ml-fn9), and the doubled EmitConfig
+// projection pushed the inferred interactive type — which every layer schema
+// carries via BaseLayerPropertiesSchema — past TS's serialization buffer at the
+// LayerSchema discriminated union. Stating the type collapses it back; the
+// runtime shape is exactly what the `z.object` below validates.
+export const InteractiveConfigSchema: z.ZodType<
+  | {
+      hover?: {
+        cursor?: string;
+        highlight?: boolean;
+        emit?: EmitConfig;
+      };
+      click?: {
+        popup?: PopupContent;
+        action?: string;
+        flyTo?: { center?: [number, number]; zoom?: number; duration?: number };
+        zoomToFeature?: {
+          padding?: number;
+          maxZoom?: number;
+          duration?: number;
+        };
+        emit?: EmitConfig;
+      };
+      mouseenter?: { action?: string };
+      mouseleave?: { action?: string };
+    }
+  | undefined
+> = z
   .object({
     hover: z
       .object({
@@ -293,6 +321,10 @@ export const InteractiveConfigSchema = z
           .boolean()
           .optional()
           .describe("Highlight feature on hover"),
+        emit: EmitConfigSchema.optional().describe(
+          "Dispatch a named host event with a declarative payload once per " +
+            "feature entered on hover (per-feature dedupe, not per mousemove)"
+        ),
       })
       .optional()
       .describe("Hover behavior"),

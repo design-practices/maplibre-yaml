@@ -18,8 +18,10 @@
  *      warning and never dispatched (closed-world default-deny).
  *   5. Payload projection reaches named feature properties; a projection over a
  *      missing property yields a defined-absent value, never a throw.
- *   6. Hover-emit is deferred this unit (see note in built-ins): emit is a CLICK
- *      interaction only, and the U2 registry resolves its name.
+ *   6. Hover-emit (ml-fn9): the SAME `emit` runtime, mirrored onto the hover
+ *      trigger with per-feature dedupe — it fires once per feature entered, not
+ *      on every mousemove, and shares the click-emit trust gate and closed-world
+ *      resolution. Its dedupe + parity tests live in the lower half of this file.
  *
  * The built-in is driven the way `EventHandler` drives it —
  * `create({...deps})` → `run(config, ctx)` — against stub deps.
@@ -33,6 +35,7 @@ import type {
   InteractionContext,
   InteractionDeps,
   InteractionHostHandlers,
+  EmitConfig,
 } from "../../src/interactions/types";
 import {
   allowsHostHook,
@@ -352,7 +355,7 @@ describe("emit — declarative payload projection", () => {
   });
 });
 
-describe("emit — registry integration and hover deferral (U2)", () => {
+describe("emit — registry integration on both triggers", () => {
   it("resolves the emit name to the built-in on the allowlist", () => {
     const registry = createInteractionRegistry();
     const result = registry.resolve("emit");
@@ -361,13 +364,176 @@ describe("emit — registry integration and hover deferral (U2)", () => {
     expect(registry.has("emit")).toBe(true);
   });
 
-  it("registers emit as a click interaction only (hover-emit deferred)", () => {
-    // Hover-emit needs per-feature dedupe AND a second registry slot for the
-    // name; the U2 registry forbids a duplicate name across the click+hover
-    // allowlist, so hover-emit is deferred. Emit is click-only this unit.
+  it("registers emit on BOTH the click and hover triggers", () => {
+    // Two runtimes under one name: the click one fires on click with no dedupe;
+    // the hover one fires on mousemove with per-feature dedupe. The registry
+    // allows the shared name across the two trigger lists (deduped in byName).
     const clickNames = CLICK_INTERACTIONS.map((i) => i.name);
     const hoverNames = HOVER_INTERACTIONS.map((i) => i.name);
     expect(clickNames).toContain("emit");
-    expect(hoverNames).not.toContain("emit");
+    expect(hoverNames).toContain("emit");
+  });
+});
+
+/** The hover-emit built-in, pulled from the ordered hover set. */
+function hoverEmitInteraction(): Interaction {
+  const found = HOVER_INTERACTIONS.find((i) => i.name === "emit");
+  if (!found) throw new Error("hover-emit built-in is not registered");
+  return found;
+}
+
+/**
+ * A hover-emit runtime plus a `move` helper that drives it the way a mousemove
+ * does — one call per pointer sample, carrying the feature `id` the dedupe keys
+ * on and the `properties` the payload projects from.
+ */
+function hoverHarness(opts: {
+  policy?: CapabilityPolicy;
+  handlers?: InteractionHostHandlers;
+}) {
+  const deps: InteractionDeps = {
+    showPopup: () => {},
+    hostHandlers: opts.handlers,
+    policy: opts.policy,
+  };
+  const runtime = hoverEmitInteraction().create(deps);
+  const move = (
+    config: EmitConfig,
+    featureId: string | number | undefined,
+    properties: Record<string, unknown> = {},
+    layerId = "layer-1"
+  ) => {
+    const ctx: InteractionContext = {
+      map: {} as unknown as InteractionContext["map"],
+      layerId,
+      sourceId: "src-1",
+      feature: {
+        type: "Feature",
+        id: featureId,
+        properties,
+        geometry: { type: "Point", coordinates: [0, 0] },
+      },
+      lngLat: { lng: 0, lat: 0 } as InteractionContext["lngLat"],
+    };
+    runtime.run(config, ctx);
+  };
+  return { runtime, move };
+}
+
+describe("hover-emit — per-feature dedupe (the core of ml-fn9)", () => {
+  const cfg: EmitConfig = {
+    event: "select",
+    payload: { id: { property: "bbl" } },
+  };
+
+  it("dispatches once when a feature is ENTERED, not on every mousemove", () => {
+    const handler = vi.fn();
+    const { move } = hoverHarness({
+      policy: trusted,
+      handlers: { select: handler },
+    });
+
+    // Three mousemove samples over the SAME feature → one dispatch.
+    move(cfg, "f1", { bbl: "A" });
+    move(cfg, "f1", { bbl: "A" });
+    move(cfg, "f1", { bbl: "A" });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith({ id: "A" });
+  });
+
+  it("dispatches AGAIN when the pointer enters a new feature", () => {
+    const handler = vi.fn();
+    const { move } = hoverHarness({
+      policy: trusted,
+      handlers: { select: handler },
+    });
+
+    move(cfg, "f1", { bbl: "A" });
+    move(cfg, "f2", { bbl: "B" }); // new feature → new dispatch
+    move(cfg, "f2", { bbl: "B" }); // dedupe on the newly-entered one
+
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(handler.mock.calls[0]?.[0]).toEqual({ id: "A" });
+    expect(handler.mock.calls[1]?.[0]).toEqual({ id: "B" });
+  });
+
+  it("re-emits a feature re-entered after clearLayer (mouseleave lifecycle)", () => {
+    const handler = vi.fn();
+    const { runtime, move } = hoverHarness({
+      policy: trusted,
+      handlers: { select: handler },
+    });
+
+    move(cfg, "f1", { bbl: "A" });
+    // mouseleave/detach clears the tracked feature, so re-entry emits again.
+    runtime.clearLayer?.("layer-1", {} as unknown as InteractionContext["map"]);
+    move(cfg, "f1", { bbl: "A" });
+
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
+  it("dedupes per layer, not globally (same id on two layers both fire)", () => {
+    const handler = vi.fn();
+    const { move } = hoverHarness({
+      policy: trusted,
+      handlers: { select: handler },
+    });
+
+    move(cfg, "f1", { bbl: "A" }, "layer-1");
+    move(cfg, "f1", { bbl: "A" }, "layer-2");
+
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("hover-emit — security parity with click-emit", () => {
+  const cfg: EmitConfig = { event: "select" };
+
+  it("is inert under an untrusted policy even with a registered handler", () => {
+    const handler = vi.fn();
+    const { move } = hoverHarness({
+      policy: untrusted,
+      handlers: { select: handler },
+    });
+    move(cfg, "f1", {});
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("is inert under the default policy (no policy passed)", () => {
+    const handler = vi.fn();
+    const { move } = hoverHarness({ handlers: { select: handler } });
+    move(cfg, "f1", {});
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("denies an unregistered event name closed-world with a warning", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { move } = hoverHarness({ policy: trusted, handlers: {} });
+
+    move({ event: "evilEval" }, "f1", {});
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toMatch(/evilEval/);
+    warn.mockRestore();
+  });
+
+  it("skips and warns once when features carry no id (dedupe needs one)", () => {
+    const handler = vi.fn();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { move } = hoverHarness({
+      policy: trusted,
+      handlers: { select: handler },
+    });
+
+    // No id → the pointer sample cannot be told from the next: emit would fire
+    // per mousemove, the firehose dedupe exists to prevent. Skip, warn once.
+    move({ event: "select" }, undefined, { bbl: "A" });
+    move({ event: "select" }, undefined, { bbl: "A" });
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toMatch(/generateId/);
+    warn.mockRestore();
   });
 });

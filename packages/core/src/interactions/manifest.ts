@@ -119,12 +119,21 @@ export function projectInteractions(
     // Fail-closed: an untrusted projection never carries the host-hook seam.
     // Dropping at projection time (rather than refusing at attach) means the
     // instruction is simply not present in the artifact an untrusted room gets.
+    // `emit` lives on both triggers (click and hover, ml-fn9), so both are
+    // dropped — the runtime trust gate is defense-in-depth behind this.
     if (!hostHooksAllowed && projected.click && "emit" in projected.click) {
       const { emit: _dropped, ...restClick } = projected.click as Record<
         string,
         unknown
       >;
       projected.click = restClick as ProjectedInteractiveConfig["click"];
+    }
+    if (!hostHooksAllowed && projected.hover && "emit" in projected.hover) {
+      const { emit: _dropped, ...restHover } = projected.hover as Record<
+        string,
+        unknown
+      >;
+      projected.hover = restHover as ProjectedInteractiveConfig["hover"];
     }
 
     layers[id] = { source, interactive: projected };

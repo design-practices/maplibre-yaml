@@ -30,6 +30,17 @@ import {
   type InteractionDenial,
 } from "../../src/interactions";
 import type { Interaction } from "../../src/interactions";
+// The authoring helper is deliberately off the public barrel (see barrel.test);
+// import it from the internal path to hand-build interactions for these tests.
+import { defineInteraction } from "../../src/interactions/types";
+
+/** A minimal built-in with a given name, for registry-shape assertions. */
+const stub = (name: string): Interaction =>
+  defineInteraction({
+    name,
+    select: (t) => t?.[name],
+    create: () => ({ run: () => {} }),
+  });
 
 /** A resolution is a denial when it carries the `denied` discriminant. */
 const isDenied = (
@@ -82,6 +93,7 @@ describe("InteractionRegistry — order is behavior", () => {
     const registry = createInteractionRegistry();
     expect(registry.hoverInteractions().map((i) => i.name)).toEqual([
       "highlight",
+      "emit",
     ]);
   });
 
@@ -118,7 +130,42 @@ describe("InteractionRegistry — instance, not singleton", () => {
       "zoomToFeature",
       "emit",
       "highlight",
+      "emit",
     ]);
     expect(names(a)).toEqual(names(b));
+  });
+});
+
+describe("InteractionRegistry — a name may sit on both triggers", () => {
+  it('accepts "emit" once in click AND once in hover without throwing', () => {
+    // The settled contract: "emit" is one logical interaction key valid on both
+    // triggers, each with its own runtime. The same name appearing once per
+    // trigger list is allowed — it is not a collision.
+    expect(
+      () => new InteractionRegistry([stub("emit")], [stub("emit")])
+    ).not.toThrow();
+  });
+
+  it("dedups a cross-trigger name to a single allowlist membership", () => {
+    // byName is the trigger-agnostic closed-world allowlist: "emit" is a valid
+    // key on click and hover, so it is present once. has()/resolve() test
+    // membership, not which trigger's runtime.
+    const registry = createInteractionRegistry();
+    expect(registry.has("emit")).toBe(true);
+    const result = registry.resolve("emit");
+    expect(isDenied(result)).toBe(false);
+    expect((result as Interaction).name).toBe("emit");
+  });
+
+  it("still throws on a genuine duplicate WITHIN the click list", () => {
+    expect(() => new InteractionRegistry([stub("dup"), stub("dup")], [])).toThrow(
+      /registered twice/
+    );
+  });
+
+  it("still throws on a genuine duplicate WITHIN the hover list", () => {
+    expect(() => new InteractionRegistry([], [stub("dup"), stub("dup")])).toThrow(
+      /registered twice/
+    );
   });
 });

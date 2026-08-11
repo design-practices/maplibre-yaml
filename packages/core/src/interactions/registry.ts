@@ -70,8 +70,13 @@ export class InteractionRegistry {
    *   {@link CLICK_INTERACTIONS} — popup before flyTo).
    * @param hover - Hover interactions in dispatch order (default: the built-in
    *   {@link HOVER_INTERACTIONS}).
-   * @throws if two interactions share a `name` — a name must resolve to exactly
-   *   one handler, and a silent last-wins would let one shadow another.
+   * @throws if two interactions share a `name` **within one trigger list** — a
+   *   name must resolve to exactly one handler per trigger, and a silent
+   *   last-wins would let one shadow another. A name that appears once in the
+   *   click list AND once in the hover list is **not** a duplicate: it is one
+   *   logical interaction key (e.g. `emit`) valid on both triggers, each with
+   *   its own runtime. Such a name is deduped into {@link byName} — the
+   *   trigger-agnostic allowlist — as a single membership.
    */
   constructor(
     click: readonly Interaction[] = CLICK_INTERACTIONS,
@@ -80,15 +85,30 @@ export class InteractionRegistry {
     this.click = click;
     this.hover = hover;
 
+    // Uniqueness is enforced per trigger list, not across the union: an intra-
+    // list duplicate is a genuine collision (two handlers, one name, one
+    // trigger) and throws; the same name across the two lists is the legitimate
+    // both-triggers case and is allowed. `byName` is the closed-world validation
+    // allowlist `validateTrigger` checks keys against — trigger-agnostic, so a
+    // cross-trigger name is present there exactly once (first writer wins; which
+    // runtime seeds it is inert, since `has`/`resolve` test membership only).
     const byName = new Map<string, Interaction>();
-    for (const interaction of [...click, ...hover]) {
-      if (byName.has(interaction.name)) {
-        throw new Error(
-          `Interaction name "${interaction.name}" is registered twice. ` +
-            "A name must resolve to exactly one handler."
-        );
+    for (const [list, trigger] of [
+      [click, "click"],
+      [hover, "hover"],
+    ] as const) {
+      const seen = new Set<string>();
+      for (const interaction of list) {
+        if (seen.has(interaction.name)) {
+          throw new Error(
+            `Interaction name "${interaction.name}" is registered twice in ` +
+              `the ${trigger} set. A name must resolve to exactly one handler ` +
+              "per trigger."
+          );
+        }
+        seen.add(interaction.name);
+        if (!byName.has(interaction.name)) byName.set(interaction.name, interaction);
       }
-      byName.set(interaction.name, interaction);
     }
     this.byName = byName;
   }

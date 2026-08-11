@@ -38,7 +38,10 @@ describe("interactions barrel", () => {
       "zoomToFeature",
       "emit",
     ]);
-    expect(HOVER_INTERACTIONS.map((i) => i.name)).toEqual(["highlight"]);
+    expect(HOVER_INTERACTIONS.map((i) => i.name)).toEqual([
+      "highlight",
+      "emit",
+    ]);
     expect(HOVER_FEATURE_STATE_KEY).toBe("hover");
   });
 
