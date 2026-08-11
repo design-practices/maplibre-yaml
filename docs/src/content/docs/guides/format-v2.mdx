@@ -1,0 +1,306 @@
+---
+title: Format v2
+description: The style/runtime split — additive, opt-in, and deep-equal to your v1 documents
+---
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+Format v2 gives a maplibre-yaml document one new idea: a visible line between
+the parts of your map that become a MapLibre `style.json` and the parts that
+only exist while the map is running. You author that line yourself, at the top
+level, with two sections — `style:` and `runtime:`.
+
+## The headline: same map, two ways
+
+**v2 is additive and opt-in.** A v2 document and its v1 twin parse to the
+**deep-equal internal model** and render and emit **identically**. This is the
+AE2 guarantee: adopting v2 requires no migration, and nothing you have already
+written in v1 breaks. You move to v2 when the split earns its keep — not because
+a version bump forced your hand.
+
+Here is one map, authored both ways. They produce the same model, so `<ml-map>`
+renders them indistinguishably.
+
+<Tabs>
+  <TabItem label="v2">
+
+```yaml
+version: 2
+type: map
+id: parcels
+style:
+  basemap: https://demotiles.maplibre.org/style.json
+  center: [-73.98, 40.75]
+  zoom: 11
+  sources:
+    sites:
+      type: geojson
+      url: https://example.com/sites.geojson
+      runtime:
+        refresh:
+          refreshInterval: 30000
+  layers:
+    - id: sites
+      type: circle
+      source: sites
+      paint:
+        circle-radius: 8
+        circle-color: "#dc2626"
+      runtime:
+        label: "Sites"
+        toggleable: true
+runtime:
+  controls:
+    navigation: true
+```
+
+  </TabItem>
+  <TabItem label="v1">
+
+```yaml
+type: map
+id: parcels
+config:
+  mapStyle: https://demotiles.maplibre.org/style.json
+  center: [-73.98, 40.75]
+  zoom: 11
+sources:
+  sites:
+    type: geojson
+    url: https://example.com/sites.geojson
+    refresh:
+      refreshInterval: 30000
+layers:
+  - id: sites
+    type: circle
+    source: sites
+    paint:
+      circle-radius: 8
+      circle-color: "#dc2626"
+    label: "Sites"
+    toggleable: true
+controls:
+  navigation: true
+```
+
+  </TabItem>
+</Tabs>
+
+The only thing that differs is where the keys sit. In v1 the live-data keys are
+inline on the source and the experience keys are inline on the layer; in v2 they
+are grouped under a nested `runtime:`. The map is the same map. This equivalence
+is not a claim — it is checked by an end-to-end test that renders a full v2
+document through `<ml-map>`, renders its v1 twin beside it, and asserts the two
+models are deep-equal (`examples/verification/v2/v2-document.html`, driven by
+`e2e/v2-parser.spec.ts`).
+
+<Aside type="tip">
+  Because the two forms collapse to one model, you can adopt v2 file by file.
+  There is no flag day and no bulk migration.
+</Aside>
+
+## The two halves
+
+Every v2 document states `version: 2` and `type: map` at its root, then splits
+into two sections.
+
+### `style:` — what compiles to `style.json`
+
+Everything under `style:` contributes to the compiled MapLibre style, possibly
+by transformation. It carries:
+
+- **`basemap`** — the base style URL (or inline style object) that is merged in
+  at compile time. This is v2's name for v1's `mapStyle`.
+- **the camera** — `center`, `zoom`, `pitch`, `bearing`, lifted to the `style:`
+  root because they are style-spec root properties.
+- **`sources`** — your data sources, each keyed by name.
+- **`layers`** — your layer list, in draw order.
+- **`state`** — spec-native runtime-tunable values (read by the `global-state`
+  expression), and optional `metadata`.
+
+### `runtime:` — what degrades
+
+Everything under `runtime:` is the behavior layer. None of it reaches the
+compiled `style.json` — when you eject to a plain style, it is stripped. It
+carries:
+
+- **`map`** — MapLibre `Map` constructor options (`minZoom`, `maxZoom`,
+  `scrollZoom`, `interactive`, `maxBounds`, and the rest).
+- **`controls`** — navigation, scale, geolocate, fullscreen, attribution.
+- **`legend`** — the map-level legend.
+- **`parameters`** — presentation metadata for your `state` keys (label, type,
+  range) that a control UI needs but the style spec has nowhere to put.
+- **`container`** — the map element's own `style` and `className`.
+
+```yaml
+version: 2
+type: map
+id: chrome-demo
+style:
+  basemap: https://demotiles.maplibre.org/style.json
+  layers: []
+runtime:
+  map:
+    minZoom: 4
+    maxZoom: 16
+  controls:
+    navigation: true
+    scale: true
+  legend:
+    title: "Legend"
+    position: top-left
+  container:
+    style: "height: 480px;"
+    className: "map-embed"
+```
+
+The split is what makes the eject guarantee legible: you can tell what will
+survive a compile to `style.json` by looking at which half a key lives in, with
+no need to consult a table.
+
+## Per-source runtime: live data stays beside its source
+
+A source's live-data configuration — polling `refresh`, `stream`, `cache`,
+`loading` — nests under that source's own `runtime:` key. It sits right beside
+the spec fields it acts on, so a source is still one thing to edit.
+
+```yaml
+version: 2
+type: map
+id: live-quakes
+style:
+  basemap: https://demotiles.maplibre.org/style.json
+  sources:
+    quakes:
+      type: geojson
+      url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson
+      runtime:
+        refresh:
+          refreshInterval: 30000
+        cache:
+          enabled: true
+          ttl: 300000
+  layers:
+    - id: quakes
+      type: circle
+      source: quakes
+      paint:
+        circle-radius: 6
+        circle-color: "#ef4444"
+```
+
+The spec half of the source (`type`, `url`, `data`, `cluster`, …) compiles into
+`style.json`; the nested `runtime:` block degrades away on eject.
+
+## Per-layer runtime: interactions, legend, label, toggle
+
+A layer's experience keys — `interactive`, `legend`, `label`, `toggleable` —
+nest under the layer's own `runtime:`. The paint, layout, filter, type, and
+source stay exactly where they are in v1 (they are byte-identical to v1) and
+compile straight through.
+
+```yaml
+version: 2
+type: map
+id: interactive-sites
+style:
+  basemap: https://demotiles.maplibre.org/style.json
+  sources:
+    sites:
+      type: geojson
+      url: https://example.com/sites.geojson
+  layers:
+    - id: sites
+      type: circle
+      source: sites
+      paint:
+        circle-radius: 8
+        circle-color: "#dc2626"
+      runtime:
+        label: "Sites"
+        toggleable: true
+        legend:
+          color: "#dc2626"
+          label: "Points of interest"
+          shape: circle
+        interactive:
+          click:
+            popup:
+              - p:
+                  - str: "A point of interest"
+```
+
+<Aside>
+  A layer's `runtime:` also reserves an `extends:` key for future layer
+  inheritance. The name is claimed but the value is currently unread — you can
+  ignore it until it is defined.
+</Aside>
+
+## `state:` and `parameters:`
+
+`state:` is spec-native and compiles through, so it belongs under `style:`.
+Its presentation metadata does not compile through, so it lives under
+`runtime.parameters:`, keyed by the same state name.
+
+```yaml
+version: 2
+type: map
+id: parameterized
+style:
+  basemap: https://demotiles.maplibre.org/style.json
+  state:
+    scenario:
+      default: baseline
+  layers: []
+runtime:
+  parameters:
+    scenario:
+      label: "Scenario"
+      type: enum
+      values: [baseline, buildout]
+```
+
+<Aside>
+  For AE2 compatibility with v1 (which reads `state:` and `parameters:` at the
+  block root), v2 also accepts both keys at the document root. The nested
+  positions shown above are canonical; when a key appears in both places, the
+  nested one wins.
+</Aside>
+
+## Where did my key go?
+
+If you know a v1 document, this table is the whole migration. It is a
+relocation, not a rewrite — every value keeps its meaning and its spelling
+(except the one rename, `mapStyle` → `basemap`).
+
+| v1 location | v2 location |
+| --- | --- |
+| `config.mapStyle` | `style.basemap` (renamed) |
+| `config.center` / `zoom` / `pitch` / `bearing` | `style.center` / `zoom` / `pitch` / `bearing` |
+| `config.minZoom` / `maxZoom` / `maxBounds` / `minPitch` / `maxPitch` | `runtime.map.*` |
+| `config.interactive` / `scrollZoom` / `boxZoom` / `dragRotate` / `dragPan` / `keyboard` / … | `runtime.map.*` |
+| `config.hash` / `attributionControl` / `logoPosition` / `trackResize` | `runtime.map.*` |
+| top-level `sources` | `style.sources` |
+| source `refresh` / `stream` / `cache` / `loading` | source `runtime.*` |
+| top-level `layers` | `style.layers` |
+| layer `interactive` / `legend` / `label` / `toggleable` | layer `runtime.*` |
+| top-level `controls` | `runtime.controls` |
+| top-level `legend` | `runtime.legend` |
+| block `style:` / `className:` | `runtime.container.style` / `runtime.container.className` |
+| top-level `state` | `style.state` (or document root) |
+| top-level `parameters` | `runtime.parameters` (or document root) |
+
+<Aside type="caution">
+  v2 objects are strict about the v1 spelling: a `mapStyle` at the `style:`
+  root, or a bare `refresh:` inline on a source, parses but surfaces an
+  unknown-key **warning** — the reminder that the key moved. It does not break
+  the document; it points you at the new home.
+</Aside>
+
+## Next steps
+
+- [Data Sources](/guides/data-sources/) — GeoJSON, URLs, and remote APIs
+- [Live Data & Streaming](/guides/live-data/) — the keys that nest under a
+  source's `runtime:`
+- [Working with Layers](/guides/layers/) — paint, layout, and filters, which are
+  identical across v1 and v2
