@@ -232,6 +232,50 @@ describe("EventHandler", () => {
       );
     });
 
+    it("isolates highlight state across layers attached incrementally (ml-wx2)", () => {
+      // Two layers share this EventHandler's interaction runtimes — built once
+      // in the constructor and reused per attachEvents (bindLayerInteractions).
+      // highlight tracks its lit feature per layerId, so hovering one layer must
+      // not disturb the other's state. Pins the shared-runtime property the
+      // bind-core convergence rests on, on the incremental attachEvents path.
+      handler.attachEvents(
+        hoverLayer({ highlight: true }, "src-a") as any
+      );
+      // Second layer needs a distinct id + source; hoverLayer hardcodes the id,
+      // so build B explicitly.
+      handler.attachEvents({
+        id: "layer-b",
+        type: "circle",
+        source: "src-b",
+        interactive: { hover: { highlight: true } },
+      } as any);
+
+      const fireFor = (layerId: string, feature: any) => {
+        const call = mockMap.on.mock.calls.find(
+          (c: any[]) => c[0] === "mousemove" && c[1] === layerId
+        );
+        call?.[2]?.({ features: [feature], lngLat: LNGLAT });
+      };
+
+      fireFor("test-layer", { id: 7, properties: {} });
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "src-a", id: 7 },
+        { hover: true }
+      );
+      mockMap.setFeatureState.mockClear();
+
+      // Hovering layer B lights B's feature and never touches layer A's lit one.
+      fireFor("layer-b", { id: 8, properties: {} });
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "src-b", id: 8 },
+        { hover: true }
+      );
+      expect(mockMap.setFeatureState).not.toHaveBeenCalledWith(
+        { source: "src-a", id: 7 },
+        expect.anything()
+      );
+    });
+
     it("resolves a named source by name, matching LayerManager", () => {
       handler.attachEvents(hoverLayer({ highlight: true }, "shared-src") as any);
       fire("mousemove", { id: 3, properties: {} });

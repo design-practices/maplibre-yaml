@@ -16,3 +16,11 @@ untrusted policy and no host handlers, so `click.emit` remains inert under
 `<ml-map>` exactly as before (fail-closed, pinned by a regression test). Making
 `click.emit` live under `<ml-map>` — an embedder trust surface plus a DOM
 `CustomEvent` bridge — is a tracked follow-up.
+
+One API-level behavior change to note (not reachable through `<ml-map>`): because
+the `emit` trust gate is now honored on the shared path, a consumer that
+constructs `MapRenderer`/`EventHandler` directly with a **trusted** `capabilities`
+policy and a `click.emit` will now see it act — dispatching to a registered host
+handler, or logging a one-time missing-handler warning when none is registered —
+where before it was unconditionally inert. `<ml-map>` never sets a trusted policy,
+so this affects only direct programmatic embedders.
