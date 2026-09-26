@@ -51,7 +51,7 @@ export interface ValidationWarning {
    * moment they upgrade. `--strict-deprecations` opts back in. Absent on
    * unknown-key and expression warnings, which promote as before.
    */
-  kind?: "deprecation";
+  kind?: "deprecation" | "unimplemented";
 }
 
 /** Valid MapLibre layer `type` values, in the order surfaced to users. */
@@ -494,6 +494,9 @@ function walk(
       // Deprecated fields — each rule decides whether it applies here.
       checkDeprecations(value, path, ctx);
 
+      // Schema-accepted fields the engine does not implement yet.
+      checkUnimplemented(value, path, ctx);
+
       // v1-lenient GeoJSON check (ml-ldv): warn on malformed inline data.
       checkGeoJSONData(value, shape, path, ctx);
 
@@ -669,6 +672,67 @@ function checkDeprecations(
       ...(pos ? { line: pos.line, column: pos.column } : {}),
       ...(rule.suggestion ? { suggestion: rule.suggestion } : {}),
       kind: "deprecation",
+    });
+  }
+}
+
+/**
+ * Schema-accepted fields the engine does not implement (yet).
+ *
+ * @remarks
+ * Part of the renderer/schema contract audit (ml-tfd.8): a field the schema
+ * advertises but nothing consumes must at least say so, instead of silently
+ * doing nothing. These produce `kind: "unimplemented"` warnings, which are
+ * NEVER promoted to errors — the document is not wrong, the engine is
+ * behind, and the author cannot "fix" anything except by removing a field
+ * the schema told them exists. Delete the entry when the feature lands.
+ */
+const UNIMPLEMENTED: DeprecationRule[] = [
+  ...["spinGlobe", "rotateAnimation", "callback"].map((field) => ({
+    field,
+    applies: (_value: Record<string, unknown>, path: (string | number)[]) =>
+      path[path.length - 2] === "chapters",
+    message:
+      `Chapter "${field}" is accepted by the schema but not implemented — ` +
+      `it currently has no effect.`,
+  })),
+  {
+    field: "action",
+    applies: (value: Record<string, unknown>, path: (string | number)[]) => {
+      const parent = path[path.length - 2];
+      return (
+        (parent === "onChapterEnter" || parent === "onChapterExit") &&
+        typeof value.action === "string" &&
+        ["fitBounds", "custom", "flyTo", "easeTo"].includes(value.action)
+      );
+    },
+    message:
+      `Chapter action values "fitBounds", "custom", "flyTo", and "easeTo" ` +
+      `are accepted by the schema but not implemented — only "setFilter", ` +
+      `"setPaintProperty", and "setLayoutProperty" run. This action ` +
+      `currently has no effect.`,
+  },
+];
+
+/**
+ * Record an unimplemented-field warning for every rule matching the walked
+ * object. Same table shape as deprecations; different kind, never promoted.
+ */
+function checkUnimplemented(
+  value: Record<string, unknown>,
+  path: (string | number)[],
+  ctx: WalkContext
+): void {
+  for (const rule of UNIMPLEMENTED) {
+    if (value[rule.field] === undefined) continue;
+    if (!rule.applies(value, path)) continue;
+
+    const pos = positionForKey(ctx.doc, ctx.lineCounter, path, rule.field);
+    ctx.warnings.push({
+      path: [...path, rule.field].join("."),
+      message: rule.message,
+      ...(pos ? { line: pos.line, column: pos.column } : {}),
+      kind: "unimplemented",
     });
   }
 }

@@ -438,6 +438,19 @@ export class LayerManager {
         urls: videoSource.urls,
         coordinates: videoSource.coordinates,
       });
+    } else {
+      // Falling through silently left the layer pointing at a source that
+      // was never added — MapLibre then killed the document with an opaque
+      // style error (ml-tfd.8). The common cause is a `$ref` in a standalone
+      // block, which parses cleanly but nothing ever resolves.
+      const detail =
+        "$ref" in (source as Record<string, unknown>)
+          ? `a "$ref" reference, which only resolves inside a "pages:" document`
+          : `an unrecognized source (type: ${JSON.stringify((source as any).type)})`;
+      throw new Error(
+        `Layer "${layer.id}" has ${detail}. ` +
+          `Inline the source or use a block-level named source.`
+      );
     }
   }
 

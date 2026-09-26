@@ -24,15 +24,18 @@ export class LegendBuilder {
 
     const items = config?.items || this.extractItems(layers);
 
-    let html = '<div class="maplibre-legend">';
-    if (config?.title) {
-      html += `<div class="legend-title">${escapeHtml(config.title)}</div>`;
-    }
+    // <details>/<summary> makes `collapsed:` real (the schema field existed
+    // with no implementation — ml-tfd.8 contract audit): the title is the
+    // toggle, `collapsed: true` starts closed, default stays fully visible.
+    // The summary needs content to be clickable, so an untitled legend gets
+    // the literal "Legend".
+    let html = `<details class="maplibre-legend"${config?.collapsed ? "" : " open"}>`;
+    html += `<summary class="legend-title">${escapeHtml(config?.title ?? "Legend")}</summary>`;
     html += '<div class="legend-items">';
     for (const item of items) {
       html += this.renderItem(item);
     }
-    html += '</div></div>';
+    html += '</div></details>';
 
     el.innerHTML = html;
   }
