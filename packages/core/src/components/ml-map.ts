@@ -390,6 +390,10 @@ export class MLMap extends HTMLElement {
           // Load event is also emitted via the event system
         },
         onError: (error) => {
+          // Loud by default: with no `ml-map:error` listener attached, a
+          // dispatched event is invisible and the document fails silently
+          // (ml-tfd.8 contract audit). Hosts still get the event.
+          console.error("[maplibre-yaml] map error:", error);
           this.dispatchEvent(
             new CustomEvent("ml-map:error", {
               bubbles: true,

@@ -196,8 +196,17 @@ export class MapRenderer {
       // Named sources are registered through LayerManager rather than added
       // raw here: it scrubs YAML-only keys and owns the refresh machinery, so
       // a named source declaring `refresh:` actually polls.
-      if (sources) {
-        this.layerManager.registerSources(sources as Record<string, unknown>);
+      // Guarded: a synchronous throw inside MapLibre's `load` handler is
+      // otherwise swallowed by the event loop, and the document dies with an
+      // empty basemap and no error anywhere — the ml-blj failure shape
+      // (ml-tfd.8 contract audit).
+      try {
+        if (sources) {
+          this.layerManager.registerSources(sources as Record<string, unknown>);
+        }
+      } catch (error) {
+        options.onError?.(error as Error);
+        return;
       }
 
       // Apply YAML-declared controls and legend once the map is ready.

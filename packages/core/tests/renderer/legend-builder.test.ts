@@ -83,6 +83,41 @@ describe("LegendBuilder", () => {
       expect(container.innerHTML).toContain("legend-title");
     });
 
+    it("starts open by default, as a toggleable <details>", () => {
+      builder.build(container, [], {
+        title: "Map Legend",
+        items: [{ shape: "circle" as const, color: "#ff0000", label: "T" }],
+      });
+
+      const details = container.querySelector("details.maplibre-legend");
+      expect(details).not.toBeNull();
+      expect(details!.hasAttribute("open")).toBe(true);
+      expect(container.querySelector("summary.legend-title")!.textContent).toBe(
+        "Map Legend"
+      );
+    });
+
+    it("collapsed: true starts closed (the field previously did nothing — ml-tfd.8)", () => {
+      builder.build(container, [], {
+        collapsed: true,
+        items: [{ shape: "circle" as const, color: "#ff0000", label: "T" }],
+      });
+
+      const details = container.querySelector("details.maplibre-legend");
+      expect(details).not.toBeNull();
+      expect(details!.hasAttribute("open")).toBe(false);
+    });
+
+    it("an untitled legend still gets a clickable summary", () => {
+      builder.build(container, [], {
+        items: [{ shape: "circle" as const, color: "#ff0000", label: "T" }],
+      });
+
+      expect(container.querySelector("summary.legend-title")!.textContent).toBe(
+        "Legend"
+      );
+    });
+
     it("renders circle symbols", () => {
       const layers: any[] = [];
       const config = {

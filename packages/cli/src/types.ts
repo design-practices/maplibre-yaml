@@ -13,7 +13,7 @@ export interface ValidationError {
    * promotion unless `--strict-deprecations`, so this must survive the
    * mapping into CLI shape or the exemption silently stops working.
    */
-  kind?: 'deprecation';
+  kind?: 'deprecation' | 'unimplemented';
 }
 
 export interface ValidationResult {

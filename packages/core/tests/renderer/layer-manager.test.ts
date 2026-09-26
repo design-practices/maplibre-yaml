@@ -204,6 +204,21 @@ describe("LayerManager", () => {
       expect(spec.generateId).toBeUndefined();
     });
 
+    it("throws a clear error for a $ref source instead of silently skipping (ml-tfd.8)", async () => {
+      // Falling through addSource's type chain left the layer pointing at a
+      // source that was never added; MapLibre then killed the document with
+      // an opaque style error.
+      await expect(
+        manager.addLayer({
+          id: "p",
+          type: "circle",
+          visible: true,
+          toggleable: false,
+          source: { $ref: "#/sources/cities" },
+        } as any)
+      ).rejects.toThrow(/"\$ref" reference.*"pages:" document/);
+    });
+
     it("adds a background layer without resolving any source (ml-chf)", async () => {
       const layer = {
         id: "backdrop",
