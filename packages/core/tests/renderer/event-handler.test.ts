@@ -232,6 +232,50 @@ describe("EventHandler", () => {
       );
     });
 
+    it("isolates highlight state across layers attached incrementally (ml-wx2)", () => {
+      // Two layers share this EventHandler's interaction runtimes — built once
+      // in the constructor and reused per attachEvents (bindLayerInteractions).
+      // highlight tracks its lit feature per layerId, so hovering one layer must
+      // not disturb the other's state. Pins the shared-runtime property the
+      // bind-core convergence rests on, on the incremental attachEvents path.
+      handler.attachEvents(
+        hoverLayer({ highlight: true }, "src-a") as any
+      );
+      // Second layer needs a distinct id + source; hoverLayer hardcodes the id,
+      // so build B explicitly.
+      handler.attachEvents({
+        id: "layer-b",
+        type: "circle",
+        source: "src-b",
+        interactive: { hover: { highlight: true } },
+      } as any);
+
+      const fireFor = (layerId: string, feature: any) => {
+        const call = mockMap.on.mock.calls.find(
+          (c: any[]) => c[0] === "mousemove" && c[1] === layerId
+        );
+        call?.[2]?.({ features: [feature], lngLat: LNGLAT });
+      };
+
+      fireFor("test-layer", { id: 7, properties: {} });
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "src-a", id: 7 },
+        { hover: true }
+      );
+      mockMap.setFeatureState.mockClear();
+
+      // Hovering layer B lights B's feature and never touches layer A's lit one.
+      fireFor("layer-b", { id: 8, properties: {} });
+      expect(mockMap.setFeatureState).toHaveBeenCalledWith(
+        { source: "src-b", id: 8 },
+        { hover: true }
+      );
+      expect(mockMap.setFeatureState).not.toHaveBeenCalledWith(
+        { source: "src-a", id: 7 },
+        expect.anything()
+      );
+    });
+
     it("resolves a named source by name, matching LayerManager", () => {
       handler.attachEvents(hoverLayer({ highlight: true }, "shared-src") as any);
       fire("mousemove", { id: 3, properties: {} });
@@ -417,21 +461,133 @@ describe("EventHandler", () => {
     });
   });
 
-  describe("click.emit is inert under the live renderer (R9 deferred)", () => {
-    it("does not dispatch or warn for a click.emit, even with a trusted policy", () => {
+  describe("click.emit honors the trust gate on the shared bind path", () => {
+    // KD3/KD4: once `EventHandler` threads `policy` + `hostHandlers` into its
+    // interaction deps (the shared-core path), the emit built-in's trust gate is
+    // reachable under the live renderer. This block replaces the pre-R9
+    // "emit is inert even when trusted" characterization: emit is no longer
+    // unconditionally inert — it is trust-gated, and the fail-closed default
+    // (the only thing `MapRenderer`/`<ml-map>` supplies) keeps it inert there.
+
+    const emitLayer = () => ({
+      id: "test-layer",
+      type: "circle" as const,
+      source: {
+        type: "geojson" as const,
+        data: { type: "FeatureCollection" as const, features: [] },
+      },
+      interactive: {
+        click: {
+          emit: { event: "select", payload: { id: { property: "bbl" } } },
+        },
+      },
+    });
+
+    /** Fire the click listener the handler registered on `map`. */
+    const fireEmitClick = (h: EventHandler) => {
+      h.attachEvents(emitLayer() as any);
+      const registered = mockMap.on.mock.calls.find(
+        (c: any[]) => c[0] === "click"
+      );
+      registered?.[2]?.({
+        features: [{ properties: { bbl: "x" } }],
+        lngLat: { lng: 0, lat: 0 },
+      });
+    };
+
+    it("trusted + no registered handler now WARNS, and dispatch continues", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-      // Constructed trusted, yet `interactionDeps` omits policy + hostHandlers,
-      // so the emit built-in's trust gate falls back to DEFAULT_POLICY
-      // (untrusted) and emit is inert: no dispatch, and no missing-handler
-      // warning (it returns at the gate before touching a host handler map).
-      // This is the documented pre-R9 no-op. When R9 threads policy +
-      // hostHandlers into these deps, this test's expectations must change
-      // consciously — a trusted click.emit with no handler would then WARN.
+      // Trusted policy, but no host handler map. The trust gate passes, so the
+      // emit built-in reaches closed-world resolution, finds no handler for
+      // "select", and warns — the `built-ins.ts` missing-handler warning, now
+      // reachable under the renderer (was silent pre-R9).
       const trustedHandler = new EventHandler(
         mockMap,
         callbacks,
         { trust: "trusted" } as any
+      );
+
+      expect(() => fireEmitClick(trustedHandler)).not.toThrow();
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toMatch(/no registered host handler/i);
+      // Dispatch continued past the denied emit — the click callback still ran.
+      expect(callbacks.onClick).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it("trusted + a registered handler DISPATCHES the projected payload", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const onSelect = vi.fn();
+
+      // Trusted policy AND a host handler for "select": the event dispatches,
+      // carrying the payload projected from the clicked feature's properties.
+      const trustedHandler = new EventHandler(
+        mockMap,
+        callbacks,
+        { trust: "trusted" } as any,
+        { select: onSelect }
+      );
+
+      fireEmitClick(trustedHandler);
+
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenCalledWith({ id: "x" });
+      // A resolved handler means no missing-handler warning.
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it("untrusted + click.emit denies SILENTLY (no dispatch, no warn) — unchanged", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const onSelect = vi.fn();
+
+      // Untrusted denies at the trust gate before resolution, so even a
+      // supplied handler never runs and nothing warns (R5, unchanged behavior).
+      const untrustedHandler = new EventHandler(
+        mockMap,
+        callbacks,
+        { trust: "untrusted" } as any,
+        { select: onSelect }
+      );
+
+      fireEmitClick(untrustedHandler);
+
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+      // Dispatch still continued to the raw-event callback.
+      expect(callbacks.onClick).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it("SECURITY (fail-closed default): no policy + no hostHandlers keeps emit inert", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      // This is the `MapRenderer`/`<ml-map>` path: no `capabilities` and no
+      // `hostHandlers` reach the constructor, so the policy defaults to
+      // untrusted and emit is denied at the trust gate — no dispatch, no warn.
+      // Pinned so a future change forwarding either can't silently make emit
+      // live under `<ml-map>` (security-review residual).
+      const defaultHandler = new EventHandler(mockMap, callbacks);
+
+      expect(() => fireEmitClick(defaultHandler)).not.toThrow();
+
+      // Inert: gated off before touching a handler map, so no warning either.
+      expect(warn).not.toHaveBeenCalled();
+      // Dispatch continued past the inert emit — the click callback still ran.
+      expect(callbacks.onClick).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it("SECURITY: an untrusted policy still ESCAPES an !html popup via the shared core", () => {
+      // The popup XSS gate must survive the delegation, not just the emit gate:
+      // an untrusted `PopupBuilder(policy)` escapes an `!html` marker rather
+      // than rendering it as live markup, on the same shared-core path.
+      const untrustedHandler = new EventHandler(
+        mockMap,
+        callbacks,
+        { trust: "untrusted" } as any
       );
       const layer = {
         id: "test-layer",
@@ -441,26 +597,31 @@ describe("EventHandler", () => {
           data: { type: "FeatureCollection" as const, features: [] },
         },
         interactive: {
-          click: { emit: { event: "select", payload: { id: { property: "bbl" } } } },
+          click: {
+            popup: [
+              { p: [{ str: { $html: "<b>bold</b>" } }, { property: "name" }] },
+            ],
+          },
         },
       };
 
-      trustedHandler.attachEvents(layer as any);
+      untrustedHandler.attachEvents(layer as any);
       const registered = mockMap.on.mock.calls.find(
         (c: any[]) => c[0] === "click"
       );
-      expect(() =>
-        registered?.[2]?.({
-          features: [{ properties: { bbl: "x" } }],
-          lngLat: { lng: 0, lat: 0 },
-        })
-      ).not.toThrow();
+      registered?.[2]?.({
+        features: [{ properties: { name: "<script>alert(1)</script>" } }],
+        lngLat: { lng: 0, lat: 0 },
+      });
 
-      // Inert: no host-hook warning today.
-      expect(warn).not.toHaveBeenCalled();
-      // Dispatch continued past the inert emit — the click callback still ran.
-      expect(callbacks.onClick).toHaveBeenCalled();
-      warn.mockRestore();
+      const html = popupInstance.setHTML.mock.calls[0]?.[0] as string;
+      expect(html).toBeDefined();
+      // The `!html` marker is denied: escaped text, not live markup.
+      expect(html).not.toContain("<b>bold</b>");
+      expect(html).toContain("&lt;b&gt;bold&lt;/b&gt;");
+      // The feature property is escaped unconditionally.
+      expect(html).not.toContain("<script>");
+      expect(html).toContain("&lt;script&gt;");
     });
   });
 

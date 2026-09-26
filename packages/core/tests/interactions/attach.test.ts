@@ -42,9 +42,15 @@ vi.mock("maplibre-gl", () => {
   return { default: { Popup }, Popup };
 });
 
-import { attachInteractions } from "../../src/interactions/attach";
+import {
+  attachInteractions,
+  bindLayerInteractions,
+  type LayerBindDeps,
+  type LayerInteractionCallbacks,
+} from "../../src/interactions/attach";
 import { projectInteractions } from "../../src/interactions/manifest";
 import { createInteractionRegistry } from "../../src/interactions/registry";
+import type { InteractionDeps } from "../../src/interactions/types";
 import type { InteractionsProjection } from "../../src/interactions/manifest";
 import { EventHandler } from "../../src/renderer/event-handler";
 import { normalizeMapBlock } from "../../src/model/normalize";
@@ -456,6 +462,95 @@ describe("attachInteractions — parity with EventHandler (R9 go/no-go)", () => 
       "emit",
     ]);
     expect(registry.hoverInteractions().map((i) => i.name)).toEqual(["highlight"]);
+  });
+});
+
+describe("bindLayerInteractions — KD2: the opt-in raw-event callback hook", () => {
+  /**
+   * Build the shared core's per-session deps the way `attachInteractions` does,
+   * with a `showPopup` that records dispatch order so we can prove the callback
+   * fires AFTER interaction dispatch.
+   */
+  function bindDeps(
+    order: string[],
+    callbacks?: LayerInteractionCallbacks
+  ): LayerBindDeps {
+    const registry = createInteractionRegistry();
+    const deps: InteractionDeps = {
+      showPopup: () => order.push("dispatch"),
+      policy: trusted,
+    };
+    const bind = (interactions: readonly any[]) =>
+      interactions.map((interaction) => ({
+        interaction,
+        runtime: interaction.create(deps),
+      }));
+    return {
+      registry,
+      clickInteractions: bind(registry.clickInteractions()),
+      hoverInteractions: bind(registry.hoverInteractions()),
+      boundHandlers: new Map(),
+      callbacks,
+    };
+  }
+
+  const clickEntry = {
+    source: "layer-source",
+    interactive: { click: { popup: [{ p: [{ property: "name" }] }] } },
+  };
+  const hoverEntry = {
+    source: "layer-source",
+    interactive: { hover: { cursor: "pointer" } },
+  };
+
+  it("fires onClick once after dispatch with (layerId, feature, lngLat)", () => {
+    const map = mockMap();
+    const order: string[] = [];
+    const onClick = vi.fn(() => order.push("onClick"));
+    bindLayerInteractions(map, "layer-1", clickEntry, bindDeps(order, { onClick }));
+
+    const feature = { properties: { name: "Grand Central" } };
+    fire(map, "click", feature);
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledWith("layer-1", feature, LNGLAT);
+    // The hook runs AFTER the select-ordered dispatch, so handlers see it first.
+    expect(order).toEqual(["dispatch", "onClick"]);
+  });
+
+  it("fires onHover on mouseenter with the event's feature (widened arg)", () => {
+    const map = mockMap();
+    const onHover = vi.fn();
+    bindLayerInteractions(map, "layer-1", hoverEntry, bindDeps([], { onHover }));
+
+    const feature = { properties: { name: "Times Sq" } };
+    // mouseenter carries the event now, so onHover resolves e.features[0].
+    fire(map, "mouseenter", feature);
+
+    expect(onHover).toHaveBeenCalledTimes(1);
+    expect(onHover).toHaveBeenCalledWith("layer-1", feature, LNGLAT);
+  });
+
+  it("does not fire onHover when mouseenter carries no feature", () => {
+    const map = mockMap();
+    const onHover = vi.fn();
+    bindLayerInteractions(map, "layer-1", hoverEntry, bindDeps([], { onHover }));
+
+    const enter = map.on.mock.calls.find((c: any[]) => c[0] === "mouseenter");
+    enter?.[2]?.({ lngLat: LNGLAT }); // no features
+
+    expect(onHover).not.toHaveBeenCalled();
+  });
+
+  it("fires nothing but still dispatches when callbacks are absent (opt-in)", () => {
+    const map = mockMap();
+    const order: string[] = [];
+    // No callbacks — the compiled-path shape.
+    bindLayerInteractions(map, "layer-1", clickEntry, bindDeps(order));
+
+    expect(() => fire(map, "click", { properties: { name: "x" } })).not.toThrow();
+    // Dispatch is unchanged; nothing extra fired.
+    expect(order).toEqual(["dispatch"]);
   });
 });
 
