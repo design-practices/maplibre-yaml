@@ -1,0 +1,61 @@
+# Hermetic twin of docs/public/configs/gallery/create-and-style-clusters.yaml.
+# Differences forced by hermeticity: inline points instead of the remote USGS
+# feed, and no cluster-count symbol layer (the local verification style ships
+# no glyphs, so text layers cannot render offline).
+type: map
+id: create-and-style-clusters
+config:
+  center: [-103.59, 40.66]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  earthquakes:
+    type: geojson
+    cluster: true
+    clusterMaxZoom: 14
+    clusterRadius: 50
+    data:
+      type: FeatureCollection
+      features:
+        - { type: Feature, geometry: { type: Point, coordinates: [-103.6, 40.7] }, properties: { mag: 2.1 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-103.5, 40.6] }, properties: { mag: 3.4 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-103.7, 40.5] }, properties: { mag: 1.8 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-103.4, 40.8] }, properties: { mag: 4.0 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-103.55, 40.65] }, properties: { mag: 2.7 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-103.65, 40.75] }, properties: { mag: 3.1 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.2, 34.1] }, properties: { mag: 4.4 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.3, 34.0] }, properties: { mag: 2.9 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.25, 34.05] }, properties: { mag: 3.6 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-90.1, 35.1] }, properties: { mag: 2.2 } }
+layers:
+  - id: clusters
+    type: circle
+    source: earthquakes
+    filter: ["has", "point_count"]
+    paint:
+      circle-color:
+        ["step", ["get", "point_count"], "#51bbd6", 100, "#f1f075", 750, "#f28cb1"]
+      circle-radius: ["step", ["get", "point_count"], 20, 100, 30, 750, 40]
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        zoomToFeature:
+          maxZoom: 12
+  - id: unclustered-point
+    type: circle
+    source: earthquakes
+    filter: ["!", ["has", "point_count"]]
+    paint:
+      circle-color: "#11b4da"
+      circle-radius: 4
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      click:
+        popup:
+          - h4:
+              - str: Earthquake
+          - p:
+              - str: "Magnitude: "
+              - property: mag

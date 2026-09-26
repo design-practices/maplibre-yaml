@@ -1,0 +1,86 @@
+# Hermetic twin of docs/public/configs/gallery/create-a-heatmap-layer.yaml
+# (local basemap; inline points instead of the remote USGS feed — the paint
+# ramps are identical).
+type: map
+id: create-a-heatmap-layer
+config:
+  center: [-118.25, 34.05]
+  zoom: 5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  earthquakes:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.2, 34.1] }, properties: { mag: 4.4 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.3, 34.0] }, properties: { mag: 2.9 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.25, 34.05] }, properties: { mag: 3.6 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.1, 34.2] }, properties: { mag: 5.1 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.4, 33.9] }, properties: { mag: 2.2 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.15, 34.0] }, properties: { mag: 3.9 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.35, 34.15] }, properties: { mag: 4.7 } }
+        - { type: Feature, geometry: { type: Point, coordinates: [-118.28, 34.08] }, properties: { mag: 3.2 } }
+layers:
+  - id: earthquakes-heat
+    type: heatmap
+    source: earthquakes
+    maxzoom: 9
+    paint:
+      heatmap-weight:
+        ["interpolate", ["linear"], ["get", "mag"], 0, 0, 6, 1]
+      heatmap-intensity:
+        ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 3]
+      heatmap-color:
+        - interpolate
+        - ["linear"]
+        - ["heatmap-density"]
+        - 0
+        - "rgba(33,102,172,0)"
+        - 0.2
+        - "rgb(103,169,207)"
+        - 0.4
+        - "rgb(209,229,240)"
+        - 0.6
+        - "rgb(253,219,199)"
+        - 0.8
+        - "rgb(239,138,98)"
+        - 1
+        - "rgb(178,24,43)"
+      heatmap-radius:
+        ["interpolate", ["linear"], ["zoom"], 0, 2, 9, 20]
+      heatmap-opacity:
+        ["interpolate", ["linear"], ["zoom"], 7, 1, 9, 0]
+  - id: earthquakes-point
+    type: circle
+    source: earthquakes
+    minzoom: 7
+    paint:
+      circle-radius:
+        - interpolate
+        - ["linear"]
+        - ["zoom"]
+        - 7
+        - ["interpolate", ["linear"], ["get", "mag"], 1, 1, 6, 4]
+        - 16
+        - ["interpolate", ["linear"], ["get", "mag"], 1, 5, 6, 50]
+      circle-color:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 1
+        - "rgba(33,102,172,0)"
+        - 2
+        - "rgb(103,169,207)"
+        - 3
+        - "rgb(209,229,240)"
+        - 4
+        - "rgb(253,219,199)"
+        - 5
+        - "rgb(239,138,98)"
+        - 6
+        - "rgb(178,24,43)"
+      circle-stroke-color: "white"
+      circle-stroke-width: 1
+      circle-opacity:
+        ["interpolate", ["linear"], ["zoom"], 7, 0, 8, 1]

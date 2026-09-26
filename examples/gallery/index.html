@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MapLibre examples gallery — hermetic twins</title>
+  <!--
+    Human index for the gallery's browser-verification twins. Each link opens
+    viewer.html on one hermetic config (local basemap, inline data) — the same
+    pages e2e/gallery.spec.ts asserts on. The public-facing gallery lives on
+    the docs site under /examples/gallery/.
+    Serve from the repo root:  pnpm verify:serve
+  -->
+  <style>
+    body { margin: 2rem auto; max-width: 40rem; font-family: system-ui, sans-serif; }
+    li { margin: 0.4rem 0; }
+  </style>
+</head>
+<body>
+  <h1>MapLibre examples gallery — hermetic twins</h1>
+  <p>Each page doubles as the demo and the regression fixture.</p>
+  <ul>
+    <li><a href="viewer.html?example=display-a-map">display-a-map</a></li>
+    <li><a href="viewer.html?example=add-a-geojson-line">add-a-geojson-line</a></li>
+    <li><a href="viewer.html?example=add-a-geojson-polygon">add-a-geojson-polygon</a></li>
+    <li><a href="viewer.html?example=draw-geojson-points">draw-geojson-points</a></li>
+    <li><a href="viewer.html?example=display-a-popup-on-click">display-a-popup-on-click</a></li>
+    <li><a href="viewer.html?example=create-and-style-clusters">create-and-style-clusters</a></li>
+    <li><a href="viewer.html?example=create-a-heatmap-layer">create-a-heatmap-layer</a></li>
+    <li><a href="viewer.html?example=extrude-polygons-for-3d-indoor-mapping">extrude-polygons-for-3d-indoor-mapping</a></li>
+  </ul>
+</body>
+</html>

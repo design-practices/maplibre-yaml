@@ -1,0 +1,21 @@
+---
+title: Display a map
+description: The MapLibre "Display a map" example as a maplibre-yaml document
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-map.yaml?raw';
+
+Replicates the MapLibre example [Display a map](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-map/): initialize a map in an HTML element. The upstream version is an HTML page with a script block; here the entire map is one YAML document.
+
+<LiveMap src="/configs/gallery/display-a-map.yaml" height="420px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-map.yaml" />
+
+## What to notice
+
+- `config.center`, `config.zoom`, and `config.mapStyle` are the whole story — `layers:` defaults to an empty list, so the smallest useful map is five meaningful lines.
+- Embed it with `<ml-map src="display-a-map.yaml">`, the Astro `<Map>` component, or eject to a plain `style.json` with `mlym emit`.

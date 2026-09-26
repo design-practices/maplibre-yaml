@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/create-and-style-clusters/
+# Same USGS earthquake data, same three-layer treatment; clustering is
+# source config, no JS.
+type: map
+id: create-and-style-clusters
+config:
+  center: [-103.59, 40.66]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  earthquakes:
+    type: geojson
+    url: "https://maplibre.org/maplibre-gl-js/docs/assets/earthquakes.geojson"
+    cluster: true
+    clusterMaxZoom: 14
+    clusterRadius: 50
+layers:
+  - id: clusters
+    type: circle
+    source: earthquakes
+    filter: ["has", "point_count"]
+    paint:
+      circle-color:
+        ["step", ["get", "point_count"], "#51bbd6", 100, "#f1f075", 750, "#f28cb1"]
+      circle-radius: ["step", ["get", "point_count"], 20, 100, 30, 750, 40]
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        zoomToFeature:
+          maxZoom: 12
+  - id: cluster-count
+    type: symbol
+    source: earthquakes
+    filter: ["has", "point_count"]
+    layout:
+      text-field: ["get", "point_count_abbreviated"]
+      text-font: ["Noto Sans Regular"]
+      text-size: 12
+  - id: unclustered-point
+    type: circle
+    source: earthquakes
+    filter: ["!", ["has", "point_count"]]
+    paint:
+      circle-color: "#11b4da"
+      circle-radius: 4
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      click:
+        popup:
+          - h4:
+              - str: Earthquake
+          - p:
+              - str: "Magnitude: "
+              - property: mag

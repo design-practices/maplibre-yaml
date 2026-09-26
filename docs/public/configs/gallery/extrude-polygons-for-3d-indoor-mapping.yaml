@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/extrude-polygons-for-3d-indoor-mapping/
+# Data-driven extrusion height/base/color, straight from feature properties.
+type: map
+id: extrude-polygons-for-3d-indoor-mapping
+config:
+  center: [-87.61694, 41.86625]
+  zoom: 15.99
+  pitch: 40
+  bearing: 20
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: room-extrusion
+    type: fill-extrusion
+    source:
+      type: geojson
+      url: "https://maplibre.org/maplibre-gl-js/docs/assets/indoor-3d-map.geojson"
+    paint:
+      fill-extrusion-color: ["get", "color"]
+      fill-extrusion-height: ["get", "height"]
+      fill-extrusion-base: ["get", "base_height"]
+      fill-extrusion-opacity: 0.5

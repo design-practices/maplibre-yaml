@@ -1,0 +1,21 @@
+---
+title: Add a GeoJSON line
+description: The MapLibre "Add a GeoJSON line" example, using the route sugar
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-geojson-line.yaml?raw';
+
+Replicates the MapLibre example [Add a GeoJSON line](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-geojson-line/). Where the original hand-builds a `Feature<LineString>` inside `addSource`, the `route:` sugar takes just the coordinates.
+
+<LiveMap src="/configs/gallery/add-a-geojson-line.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-geojson-line.yaml" />
+
+## What to notice
+
+- `route:` expands to a `Feature<LineString>` at parse time — the emitted `style.json` carries canonical GeoJSON, so nothing downstream knows sugar was involved.
+- `layout` and `paint` keys are the MapLibre style-spec names, verbatim; no translation table to learn.

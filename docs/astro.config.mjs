@@ -97,6 +97,7 @@ export default defineConfig({
           label: "Examples",
           items: [
             { label: "Overview", link: "/examples/" },
+            { label: "MapLibre Gallery", link: "/examples/gallery/" },
             { label: "Basic Map", link: "/examples/basic-map/" },
             {
               label: "Earthquake Tracker",

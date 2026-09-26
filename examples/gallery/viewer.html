@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Gallery viewer</title>
+  <!--
+    Parametrized harness for the MapLibre-examples gallery twins: the page a
+    human opens to see one example is the page e2e/gallery.spec.ts drives.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/gallery/viewer.html?example=<slug>
+    (index.html next door lists every slug.)
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 480px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header id="title">gallery viewer</header>
+  <ml-map id="map"></ml-map>
+  <script type="module">
+    import "../../packages/core/register.js";
+    // Only [a-z0-9-] slugs resolve, and only into ./configs/ — the query
+    // param can't traverse anywhere else.
+    const slug = new URLSearchParams(location.search).get("example") ?? "";
+    if (/^[a-z0-9-]+$/.test(slug)) {
+      document.getElementById("title").textContent = `gallery: ${slug}`;
+      document.getElementById("map").setAttribute("src", `./configs/${slug}.yaml`);
+    } else {
+      document.getElementById("title").textContent =
+        "missing or invalid ?example=<slug> — see index.html for the list";
+    }
+  </script>
+</body>
+</html>
