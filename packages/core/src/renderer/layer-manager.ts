@@ -167,6 +167,20 @@ export class LayerManager {
       this.namedSources.set(id, spec as Record<string, unknown>);
 
       if (this.map.getSource(id)) continue;
+
+      // `url` on a geojson source is our key, not MapLibre's (its geojson
+      // sources take `data`), so passing it through makes style validation
+      // throw and the whole document render abort. Route it through the same
+      // DataFetcher path inline layer sources use: the source is added
+      // synchronously with its initial data, the fetch resolves into
+      // setData, and data events fire with the source id as their subject —
+      // exactly like the refresh pipeline (startSourcePipeline) already does.
+      const geojson = spec as unknown as GeoJSONSourceConfig;
+      if (geojson.type === "geojson" && geojson.url) {
+        void this.addGeoJSONSourceFromURL(id, id, geojson);
+        continue;
+      }
+
       this.map.addSource(id, this.toMapLibreSourceSpec(spec as any));
     }
   }

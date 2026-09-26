@@ -1,0 +1,28 @@
+# Assertion: a block-level named source with `url:` (not inline `data:`)
+# actually loads — two layers share one fetched source. This is the exact
+# shape that silently aborted the whole render before the fix: `url` leaked
+# into MapLibre's addSource, style validation threw, and no document layer
+# was ever added (found via the gallery heatmap page, GH #88 review).
+type: map
+id: named-source-url
+config:
+  center: [-118.25, 34.05]
+  zoom: 8
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  quakes:
+    type: geojson
+    url: "/examples/verification/data/quakes-sample.geojson"
+layers:
+  - id: quakes-heat
+    type: heatmap
+    source: quakes
+    paint:
+      heatmap-radius: 30
+      heatmap-weight: ["interpolate", ["linear"], ["get", "mag"], 0, 0, 6, 1]
+  - id: quakes-points
+    type: circle
+    source: quakes
+    paint:
+      circle-radius: 6
+      circle-color: "#e63946"

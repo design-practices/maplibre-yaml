@@ -458,6 +458,103 @@ describe("LayerManager", () => {
       manager.removeLayer("b");
       expect(manager.isRefreshing("shared")).toBe(false);
     });
+
+    // `url` is our key, not MapLibre's — a geojson source spec carrying it
+    // fails style validation and aborted the whole render. The named path
+    // must route through the DataFetcher like inline layer sources do.
+    describe("named source with url", () => {
+      const remoteFC = {
+        type: "FeatureCollection" as const,
+        features: [
+          {
+            type: "Feature" as const,
+            geometry: { type: "Point" as const, coordinates: [0, 0] },
+            properties: { mag: 3 },
+          },
+        ],
+      };
+
+      const okResponse = () => ({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: { get: () => null },
+        json: async () => remoteFC,
+      });
+
+      afterEach(() => {
+        vi.unstubAllGlobals();
+      });
+
+      it("adds the source without the url key, with initial data and cluster options", async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => okResponse()));
+
+        manager.registerSources({
+          quakes: {
+            type: "geojson",
+            url: "https://example.com/quakes.geojson",
+            cluster: true,
+            clusterRadius: 50,
+          },
+        });
+
+        // The source lands synchronously so string-ref layers can attach.
+        expect(mockMap.addSource).toHaveBeenCalledTimes(1);
+        const [id, spec] = mockMap.addSource.mock.calls[0];
+        expect(id).toBe("quakes");
+        expect(spec).not.toHaveProperty("url");
+        expect(spec.data).toEqual({ type: "FeatureCollection", features: [] });
+        expect(spec.cluster).toBe(true);
+        expect(spec.clusterRadius).toBe(50);
+      });
+
+      it("resolves the fetch into setData and fires data events keyed by the source id", async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => okResponse()));
+        const setData = vi.fn();
+
+        // registerSources consults getSource BEFORE adding (idempotence
+        // pre-check), so it must see nothing during registration — only the
+        // later fetch resolution should find the live source.
+        manager.registerSources({
+          quakes: { type: "geojson", url: "https://example.com/quakes.geojson" },
+        });
+        mockMap.getSource = vi.fn((id: string) =>
+          id === "quakes" ? { setData } : undefined
+        );
+
+        await vi.waitFor(() => {
+          expect(setData).toHaveBeenCalledWith(remoteFC);
+        });
+        expect(callbacks.onDataLoading).toHaveBeenCalledWith("quakes");
+        expect(callbacks.onDataLoaded).toHaveBeenCalledWith("quakes", 1);
+      });
+
+      it("reports a failed fetch through onDataError instead of throwing", async () => {
+        vi.stubGlobal(
+          "fetch",
+          // 404: non-retryable per isRetryableError, so the error surfaces
+          // immediately instead of after the retry backoff schedule.
+          vi.fn(async () => ({
+            ok: false,
+            status: 404,
+            statusText: "Not Found",
+            headers: { get: () => null },
+            json: async () => ({}),
+          }))
+        );
+
+        manager.registerSources({
+          quakes: { type: "geojson", url: "https://example.com/quakes.geojson" },
+        });
+
+        await vi.waitFor(() => {
+          expect(callbacks.onDataError).toHaveBeenCalledWith(
+            "quakes",
+            expect.anything()
+          );
+        });
+      });
+    });
   });
 
   describe("removeLayer", () => {
