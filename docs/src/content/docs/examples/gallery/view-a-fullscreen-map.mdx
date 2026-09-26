@@ -1,0 +1,20 @@
+---
+title: View a fullscreen map
+description: The MapLibre fullscreen-control example as a controls entry
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/view-a-fullscreen-map.yaml?raw';
+
+Replicates the MapLibre example [View a fullscreen map](https://maplibre.org/maplibre-gl-js/docs/examples/view-a-fullscreen-map/) over Florence.
+
+<LiveMap src="/configs/gallery/view-a-fullscreen-map.yaml" height="420px" caption="The ⛶ button toggles fullscreen" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="view-a-fullscreen-map.yaml" />
+
+## What to notice
+
+- `controls.fullscreen: true` is the whole feature; give it a `{ position }` block to move it from the default top-right.

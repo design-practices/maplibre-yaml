@@ -1,0 +1,20 @@
+---
+title: Change the default position for attribution
+description: The MapLibre attribution-position example as a controls entry
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/change-the-default-position-for-attribution.yaml?raw';
+
+Replicates the MapLibre example [Change the default position for attribution](https://maplibre.org/maplibre-gl-js/docs/examples/change-the-default-position-for-attribution/).
+
+<LiveMap src="/configs/gallery/change-the-default-position-for-attribution.yaml" height="420px" caption="Attribution sits top-left instead of bottom-right" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="change-the-default-position-for-attribution.yaml" />
+
+## What to notice
+
+- Declaring `controls.attribution` replaces the built-in control; `position` takes any of the four corners, and `compact`/`customAttribution` are available on the same block.

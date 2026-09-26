@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-live-realtime-data/
+# The upstream version hand-rolls window.setInterval + fetch + setData;
+# here polling is two lines of source config.
+type: map
+id: add-live-realtime-data
+config:
+  center: [0, 20]
+  zoom: 1
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: drone
+    type: circle
+    source:
+      type: geojson
+      url: "https://wanderdrone.appspot.com/"
+      refresh:
+        refreshInterval: 2000
+        updateStrategy: replace
+    paint:
+      circle-radius: 10
+      circle-color: "#e63946"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

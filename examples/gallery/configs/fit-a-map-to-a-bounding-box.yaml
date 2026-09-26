@@ -1,0 +1,8 @@
+# Hermetic twin of docs/public/configs/gallery/fit-a-map-to-a-bounding-box.yaml.
+type: map
+id: fit-a-map-to-a-bounding-box
+config:
+  center: [0, 0]
+  zoom: 1
+  bounds: [32.958984, -5.353521, 43.50585, 5.615985]
+  mapStyle: "/examples/verification/configs/local-style.json"

@@ -52,6 +52,25 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
     layers: ["room-extrusion"],
     rendered: "room-extrusion",
   },
+  // Wave 1b. Raster layers are not feature-queryable, so tile-backed twins
+  // assert layer presence + painted canvas. `add-a-vector-tile-source` and
+  // `add-a-video` have no hermetic twins: no local vector tileset or video
+  // asset exists, and faking either would test nothing real.
+  { slug: "display-a-satellite-map", layers: ["satellite"] },
+  { slug: "add-a-wms-source", layers: ["wms-imagery"] },
+  { slug: "display-a-non-interactive-map", layers: [] },
+  { slug: "change-the-default-position-for-attribution", layers: [] },
+  { slug: "display-map-navigation-controls", layers: [] },
+  { slug: "view-a-fullscreen-map", layers: [] },
+  { slug: "fit-a-map-to-a-bounding-box", layers: [] },
+  { slug: "restrict-map-panning-to-an-area", layers: [] },
+  {
+    slug: "add-multiple-geometries-from-one-geojson-source",
+    layers: ["park-boundary", "park-points"],
+    rendered: "park-boundary",
+  },
+  { slug: "show-polygon-information-on-click", layers: ["state"], rendered: "state" },
+  { slug: "add-live-realtime-data", layers: ["drone"], rendered: "drone" },
 ];
 
 async function openExample(page: Page, slug: string, layers: string[]): Promise<void> {
@@ -132,6 +151,74 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
     const popup = page.locator(".maplibregl-popup");
     await expect(popup).toBeVisible();
     await expect(popup.locator("h3")).toHaveText("Make it Mount Pleasant");
+
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("controls pages: each YAML controls entry produces its DOM control where declared", async ({
+    page,
+  }) => {
+    await guard(page);
+
+    await openExample(page, "display-map-navigation-controls", []);
+    await expect(
+      page.locator(".maplibregl-ctrl-top-left .maplibregl-ctrl-zoom-in")
+    ).toBeVisible();
+
+    await openExample(page, "view-a-fullscreen-map", []);
+    await expect(page.locator(".maplibregl-ctrl-fullscreen")).toBeVisible();
+
+    await openExample(page, "change-the-default-position-for-attribution", []);
+    await expect(
+      page.locator(".maplibregl-ctrl-top-left .maplibregl-ctrl-attrib")
+    ).toBeVisible();
+  });
+
+  test("camera-config pages: bounds frames the box, maxBounds constrains, interactive:false disables handlers", async ({
+    page,
+  }) => {
+    await guard(page);
+
+    // config.bounds → the initial camera centers on the box, not on `center`.
+    await openExample(page, "fit-a-map-to-a-bounding-box", []);
+    const centerLng = await page.evaluate(
+      () => (document.getElementById("map") as any).getMap().getCenter().lng
+    );
+    expect(centerLng).toBeGreaterThan(35);
+    expect(centerLng).toBeLessThan(41);
+
+    await openExample(page, "restrict-map-panning-to-an-area", []);
+    const maxBounds = await page.evaluate(() =>
+      Boolean((document.getElementById("map") as any).getMap().getMaxBounds())
+    );
+    expect(maxBounds, "maxBounds not applied").toBe(true);
+
+    await openExample(page, "display-a-non-interactive-map", []);
+    const handlers = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return {
+        dragPan: map.dragPan.isEnabled(),
+        scrollZoom: map.scrollZoom.isEnabled(),
+      };
+    });
+    expect(handlers).toEqual({ dragPan: false, scrollZoom: false });
+  });
+
+  test("add-live-realtime-data: the poll loop keeps delivering data", async ({ page }) => {
+    const errors = await guard(page);
+    await openExample(page, "add-live-realtime-data", ["drone"]);
+
+    // Two ticks past the initial load prove the interval loop, not just the
+    // first fetch. Events arrive on the <ml-map> element itself.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          let ticks = 0;
+          document.getElementById("map")!.addEventListener("ml-map:layer-data-loaded", () => {
+            if (++ticks >= 2) resolve();
+          });
+        })
+    );
 
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });

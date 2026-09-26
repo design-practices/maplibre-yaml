@@ -1,0 +1,8 @@
+# Hermetic twin of docs/public/configs/gallery/display-a-non-interactive-map.yaml.
+type: map
+id: display-a-non-interactive-map
+config:
+  center: [2.3488, 48.8534]
+  zoom: 11
+  interactive: false
+  mapStyle: "/examples/verification/configs/local-style.json"

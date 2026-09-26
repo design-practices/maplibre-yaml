@@ -1,0 +1,13 @@
+# Hermetic twin of docs/public/configs/gallery/change-the-default-position-for-attribution.yaml.
+type: map
+id: change-the-default-position-for-attribution
+config:
+  center: [-77.0353, 38.8895]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+# customAttribution gives the control content — the local style carries no
+# attribution of its own, and an empty control collapses to hidden.
+controls:
+  attribution:
+    position: top-left
+    customAttribution: "local verification style"

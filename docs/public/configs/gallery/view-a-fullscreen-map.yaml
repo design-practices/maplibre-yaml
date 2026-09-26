@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/view-a-fullscreen-map/
+type: map
+id: view-a-fullscreen-map
+config:
+  center: [11.255, 43.77]
+  zoom: 13
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+controls:
+  fullscreen: true

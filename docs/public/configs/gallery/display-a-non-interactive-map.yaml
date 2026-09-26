@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/display-a-non-interactive-map/
+type: map
+id: display-a-non-interactive-map
+config:
+  center: [2.3488, 48.8534]
+  zoom: 11
+  interactive: false
+  mapStyle: "https://demotiles.maplibre.org/style.json"

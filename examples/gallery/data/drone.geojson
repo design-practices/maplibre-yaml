@@ -1,0 +1,6 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [12.4924, 41.8902] }, "properties": { "name": "drone" } }
+  ]
+}

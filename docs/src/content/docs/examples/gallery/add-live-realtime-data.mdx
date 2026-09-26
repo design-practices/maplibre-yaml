@@ -1,0 +1,21 @@
+---
+title: Add live realtime data
+description: The MapLibre realtime-data example — polling as source configuration
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-live-realtime-data.yaml?raw';
+
+Replicates the MapLibre example [Add live realtime data](https://maplibre.org/maplibre-gl-js/docs/examples/add-live-realtime-data/): a point that moves as its remote feed updates. The upstream version hand-rolls `setInterval` + `fetch` + `setData`; here polling is two lines of source config.
+
+<LiveMap src="/configs/gallery/add-live-realtime-data.yaml" height="460px" caption="The point jumps every two seconds as the feed updates" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-live-realtime-data.yaml" />
+
+## What to notice
+
+- `refresh.refreshInterval` + `updateStrategy` cover the poll loop; `merge` and `append-window` strategies (with `updateKey`/`windowSize`) handle feeds that accumulate rather than replace.
+- For push instead of poll, the same source takes a `stream:` block (SSE or WebSocket) — see the live-data guide.
