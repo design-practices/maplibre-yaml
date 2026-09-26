@@ -1,0 +1,21 @@
+---
+title: Add a vector tile source
+description: The MapLibre "Add a vector tile source" example — TileJSON url + source-layer
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-vector-tile-source.yaml?raw';
+
+Replicates the MapLibre example [Add a vector tile source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-vector-tile-source/): country outlines drawn from a vector tileset on top of the basemap.
+
+<LiveMap src="/configs/gallery/add-a-vector-tile-source.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-vector-tile-source.yaml" />
+
+## What to notice
+
+- Vector sources take a TileJSON `url:` (or a `tiles:` template list); the layer picks its layer inside the tileset with `source-layer:`.
+- `minzoom`/`maxzoom`, `scheme`, and `promoteId` are all available on the source when you need them.

@@ -1,0 +1,36 @@
+# Hermetic twin of docs/public/configs/gallery/show-polygon-information-on-click.yaml
+# (local basemap; a compact polygon standing in for the full state outline —
+# the interactive block under test is identical).
+type: map
+id: show-polygon-information-on-click
+config:
+  center: [-90.0, 44.5]
+  zoom: 6
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: state
+    type: fill
+    source:
+      type: geojson
+      region:
+        name: Wisconsin
+        description: The Badger State
+        coordinates:
+          - - [-92.9, 46.6]
+            - [-87.0, 46.6]
+            - [-87.0, 42.5]
+            - [-92.9, 42.5]
+            - [-92.9, 46.6]
+    paint:
+      fill-color: "#3b9ddd"
+      fill-opacity: 0.55
+    interactive:
+      hover:
+        cursor: pointer
+        highlight: true
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - property: description

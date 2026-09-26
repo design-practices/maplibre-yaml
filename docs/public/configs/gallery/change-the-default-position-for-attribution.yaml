@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/change-the-default-position-for-attribution/
+type: map
+id: change-the-default-position-for-attribution
+config:
+  center: [-77.0353, 38.8895]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+controls:
+  attribution:
+    position: top-left

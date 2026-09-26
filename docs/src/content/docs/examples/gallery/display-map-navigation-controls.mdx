@@ -1,0 +1,20 @@
+---
+title: Display map navigation controls
+description: The MapLibre navigation-controls example as a controls entry
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-map-navigation-controls.yaml?raw';
+
+Replicates the MapLibre example [Display map navigation controls](https://maplibre.org/maplibre-gl-js/docs/examples/display-map-navigation-controls/): zoom and rotation controls, placed top-left.
+
+<LiveMap src="/configs/gallery/display-map-navigation-controls.yaml" height="420px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-map-navigation-controls.yaml" />
+
+## What to notice
+
+- Each control is a boolean (`navigation: true`) or a `{ position }` block. Available controls: `navigation`, `geolocate`, `scale`, `fullscreen`, `attribution`.

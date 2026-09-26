@@ -1,0 +1,21 @@
+---
+title: Display a satellite map
+description: The MapLibre "Display a satellite map" example as a raster layer in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-satellite-map.yaml?raw';
+
+Replicates the MapLibre example [Display a satellite map](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-satellite-map/): a satellite raster baselayer (here over Yosemite Valley).
+
+<LiveMap src="/configs/gallery/display-a-satellite-map.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-satellite-map.yaml" />
+
+## What to notice
+
+- A raster source is a `tiles:` URL template plus `tileSize`; `attribution` rides on the source and surfaces in the attribution control.
+- To make the imagery the *only* thing on screen, point `mapStyle` at an empty style — here it sits above the vector basemap instead.

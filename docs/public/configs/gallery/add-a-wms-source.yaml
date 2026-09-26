@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-a-wms-source/
+# A WMS endpoint is just a raster tile URL template with a bbox placeholder.
+type: map
+id: add-a-wms-source
+config:
+  center: [-74.5447, 40.6892]
+  zoom: 8
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: wms-imagery
+    type: raster
+    source:
+      type: raster
+      tiles:
+        - "https://img.nj.gov/imagerywms/Natural2015?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&layers=Natural2015"
+      tileSize: 256
+      attribution: "NJ Office of GIS"
+    paint:
+      raster-opacity: 0.9

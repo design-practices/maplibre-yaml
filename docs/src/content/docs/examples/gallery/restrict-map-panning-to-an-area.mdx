@@ -1,0 +1,20 @@
+---
+title: Restrict map panning to an area
+description: The MapLibre maxBounds example as one config field
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/restrict-map-panning-to-an-area.yaml?raw';
+
+Replicates the MapLibre example [Restrict map panning to an area](https://maplibre.org/maplibre-gl-js/docs/examples/restrict-map-panning-to-an-area/): the camera cannot leave Manhattan.
+
+<LiveMap src="/configs/gallery/restrict-map-panning-to-an-area.yaml" height="460px" caption="Try panning away — the camera stays inside the bounds" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="restrict-map-panning-to-an-area.yaml" />
+
+## What to notice
+
+- `config.maxBounds` constrains panning *and* zooming-out. Its friends `minZoom`/`maxZoom`/`minPitch`/`maxPitch` cover the other camera constraints.

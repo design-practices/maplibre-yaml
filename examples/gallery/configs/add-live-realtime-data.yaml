@@ -1,0 +1,26 @@
+# Hermetic twin of docs/public/configs/gallery/add-live-realtime-data.yaml.
+# Polls a local static file instead of the remote drone feed — the payload
+# never changes, but the poll loop (fetch -> setData every interval) is the
+# machinery under test.
+type: map
+id: add-live-realtime-data
+config:
+  center: [12.4924, 41.8902]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: drone
+    type: circle
+    source:
+      type: geojson
+      url: "/examples/gallery/data/drone.geojson"
+      cache:
+        enabled: false
+      refresh:
+        refreshInterval: 1000
+        updateStrategy: replace
+    paint:
+      circle-radius: 10
+      circle-color: "#e63946"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

@@ -1,0 +1,20 @@
+---
+title: Display a non-interactive map
+description: The MapLibre "Display a non-interactive map" example — one config flag
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-non-interactive-map.yaml?raw';
+
+Replicates the MapLibre example [Display a non-interactive map](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-non-interactive-map/): a static map that ignores drag, scroll, and keyboard input.
+
+<LiveMap src="/configs/gallery/display-a-non-interactive-map.yaml" height="420px" caption="Try dragging — nothing moves" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-non-interactive-map.yaml" />
+
+## What to notice
+
+- `interactive: false` disables every input handler at construction. For finer control, individual handlers (`scrollZoom`, `dragPan`, `dragRotate`, `keyboard`, …) are their own config flags.

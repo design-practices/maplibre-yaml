@@ -1,0 +1,21 @@
+---
+title: Add a video
+description: The MapLibre "Add a video" example — geo-anchored drone footage in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-video.yaml?raw';
+
+Replicates the MapLibre example [Add a video](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-video/): drone footage pinned to the ground by four corner coordinates.
+
+<LiveMap src="/configs/gallery/add-a-video.yaml" height="460px" caption="The video loops, anchored to its four corners" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-video.yaml" />
+
+## What to notice
+
+- A video source takes `urls:` (format fallbacks in order) and `coordinates:` — four `[lng, lat]` corners in top-left, top-right, bottom-right, bottom-left order.
+- The layer that draws it is a plain `raster` layer, same as an image source.

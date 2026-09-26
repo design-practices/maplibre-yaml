@@ -1,0 +1,18 @@
+# Hermetic twin of docs/public/configs/gallery/display-a-satellite-map.yaml.
+# The raster imagery is the e2e server's synthesized tile endpoint — the
+# pipeline under test (raster source -> raster layer) is identical.
+type: map
+id: display-a-satellite-map
+config:
+  center: [-119.5383, 37.7402]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: satellite
+    type: raster
+    source:
+      type: raster
+      tiles:
+        - "/dem/{z}/{x}/{y}.png"
+      tileSize: 256
+      attribution: "synthetic local tiles"

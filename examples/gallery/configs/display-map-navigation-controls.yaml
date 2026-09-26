@@ -1,0 +1,11 @@
+# Hermetic twin of docs/public/configs/gallery/display-map-navigation-controls.yaml.
+type: map
+id: display-map-navigation-controls
+config:
+  center: [-74.5, 40]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+controls:
+  navigation:
+    enabled: true
+    position: top-left
