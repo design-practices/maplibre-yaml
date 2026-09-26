@@ -258,34 +258,41 @@ export class LayerManager {
   }
 
   async addLayer(layer: Layer): Promise<void> {
+    // Background layers are sourceless by spec — resolving a source for one
+    // dereferenced `layer.source.type` on undefined and threw, so a
+    // schema-valid background layer killed the whole document (ml-chf).
+    const isBackground = layer.type === "background";
+
     // If source is a string reference (named source), use it directly;
     // otherwise generate a source ID for inline source objects
-    const isSourceRef = typeof layer.source === "string";
+    const isSourceRef = !isBackground && typeof layer.source === "string";
     const sourceId = isSourceRef ? layer.source as string : `${layer.id}-source`;
-    this.layerToSource.set(layer.id, sourceId);
 
-    if (isSourceRef) {
-      // One pipeline per source id regardless of how many layers reference it.
-      this.sourceRefCounts.set(
-        sourceId,
-        (this.sourceRefCounts.get(sourceId) ?? 0) + 1
-      );
-    }
+    if (!isBackground) {
+      this.layerToSource.set(layer.id, sourceId);
 
-    if (!isSourceRef) {
-      await this.addSource(sourceId, layer);
-    } else if (!this.map.getSource(sourceId)) {
-      throw new Error(
-        `Source '${sourceId}' referenced by layer '${layer.id}' not found. ` +
-        `Ensure it is defined in the block-level 'sources' map.`
-      );
+      if (isSourceRef) {
+        // One pipeline per source id regardless of how many layers reference it.
+        this.sourceRefCounts.set(
+          sourceId,
+          (this.sourceRefCounts.get(sourceId) ?? 0) + 1
+        );
+        if (!this.map.getSource(sourceId)) {
+          throw new Error(
+            `Source '${sourceId}' referenced by layer '${layer.id}' not found. ` +
+            `Ensure it is defined in the block-level 'sources' map.`
+          );
+        }
+      } else {
+        await this.addSource(sourceId, layer);
+      }
     }
 
     const layerSpec: any = {
       id: layer.id,
       type: layer.type,
-      source: sourceId,
     };
+    if (!isBackground) layerSpec.source = sourceId;
 
     if ("paint" in layer && layer.paint) layerSpec.paint = layer.paint;
 

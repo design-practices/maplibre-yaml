@@ -204,6 +204,44 @@ describe("LayerManager", () => {
       expect(spec.generateId).toBeUndefined();
     });
 
+    it("adds a background layer without resolving any source (ml-chf)", async () => {
+      const layer = {
+        id: "backdrop",
+        type: "background" as const,
+        visible: true,
+        toggleable: false,
+        paint: { "background-color": "#cfe8c9", "background-opacity": 0.8 },
+      };
+
+      // Previously this dereferenced `layer.source.type` on undefined and
+      // threw — a schema-valid background layer killed the whole document.
+      await manager.addLayer(layer as any);
+
+      expect(mockMap.addSource).not.toHaveBeenCalled();
+      const spec = mockMap.addLayer.mock.calls[0][0];
+      expect(spec).toEqual(
+        expect.objectContaining({ id: "backdrop", type: "background" })
+      );
+      expect(spec).not.toHaveProperty("source");
+      expect(spec.paint["background-color"]).toBe("#cfe8c9");
+    });
+
+    it("removes a background layer without touching any source", async () => {
+      await manager.addLayer({
+        id: "backdrop",
+        type: "background",
+        visible: true,
+        toggleable: false,
+      } as any);
+      mockMap.getLayer.mockReturnValue(true);
+      mockMap.getSource = vi.fn(() => undefined);
+
+      manager.removeLayer("backdrop");
+
+      expect(mockMap.removeLayer).toHaveBeenCalledWith("backdrop");
+      expect(mockMap.removeSource).not.toHaveBeenCalled();
+    });
+
     it("adds a hillshade layer with a raster-dem source", async () => {
       const layer = {
         id: "terrain",

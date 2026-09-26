@@ -1,0 +1,30 @@
+# Assertion: a schema-valid `background` layer renders under <ml-map>
+# instead of killing the document (ml-chf — the renderer unconditionally
+# resolved a source for every layer and background layers have none).
+# The translucent wash sits above the basemap; the circle proves layers
+# after the background still render.
+type: map
+id: background-layer
+config:
+  center: [-74.006, 40.7128]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: wash
+    type: background
+    paint:
+      background-color: "#1d3557"
+      background-opacity: 0.35
+  - id: marker
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: { name: "still here" }
+    paint:
+      circle-radius: 20
+      circle-color: "#e63946"
