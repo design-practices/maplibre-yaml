@@ -82,6 +82,12 @@ jobs:
     #
     # actions/checkout builds the PR *merge commit* on pull_request events, so
     # the tree here is the state main will be in after merge. See ml-ook.
+    #
+    # Prerelease-mode subtlety: while .changeset/pre.json exists, `changeset
+    # version` deliberately KEEPS consumed .md files on disk (they are
+    # re-applied at the stable `pre exit` versioning) and records consumption
+    # in pre.json's "changesets" array instead of deleting. So in pre mode a
+    # surviving file is only stale if its name is absent from that array.
     version-pr-completeness:
         name: Version PR consumes every changeset
         if: github.event_name == 'pull_request' && github.head_ref == 'changeset-release/main'
@@ -92,11 +98,14 @@ jobs:
 
             - name: Assert no changeset survives the merge
               run: |
-                  leftover=$(find .changeset -name '*.md' ! -name 'README.md' | sort)
+                  leftover=$(find .changeset -name '*.md' ! -name 'README.md' -printf '%f\n' | sed 's/\.md$//' | sort)
+                  if [ -f .changeset/pre.json ]; then
+                      leftover=$(comm -23 <(printf '%s\n' "$leftover") <(jq -r '.changesets[]' .changeset/pre.json | sort))
+                  fi
                   if [ -n "$leftover" ]; then
                       echo "::error::This version PR does not consume every changeset on main. Merging it would open another version PR instead of publishing."
                       echo ""
-                      echo "Changesets that would survive the merge:"
+                      echo "Unconsumed changesets that would survive the merge:"
                       echo "$leftover" | sed 's/^/  /'
                       echo ""
                       echo "Fix: push to main (or re-run the Release workflow) so changesets/action"
@@ -104,7 +113,7 @@ jobs:
                       echo "regenerated PR."
                       exit 1
                   fi
-                  echo "No changesets survive the merge -- the publish path will fire."
+                  echo "No unconsumed changeset survives the merge -- the publish path will fire."
 
     # Drives the Phase 1 fixtures against a real MapLibre instance in headless
     # Chromium. The unit suites can only prove we handed MapLibre a given
