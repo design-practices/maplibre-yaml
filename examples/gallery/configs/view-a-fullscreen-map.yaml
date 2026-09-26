@@ -1,0 +1,9 @@
+# Hermetic twin of docs/public/configs/gallery/view-a-fullscreen-map.yaml.
+type: map
+id: view-a-fullscreen-map
+config:
+  center: [11.255, 43.77]
+  zoom: 13
+  mapStyle: "/examples/verification/configs/local-style.json"
+controls:
+  fullscreen: true

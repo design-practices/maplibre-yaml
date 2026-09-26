@@ -1,0 +1,21 @@
+---
+title: Show polygon information on click
+description: The MapLibre polygon-info example — popup, cursor, and highlight in one block
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/show-polygon-information-on-click.yaml?raw';
+
+Replicates the MapLibre example [Show polygon information on click](https://maplibre.org/maplibre-gl-js/docs/examples/show-polygon-information-on-click/), with the `region:` sugar carrying the polygon and its display properties.
+
+<LiveMap src="/configs/gallery/show-polygon-information-on-click.yaml" height="460px" caption="Hover highlights the state; click for its popup" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="show-polygon-information-on-click.yaml" />
+
+## What to notice
+
+- `region:` accepts `name`/`description` alongside coordinates — they land as feature properties, which the popup then reads with `property:` items.
+- `hover.highlight: true` adds the per-feature hover repaint the upstream version doesn't even attempt.

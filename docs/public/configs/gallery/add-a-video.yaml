@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-a-video/
+# Same drone footage, geo-anchored by four corner coordinates (TL/TR/BR/BL).
+type: map
+id: add-a-video
+config:
+  center: [-122.514426, 37.562984]
+  zoom: 17
+  minZoom: 14
+  bearing: -96
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: drone-footage
+    type: raster
+    source:
+      type: video
+      urls:
+        - "https://static-assets.mapbox.com/mapbox-gl-js/drone.mp4"
+        - "https://static-assets.mapbox.com/mapbox-gl-js/drone.webm"
+      coordinates:
+        - [-122.51596391201019, 37.56238816766053]
+        - [-122.51467645168304, 37.56410183312965]
+        - [-122.51309394836426, 37.563391708549425]
+        - [-122.51423120498657, 37.56161849366671]

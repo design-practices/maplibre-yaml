@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/fit-a-map-to-a-bounding-box/
+# The initial viewport is the bounding box, whatever the container's pixels.
+type: map
+id: fit-a-map-to-a-bounding-box
+config:
+  center: [0, 0]
+  zoom: 1
+  bounds: [32.958984, -5.353521, 43.50585, 5.615985]
+  mapStyle: "https://demotiles.maplibre.org/style.json"

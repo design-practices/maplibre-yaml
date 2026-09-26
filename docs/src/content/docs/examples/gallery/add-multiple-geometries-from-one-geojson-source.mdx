@@ -1,0 +1,21 @@
+---
+title: Add multiple geometries from one GeoJSON source
+description: The MapLibre multiple-geometries example — one named source, two filtered layers
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-multiple-geometries-from-one-geojson-source.yaml?raw';
+
+Replicates the MapLibre example [Add multiple geometries from one GeoJSON source](https://maplibre.org/maplibre-gl-js/docs/examples/add-multiple-geometries-from-one-geojson-source/): a park boundary polygon and its points of interest, from a single source.
+
+<LiveMap src="/configs/gallery/add-multiple-geometries-from-one-geojson-source.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-multiple-geometries-from-one-geojson-source.yaml" />
+
+## What to notice
+
+- The block-level `sources:` record is fetched once and shared; each layer selects its geometry with a `["==", ["geometry-type"], …]` filter.
+- The same pattern powers the clusters page (three layers, one source).

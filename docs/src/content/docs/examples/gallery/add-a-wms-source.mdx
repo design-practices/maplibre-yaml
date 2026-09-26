@@ -1,0 +1,21 @@
+---
+title: Add a WMS source
+description: The MapLibre "Add a WMS source" example — a WMS endpoint as a raster tile template
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-wms-source.yaml?raw';
+
+Replicates the MapLibre example [Add a WMS source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-wms-source/): New Jersey aerial imagery served by a WMS endpoint.
+
+<LiveMap src="/configs/gallery/add-a-wms-source.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-wms-source.yaml" />
+
+## What to notice
+
+- There is no special WMS source type — a `GetMap` URL with the `{bbox-epsg-3857}` placeholder *is* a raster tile template, exactly as upstream.
+- Raster paint keys (`raster-opacity` here) apply like any other layer styling.
