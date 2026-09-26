@@ -461,7 +461,10 @@ describe("attachInteractions — parity with EventHandler (R9 go/no-go)", () => 
       "zoomToFeature",
       "emit",
     ]);
-    expect(registry.hoverInteractions().map((i) => i.name)).toEqual(["highlight"]);
+    expect(registry.hoverInteractions().map((i) => i.name)).toEqual([
+      "highlight",
+      "emit",
+    ]);
   });
 });
 

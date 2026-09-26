@@ -191,13 +191,45 @@ describe("InteractiveConfigSchema", () => {
     expect(result?.click?.emit?.payload?.id).not.toHaveProperty("code");
   });
 
-  it("does not accept emit on hover (hover-emit deferred this unit)", () => {
-    // hover.emit is not on the hover shape yet — a `.passthrough()`-free hover
-    // object strips it, so it never reaches the parsed config.
+  it("accepts emit on hover (event + declarative payload)", () => {
+    // hover-emit (ml-fn9): the same EmitConfig shape sits on the hover trigger,
+    // where its runtime fires once per feature entered with per-feature dedupe.
+    const config = {
+      hover: {
+        highlight: true,
+        emit: {
+          event: "select",
+          payload: { id: { property: "bbl" }, label: { property: "name" } },
+        },
+      },
+    };
+    expect(InteractiveConfigSchema.parse(config)).toMatchObject(config);
+  });
+
+  it("accepts a hover emit with just an event (payload optional)", () => {
+    const config = { hover: { emit: { event: "ping" } } };
+    expect(InteractiveConfigSchema.parse(config)).toMatchObject(config);
+  });
+
+  it("rejects a hover emit with no event (event is required)", () => {
+    expect(() =>
+      InteractiveConfigSchema.parse({ hover: { emit: { payload: {} } } })
+    ).toThrow();
+  });
+
+  it("strips a code-shaped field from a hover emit payload item", () => {
+    // Same format law as click emit: the payload item is not `.passthrough()`,
+    // so an executable/selector/GLSL field is stripped rather than carried.
     const result = InteractiveConfigSchema.parse({
-      hover: { highlight: true, emit: { event: "select" } },
+      hover: {
+        emit: {
+          event: "select",
+          payload: { id: { property: "bbl", code: "map.remove()" } },
+        },
+      },
     });
-    expect(result?.hover).not.toHaveProperty("emit");
+    expect(result?.hover?.emit?.payload?.id).toEqual({ property: "bbl" });
+    expect(result?.hover?.emit?.payload?.id).not.toHaveProperty("code");
   });
 });
 
