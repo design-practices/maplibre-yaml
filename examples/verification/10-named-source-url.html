@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Named source with url:</title>
+  <!--
+    PASS = red dots over a heat blob near Los Angeles (a named `sources:`
+    entry with `url:` fetched and both layers drew from it). FAIL = empty
+    green basemap: the url leaked into MapLibre's source spec and the whole
+    document render aborted.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/10-named-source-url.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 460px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = red dots over a heat blob near Los Angeles. FAIL = empty green basemap.</header>
+  <ml-map id="map" src="./configs/named-source-url.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>
