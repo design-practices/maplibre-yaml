@@ -9,5 +9,14 @@
     "@maplibre-yaml/cli": "0.2.2",
     "@maplibre-yaml/core": "0.5.0"
   },
-  "changesets": []
+  "changesets": [
+    "astro-html-loader-fix",
+    "geojson-sugar-normalization",
+    "interactions-bind-core-convergence",
+    "interactions-registry",
+    "parse-options-consistency",
+    "v1-geojson-warning",
+    "v2-style-metadata",
+    "v2-surface-parser"
+  ]
 }
