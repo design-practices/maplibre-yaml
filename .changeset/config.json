@@ -14,7 +14,8 @@
   "updateInternalDependencies": "patch",
   "ignore": [
     "@maplibre-yaml/example-astro-minimal",
-    "@maplibre-yaml/example-verification"
+    "@maplibre-yaml/example-verification",
+    "@maplibre-yaml/astro"
   ],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true
