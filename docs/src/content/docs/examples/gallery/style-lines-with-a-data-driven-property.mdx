@@ -1,0 +1,20 @@
+---
+title: Style lines with a data-driven property
+description: The MapLibre data-driven line-color example in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/style-lines-with-a-data-driven-property.yaml?raw';
+
+Replicates the MapLibre example [Style lines with a data-driven property](https://maplibre.org/maplibre-gl-js/docs/examples/style-lines-with-a-data-driven-property/): one layer, per-feature color.
+
+<LiveMap src="/configs/gallery/style-lines-with-a-data-driven-property.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="style-lines-with-a-data-driven-property.yaml" />
+
+## What to notice
+
+- `line-color: ["get", "color"]` reads each feature's property — add features with new colors and the layer needs no change.

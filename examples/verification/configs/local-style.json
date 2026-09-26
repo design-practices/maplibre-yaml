@@ -6,8 +6,11 @@
     {
       "id": "background",
       "type": "background",
-      "paint": { "background-color": "#cfe8c9" }
+      "paint": {
+        "background-color": "#cfe8c9"
+      }
     }
   ],
-  "_comment": "Deliberately source-less. The browser fixtures assert on our own layers and controls, not on basemap imagery, so this removes the last network dependency and keeps the suite deterministic in CI."
+  "_comment": "Deliberately source-less. The browser fixtures assert on our own layers and controls, not on basemap imagery, so this removes the last network dependency and keeps the suite deterministic in CI. Glyphs point at the e2e server's empty-pbf endpoint so symbol layers with text load hermetically (gallery label twins); no visible glyphs render.",
+  "glyphs": "/glyphs/{fontstack}/{range}.pbf"
 }

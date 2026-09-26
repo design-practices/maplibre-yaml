@@ -1,0 +1,20 @@
+---
+title: Variable label placement with offset
+description: The MapLibre variable-anchor-offset example in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/variable-label-placement-with-offset.yaml?raw';
+
+Replicates the MapLibre example [Variable label placement with offset](https://maplibre.org/maplibre-gl-js/docs/examples/variable-label-placement-with-offset/): each anchor pairs with its own offset.
+
+<LiveMap src="/configs/gallery/variable-label-placement-with-offset.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="variable-label-placement-with-offset.yaml" />
+
+## What to notice
+
+- `text-variable-anchor-offset` sits outside the curated schema subset and rides the spec-derived allowlist — it renders, and `mlym validate --strict` stays green.

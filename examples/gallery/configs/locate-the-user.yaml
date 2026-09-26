@@ -1,0 +1,9 @@
+# Hermetic twin of docs/public/configs/gallery/locate-the-user.yaml (local basemap).
+type: map
+id: locate-the-user
+config:
+  center: [-24, 42]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+controls:
+  geolocate: true

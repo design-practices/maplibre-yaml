@@ -1,0 +1,8 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "properties": { "id": "q1", "mag": 3.2, "place": "Alpha ridge" }, "geometry": { "type": "Point", "coordinates": [-120.1, 39.9] } },
+    { "type": "Feature", "properties": { "id": "q2", "mag": 4.5, "place": "Beta fault" }, "geometry": { "type": "Point", "coordinates": [-119.4, 40.3] } },
+    { "type": "Feature", "properties": { "id": "q3", "mag": 2.7, "place": "Gamma basin" }, "geometry": { "type": "Point", "coordinates": [-120.7, 40.6] } }
+  ]
+}

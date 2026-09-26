@@ -1,0 +1,23 @@
+# Hermetic twin of docs/public/configs/gallery/display-line-that-crosses-180th-meridian.yaml (local basemap).
+type: map
+id: display-line-that-crosses-180th-meridian
+config:
+  center: [180, 52]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: crossing
+    type: line
+    source:
+      type: geojson
+      route:
+        name: Aleutian hop
+        coordinates:
+          - [172, 52]
+          - [188, 52]
+    layout:
+      line-join: round
+      line-cap: round
+    paint:
+      line-color: "#e63946"
+      line-width: 4

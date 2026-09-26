@@ -1,0 +1,21 @@
+---
+title: Add a hillshade layer
+description: The MapLibre hillshade example — terrain shading from a raster-dem source
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-hillshade-layer.yaml?raw';
+
+Replicates the MapLibre example [Add a hillshade layer](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-hillshade-layer/): Mount Hood in relief.
+
+<LiveMap src="/configs/gallery/add-a-hillshade-layer.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-hillshade-layer.yaml" />
+
+## What to notice
+
+- A `raster-dem` source (`encoding: terrarium` for AWS elevation tiles) plus a `hillshade` layer — no JS, no plugins.
+- Map-level 3D `terrain:` is a tracked gap (see the gallery index); hillshade sourcing is fully supported today.

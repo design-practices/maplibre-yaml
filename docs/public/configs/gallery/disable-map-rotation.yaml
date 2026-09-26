@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/disable-map-rotation/
+# Right-drag and touch-rotate do nothing; north stays up.
+type: map
+id: disable-map-rotation
+config:
+  center: [12.4964, 41.9028]
+  zoom: 10
+  dragRotate: false
+  touchZoomRotate: false
+  mapStyle: "https://demotiles.maplibre.org/style.json"

@@ -1,0 +1,9 @@
+# Hermetic twin of docs/public/configs/gallery/disable-map-rotation.yaml (local basemap).
+type: map
+id: disable-map-rotation
+config:
+  center: [12.4964, 41.9028]
+  zoom: 10
+  dragRotate: false
+  touchZoomRotate: false
+  mapStyle: "/examples/verification/configs/local-style.json"

@@ -1,0 +1,28 @@
+# Hermetic twin of docs/public/configs/gallery/variable-label-placement.yaml (local basemap).
+type: map
+id: variable-label-placement
+config:
+  center: [-79.4512, 43.6568]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: poi-labels
+    type: symbol
+    source:
+      type: geojson
+      locations:
+        - { coordinates: [-79.4512, 43.6568], name: High Park }
+        - { coordinates: [-79.389, 43.6426], name: CN Tower }
+        - { coordinates: [-79.3832, 43.6532], name: City Hall }
+        - { coordinates: [-79.4197, 43.6668], name: Casa Loma }
+    layout:
+      text-font: ["Noto Sans Regular"]
+      text-field: ["get", "name"]
+      text-variable-anchor: [top, bottom, left, right]
+      text-radial-offset: 0.5
+      text-justify: auto
+      text-size: 13
+    paint:
+      text-color: "#1d3557"
+      text-halo-color: "#ffffff"
+      text-halo-width: 1.5

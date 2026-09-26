@@ -1,0 +1,20 @@
+---
+title: Change building color based on zoom level
+description: The MapLibre zoom-interpolated color example over basemap buildings
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/change-building-color-based-on-zoom-level.yaml?raw';
+
+Replicates the MapLibre example [Change building color based on zoom level](https://maplibre.org/maplibre-gl-js/docs/examples/change-building-color-based-on-zoom-level/).
+
+<LiveMap src="/configs/gallery/change-building-color-based-on-zoom-level.yaml" height="460px" caption="Zoom from 15 to 17 and watch the fill ease from sand to terracotta" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="change-building-color-based-on-zoom-level.yaml" />
+
+## What to notice
+
+- An `interpolate` on `["zoom"]` with an exponential base, applied to the basemap's own `building` source-layer — the same basemap-extension trick as the 3D-buildings page.

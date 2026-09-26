@@ -1,0 +1,20 @@
+---
+title: Set pitch and bearing
+description: The MapLibre pitch/bearing example as two config fields
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/set-pitch-and-bearing.yaml?raw';
+
+Replicates the MapLibre example [Set pitch and bearing](https://maplibre.org/maplibre-gl-js/docs/examples/set-pitch-and-bearing/): an oblique initial camera over Montréal.
+
+<LiveMap src="/configs/gallery/set-pitch-and-bearing.yaml" height="420px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="set-pitch-and-bearing.yaml" />
+
+## What to notice
+
+- `config.pitch` (0–85) and `config.bearing` (−180–180) join `center`/`zoom` as the four initial-camera fields.

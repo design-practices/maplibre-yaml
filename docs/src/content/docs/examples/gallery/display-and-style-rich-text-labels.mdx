@@ -1,0 +1,21 @@
+---
+title: Display and style rich text labels
+description: The MapLibre format-expression example in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-and-style-rich-text-labels.yaml?raw';
+
+Replicates the MapLibre example [Display and style rich text labels](https://maplibre.org/maplibre-gl-js/docs/examples/display-and-style-rich-text-labels/): two type sizes in one label.
+
+<LiveMap src="/configs/gallery/display-and-style-rich-text-labels.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-and-style-rich-text-labels.yaml" />
+
+## What to notice
+
+- The `format` expression mixes sections with per-section `font-scale` — verbatim style-spec, where YAML's block form keeps the sections readable.
+- `text-font` must name a face the basemap's glyph server carries (demotiles ships Noto Sans Regular).

@@ -1,0 +1,18 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-raster-tile-source.yaml
+# (local basemap; the e2e server's synthesized tiles stand in for OSM —
+# the raster source/layer pipeline under test is identical).
+type: map
+id: add-a-raster-tile-source
+config:
+  center: [2.3488, 48.8534]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: osm-raster
+    type: raster
+    source:
+      type: raster
+      tiles:
+        - "/dem/{z}/{x}/{y}.png"
+      tileSize: 256
+      attribution: "synthetic local tiles"

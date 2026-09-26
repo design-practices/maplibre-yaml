@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/center-the-map-on-a-clicked-symbol/
+# zoomToFeature flies to the clicked feature — for a point, that centers it.
+type: map
+id: center-the-map-on-a-clicked-symbol
+config:
+  center: [-90.96, -0.47]
+  zoom: 7.5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: islands
+    type: circle
+    source:
+      type: geojson
+      locations:
+        - { coordinates: [-91.395, -0.9538], name: Isabela }
+        - { coordinates: [-90.3295, -0.6344], name: Santa Cruz }
+        - { coordinates: [-89.6293, -0.8933], name: San Cristóbal }
+        - { coordinates: [-90.7514, 0.3199], name: Genovesa }
+    paint:
+      circle-radius: 9
+      circle-color: "#2a9d8f"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        zoomToFeature:
+          maxZoom: 10

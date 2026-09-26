@@ -1,0 +1,20 @@
+---
+title: Hash routing
+description: The MapLibre hash-routing example as one config flag
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/hash-routing.yaml?raw';
+
+Replicates the MapLibre example [Hash routing](https://maplibre.org/maplibre-gl-js/docs/examples/hash-routing/): the viewport lives in the URL fragment.
+
+<LiveMap src="/configs/gallery/hash-routing.yaml" height="420px" caption="Pan, then copy the URL — the view travels with it" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="hash-routing.yaml" />
+
+## What to notice
+
+- `config.hash: true` round-trips `#zoom/lat/lng/bearing/pitch` through the URL — deep-linkable map states with zero code.

@@ -1,0 +1,21 @@
+---
+title: Display buildings in 3D
+description: The MapLibre 3D-buildings example, extending the basemap's own source
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-buildings-in-3d.yaml?raw';
+
+Replicates the MapLibre example [Display buildings in 3D](https://maplibre.org/maplibre-gl-js/docs/examples/display-buildings-in-3d/): lower Manhattan extruded from the basemap's building data.
+
+<LiveMap src="/configs/gallery/display-buildings-in-3d.yaml" height="500px" caption="Right-drag (or Ctrl-drag) to orbit" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-buildings-in-3d.yaml" />
+
+## What to notice
+
+- The layer's `source: openmaptiles` is a bare name that resolves against the **loaded basemap's** vector source — YAML can extend the basemap, not just sit on top of it.
+- Height and base ease in with a zoom `interpolate`, exactly as upstream.

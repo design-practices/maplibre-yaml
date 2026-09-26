@@ -1,0 +1,22 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-hillshade-layer.yaml
+# (local basemap; the e2e server's synthesized terrarium DEM tiles stand in
+# for the AWS elevation tiles — same raster-dem + hillshade pipeline).
+type: map
+id: add-a-hillshade-layer
+config:
+  center: [-121.696, 45.374]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: hillshade
+    type: hillshade
+    source:
+      type: raster-dem
+      tiles:
+        - "/dem/{z}/{x}/{y}.png"
+      encoding: terrarium
+      tileSize: 256
+      maxzoom: 14
+    paint:
+      hillshade-shadow-color: "#473B24"
+      hillshade-exaggeration: 0.6

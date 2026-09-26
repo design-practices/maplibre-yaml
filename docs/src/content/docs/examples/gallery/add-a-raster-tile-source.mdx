@@ -1,0 +1,20 @@
+---
+title: Add a raster tile source
+description: The MapLibre raster-source example over OSM tiles
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-raster-tile-source.yaml?raw';
+
+Replicates the MapLibre example [Add a raster tile source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-raster-tile-source/): OpenStreetMap raster tiles above the vector basemap.
+
+<LiveMap src="/configs/gallery/add-a-raster-tile-source.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-raster-tile-source.yaml" />
+
+## What to notice
+
+- A raster source is `tiles:` + `tileSize`; `attribution` rides the source into the attribution control.

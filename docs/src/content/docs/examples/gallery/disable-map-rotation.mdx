@@ -1,0 +1,20 @@
+---
+title: Disable map rotation
+description: The MapLibre disable-rotation example as config flags
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/disable-map-rotation.yaml?raw';
+
+Replicates the MapLibre example [Disable map rotation](https://maplibre.org/maplibre-gl-js/docs/examples/disable-map-rotation/): north stays up.
+
+<LiveMap src="/configs/gallery/disable-map-rotation.yaml" height="420px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="disable-map-rotation.yaml" />
+
+## What to notice
+
+- `dragRotate: false` kills right-drag rotation; `touchZoomRotate: false` disables the touch gesture wholesale (the upstream version keeps pinch-zoom while disabling only rotation — that finer split needs `getMap()`).

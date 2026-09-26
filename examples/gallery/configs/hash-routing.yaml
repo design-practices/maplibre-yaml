@@ -1,0 +1,8 @@
+# Hermetic twin of docs/public/configs/gallery/hash-routing.yaml (local basemap).
+type: map
+id: hash-routing
+config:
+  center: [-0.13, 51.51]
+  zoom: 11
+  hash: true
+  mapStyle: "/examples/verification/configs/local-style.json"

@@ -1,0 +1,26 @@
+# Hermetic twin of docs/public/configs/gallery/use-locally-generated-ideographs.yaml (local basemap).
+type: map
+id: use-locally-generated-ideographs
+config:
+  center: [137.5, 36.5]
+  zoom: 4.5
+  localIdeographFontFamily: "'Noto Sans CJK JP', 'Hiragino Sans', sans-serif"
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: city-labels-ja
+    type: symbol
+    source:
+      type: geojson
+      locations:
+        - { coordinates: [139.6917, 35.6895], name: 東京 }
+        - { coordinates: [135.5023, 34.6937], name: 大阪 }
+        - { coordinates: [141.3545, 43.0621], name: 札幌 }
+        - { coordinates: [130.4017, 33.5902], name: 福岡 }
+    layout:
+      text-font: ["Noto Sans Regular"]
+      text-field: ["get", "name"]
+      text-size: 16
+    paint:
+      text-color: "#1d3557"
+      text-halo-color: "#ffffff"
+      text-halo-width: 1.5

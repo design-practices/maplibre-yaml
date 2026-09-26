@@ -1,0 +1,8 @@
+# Hermetic twin of docs/public/configs/gallery/disable-scroll-zoom.yaml (local basemap).
+type: map
+id: disable-scroll-zoom
+config:
+  center: [13.405, 52.52]
+  zoom: 10
+  scrollZoom: false
+  mapStyle: "/examples/verification/configs/local-style.json"

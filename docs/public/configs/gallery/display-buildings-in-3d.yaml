@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/display-buildings-in-3d/
+# The layer draws from the BASEMAP's own vector source: a bare source name
+# that is not in the block's `sources:` record resolves against the loaded
+# style, so YAML can extend the basemap, not just sit on top of it.
+type: map
+id: display-buildings-in-3d
+config:
+  center: [-74.0066, 40.7135]
+  zoom: 15.4
+  pitch: 45
+  bearing: -17.6
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: buildings-3d
+    type: fill-extrusion
+    source: openmaptiles
+    source-layer: building
+    minzoom: 14
+    paint:
+      fill-extrusion-color: "#c9bba6"
+      fill-extrusion-height:
+        ["interpolate", ["linear"], ["zoom"], 14, 0, 15.5, ["get", "render_height"]]
+      fill-extrusion-base:
+        ["interpolate", ["linear"], ["zoom"], 14, 0, 15.5, ["get", "render_min_height"]]
+      fill-extrusion-opacity: 0.75

@@ -1,0 +1,21 @@
+---
+title: Center the map on a clicked symbol
+description: The MapLibre center-on-click example as a click interaction
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/center-the-map-on-a-clicked-symbol.yaml?raw';
+
+Replicates the MapLibre example [Center the map on a clicked symbol](https://maplibre.org/maplibre-gl-js/docs/examples/center-the-map-on-a-clicked-symbol/).
+
+<LiveMap src="/configs/gallery/center-the-map-on-a-clicked-symbol.yaml" height="460px" caption="Click an island to center and zoom to it" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="center-the-map-on-a-clicked-symbol.yaml" />
+
+## What to notice
+
+- `click.zoomToFeature` fits the clicked feature's own bounds — for a point that centers it; `maxZoom` caps the flight.
+- `click.flyTo` covers the fixed-destination variant.

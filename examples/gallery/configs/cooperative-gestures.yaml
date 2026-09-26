@@ -1,0 +1,8 @@
+# Hermetic twin of docs/public/configs/gallery/cooperative-gestures.yaml (local basemap).
+type: map
+id: cooperative-gestures
+config:
+  center: [-122.4194, 37.7749]
+  zoom: 12
+  cooperativeGestures: true
+  mapStyle: "/examples/verification/configs/local-style.json"

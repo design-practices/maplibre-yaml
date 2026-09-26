@@ -1,0 +1,20 @@
+---
+title: Cooperative gestures
+description: The MapLibre cooperative-gestures example as one config flag
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/cooperative-gestures.yaml?raw';
+
+Replicates the MapLibre example [Cooperative gestures](https://maplibre.org/maplibre-gl-js/docs/examples/cooperative-gestures/): the map asks for Ctrl/Cmd before hijacking your scroll.
+
+<LiveMap src="/configs/gallery/cooperative-gestures.yaml" height="420px" caption="Scroll without the modifier key — the page scrolls, not the map" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="cooperative-gestures.yaml" />
+
+## What to notice
+
+- `config.cooperativeGestures: true` is a MapLibre constructor option riding the open `config:` passthrough — any MapOptions value works there.

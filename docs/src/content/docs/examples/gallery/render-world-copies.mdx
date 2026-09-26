@@ -1,0 +1,20 @@
+---
+title: Render world copies
+description: The MapLibre world-copies example as one config flag
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/render-world-copies.yaml?raw';
+
+Replicates the MapLibre example [Render world copies](https://maplibre.org/maplibre-gl-js/docs/examples/render-world-copies/).
+
+<LiveMap src="/configs/gallery/render-world-copies.yaml" height="420px" caption="Pan west or east — there is exactly one world" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="render-world-copies.yaml" />
+
+## What to notice
+
+- `config.renderWorldCopies: false` renders a single world instead of tiling copies across the antimeridian.
