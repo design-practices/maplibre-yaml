@@ -1,0 +1,21 @@
+---
+title: Extrude polygons for 3D indoor mapping
+description: The MapLibre 3D indoor-mapping example as a data-driven fill-extrusion layer
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/extrude-polygons-for-3d-indoor-mapping.yaml?raw';
+
+Replicates the MapLibre example [Extrude polygons for 3D indoor mapping](https://maplibre.org/maplibre-gl-js/docs/examples/extrude-polygons-for-3d-indoor-mapping/): a 3D floor plan where each room's height, base, and color come from its own feature properties.
+
+<LiveMap src="/configs/gallery/extrude-polygons-for-3d-indoor-mapping.yaml" height="500px" caption="Drag with right-click (or Ctrl) to orbit the model" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="extrude-polygons-for-3d-indoor-mapping.yaml" />
+
+## What to notice
+
+- `fill-extrusion-height`, `-base`, and `-color` each read straight from feature properties with `["get", ...]` — the geometry file carries the building, the layer carries nothing but the mapping.
+- The initial 3D perspective is just `config.pitch` and `config.bearing`.

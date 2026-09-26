@@ -1,0 +1,9 @@
+# Hermetic twin of docs/public/configs/gallery/display-a-map.yaml.
+# Same document shape; the basemap is the local source-less style so the
+# browser suite never leaves localhost (see e2e/server.mjs).
+type: map
+id: display-a-map
+config:
+  center: [0, 20]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"

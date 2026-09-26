@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/draw-geojson-points/
+# The `locations:` sugar stands in for the hand-built FeatureCollection<Point>.
+type: map
+id: draw-geojson-points
+config:
+  center: [0, 20]
+  zoom: 1
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      locations:
+        - { coordinates: [-0.1276, 51.5072], name: London }
+        - { coordinates: [-74.006, 40.7128], name: New York }
+        - { coordinates: [139.6917, 35.6895], name: Tokyo }
+        - { coordinates: [151.2093, -33.8688], name: Sydney }
+        - { coordinates: [36.8219, -1.2921], name: Nairobi }
+        - { coordinates: [-46.6333, -23.5505], name: "São Paulo" }
+        - { coordinates: [-99.1332, 19.4326], name: "Mexico City" }
+        - { coordinates: [77.209, 28.6139], name: Delhi }
+    paint:
+      circle-radius: 6
+      circle-color: "#b42222"
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"

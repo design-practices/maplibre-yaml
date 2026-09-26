@@ -1,0 +1,22 @@
+---
+title: Create and style clusters
+description: The MapLibre "Create and style clusters" example as declarative source config
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/create-and-style-clusters.yaml?raw';
+
+Replicates the MapLibre example [Create and style clusters](https://maplibre.org/maplibre-gl-js/docs/examples/create-and-style-clusters/) — the same USGS earthquake feed and the same three-layer treatment. The upstream version also registers a click handler that calls `getClusterExpansionZoom`; here `zoomToFeature` covers the click-to-zoom gesture declaratively.
+
+<LiveMap src="/configs/gallery/create-and-style-clusters.yaml" height="500px" caption="Click a cluster to zoom in; click a point for its magnitude" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="create-and-style-clusters.yaml" />
+
+## What to notice
+
+- Clustering is entirely source configuration (`cluster`, `clusterMaxZoom`, `clusterRadius`) — the block-level `sources:` record lets three layers share one fetch.
+- The `step` expressions on color and radius are the style-spec arrays verbatim.
+- `filter: ["has", "point_count"]` vs `["!", ["has", "point_count"]]` splits clusters from single points, exactly as upstream.

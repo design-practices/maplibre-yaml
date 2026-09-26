@@ -1,0 +1,21 @@
+---
+title: Add a GeoJSON polygon
+description: The MapLibre "Add a GeoJSON polygon" example, using the region sugar
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-geojson-polygon.yaml?raw';
+
+Replicates the MapLibre example [Add a GeoJSON polygon](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-geojson-polygon/) — the classic Maine polygon, authored with the `region:` sugar.
+
+<LiveMap src="/configs/gallery/add-a-geojson-polygon.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-geojson-polygon.yaml" />
+
+## What to notice
+
+- `region.coordinates` is an array of linear rings, exactly as in GeoJSON `Polygon` — add a second ring to cut a hole.
+- The sugar node accepts only `coordinates`, `name`, and `description`; anything else is a parse error, so styling stays on the layer where it belongs.

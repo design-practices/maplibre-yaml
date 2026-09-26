@@ -1,0 +1,22 @@
+---
+title: Display a popup on click
+description: The MapLibre "Display a popup on click" example as one interactive block
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-popup-on-click.yaml?raw';
+
+Replicates the MapLibre example [Display a popup on click](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-click/). The upstream version wires `map.on('click')`, `map.on('mouseenter')`, `map.on('mouseleave')`, and builds popup HTML by hand; here that is one `interactive:` block.
+
+<LiveMap src="/configs/gallery/display-a-popup-on-click.yaml" height="460px" caption="Click a point to open its popup" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-popup-on-click.yaml" />
+
+## What to notice
+
+- `popup:` content is a structured list of tag blocks, not an HTML string — every value is escaped and tags are checked against an allowlist, so untrusted feature properties can't inject markup.
+- `hover.cursor: pointer` replaces the two mouse-event handlers from the original.
+- `property:` items read from the clicked feature; mix them with literal `str:` items freely.

@@ -1,0 +1,44 @@
+# Hermetic twin of docs/public/configs/gallery/extrude-polygons-for-3d-indoor-mapping.yaml
+# (local basemap; two inline rooms instead of the remote floor-plan file —
+# the data-driven paint mapping is identical).
+type: map
+id: extrude-polygons-for-3d-indoor-mapping
+config:
+  center: [-87.61694, 41.86625]
+  zoom: 15.99
+  pitch: 40
+  bearing: 20
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: room-extrusion
+    type: fill-extrusion
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: { color: "#e63946", height: 30, base_height: 0 }
+            geometry:
+              type: Polygon
+              coordinates:
+                - - [-87.6175, 41.8663]
+                  - [-87.6168, 41.8663]
+                  - [-87.6168, 41.8659]
+                  - [-87.6175, 41.8659]
+                  - [-87.6175, 41.8663]
+          - type: Feature
+            properties: { color: "#457b9d", height: 50, base_height: 30 }
+            geometry:
+              type: Polygon
+              coordinates:
+                - - [-87.6167, 41.8666]
+                  - [-87.616, 41.8666]
+                  - [-87.616, 41.8662]
+                  - [-87.6167, 41.8662]
+                  - [-87.6167, 41.8666]
+    paint:
+      fill-extrusion-color: ["get", "color"]
+      fill-extrusion-height: ["get", "height"]
+      fill-extrusion-base: ["get", "base_height"]
+      fill-extrusion-opacity: 0.5

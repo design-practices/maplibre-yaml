@@ -1,0 +1,21 @@
+---
+title: Draw GeoJSON points
+description: The MapLibre "Draw GeoJSON points" example, using the locations sugar
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/draw-geojson-points.yaml?raw';
+
+Replicates the MapLibre example [Draw GeoJSON points](https://maplibre.org/maplibre-gl-js/docs/examples/draw-geojson-points/). The `locations:` sugar turns a list of named coordinates into a `FeatureCollection<Point>`.
+
+<LiveMap src="/configs/gallery/draw-geojson-points.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="draw-geojson-points.yaml" />
+
+## What to notice
+
+- Each `locations` item's `name`/`description` become feature properties — ready for popups, labels, or data-driven styling.
+- Swap the layer `type` to `heatmap` or add `cluster: true` to the source and the same data drives the other point treatments in this gallery.
