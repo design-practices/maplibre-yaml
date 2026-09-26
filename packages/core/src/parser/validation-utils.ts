@@ -23,6 +23,7 @@ import type { Document, LineCounter } from "yaml";
 import { isMap } from "yaml";
 import { ExpressionSchema } from "../schemas/base.schema";
 import { GeoJSONSchema } from "../schemas/geojson.schema";
+import { SPEC_PAINT_KEYS, SPEC_LAYOUT_KEYS } from "./spec-keys.generated";
 
 /**
  * A non-fatal validation finding surfaced alongside errors.
@@ -496,13 +497,32 @@ function walk(
       // v1-lenient GeoJSON check (ml-ldv): warn on malformed inline data.
       checkGeoJSONData(value, shape, path, ctx);
 
+      // Inside a paint:/layout: object, the curated zod shape is a typed
+      // subset of the style spec, not its boundary. A key the CURRENT spec
+      // defines rides .passthrough() to MapLibre and must not read as
+      // "unknown" — strict validation promoted that warning to an error, so
+      // correct documents using newer spec keys failed CI (ml-chh.11). The
+      // generated sets are the spec's actual key inventory; typos still
+      // warn, now hinting against the full spec pool.
+      const parentKey = path[path.length - 1];
+      const specKeys =
+        parentKey === "paint"
+          ? SPEC_PAINT_KEYS
+          : parentKey === "layout"
+            ? SPEC_LAYOUT_KEYS
+            : null;
+
       for (const key of Object.keys(value)) {
         if (key.startsWith("x-")) continue; // extension escape hatch
         const fieldSchema = shape[key];
         if (fieldSchema) {
           walk(value[key], fieldSchema, [...path, key], ctx);
         } else if (!open) {
-          const hint = suggest(key, knownKeys);
+          if (specKeys?.has(key)) continue; // real spec key on passthrough
+          const hint = suggest(
+            key,
+            specKeys ? [...knownKeys, ...specKeys] : knownKeys
+          );
           const pos = positionForKey(ctx.doc, ctx.lineCounter, path, key);
           ctx.warnings.push({
             path: [...path, key].join("."),
