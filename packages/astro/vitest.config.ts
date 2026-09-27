@@ -1,10 +1,17 @@
 /**
  * @file Vitest configuration for Astro package tests
+ *
+ * @remarks
+ * Routed through Astro's `getViteConfig` so `.astro` components compile
+ * inside vitest — this is what lets the Container-API behavioral tests
+ * (tests/components/container-render.test.ts, ml-qxt) actually render
+ * `Map`/`FullPageMap`/`Scrollytelling`/`Chapter` instead of stubbing their
+ * prop types. Plain `defineConfig` cannot load `.astro` files.
  */
 
-import { defineConfig } from "vitest/config";
+import { getViteConfig } from "astro/config";
 
-export default defineConfig({
+export default getViteConfig({
   test: {
     globals: true,
     environment: "node",
