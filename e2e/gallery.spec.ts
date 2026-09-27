@@ -15,6 +15,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { meetsVersion, STATE_RUNTIME_FLOOR } from "../packages/core/src/capabilities";
 
 /**
  * The maplibre-gl version the e2e vendor serves (root devDependency — the
@@ -25,10 +26,13 @@ const VENDOR_MAPLIBRE_VERSION: string = JSON.parse(
   readFileSync(join(process.cwd(), "node_modules/maplibre-gl/package.json"), "utf8")
 ).version;
 
-/** True when the vendor supports `global-state` expressions (>= 5.6). */
+/**
+ * True when the vendor supports `global-state` expressions. Delegates to
+ * core's own floor + comparator so the gate can never drift from the
+ * runtime capability the library itself enforces.
+ */
 function vendorHasGlobalState(): boolean {
-  const [major = 0, minor = 0] = VENDOR_MAPLIBRE_VERSION.split(".").map(Number);
-  return major > 5 || (major === 5 && minor >= 6);
+  return meetsVersion(VENDOR_MAPLIBRE_VERSION, STATE_RUNTIME_FLOOR);
 }
 
 /** Fail the test on any page error or off-origin request (hermeticity). */

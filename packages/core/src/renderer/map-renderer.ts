@@ -159,9 +159,15 @@ export class MapRenderer {
     // each major reads the one it knows and ignores the other — so
     // `preserveDrawingBuffer: true` keeps working across the peer range
     // instead of silently dying on v5 (U1 breakpoint audit).
-    const contextAttributes: Record<string, unknown> = {};
+    // Seed from an author-supplied canvasContextAttributes (config keys ride
+    // the passthrough), so the flat keys layer over it instead of clobbering.
+    const authorAttributes = (config as Record<string, unknown>)['canvasContextAttributes'];
+    const contextAttributes: Record<string, unknown> =
+      authorAttributes && typeof authorAttributes === 'object'
+        ? { ...(authorAttributes as Record<string, unknown>) }
+        : {};
     for (const key of ['antialias', 'preserveDrawingBuffer', 'failIfMajorPerformanceCaveat'] as const) {
-      const value = (config as Record<string, unknown>)[key];
+      const value = config[key];
       if (value !== undefined) contextAttributes[key] = value;
     }
 
@@ -242,11 +248,17 @@ export class MapRenderer {
         }).setGlobalStateProperty;
         if (typeof setState === 'function') {
           for (const [key, entry] of Object.entries(options.state)) {
-            const value =
-              entry && typeof entry === 'object' && 'default' in (entry as object)
-                ? (entry as { default?: unknown }).default
-                : entry;
-            if (value !== undefined) setState.call(this.map, key, value);
+            // Spec shape is { default: value }. An object without `default`
+            // declares nothing — skip it rather than hand the object itself
+            // to the runtime as the state value. Bare (non-object) entries
+            // are accepted as raw values for programmatic callers.
+            if (entry && typeof entry === 'object') {
+              if (!('default' in entry)) continue;
+              const value = (entry as { default?: unknown }).default;
+              if (value !== undefined) setState.call(this.map, key, value);
+            } else if (entry !== undefined) {
+              setState.call(this.map, key, entry);
+            }
           }
         } else {
           console.warn(

@@ -151,6 +151,21 @@ describe("MapRenderer", () => {
       });
     });
 
+    it("layers flat keys over an author-supplied canvasContextAttributes instead of clobbering it", () => {
+      renderer = new MapRenderer(container, {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+        canvasContextAttributes: { powerPreference: "high-performance" },
+        antialias: true,
+      } as any);
+
+      expect((renderer.getMap() as any).ctorOptions.canvasContextAttributes).toEqual({
+        powerPreference: "high-performance",
+        antialias: true,
+      });
+    });
+
     it("passes no canvasContextAttributes when none of the flat keys are set", () => {
       renderer = new MapRenderer(container, {
         center: [0, 0] as [number, number],
@@ -192,6 +207,32 @@ describe("MapRenderer", () => {
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0]![0]).toContain("setGlobalStateProperty");
       warn.mockRestore();
+    });
+
+    it("skips an object entry without `default` instead of passing the object through", () => {
+      renderer = new MapRenderer(container, config, [], {
+        state: { minPop: {}, scenario: { default: "built" } },
+      });
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+
+      map.emit("load");
+
+      // `{}` declares nothing — it must never become the state value.
+      expect(map.setGlobalStateProperty).toHaveBeenCalledTimes(1);
+      expect(map.setGlobalStateProperty).toHaveBeenCalledWith("scenario", "built");
+    });
+
+    it("accepts a bare non-object entry as a raw value (programmatic callers)", () => {
+      renderer = new MapRenderer(container, config, [], {
+        state: { minPop: 5 },
+      });
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+
+      map.emit("load");
+
+      expect(map.setGlobalStateProperty).toHaveBeenCalledWith("minPop", 5);
     });
 
     it("touches nothing when no state block was declared", () => {
