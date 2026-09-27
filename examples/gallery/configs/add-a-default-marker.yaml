@@ -1,0 +1,9 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-default-marker.yaml (local basemap).
+type: map
+id: add-a-default-marker
+config:
+  center: [12.55, 55.665]
+  zoom: 8
+  mapStyle: "/examples/verification/configs/local-style.json"
+markers:
+  - at: [12.55, 55.665]

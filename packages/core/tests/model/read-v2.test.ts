@@ -521,6 +521,73 @@ style:
   });
 });
 
+describe("AE2 — markers (U5)", () => {
+  it("v1 root markers and v2 runtime.markers normalize deep-equal", () => {
+    const v1 = model(`
+type: map
+id: pins
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: ${BASEMAP}
+markers:
+  - at: [1, 2]
+    color: "#e63946"
+    size: 1.5
+  - at: [3, 4]
+    popup:
+      - h3:
+          - str: Hi
+`);
+    const v2 = model(`
+version: 2
+type: map
+id: pins
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 2
+runtime:
+  markers:
+    - at: [1, 2]
+      color: "#e63946"
+      size: 1.5
+    - at: [3, 4]
+      popup:
+        - h3:
+            - str: Hi
+`);
+    expect(v2.runtime.markers).toHaveLength(2);
+    expect(v2).toEqual(v1);
+  });
+
+  it("empty markers lists normalize away in both formats (zero markers lose nothing)", () => {
+    const v1 = model(`
+type: map
+id: pins
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: ${BASEMAP}
+markers: []
+`);
+    const v2 = model(`
+version: 2
+type: map
+id: pins
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 2
+runtime:
+  markers: []
+`);
+    expect(v1.runtime.markers).toBeUndefined();
+    expect(v2.runtime.markers).toBeUndefined();
+    expect(v2).toEqual(v1);
+  });
+});
+
 describe("AE2 round-trip — the emitter sees only the model", () => {
   it("a v2 doc and its v1 twin project to the same style.json", () => {
     const v1 = model(`

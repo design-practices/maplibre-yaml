@@ -268,6 +268,13 @@ describe("round trip — the fidelity proof", () => {
     expect(denormalizeOptions(model)).toEqual({});
   });
 
+  it("carries markers through the runtime half into renderer options (U5)", () => {
+    const markers = [{ at: [1, 2], color: "#e63946" }];
+    const model = normalizeMapBlock(minimalInput({ markers } as never));
+    expect(model.runtime.markers).toEqual(markers);
+    expect(denormalizeOptions(model).markers).toEqual(markers);
+  });
+
   it("carries the state block into renderer options (global-state defaults, U1)", () => {
     const state = { minPop: { default: 5 } };
     const model = normalizeMapBlock(minimalInput({ state } as never));

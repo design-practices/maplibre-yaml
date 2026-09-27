@@ -18,7 +18,10 @@
  * The prefixing rule (KTD3): the basemap keeps the `default` sprite id;
  * document-generated assets live under the fixed {@link DOCUMENT_SPRITE_ID}
  * id, and lowered layers reference icons as `mlym:<name>` — refs always
- * resolve and never shadow basemap icons.
+ * resolve and never shadow basemap icons. The same `mlym:` prefix extends to
+ * feature-property KEYS a lowering synthesizes (e.g. `mlym:icon` on the
+ * markers source): synthesized properties are namespaced so they can never
+ * collide with author data, a rule every future lowering inherits.
  */
 
 import type { EmitResult } from "./project";
@@ -140,6 +143,51 @@ export function hatchTileSvg(options: HatchTileOptions = {}): EmitAsset {
   };
 }
 
+/** Options for {@link pinSvg}. */
+export interface PinOptions {
+  /** Pin fill color. Defaults to MapLibre's default-marker blue. */
+  color?: string;
+  /** Scale multiplier over the default 27×41 pin. */
+  size?: number;
+}
+
+/** MapLibre's default-marker blue, so an unstyled pin ejects looking native. */
+export const DEFAULT_PIN_COLOR = "#3FB1CE";
+/** The default pin's CSS-pixel footprint (matches MapLibre's own marker). */
+export const DEFAULT_PIN_WIDTH = 27;
+export const DEFAULT_PIN_HEIGHT = 41;
+
+/**
+ * The default marker pin as a deterministic SVG asset (U5) — the raster half
+ * of the markers fallback: a live `maplibregl.Marker` lowers to a symbol
+ * layer whose icon is this teardrop, shaped and colored like MapLibre's own
+ * default marker so the ejected map reads the same.
+ */
+export function pinSvg(options: PinOptions = {}): EmitAsset {
+  // Schema-validated colors can't carry markup, but this is the last line of
+  // defense for programmatic callers: strip anything that could break out of
+  // the fill attribute.
+  const color = (options.color ?? DEFAULT_PIN_COLOR).replace(/["'<>&]/g, "");
+  const size = options.size ?? 1;
+  const width = Math.round(DEFAULT_PIN_WIDTH * size);
+  const height = Math.round(DEFAULT_PIN_HEIGHT * size);
+
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
+    `viewBox="0 0 27 41">` +
+    `<path fill="${color}" stroke="#ffffff" stroke-width="1.5" ` +
+    `d="M13.5 0.75C6.6 0.75 1 6.35 1 13.25c0 9.5 12.5 26.5 12.5 26.5S26 22.75 26 13.25C26 6.35 20.4 0.75 13.5 0.75z"/>` +
+    `<circle cx="13.5" cy="13.25" r="4.5" fill="#ffffff" opacity="0.9"/>` +
+    `</svg>`;
+
+  return {
+    name: assetName("pin", [color.replace(/^#/, ""), size], svg),
+    svg,
+    width,
+    height,
+  };
+}
+
 /** One sprite-index entry, per the MapLibre sprite index format. */
 export interface SpriteIndexEntry {
   x: number;
@@ -160,10 +208,18 @@ export interface SpriteSheetLayout {
   height: number;
 }
 
+/** Sheet-pixel width at which shelves wrap — comfortably under every
+ * WebGL max-texture floor (4096) even at @2x, while keeping row packing
+ * deterministic. Markers made asset counts author-driven (one pin per
+ * distinct color/size), so unbounded single-row sheets are a real failure
+ * mode, not a hypothetical. */
+const SHEET_WRAP_WIDTH = 1024;
+
 /**
- * Deterministic shelf layout: assets sorted by name, packed left-to-right on
- * one shelf. Deterministic beats optimal here — sheets are small (pins,
- * tiles) and a stable layout keeps emitted artifacts diffable.
+ * Deterministic shelf layout: assets sorted by name, packed left-to-right,
+ * wrapping to a new shelf at {@link SHEET_WRAP_WIDTH} sheet pixels.
+ * Deterministic beats optimal here — a stable layout keeps emitted
+ * artifacts diffable.
  */
 export function buildSpriteIndex(
   assets: readonly EmitAsset[],
@@ -174,17 +230,25 @@ export function buildSpriteIndex(
   const placements: { asset: EmitAsset; x: number; y: number }[] = [];
 
   let x = 0;
-  let height = 0;
+  let y = 0;
+  let shelfHeight = 0;
+  let sheetWidth = 0;
   for (const asset of sorted) {
     const w = asset.width * pixelRatio;
     const h = asset.height * pixelRatio;
-    index[asset.name] = { x, y: 0, width: w, height: h, pixelRatio };
-    placements.push({ asset, x, y: 0 });
+    if (x > 0 && x + w > SHEET_WRAP_WIDTH) {
+      y += shelfHeight;
+      x = 0;
+      shelfHeight = 0;
+    }
+    index[asset.name] = { x, y, width: w, height: h, pixelRatio };
+    placements.push({ asset, x, y });
     x += w;
-    if (h > height) height = h;
+    if (h > shelfHeight) shelfHeight = h;
+    if (x > sheetWidth) sheetWidth = x;
   }
 
-  return { index, placements, width: x, height };
+  return { index, placements, width: sheetWidth, height: y + shelfHeight };
 }
 
 /**

@@ -10,7 +10,9 @@ import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, 
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
 import { EventHandler, type EventHandlerCallbacks } from './event-handler';
 import { LegendBuilder } from './legend-builder';
+import type { MarkerConfig } from '../schemas/map.schema';
 import { ControlsManager } from './controls-manager';
+import { MarkersManager } from './markers-manager';
 import type { CapabilityPolicy } from "../capabilities.js";
 import {
   denormalizeConfig,
@@ -74,6 +76,8 @@ export interface MapRendererOptions {
    * `mapStyle` + addLayer, so the block cannot ride in on the style object.
    */
   state?: Record<string, unknown>;
+  /** Standalone `markers:` — DOM pins added on load, removed on destroy. */
+  markers?: MarkerConfig[];
 }
 
 /**
@@ -88,6 +92,9 @@ export interface MapRendererEvents {
   'layer:data-error': { layerId: string; error: Error };
   'layer:click': { layerId: string; feature: any; lngLat: LngLat };
   'layer:hover': { layerId: string; feature: any; lngLat: LngLat };
+  'markers:added': { count: number };
+  'marker:click': { index: number; at: [number, number] };
+  'marker:icon-error': { index: number; icon: string };
 }
 
 /**
@@ -98,6 +105,7 @@ export class MapRenderer {
   private layerManager: LayerManager;
   private eventHandler: EventHandler;
   private legendBuilder: LegendBuilder;
+  private markersManager: MarkersManager | null = null;
   private controlsManager: ControlsManager;
   private eventListeners: Map<string, Set<Function>>;
   private isLoaded: boolean;
@@ -288,6 +296,18 @@ export class MapRenderer {
         this.buildLegend(this.createLegendContainer(options.legend), layers, options.legend);
       }
 
+      // Standalone markers: DOM pins with the document's popup content run
+      // through the same trust gate as every popup sink (U5).
+      if (options.markers && options.markers.length > 0) {
+        this.markersManager = new MarkersManager(this.map, options.capabilities, {
+          onMarkersAdded: (count) => this.emit('markers:added', { count }),
+          onMarkerClick: (index, at) => this.emit('marker:click', { index, at }),
+          onMarkerIconError: (index, icon) =>
+            this.emit('marker:icon-error', { index, icon }),
+        });
+        this.markersManager.add(options.markers as MarkerConfig[]);
+      }
+
       // Add layers
       Promise.all(layers.map((layer) => this.addLayer(layer)))
         .then(() => {
@@ -442,6 +462,8 @@ export class MapRenderer {
   destroy(): void {
     this.eventHandler.destroy();
     this.layerManager.destroy();
+    this.markersManager?.destroy();
+    this.markersManager = null;
     this.controlsManager.removeAllControls();
     this.autoLegendContainer?.remove();
     this.autoLegendContainer = null;

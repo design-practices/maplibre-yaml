@@ -86,6 +86,12 @@ export {
   contentHash8,
   assetName,
   hatchTileSvg,
+  pinSvg,
+  lowerMarkers,
+  buildMarkersLowering,
+  MARKERS_SOURCE_ID,
+  MARKERS_LAYER_ID,
+  DEFAULT_PIN_COLOR,
   buildSpriteIndex,
   attachSpriteAssets,
   dedupeAssets,
@@ -94,6 +100,9 @@ export {
 export type {
   EmitAsset,
   HatchTileOptions,
+  PinOptions,
+  LoweredMarkers,
+  MarkersLowering,
   SpriteIndexEntry,
   SpriteSheetLayout,
 } from "./emitter";

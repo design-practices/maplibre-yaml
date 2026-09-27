@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-a-default-marker/
+# The whole new-Marker-addTo dance is one markers: entry.
+type: map
+id: add-a-default-marker
+config:
+  center: [12.55, 55.665]
+  zoom: 8
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+markers:
+  - at: [12.55, 55.665]

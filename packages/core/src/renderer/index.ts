@@ -12,6 +12,9 @@ export type { LayerManagerCallbacks } from "./layer-manager";
 export { EventHandler } from "./event-handler";
 export type { EventHandlerCallbacks } from "./event-handler";
 
+export { MarkersManager } from "./markers-manager";
+export type { MarkersManagerCallbacks } from "./markers-manager";
+
 export { PopupBuilder } from "./popup-builder";
 export { LegendBuilder } from "./legend-builder";
 export { ControlsManager } from "./controls-manager";

@@ -2672,6 +2672,53 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                 "additionalProperties": true
               },
               "description": "Presentation metadata for \`state\` keys — label, type, range"
+            },
+            "markers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "at": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": [
+                      {
+                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/0"
+                      },
+                      {
+                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
+                      }
+                    ],
+                    "description": "Marker position [lng, lat]"
+                  },
+                  "color": {
+                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
+                    "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
+                  },
+                  "size": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Scale multiplier for the pin (1 = MapLibre's default size)"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "description": "Image URL replacing the default pin"
+                  },
+                  "popup": {
+                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/popup",
+                    "description": "Popup opened by clicking the marker (same structured content as layer popups)"
+                  }
+                },
+                "required": [
+                  "at"
+                ],
+                "additionalProperties": false,
+                "patternProperties": {
+                  "^x-": {}
+                }
+              },
+              "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
             }
           },
           "required": [
@@ -3287,6 +3334,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "parameters": {
                               "$ref": "#/$defs/any/oneOf/0/properties/parameters",
                               "description": "Presentation metadata for \`state\` keys — label, type, range"
+                            },
+                            "markers": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/markers",
+                              "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
                             }
                           },
                           "required": [
@@ -6061,6 +6112,53 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
             "additionalProperties": true
           },
           "description": "Presentation metadata for \`state\` keys — label, type, range"
+        },
+        "markers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": [
+                  {
+                    "$ref": "#/$defs/map/properties/config/properties/center/items/0"
+                  },
+                  {
+                    "$ref": "#/$defs/map/properties/config/properties/center/items/1"
+                  }
+                ],
+                "description": "Marker position [lng, lat]"
+              },
+              "color": {
+                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
+                "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
+              },
+              "size": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Scale multiplier for the pin (1 = MapLibre's default size)"
+              },
+              "icon": {
+                "type": "string",
+                "description": "Image URL replacing the default pin"
+              },
+              "popup": {
+                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/popup",
+                "description": "Popup opened by clicking the marker (same structured content as layer popups)"
+              }
+            },
+            "required": [
+              "at"
+            ],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          },
+          "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
         }
       },
       "required": [
@@ -9001,6 +9099,53 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                             "additionalProperties": true
                           },
                           "description": "Presentation metadata for \`state\` keys — label, type, range"
+                        },
+                        "markers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "at": {
+                                "type": "array",
+                                "minItems": 2,
+                                "maxItems": 2,
+                                "items": [
+                                  {
+                                    "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/0"
+                                  },
+                                  {
+                                    "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
+                                  }
+                                ],
+                                "description": "Marker position [lng, lat]"
+                              },
+                              "color": {
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
+                                "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
+                              },
+                              "size": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "description": "Scale multiplier for the pin (1 = MapLibre's default size)"
+                              },
+                              "icon": {
+                                "type": "string",
+                                "description": "Image URL replacing the default pin"
+                              },
+                              "popup": {
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/interactive/properties/hover/properties/popup",
+                                "description": "Popup opened by clicking the marker (same structured content as layer popups)"
+                              }
+                            },
+                            "required": [
+                              "at"
+                            ],
+                            "additionalProperties": false,
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          },
+                          "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
                         }
                       },
                       "required": [
@@ -9067,6 +9212,10 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "parameters": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/parameters",
                           "description": "Presentation metadata for \`state\` keys — label, type, range"
+                        },
+                        "markers": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/markers",
+                          "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
                         }
                       },
                       "required": [

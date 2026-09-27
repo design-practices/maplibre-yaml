@@ -119,6 +119,34 @@ describe("dedupeAssets / name collisions", () => {
     expect(layout.placements).toHaveLength(1);
     expect(layout.width).toBe(asset.width);
   });
+
+  it("buildSpriteIndex wraps to new shelves instead of growing one endless row", () => {
+    // Marker documents make asset counts author-driven; without wrapping, a
+    // hundred distinct pins would exceed WebGL texture limits at @2x.
+    const assets = Array.from({ length: 100 }, (_, i) =>
+      hatchTileSvg({ angle: i, size: 64 })
+    );
+    const layout = buildSpriteIndex(assets, 2);
+    expect(layout.width).toBeLessThanOrEqual(1024);
+    expect(layout.height).toBeGreaterThan(128); // more than one shelf
+    // Deterministic and non-overlapping: every entry sits inside the sheet
+    // and no two entries intersect.
+    const entries = Object.values(layout.index);
+    for (const e of entries) {
+      expect(e.x + e.width).toBeLessThanOrEqual(layout.width);
+      expect(e.y + e.height).toBeLessThanOrEqual(layout.height);
+    }
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        const a = entries[i]!;
+        const b = entries[j]!;
+        const overlap =
+          a.x < b.x + b.width && b.x < a.x + a.width &&
+          a.y < b.y + b.height && b.y < a.y + a.height;
+        expect(overlap).toBe(false);
+      }
+    }
+  });
 });
 
 describe("assets survive the runtime gate", () => {

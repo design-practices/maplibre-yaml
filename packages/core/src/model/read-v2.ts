@@ -174,6 +174,10 @@ export function readV2Block(doc: MapBlockV2): MapModel {
     model.runtime.parameters = docParameters as Record<string, unknown>;
   if (runtime["controls"] !== undefined)
     model.runtime.controls = runtime["controls"] as ControlsConfig;
+  // Empty lists normalize away (v1 parity — zero markers lose nothing on emit).
+  const v2Markers = runtime["markers"] as MapModel["runtime"]["markers"];
+  if (v2Markers !== undefined && v2Markers.length > 0)
+    model.runtime.markers = v2Markers;
   if (runtime["legend"] !== undefined)
     model.runtime.legend = runtime["legend"] as LegendConfig;
   if (runtime["container"] !== undefined)

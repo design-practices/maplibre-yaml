@@ -80,6 +80,7 @@ describe("closed-world exhaustiveness (R4)", () => {
       "legend",
       "container",
       "parameters",
+      "markers",
       "state",
       "x-*",
     ]) {

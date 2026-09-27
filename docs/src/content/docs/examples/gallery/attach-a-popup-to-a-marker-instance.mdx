@@ -1,0 +1,21 @@
+---
+title: Attach a popup to a marker instance
+description: "The MapLibre marker-popup example — structured popup content on a marker"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/attach-a-popup-to-a-marker-instance.yaml?raw';
+
+Replicates the MapLibre example [Attach a popup to a marker instance](https://maplibre.org/maplibre-gl-js/docs/examples/attach-a-popup-to-a-marker-instance/). The upstream `marker.setPopup(new Popup().setHTML(...))` becomes a `popup:` block on the marker — the same trust-gated structured content as layer popups, so untrusted documents can't inject markup.
+
+<LiveMap src="/configs/gallery/attach-a-popup-to-a-marker-instance.yaml" height="440px" caption="Click the pin to toggle its popup" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="attach-a-popup-to-a-marker-instance.yaml" />
+
+## What to notice
+
+- Marker popups use the identical content vocabulary as `click.popup` on layers — tags are allowlisted, values escaped.
+- Clicking the marker toggles the popup, MapLibre's built-in behavior.

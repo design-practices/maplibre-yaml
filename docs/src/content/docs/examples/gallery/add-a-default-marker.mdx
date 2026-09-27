@@ -1,0 +1,21 @@
+---
+title: Add a default marker
+description: "The MapLibre default-marker example as one markers: entry"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-default-marker.yaml?raw';
+
+Replicates the MapLibre example [Add a default marker](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-default-marker/). The upstream `new maplibregl.Marker().setLngLat(...).addTo(map)` is one `markers:` entry — and unlike a layer, it's a real DOM marker, exactly what the imperative API creates.
+
+<LiveMap src="/configs/gallery/add-a-default-marker.yaml" height="440px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-default-marker.yaml" />
+
+## What to notice
+
+- `markers:` entries are DOM markers live; on `mlym emit --with-fallbacks` they lower to a symbol layer with a generated pin sprite (the format's first *ejects-via-fallback* construct — see [Eject Classes](/guides/eject-classes/)).
+- `--strict` refuses marker documents: a DOM marker and a symbol layer are close, not identical, and strict means nothing visual changes.
