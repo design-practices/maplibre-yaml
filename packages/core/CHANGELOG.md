@@ -1,5 +1,72 @@
 # @maplibre-yaml/core
 
+## 0.6.0-alpha.1
+
+### Minor Changes
+
+- 8e850aa: `emit` is now a hover interaction as well as a click one (ml-fn9). A layer's
+  `hover: { emit: { event, payload } }` dispatches the named host event once per
+  feature _entered_ — per-feature deduped (mirroring `highlight`), driven by
+  `mousemove`, so it fires when the pointer enters a new feature rather than on
+  every pointer move. It shares the exact trust gate and closed-world
+  host-handler resolution as click-emit (one `dispatchEmit` seam), so an untrusted
+  document's `hover.emit` is denied just like `click.emit`, and — like all `emit`
+  — it is inert under `<ml-map>` until the deferred trust-surface follow-up. Hover
+  dedupe needs a feature id; a source without one gets a one-time warning pointing
+  at `generateId`/`promoteId` rather than a per-move firehose.
+
+### Patch Changes
+
+- 8d5c7c3: `background` layers now render under `<ml-map>`. The renderer
+  unconditionally resolved a source for every layer, but background layers
+  are sourceless by spec — so a schema-valid (and correctly emitting)
+  background layer threw during source resolution and took the whole
+  document down with it. Background layers now skip source resolution
+  entirely, and removing one no longer touches any source. Found by the
+  examples-gallery capability census.
+- 25a98cc: Renderer/schema contract audit: schema-valid documents now render or fail
+  loudly, never silently. Four observable changes: (1) legend `collapsed:`
+  is implemented — the legend renders as a native `<details>` with the title
+  as its toggle, starting closed when `collapsed: true` (the field previously
+  did nothing; an untitled legend gets a "Legend" summary). (2) Schema-accepted
+  fields the engine does not implement yet (scrollytelling `spinGlobe`,
+  `rotateAnimation`, `callback`, and the `fitBounds`/`custom`/`flyTo`/`easeTo`
+  chapter actions) now emit `kind: "unimplemented"` warnings — visible in
+  `mlym validate` output but never promoted to errors, since the document is
+  not wrong. (3) `<ml-map>` logs render errors to the console in addition to
+  dispatching `ml-map:error`, so a document failure is visible without a
+  listener; a throw during named-source registration is now routed to that
+  error path instead of being swallowed inside MapLibre's load handler.
+  (4) A layer whose source object the renderer cannot resolve (an unresolved
+  `$ref` passed programmatically, or an unknown source shape) throws a clear
+  error naming the layer instead of silently adding nothing.
+- 2545477: Inline and url-fetched GeoJSON layer sources now forward `lineMetrics`,
+  `tolerance`, `buffer`, `maxzoom`, and `attribution` (and the url path also
+  `generateId`/`promoteId`) to MapLibre. The renderer built these source
+  specs from a hand-picked field list, so schema-accepted options were
+  silently dropped — most visibly, `line-gradient` never rendered because its
+  source lost `lineMetrics`. Found by the gallery gradient-line pages.
+- d484c10: Block-level named `sources:` entries with `url:` now actually load under the
+  renderer. Previously the YAML-only `url` key was passed straight through to
+  MapLibre's `addSource` — whose geojson sources take `data`, not `url` — so
+  style validation threw and the _entire_ document render silently aborted:
+  no sources, no layers, an empty basemap. Named url sources now route through
+  the same DataFetcher path as inline layer sources (initial empty data added
+  synchronously so referencing layers can attach, the fetch resolving into
+  `setData`, caching honored, and `layer-data-loading/loaded/error` events
+  fired with the source id as their subject, matching the refresh pipeline).
+  Inline sources and named sources with inline `data:` were unaffected.
+- 0420dd8: Valid style-spec paint/layout keys outside the curated schema shapes no
+  longer produce "unknown key" warnings — and therefore no longer fail
+  `mlym validate --strict` (the CI default). The warning walker now consults
+  key inventories generated from `@maplibre/maplibre-gl-style-spec` (v5-era
+  keys like `hillshade-method`, `text-variable-anchor-offset`, and
+  `visibility` on any layer's `layout` included), so correct documents stop
+  erroring while typos still warn — with did-you-mean hints now drawn from
+  the full spec pool, not just the curated subset. The generated inventory is
+  pinned to the installed spec package by a unit test, so it cannot silently
+  drift again.
+
 ## 0.6.0-alpha.0
 
 ### Minor Changes
