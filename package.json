@@ -33,6 +33,7 @@
     "version": "changeset version",
     "release": "bash scripts/release.sh",
     "verify:serve": "node e2e/server.mjs",
+    "verify:docs-gallery": "node scripts/verify-docs-gallery.mjs",
     "verify:browser": "playwright test",
     "verify:browser:headed": "playwright test --headed"
   },

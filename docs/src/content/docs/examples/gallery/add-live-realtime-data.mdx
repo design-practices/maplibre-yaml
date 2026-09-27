@@ -7,9 +7,9 @@ import LiveMap from '../../../../components/LiveMap.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/add-live-realtime-data.yaml?raw';
 
-Replicates the MapLibre example [Add live realtime data](https://maplibre.org/maplibre-gl-js/docs/examples/add-live-realtime-data/): a point that moves as its remote feed updates. The upstream version hand-rolls `setInterval` + `fetch` + `setData`; here polling is two lines of source config.
+Replicates the MapLibre example [Add live realtime data](https://maplibre.org/maplibre-gl-js/docs/examples/add-live-realtime-data/): a layer that re-fetches its remote feed on an interval — here the USGS live earthquake feed (upstream's wanderdrone endpoint no longer serves CORS headers). The upstream version hand-rolls `setInterval` + `fetch` + `setData`; here polling is two lines of source config.
 
-<LiveMap src="/configs/gallery/add-live-realtime-data.yaml" height="460px" caption="The point jumps every two seconds as the feed updates" />
+<LiveMap src="/configs/gallery/add-live-realtime-data.yaml" height="460px" caption="The layer re-polls the USGS feed every 15 seconds" />
 
 ## The complete document
 

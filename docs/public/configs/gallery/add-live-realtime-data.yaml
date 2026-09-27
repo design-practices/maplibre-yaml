@@ -1,11 +1,13 @@
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
 # Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-live-realtime-data/
 # The upstream version hand-rolls window.setInterval + fetch + setData;
-# here polling is two lines of source config.
+# here polling is two lines of source config. (Upstream polls
+# wanderdrone.appspot.com, which no longer serves CORS headers — this
+# page polls the USGS live earthquake feed instead.)
 type: map
 id: add-live-realtime-data
 config:
-  center: [0, 20]
+  center: [-40, 30]
   zoom: 1
   mapStyle: "https://demotiles.maplibre.org/style.json"
 layers:
@@ -13,9 +15,9 @@ layers:
     type: circle
     source:
       type: geojson
-      url: "https://wanderdrone.appspot.com/"
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
       refresh:
-        refreshInterval: 2000
+        refreshInterval: 15000
         updateStrategy: replace
     paint:
       circle-radius: 10

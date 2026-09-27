@@ -17,4 +17,5 @@ Replicates the MapLibre example [Change the default position for attribution](ht
 
 ## What to notice
 
-- Declaring `controls.attribution` replaces the built-in control; `position` takes any of the four corners, and `compact`/`customAttribution` are available on the same block.
+- Declaring `controls.attribution` replaces the built-in control; `position` takes any of the four corners.
+- `customAttribution` matters here: the replacement control only shows source-contributed attribution text, and if there is none it renders empty — invisible. Give it content when your basemap carries no attribution of its own.
