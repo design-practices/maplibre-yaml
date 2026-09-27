@@ -15,7 +15,21 @@
 
 import { EjectClassRegistry } from "./registry";
 
-/** The default registry every emit path consults. */
+/**
+ * The default registry every emit path consults.
+ *
+ * @remarks
+ * Deliberately a module singleton, unlike `ExtensionRegistry` and
+ * `InteractionRegistry` (which are per-host instances because different
+ * hosts trust different namespaces/interactions). Eject classes are a
+ * property of the FORMAT, not of a host: `layer.interactive` means the same
+ * thing in every process, so per-caller registries would only invite two
+ * copies of the truth. Consumers registering their own constructs (the
+ * chrome/effects tiers do) share the format-wide namespace — core-owned
+ * names are single words or `layer.`/`source.`-prefixed; third parties
+ * should prefix with their package name to stay clear of future core
+ * registrations.
+ */
 export const ejectClasses = new EjectClassRegistry();
 
 // ---------------------------------------------------------------------------
@@ -60,8 +74,8 @@ ejectClasses.register("layer.before", {
 // ---------------------------------------------------------------------------
 
 const LIVE_DATA_ON_EMIT =
-  "Live-data configuration does not compile; the emitted source carries the data " +
-  "present at compile time (or renders empty when there is none — reported as lossy).";
+  "Live-data machinery does not compile; the emitted source carries the data " +
+  "present at compile time.";
 
 for (const key of [
   "source.refresh",

@@ -51,6 +51,22 @@ export async function emitStyle(
   const model = toModel(block as never);
   const projected = applyRuntimeGate(projectStyle(model, mode), policy);
 
+  // projectStyle enforces --strict over its own warnings, but the runtime
+  // gate can ADD lossy ones (state inlined below the target floor). Without
+  // this re-check, `mlym emit --strict --target 4.0.0` on a state-using
+  // document would degrade lossily and exit 0 — strict must mean strict over
+  // the whole pipeline, not the first stage.
+  if (mode === 'strict') {
+    const lossy = projected.warnings.filter((w) => w.kind === 'lossy');
+    if (lossy.length > 0) {
+      throw new EmitError(
+        `Emit failed in strict mode: ${lossy.length} item(s) could not be represented ` +
+          'without changing what the map shows.',
+        projected.warnings,
+      );
+    }
+  }
+
   const basemap = model.style.basemap;
   if (basemap === undefined) {
     return { style: projected.style, warnings: projected.warnings };

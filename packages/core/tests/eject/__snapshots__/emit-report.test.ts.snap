@@ -3,34 +3,67 @@
 exports[`declared-absence reporting > kitchen-sink declared-absence report is stable (snapshot) 1`] = `
 [
   {
+    "construct": "layer.interactive",
+    "ejectClass": "declared-absence",
     "kind": "contract",
     "message": "\`interactive\` — Interactions (popups, hover, highlight) are runtime behavior with no style.json form; the emitted style renders the layer without them. attachInteractions() restores them over an ejected style.",
     "path": "layers.pts.interactive",
   },
   {
+    "construct": "layer.legend",
+    "ejectClass": "declared-absence",
     "kind": "contract",
     "message": "\`legend\` — Legend entries are chrome, not cartography; the emitted style has no legend surface.",
     "path": "layers.pts.legend",
   },
   {
+    "construct": "layer.label",
+    "ejectClass": "declared-absence",
+    "kind": "contract",
+    "message": "\`label\` — Display labels are chrome metadata and are absent from the emitted style.",
+    "path": "layers.pts.label",
+  },
+  {
+    "construct": "layer.toggleable",
+    "ejectClass": "declared-absence",
     "kind": "contract",
     "message": "\`toggleable\` — Toggleability is user-interaction surface; the emitted style carries the layer's authored visibility and no toggle.",
     "path": "layers.pts.toggleable",
   },
   {
+    "construct": "map.options",
+    "ejectClass": "declared-absence",
     "kind": "contract",
-    "message": "Map options (scrollZoom) are constructor-only and have no style-spec equivalent; the emitted style uses MapLibre's defaults.",
+    "message": "Map options (scrollZoom) — MapLibre constructor options are host decisions with no style-spec equivalent; the emitted style uses MapLibre's defaults.",
     "path": "runtime.map",
   },
   {
+    "construct": "parameters",
+    "ejectClass": "declared-absence",
+    "kind": "contract",
+    "message": "\`parameters\` — Parameter presentation metadata (labels, control types) is UI surface; the state values themselves eject via \`state:\` (inlined as defaults below the runtime floor).",
+    "path": "parameters",
+  },
+  {
+    "construct": "controls",
+    "ejectClass": "declared-absence",
     "kind": "contract",
     "message": "\`controls\` — Controls are DOM chrome; the emitted style renders the map with MapLibre's default control set only.",
     "path": "controls",
   },
   {
+    "construct": "legend",
+    "ejectClass": "declared-absence",
     "kind": "contract",
     "message": "\`legend\` — The legend is DOM chrome; the emitted style has no legend surface.",
     "path": "legend",
+  },
+  {
+    "construct": "container",
+    "ejectClass": "declared-absence",
+    "kind": "contract",
+    "message": "\`container\` — Container styling (className, inline style) belongs to the host page, not the style.",
+    "path": "container",
   },
 ]
 `;
