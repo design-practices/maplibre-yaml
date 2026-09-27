@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`declared-absence reporting > kitchen-sink declared-absence report is stable (snapshot) 1`] = `
+[
+  {
+    "kind": "contract",
+    "message": "\`interactive\` — Interactions (popups, hover, highlight) are runtime behavior with no style.json form; the emitted style renders the layer without them. attachInteractions() restores them over an ejected style.",
+    "path": "layers.pts.interactive",
+  },
+  {
+    "kind": "contract",
+    "message": "\`legend\` — Legend entries are chrome, not cartography; the emitted style has no legend surface.",
+    "path": "layers.pts.legend",
+  },
+  {
+    "kind": "contract",
+    "message": "\`toggleable\` — Toggleability is user-interaction surface; the emitted style carries the layer's authored visibility and no toggle.",
+    "path": "layers.pts.toggleable",
+  },
+  {
+    "kind": "contract",
+    "message": "Map options (scrollZoom) are constructor-only and have no style-spec equivalent; the emitted style uses MapLibre's defaults.",
+    "path": "runtime.map",
+  },
+  {
+    "kind": "contract",
+    "message": "\`controls\` — Controls are DOM chrome; the emitted style renders the map with MapLibre's default control set only.",
+    "path": "controls",
+  },
+  {
+    "kind": "contract",
+    "message": "\`legend\` — The legend is DOM chrome; the emitted style has no legend surface.",
+    "path": "legend",
+  },
+]
+`;

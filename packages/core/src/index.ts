@@ -77,6 +77,15 @@ export type {
 
 // Emitter — projects the model's style half to spec-valid style.json
 export { projectStyle, EmitError, mergeBasemap, resolveBasemap, applyRuntimeGate } from "./emitter";
+export {
+  EjectClassRegistry,
+  ejectClasses,
+  type EjectClass,
+  type EjectClassDefinition,
+  type EjectContext,
+  type EjectLowering,
+  type EjectAssetDescriptor,
+} from "./eject";
 export type {
   EmitMode,
   EmitWarning,

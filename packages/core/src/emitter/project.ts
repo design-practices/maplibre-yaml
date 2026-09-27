@@ -25,6 +25,7 @@
  */
 
 import type { MapModel, LayerModel } from "../model/types";
+import { ejectClasses } from "../eject";
 
 /** How unrepresentable content is handled. */
 export type EmitMode = "strict" | "with-fallbacks";
@@ -161,14 +162,24 @@ function orderLayers(
  * author's data, not an extension block. This returns a cleaned copy rather
  * than mutating, so the model the caller holds is untouched.
  */
-function stripExtensions(node: unknown, opaque: Set<string>): unknown {
-  if (Array.isArray(node)) return node.map((item) => stripExtensions(item, opaque));
+function stripExtensions(
+  node: unknown,
+  opaque: Set<string>,
+  path = "",
+  stripped?: string[]
+): unknown {
+  if (Array.isArray(node))
+    return node.map((item, i) => stripExtensions(item, opaque, `${path}[${i}]`, stripped));
   if (!isPlainObject(node)) return node;
 
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node)) {
-    if (FORBIDDEN_PREFIXES.some((p) => key.startsWith(p))) continue;
-    out[key] = opaque.has(key) ? value : stripExtensions(value, opaque);
+    if (FORBIDDEN_PREFIXES.some((p) => key.startsWith(p))) {
+      stripped?.push(path ? `${path}.${key}` : key);
+      continue;
+    }
+    const childPath = path ? `${path}.${key}` : key;
+    out[key] = opaque.has(key) ? value : stripExtensions(value, opaque, childPath, stripped);
   }
   return out;
 }
@@ -232,6 +243,9 @@ export function projectStyle(
   for (const [name, source] of Object.entries(model.style.sources)) {
     sources[name] = isPlainObject(source.spec) ? { ...source.spec } : source.spec;
     if (Object.keys(source.runtime).length > 0) {
+      // Every live-data construct must carry a registered eject class — an
+      // unregistered one throws here rather than vanishing (R4's closed world).
+      for (const key of Object.keys(source.runtime)) ejectClasses.require(`source.${key}`);
       const hasData = isPlainObject(source.spec) && "data" in source.spec;
       warnings.push({
         path: `sources.${name}`,
@@ -259,12 +273,32 @@ export function projectStyle(
     }
 
     if (Object.keys(layer.runtime).length > 0) {
-      const dropped = Object.keys(layer.runtime).filter((k) => k !== "before");
-      if (dropped.length > 0) {
+      // Registry-driven declared absences (R6): one warning per construct,
+      // wording from its registration, so the report and the construct list
+      // cannot drift. `before` ejects (honored via ordering below) and
+      // `source` holds an inline source's own runtime half, reported at the
+      // source granularity here.
+      for (const key of Object.keys(layer.runtime)) {
+        if (key === "before") continue;
+        if (key === "source") {
+          const sourceRuntime = layer.runtime["source"];
+          if (isPlainObject(sourceRuntime)) {
+            for (const k of Object.keys(sourceRuntime)) ejectClasses.require(`source.${k}`);
+            warnings.push({
+              path: `layers.${id}.source`,
+              kind: "contract",
+              message:
+                `Live-data configuration (${Object.keys(sourceRuntime).join(", ")}) does ` +
+                "not compile; the emitted source carries the data present at compile time.",
+            });
+          }
+          continue;
+        }
+        const definition = ejectClasses.require(`layer.${key}`);
         warnings.push({
-          path: `layers.${id}`,
+          path: `layers.${id}.${key}`,
           kind: "contract",
-          message: `${dropped.join(", ")} do not compile and are absent from the emitted style.`,
+          message: `\`${key}\` — ${definition.onEmit}`,
         });
       }
     }
@@ -296,6 +330,7 @@ export function projectStyle(
 
   const runtimeKeys = Object.keys(model.runtime.map);
   if (runtimeKeys.length > 0) {
+    ejectClasses.require("map.options");
     warnings.push({
       path: "runtime.map",
       kind: "contract",
@@ -303,6 +338,20 @@ export function projectStyle(
         `Map options (${runtimeKeys.join(", ")}) are constructor-only and have no ` +
         "style-spec equivalent; the emitted style uses MapLibre's defaults.",
     });
+  }
+
+  // Root chrome constructs previously vanished from emit with no trace at
+  // all — the exact silent omission the doctrine forbids (R5/R6). Each is a
+  // declared absence now, reported with its registered wording.
+  for (const construct of ["controls", "legend", "container", "parameters"] as const) {
+    if (model.runtime[construct] !== undefined) {
+      const definition = ejectClasses.require(construct);
+      warnings.push({
+        path: construct,
+        kind: "contract",
+        message: `\`${construct}\` — ${definition.onEmit}`,
+      });
+    }
   }
 
   // `--strict` means no *lossy* degradation was required, not "the document
@@ -319,7 +368,20 @@ export function projectStyle(
   }
 
   const opaque = new Set(["data", "properties", "clusterProperties", "metadata"]);
-  const cleaned = stripExtensions(style, opaque) as Record<string, unknown>;
+  const strippedExtensions: string[] = [];
+  const cleaned = stripExtensions(style, opaque, "", strippedExtensions) as Record<
+    string,
+    unknown
+  >;
+  if (strippedExtensions.length > 0) {
+    const definition = ejectClasses.require("x-*");
+    warnings.push({
+      path: strippedExtensions[0]!,
+      kind: "contract",
+      message:
+        `Extension blocks (${strippedExtensions.join(", ")}) — ${definition.onEmit}`,
+    });
+  }
   // The invariant, now over the stripped output: `x-*` is gone by the strip
   // above, so anything assertClean still finds — a `runtime` key — is a real
   // projection bug and fails closed rather than shipping.
