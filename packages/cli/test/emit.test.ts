@@ -52,8 +52,17 @@ describe('emitStyle', () => {
     expect(layers[0]).not.toHaveProperty('interactive');
     const sources = style['sources'] as Record<string, Record<string, unknown>>;
     expect(sources['parcels']).not.toHaveProperty('refresh');
-    // The source had compile-time data, so its live-data loss is a contract warning.
-    expect(warnings.some((w) => w.path === 'sources.parcels' && w.kind === 'contract')).toBe(true);
+    // The source had compile-time data, so its live-data loss is a contract
+    // warning — per construct since the eject-class registry (U3), with the
+    // machine-readable construct field.
+    expect(
+      warnings.some(
+        (w) =>
+          w.path === 'sources.parcels.refresh' &&
+          w.kind === 'contract' &&
+          w.construct === 'source.refresh',
+      ),
+    ).toBe(true);
   });
 
   it('merges an inline basemap so the output is self-contained', async () => {
