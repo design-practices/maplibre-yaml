@@ -19,3 +19,4 @@ Replicates the MapLibre example [Add a pattern to a polygon](https://maplibre.or
 
 - `fill-pattern: wave` is a literal reference to the declared image — the same name works for `icon-image`, `line-pattern`, and `background-pattern`.
 - On eject the pattern is fetched into the document sprite and the reference rewrites to `mlym:wave`; `--strict` accepts the document because nothing is lost.
+- `images:` hosts must send CORS headers (the loader uses `crossOrigin="anonymous"` for the texture upload) — unlike marker `icon:` URLs, which are plain DOM images.

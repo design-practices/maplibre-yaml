@@ -154,7 +154,11 @@ layers:
 ```
 
 Live, every image loads **before** layers are added, so references resolve
-on first render. On eject the construct fully compiles (class **ejects**):
+on first render. Images load with `crossOrigin="anonymous"` (a WebGL
+texture must be untainted), so the host **must allow cross-origin access**
+on every response in the chain, redirects included — a host that serves
+plain `<img>` tags fine can still fail here. A failed image warns once and
+the document keeps rendering. On eject the construct fully compiles (class **ejects**):
 `mlym emit` fetches each URL into the document sprite and rewrites literal
 references (`icon-image`, `fill-pattern`, `line-pattern`,
 `background-pattern`, `fill-extrusion-pattern`) to `mlym:<name>` —

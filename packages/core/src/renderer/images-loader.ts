@@ -108,7 +108,9 @@ export function loadDocumentImages(
         if (settle()) return;
         console.warn(
           `[maplibre-yaml] image "${name}" failed to load from ${url}; ` +
-            "layers referencing it render without it."
+            "layers referencing it render without it. (Images load with " +
+            "crossOrigin=anonymous — the host must allow cross-origin access, " +
+            "including on every redirect hop.)"
         );
         onImageError?.(name, url);
         resolve();
