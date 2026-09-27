@@ -157,16 +157,30 @@ ejectClasses.register("markers", {
   // share ONE implementation — buildMarkersLowering — and a parity test pins
   // that they cannot drift.
   eject: (ctx) => {
-    const { sourceSpec, layerSpec, assets, warnings } = buildMarkersLowering(
+    const { sourceSpec, layerSpec, assets, images, warnings } = buildMarkersLowering(
       ctx.value as MarkerConfig[]
     );
     return {
       sources: { [MARKERS_SOURCE_ID]: sourceSpec },
       layers: [layerSpec],
       assets,
+      images,
       warnings,
     };
   },
+});
+
+// Style-half construct (U6): registered so the docs eject-class table and
+// programmatic consumers can see its declared behavior. It never reaches the
+// projection's RUNTIME loop; the projection itself reports the two edges
+// (relative URLs are lossy, dynamic references warn as contract).
+ejectClasses.register("images", {
+  class: "ejects",
+  onEmit:
+    "Named images with absolute http(s) URLs are fetched at compile time and " +
+    "merged into the document sprite; literal layer references are rewritten " +
+    "to `mlym:<name>` so they resolve in the emitted style. Relative URLs " +
+    "cannot compile (lossy).",
 });
 
 ejectClasses.register("x-*", {

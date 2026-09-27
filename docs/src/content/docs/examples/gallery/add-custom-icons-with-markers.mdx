@@ -19,4 +19,4 @@ Replicates the MapLibre example [Add custom icons with markers](https://maplibre
 
 - `icon:` swaps the default pin for any image URL; `size:` scales it.
 - A failed icon load falls back to the default pin with one console note — never a blank marker.
-- On eject the icons aren't embeddable yet (that arrives with `images:`), so the emitted style substitutes default pins and says so as a lossy warning.
+- On eject, `mlym emit --with-fallbacks` fetches each icon URL into the document sprite, so the emitted symbol layer renders the same images (markers as a whole remain a lossy fallback — dragging and popups don't compile).

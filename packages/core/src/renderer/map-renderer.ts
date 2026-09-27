@@ -13,6 +13,8 @@ import { LegendBuilder } from './legend-builder';
 import type { MarkerConfig } from '../schemas/map.schema';
 import { ControlsManager } from './controls-manager';
 import { MarkersManager } from './markers-manager';
+import { loadDocumentImages } from './images-loader';
+import type { ImageConfig } from '../schemas/map.schema';
 import type { CapabilityPolicy } from "../capabilities.js";
 import {
   denormalizeConfig,
@@ -78,6 +80,11 @@ export interface MapRendererOptions {
   state?: Record<string, unknown>;
   /** Standalone `markers:` — DOM pins added on load, removed on destroy. */
   markers?: MarkerConfig[];
+  /**
+   * Named images (`images:`) registered via `map.addImage` before layers are
+   * added, so `icon-image`/`*-pattern` references resolve on first render.
+   */
+  images?: Record<string, ImageConfig>;
 }
 
 /**
@@ -95,6 +102,7 @@ export interface MapRendererEvents {
   'markers:added': { count: number };
   'marker:click': { index: number; at: [number, number] };
   'marker:icon-error': { index: number; icon: string };
+  'image:error': { name: string; url: string };
 }
 
 /**
@@ -112,6 +120,8 @@ export class MapRenderer {
   private containerEl: HTMLElement | null;
   private controlsAdded: boolean;
   private legendBuilt: boolean;
+  /** Set by destroy(); late async continuations (image loads) check it. */
+  private destroyed = false;
   private autoLegendContainer: HTMLElement | null;
 
 
@@ -308,15 +318,55 @@ export class MapRenderer {
         this.markersManager.add(options.markers as MarkerConfig[]);
       }
 
-      // Add layers
-      Promise.all(layers.map((layer) => this.addLayer(layer)))
+      // Declared images register BEFORE layers so icon-image/*-pattern
+      // references resolve on first render (never rejects — a failed image
+      // warns and the layer draws without it, per ml-blj).
+      const imagesReady =
+        options.images && Object.keys(options.images).length > 0
+          ? loadDocumentImages(this.map, options.images, (name, url) =>
+              this.emit('image:error', { name, url })
+            )
+          : Promise.resolve();
+
+      // Add layers. Image loading pushes the adds behind network time, so a
+      // destroy() during that window (SPA navigation, component unmount) must
+      // stop the chain — adding layers to a removed map throws, and reporting
+      // that as a fatal document error on a map the host disposed on purpose
+      // would be noise.
+      imagesReady
         .then(() => {
-          this.emit('load', undefined);
-          options.onLoad?.();
+          if (this.destroyed) return;
+          return Promise.all(layers.map((layer) => this.addLayer(layer))).then(() => {
+            this.emit('load', undefined);
+            options.onLoad?.();
+          });
         })
         .catch((error) => {
+          if (this.destroyed) return;
           options.onError?.(error, true);
         });
+    });
+
+    // An image name no declared image or sprite supplies: warn once per
+    // name instead of letting MapLibre spam one warning per render. The set
+    // is bounded because data-driven icon-image makes the id space
+    // feature-data-sized — past the cap, one final note and silence.
+    const MISSING_WARN_CAP = 100;
+    const missingWarned = new Set<string>();
+    this.map.on('styleimagemissing', (e: { id: string }) => {
+      if (missingWarned.has(e.id) || missingWarned.size > MISSING_WARN_CAP) return;
+      missingWarned.add(e.id);
+      if (missingWarned.size > MISSING_WARN_CAP) {
+        console.warn(
+          `[maplibre-yaml] over ${MISSING_WARN_CAP} distinct missing image names; ` +
+            'suppressing further missing-image warnings.'
+        );
+        return;
+      }
+      console.warn(
+        `[maplibre-yaml] layer references image "${e.id}" but no images: entry, ` +
+          'sprite, or addImage call supplies it.'
+      );
     });
 
     // Handle errors. Runtime maplibre error events are non-fatal: the map
@@ -462,6 +512,7 @@ export class MapRenderer {
   destroy(): void {
     this.eventHandler.destroy();
     this.layerManager.destroy();
+    this.destroyed = true;
     this.markersManager?.destroy();
     this.markersManager = null;
     this.controlsManager.removeAllControls();

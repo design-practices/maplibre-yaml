@@ -101,6 +101,15 @@ export interface StyleHalf {
    * v1/v2 divergence.
    */
   metadata?: Record<string, unknown>;
+  /**
+   * Named images for symbol layers and patterns (U6, R9).
+   *
+   * @remarks
+   * Style half because it fully compiles: live, the renderer `addImage`s
+   * each before layers; on eject the images are fetched at compile time and
+   * merged into the document sprite (class `ejects`).
+   */
+  images?: Record<string, import("../schemas/map.schema").ImageConfig>;
   sources: Record<string, SourceModel>;
   layers: LayerModel[];
 }
@@ -149,4 +158,6 @@ export interface V1MapInput {
   parameters?: Record<string, unknown>;
   /** Standalone markers, authored at the document root. */
   markers?: import("../schemas/map.schema").MarkerConfig[];
+  /** Named images for symbol layers and patterns, authored at the root. */
+  images?: Record<string, import("../schemas/map.schema").ImageConfig>;
 }

@@ -1,0 +1,24 @@
+# Hermetic twin of docs/public/configs/gallery/use-a-fallback-image.yaml (local basemap + icon).
+type: map
+id: use-a-fallback-image
+config:
+  center: [-77.0323, 38.9131]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+images:
+  fallback-marker: "/examples/gallery/assets/icon-b.png"
+sources:
+  points:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry: { type: Point, coordinates: [-77.0323, 38.9131] }
+          properties: {}
+layers:
+  - id: fallback
+    type: symbol
+    source: points
+    layout:
+      icon-image: ["coalesce", ["image", "primary-icon"], ["image", "fallback-marker"]]

@@ -28,7 +28,7 @@
  * (the same schema/renderer-contract lesson the gallery census taught).
  */
 
-import type { EmitAsset } from "../emitter/assets";
+import type { EmitAsset, EmitImageRef } from "../emitter/assets";
 import type { EmitWarning } from "../emitter/project";
 
 /** What `mlym emit` does with a construct. */
@@ -40,6 +40,8 @@ export interface EjectLowering {
   sources?: Record<string, Record<string, unknown>>;
   /** Sprite descriptors, in the emitter's shared vocabulary (U4's pipeline). */
   assets?: EmitAsset[];
+  /** Fetch-at-emit image refs the lowering references (marker icons). */
+  images?: EmitImageRef[];
   warnings?: EmitWarning[];
 }
 

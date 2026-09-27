@@ -94,16 +94,22 @@ export {
   DEFAULT_PIN_COLOR,
   buildSpriteIndex,
   attachSpriteAssets,
+  attachSpriteImages,
   dedupeAssets,
   finalizeSpriteBaseUrl,
+  imageAssetName,
+  DEFAULT_PIN_WIDTH,
+  DEFAULT_PIN_HEIGHT,
 } from "./emitter";
 export type {
   EmitAsset,
+  EmitImageRef,
   HatchTileOptions,
   PinOptions,
   LoweredMarkers,
   MarkersLowering,
   SpriteIndexEntry,
+  SpriteLayoutItem,
   SpriteSheetLayout,
 } from "./emitter";
 export {

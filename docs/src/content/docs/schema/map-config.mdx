@@ -118,8 +118,63 @@ markers:
 Markers are a **fallback-class** construct on eject: `mlym emit
 --with-fallbacks` lowers them to a symbol layer with generated pin sprites
 (the pins render; dragging and popup content do not compile), and `--strict`
-refuses marker documents. See the [eject classes
-reference](/reference/eject-classes/).
+refuses marker documents. `icon:` URLs are fetched into the document sprite
+at compile time, so ejected icon markers keep their images. See the [eject
+classes reference](/reference/eject-classes/).
+
+## Images
+
+`images:` declares named images for symbol layers and patterns — a
+document-root key, a sibling of `config:`. Each entry is a URL string or an
+options object:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `url` | string | Image URL (required; a bare string is shorthand for `{ url }`) |
+| `sdf` | boolean | Treat as a signed-distance-field icon (tintable via `icon-color`) |
+| `pixelRatio` | number | Source density — `2` means the file is @2x its CSS size |
+
+```yaml
+type: map
+id: iconic
+config:
+  center: [0, 0]
+  zoom: 2
+images:
+  poi: https://example.com/poi.png
+  arrow:
+    url: https://example.com/arrow.png
+    sdf: true
+layers:
+  - id: spots
+    type: symbol
+    source: pts
+    layout:
+      icon-image: poi
+```
+
+Live, every image loads **before** layers are added, so references resolve
+on first render. Images load with `crossOrigin="anonymous"` (a WebGL
+texture must be untainted), so the host **must allow cross-origin access**
+on every response in the chain, redirects included — a host that serves
+plain `<img>` tags fine can still fail here. A failed image warns once and
+the document keeps rendering. On eject the construct fully compiles (class **ejects**):
+`mlym emit` fetches each URL into the document sprite and rewrites literal
+references (`icon-image`, `fill-pattern`, `line-pattern`,
+`background-pattern`, `fill-extrusion-pattern`) to `mlym:<name>` —
+`--strict` accepts image documents. Dynamic references
+(`["image", ["get", "icon"]]`) resolve live but cannot be rewritten at
+compile time; emit reports them, and runtime values naming declared images
+must spell `mlym:<name>` themselves. Relative URLs render live but cannot
+be fetched at compile time — emit reports them as lossy, so `--strict`
+refuses them.
+
+:::caution
+`mlym emit` performs a network request for **every** `images:` entry and
+marker `icon:` URL in the document (bounded: 30s timeout, 20MB and
+1024px-per-image ceilings). Only emit documents whose URLs you trust — the
+fetched bytes are embedded verbatim into the sprite files you publish.
+:::
 
 ## View Options
 

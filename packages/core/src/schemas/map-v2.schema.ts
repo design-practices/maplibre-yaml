@@ -45,6 +45,7 @@ import {
   StateSchema,
   ParametersSchema,
   MarkersSchema,
+  ImagesSchema,
 } from "./map.schema";
 import {
   GeoJSONSourceSchema,
@@ -379,6 +380,9 @@ export const StyleV2Schema: z.ZodTypeAny = z
       .describe("Style metadata (style-spec root `metadata` slot)"),
     state: StateSchema.optional().describe(
       "Spec-native runtime-tunable values, read via `global-state`"
+    ),
+    images: ImagesSchema.optional().describe(
+      "Named images for symbol layers and patterns — style half, merged into the sprite on eject"
     ),
     sources: z
       .record(z.string(), SourceV2Schema)

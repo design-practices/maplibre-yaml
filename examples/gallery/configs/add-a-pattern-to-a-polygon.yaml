@@ -1,0 +1,26 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-pattern-to-a-polygon.yaml (local basemap + pattern).
+type: map
+id: add-a-pattern-to-a-polygon
+config:
+  center: [10, 10]
+  zoom: 2
+  mapStyle: "/examples/verification/configs/local-style.json"
+images:
+  wave: "/examples/gallery/assets/icon-a.png"
+sources:
+  shape:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry:
+            type: Polygon
+            coordinates: [[[0, 0], [20, 0], [20, 20], [0, 20], [0, 0]]]
+          properties: {}
+layers:
+  - id: patterned
+    type: fill
+    source: shape
+    paint:
+      fill-pattern: wave

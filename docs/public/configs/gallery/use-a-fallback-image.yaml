@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/use-a-fallback-image/
+# coalesce tries each image in turn; the undeclared name misses (one console
+# note) and the declared fallback renders.
+type: map
+id: use-a-fallback-image
+config:
+  center: [-77.0323, 38.9131]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+images:
+  fallback-marker: "https://maplibre.org/maplibre-gl-js/docs/assets/osgeo-logo.png"
+sources:
+  points:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry: { type: Point, coordinates: [-77.0323, 38.9131] }
+          properties: {}
+layers:
+  - id: fallback
+    type: symbol
+    source: points
+    layout:
+      icon-image: ["coalesce", ["image", "primary-icon"], ["image", "fallback-marker"]]

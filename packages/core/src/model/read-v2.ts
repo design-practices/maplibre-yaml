@@ -169,6 +169,10 @@ export function readV2Block(doc: MapBlockV2): MapModel {
     model.style.basemap = style["basemap"] as MapConfig["mapStyle"];
   if (docState !== undefined)
     model.style.state = docState as Record<string, unknown>;
+  // Style-half `images:` — empty records normalize away (v1 parity).
+  const v2Images = style["images"] as MapModel["style"]["images"];
+  if (v2Images !== undefined && Object.keys(v2Images).length > 0)
+    model.style.images = v2Images;
 
   if (docParameters !== undefined)
     model.runtime.parameters = docParameters as Record<string, unknown>;
