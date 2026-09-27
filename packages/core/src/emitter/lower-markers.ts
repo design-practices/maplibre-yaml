@@ -21,7 +21,9 @@
 
 import type { MapModel } from "../model/types";
 import type { MarkerConfig } from "../schemas/map.schema";
-import type { EmitAsset, EmitWarning } from "../emitter";
+import type { EmitAsset } from "./assets";
+import type { EmitWarning } from "./project";
+import { EmitError } from "./project";
 import { pinSvg } from "./assets";
 
 /** What the pre-pass produced. */
@@ -92,8 +94,8 @@ export function buildMarkersLowering(markers: readonly MarkerConfig[]): MarkersL
     ejectClass: "fallback",
     message:
       `${markers.length} marker(s) lowered to a symbol layer ("${MARKERS_LAYER_ID}") ` +
-      "with generated pin sprites. The pins render, but DOM-marker behavior " +
-      "(dragging, built-in popups) does not compile — popups need attachInteractions.",
+      "with generated pin sprites. The pins render; DOM-marker behavior and " +
+      "marker popup content do not compile (popups are dropped from the emitted style).",
   });
 
   return {
@@ -127,6 +129,22 @@ export function lowerMarkers(model: MapModel): LoweredMarkers {
   const markers = model.runtime.markers;
   if (!markers || markers.length === 0) {
     return { model, assets: [], warnings: [] };
+  }
+
+  // Refuse loudly on id collision — an authored source/layer named like the
+  // synthesized ones would be silently clobbered/duplicated otherwise, the
+  // exact silent-drop class the doctrine forbids.
+  if (model.style.sources[MARKERS_SOURCE_ID] !== undefined) {
+    throw new EmitError(
+      `Cannot lower markers: the document already declares a source named ` +
+        `"${MARKERS_SOURCE_ID}", which the lowering would overwrite. Rename it.`
+    );
+  }
+  if (model.style.layers.some((l) => l.spec["id"] === MARKERS_LAYER_ID)) {
+    throw new EmitError(
+      `Cannot lower markers: the document already declares a layer named ` +
+        `"${MARKERS_LAYER_ID}", which would collide with the synthesized pin layer. Rename it.`
+    );
   }
 
   const { sourceSpec, layerSpec, assets, warnings } = buildMarkersLowering(markers);

@@ -92,6 +92,9 @@ export interface MapRendererEvents {
   'layer:data-error': { layerId: string; error: Error };
   'layer:click': { layerId: string; feature: any; lngLat: LngLat };
   'layer:hover': { layerId: string; feature: any; lngLat: LngLat };
+  'markers:added': { count: number };
+  'marker:click': { index: number; at: [number, number] };
+  'marker:icon-error': { index: number; icon: string };
 }
 
 /**
@@ -296,7 +299,12 @@ export class MapRenderer {
       // Standalone markers: DOM pins with the document's popup content run
       // through the same trust gate as every popup sink (U5).
       if (options.markers && options.markers.length > 0) {
-        this.markersManager = new MarkersManager(this.map, options.capabilities);
+        this.markersManager = new MarkersManager(this.map, options.capabilities, {
+          onMarkersAdded: (count) => this.emit('markers:added', { count }),
+          onMarkerClick: (index, at) => this.emit('marker:click', { index, at }),
+          onMarkerIconError: (index, icon) =>
+            this.emit('marker:icon-error', { index, icon }),
+        });
         this.markersManager.add(options.markers as MarkerConfig[]);
       }
 

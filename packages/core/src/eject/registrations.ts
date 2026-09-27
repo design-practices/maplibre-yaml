@@ -140,15 +140,22 @@ ejectClasses.register("state", {
     "expressions instead (the inlineState gate).",
 });
 
+// The first registration whose eject() carries real computation from the
+// emitter layer (every declared-absence entry above is a pure string). The
+// import deliberately targets emitter/lower-markers DIRECTLY, never the
+// emitter barrel — the barrel re-exports project.ts, which imports this
+// file, and only the direct-file import keeps that from becoming a require
+// cycle. Future fallback registrations follow the same rule.
 ejectClasses.register("markers", {
   class: "fallback",
   onEmit:
     "Markers lower to a symbol layer with generated pin sprites — the pins " +
     "render in the emitted style (lossy: DOM-marker behavior like dragging " +
     "and built-in popups does not compile).",
-  // The doctrine's mechanical contract for a fallback-class construct: the
-  // lowering IS the registration. `lowerMarkers` (the emit pre-pass) and this
-  // hook share one implementation.
+  // The doctrine's mechanical contract for a fallback-class construct: this
+  // hook and `lowerMarkers` (the emit pre-pass, which the CLI actually runs)
+  // share ONE implementation — buildMarkersLowering — and a parity test pins
+  // that they cannot drift.
   eject: (ctx) => {
     const { sourceSpec, layerSpec, assets, warnings } = buildMarkersLowering(
       ctx.value as MarkerConfig[]

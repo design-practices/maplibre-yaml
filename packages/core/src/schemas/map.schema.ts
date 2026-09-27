@@ -16,6 +16,7 @@ import {
   LngLatSchema,
   LngLatBoundsSchema,
   ZoomLevelSchema,
+  ColorSchema,
 } from "./base.schema";
 import { LayerOrReferenceSchema, PopupContentSchema } from "./layer.schema";
 import { LayerSourceSchema } from "./source.schema";
@@ -432,10 +433,9 @@ export const StateSchema = z
  */
 export const MarkerSchema = z.object({
   at: LngLatSchema.describe("Marker position [lng, lat]"),
-  color: z
-    .string()
-    .optional()
-    .describe("Pin color (the default pin only; ignored when `icon` is set)"),
+  color: ColorSchema.optional().describe(
+    "Pin color (the default pin only; ignored when `icon` is set)"
+  ),
   size: z
     .number()
     .positive()

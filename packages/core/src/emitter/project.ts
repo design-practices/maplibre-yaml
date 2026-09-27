@@ -456,8 +456,9 @@ export function projectStyle(
         construct,
         ejectClass: definition.class,
         message: unloweredFallback
-          ? `\`${construct}\` was not lowered — the emit pipeline substitutes its ` +
-            `fallback (${definition.onEmit}); a direct projectStyle call drops it.`
+          ? `\`${construct}\` cannot compile without visual change. A documented ` +
+            `fallback exists (${definition.onEmit}) — re-run with --with-fallbacks ` +
+            `to substitute it.`
           : `\`${construct}\` — ${definition.onEmit}`,
       });
     } else {

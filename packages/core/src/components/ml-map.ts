@@ -64,6 +64,9 @@ import { escapeHtml } from "../utils/html.js";
  * @fires ml-map:layer-data-error - Layer data failed to load
  * @fires ml-map:layer-click - User clicked on a layer feature
  * @fires ml-map:layer-hover - User hovered over a layer feature
+ * @fires ml-map:markers-added - Standalone `markers:` pins were added
+ * @fires ml-map:marker-click - User clicked a standalone marker
+ * @fires ml-map:marker-icon-error - A marker icon failed (unsafe scheme or load error); the default pin was substituted
  */
 export class MLMap extends HTMLElement {
   /** Internal MapRenderer instance */
@@ -613,6 +616,32 @@ export class MLMap extends HTMLElement {
         new CustomEvent("ml-map:layer-hover", {
           bubbles: true,
           detail: { layerId, feature, lngLat },
+        })
+      );
+    });
+
+    // Standalone markers (U5): added / clicked / icon fell back to the pin
+    this.renderer.on("markers:added", ({ count }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:markers-added", {
+          bubbles: true,
+          detail: { count },
+        })
+      );
+    });
+    this.renderer.on("marker:click", ({ index, at }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:marker-click", {
+          bubbles: true,
+          detail: { index, at },
+        })
+      );
+    });
+    this.renderer.on("marker:icon-error", ({ index, icon }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:marker-icon-error", {
+          bubbles: true,
+          detail: { index, icon },
         })
       );
     });

@@ -84,6 +84,31 @@ describe("lowerMarkers (KTD4 pre-pass)", () => {
     const model = doc(undefined);
     expect(lowerMarkers(model).model).toBe(model);
   });
+
+  it("an empty markers list normalizes away — nothing lossy, strict passes", () => {
+    // Zero markers lose nothing on emit, so normalize drops the key entirely
+    // (both format versions) and strict never sees a fallback construct.
+    const model = doc([]);
+    expect(model.runtime.markers).toBeUndefined();
+    expect(lowerMarkers(model).model).toBe(model);
+    expect(() => projectStyle(model, "strict")).not.toThrow();
+  });
+
+  it("refuses to lower when the document already uses the reserved ids", () => {
+    const collidingSource = normalizeMapBlock({
+      id: "pins",
+      config: { center: [0, 0], zoom: 2, mapStyle: "https://example.com/style.json" },
+      layers: [
+        {
+          id: MARKERS_LAYER_ID,
+          type: "circle",
+          source: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+        },
+      ],
+      markers: MARKERS,
+    } as unknown as V1MapInput);
+    expect(() => lowerMarkers(collidingSource)).toThrow(/mlym-markers/);
+  });
 });
 
 describe("the fallback contract (R5)", () => {
@@ -94,6 +119,22 @@ describe("the fallback contract (R5)", () => {
     expect(lowering.layers?.[0]?.["id"]).toBe(MARKERS_LAYER_ID);
     expect(lowering.sources?.[MARKERS_SOURCE_ID]).toBeDefined();
     expect(lowering.assets?.length).toBeGreaterThan(0);
+  });
+
+  it("the eject() hook and the lowerMarkers pre-pass cannot drift", () => {
+    // Both are backed by buildMarkersLowering; this pins the parity so a
+    // future edit to one path cannot silently diverge from the other.
+    const hook = ejectClasses.require("markers").eject!({ value: MARKERS, path: "markers" });
+    const { model, assets } = lowerMarkers(doc(MARKERS));
+    expect(hook.sources?.[MARKERS_SOURCE_ID]).toEqual(model.style.sources[MARKERS_SOURCE_ID]!.spec);
+    expect(hook.layers?.[0]).toEqual(model.style.layers.at(-1)!.spec);
+    expect(hook.assets).toEqual(assets);
+  });
+
+  it("the un-lowered strict message points authors at --with-fallbacks", () => {
+    const { warnings } = projectStyle(doc(MARKERS));
+    const warning = warnings.find((w) => w.construct === "markers");
+    expect(warning?.message).toContain("--with-fallbacks");
   });
 
   it("an UN-lowered markers document is lossy in projectStyle — --strict refuses it", () => {

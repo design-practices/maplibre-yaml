@@ -104,6 +104,64 @@ layers:
     ).rejects.toMatchObject({ code: 1 });
   });
 
+  const MARKERS_DOC = `type: map
+id: pins
+config:
+  center: [-73.98, 40.75]
+  zoom: 12
+markers:
+  - at: [-73.985, 40.748]
+    color: "#e63946"
+  - at: [-73.97, 40.76]
+`;
+
+  it('refuses a markers document under --strict, naming the fallback flag', async () => {
+    const dir = await mkdir();
+    const doc = join(dir, 'pins.yaml');
+    await writeFile(doc, MARKERS_DOC);
+
+    const error = await execAsync(`node "${CLI}" emit "${doc}" --strict`).then(
+      () => null,
+      (e) => e,
+    );
+    expect(error).toMatchObject({ code: 1 });
+    expect(String(error.stderr)).toMatch(/--with-fallbacks/);
+  });
+
+  it('requires --out and --sprite-base for a markers doc under --with-fallbacks', async () => {
+    const dir = await mkdir();
+    const doc = join(dir, 'pins.yaml');
+    await writeFile(doc, MARKERS_DOC);
+
+    const error = await execAsync(
+      `node "${CLI}" emit "${doc}" --with-fallbacks`,
+    ).then(() => null, (e) => e);
+    expect(error).toMatchObject({ code: 1 });
+    expect(String(error.stderr)).toMatch(/--out/);
+  });
+
+  it('lowers markers to a symbol layer and writes the sprite files', async () => {
+    const dir = await mkdir();
+    const doc = join(dir, 'pins.yaml');
+    const out = join(dir, 'style.json');
+    await writeFile(doc, MARKERS_DOC);
+
+    await execAsync(
+      `node "${CLI}" emit "${doc}" --with-fallbacks --out "${out}" --sprite-base https://maps.example.com/pins`,
+    );
+    const style = JSON.parse(await readFile(out, 'utf-8'));
+    const markerLayer = style.layers.find((l: any) => l.id === 'mlym-markers');
+    expect(markerLayer.type).toBe('symbol');
+    expect(style.sources['mlym-markers'].data.features).toHaveLength(2);
+    expect(style.sprite).toEqual([
+      { id: 'mlym', url: 'https://maps.example.com/pins/mlym' },
+    ]);
+    // The four sprite files land beside the style (KTD3: cli rasterizes).
+    for (const name of ['mlym.json', 'mlym.png', 'mlym@2x.json', 'mlym@2x.png']) {
+      expect(await readFile(join(dir, name))).toBeDefined();
+    }
+  });
+
   it('rejects a scrollytelling document — only map compiles', async () => {
     const dir = await mkdir();
     const doc = join(dir, 'story.yaml');

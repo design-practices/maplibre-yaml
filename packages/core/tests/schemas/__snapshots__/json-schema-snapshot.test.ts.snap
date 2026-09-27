@@ -2693,7 +2693,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                     "description": "Marker position [lng, lat]"
                   },
                   "color": {
-                    "type": "string",
+                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
                     "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
                   },
                   "size": {
@@ -6133,7 +6133,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                 "description": "Marker position [lng, lat]"
               },
               "color": {
-                "type": "string",
+                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
                 "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
               },
               "size": {
@@ -9120,7 +9120,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "description": "Marker position [lng, lat]"
                               },
                               "color": {
-                                "type": "string",
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
                                 "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
                               },
                               "size": {

@@ -6,10 +6,14 @@
 `markers:` — standalone map pins as first-class YAML (R8), and the format's
 first *ejects-via-fallback* construct (R5). Live, each entry is a real
 `maplibregl.Marker` DOM pin: `at:` position, `color:`/`size:` on the default
-pin, `icon:` swapping in any image URL (a failed load falls back to the pin
-with one console note), and `popup:` carrying the same trust-gated structured
-content as layer popups. Authored at the v1 document root or v2
-`runtime.markers` — the two normalize identically.
+pin, `icon:` swapping in any image URL (a failed load or unsafe URL scheme
+falls back to the pin with one console note), and `popup:` carrying the same
+trust-gated structured content as layer popups. Authored at the v1 document
+root or v2 `runtime.markers` — the two normalize identically. `<ml-map>`
+surfaces marker lifecycle as `ml-map:markers-added`, `ml-map:marker-click`,
+and `ml-map:marker-icon-error` events (mirroring the layer events), and
+`MarkerSchema`/`MarkersSchema`/`MarkerConfig` are exported from the schemas
+barrel. `color:` validates as a real color, not any string.
 
 On eject, `mlym emit --with-fallbacks` lowers markers to a symbol layer
 ("mlym-markers") with generated pin sprites through the sprite pipeline,

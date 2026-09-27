@@ -238,7 +238,10 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   if (input.parameters !== undefined) model.runtime.parameters = input.parameters;
   if (input.controls !== undefined) model.runtime.controls = input.controls;
   if (input.legend !== undefined) model.runtime.legend = input.legend;
-  if (input.markers !== undefined) model.runtime.markers = input.markers;
+  // An empty list is normalized away: a defined runtime.markers is what makes
+  // an emit lossy, and zero markers lose nothing.
+  if (input.markers !== undefined && input.markers.length > 0)
+    model.runtime.markers = input.markers;
   if (input.className !== undefined || input.style !== undefined) {
     model.runtime.container = {};
     if (input.className !== undefined) model.runtime.container.className = input.className;
