@@ -280,3 +280,39 @@ Each shipped page = YAML (+ minimal JS for H) + a browser verification case
 
 X pages are skipped; the gallery index can link the upstream originals for
 completeness.
+
+
+## Wave 3 friction log (escape-hatch dogfooding, 2026-09-27)
+
+Input for the 0.7 scoping (ml-7ya). Built 6 hatch pages (fly-to, filter,
+color-buttons, features-under-pointer, animate-a-point, web-fonts), each
+shipping its JS as a shown-and-tested artifact next to its YAML.
+
+**Blockers found (candidate 0.7 surface):**
+
+- **F1 — `global-state` is undemonstrable in any consumer today.** The
+  runtime floor is maplibre-gl 5.6; everything pins v4. Three upstream
+  examples (global-state filter, time slider, color-by-state) had to fall
+  back to `setFilter`/`setPaintProperty` hatches. ml-tfd.1 (v5) is a
+  prerequisite for the state story, not just CI hygiene.
+- **F2 — `addProtocol` is unreachable from consumers.** Protocol plugins
+  (pmtiles, COG, contours, addProtocol-transform: 4 census examples) must
+  register on the maplibre-gl module instance core bundles — core does not
+  export it, and a bundled consumer has no global. The pmtiles page could
+  not be built at all. Candidate surface: re-export `maplibregl` from core,
+  or an addProtocol passthrough, or a `protocols:` config hook.
+
+**Positives (hatches that beat upstream ergonomics):**
+
+- **F3** — the DOM-event surface (`ml-map:layer-hover`) replicated the
+  queryRenderedFeatures example with ZERO MapLibre API — plain
+  `addEventListener`.
+- **F4** — `updateLayerData()` made animate-a-point simpler than upstream
+  (no `getSource(...)` bookkeeping).
+- **F5** — `getMap()` was one-line access everywhere; the only rough edge
+  is readiness (null-guards in every snippet). A documented
+  `await`-on-`ml-map:load` idiom (or a promise-returning `mapReady()`)
+  would remove the boilerplate.
+- **F6** — the inline `mapStyle` object cleanly covered the style-root
+  hatch (glyphs); deliberately unvalidated, now documented as such on the
+  web-fonts page.

@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/get-features-under-the-mouse-pointer/
+# No getMap() needed here: <ml-map> dispatches DOM CustomEvents for layer
+# hovers — see get-features-under-the-mouse-pointer.js.
+type: map
+id: get-features-under-the-mouse-pointer
+config:
+  center: [-73.97, 40.72]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: landmarks
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, geometry: { type: Point, coordinates: [-73.9857, 40.7484] }, properties: { name: "Empire State Building", kind: landmark } }
+          - { type: Feature, geometry: { type: Point, coordinates: [-73.9654, 40.7829] }, properties: { name: "Central Park", kind: park } }
+          - { type: Feature, geometry: { type: Point, coordinates: [-73.9969, 40.7061] }, properties: { name: "Brooklyn Bridge", kind: bridge } }
+          - { type: Feature, geometry: { type: Point, coordinates: [-74.0445, 40.6892] }, properties: { name: "Statue of Liberty", kind: landmark } }
+    paint:
+      circle-radius: 9
+      circle-color: "#7c3aed"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer

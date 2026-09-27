@@ -1,0 +1,29 @@
+---
+title: Animate a point
+description: "The MapLibre point-animation example — a loop feeding updateLayerData()"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/animate-a-point.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/animate-a-point.js?raw';
+
+
+Replicates the MapLibre example [Animate a point](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-point/). The upstream version reaches into `map.getSource(...).setData()`; here the loop feeds `<ml-map>`'s own `updateLayerData()` — no source-id bookkeeping.
+
+<LiveMap src="/configs/gallery/animate-a-point.yaml" height="440px" caption="The point orbits at ~16fps" />
+
+<script src="/gallery-js/animate-a-point.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="animate-a-point.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="animate-a-point.js" />
+
+## What to notice
+
+- `updateLayerData(layerId, geojson)` is the element's imperative data API — it resolves the layer's source itself, and feature-state survives the same way `refresh:` updates do.
+- For data that changes on the *server*, prefer the declarative `refresh:`/`stream:` source config; this hatch is for client-computed motion.

@@ -1,0 +1,24 @@
+# Hermetic twin of docs/public/configs/gallery/change-a-layers-color-with-buttons.yaml (local basemap;
+# driven by the SAME JS file the docs page loads).
+type: map
+id: change-a-layers-color-with-buttons
+config:
+  center: [12.338, 45.4385]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: district
+    type: fill
+    source:
+      type: geojson
+      region:
+        name: Laguna di Venezia
+        coordinates:
+          - - [12.25, 45.36]
+            - [12.45, 45.36]
+            - [12.45, 45.52]
+            - [12.25, 45.52]
+            - [12.25, 45.36]
+    paint:
+      fill-color: "#3b9ddd"
+      fill-opacity: 0.6

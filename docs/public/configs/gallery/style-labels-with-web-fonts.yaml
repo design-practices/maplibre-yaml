@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-web-fonts/
+# The escape hatch here is INSIDE the YAML: mapStyle takes a full inline
+# style object, so style-root concerns with no dedicated YAML field —
+# glyphs, sprite, and friends — are still authorable.
+type: map
+id: style-labels-with-web-fonts
+config:
+  center: [16.37, 48.21]
+  zoom: 10
+  mapStyle:
+    version: 8
+    name: glyphs-demo
+    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
+    sources: {}
+    layers:
+      - id: backdrop
+        type: background
+        paint:
+          background-color: "#f4efe9"
+layers:
+  - id: city-labels
+    type: symbol
+    source:
+      type: geojson
+      locations:
+        - { coordinates: [16.3738, 48.2082], name: Wien }
+        - { coordinates: [16.36, 48.185], name: Wieden }
+        - { coordinates: [16.4, 48.24], name: Donaustadt }
+    layout:
+      text-font: ["Noto Sans Regular"]
+      text-field: ["get", "name"]
+      text-size: 20
+    paint:
+      text-color: "#1d3557"

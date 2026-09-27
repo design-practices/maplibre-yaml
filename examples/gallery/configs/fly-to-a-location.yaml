@@ -1,0 +1,8 @@
+# Hermetic twin of docs/public/configs/gallery/fly-to-a-location.yaml (local basemap;
+# driven by the SAME JS file the docs page loads).
+type: map
+id: fly-to-a-location
+config:
+  center: [-2.2, 53.5]
+  zoom: 4
+  mapStyle: "/examples/verification/configs/local-style.json"

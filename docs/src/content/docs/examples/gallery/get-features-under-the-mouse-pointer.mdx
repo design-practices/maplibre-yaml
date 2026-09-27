@@ -1,0 +1,31 @@
+---
+title: Get features under the mouse pointer
+description: "The MapLibre queryRenderedFeatures example — via ml-map's DOM events, no MapLibre API at all"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/get-features-under-the-mouse-pointer.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/get-features-under-the-mouse-pointer.js?raw';
+
+
+Replicates the MapLibre example [Get features under the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/get-features-under-the-mouse-pointer/) — without touching the MapLibre API. `<ml-map>` dispatches DOM `CustomEvent`s for layer interactions; a plain `addEventListener` receives the hovered feature.
+
+<div data-feature-info style="min-height:1.6rem; margin:1rem 0; font-weight:600;"></div>
+
+<LiveMap src="/configs/gallery/get-features-under-the-mouse-pointer.yaml" height="440px" caption="Hover a point — its properties appear above" />
+
+<script src="/gallery-js/get-features-under-the-mouse-pointer.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="get-features-under-the-mouse-pointer.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="get-features-under-the-mouse-pointer.js" />
+
+## What to notice
+
+- `ml-map:layer-hover` (and `-click`, `-data-loaded`, …) carry `{ layerId, feature, lngLat }` in `detail` — the web-component event surface is often hatch enough.
+- `hover.cursor: pointer` in the YAML is what marks the layer interactive.

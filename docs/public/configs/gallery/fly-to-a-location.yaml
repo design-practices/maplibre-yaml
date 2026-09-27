@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/fly-to-a-location/
+# The YAML half: the map itself. Runtime camera moves live in the page's
+# JS via getMap() — see fly-to-a-location.js next to this file's page.
+type: map
+id: fly-to-a-location
+config:
+  center: [-2.2, 53.5]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"

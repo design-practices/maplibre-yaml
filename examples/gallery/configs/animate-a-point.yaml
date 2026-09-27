@@ -1,0 +1,21 @@
+# Hermetic twin of docs/public/configs/gallery/animate-a-point.yaml (local basemap;
+# driven by the SAME JS file the docs page loads).
+type: map
+id: animate-a-point
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: orbiter
+    type: circle
+    source:
+      type: geojson
+      location:
+        name: Orbiter
+        coordinates: [20, 0]
+    paint:
+      circle-radius: 10
+      circle-color: "#e63946"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
