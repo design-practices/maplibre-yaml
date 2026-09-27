@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/visualize-population-density/
+# The `let`/`var` expression binds a computed density once and reuses it in
+# the color ramp — verbatim style-spec, in YAML block form.
+type: map
+id: visualize-population-density
+config:
+  center: [30.5, 50.5]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: density
+    type: fill
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: { name: Denseland, population: 3000000, sq-km: 8000 }
+            geometry:
+              type: Polygon
+              coordinates:
+                - - [27, 49]
+                  - [30, 49]
+                  - [30, 51]
+                  - [27, 51]
+                  - [27, 49]
+          - type: Feature
+            properties: { name: Sparseland, population: 400000, sq-km: 30000 }
+            geometry:
+              type: Polygon
+              coordinates:
+                - - [31, 49]
+                  - [35, 49]
+                  - [35, 52]
+                  - [31, 52]
+                  - [31, 49]
+    paint:
+      fill-color:
+        - let
+        - density
+        - ["/", ["get", "population"], ["get", "sq-km"]]
+        - - interpolate
+          - ["linear"]
+          - ["var", "density"]
+          - 10
+          - "#edf8e9"
+          - 400
+          - "#006d2c"
+      fill-opacity: 0.7
+    interactive:
+      click:
+        popup:
+          - h4:
+              - property: name
+          - p:
+              - str: "People per km²: "
+              - property: population

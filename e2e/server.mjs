@@ -156,6 +156,13 @@ const server = createServer(async (req, res) => {
     if (path.startsWith("/dem/") && path.endsWith(".png")) {
       return send(200, DEM_TILE, TYPES[".png"]);
     }
+    if (path.startsWith("/glyphs/") && path.endsWith(".pbf")) {
+      // An empty buffer is a valid (empty) glyphs protobuf message: symbol
+      // layers with text load without a network dependency or a console
+      // error. No visible glyphs render — the gallery label twins assert
+      // layer presence and error-freeness, not typography.
+      return send(200, Buffer.alloc(0), "application/x-protobuf");
+    }
 
     // Static, confined to the repo root.
     const rel = normalize(path).replace(/^(\.\.[/\\])+/, "");

@@ -1,0 +1,9 @@
+# Hermetic twin of docs/public/configs/gallery/set-pitch-and-bearing.yaml (local basemap).
+type: map
+id: set-pitch-and-bearing
+config:
+  center: [-73.5804, 45.53483]
+  zoom: 9
+  pitch: 60
+  bearing: -60
+  mapStyle: "/examples/verification/configs/local-style.json"

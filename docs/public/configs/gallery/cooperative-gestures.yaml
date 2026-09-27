@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/cooperative-gestures/
+# Scroll without Ctrl/Cmd and the page scrolls; the map asks for the modifier.
+type: map
+id: cooperative-gestures
+config:
+  center: [-122.4194, 37.7749]
+  zoom: 12
+  cooperativeGestures: true
+  mapStyle: "https://demotiles.maplibre.org/style.json"

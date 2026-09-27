@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/style-lines-with-a-data-driven-property/
+# One layer, per-feature color: line-color reads each feature's property.
+type: map
+id: style-lines-with-a-data-driven-property
+config:
+  center: [-122.4833, 37.829]
+  zoom: 14
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: colored-lines
+    type: line
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: { color: "#F7455D" }
+            geometry:
+              type: LineString
+              coordinates:
+                - [-122.4833, 37.833]
+                - [-122.4811, 37.8319]
+                - [-122.4787, 37.8305]
+                - [-122.4761, 37.8291]
+          - type: Feature
+            properties: { color: "#33C9EB" }
+            geometry:
+              type: LineString
+              coordinates:
+                - [-122.4833, 37.827]
+                - [-122.4811, 37.8259]
+                - [-122.4787, 37.8245]
+                - [-122.4761, 37.8231]
+    layout:
+      line-join: round
+      line-cap: round
+    paint:
+      line-color: ["get", "color"]
+      line-width: 6

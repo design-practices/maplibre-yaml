@@ -1,0 +1,8 @@
+# Hermetic twin of docs/public/configs/gallery/render-world-copies.yaml (local basemap).
+type: map
+id: render-world-copies
+config:
+  center: [0, 20]
+  zoom: 1
+  renderWorldCopies: false
+  mapStyle: "/examples/verification/configs/local-style.json"

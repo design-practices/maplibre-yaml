@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-a-new-layer-below-labels/
+# `before:` slots the fill underneath the basemap's country labels, which
+# stay readable on top of it.
+type: map
+id: add-a-new-layer-below-labels
+config:
+  center: [10, 50]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: wash-below-labels
+    type: fill
+    before: countries-label
+    source:
+      type: geojson
+      region:
+        name: Central Europe wash
+        coordinates:
+          - - [-5, 40]
+            - [25, 40]
+            - [25, 58]
+            - [-5, 58]
+            - [-5, 40]
+    paint:
+      fill-color: "#7c3aed"
+      fill-opacity: 0.4

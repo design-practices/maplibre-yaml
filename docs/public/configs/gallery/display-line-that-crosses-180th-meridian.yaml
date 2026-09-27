@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/display-line-that-crosses-180th-meridian/
+# Longitudes past 180 draw the short way across the antimeridian instead of
+# wrapping around the world.
+type: map
+id: display-line-that-crosses-180th-meridian
+config:
+  center: [180, 52]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: crossing
+    type: line
+    source:
+      type: geojson
+      route:
+        name: Aleutian hop
+        coordinates:
+          - [172, 52]
+          - [188, 52]
+    layout:
+      line-join: round
+      line-cap: round
+    paint:
+      line-color: "#e63946"
+      line-width: 4

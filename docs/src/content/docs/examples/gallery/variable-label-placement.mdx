@@ -1,0 +1,20 @@
+---
+title: Variable label placement
+description: The MapLibre variable-anchor example in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/variable-label-placement.yaml?raw';
+
+Replicates the MapLibre example [Variable label placement](https://maplibre.org/maplibre-gl-js/docs/examples/variable-label-placement/).
+
+<LiveMap src="/configs/gallery/variable-label-placement.yaml" height="460px" caption="Zoom out — crowded labels shift anchor instead of hiding" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="variable-label-placement.yaml" />
+
+## What to notice
+
+- `text-variable-anchor` lists anchors in preference order; `text-radial-offset` and `text-justify: auto` complete the upstream recipe.

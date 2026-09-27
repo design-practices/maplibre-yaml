@@ -204,6 +204,37 @@ describe("LayerManager", () => {
       expect(spec.generateId).toBeUndefined();
     });
 
+    it("forwards lineMetrics and friends on an inline geojson source (ml-tfd.8 family)", async () => {
+      // Dropping schema-accepted options silently disabled the features
+      // that read them — line-gradient needs lineMetrics (gallery find).
+      await manager.addLayer({
+        id: "grad",
+        type: "line",
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "geojson",
+          lineMetrics: true,
+          tolerance: 0.4,
+          buffer: 64,
+          maxzoom: 12,
+          attribution: "test",
+          data: { type: "FeatureCollection", features: [] },
+        },
+      } as any);
+
+      const spec = mockMap.addSource.mock.calls[0][1];
+      expect(spec).toEqual(
+        expect.objectContaining({
+          lineMetrics: true,
+          tolerance: 0.4,
+          buffer: 64,
+          maxzoom: 12,
+          attribution: "test",
+        })
+      );
+    });
+
     it("throws a clear error for a $ref source instead of silently skipping (ml-tfd.8)", async () => {
       // Falling through addSource's type chain left the layer pointing at a
       // source that was never added; MapLibre then killed the document with

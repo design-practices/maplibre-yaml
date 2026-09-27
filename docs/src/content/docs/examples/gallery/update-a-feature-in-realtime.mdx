@@ -1,0 +1,21 @@
+---
+title: Update a feature in realtime
+description: The MapLibre realtime-update example with merge-strategy polling
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/update-a-feature-in-realtime.yaml?raw';
+
+Replicates the MapLibre example [Update a feature in realtime](https://maplibre.org/maplibre-gl-js/docs/examples/update-a-feature-in-realtime/): live USGS earthquakes, updated in place.
+
+<LiveMap src="/configs/gallery/update-a-feature-in-realtime.yaml" height="460px" caption="Circles update as the hourly feed refreshes" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="update-a-feature-in-realtime.yaml" />
+
+## What to notice
+
+- `updateStrategy: merge` + `updateKey: id` updates existing features by id instead of replacing the collection — the declarative version of upstream's hand-rolled diffing.
+- `append-window` (with `windowSize`/`windowDuration`) covers accumulating feeds.

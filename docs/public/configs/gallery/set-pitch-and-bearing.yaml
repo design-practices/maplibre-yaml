@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/set-pitch-and-bearing/
+type: map
+id: set-pitch-and-bearing
+config:
+  center: [-73.5804, 45.53483]
+  zoom: 9
+  pitch: 60
+  bearing: -60
+  mapStyle: "https://demotiles.maplibre.org/style.json"

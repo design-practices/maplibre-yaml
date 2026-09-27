@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/change-building-color-based-on-zoom-level/
+# Zoom from 15 to 17: the interpolate expression eases the fill from sand
+# to terracotta. The layer draws from the basemap's own vector source.
+type: map
+id: change-building-color-based-on-zoom-level
+config:
+  center: [-90.0715, 29.9511]
+  zoom: 15
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: buildings-by-zoom
+    type: fill
+    source: openmaptiles
+    source-layer: building
+    minzoom: 14
+    paint:
+      fill-color:
+        - interpolate
+        - ["exponential", 0.5]
+        - ["zoom"]
+        - 15
+        - "#e8d8c3"
+        - 17
+        - "#c47a5a"
+      fill-opacity: 0.85

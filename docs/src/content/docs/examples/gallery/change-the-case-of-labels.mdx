@@ -1,0 +1,20 @@
+---
+title: Change the case of labels
+description: The MapLibre upcase/downcase example in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/change-the-case-of-labels.yaml?raw';
+
+Replicates the MapLibre example [Change the case of labels](https://maplibre.org/maplibre-gl-js/docs/examples/change-the-case-of-labels/).
+
+<LiveMap src="/configs/gallery/change-the-case-of-labels.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="change-the-case-of-labels.yaml" />
+
+## What to notice
+
+- `["upcase", ["get", "name"]]` transforms at render time — the data keeps its original casing.

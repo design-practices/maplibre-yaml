@@ -1,0 +1,20 @@
+---
+title: Disable scroll zoom
+description: The MapLibre disable-scroll-zoom example as one config flag
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/disable-scroll-zoom.yaml?raw';
+
+Replicates the MapLibre example [Disable scroll zoom](https://maplibre.org/maplibre-gl-js/docs/examples/disable-scroll-zoom/).
+
+<LiveMap src="/configs/gallery/disable-scroll-zoom.yaml" height="420px" caption="The wheel scrolls the page; zoom by double-click" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="disable-scroll-zoom.yaml" />
+
+## What to notice
+
+- `config.scrollZoom: false` — each interaction handler (`boxZoom`, `dragPan`, `keyboard`, `doubleClickZoom`, …) is its own flag.

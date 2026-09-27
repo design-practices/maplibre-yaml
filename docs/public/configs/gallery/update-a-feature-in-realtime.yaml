@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/update-a-feature-in-realtime/
+# The USGS feed updates in place: `merge` matches features by id and updates
+# them rather than replacing the whole collection.
+type: map
+id: update-a-feature-in-realtime
+config:
+  center: [-120, 40]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: quakes-live
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
+      refresh:
+        refreshInterval: 30000
+        updateStrategy: merge
+        updateKey: id
+    paint:
+      circle-radius:
+        ["interpolate", ["linear"], ["get", "mag"], 1, 4, 6, 24]
+      circle-color: "#e63946"
+      circle-opacity: 0.7
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      click:
+        popup:
+          - h4:
+              - property: place
+          - p:
+              - str: "Magnitude: "
+              - property: mag

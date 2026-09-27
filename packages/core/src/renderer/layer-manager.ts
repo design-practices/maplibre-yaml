@@ -376,6 +376,16 @@ export class LayerManager {
         if (geojsonSource.clusterMinPoints !== undefined) sourceSpec.clusterMinPoints = geojsonSource.clusterMinPoints;
         if (geojsonSource.clusterProperties !== undefined) sourceSpec.clusterProperties = geojsonSource.clusterProperties;
 
+        // The remaining MapLibre geojson options the schema accepts. Dropping
+        // them silently disabled features that need them — line-gradient
+        // needs lineMetrics, found by the gallery gradient pages (ml-tfd.8
+        // family: forward what the schema accepted).
+        if (geojsonSource.lineMetrics !== undefined) sourceSpec.lineMetrics = geojsonSource.lineMetrics;
+        if (geojsonSource.tolerance !== undefined) sourceSpec.tolerance = geojsonSource.tolerance;
+        if (geojsonSource.buffer !== undefined) sourceSpec.buffer = geojsonSource.buffer;
+        if (geojsonSource.maxzoom !== undefined) sourceSpec.maxzoom = geojsonSource.maxzoom;
+        if (geojsonSource.attribution !== undefined) sourceSpec.attribution = geojsonSource.attribution;
+
         this.map.addSource(sourceId, sourceSpec);
       } else if (geojsonSource.stream) {
         this.map.addSource(sourceId, {
@@ -483,6 +493,17 @@ export class LayerManager {
     if (config.clusterMaxZoom !== undefined) sourceSpec.clusterMaxZoom = config.clusterMaxZoom;
     if (config.clusterMinPoints !== undefined) sourceSpec.clusterMinPoints = config.clusterMinPoints;
     if (config.clusterProperties !== undefined) sourceSpec.clusterProperties = config.clusterProperties;
+
+    // Same passthrough as the inline-data path (line-gradient needs
+    // lineMetrics; dropping schema-accepted options silently disables the
+    // features that read them).
+    if (config.lineMetrics !== undefined) sourceSpec.lineMetrics = config.lineMetrics;
+    if (config.tolerance !== undefined) sourceSpec.tolerance = config.tolerance;
+    if (config.buffer !== undefined) sourceSpec.buffer = config.buffer;
+    if (config.maxzoom !== undefined) sourceSpec.maxzoom = config.maxzoom;
+    if (config.attribution !== undefined) sourceSpec.attribution = config.attribution;
+    if (config.generateId !== undefined) sourceSpec.generateId = config.generateId;
+    if (config.promoteId !== undefined) sourceSpec.promoteId = config.promoteId;
 
     this.map.addSource(sourceId, sourceSpec);
 

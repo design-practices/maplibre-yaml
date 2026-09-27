@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/hash-routing/
+# Pan or zoom, then reload: the viewport lives in the URL fragment.
+type: map
+id: hash-routing
+config:
+  center: [-0.13, 51.51]
+  zoom: 11
+  hash: true
+  mapStyle: "https://demotiles.maplibre.org/style.json"

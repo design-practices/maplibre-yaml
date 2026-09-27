@@ -1,0 +1,21 @@
+---
+title: Visualize population density
+description: The MapLibre let/var expression example in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/visualize-population-density.yaml?raw';
+
+Replicates the MapLibre example [Visualize population density](https://maplibre.org/maplibre-gl-js/docs/examples/visualize-population-density/): compute density once, reuse it in the ramp.
+
+<LiveMap src="/configs/gallery/visualize-population-density.yaml" height="460px" caption="Click a region for its numbers" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="visualize-population-density.yaml" />
+
+## What to notice
+
+- `let` binds `density` to a computed value; `var` reads it inside the `interpolate` — the full expression language is available verbatim.
+- The click popup reads the same properties the expression does.

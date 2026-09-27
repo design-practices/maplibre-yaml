@@ -1,0 +1,21 @@
+---
+title: Locate the user
+description: The MapLibre geolocate example as a controls entry
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/locate-the-user.yaml?raw';
+
+Replicates the MapLibre example [Locate the user](https://maplibre.org/maplibre-gl-js/docs/examples/locate-the-user/).
+
+<LiveMap src="/configs/gallery/locate-the-user.yaml" height="420px" caption="Click the geolocate button and grant permission" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="locate-the-user.yaml" />
+
+## What to notice
+
+- `controls.geolocate: true` adds the control with high-accuracy tracking enabled.
+- Position takes the usual `{ enabled, position }` block form.

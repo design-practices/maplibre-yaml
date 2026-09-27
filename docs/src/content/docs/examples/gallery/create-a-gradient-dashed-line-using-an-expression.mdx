@@ -1,0 +1,20 @@
+---
+title: Create a gradient dashed line using an expression
+description: The MapLibre gradient+dash example in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/create-a-gradient-dashed-line-using-an-expression.yaml?raw';
+
+Replicates the MapLibre example [Create a gradient dashed line using an expression](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-gradient-dashed-line-using-an-expression/).
+
+<LiveMap src="/configs/gallery/create-a-gradient-dashed-line-using-an-expression.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="create-a-gradient-dashed-line-using-an-expression.yaml" />
+
+## What to notice
+
+- `line-gradient` and `line-dasharray` compose on one layer, exactly as upstream.

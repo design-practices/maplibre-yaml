@@ -1,0 +1,20 @@
+---
+title: Use locally generated ideographs
+description: The MapLibre local-ideographs example in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/use-locally-generated-ideographs.yaml?raw';
+
+Replicates the MapLibre example [Use locally generated ideographs](https://maplibre.org/maplibre-gl-js/docs/examples/use-locally-generated-ideographs/): CJK labels drawn from local fonts.
+
+<LiveMap src="/configs/gallery/use-locally-generated-ideographs.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="use-locally-generated-ideographs.yaml" />
+
+## What to notice
+
+- `config.localIdeographFontFamily` generates CJK/Hangul glyphs client-side from the named font stack instead of fetching glyph ranges — faster, and independent of the glyph server's coverage.

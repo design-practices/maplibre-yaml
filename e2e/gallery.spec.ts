@@ -71,6 +71,55 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
   },
   { slug: "show-polygon-information-on-click", layers: ["state"], rendered: "state" },
   { slug: "add-live-realtime-data", layers: ["drone"], rendered: "drone" },
+  // Wave 2. Config-flag pages assert behavior in the bespoke tests below;
+  // label twins assert presence + error-freeness (the local style serves
+  // empty glyphs, so no visible text renders hermetically). Docs-only, no
+  // twin: display-buildings-in-3d and change-building-color-based-on-zoom-level
+  // (both draw from the remote openfreemap basemap's own source — no local
+  // vector tileset can stand in honestly).
+  { slug: "set-pitch-and-bearing", layers: [] },
+  { slug: "hash-routing", layers: [] },
+  { slug: "render-world-copies", layers: [] },
+  { slug: "locate-the-user", layers: [] },
+  { slug: "cooperative-gestures", layers: [] },
+  { slug: "disable-map-rotation", layers: [] },
+  { slug: "disable-scroll-zoom", layers: [] },
+  { slug: "add-a-raster-tile-source", layers: ["osm-raster"] },
+  {
+    slug: "display-line-that-crosses-180th-meridian",
+    layers: ["crossing"],
+    rendered: "crossing",
+  },
+  { slug: "update-a-feature-in-realtime", layers: ["quakes-live"], rendered: "quakes-live" },
+  { slug: "add-a-new-layer-below-labels", layers: ["wash-below-labels"] },
+  { slug: "add-a-hillshade-layer", layers: ["hillshade"] },
+  { slug: "display-and-style-rich-text-labels", layers: ["city-labels"] },
+  { slug: "change-the-case-of-labels", layers: ["shouting-labels"] },
+  { slug: "variable-label-placement", layers: ["poi-labels"] },
+  { slug: "variable-label-placement-with-offset", layers: ["poi-labels"] },
+  { slug: "use-locally-generated-ideographs", layers: ["city-labels-ja"] },
+  {
+    slug: "style-lines-with-a-data-driven-property",
+    layers: ["colored-lines"],
+    rendered: "colored-lines",
+  },
+  {
+    slug: "create-a-gradient-line-using-an-expression",
+    layers: ["gradient-line"],
+    rendered: "gradient-line",
+  },
+  {
+    slug: "create-a-gradient-dashed-line-using-an-expression",
+    layers: ["gradient-dashed-line"],
+    rendered: "gradient-dashed-line",
+  },
+  { slug: "visualize-population-density", layers: ["density"], rendered: "density" },
+  { slug: "create-a-hover-effect", layers: ["states"], rendered: "states" },
+  {
+    slug: "center-the-map-on-a-clicked-symbol",
+    layers: ["islands"],
+    rendered: "islands",
+  },
 ];
 
 async function openExample(page: Page, slug: string, layers: string[]): Promise<void> {
@@ -202,6 +251,133 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
       };
     });
     expect(handlers).toEqual({ dragPan: false, scrollZoom: false });
+  });
+
+  test("wave-2 config flags: each YAML flag reaches the live map", async ({ page }) => {
+    await guard(page);
+
+    await openExample(page, "set-pitch-and-bearing", []);
+    const camera = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return { pitch: map.getPitch(), bearing: map.getBearing() };
+    });
+    expect(camera).toEqual({ pitch: 60, bearing: -60 });
+
+    await openExample(page, "render-world-copies", []);
+    expect(
+      await page.evaluate(() =>
+        (document.getElementById("map") as any).getMap().getRenderWorldCopies()
+      )
+    ).toBe(false);
+
+    await openExample(page, "cooperative-gestures", []);
+    expect(
+      await page.evaluate(() => {
+        const map = (document.getElementById("map") as any).getMap();
+        return Boolean(map.cooperativeGestures?.isEnabled?.());
+      })
+    ).toBe(true);
+
+    await openExample(page, "disable-map-rotation", []);
+    expect(
+      await page.evaluate(() => {
+        const map = (document.getElementById("map") as any).getMap();
+        return { drag: map.dragRotate.isEnabled(), touch: map.touchZoomRotate.isEnabled() };
+      })
+    ).toEqual({ drag: false, touch: false });
+
+    await openExample(page, "disable-scroll-zoom", []);
+    expect(
+      await page.evaluate(() =>
+        (document.getElementById("map") as any).getMap().scrollZoom.isEnabled()
+      )
+    ).toBe(false);
+
+    await openExample(page, "locate-the-user", []);
+    await expect(page.locator(".maplibregl-ctrl-geolocate")).toBeVisible();
+  });
+
+  test("hash-routing: the viewport writes itself into the URL", async ({ page }) => {
+    await guard(page);
+    await openExample(page, "hash-routing", []);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          const map = (document.getElementById("map") as any).getMap();
+          map.once("moveend", () => resolve());
+          map.jumpTo({ center: [10, 45], zoom: 6 });
+        })
+    );
+    expect(page.url()).toContain("#");
+  });
+
+  test("add-a-new-layer-below-labels: before places the layer under its target", async ({
+    page,
+  }) => {
+    await guard(page);
+    await openExample(page, "add-a-new-layer-below-labels", ["wash-below-labels"]);
+    const order = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      const ids = map.getStyle().layers.map((l: any) => l.id);
+      return { wash: ids.indexOf("wash-below-labels"), target: ids.indexOf("background") };
+    });
+    expect(order.wash).toBeGreaterThanOrEqual(0);
+    expect(order.wash).toBeLessThan(order.target);
+  });
+
+  test("update-a-feature-in-realtime: the merge poll loop keeps delivering", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openExample(page, "update-a-feature-in-realtime", ["quakes-live"]);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          let ticks = 0;
+          document.getElementById("map")!.addEventListener("ml-map:layer-data-loaded", () => {
+            if (++ticks >= 2) resolve();
+          });
+        })
+    );
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("center-the-map-on-a-clicked-symbol: clicking a point centers the camera on it", async ({
+    page,
+  }) => {
+    await guard(page);
+    await openExample(page, "center-the-map-on-a-clicked-symbol", ["islands"]);
+
+    const target = [-91.395, -0.9538] as const;
+    const pt = await page.evaluate((lngLat) => {
+      const map = (document.getElementById("map") as any).getMap();
+      const p = map.project(lngLat as any);
+      const rect = map.getCanvas().getBoundingClientRect();
+      return { x: rect.left + p.x, y: rect.top + p.y };
+    }, target);
+    await page.waitForFunction(
+      ({ x, y }) => {
+        const map = (document.getElementById("map") as any).getMap();
+        const rect = map.getCanvas().getBoundingClientRect();
+        return (
+          map.queryRenderedFeatures([x - rect.left, y - rect.top], { layers: ["islands"] })
+            .length > 0
+        );
+      },
+      pt,
+      { timeout: 30_000 }
+    );
+    const settled = page.evaluate(
+      () =>
+        new Promise<{ lng: number; lat: number }>((resolve) => {
+          const map = (document.getElementById("map") as any).getMap();
+          map.once("moveend", () => resolve(map.getCenter()));
+        })
+    );
+    await page.mouse.click(pt.x, pt.y);
+    const center = await settled;
+    expect(Math.abs(center.lng - target[0])).toBeLessThan(0.05);
+    expect(Math.abs(center.lat - target[1])).toBeLessThan(0.05);
   });
 
   test("add-live-realtime-data: the poll loop keeps delivering data", async ({ page }) => {

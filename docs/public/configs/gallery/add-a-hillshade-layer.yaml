@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-a-hillshade-layer/
+type: map
+id: add-a-hillshade-layer
+config:
+  center: [-121.696, 45.374]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: hillshade
+    type: hillshade
+    source:
+      type: raster-dem
+      tiles:
+        - "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+      encoding: terrarium
+      tileSize: 256
+      maxzoom: 14
+      attribution: "Terrain tiles: Mapzen/AWS Open Data"
+    paint:
+      hillshade-shadow-color: "#473B24"
+      hillshade-exaggeration: 0.6

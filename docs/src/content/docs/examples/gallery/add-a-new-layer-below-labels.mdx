@@ -1,0 +1,21 @@
+---
+title: Add a new layer below labels
+description: "The MapLibre below-labels example as a before: field"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-new-layer-below-labels.yaml?raw';
+
+Replicates the MapLibre example [Add a new layer below labels](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-new-layer-below-labels/): the purple wash slides under the basemap's country labels.
+
+<LiveMap src="/configs/gallery/add-a-new-layer-below-labels.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-new-layer-below-labels.yaml" />
+
+## What to notice
+
+- `before: countries-label` is the second argument to `addLayer` — the layer inserts below the named basemap layer, so labels stay readable.
+- Works with any layer id in the loaded style; the emitter honors it as array order.

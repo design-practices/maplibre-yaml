@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/disable-scroll-zoom/
+# The wheel scrolls the page, not the map; zoom with double-click or pinch.
+type: map
+id: disable-scroll-zoom
+config:
+  center: [13.405, 52.52]
+  zoom: 10
+  scrollZoom: false
+  mapStyle: "https://demotiles.maplibre.org/style.json"

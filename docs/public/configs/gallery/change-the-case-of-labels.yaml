@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/change-the-case-of-labels/
+type: map
+id: change-the-case-of-labels
+config:
+  center: [-4, 55]
+  zoom: 4.5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: shouting-labels
+    type: symbol
+    source:
+      type: geojson
+      locations:
+        - { coordinates: [-0.1276, 51.5072], name: London }
+        - { coordinates: [-3.1883, 55.9533], name: Edinburgh }
+        - { coordinates: [-6.2603, 53.3498], name: Dublin }
+        - { coordinates: [-2.2426, 53.4808], name: Manchester }
+    layout:
+      text-font: ["Noto Sans Regular"]
+      text-field: ["upcase", ["get", "name"]]
+      text-size: 14
+    paint:
+      text-color: "#1d3557"
+      text-halo-color: "#ffffff"
+      text-halo-width: 1.5

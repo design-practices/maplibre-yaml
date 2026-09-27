@@ -1,0 +1,24 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-new-layer-below-labels.yaml (local basemap).
+type: map
+id: add-a-new-layer-below-labels
+config:
+  center: [10, 50]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: wash-below-labels
+    type: fill
+    before: background  # local style has no label layer; background proves the ordering mechanism
+    source:
+      type: geojson
+      region:
+        name: Central Europe wash
+        coordinates:
+          - - [-5, 40]
+            - [25, 40]
+            - [25, 58]
+            - [-5, 58]
+            - [-5, 40]
+    paint:
+      fill-color: "#7c3aed"
+      fill-opacity: 0.4

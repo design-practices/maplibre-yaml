@@ -1,0 +1,20 @@
+---
+title: Display line that crosses 180th meridian
+description: The MapLibre antimeridian example with the route sugar
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-line-that-crosses-180th-meridian.yaml?raw';
+
+Replicates the MapLibre example [Display line that crosses 180th meridian](https://maplibre.org/maplibre-gl-js/docs/examples/display-line-that-crosses-180th-meridian/).
+
+<LiveMap src="/configs/gallery/display-line-that-crosses-180th-meridian.yaml" height="460px" caption="The line takes the short way across the date line" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-line-that-crosses-180th-meridian.yaml" />
+
+## What to notice
+
+- Longitudes past ±180 (here `188`) tell MapLibre to draw across the antimeridian instead of wrapping the long way around — same trick as upstream, inside a `route:` sugar.
