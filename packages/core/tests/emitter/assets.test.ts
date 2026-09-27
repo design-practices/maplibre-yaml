@@ -9,6 +9,8 @@ import {
   hatchTileSvg,
   buildSpriteIndex,
   attachSpriteAssets,
+  dedupeAssets,
+  finalizeSpriteBaseUrl,
   DOCUMENT_SPRITE_ID,
 } from "../../src/emitter/assets";
 import { mergeBasemap } from "../../src/emitter/basemap";
@@ -24,13 +26,13 @@ describe("asset naming (KTD6)", () => {
   it("is deterministic: same inputs, same name", () => {
     const a = hatchTileSvg({ angle: 45, spacing: 8 });
     const b = hatchTileSvg({ angle: 45, spacing: 8 });
-    expect(a.asset.name).toBe(b.asset.name);
-    expect(a.asset.svg).toBe(b.asset.svg);
+    expect(a.name).toBe(b.name);
+    expect(a.svg).toBe(b.svg);
   });
 
   it("differs when params differ, keeping the readable prefix", () => {
-    const a = hatchTileSvg({ angle: 45, spacing: 8 }).asset.name;
-    const b = hatchTileSvg({ angle: 30, spacing: 8 }).asset.name;
+    const a = hatchTileSvg({ angle: 45, spacing: 8 }).name;
+    const b = hatchTileSvg({ angle: 30, spacing: 8 }).name;
     expect(a).not.toBe(b);
     expect(a).toMatch(/^fx-hatch-45-8-[0-9a-f]{8}$/);
     expect(b).toMatch(/^fx-hatch-30-8-[0-9a-f]{8}$/);
@@ -69,7 +71,7 @@ describe("sprite index layout", () => {
 
 describe("attachSpriteAssets", () => {
   it("declares the document sprite in array form and carries descriptors", () => {
-    const { asset } = hatchTileSvg();
+    const asset = hatchTileSvg();
     const result = attachSpriteAssets(emptyResult(), [asset]);
     expect(result.style["sprite"]).toEqual([
       { id: DOCUMENT_SPRITE_ID, url: DOCUMENT_SPRITE_ID },
@@ -81,10 +83,102 @@ describe("attachSpriteAssets", () => {
     const result = emptyResult();
     expect(attachSpriteAssets(result, [])).toBe(result);
   });
+
+  it("finalizes the sprite URL when a base is supplied", () => {
+    const asset = hatchTileSvg();
+    const result = attachSpriteAssets(emptyResult(), [asset], "https://maps.example.com/app/");
+    expect(result.style["sprite"]).toEqual([
+      { id: DOCUMENT_SPRITE_ID, url: `https://maps.example.com/app/${DOCUMENT_SPRITE_ID}` },
+    ]);
+  });
+
+  it("accumulates across calls, deduping identical assets", () => {
+    const asset = hatchTileSvg();
+    const once = attachSpriteAssets(emptyResult(), [asset]);
+    const twice = attachSpriteAssets(once, [asset]);
+    expect(twice.assets).toHaveLength(1);
+  });
+});
+
+describe("dedupeAssets / name collisions", () => {
+  it("keeps one copy of identical content", () => {
+    const asset = hatchTileSvg();
+    expect(dedupeAssets([asset, { ...asset }])).toHaveLength(1);
+  });
+
+  it("throws when one name claims two different images", () => {
+    const asset = hatchTileSvg();
+    expect(() =>
+      dedupeAssets([asset, { ...asset, svg: "<svg><!-- different --></svg>" }])
+    ).toThrow(/claimed by two different images/);
+  });
+
+  it("buildSpriteIndex never packs a wider sheet than its index describes", () => {
+    const asset = hatchTileSvg();
+    const layout = buildSpriteIndex([asset, { ...asset }]);
+    expect(layout.placements).toHaveLength(1);
+    expect(layout.width).toBe(asset.width);
+  });
+});
+
+describe("assets survive the runtime gate", () => {
+  it("applyRuntimeGate's rebuild carries EmitResult.assets through", async () => {
+    const { applyRuntimeGate } = await import("../../src/emitter/modes");
+    const asset = hatchTileSvg();
+    const attached = attachSpriteAssets(
+      emptyResult({ state: { minPop: { default: 5 } } }),
+      [asset]
+    );
+    // Below the state floor the gate inlines defaults and REBUILDS the
+    // result — assets must ride the spread, not vanish.
+    const gated = applyRuntimeGate(attached, { trust: "trusted", target: "4.0.0" });
+    expect(gated.assets).toEqual([asset]);
+  });
+});
+
+describe("finalizeSpriteBaseUrl", () => {
+  it("rewrites only the relative placeholder entry", () => {
+    const style = {
+      sprite: [
+        { id: "default", url: "https://base.example/sprite" },
+        { id: DOCUMENT_SPRITE_ID, url: DOCUMENT_SPRITE_ID },
+      ],
+    };
+    const out = finalizeSpriteBaseUrl(style, "https://maps.example.com/app");
+    expect(out["sprite"]).toEqual([
+      { id: "default", url: "https://base.example/sprite" },
+      { id: DOCUMENT_SPRITE_ID, url: `https://maps.example.com/app/${DOCUMENT_SPRITE_ID}` },
+    ]);
+  });
+
+  it("leaves styles without an array sprite untouched", () => {
+    const style = { sprite: "https://base.example/sprite" };
+    expect(finalizeSpriteBaseUrl(style, "https://x.example")).toEqual(style);
+  });
+});
+
+describe("hatch tile seamlessness (lattice snap)", () => {
+  it("snaps (angle, spacing) so the stroke family is periodic over the tile", () => {
+    // 45°/8px/32px: 32·sin45 ≈ 22.6 is NOT a multiple of 8 — unsnapped, every
+    // stroke jogs at the tile boundary. The snap picks j=k=3 crossings.
+    const asset = hatchTileSvg({ angle: 45, spacing: 8, size: 32 });
+    const rotate = asset.svg.match(/rotate\(([-\d.]+)/);
+    expect(rotate).not.toBeNull();
+    expect(Number(rotate![1])).toBeCloseTo(45, 5);
+    // spacing' = 32 / hypot(3,3) ≈ 7.5425 — read back from the line offsets.
+    const offsets = [...asset.svg.matchAll(/y1="([-\d.]+)"/g)].map((m) => Number(m[1]));
+    const step = offsets[1]! - offsets[0]!;
+    expect(step).toBeCloseTo(32 / Math.hypot(3, 3), 3);
+  });
+
+  it("angle 0 and 90 survive the snap", () => {
+    expect(() => hatchTileSvg({ angle: 0 })).not.toThrow();
+    expect(() => hatchTileSvg({ angle: 90 })).not.toThrow();
+  });
 });
 
 describe("basemap sprite merge (KTD3 prefixing)", () => {
-  const { asset } = hatchTileSvg();
+  const asset = hatchTileSvg();
 
   it("string basemap sprite becomes `default`, document assets keep `mlym` — both survive", () => {
     const projected = attachSpriteAssets(emptyResult(), [asset]);

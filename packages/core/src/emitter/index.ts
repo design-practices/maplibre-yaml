@@ -13,6 +13,8 @@ export {
   hatchTileSvg,
   buildSpriteIndex,
   attachSpriteAssets,
+  dedupeAssets,
+  finalizeSpriteBaseUrl,
 } from "./assets";
 export type { BasemapFetcher } from "./basemap";
 export type { EmitMode, EmitWarning, EmitWarningKind, EmitResult, LayerPlacement } from "./project";

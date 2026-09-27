@@ -11,7 +11,13 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { hatchTileSvg, DOCUMENT_SPRITE_ID } from "@maplibre-yaml/core";
+import {
+  hatchTileSvg,
+  attachSpriteAssets,
+  finalizeSpriteBaseUrl,
+  DOCUMENT_SPRITE_ID,
+  type EmitResult,
+} from "@maplibre-yaml/core";
 import { rasterizeSpriteFiles } from "../src/lib/rasterize.js";
 
 const outDir = process.argv[2];
@@ -21,12 +27,20 @@ if (!outDir || !baseUrl) {
   process.exit(1);
 }
 
-const { asset } = hatchTileSvg({ angle: 45, spacing: 6, strokeWidth: 2, color: "#7b2cbf" });
-const files = await rasterizeSpriteFiles([asset]);
+const asset = hatchTileSvg({ angle: 45, spacing: 6, strokeWidth: 2, color: "#7b2cbf" });
+
+// The same attach → finalize path `mlym emit --out --sprite-base` runs, so
+// the twin consumes the sprite declaration the library actually ships.
+const attached = attachSpriteAssets(
+  { style: { version: 8 }, warnings: [], placements: [] } as unknown as EmitResult,
+  [asset]
+);
+const spriteRoot = finalizeSpriteBaseUrl(attached.style, baseUrl)["sprite"];
+const files = await rasterizeSpriteFiles(attached.assets!);
 
 const style = {
   version: 8,
-  sprite: [{ id: DOCUMENT_SPRITE_ID, url: `${baseUrl}/${DOCUMENT_SPRITE_ID}` }],
+  sprite: spriteRoot,
   sources: {
     square: {
       type: "geojson",
@@ -62,6 +76,9 @@ const html = `<!DOCTYPE html>
     style: "${baseUrl}/style.json",
     center: [0, 0],
     zoom: 2,
+    // The spec's pixel probe reads the canvas back; WebGL buffers are
+    // cleared after compositing without this.
+    canvasContextAttributes: { preserveDrawingBuffer: true },
   });
   window.__sprite = { map, pattern: ${JSON.stringify(`${DOCUMENT_SPRITE_ID}:${asset.name}`)} };
 </script></body></html>`;

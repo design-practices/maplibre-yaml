@@ -163,6 +163,19 @@ export function mergeBasemap(base: unknown, projected: EmitResult): EmitResult {
   // a document generates one sprite asset — that is the bug this fixes.
   const baseSprite = base["sprite"];
   const documentSprite = documentStyle["sprite"];
+  if (typeof documentSprite === "string" && baseSprite !== undefined) {
+    // A string document sprite (no current producer emits one) would fall
+    // through to the document-wins copy above and silently orphan every
+    // basemap icon — the exact clobber the array branch below exists to
+    // prevent. Warn like every other collision in this function.
+    warnings.push({
+      path: "sprite",
+      kind: "lossy",
+      message:
+        "The document's sprite replaces the basemap's entirely; basemap icons are orphaned. " +
+        "Use the array form to carry both.",
+    });
+  }
   if (Array.isArray(documentSprite) && baseSprite !== undefined) {
     const combined: { id: string; url: string }[] =
       typeof baseSprite === "string"
@@ -191,7 +204,7 @@ export function mergeBasemap(base: unknown, projected: EmitResult): EmitResult {
   style["sources"] = sources;
   style["layers"] = merged;
 
-  return { style, warnings, placements: projected.placements, ...(projected.assets ? { assets: projected.assets } : {}) };
+  return { ...projected, style, warnings };
 }
 
 /** Injectable so a build can supply a cache, an offline mirror, or a file. */

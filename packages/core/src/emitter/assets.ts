@@ -90,14 +90,26 @@ export interface HatchTileOptions {
  * neighborhood and clipping to the center tile, so a stroke exiting one edge
  * re-enters the opposite one exactly.
  */
-export function hatchTileSvg(options: HatchTileOptions = {}): {
-  asset: EmitAsset;
-} {
-  const angle = options.angle ?? 45;
-  const spacing = options.spacing ?? 8;
+export function hatchTileSvg(options: HatchTileOptions = {}): EmitAsset {
+  const requestedAngle = options.angle ?? 45;
+  const requestedSpacing = options.spacing ?? 8;
   const strokeWidth = options.strokeWidth ?? 1.5;
   const color = options.color ?? "#000000";
   const size = options.size ?? 32;
+
+  // Seamlessness requires the line family to be PERIODIC over the tile in
+  // both axes: size·sinθ and size·cosθ must be integer multiples of the
+  // spacing, or every stroke jogs at every tile boundary (the default
+  // 45°/8px/32px request is off by ~2.6px). Snap the requested (angle,
+  // spacing) to the nearest seamless lattice: j and k count stroke crossings
+  // along the tile's two axes.
+  const theta = (requestedAngle * Math.PI) / 180;
+  const j = Math.round((size * Math.abs(Math.sin(theta))) / requestedSpacing);
+  const k = Math.round((size * Math.abs(Math.cos(theta))) / requestedSpacing);
+  const safeJ = j === 0 && k === 0 ? 1 : j;
+  const angle =
+    Math.sign(Math.sin(theta) || 1) * ((Math.atan2(safeJ, k) * 180) / Math.PI);
+  const spacing = size / Math.hypot(safeJ, k);
 
   const lines: string[] = [];
   // Cover the diagonal of the 3×3 neighborhood so every rotation fills it.
@@ -119,12 +131,12 @@ export function hatchTileSvg(options: HatchTileOptions = {}): {
     `</g></svg>`;
 
   return {
-    asset: {
-      name: assetName("hatch", [angle, spacing], svg),
-      svg,
-      width: size,
-      height: size,
-    },
+    // The slug names what the author ASKED for; the hash covers what the
+    // snap actually produced (it hashes the SVG).
+    name: assetName("hatch", [requestedAngle, requestedSpacing], svg),
+    svg,
+    width: size,
+    height: size,
   };
 }
 
@@ -157,7 +169,7 @@ export function buildSpriteIndex(
   assets: readonly EmitAsset[],
   pixelRatio: 1 | 2 = 1
 ): SpriteSheetLayout {
-  const sorted = [...assets].sort((a, b) => a.name.localeCompare(b.name));
+  const sorted = [...dedupeAssets(assets)].sort((a, b) => a.name.localeCompare(b.name));
   const index: Record<string, SpriteIndexEntry> = {};
   const placements: { asset: EmitAsset; x: number; y: number }[] = [];
 
@@ -176,22 +188,91 @@ export function buildSpriteIndex(
 }
 
 /**
- * Attach generated assets to an emit result: records the descriptors and
- * declares the document sprite on the style root in the spec's array form,
- * under {@link DOCUMENT_SPRITE_ID} with a relative URL the CLI's file layout
- * satisfies (`mlym.png`/`mlym.json` beside the style). Merging with a
- * basemap's own sprite happens later, in `mergeBasemap`.
+ * Collapse duplicate names: identical content is the common legitimate case
+ * (two constructs sharing a preset) and keeps one copy; same name with
+ * DIFFERENT content is a collision that would silently render one authored
+ * pattern as another — thrown, never shipped.
  */
+export function dedupeAssets(assets: readonly EmitAsset[]): EmitAsset[] {
+  const byName = new Map<string, EmitAsset>();
+  for (const asset of assets) {
+    const existing = byName.get(asset.name);
+    if (existing === undefined) {
+      byName.set(asset.name, asset);
+      continue;
+    }
+    if (existing.svg !== asset.svg) {
+      throw new Error(
+        `[assets] sprite name "${asset.name}" is claimed by two different images — ` +
+          "a name collision would silently render one authored pattern as another. " +
+          "Rename one (the content hash should make this unreachable; if you hit it " +
+          "organically, please report it)."
+      );
+    }
+  }
+  return [...byName.values()];
+}
+
+/**
+ * Attach generated assets to an emit result: records the (deduped)
+ * descriptors and declares the document sprite on the style root in the
+ * spec's array form under {@link DOCUMENT_SPRITE_ID}.
+ *
+ * @remarks
+ * MapLibre requires sprite URLs to be ABSOLUTE — it rejects a relative one
+ * at load ("Invalid sprite URL, must be absolute"). Pass `spriteBaseUrl`
+ * (the URL prefix where the sprite files will be served) to finalize the
+ * entry here; without it the entry carries the relative placeholder
+ * {@link DOCUMENT_SPRITE_ID}, which a consumer MUST rewrite before the style
+ * loads — `mlym emit` refuses to ship it unfinalized (`--sprite-base`).
+ * Merging with a basemap's own sprite happens later, in `mergeBasemap`.
+ */
+/**
+ * Rewrite the document sprite's relative placeholder to an absolute URL.
+ *
+ * @remarks
+ * The deployment-time half of the contract described on
+ * {@link attachSpriteAssets}: producers attach with the placeholder (they
+ * cannot know where the style will be served), and whoever writes the files
+ * finalizes. Returns a new style; entries already absolute are untouched.
+ */
+export function finalizeSpriteBaseUrl(
+  style: Record<string, unknown>,
+  spriteBaseUrl: string
+): Record<string, unknown> {
+  const sprite = style["sprite"];
+  if (!Array.isArray(sprite)) return style;
+  const base = spriteBaseUrl.replace(/\/$/, "");
+  const rewritten = sprite.map((entry) =>
+    isSpriteEntry(entry) && entry.url === DOCUMENT_SPRITE_ID
+      ? { ...entry, url: `${base}/${DOCUMENT_SPRITE_ID}` }
+      : entry
+  );
+  return { ...style, sprite: rewritten };
+}
+
+function isSpriteEntry(value: unknown): value is { id: string; url: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { url?: unknown }).url === "string"
+  );
+}
+
 export function attachSpriteAssets(
   result: EmitResult,
-  assets: readonly EmitAsset[]
+  assets: readonly EmitAsset[],
+  spriteBaseUrl?: string
 ): EmitResult {
   if (assets.length === 0) return result;
+  const url = spriteBaseUrl
+    ? `${spriteBaseUrl.replace(/\/$/, "")}/${DOCUMENT_SPRITE_ID}`
+    : DOCUMENT_SPRITE_ID;
   const style = { ...result.style };
-  style["sprite"] = [{ id: DOCUMENT_SPRITE_ID, url: DOCUMENT_SPRITE_ID }];
+  style["sprite"] = [{ id: DOCUMENT_SPRITE_ID, url }];
   return {
     ...result,
     style,
-    assets: [...(result.assets ?? []), ...assets],
+    assets: dedupeAssets([...(result.assets ?? []), ...assets]),
   };
 }

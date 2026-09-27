@@ -24,6 +24,7 @@ import {
   resolveBasemap,
   mergeBasemap,
   applyRuntimeGate,
+  finalizeSpriteBaseUrl,
   EmitError,
   type EmitMode,
   type EmitWarning,
@@ -90,6 +91,35 @@ export async function emitStyle(
   };
 }
 
+/**
+ * The asset-bearing argument contract, as a pure function (unit-testable
+ * without driving the whole command): assets require both `--out` (files
+ * land beside the style) and `--sprite-base` (MapLibre rejects relative
+ * sprite URLs). Returns the error message, or null when the args suffice.
+ */
+export function spriteAssetArgsError(
+  assets: EmitAsset[] | undefined,
+  out: string | undefined,
+  spriteBase: string | undefined,
+): string | null {
+  if (!assets || assets.length === 0) return null;
+  if (!out) {
+    return (
+      `This document generates ${assets.length} sprite asset(s); the emitted style ` +
+      'is not self-contained without them. Pass --out <dir/style.json> (and ' +
+      '--sprite-base) so the sprite files are written beside the style.'
+    );
+  }
+  if (!spriteBase) {
+    return (
+      'Sprite assets need an absolute URL in the emitted style (MapLibre rejects ' +
+      'relative sprite URLs). Pass --sprite-base <url-prefix> pointing at where ' +
+      "the style's directory will be served, e.g. --sprite-base https://maps.example.com/app"
+    );
+  }
+  return null;
+}
+
 export const emitCommand = defineCommand({
   meta: {
     name: 'emit',
@@ -125,6 +155,13 @@ export const emitCommand = defineCommand({
       type: 'string',
       alias: 'o',
       description: 'Write the style to a file instead of stdout',
+    },
+    'sprite-base': {
+      type: 'string',
+      description:
+        'Absolute URL prefix where the sprite files will be served (required ' +
+        'when the document generates sprite assets — MapLibre rejects relative ' +
+        'sprite URLs, so the emitted style must carry the deployed location)',
     },
   },
   async run({ args }) {
@@ -190,46 +227,60 @@ export const emitCommand = defineCommand({
       consola.warn(`${w.path}: ${w.message}`);
     }
 
+    // A document that generates sprite assets is only self-contained as a
+    // DIRECTORY (style + sprite files), and MapLibre rejects relative sprite
+    // URLs — so both --out and --sprite-base are hard requirements here.
+    // Emitting a style whose sprite can never resolve would violate the
+    // eject guarantee while looking like success.
+    const assetArgsError = spriteAssetArgsError(
+      assets,
+      args.out as string | undefined,
+      args['sprite-base'] as string | undefined,
+    );
+    if (assetArgsError) {
+      logger.error(assetArgsError);
+      process.exit(EXIT_CODES.VALIDATION_ERROR);
+    }
+    if (assets && assets.length > 0) {
+      style = finalizeSpriteBaseUrl(style, args['sprite-base'] as string);
+    }
+
     const json = JSON.stringify(style, null, 2);
 
     if (args.out) {
       const outPath = resolve(args.out as string);
-      try {
-        mkdirSync(dirname(outPath), { recursive: true });
-        writeFileSync(outPath, json + '\n', 'utf-8');
-      } catch (err) {
-        logger.error(`Failed to write style to ${outPath}`, err as Error);
-        process.exit(EXIT_CODES.UNKNOWN_ERROR);
-      }
-      consola.success(`Wrote style to ${outPath}`);
 
-      // Generated sprite assets land beside the style, where the emitted
-      // sprite's relative URL (`mlym`) resolves. Rasterization (sharp) is
-      // loaded lazily — documents without assets never pay for it.
+      // Rasterize BEFORE any write: a sharp failure must not leave a
+      // valid-looking style referencing sprite files that don't exist.
+      let spriteFiles: { filename: string; data: Buffer }[] = [];
       if (assets && assets.length > 0) {
         try {
           const { rasterizeSpriteFiles } = await import('../lib/rasterize.js');
-          const files = await rasterizeSpriteFiles(assets);
-          for (const file of files) {
-            writeFileSync(resolve(dirname(outPath), file.filename), file.data);
-          }
-          consola.success(
-            `Wrote ${files.length} sprite file(s) (${assets.length} asset(s)) beside the style`,
-          );
+          spriteFiles = await rasterizeSpriteFiles(assets);
         } catch (err) {
-          logger.error('Failed to rasterize sprite assets', err as Error);
+          logger.error('Failed to rasterize sprite assets; nothing written', err as Error);
           process.exit(EXIT_CODES.UNKNOWN_ERROR);
         }
       }
+
+      try {
+        mkdirSync(dirname(outPath), { recursive: true });
+        writeFileSync(outPath, json + '\n', 'utf-8');
+        for (const file of spriteFiles) {
+          writeFileSync(resolve(dirname(outPath), file.filename), file.data);
+        }
+      } catch (err) {
+        logger.error(`Failed to write output to ${outPath}`, err as Error);
+        process.exit(EXIT_CODES.UNKNOWN_ERROR);
+      }
+      consola.success(
+        spriteFiles.length > 0
+          ? `Wrote style + ${spriteFiles.length} sprite file(s) to ${dirname(outPath)}`
+          : `Wrote style to ${outPath}`,
+      );
       return;
     }
 
-    if (assets && assets.length > 0) {
-      consola.warn(
-        `This document generates ${assets.length} sprite asset(s), which need ` +
-          'files beside the style — use --out to write them; stdout carries the style only.',
-      );
-    }
     console.log(json);
   },
 });

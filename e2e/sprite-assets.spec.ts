@@ -72,14 +72,37 @@ test.describe("sprite pipeline: emitted assets render as a fill pattern in vanil
       { timeout: 30_000 }
     );
 
-    // …and the sprite image actually resolved: a missing fill-pattern icon
-    // logs a console error (caught by the guard) and paints nothing. Belt and
-    // braces: the style image must exist on the map under its prefixed name.
+    // …and the sprite image actually resolved onto the map under its
+    // prefixed name (registration-level check; a missing icon only warns,
+    // which the guard does not catch)…
     const hasImage = await page.evaluate(() => {
       const s = (window as any).__sprite;
       return s.map.hasImage(s.pattern);
     });
     expect(hasImage, "sprite image did not resolve onto the map").toBe(true);
+
+    // …and the pattern PAINTED INK. hasImage + queryRenderedFeatures both
+    // pass with a fully transparent sheet; only pixels prove the composite.
+    // The stroke color is #7b2cbf over a white background — count canvas
+    // pixels that are decidedly purple-ish.
+    const inked = await page.evaluate(() => {
+      const canvas = document.querySelector("#map canvas.maplibregl-canvas") as HTMLCanvasElement;
+      const gl2d = document.createElement("canvas");
+      gl2d.width = canvas.width;
+      gl2d.height = canvas.height;
+      const ctx = gl2d.getContext("2d")!;
+      ctx.drawImage(canvas, 0, 0);
+      const { data } = ctx.getImageData(0, 0, gl2d.width, gl2d.height);
+      let purple = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const [r, g, b] = [data[i]!, data[i + 1]!, data[i + 2]!];
+        if (b > 120 && r < 200 && g < 120 && b > r) purple++;
+      }
+      return purple;
+    });
+    expect(inked, "no stroke-colored pixels on the canvas — blank sprite sheet?").toBeGreaterThan(
+      100
+    );
 
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
