@@ -68,6 +68,8 @@ import { escapeHtml } from "../utils/html.js";
  * @fires ml-map:marker-click - User clicked a standalone marker
  * @fires ml-map:marker-icon-error - A marker icon failed (unsafe scheme or load error); the default pin was substituted
  * @fires ml-map:image-error - A declared `images:` entry failed (unsafe scheme, load or register error)
+ * @fires ml-map:parameter-change - A params-panel control wrote a state key
+ * @fires ml-map:layer-visibility - A params-panel checkbox toggled a layer
  */
 export class MLMap extends HTMLElement {
   /** Internal MapRenderer instance */
@@ -653,6 +655,24 @@ export class MLMap extends HTMLElement {
         new CustomEvent("ml-map:image-error", {
           bubbles: true,
           detail: { name, url },
+        })
+      );
+    });
+
+    // Params panel (U8): control writes, observable like every other action
+    this.renderer.on("parameter:change", ({ key, value }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:parameter-change", {
+          bubbles: true,
+          detail: { key, value },
+        })
+      );
+    });
+    this.renderer.on("layer:visibility", ({ layerId, visible }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:layer-visibility", {
+          bubbles: true,
+          detail: { layerId, visible },
         })
       );
     });

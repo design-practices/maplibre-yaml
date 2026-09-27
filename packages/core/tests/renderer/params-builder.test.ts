@@ -146,6 +146,59 @@ describe("ParamsBuilder", () => {
   });
 });
 
+describe("ParamsBuilder edge semantics", () => {
+  it("bare non-object state entries seed controls — the value the renderer applied", () => {
+    const container = build({
+      parameters: { year: { type: "range", min: 1900, max: 2100 }, night: {} },
+      state: { year: 1980, night: false } as any,
+    });
+    const slider = container.querySelector("input[type=range]") as HTMLInputElement;
+    expect(slider.value).toBe("1980");
+    // The bare boolean still infers a toggle.
+    expect(container.querySelector("input[type=checkbox]")).not.toBeNull();
+  });
+
+  it("a select whose state default matches no value shows the APPLIED default, disabled", () => {
+    const container = build({
+      parameters: { year: { type: "select", values: [2000, 2010] } },
+      state: { year: { default: "2010" } }, // string vs numeric values
+    });
+    const select = container.querySelector("select") as HTMLSelectElement;
+    const selected = select.selectedOptions[0]!;
+    expect(selected.disabled).toBe(true);
+    expect(selected.textContent).toBe("2010");
+    // The authored values remain pickable.
+    expect(select.options).toHaveLength(3);
+  });
+
+  it("no type, no values, non-boolean default → read-only row (inference exhaustion)", () => {
+    const container = build({
+      parameters: { radius: {} },
+      state: { radius: { default: 6 } },
+    });
+    expect(container.querySelector("input, select")).toBeNull();
+    expect(container.textContent).toContain("6");
+  });
+
+  it("a parameter with no state entry renders its label with an em-dash value", () => {
+    const container = build({ parameters: { ghost: { label: "Ghost" } } });
+    expect(container.textContent).toContain("Ghost");
+    expect(container.textContent).toContain("—");
+  });
+
+  it("hostile markup in labels and values stays inert text", () => {
+    const XSS = '<img src=x onerror="window.__pwned=1">';
+    const container = build({
+      parameters: { evil: { label: XSS, type: "select", values: [XSS] } },
+      state: { evil: { default: XSS } },
+      toggleableLayers: [{ id: "l", label: XSS, visible: true }],
+    });
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.textContent).toContain(XSS);
+    expect((window as any).__pwned).toBeUndefined();
+  });
+});
+
 describe("ChromeLayout (KTD10)", () => {
   it("same-corner occupants stack in registration order, opting into pointer events", () => {
     const host = document.createElement("div");

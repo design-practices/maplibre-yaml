@@ -16,7 +16,14 @@
  * controls, and it lives on the HOST element so it survives style reloads.
  */
 
-export type ChromeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+import type { ControlPosition } from "../schemas/map.schema";
+
+/**
+ * Chrome corners are the SAME four positions the schema's
+ * `ControlPosition` already names — one vocabulary for every placed thing,
+ * not a third spelling of the corners.
+ */
+export type ChromeCorner = ControlPosition;
 
 export const CHROME_CORNERS: readonly ChromeCorner[] = [
   "top-left",
@@ -43,9 +50,19 @@ export class ChromeLayout {
     // Bottom corners grow upward so the first-registered piece hugs the edge.
     el.style.flexDirection = corner.startsWith("bottom") ? "column-reverse" : "column";
     el.style.gap = "8px";
-    el.style.maxHeight = "calc(100% - 20px)";
     el.style.pointerEvents = "none";
-    el.style[corner.startsWith("top") ? "top" : "bottom"] = "10px";
+    // MapLibre's own control corner (z-index 2, same 10px inset) may already
+    // occupy this corner — nudge the chrome corner past it so a navigation
+    // control and the params panel compose instead of overlapping. Controls
+    // added AFTER the first chrome mount are not re-measured (documented).
+    const controls = this.host.querySelector<HTMLElement>(
+      `.maplibregl-ctrl-${corner}`
+    );
+    const controlsExtent =
+      controls && controls.offsetHeight > 0 ? controls.offsetHeight + 10 : 0;
+    const inset = 10 + controlsExtent;
+    el.style.maxHeight = `calc(100% - ${inset + 10}px)`;
+    el.style[corner.startsWith("top") ? "top" : "bottom"] = `${inset}px`;
     el.style[corner.endsWith("left") ? "left" : "right"] = "10px";
     el.style.alignItems = corner.endsWith("left") ? "flex-start" : "flex-end";
 
@@ -57,6 +74,11 @@ export class ChromeLayout {
   /** Mount one chrome piece into a corner (stacks after current occupants). */
   mount(corner: ChromeCorner, el: HTMLElement): void {
     el.style.pointerEvents = "auto";
+    // Flex children refuse to shrink by default (min-height: auto) — a
+    // piece taller than the corner must scroll, not clip unreachably under
+    // MapLibre's overflow: hidden host.
+    el.style.minHeight = "0";
+    el.style.overflowY = "auto";
     this.corner(corner).appendChild(el);
   }
 

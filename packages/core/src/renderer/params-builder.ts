@@ -112,13 +112,18 @@ export class ParamsBuilder {
     container.appendChild(panel);
   }
 
-  /** The state default for a key — `state: { key: { default } }`. */
+  /**
+   * The state default for a key. Spec shape is `{ key: { default } }`;
+   * bare non-object entries are accepted as raw values, mirroring what the
+   * renderer actually applies to the map — the panel must seed from the
+   * same value the document set.
+   */
   private stateDefault(config: ParamsPanelConfig, key: string): unknown {
     const entry = config.state?.[key];
-    if (typeof entry === "object" && entry !== null && "default" in entry) {
-      return (entry as { default?: unknown }).default;
+    if (typeof entry === "object" && entry !== null) {
+      return "default" in entry ? (entry as { default?: unknown }).default : undefined;
     }
-    return undefined;
+    return entry;
   }
 
   /** Resolve the control kind: explicit type wins, then shape inference. */
@@ -170,6 +175,10 @@ export class ParamsBuilder {
           value.textContent = input.value;
           callbacks.onStateChange?.(key, Number(input.value));
         });
+        // No state entry: the browser seeds the slider at its midpoint —
+        // write that once so the displayed value IS the applied state,
+        // instead of the panel showing a number global-state never saw.
+        if (current === undefined) callbacks.onStateChange?.(key, Number(input.value));
         row.appendChild(input);
         row.appendChild(value);
         break;
@@ -178,13 +187,28 @@ export class ParamsBuilder {
         const values = meta.values ?? [];
         const select = document.createElement("select");
         select.style.cssText = "width:100%;display:block;";
+        let matched = false;
         values.forEach((v, i) => {
           const option = document.createElement("option");
           option.value = String(i);
           option.textContent = String(v);
-          if (v === current) option.selected = true;
+          if (v === current) {
+            option.selected = true;
+            matched = true;
+          }
           select.appendChild(option);
         });
+        if (!matched) {
+          // The applied state default is not among the authored values —
+          // show IT (disabled placeholder) rather than displaying values[0]
+          // while the map renders something else.
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.disabled = true;
+          placeholder.textContent = current === undefined ? "—" : String(current);
+          select.prepend(placeholder);
+          select.selectedIndex = 0;
+        }
         // Values keep their authored TYPE (a numeric enum stays numeric):
         // options carry indexes and the change handler writes the original.
         select.addEventListener("change", () => {
@@ -200,6 +224,8 @@ export class ParamsBuilder {
         input.addEventListener("change", () => {
           callbacks.onStateChange?.(key, input.checked);
         });
+        // No state entry: the unchecked box must MEAN false to the map.
+        if (current === undefined) callbacks.onStateChange?.(key, false);
         row.appendChild(input);
         break;
       }
