@@ -25,6 +25,7 @@
  */
 
 import type { MapModel, LayerModel } from "../model/types";
+import type { EmitAsset } from "./assets";
 import { ejectClasses } from "../eject";
 import type { EjectClassDefinition } from "../eject";
 import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
@@ -69,6 +70,12 @@ export interface LayerPlacement {
 export interface EmitResult {
   style: Record<string, unknown>;
   warnings: EmitWarning[];
+  /**
+   * Generated raster-asset descriptors (marker pins, pattern tiles) the
+   * style's sprite references. Core describes; the CLI rasterizes and writes
+   * them beside the style (KTD3). Absent when the document generates none.
+   */
+  assets?: EmitAsset[];
   /**
    * Placement intent for the document's own layers.
    *

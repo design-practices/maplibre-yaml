@@ -9,7 +9,6 @@ export {
   type EjectClassDefinition,
   type EjectContext,
   type EjectLowering,
-  type EjectAssetDescriptor,
 } from "./registry";
 
 export { ejectClasses } from "./registrations";

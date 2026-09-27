@@ -28,23 +28,19 @@
  * (the same schema/renderer-contract lesson the gallery census taught).
  */
 
+import type { EmitAsset } from "../emitter/assets";
+import type { EmitWarning } from "../emitter/project";
+
 /** What `mlym emit` does with a construct. */
 export type EjectClass = "ejects" | "fallback" | "declared-absence";
-
-/** Assets a `fallback`-class eject can produce (files written beside the style). */
-export interface EjectAssetDescriptor {
-  /** File name relative to the emitted style, e.g. `sprites/pin-a1b2c3d4.png`. */
-  name: string;
-  /** Raw bytes, or a descriptor a rasterizing caller resolves (KTD3). */
-  data: Uint8Array | Record<string, unknown>;
-}
 
 /** The lowered output of a `fallback`-class construct. */
 export interface EjectLowering {
   layers?: Record<string, unknown>[];
   sources?: Record<string, Record<string, unknown>>;
-  assets?: EjectAssetDescriptor[];
-  warnings?: { path: string; kind: "contract" | "lossy"; message: string }[];
+  /** Sprite descriptors, in the emitter's shared vocabulary (U4's pipeline). */
+  assets?: EmitAsset[];
+  warnings?: EmitWarning[];
 }
 
 /** Context handed to a `fallback` construct's `eject()`. */

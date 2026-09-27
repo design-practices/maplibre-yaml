@@ -155,10 +155,56 @@ export function mergeBasemap(base: unknown, projected: EmitResult): EmitResult {
     if (key === "sources" || key === "layers") continue;
     style[key] = value;
   }
+
+  // Sprite is the one root key MERGED rather than won (KTD3): the basemap
+  // keeps its icons under `default`, document-generated assets live under
+  // their own id, and both survive in the spec's array form. The blind
+  // document-wins overwrite above would orphan every basemap icon the moment
+  // a document generates one sprite asset — that is the bug this fixes.
+  const baseSprite = base["sprite"];
+  const documentSprite = documentStyle["sprite"];
+  if (typeof documentSprite === "string" && baseSprite !== undefined) {
+    // A string document sprite (no current producer emits one) would fall
+    // through to the document-wins copy above and silently orphan every
+    // basemap icon — the exact clobber the array branch below exists to
+    // prevent. Warn like every other collision in this function.
+    warnings.push({
+      path: "sprite",
+      kind: "lossy",
+      message:
+        "The document's sprite replaces the basemap's entirely; basemap icons are orphaned. " +
+        "Use the array form to carry both.",
+    });
+  }
+  if (Array.isArray(documentSprite) && baseSprite !== undefined) {
+    const combined: { id: string; url: string }[] =
+      typeof baseSprite === "string"
+        ? [{ id: "default", url: baseSprite }]
+        : Array.isArray(baseSprite)
+          ? [...(baseSprite as { id: string; url: string }[])]
+          : [];
+    for (const entry of documentSprite as { id: string; url: string }[]) {
+      const collision = combined.findIndex((e) => e.id === entry.id);
+      if (collision !== -1) {
+        warnings.push({
+          path: `sprite.${entry.id}`,
+          kind: "lossy",
+          message:
+            `Sprite id "${entry.id}" shadows one of the same id in the basemap. ` +
+            "The document's sprite is used; basemap icons under that id are orphaned.",
+        });
+        combined[collision] = entry;
+      } else {
+        combined.push(entry);
+      }
+    }
+    style["sprite"] = combined;
+  }
+
   style["sources"] = sources;
   style["layers"] = merged;
 
-  return { style, warnings, placements: projected.placements };
+  return { ...projected, style, warnings };
 }
 
 /** Injectable so a build can supply a cache, an offline mirror, or a file. */

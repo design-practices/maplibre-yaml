@@ -24,9 +24,11 @@ import {
   resolveBasemap,
   mergeBasemap,
   applyRuntimeGate,
+  finalizeSpriteBaseUrl,
   EmitError,
   type EmitMode,
   type EmitWarning,
+  type EmitAsset,
   type CapabilityPolicy,
   type TrustContext,
 } from '@maplibre-yaml/core';
@@ -47,7 +49,11 @@ export async function emitStyle(
   block: unknown,
   mode: EmitMode,
   policy: CapabilityPolicy,
-): Promise<{ style: Record<string, unknown>; warnings: EmitWarning[] }> {
+): Promise<{
+  style: Record<string, unknown>;
+  warnings: EmitWarning[];
+  assets?: EmitAsset[];
+}> {
   const model = toModel(block as never);
   const projected = applyRuntimeGate(projectStyle(model, mode), policy);
 
@@ -69,12 +75,49 @@ export async function emitStyle(
 
   const basemap = model.style.basemap;
   if (basemap === undefined) {
-    return { style: projected.style, warnings: projected.warnings };
+    return {
+      style: projected.style,
+      warnings: projected.warnings,
+      ...(projected.assets ? { assets: projected.assets } : {}),
+    };
   }
 
   const base = await resolveBasemap(basemap);
   const merged = mergeBasemap(base, projected);
-  return { style: merged.style, warnings: merged.warnings };
+  return {
+    style: merged.style,
+    warnings: merged.warnings,
+    ...(merged.assets ? { assets: merged.assets } : {}),
+  };
+}
+
+/**
+ * The asset-bearing argument contract, as a pure function (unit-testable
+ * without driving the whole command): assets require both `--out` (files
+ * land beside the style) and `--sprite-base` (MapLibre rejects relative
+ * sprite URLs). Returns the error message, or null when the args suffice.
+ */
+export function spriteAssetArgsError(
+  assets: EmitAsset[] | undefined,
+  out: string | undefined,
+  spriteBase: string | undefined,
+): string | null {
+  if (!assets || assets.length === 0) return null;
+  if (!out) {
+    return (
+      `This document generates ${assets.length} sprite asset(s); the emitted style ` +
+      'is not self-contained without them. Pass --out <dir/style.json> (and ' +
+      '--sprite-base) so the sprite files are written beside the style.'
+    );
+  }
+  if (!spriteBase) {
+    return (
+      'Sprite assets need an absolute URL in the emitted style (MapLibre rejects ' +
+      'relative sprite URLs). Pass --sprite-base <url-prefix> pointing at where ' +
+      "the style's directory will be served, e.g. --sprite-base https://maps.example.com/app"
+    );
+  }
+  return null;
 }
 
 export const emitCommand = defineCommand({
@@ -112,6 +155,13 @@ export const emitCommand = defineCommand({
       type: 'string',
       alias: 'o',
       description: 'Write the style to a file instead of stdout',
+    },
+    'sprite-base': {
+      type: 'string',
+      description:
+        'Absolute URL prefix where the sprite files will be served (required ' +
+        'when the document generates sprite assets — MapLibre rejects relative ' +
+        'sprite URLs, so the emitted style must carry the deployed location)',
     },
   },
   async run({ args }) {
@@ -156,8 +206,9 @@ export const emitCommand = defineCommand({
 
     let style: Record<string, unknown>;
     let warnings: EmitWarning[];
+    let assets: EmitAsset[] | undefined;
     try {
-      ({ style, warnings } = await emitStyle(parsed.data, mode, policy));
+      ({ style, warnings, assets } = await emitStyle(parsed.data, mode, policy));
     } catch (err) {
       if (err instanceof EmitError) {
         logger.error(err.message);
@@ -176,18 +227,57 @@ export const emitCommand = defineCommand({
       consola.warn(`${w.path}: ${w.message}`);
     }
 
+    // A document that generates sprite assets is only self-contained as a
+    // DIRECTORY (style + sprite files), and MapLibre rejects relative sprite
+    // URLs — so both --out and --sprite-base are hard requirements here.
+    // Emitting a style whose sprite can never resolve would violate the
+    // eject guarantee while looking like success.
+    const assetArgsError = spriteAssetArgsError(
+      assets,
+      args.out as string | undefined,
+      args['sprite-base'] as string | undefined,
+    );
+    if (assetArgsError) {
+      logger.error(assetArgsError);
+      process.exit(EXIT_CODES.VALIDATION_ERROR);
+    }
+    if (assets && assets.length > 0) {
+      style = finalizeSpriteBaseUrl(style, args['sprite-base'] as string);
+    }
+
     const json = JSON.stringify(style, null, 2);
 
     if (args.out) {
       const outPath = resolve(args.out as string);
+
+      // Rasterize BEFORE any write: a sharp failure must not leave a
+      // valid-looking style referencing sprite files that don't exist.
+      let spriteFiles: { filename: string; data: Buffer }[] = [];
+      if (assets && assets.length > 0) {
+        try {
+          const { rasterizeSpriteFiles } = await import('../lib/rasterize.js');
+          spriteFiles = await rasterizeSpriteFiles(assets);
+        } catch (err) {
+          logger.error('Failed to rasterize sprite assets; nothing written', err as Error);
+          process.exit(EXIT_CODES.UNKNOWN_ERROR);
+        }
+      }
+
       try {
         mkdirSync(dirname(outPath), { recursive: true });
         writeFileSync(outPath, json + '\n', 'utf-8');
+        for (const file of spriteFiles) {
+          writeFileSync(resolve(dirname(outPath), file.filename), file.data);
+        }
       } catch (err) {
-        logger.error(`Failed to write style to ${outPath}`, err as Error);
+        logger.error(`Failed to write output to ${outPath}`, err as Error);
         process.exit(EXIT_CODES.UNKNOWN_ERROR);
       }
-      consola.success(`Wrote style to ${outPath}`);
+      consola.success(
+        spriteFiles.length > 0
+          ? `Wrote style + ${spriteFiles.length} sprite file(s) to ${dirname(outPath)}`
+          : `Wrote style to ${outPath}`,
+      );
       return;
     }
 
