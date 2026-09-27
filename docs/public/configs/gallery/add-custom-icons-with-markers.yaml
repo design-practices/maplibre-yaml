@@ -10,8 +10,8 @@ config:
   mapStyle: "https://demotiles.maplibre.org/style.json"
 markers:
   - at: [-66.324462, -16.024695]
-    icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Cat_silhouette.svg/64px-Cat_silhouette.svg.png"
+    icon: "https://commons.wikimedia.org/wiki/Special:FilePath/Cat_silhouette.svg?width=64"
     size: 1
   - at: [-61.21582, -15.971891]
-    icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Dog_silhouette.svg/64px-Dog_silhouette.svg.png"
+    icon: "https://commons.wikimedia.org/wiki/Special:FilePath/Dog_silhouette.svg?width=64"
     size: 1.4
