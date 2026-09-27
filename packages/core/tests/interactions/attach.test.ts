@@ -33,6 +33,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const popupInstance = {
   setLngLat: vi.fn().mockReturnThis(),
   setHTML: vi.fn().mockReturnThis(),
+    on: vi.fn(),
   addTo: vi.fn().mockReturnThis(),
   remove: vi.fn(),
 };
@@ -464,6 +465,7 @@ describe("attachInteractions — parity with EventHandler (R9 go/no-go)", () => 
     expect(registry.hoverInteractions().map((i) => i.name)).toEqual([
       "highlight",
       "emit",
+      "popup",
     ]);
   });
 });

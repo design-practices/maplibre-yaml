@@ -24,8 +24,8 @@
  */
 
 import type { Map as MapLibreMap, MapMouseEvent, LngLat } from "maplibre-gl";
-import { Popup } from "../renderer/maplibre-interop";
 import { PopupBuilder } from "../renderer/popup-builder";
+import { PopupSlot } from "./popup-slot";
 import { DEFAULT_POLICY, type CapabilityPolicy } from "../capabilities";
 import {
   InteractionRegistry,
@@ -120,7 +120,7 @@ export interface LayerInteractionCallbacks {
  * must be shared across layers — the `boundHandlers` map `detach`/`destroy`
  * drive, and the pre-built interaction runtimes (`highlight` tracks its lit
  * feature per layerId across layers) — is not recreated per layer. The popup
- * lifecycle (`PopupBuilder`/`activePopup`) is not here: it is absorbed into the
+ * lifecycle (`PopupBuilder`/`PopupSlot`) is not here: it is absorbed into the
  * bound interactions' `showPopup` dep by the caller, so the core never touches
  * it directly.
  */
@@ -312,16 +312,15 @@ export function attachInteractions(
   } = options;
 
   // The compiled-path XSS gate: the popup sink runs through PopupBuilder(policy)
-  // so `!html` and feature escaping apply exactly as in the renderer.
-  const popupBuilder = new PopupBuilder(policy);
-  let activePopup: Popup | null = null;
+  // so `!html` and feature escaping apply exactly as in the renderer. The
+  // pinned/hover coexistence contract lives in PopupSlot (KTD8), shared with
+  // the renderer host.
+  const popupSlot = new PopupSlot(map, new PopupBuilder(policy));
 
   const deps: InteractionDeps = {
-    showPopup: (content, feature, lngLat) => {
-      activePopup?.remove();
-      const html = popupBuilder.build(content, feature?.properties ?? {});
-      activePopup = new Popup().setLngLat(lngLat).setHTML(html).addTo(map);
-    },
+    showPopup: (content, feature, lngLat, options) =>
+      popupSlot.show(content, feature, lngLat, options),
+    hidePopup: () => popupSlot.hideHover(),
     hostHandlers,
     policy,
   };
@@ -366,8 +365,7 @@ export function attachInteractions(
 
   const destroy = (): void => {
     for (const layerId of [...boundHandlers.keys()]) detach(layerId);
-    activePopup?.remove();
-    activePopup = null;
+    popupSlot.destroy();
   };
 
   // Wire every projected layer through the shared per-layer bind core.

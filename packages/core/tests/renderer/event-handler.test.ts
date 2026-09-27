@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const popupInstance = {
   setLngLat: vi.fn().mockReturnThis(),
   setHTML: vi.fn().mockReturnThis(),
+    on: vi.fn(),
   addTo: vi.fn().mockReturnThis(),
   remove: vi.fn(),
 };

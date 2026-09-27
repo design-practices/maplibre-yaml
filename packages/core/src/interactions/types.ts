@@ -91,8 +91,40 @@ export interface InteractionContext {
  * instance, so an interaction can still reach anything on it. Narrowing that
  * is part of the extraction, not of this unit.
  */
+/**
+ * How a popup behaves once shown (KTD8).
+ *
+ * @remarks
+ * `kind` is the coexistence contract: the host owns ONE popup slot, and a
+ * `pinned` popup (click) holds it until the user dismisses it — a `hover`
+ * popup never displaces a pinned one (it is silently skipped while one is
+ * open) and is itself replaced freely. This is what makes hover a preview
+ * and click a pin instead of the two fighting over the slot.
+ */
+export interface ShowPopupOptions {
+  closeButton?: boolean;
+  closeOnClick?: boolean;
+  kind?: "pinned" | "hover";
+}
+
 export interface InteractionDeps {
-  showPopup: (content: PopupContent, feature: any, lngLat: LngLat) => void;
+  /**
+   * Show a popup. Returns `false` when the slot contract suppressed it (a
+   * hover popup while a pinned one is open) — a `void` return counts as
+   * shown, so legacy three-argument implementations keep working unchanged.
+   */
+  showPopup: (
+    content: PopupContent,
+    feature: any,
+    lngLat: LngLat,
+    options?: ShowPopupOptions
+  ) => boolean | void;
+  /**
+   * Dismiss the current HOVER popup, if one is showing. A pinned popup is
+   * never touched — its dismissal belongs to the user (close button /
+   * closeOnClick), not to mouseleave.
+   */
+  hidePopup?: () => void;
   /**
    * The host handler map the `emit` interaction resolves event names against.
    *

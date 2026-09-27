@@ -4,7 +4,6 @@
  */
 
 import type { Map as MapLibreMap, LngLat } from "maplibre-gl";
-import { Popup } from "./maplibre-interop";
 import type { z } from "zod";
 import { LayerSchema, PopupContentSchema } from "../schemas";
 import { PopupBuilder } from "./popup-builder";
@@ -14,6 +13,7 @@ import {
   type InteractionRegistry,
   type Interaction,
   type InteractionDeps,
+  type ShowPopupOptions,
   type InteractionRuntime,
   type InteractionHostHandlers,
 } from "../interactions";
@@ -23,6 +23,7 @@ import {
   type LayerBindDeps,
 } from "../interactions/attach";
 import type { ProjectedLayerInteractions } from "../interactions/manifest";
+import { PopupSlot } from "../interactions/popup-slot";
 
 /** An interaction paired with its per-handler runtime. */
 type BoundInteraction = {
@@ -58,15 +59,15 @@ export type {
  * adds them); `attachInteractions` drives the same core all-at-once from a
  * declarative projection. There is no second copy to keep in sync.
  *
- * The popup lifecycle stays caller-side (this class owns its `PopupBuilder`
- * and `activePopup`, threaded into the core via `interactionDeps.showPopup`),
+ * The popup lifecycle lives in the shared {@link PopupSlot} (KTD8), owned
+ * per handler and threaded into the core via `interactionDeps.showPopup` —
  * exactly as `attachInteractions` does.
  */
 export class EventHandler {
   private map: MapLibreMap;
   private callbacks: EventHandlerCallbacks;
-  private popupBuilder: PopupBuilder;
-  private activePopup: Popup | null;
+  /** The one-popup slot (KTD8 coexistence), shared with attachInteractions. */
+  private popupSlot: PopupSlot;
   private attachedLayers: Set<string>;
   private boundHandlers: Map<string, any>;
   private registry: InteractionRegistry;
@@ -84,8 +85,7 @@ export class EventHandler {
   ) {
     this.map = map;
     this.callbacks = callbacks || {};
-    this.popupBuilder = new PopupBuilder(policy);
-    this.activePopup = null;
+    this.popupSlot = new PopupSlot(map, new PopupBuilder(policy));
     this.attachedLayers = new Set();
     this.boundHandlers = new Map();
     this.registry = createInteractionRegistry();
@@ -98,8 +98,9 @@ export class EventHandler {
     // supplies today) denies silently. `MapRenderer` passes no `hostHandlers`,
     // so `click.emit` stays inert under `<ml-map>` — fail-closed by default.
     this.interactionDeps = {
-      showPopup: (content, feature, lngLat) =>
-        this.showPopup(content, feature, lngLat),
+      showPopup: (content, feature, lngLat, options) =>
+        this.showPopup(content, feature, lngLat, options),
+      hidePopup: () => this.hidePopup(),
       hostHandlers,
       policy,
     };
@@ -179,15 +180,18 @@ export class EventHandler {
    * directly — it is absorbed into `interactionDeps.showPopup`, mirroring
    * `attachInteractions`. The single `PopupBuilder(policy)` gates `!html`.
    */
-  private showPopup(content: PopupContent, feature: any, lngLat: LngLat): void {
-    this.activePopup?.remove();
+  private showPopup(
+    content: PopupContent,
+    feature: any,
+    lngLat: LngLat,
+    options?: ShowPopupOptions
+  ): boolean {
+    return this.popupSlot.show(content, feature, lngLat, options);
+  }
 
-    const html = this.popupBuilder.build(content, feature.properties);
-
-    this.activePopup = new Popup()
-      .setLngLat(lngLat)
-      .setHTML(html)
-      .addTo(this.map);
+  /** Dismiss the current HOVER popup only; a pinned popup belongs to the user. */
+  private hidePopup(): void {
+    this.popupSlot.hideHover();
   }
 
   /**
@@ -234,7 +238,6 @@ export class EventHandler {
     for (const layerId of this.attachedLayers) {
       this.detachEvents(layerId);
     }
-    this.activePopup?.remove();
-    this.activePopup = null;
+    this.popupSlot.destroy();
   }
 }

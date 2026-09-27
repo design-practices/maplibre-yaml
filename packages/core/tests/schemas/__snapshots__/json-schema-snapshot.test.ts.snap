@@ -999,17 +999,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                     "patternProperties": {
                                       "^x-": {}
                                     }
-                                  }
-                                },
-                                "additionalProperties": false,
-                                "description": "Hover behavior",
-                                "patternProperties": {
-                                  "^x-": {}
-                                }
-                              },
-                              "click": {
-                                "type": "object",
-                                "properties": {
+                                  },
                                   "popup": {
                                     "type": "array",
                                     "items": {
@@ -1075,6 +1065,20 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                         }
                                       }
                                     },
+                                    "description": "Popup shown while hovering a feature (no close button; dismissed on leave). A pinned click popup suppresses hover popups until it is dismissed. Touch has no hover: tap uses \`click.popup\`."
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "description": "Hover behavior",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
+                              },
+                              "click": {
+                                "type": "object",
+                                "properties": {
+                                  "popup": {
+                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/popup",
                                     "description": "Popup content to display"
                                   },
                                   "action": {
@@ -4384,17 +4388,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                 "patternProperties": {
                                   "^x-": {}
                                 }
-                              }
-                            },
-                            "additionalProperties": false,
-                            "description": "Hover behavior",
-                            "patternProperties": {
-                              "^x-": {}
-                            }
-                          },
-                          "click": {
-                            "type": "object",
-                            "properties": {
+                              },
                               "popup": {
                                 "type": "array",
                                 "items": {
@@ -4460,6 +4454,20 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                     }
                                   }
                                 },
+                                "description": "Popup shown while hovering a feature (no close button; dismissed on leave). A pinned click popup suppresses hover popups until it is dismissed. Touch has no hover: tap uses \`click.popup\`."
+                              }
+                            },
+                            "additionalProperties": false,
+                            "description": "Hover behavior",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          },
+                          "click": {
+                            "type": "object",
+                            "properties": {
+                              "popup": {
+                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/popup",
                                 "description": "Popup content to display"
                               },
                               "action": {
@@ -6898,17 +6906,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                             "patternProperties": {
                               "^x-": {}
                             }
-                          }
-                        },
-                        "additionalProperties": false,
-                        "description": "Hover behavior",
-                        "patternProperties": {
-                          "^x-": {}
-                        }
-                      },
-                      "click": {
-                        "type": "object",
-                        "properties": {
+                          },
                           "popup": {
                             "type": "array",
                             "items": {
@@ -6974,6 +6972,20 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 }
                               }
                             },
+                            "description": "Popup shown while hovering a feature (no close button; dismissed on leave). A pinned click popup suppresses hover popups until it is dismissed. Touch has no hover: tap uses \`click.popup\`."
+                          }
+                        },
+                        "additionalProperties": false,
+                        "description": "Hover behavior",
+                        "patternProperties": {
+                          "^x-": {}
+                        }
+                      },
+                      "click": {
+                        "type": "object",
+                        "properties": {
+                          "popup": {
+                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/interactive/properties/hover/properties/popup",
                             "description": "Popup content to display"
                           },
                           "action": {
@@ -10451,17 +10463,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                 "patternProperties": {
                                   "^x-": {}
                                 }
-                              }
-                            },
-                            "additionalProperties": false,
-                            "description": "Hover behavior",
-                            "patternProperties": {
-                              "^x-": {}
-                            }
-                          },
-                          "click": {
-                            "type": "object",
-                            "properties": {
+                              },
                               "popup": {
                                 "type": "array",
                                 "items": {
@@ -10527,6 +10529,20 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     }
                                   }
                                 },
+                                "description": "Popup shown while hovering a feature (no close button; dismissed on leave). A pinned click popup suppresses hover popups until it is dismissed. Touch has no hover: tap uses \`click.popup\`."
+                              }
+                            },
+                            "additionalProperties": false,
+                            "description": "Hover behavior",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          },
+                          "click": {
+                            "type": "object",
+                            "properties": {
+                              "popup": {
+                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/popup",
                                 "description": "Popup content to display"
                               },
                               "action": {

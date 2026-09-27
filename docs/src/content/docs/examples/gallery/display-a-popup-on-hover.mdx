@@ -1,0 +1,24 @@
+---
+title: Display a popup on hover
+description: The MapLibre "Display a popup on hover" example as one hover.popup entry
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-popup-on-hover.yaml?raw';
+
+Replicates the MapLibre example [Display a popup on hover](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-hover/). The upstream version tracks `mousemove`/`mouseleave` by hand, creates a `Popup({ closeButton: false, closeOnClick: false })`, and dedupes so the popup doesn't flicker on every mouse move; here that whole dance is one `hover.popup` entry.
+
+<LiveMap src="/configs/gallery/display-a-popup-on-hover.yaml" height="460px" caption="Hover a point for a preview; click to pin it" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-popup-on-hover.yaml" />
+
+## What to notice
+
+- The hover popup is chromeless (no close button) and dismisses when the pointer leaves the layer — it's a preview, not a commitment.
+- **Hover previews, click pins.** With both `hover.popup` and `click.popup` on one layer, clicking pins the popup (close button included) and hover previews are suppressed until you dismiss it.
+- Popups show once per *feature entered*, not per mouse move — the per-feature dedupe the upstream example hand-rolls.
+- Touch has no hover: on touch devices a tap opens the `click.popup`, so no content is hover-only.
+- `generateId: true` on the source gives features ids for exact dedupe tracking; without ids the popup still works, keyed by geometry (with a console hint).
