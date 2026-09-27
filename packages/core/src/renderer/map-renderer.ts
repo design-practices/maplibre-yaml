@@ -46,7 +46,13 @@ function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
  */
 export interface MapRendererOptions {
   onLoad?: () => void;
-  onError?: (error: Error) => void;
+  /**
+   * `fatal` distinguishes load-aborting failures (source registration, layer
+   * add — the document will never reach `load`) from runtime maplibre error
+   * events (a 404'd tile, a missing sprite) that the map survives. Optional
+   * second argument, so existing single-arg callbacks are unaffected.
+   */
+  onError?: (error: Error, fatal?: boolean) => void;
   /** Controls declared in the YAML `controls:` block — added automatically on map load */
   controls?: ControlsConfig;
   /** Legend declared in the YAML `legend:` block — built automatically on map load */
@@ -233,7 +239,7 @@ export class MapRenderer {
           this.layerManager.registerSources(sources as Record<string, unknown>);
         }
       } catch (error) {
-        options.onError?.(error as Error);
+        options.onError?.(error as Error, true);
         return;
       }
 
@@ -289,13 +295,14 @@ export class MapRenderer {
           options.onLoad?.();
         })
         .catch((error) => {
-          options.onError?.(error);
+          options.onError?.(error, true);
         });
     });
 
-    // Handle errors
+    // Handle errors. Runtime maplibre error events are non-fatal: the map
+    // still reaches `load` after a failed tile/sprite/glyph request.
     this.map.on('error', (e) => {
-      options.onError?.(e.error);
+      options.onError?.(e.error, false);
     });
   }
 

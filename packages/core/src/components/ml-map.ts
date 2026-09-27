@@ -72,6 +72,22 @@ export class MLMap extends HTMLElement {
   /** Whether the component has been initialized */
   private initialized = false;
 
+  /**
+   * Whether the DOCUMENT finished loading — set when the renderer's `load`
+   * fires (basemap ready AND every document layer added), not MapLibre's
+   * earlier map-`load`. `mapReady()`'s fast path keys on this so it resolves
+   * on exactly the condition `ml-map:load` announces.
+   */
+  private documentLoaded = false;
+
+  /**
+   * Terminal document failure, kept so a `mapReady()` call arriving AFTER
+   * `ml-map:error` fired rejects instead of waiting forever for events that
+   * will never recur. Cleared on every re-render. Runtime maplibre errors
+   * (non-fatal — the map still loads) do not land here.
+   */
+  private lastError: Error | null = null;
+
   /** Container element for the map */
   private mapContainer: HTMLDivElement | null = null;
 
@@ -362,6 +378,11 @@ export class MLMap extends HTMLElement {
       this.renderer = null;
     }
 
+    // A fresh render resets the readiness state a pending or future
+    // mapReady() reads.
+    this.documentLoaded = false;
+    this.lastError = null;
+
     // Clear content and set up container
     this.innerHTML = "";
 
@@ -389,15 +410,19 @@ export class MLMap extends HTMLElement {
         onLoad: () => {
           // Load event is also emitted via the event system
         },
-        onError: (error) => {
+        onError: (error, fatal) => {
           // Loud by default: with no `ml-map:error` listener attached, a
           // dispatched event is invisible and the document fails silently
           // (ml-tfd.8 contract audit). Hosts still get the event.
           console.error("[maplibre-yaml] map error:", error);
+          // Only load-aborting failures are terminal for mapReady();
+          // runtime maplibre errors (a 404'd tile) precede a successful
+          // load all the time and must not poison readiness.
+          if (fatal !== false) this.lastError = error;
           this.dispatchEvent(
             new CustomEvent("ml-map:error", {
               bubbles: true,
-              detail: { error },
+              detail: { error, fatal: fatal !== false },
             })
           );
         },
@@ -509,8 +534,11 @@ export class MLMap extends HTMLElement {
   private setupEventForwarding(): void {
     if (!this.renderer) return;
 
-    // Map load event
+    // Map load event — the renderer emits this after the basemap is ready
+    // AND every document layer was added, so it is the document-level
+    // readiness signal mapReady()'s fast path keys on.
     this.renderer.on("load", () => {
+      this.documentLoaded = true;
       this.dispatchEvent(
         new CustomEvent("ml-map:load", {
           bubbles: true,
@@ -594,6 +622,17 @@ export class MLMap extends HTMLElement {
    * Handle and display errors
    */
   private handleError(errors: ParseError[], showHelp = false): void {
+    // Persist the failure so a mapReady() call arriving after this event
+    // rejects with the structured errors instead of waiting forever.
+    this.lastError = Object.assign(
+      new Error(
+        `[ml-map] ${errors
+          .map((e) => (e.path ? `${e.path}: ${e.message}` : e.message))
+          .join("; ")}`
+      ),
+      { errors }
+    );
+
     // Dispatch error event
     this.dispatchEvent(
       new CustomEvent("ml-map:error", {
@@ -696,6 +735,9 @@ export class MLMap extends HTMLElement {
    *
    * @returns The MapLibre GL map instance, or null if not initialized
    *
+   * @see {@link MLMap.mapReady} — the promise form; resolves once loaded and
+   * removes the need for the load-listener + null-guard shown below.
+   *
    * @example
    * ```javascript
    * const mapEl = document.querySelector('ml-map');
@@ -727,8 +769,15 @@ export class MLMap extends HTMLElement {
    * ```
    */
   mapReady(): Promise<MapLibreMap> {
-    const loaded = this.renderer?.isMapLoaded() ? this.renderer.getMap() : null;
-    if (loaded) return Promise.resolve(loaded);
+    // Fast paths mirror the event contract exactly: resolve on the same
+    // condition ml-map:load announces (document loaded — basemap AND every
+    // layer), reject when a terminal failure already fired (its ml-map:error
+    // will never recur for a late subscriber).
+    if (this.documentLoaded) {
+      const map = this.getMap();
+      if (map) return Promise.resolve(map);
+    }
+    if (this.lastError) return Promise.reject(this.lastError);
 
     return new Promise<MapLibreMap>((resolve, reject) => {
       const onLoad = () => {
@@ -738,13 +787,31 @@ export class MLMap extends HTMLElement {
         else reject(new Error("[ml-map] loaded without a map instance"));
       };
       const onError = (event: Event) => {
-        cleanup();
         const detail = (event as CustomEvent).detail;
-        reject(
-          detail?.error instanceof Error
-            ? detail.error
-            : new Error(`[ml-map] failed to load: ${JSON.stringify(detail ?? {})}`)
-        );
+        // Non-fatal runtime errors (a 404'd tile before load) don't decide
+        // readiness — the map still loads after them. Keep waiting.
+        if (detail?.fatal === false) return;
+        cleanup();
+        if (detail?.error instanceof Error) {
+          reject(detail.error);
+        } else if (Array.isArray(detail?.errors)) {
+          // handleError's shape: structured ParseError[] — keep it readable
+          // and attach the array for programmatic consumers.
+          reject(
+            Object.assign(
+              new Error(
+                `[ml-map] ${detail.errors
+                  .map((e: { path?: string; message: string }) =>
+                    e.path ? `${e.path}: ${e.message}` : e.message
+                  )
+                  .join("; ")}`
+              ),
+              { errors: detail.errors }
+            )
+          );
+        } else {
+          reject(new Error(`[ml-map] failed to load: ${JSON.stringify(detail ?? {})}`));
+        }
       };
       const cleanup = () => {
         this.removeEventListener("ml-map:load", onLoad);

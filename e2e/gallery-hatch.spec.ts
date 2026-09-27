@@ -171,6 +171,32 @@ test.describe("escape-hatch pages: the shipped JS drives the shipped YAML", () =
     expect(errors).toEqual([]);
   });
 
+  test("fly-to-a-location: a click BEFORE load waits via mapReady and still lands (U2)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    // No openHatch wait — click as soon as the button exists, racing the map.
+    await page.goto(`/examples/gallery/hatch/fly-to-a-location.html`, {
+      waitUntil: "domcontentloaded",
+    });
+    await page.click('[data-fly="[-0.1276,51.5072]"]');
+
+    // mapReady() inside the handler defers the flight until the map exists;
+    // the old getMap() null-guard dropped this click on the floor.
+    await page.waitForFunction(
+      () => {
+        const map = (document.getElementById("map") as any)?.getMap?.();
+        if (!map) return false;
+        const c = map.getCenter();
+        return Math.abs(c.lng - -0.1276) < 0.05 && Math.abs(c.lat - 51.5072) < 0.05;
+      },
+      undefined,
+      { timeout: 60_000 }
+    );
+
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
   test("pmtiles-source-and-protocol: addProtocol via the core/maplibre subpath serves a document source (U2)", async ({
     page,
   }) => {

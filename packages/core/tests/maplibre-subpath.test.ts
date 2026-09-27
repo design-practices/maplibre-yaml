@@ -20,12 +20,25 @@ import { fileURLToPath } from "node:url";
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(PKG_ROOT, "dist", "maplibre.js");
 
-describe("dist/maplibre.js under real Node ESM", () => {
+// In CI the build always precedes tests (presubmit's `build && test`, and
+// both ci.yml jobs run Build first) — so an absent dist there means the
+// ordering broke, and silently skipping the only real interop guard would
+// be exactly the silent-pass this test exists to prevent.
+if (process.env.CI && !existsSync(DIST)) {
+  throw new Error(
+    "dist/maplibre.js missing under CI — the build step must run before tests"
+  );
+}
+
+describe("the @maplibre-yaml/core/maplibre subpath under real Node ESM", () => {
   it.skipIf(!existsSync(DIST))(
     "exposes addProtocol and the constructor surface as named exports",
     () => {
+      // Self-referencing package specifier: resolves through package.json's
+      // "exports" map — the same resolution a real consumer gets, which a
+      // direct dist path would bypass.
       const script = `
-        const m = await import(${JSON.stringify(DIST)});
+        const m = await import("@maplibre-yaml/core/maplibre");
         if (typeof m.addProtocol !== "function") throw new Error("addProtocol is not a function: " + typeof m.addProtocol);
         if (typeof m.removeProtocol !== "function") throw new Error("removeProtocol is not a function");
         if (typeof m.Map !== "function") throw new Error("Map is not a constructor: " + typeof m.Map);

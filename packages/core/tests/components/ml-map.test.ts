@@ -665,15 +665,37 @@ layers: []
       await expect(ready).resolves.toBe(fakeMap);
     });
 
-    it("resolves immediately when the map is already loaded", async () => {
+    it("resolves immediately when the document is already loaded", async () => {
       const element = document.createElement('ml-map') as MLMap;
       const fakeMap = { on: vi.fn(), off: vi.fn() };
       (element as any).renderer = {
         isMapLoaded: () => true,
         getMap: () => fakeMap,
       };
+      // The fast path keys on DOCUMENT readiness (every layer added), not
+      // MapLibre's earlier map-load — isMapLoaded() alone must not trigger it.
+      (element as any).documentLoaded = true;
 
       await expect(element.mapReady()).resolves.toBe(fakeMap);
+    });
+
+    it("does not fast-resolve on map-load alone (layers still pending)", async () => {
+      const element = document.createElement('ml-map') as MLMap;
+      const fakeMap = { on: vi.fn(), off: vi.fn() };
+      (element as any).renderer = {
+        isMapLoaded: () => true, // MapLibre map loaded…
+        getMap: () => fakeMap,
+      };
+      // …but the document (layers) hasn't finished: promise must stay pending
+      // until ml-map:load.
+      const ready = element.mapReady();
+      let settled = false;
+      ready.then(() => (settled = true), () => (settled = true));
+      await new Promise((r) => setTimeout(r, 5));
+      expect(settled).toBe(false);
+
+      element.dispatchEvent(new CustomEvent("ml-map:load", { detail: {} }));
+      await expect(ready).resolves.toBe(fakeMap);
     });
 
     it("rejects when ml-map:error fires first", async () => {
@@ -686,6 +708,44 @@ layers: []
       );
 
       await expect(ready).rejects.toBe(boom);
+    });
+
+    it("rejects immediately when called AFTER the document already failed", async () => {
+      const element = document.createElement('ml-map') as MLMap;
+      // Simulate the real failure path: handleError dispatched once, long ago.
+      (element as any).handleError([{ path: "layers", message: "no such source" }]);
+
+      await expect(element.mapReady()).rejects.toThrow(/layers: no such source/);
+    });
+
+    it("rejects with readable messages from handleError's ParseError[] shape", async () => {
+      const element = document.createElement('ml-map') as MLMap;
+      const ready = element.mapReady();
+
+      element.dispatchEvent(
+        new CustomEvent("ml-map:error", {
+          detail: { errors: [{ path: "config", message: "mapStyle is required" }] },
+        })
+      );
+
+      await expect(ready).rejects.toThrow(/config: mapStyle is required/);
+    });
+
+    it("ignores non-fatal runtime errors and still resolves on load", async () => {
+      const element = document.createElement('ml-map') as MLMap;
+      const fakeMap = { on: vi.fn(), off: vi.fn() };
+      (element as any).renderer = { isMapLoaded: () => true, getMap: () => fakeMap };
+      const ready = element.mapReady();
+
+      // A 404'd tile before load: non-fatal, must not settle readiness.
+      element.dispatchEvent(
+        new CustomEvent("ml-map:error", {
+          detail: { error: new Error("tile 404"), fatal: false },
+        })
+      );
+      element.dispatchEvent(new CustomEvent("ml-map:load", { detail: {} }));
+
+      await expect(ready).resolves.toBe(fakeMap);
     });
   });
 });

@@ -10,39 +10,21 @@
  * core resolves — maplibre-gl stays external in every build, so the import
  * graph guarantees identity with the copy the renderer constructs maps from.
  *
- * Interop rule (see renderer/maplibre-interop.ts for the full story): the
- * maplibre-gl CJS bundle has no `exports` map, so `export * from
- * "maplibre-gl"` loses every named export under Node ESM. Runtime values are
- * therefore re-exported explicitly off the interop-resolved namespace, and
- * the namespace itself ships as the default export for anything not named
- * here.
+ * Everything here is a re-export of `renderer/maplibre-interop.ts`, the one
+ * sanctioned place maplibre-gl runtime values enter this package (its module
+ * doc explains the Node-ESM named-export hazard that rule exists for). This
+ * file adds no resolution logic of its own — do not import maplibre-gl
+ * directly here.
  */
 
-import * as maplibre from "maplibre-gl";
-
-const gl = ((maplibre as unknown as { default?: typeof maplibre }).default ??
-  maplibre) as typeof maplibre;
+import { maplibregl } from "./renderer/maplibre-interop";
 
 /**
- * The resolved maplibre-gl namespace — every export, including ones this
- * module does not name individually.
+ * The resolved maplibre-gl namespace — every export, including ones the
+ * named surface below does not cover.
  */
-export default gl;
+export default maplibregl;
 
-/** Register a custom URL-scheme handler (pmtiles, cog, stubbed test data). */
-export const addProtocol: typeof maplibre.addProtocol = gl.addProtocol;
-/** Remove a handler registered with {@link addProtocol}. */
-export const removeProtocol: typeof maplibre.removeProtocol = gl.removeProtocol;
-
-// The constructor surface, same names as maplibre-interop exports them, so
-// `import { Map } from "@maplibre-yaml/core/maplibre"` works in value and
-// type position alike.
-export {
-  Map,
-  Popup,
-  NavigationControl,
-  GeolocateControl,
-  ScaleControl,
-  FullscreenControl,
-  AttributionControl,
-} from "./renderer/maplibre-interop";
+// addProtocol/removeProtocol, the constructor surface (Map, Popup, the
+// controls), and the `maplibregl` namespace const — all interop-resolved.
+export * from "./renderer/maplibre-interop";

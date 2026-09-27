@@ -32,6 +32,18 @@ import * as maplibre from "maplibre-gl";
 const gl = ((maplibre as unknown as { default?: typeof maplibre }).default ??
   maplibre) as typeof maplibre;
 
+/**
+ * The whole interop-resolved namespace, for module-level APIs not named
+ * below (addProtocol and friends live here too, but consumers reaching for
+ * anything else — setRTLTextPlugin, config — go through this).
+ */
+export const maplibregl = gl;
+
+/** Register a custom URL-scheme handler (pmtiles, cog, stubbed test data). */
+export const addProtocol: typeof maplibre.addProtocol = gl.addProtocol;
+/** Remove a handler registered with {@link addProtocol}. */
+export const removeProtocol: typeof maplibre.removeProtocol = gl.removeProtocol;
+
 export const Map: typeof maplibre.Map = gl.Map;
 export const Popup: typeof maplibre.Popup = gl.Popup;
 export const NavigationControl: typeof maplibre.NavigationControl =
