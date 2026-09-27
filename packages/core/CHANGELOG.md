@@ -1,5 +1,147 @@
 # @maplibre-yaml/core
 
+## 0.6.0
+
+### Minor Changes
+
+- 2692ab0: Add GeoJSON authoring sugar (`location`, `locations`, `region`, `route`) on
+  `type: geojson` sources. A source may carry one of these in place of `data:`/
+  `url:`, and it expands to a `Feature`/`FeatureCollection` immediately after
+  parse — format-wide (v1 and v2, standalone map blocks and multi-page
+  documents), so a sugar document renders through `<ml-map>` and normalizes
+  identically in both formats. The expander is exported from `@maplibre-yaml/core`
+  (`expandGeoSugar`, `project`, `detectSugarKey`, `SUGAR_KEYS`) so
+  `@maplibre-yaml/astro`'s builders share the same base-Feature shape. Malformed
+  sugar reports a clear error re-anchored to the authored sugar key rather than a
+  synthesized `data.*` path.
+- 8e850aa: `emit` is now a hover interaction as well as a click one (ml-fn9). A layer's
+  `hover: { emit: { event, payload } }` dispatches the named host event once per
+  feature _entered_ — per-feature deduped (mirroring `highlight`), driven by
+  `mousemove`, so it fires when the pointer enters a new feature rather than on
+  every pointer move. It shares the exact trust gate and closed-world
+  host-handler resolution as click-emit (one `dispatchEmit` seam), so an untrusted
+  document's `hover.emit` is denied just like `click.emit`, and — like all `emit`
+  — it is inert under `<ml-map>` until the deferred trust-surface follow-up. Hover
+  dedupe needs a feature id; a source without one gets a one-time warning pointing
+  at `generateId`/`promoteId` rather than a per-move firehose.
+- 8455c47: Converge the two interaction-binding code paths onto one shared per-layer core
+  (ml-wx2). The renderer's `EventHandler` and the standalone `attachInteractions`
+  were hand-maintained copies of the `map.on` binding + dispatch + cursor logic;
+  they now share a single `bindLayerInteractions` core, so a change to what is
+  bound or how it dispatches is made once. `attachInteractions` gains an optional
+  raw-event callback hook (its public, additive surface change). As a consequence,
+  the `emit` interaction's trust gate is now honored on the shared path under the
+  renderer too.
+
+  No `<ml-map>` behavior change: `MapRenderer` still supplies the default
+  untrusted policy and no host handlers, so `click.emit` remains inert under
+  `<ml-map>` exactly as before (fail-closed, pinned by a regression test). Making
+  `click.emit` live under `<ml-map>` — an embedder trust surface plus a DOM
+  `CustomEvent` bridge — is a tracked follow-up.
+
+  One API-level behavior change to note (not reachable through `<ml-map>`): because
+  the `emit` trust gate is now honored on the shared path, a consumer that
+  constructs `MapRenderer`/`EventHandler` directly with a **trusted** `capabilities`
+  policy and a `click.emit` will now see it act — dispatching to a registered host
+  handler, or logging a one-time missing-handler warning when none is registered —
+  where before it was unconditionally inert. `<ml-map>` never sets a trusted policy,
+  so this affects only direct programmatic embedders.
+
+- 0972d93: Interactions ship as a registry-backed module with a standalone
+  `attachInteractions` entry point (ml-cbm, PR #73). The declarative interactions
+  (popup, highlight, zoom-to-feature, emit) can now be wired onto **any**
+  `maplibregl.Map` — a bare compiled `style.json`, or a map the host already owns
+  — not just a map the library rendered. Because the emitter strips the runtime
+  half, a compiled style renders but is inert; `attachInteractions` reattaches the
+  behavior over it, so interactions survive eject. Popup `!html` stays
+  capability-gated and emit stays trust-gated and closed-world.
+- 0972d93: Make the library's canonical YAML parse options a supported public export
+  (ml-0fg, PR #74). `YAML_PARSE_OPTIONS` and `htmlTag` are now exported (frozen)
+  from `@maplibre-yaml/core` so a consumer that parses YAML itself parses exactly
+  as the library does instead of re-declaring the options and drifting.
+- 43dbb14: Warn on malformed inline GeoJSON `data` under format v1 (ml-ldv). v1 keeps
+  `source.data` as permissive (`z.any()`) for byte-for-byte compatibility —
+  MapLibre tolerates loosely-conformant geometry — so genuinely broken inline
+  GeoJSON used to pass validation silently. It now surfaces a validation
+  **warning** that names the RFC 7946 problem; the document still parses and
+  renders. The check is self-gating on the field schema, so format v2 (where the
+  same data is already a hard error) never double-reports it.
+
+  Note: like other non-deprecation warnings, this promotes to an error under
+  `mlym validate --strict` / CI, so upgrading may surface a CI failure for a
+  document that already contained malformed inline geometry — the fix is to
+  correct the geometry (or move it to a fetched `url:`).
+
+- d595a87: Compile format-v2 `style.metadata` through to the emitted `style.json` root
+  (ml-tay). The v2 schema accepted `style.metadata` but the reader had no model
+  slot for it and dropped it silently — a never-drop-discipline gap. It now lands
+  on the model's style half and the emitter writes it to the style-spec root
+  `metadata` property, so authored style metadata survives eject. It has no v1
+  surface (v1 `config.metadata` is a `Map` option under `runtime.map`), so it is
+  not an AE2 pair and cannot cause a v1/v2 divergence.
+- 0972d93: Parse format-v2 documents into the internal model (ml-dsu, PR #72). A second
+  parser front end reads a `version: 2` document — the explicit `style:` /
+  `runtime:` split, per-source and per-layer `runtime:` blocks, and the v2 renames
+  (`basemap`, root-level camera, `runtime.container.style`) — into the same
+  `MapModel` a v1 document produces. A `toModel(result)` dispatcher selects the v1
+  or v2 front end by the detected version, so the renderer, emitter, and extension
+  registry are untouched: a v2 document is indistinguishable from its v1 twin
+  downstream (AE2). Inline `source.data` is now validated as real RFC 7946 GeoJSON
+  (a hard error under v2, still lenient under v1). `mlym validate` accepts and
+  strictly validates v2 documents through the same path.
+
+### Patch Changes
+
+- 8d5c7c3: `background` layers now render under `<ml-map>`. The renderer
+  unconditionally resolved a source for every layer, but background layers
+  are sourceless by spec — so a schema-valid (and correctly emitting)
+  background layer threw during source resolution and took the whole
+  document down with it. Background layers now skip source resolution
+  entirely, and removing one no longer touches any source. Found by the
+  examples-gallery capability census.
+- 25a98cc: Renderer/schema contract audit: schema-valid documents now render or fail
+  loudly, never silently. Four observable changes: (1) legend `collapsed:`
+  is implemented — the legend renders as a native `<details>` with the title
+  as its toggle, starting closed when `collapsed: true` (the field previously
+  did nothing; an untitled legend gets a "Legend" summary). (2) Schema-accepted
+  fields the engine does not implement yet (scrollytelling `spinGlobe`,
+  `rotateAnimation`, `callback`, and the `fitBounds`/`custom`/`flyTo`/`easeTo`
+  chapter actions) now emit `kind: "unimplemented"` warnings — visible in
+  `mlym validate` output but never promoted to errors, since the document is
+  not wrong. (3) `<ml-map>` logs render errors to the console in addition to
+  dispatching `ml-map:error`, so a document failure is visible without a
+  listener; a throw during named-source registration is now routed to that
+  error path instead of being swallowed inside MapLibre's load handler.
+  (4) A layer whose source object the renderer cannot resolve (an unresolved
+  `$ref` passed programmatically, or an unknown source shape) throws a clear
+  error naming the layer instead of silently adding nothing.
+- 2545477: Inline and url-fetched GeoJSON layer sources now forward `lineMetrics`,
+  `tolerance`, `buffer`, `maxzoom`, and `attribution` (and the url path also
+  `generateId`/`promoteId`) to MapLibre. The renderer built these source
+  specs from a hand-picked field list, so schema-accepted options were
+  silently dropped — most visibly, `line-gradient` never rendered because its
+  source lost `lineMetrics`. Found by the gallery gradient-line pages.
+- d484c10: Block-level named `sources:` entries with `url:` now actually load under the
+  renderer. Previously the YAML-only `url` key was passed straight through to
+  MapLibre's `addSource` — whose geojson sources take `data`, not `url` — so
+  style validation threw and the _entire_ document render silently aborted:
+  no sources, no layers, an empty basemap. Named url sources now route through
+  the same DataFetcher path as inline layer sources (initial empty data added
+  synchronously so referencing layers can attach, the fetch resolving into
+  `setData`, caching honored, and `layer-data-loading/loaded/error` events
+  fired with the source id as their subject, matching the refresh pipeline).
+  Inline sources and named sources with inline `data:` were unaffected.
+- 0420dd8: Valid style-spec paint/layout keys outside the curated schema shapes no
+  longer produce "unknown key" warnings — and therefore no longer fail
+  `mlym validate --strict` (the CI default). The warning walker now consults
+  key inventories generated from `@maplibre/maplibre-gl-style-spec` (v5-era
+  keys like `hillshade-method`, `text-variable-anchor-offset`, and
+  `visibility` on any layer's `layout` included), so correct documents stop
+  erroring while typos still warn — with did-you-mean hints now drawn from
+  the full spec pool, not just the curated subset. The generated inventory is
+  pinned to the installed spec package by a unit test, so it cannot silently
+  drift again.
+
 ## 0.6.0-alpha.1
 
 ### Minor Changes

@@ -1,5 +1,23 @@
 # @maplibre-yaml/astro
 
+## 0.4.1
+
+### Patch Changes
+
+- be31545: Fix the Astro loader's `!html` handling by importing core's canonical
+  `YAML_PARSE_OPTIONS` (ml-0fg, PR #74). The loader carried a drifted copy of the
+  parse options that had `merge` but not the `!html` tag, so `label: !html "<b>Bold</b>"`
+  resolved to the `{ $html }` marker through core but to a bare string through
+  Astro's `loadYAML`/`loadFromGlob`; the loader now imports the canonical options
+  and the two read paths agree.
+- d42afe8: `buildPolygonMapConfig` (and everything built on its region layers) now
+  renders its outline. The `region-outline` layer referenced `"region-fill"`
+  as its source — a _layer_ id, not a source name (the renderer names a
+  layer's inline source `<layerId>-source`), so the reference resolved
+  against nothing and the outline silently never drew. Both layers now carry
+  their own inline source. Found by the astro release-gate smoke the moment
+  renderer errors became loud.
+
 ## 0.4.0
 
 ### Minor Changes

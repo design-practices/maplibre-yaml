@@ -1,5 +1,53 @@
 # @maplibre-yaml/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- 0972d93: Parse format-v2 documents into the internal model (ml-dsu, PR #72). A second
+  parser front end reads a `version: 2` document — the explicit `style:` /
+  `runtime:` split, per-source and per-layer `runtime:` blocks, and the v2 renames
+  (`basemap`, root-level camera, `runtime.container.style`) — into the same
+  `MapModel` a v1 document produces. A `toModel(result)` dispatcher selects the v1
+  or v2 front end by the detected version, so the renderer, emitter, and extension
+  registry are untouched: a v2 document is indistinguishable from its v1 twin
+  downstream (AE2). Inline `source.data` is now validated as real RFC 7946 GeoJSON
+  (a hard error under v2, still lenient under v1). `mlym validate` accepts and
+  strictly validates v2 documents through the same path.
+
+### Patch Changes
+
+- 25a98cc: Renderer/schema contract audit: schema-valid documents now render or fail
+  loudly, never silently. Four observable changes: (1) legend `collapsed:`
+  is implemented — the legend renders as a native `<details>` with the title
+  as its toggle, starting closed when `collapsed: true` (the field previously
+  did nothing; an untitled legend gets a "Legend" summary). (2) Schema-accepted
+  fields the engine does not implement yet (scrollytelling `spinGlobe`,
+  `rotateAnimation`, `callback`, and the `fitBounds`/`custom`/`flyTo`/`easeTo`
+  chapter actions) now emit `kind: "unimplemented"` warnings — visible in
+  `mlym validate` output but never promoted to errors, since the document is
+  not wrong. (3) `<ml-map>` logs render errors to the console in addition to
+  dispatching `ml-map:error`, so a document failure is visible without a
+  listener; a throw during named-source registration is now routed to that
+  error path instead of being swallowed inside MapLibre's load handler.
+  (4) A layer whose source object the renderer cannot resolve (an unresolved
+  `$ref` passed programmatically, or an unknown source shape) throws a clear
+  error naming the layer instead of silently adding nothing.
+- Updated dependencies [8d5c7c3]
+- Updated dependencies [25a98cc]
+- Updated dependencies [2545477]
+- Updated dependencies [2692ab0]
+- Updated dependencies [8e850aa]
+- Updated dependencies [8455c47]
+- Updated dependencies [0972d93]
+- Updated dependencies [d484c10]
+- Updated dependencies [0972d93]
+- Updated dependencies [0420dd8]
+- Updated dependencies [43dbb14]
+- Updated dependencies [d595a87]
+- Updated dependencies [0972d93]
+  - @maplibre-yaml/core@0.6.0
+
 ## 0.3.0-alpha.1
 
 ### Patch Changes
