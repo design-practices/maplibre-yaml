@@ -13,6 +13,27 @@
  * The page a human opens to see an example is the page this test drives.
  */
 import { test, expect, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { meetsVersion, STATE_RUNTIME_FLOOR } from "../packages/core/src/capabilities";
+
+/**
+ * The maplibre-gl version the e2e vendor serves (root devDependency — the
+ * same resolution `e2e/server.mjs` uses). The CI matrix overrides it per
+ * leg, so version-gated twins read it here rather than assuming 5.x.
+ */
+const VENDOR_MAPLIBRE_VERSION: string = JSON.parse(
+  readFileSync(join(process.cwd(), "node_modules/maplibre-gl/package.json"), "utf8")
+).version;
+
+/**
+ * True when the vendor supports `global-state` expressions. Delegates to
+ * core's own floor + comparator so the gate can never drift from the
+ * runtime capability the library itself enforces.
+ */
+function vendorHasGlobalState(): boolean {
+  return meetsVersion(VENDOR_MAPLIBRE_VERSION, STATE_RUNTIME_FLOOR);
+}
 
 /** Fail the test on any page error or off-origin request (hermeticity). */
 async function guard(page: Page): Promise<string[]> {
@@ -395,6 +416,42 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
           });
         })
     );
+
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("filter-features-with-global-state: a `state:` doc's global-state filter renders live (U1, seeds U8)", async ({
+    page,
+  }) => {
+    test.skip(
+      !vendorHasGlobalState(),
+      `global-state expressions need maplibre-gl >= 5.6 (vendor is ${VENDOR_MAPLIBRE_VERSION}); U8 owns the sub-5.6 declared-absence posture`
+    );
+
+    const errors = await guard(page);
+    await openExample(page, "filter-features-with-global-state", ["big-cities"]);
+
+    // The filter's default (minPop: 5) let the big cities through…
+    await page.waitForFunction(
+      () => {
+        const map = (document.getElementById("map") as any)?.getMap?.();
+        return (
+          (map?.queryRenderedFeatures?.(undefined, { layers: ["big-cities"] }) ?? []).length > 0
+        );
+      },
+      undefined,
+      { timeout: 30_000 }
+    );
+
+    // …and kept every below-threshold feature off the canvas — the filter
+    // evaluated against real state, it didn't just fail open.
+    const belowThreshold = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return map
+        .queryRenderedFeatures(undefined, { layers: ["big-cities"] })
+        .filter((f: any) => (f.properties?.pop ?? 0) < 5).length;
+    });
+    expect(belowThreshold, "sub-threshold features rendered — filter fell open").toBe(0);
 
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });

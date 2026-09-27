@@ -313,9 +313,21 @@ export function denormalizeSources(model: MapModel): Record<string, LayerSource>
 export function denormalizeOptions(model: MapModel): {
   controls?: ControlsConfig;
   legend?: LegendConfig;
+  state?: Record<string, unknown>;
 } {
-  const options: { controls?: ControlsConfig; legend?: LegendConfig } = {};
+  const options: {
+    controls?: ControlsConfig;
+    legend?: LegendConfig;
+    state?: Record<string, unknown>;
+  } = {};
   if (model.runtime.controls !== undefined) options.controls = model.runtime.controls;
   if (model.runtime.legend !== undefined) options.legend = model.runtime.legend;
+  // `state:` lives in the style half (it is a style-spec root property), but
+  // the renderer builds the live style from `mapStyle` + addLayer calls, so
+  // the block never reaches MapLibre through the style object. The renderer
+  // applies the defaults via `setGlobalStateProperty` instead — without this,
+  // a `global-state` expression reads null and the document silently breaks
+  // (the U1 twin caught exactly that).
+  if (model.style.state !== undefined) options.state = model.style.state;
   return options;
 }

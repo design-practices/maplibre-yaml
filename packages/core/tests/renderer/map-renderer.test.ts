@@ -5,6 +5,8 @@ import { MapRenderer } from "../../src/renderer/map-renderer";
 vi.mock("maplibre-gl", () => {
   class MockMap {
     private events: Map<string, Set<Function>> = new Map();
+    /** Constructor options, kept for option-shape assertions. */
+    public ctorOptions: any;
     public addLayer = vi.fn();
     public addSource = vi.fn();
     public removeLayer = vi.fn();
@@ -14,6 +16,10 @@ vi.mock("maplibre-gl", () => {
     public setLayoutProperty = vi.fn();
     public addControl = vi.fn();
     public removeControl = vi.fn();
+
+    constructor(options?: any) {
+      this.ctorOptions = options;
+    }
 
     getCanvas() {
       return { style: { cursor: "" } };
@@ -121,6 +127,122 @@ describe("MapRenderer", () => {
 
       // Simulate map load event
       renderer.getMap().emit("load");
+    });
+  });
+
+  describe("WebGL context options (v4 top-level / v5 canvasContextAttributes)", () => {
+    it("hands MapLibre both shapes so the flat YAML keys survive the v5 move", () => {
+      renderer = new MapRenderer(container, {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+        preserveDrawingBuffer: true,
+        antialias: true,
+      } as any);
+      const opts = (renderer.getMap() as any).ctorOptions;
+
+      // v4 reads the top-level keys…
+      expect(opts.preserveDrawingBuffer).toBe(true);
+      expect(opts.antialias).toBe(true);
+      // …v5 reads canvasContextAttributes; each ignores the other's shape.
+      expect(opts.canvasContextAttributes).toEqual({
+        preserveDrawingBuffer: true,
+        antialias: true,
+      });
+    });
+
+    it("layers flat keys over an author-supplied canvasContextAttributes instead of clobbering it", () => {
+      renderer = new MapRenderer(container, {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+        canvasContextAttributes: { powerPreference: "high-performance" },
+        antialias: true,
+      } as any);
+
+      expect((renderer.getMap() as any).ctorOptions.canvasContextAttributes).toEqual({
+        powerPreference: "high-performance",
+        antialias: true,
+      });
+    });
+
+    it("passes no canvasContextAttributes when none of the flat keys are set", () => {
+      renderer = new MapRenderer(container, {
+        center: [0, 0] as [number, number],
+        zoom: 2,
+        mapStyle: "https://example.com/style.json",
+      });
+      expect((renderer.getMap() as any).ctorOptions.canvasContextAttributes).toBeUndefined();
+    });
+  });
+
+  describe("state defaults (`state:` block → setGlobalStateProperty)", () => {
+    const config = {
+      center: [0, 0] as [number, number],
+      zoom: 2,
+      mapStyle: "https://example.com/style.json",
+    };
+
+    it("applies each state default via setGlobalStateProperty on load", () => {
+      renderer = new MapRenderer(container, config, [], {
+        state: { minPop: { default: 5 }, scenario: { default: "built" } },
+      });
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+
+      map.emit("load");
+
+      expect(map.setGlobalStateProperty).toHaveBeenCalledWith("minPop", 5);
+      expect(map.setGlobalStateProperty).toHaveBeenCalledWith("scenario", "built");
+    });
+
+    it("warns once instead of throwing when the runtime lacks setGlobalStateProperty (< 5.6)", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      renderer = new MapRenderer(container, config, [], {
+        state: { minPop: { default: 5 } },
+      });
+      // MockMap has no setGlobalStateProperty — that IS the sub-5.6 runtime.
+      renderer.getMap().emit("load");
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toContain("setGlobalStateProperty");
+      warn.mockRestore();
+    });
+
+    it("skips an object entry without `default` instead of passing the object through", () => {
+      renderer = new MapRenderer(container, config, [], {
+        state: { minPop: {}, scenario: { default: "built" } },
+      });
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+
+      map.emit("load");
+
+      // `{}` declares nothing — it must never become the state value.
+      expect(map.setGlobalStateProperty).toHaveBeenCalledTimes(1);
+      expect(map.setGlobalStateProperty).toHaveBeenCalledWith("scenario", "built");
+    });
+
+    it("accepts a bare non-object entry as a raw value (programmatic callers)", () => {
+      renderer = new MapRenderer(container, config, [], {
+        state: { minPop: 5 },
+      });
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+
+      map.emit("load");
+
+      expect(map.setGlobalStateProperty).toHaveBeenCalledWith("minPop", 5);
+    });
+
+    it("touches nothing when no state block was declared", () => {
+      renderer = new MapRenderer(container, config, [], {});
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+
+      map.emit("load");
+
+      expect(map.setGlobalStateProperty).not.toHaveBeenCalled();
     });
   });
 

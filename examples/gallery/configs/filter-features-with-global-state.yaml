@@ -1,0 +1,43 @@
+# Hermetic twin seeded by U1 of the 0.7 plan: a `state:` document whose layer
+# filter reads `global-state` — the first live proof of the ≥5.6 expression
+# now that the e2e vendor runs maplibre-gl 5.24. The v4 matrix leg skips this
+# twin in the spec (the expression doesn't exist there); U8's params panel
+# owns the sub-5.6 declared-absence posture.
+type: map
+id: filter-features-with-global-state
+config:
+  center: [0, 20]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+state:
+  minPop:
+    default: 5
+layers:
+  - id: big-cities
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-0.1276, 51.5072] }
+            properties: { name: London, pop: 9 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [139.6917, 35.6895] }
+            properties: { name: Tokyo, pop: 14 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [36.8219, -1.2921] }
+            properties: { name: Nairobi, pop: 4 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [151.2093, -33.8688] }
+            properties: { name: Sydney, pop: 5 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [18.4241, -33.9249] }
+            properties: { name: "Cape Town", pop: 3 }
+    filter: [">=", ["get", "pop"], ["global-state", "minPop"]]
+    paint:
+      circle-radius: 7
+      circle-color: "#2a6f97"
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"

@@ -124,8 +124,19 @@ jobs:
     # Every asset (maplibre-gl, its CSS, the basemap style, the DEM tiles) is
     # served locally by e2e/server.mjs, so no external service can turn this
     # red. That is what makes it safe as a required check.
+    #
+    # The maplibre-version matrix (U1, ml-tfd.1) runs the suites against both
+    # ends of the supported peer range. The peer range advertised ^3||^4||^5
+    # while CI tested only one pinned version -- the v5 named-import break
+    # shipped undetected in 0.2.1/0.2.2. A pnpm override forces every
+    # workspace package (and the e2e vendor resolution) onto the matrix
+    # version, so the advertised range is the tested range.
     browser-verification:
         runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                maplibre-version: ["^4.7.1", "^5.24.0"]
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -138,8 +149,45 @@ jobs:
                   node-version: 20
                   cache: "pnpm"
 
+            # pnpm 9 (the pinned packageManager) reads overrides from
+            # package.json; pnpm 10 moved them to pnpm-workspace.yaml and
+            # silently ignores this field. If packageManager is ever bumped,
+            # move this write — the assert step below turns that mistake into
+            # a red leg instead of a silent no-op.
+            - name: Pin maplibre-gl ${{ matrix.maplibre-version }} via pnpm override
+              env:
+                  MAPLIBRE_VERSION: ${{ matrix.maplibre-version }}
+              run: |
+                  node -e "
+                    const fs = require('fs');
+                    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+                    pkg.pnpm = pkg.pnpm ?? {};
+                    pkg.pnpm.overrides = { ...pkg.pnpm.overrides, 'maplibre-gl': process.env.MAPLIBRE_VERSION };
+                    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+                  "
+
             - name: Install dependencies
-              run: pnpm install --frozen-lockfile
+              run: pnpm install --no-frozen-lockfile
+
+            # Fails the leg when any resolution the suites use does not carry
+            # the matrix major — without this the override could silently
+            # no-op and both legs would green-run the same version.
+            - name: Assert resolved maplibre-gl matches the matrix leg
+              env:
+                  MAPLIBRE_VERSION: ${{ matrix.maplibre-version }}
+              run: |
+                  node -e "
+                    const path = require('path');
+                    const want = process.env.MAPLIBRE_VERSION.match(/\d+/)[0];
+                    for (const p of ['.', 'packages/core', 'packages/astro']) {
+                      const v = require(path.resolve(p, 'node_modules/maplibre-gl/package.json')).version;
+                      console.log(p, 'maplibre-gl', v);
+                      if (v.split('.')[0] !== want) {
+                        console.error('matrix leg wants major ' + want + ', resolved ' + v + ' in ' + p);
+                        process.exit(1);
+                      }
+                    }
+                  "
 
             - name: Resolve Playwright version
               id: pw
@@ -164,6 +212,9 @@ jobs:
             - name: Build
               run: pnpm build
 
+            - name: Run core unit tests against the matrix version
+              run: pnpm --filter @maplibre-yaml/core test
+
             - name: Run browser verification
               run: pnpm verify:browser
 
@@ -171,7 +222,7 @@ jobs:
               uses: actions/upload-artifact@v4
               if: failure()
               with:
-                  name: browser-verification-report
+                  name: browser-verification-report-${{ strategy.job-index }}
                   path: |
                       e2e/report
                       e2e/results

@@ -61,6 +61,13 @@ export interface MapRendererOptions {
    * the safe default without opting into it.
    */
   capabilities?: CapabilityPolicy;
+  /**
+   * The document's `state:` block (`{ key: { default } }` per the style
+   * spec). Applied on load via `setGlobalStateProperty` so `global-state`
+   * expressions read the declared defaults — the live style is built from
+   * `mapStyle` + addLayer, so the block cannot ride in on the style object.
+   */
+  state?: Record<string, unknown>;
 }
 
 /**
@@ -146,9 +153,30 @@ export class MapRenderer {
       );
     }
 
+    // maplibre-gl v5 moved the WebGL context options into
+    // `canvasContextAttributes`; v4 and earlier read them at the top level.
+    // The YAML surface keeps the flat keys, and we hand MapLibre both shapes —
+    // each major reads the one it knows and ignores the other — so
+    // `preserveDrawingBuffer: true` keeps working across the peer range
+    // instead of silently dying on v5 (U1 breakpoint audit).
+    // Seed from an author-supplied canvasContextAttributes (config keys ride
+    // the passthrough), so the flat keys layer over it instead of clobbering.
+    const authorAttributes = (config as Record<string, unknown>)['canvasContextAttributes'];
+    const contextAttributes: Record<string, unknown> =
+      authorAttributes && typeof authorAttributes === 'object'
+        ? { ...(authorAttributes as Record<string, unknown>) }
+        : {};
+    for (const key of ['antialias', 'preserveDrawingBuffer', 'failIfMajorPerformanceCaveat'] as const) {
+      const value = config[key];
+      if (value !== undefined) contextAttributes[key] = value;
+    }
+
     // Initialize MapLibre map
     this.map = new MapLibreMap({
       ...config,
+      ...(Object.keys(contextAttributes).length > 0
+        ? { canvasContextAttributes: contextAttributes }
+        : {}),
       container: typeof container === 'string' ? container : container,
       style: config.mapStyle as any,
       center: config.center as [number, number],
@@ -207,6 +235,38 @@ export class MapRenderer {
       } catch (error) {
         options.onError?.(error as Error);
         return;
+      }
+
+      // Apply the document's `state:` defaults before layers are added, so a
+      // layer whose filter/paint reads `global-state` never evaluates against
+      // null. `setGlobalStateProperty` exists from maplibre-gl 5.6; on older
+      // runtimes a declared `state:` block warns once instead of silently
+      // doing nothing (the declared-absence posture, R5/U8).
+      if (options.state && Object.keys(options.state).length > 0) {
+        const setState = (this.map as unknown as {
+          setGlobalStateProperty?: (name: string, value: unknown) => void;
+        }).setGlobalStateProperty;
+        if (typeof setState === 'function') {
+          for (const [key, entry] of Object.entries(options.state)) {
+            // Spec shape is { default: value }. An object without `default`
+            // declares nothing — skip it rather than hand the object itself
+            // to the runtime as the state value. Bare (non-object) entries
+            // are accepted as raw values for programmatic callers.
+            if (entry && typeof entry === 'object') {
+              if (!('default' in entry)) continue;
+              const value = (entry as { default?: unknown }).default;
+              if (value !== undefined) setState.call(this.map, key, value);
+            } else if (entry !== undefined) {
+              setState.call(this.map, key, entry);
+            }
+          }
+        } else {
+          console.warn(
+            '[maplibre-yaml] this document declares `state:`, but the running ' +
+              'maplibre-gl has no setGlobalStateProperty (needs >= 5.6); ' +
+              '`global-state` expressions will read null.',
+          );
+        }
       }
 
       // Apply YAML-declared controls and legend once the map is ready.

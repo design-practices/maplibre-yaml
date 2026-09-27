@@ -268,6 +268,13 @@ describe("round trip — the fidelity proof", () => {
     expect(denormalizeOptions(model)).toEqual({});
   });
 
+  it("carries the state block into renderer options (global-state defaults, U1)", () => {
+    const state = { minPop: { default: 5 } };
+    const model = normalizeMapBlock(minimalInput({ state } as never));
+    expect(model.style.state).toEqual(state);
+    expect(denormalizeOptions(model)).toEqual({ state });
+  });
+
   it("does not invent empty runtime containers", () => {
     const model = normalizeMapBlock(minimalInput());
     expect(model.runtime.container).toBeUndefined();

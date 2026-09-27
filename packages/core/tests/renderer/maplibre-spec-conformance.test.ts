@@ -93,7 +93,9 @@ describe("generated MapLibre specs are spec-valid", () => {
 
       // The real compiler, not a shape assertion: a malformed `case`, a bad
       // ["boolean", ...] arity, or a non-colour branch fails here.
-      const compiled = createPropertyExpression(generated, COLOR_PROPERTY_SPEC);
+      // style-spec 26 added a rootKey parameter (the property path, used for
+      // error keys and global-state lookups) between expression and spec.
+      const compiled = createPropertyExpression(generated, "circle-color", COLOR_PROPERTY_SPEC);
       expect(
         compiled.result === "error"
           ? (compiled as any).value.map((e: any) => e.message).join("; ")
@@ -117,6 +119,7 @@ describe("generated MapLibre specs are spec-valid", () => {
 
       const compiled = createPropertyExpression(
         addedLayers[0].paint["circle-color"],
+        "circle-color",
         COLOR_PROPERTY_SPEC
       ) as any;
       expect(compiled.result).toBe("success");
@@ -179,6 +182,7 @@ describe("generated MapLibre specs are spec-valid", () => {
 
       const compiled = createPropertyExpression(
         addedLayers[0].paint["circle-color"],
+        "circle-color",
         COLOR_PROPERTY_SPEC
       ) as any;
       expect(compiled.result).toBe("success");
