@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-point/
+# The YAML half: the layer and its starting position. The animation loop
+# feeds new data through <ml-map>'s updateLayerData() — see animate-a-point.js.
+type: map
+id: animate-a-point
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: orbiter
+    type: circle
+    source:
+      type: geojson
+      location:
+        name: Orbiter
+        coordinates: [20, 0]
+    paint:
+      circle-radius: 10
+      circle-color: "#e63946"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

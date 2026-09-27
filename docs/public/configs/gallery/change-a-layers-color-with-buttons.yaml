@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/change-a-layers-color-with-buttons/
+# The YAML half: the layer with its starting color. Swatches drive
+# setPaintProperty through getMap() — see change-a-layers-color-with-buttons.js.
+type: map
+id: change-a-layers-color-with-buttons
+config:
+  center: [12.338, 45.4385]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: district
+    type: fill
+    source:
+      type: geojson
+      region:
+        name: Laguna di Venezia
+        coordinates:
+          - - [12.25, 45.36]
+            - [12.45, 45.36]
+            - [12.45, 45.52]
+            - [12.25, 45.52]
+            - [12.25, 45.36]
+    paint:
+      fill-color: "#3b9ddd"
+      fill-opacity: 0.6

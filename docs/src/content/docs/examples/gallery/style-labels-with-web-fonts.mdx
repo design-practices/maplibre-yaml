@@ -1,0 +1,22 @@
+---
+title: Style labels with web fonts
+description: "The MapLibre web-fonts example — an inline style object as the basemap"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/style-labels-with-web-fonts.yaml?raw';
+
+
+Replicates the MapLibre example [Style labels with web fonts](https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-web-fonts/). `glyphs` has no dedicated YAML field — but `mapStyle` accepts a **full inline style object**, so style-root concerns stay authorable without leaving the document.
+
+<LiveMap src="/configs/gallery/style-labels-with-web-fonts.yaml" height="440px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="style-labels-with-web-fonts.yaml" />
+
+## What to notice
+
+- The inline `mapStyle` object is the widest escape hatch in the format: anything the MapLibre style spec puts at the style root (glyphs, sprite, and today also terrain/sky/projection) can be authored there.
+- It is deliberately unvalidated — the style spec is MapLibre's contract, not ours; `mlym validate` checks everything *around* it.

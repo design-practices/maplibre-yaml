@@ -1,0 +1,36 @@
+---
+title: Change a layer's color with buttons
+description: "The MapLibre setPaintProperty example — swatches over a declarative layer"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/change-a-layers-color-with-buttons.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/change-a-layers-color-with-buttons.js?raw';
+
+
+Replicates the MapLibre example [Change a layer's color with buttons](https://maplibre.org/maplibre-gl-js/docs/examples/change-a-layers-color-with-buttons/).
+
+<div style="display:flex; gap:0.5rem; margin:1rem 0;">
+  <button data-fill-color="#3b9ddd" style="width:2.2rem; height:2.2rem; background:#3b9ddd; border:2px solid #333; cursor:pointer;" aria-label="blue"></button>
+  <button data-fill-color="#e63946" style="width:2.2rem; height:2.2rem; background:#e63946; border:2px solid #333; cursor:pointer;" aria-label="red"></button>
+  <button data-fill-color="#2a9d8f" style="width:2.2rem; height:2.2rem; background:#2a9d8f; border:2px solid #333; cursor:pointer;" aria-label="teal"></button>
+  <button data-fill-color="#f4a261" style="width:2.2rem; height:2.2rem; background:#f4a261; border:2px solid #333; cursor:pointer;" aria-label="orange"></button>
+</div>
+
+<LiveMap src="/configs/gallery/change-a-layers-color-with-buttons.yaml" height="440px" caption="Pick a swatch to repaint the lagoon" />
+
+<script src="/gallery-js/change-a-layers-color-with-buttons.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="change-a-layers-color-with-buttons.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="change-a-layers-color-with-buttons.js" />
+
+## What to notice
+
+- Any paint property is runtime-settable through `getMap().setPaintProperty`; the YAML keeps the authored default.
+- The `region:` sugar carries the polygon — sugar and runtime mutation compose.

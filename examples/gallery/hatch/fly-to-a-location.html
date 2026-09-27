@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>hatch: fly-to-a-location</title>
+  <!-- Hatch twin: same YAML shape as the docs page (local basemap) driven by
+       THE SAME JS file the docs page loads (/docs/public/gallery-js/fly-to-a-location.js).
+       Serve from the repo root: pnpm verify:serve -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    .controls { padding: 8px 16px; display: flex; gap: 0.5rem; align-items: center; }
+    ml-map { display: block; height: 440px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>hatch twin: fly-to-a-location</header>
+  <div class="controls"><button data-fly="[-0.1276,51.5072]">Fly to London</button><button data-fly="[2.3522,48.8566]">Fly to Paris</button></div>
+  <ml-map id="map" src="../configs/fly-to-a-location.yaml"></ml-map>
+  <script type="module" src="../../../packages/core/register.js"></script>
+  <script src="/docs/public/gallery-js/fly-to-a-location.js" defer></script>
+</body>
+</html>

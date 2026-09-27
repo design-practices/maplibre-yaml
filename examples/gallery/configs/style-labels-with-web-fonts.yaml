@@ -1,0 +1,32 @@
+# Hermetic twin of docs/public/configs/gallery/style-labels-with-web-fonts.yaml
+# (inline style's glyphs point at the e2e server's empty-pbf endpoint).
+type: map
+id: style-labels-with-web-fonts
+config:
+  center: [16.37, 48.21]
+  zoom: 10
+  mapStyle:
+    version: 8
+    name: glyphs-demo
+    glyphs: "/glyphs/{fontstack}/{range}.pbf"
+    sources: {}
+    layers:
+      - id: backdrop
+        type: background
+        paint:
+          background-color: "#f4efe9"
+layers:
+  - id: city-labels
+    type: symbol
+    source:
+      type: geojson
+      locations:
+        - { coordinates: [16.3738, 48.2082], name: Wien }
+        - { coordinates: [16.36, 48.185], name: Wieden }
+        - { coordinates: [16.4, 48.24], name: Donaustadt }
+    layout:
+      text-font: ["Noto Sans Regular"]
+      text-field: ["get", "name"]
+      text-size: 20
+    paint:
+      text-color: "#1d3557"
