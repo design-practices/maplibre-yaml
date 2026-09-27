@@ -557,6 +557,118 @@ test.describe("markers: DOM pins from the markers: block (U5)", () => {
   });
 });
 
+test.describe("params panel: parameters: + toggleable: drive the map (U8)", () => {
+  const renderedCount = (page: Page, layer: string) =>
+    page.evaluate(
+      (l) =>
+        (document.getElementById("map") as any)
+          .getMap()
+          .queryRenderedFeatures(undefined, { layers: [l] }).length,
+      layer
+    );
+
+  test("create-a-time-slider: the range control drives the global-state filter", async ({
+    page,
+  }) => {
+    test.skip(
+      !vendorHasGlobalState(),
+      `global-state needs maplibre-gl >= 5.6 (vendor is ${VENDOR_MAPLIBRE_VERSION})`
+    );
+    const errors = await guard(page);
+    await openExample(page, "create-a-time-slider", ["cities"]);
+
+    // Default year 1980: two of the five points pass the filter.
+    await page.waitForFunction(
+      () =>
+        (document.getElementById("map") as any)
+          .getMap()
+          .queryRenderedFeatures(undefined, { layers: ["cities"] }).length === 2
+    );
+
+    const slider = page.locator(".ml-map-params input[type=range]");
+    await expect(slider).toBeVisible();
+    await slider.fill("2020");
+    await page.waitForFunction(
+      () =>
+        (document.getElementById("map") as any)
+          .getMap()
+          .queryRenderedFeatures(undefined, { layers: ["cities"] }).length === 5
+    );
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("filter-layer-symbols: toggles filter categories; the labeled layer gets a visibility checkbox", async ({
+    page,
+  }) => {
+    test.skip(
+      !vendorHasGlobalState(),
+      `global-state needs maplibre-gl >= 5.6 (vendor is ${VENDOR_MAPLIBRE_VERSION})`
+    );
+    const errors = await guard(page);
+    await openExample(page, "filter-layer-symbols-using-global-state", ["pois"]);
+    await page.waitForFunction(
+      () =>
+        (document.getElementById("map") as any)
+          .getMap()
+          .queryRenderedFeatures(undefined, { layers: ["pois"] }).length === 4
+    );
+
+    // Uncheck "Parks": the two park features filter out.
+    const parks = page.locator(".ml-map-params-row", { hasText: "Parks" }).locator("input");
+    await parks.setChecked(false);
+    await page.waitForFunction(
+      () =>
+        (document.getElementById("map") as any)
+          .getMap()
+          .queryRenderedFeatures(undefined, { layers: ["pois"] }).length === 2
+    );
+
+    // The layer's authored label put a whole-layer checkbox on the panel.
+    const layerToggle = page
+      .locator(".ml-map-params-layer", { hasText: "Points of interest" })
+      .locator("input");
+    await layerToggle.setChecked(false);
+    await page.waitForFunction(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return map.getLayoutProperty("pois", "visibility") === "none";
+    });
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("change-a-layers-color-with-buttons: the select writes global state", async ({
+    page,
+  }) => {
+    test.skip(
+      !vendorHasGlobalState(),
+      `global-state needs maplibre-gl >= 5.6 (vendor is ${VENDOR_MAPLIBRE_VERSION})`
+    );
+    const errors = await guard(page);
+    await openExample(page, "change-a-layers-color-with-buttons", ["district"]);
+
+    await page.locator(".ml-map-params select").selectOption("1");
+    const fill = await page.evaluate(
+      () => (document.getElementById("map") as any).getMap().getGlobalState().fill
+    );
+    expect(fill).toBe("#e63946");
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("below the state floor, the panel degrades to a declared-absence notice", async ({
+    page,
+  }) => {
+    test.skip(
+      vendorHasGlobalState(),
+      "this leg HAS global state; the notice posture belongs to the v4 leg"
+    );
+    const errors = await guard(page);
+    await openExample(page, "params-declared-absence", ["dot"]);
+
+    await expect(page.locator(".ml-map-params-notice")).toBeVisible();
+    await expect(page.locator(".ml-map-params input")).toHaveCount(0);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
 test.describe("images: declared images register before layers (U6)", () => {
   test("add-an-icon-to-the-map: the image is registered and the symbol renders it", async ({
     page,

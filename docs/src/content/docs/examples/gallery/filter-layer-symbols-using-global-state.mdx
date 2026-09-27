@@ -1,0 +1,22 @@
+---
+title: Filter layer symbols using global state
+description: "The MapLibre global-state filter example — toggle parameters, no JS"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/filter-layer-symbols-using-global-state.yaml?raw';
+
+Replicates the MapLibre example [Filter layer symbols using global state](https://maplibre.org/maplibre-gl-js/docs/examples/filter-layer-symbols-using-global-state/). The upstream checkboxes and their listeners become two `toggle` parameters; the categories show and hide as the filter reads `global-state`.
+
+<LiveMap src="/configs/gallery/filter-layer-symbols-using-global-state.yaml" height="440px" caption="Uncheck a category and its points vanish" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="filter-layer-symbols-using-global-state.yaml" />
+
+## What to notice
+
+- Two `toggle` parameters drive two state keys; the one filter combines them with `any`/`all`.
+- The layer's authored `label:` also puts a whole-layer visibility checkbox on the panel — that is `toggleable:` being consumed (set `toggleable: false` to opt a labeled layer out).
+- Requires maplibre-gl ≥ 5.6 for the state-driven controls; the layer checkbox is plain visibility and works everywhere.

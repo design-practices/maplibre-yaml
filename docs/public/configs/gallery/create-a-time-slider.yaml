@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/create-a-time-slider/
+# A range parameter drives a global-state filter — the params panel renders
+# the slider; no JS.
+type: map
+id: create-a-time-slider
+config:
+  center: [20, 20]
+  zoom: 1
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+state:
+  year:
+    default: 1980
+parameters:
+  year:
+    label: Founded by
+    type: range
+    min: 1960
+    max: 2020
+    step: 10
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, geometry: { type: Point, coordinates: [-0.13, 51.51] }, properties: { name: Alpha, year: 1960 } }
+          - { type: Feature, geometry: { type: Point, coordinates: [139.69, 35.69] }, properties: { name: Bravo, year: 1970 } }
+          - { type: Feature, geometry: { type: Point, coordinates: [36.82, -1.29] }, properties: { name: Charlie, year: 1990 } }
+          - { type: Feature, geometry: { type: Point, coordinates: [151.21, -33.87] }, properties: { name: Delta, year: 2010 } }
+          - { type: Feature, geometry: { type: Point, coordinates: [-74.01, 40.71] }, properties: { name: Echo, year: 2020 } }
+    filter: ["<=", ["get", "year"], ["global-state", "year"]]
+    paint:
+      circle-radius: 7
+      circle-color: "#e76f51"
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"

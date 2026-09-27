@@ -81,6 +81,16 @@ parameters:
     values: [built, potential]
 ```
 
+Declaring `parameters:` renders the built-in **params panel** (top-right, in
+the same corner system as the legend): each entry becomes a control writing
+its state key via `setGlobalStateProperty`. Control types: `range`
+(`min`/`max`/`step`), `select` (alias `enum`, options from `values`), and
+`toggle`; an unrecognized type degrades to a labeled read-only row. The
+panel also lists a visibility checkbox for every layer with an authored
+`label:` (set `toggleable: false` to opt a labeled layer out) — layer
+toggles are plain visibility and work on every supported runtime, while
+parameter controls need maplibre-gl ≥ 5.6 and degrade to a notice below it.
+
 :::note
 `state` and `global-state` require **maplibre-gl 5.6.0 or later**, and are
 supported on maplibre-gl JS only. When a document is compiled with `mlym emit`

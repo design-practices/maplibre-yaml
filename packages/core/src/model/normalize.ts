@@ -322,6 +322,7 @@ export function denormalizeOptions(model: MapModel): {
   controls?: ControlsConfig;
   legend?: LegendConfig;
   state?: Record<string, unknown>;
+  parameters?: Record<string, unknown>;
   markers?: MapModel["runtime"]["markers"];
   images?: MapModel["style"]["images"];
 } {
@@ -329,12 +330,17 @@ export function denormalizeOptions(model: MapModel): {
     controls?: ControlsConfig;
     legend?: LegendConfig;
     state?: Record<string, unknown>;
+    parameters?: Record<string, unknown>;
     markers?: MapModel["runtime"]["markers"];
     images?: MapModel["style"]["images"];
   } = {};
   if (model.runtime.controls !== undefined) options.controls = model.runtime.controls;
   if (model.runtime.legend !== undefined) options.legend = model.runtime.legend;
   if (model.runtime.markers !== undefined) options.markers = model.runtime.markers;
+  // The params panel (U8) is the first reader of `parameters:` — control
+  // metadata joined with `state:` defaults at render time.
+  if (model.runtime.parameters !== undefined)
+    options.parameters = model.runtime.parameters;
   // `state:` lives in the style half (it is a style-spec root property), but
   // the renderer builds the live style from `mapStyle` + addLayer calls, so
   // the block never reaches MapLibre through the style object. The renderer

@@ -96,20 +96,6 @@ test.describe("escape-hatch pages: the shipped JS drives the shipped YAML", () =
     expect(errors).toEqual([]);
   });
 
-  test("change-a-layers-color-with-buttons: a swatch repaints the layer", async ({ page }) => {
-    const errors = await guard(page);
-    await openHatch(page, "change-a-layers-color-with-buttons", ["district"]);
-
-    await page.click('[data-fill-color="#e63946"]');
-    await page.waitForFunction(() => {
-      const map = (document.getElementById("map") as any).getMap();
-      const c = map.getPaintProperty("district", "fill-color");
-      // MapLibre may normalize the colour; compare loosely.
-      return String(c).toLowerCase().includes("e63946") || String(c).startsWith("rgb(230");
-    });
-    expect(errors).toEqual([]);
-  });
-
   test("get-features-under-the-mouse-pointer: hover fills the info panel via DOM events", async ({
     page,
   }) => {

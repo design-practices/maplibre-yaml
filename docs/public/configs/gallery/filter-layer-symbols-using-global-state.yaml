@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/filter-layer-symbols-using-global-state/
+# Toggle parameters drive a global-state filter; the layer's authored label
+# also puts a visibility checkbox on the panel (`toggleable:` consuming).
+type: map
+id: filter-layer-symbols-using-global-state
+config:
+  center: [-77.03, 38.9]
+  zoom: 11
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+state:
+  showParks:
+    default: true
+  showMuseums:
+    default: true
+parameters:
+  showParks:
+    label: Parks
+    type: toggle
+  showMuseums:
+    label: Museums
+    type: toggle
+layers:
+  - id: pois
+    label: Points of interest
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, geometry: { type: Point, coordinates: [-77.045, 38.905] }, properties: { kind: park } }
+          - { type: Feature, geometry: { type: Point, coordinates: [-77.02, 38.89] }, properties: { kind: park } }
+          - { type: Feature, geometry: { type: Point, coordinates: [-77.03, 38.9] }, properties: { kind: museum } }
+          - { type: Feature, geometry: { type: Point, coordinates: [-77.01, 38.91] }, properties: { kind: museum } }
+    filter:
+      - any
+      - ["all", ["==", ["get", "kind"], "park"], ["global-state", "showParks"]]
+      - ["all", ["==", ["get", "kind"], "museum"], ["global-state", "showMuseums"]]
+    paint:
+      circle-radius: 8
+      circle-color: ["match", ["get", "kind"], "park", "#2a9d8f", "#e9c46a"]
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"

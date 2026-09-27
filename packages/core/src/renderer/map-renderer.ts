@@ -14,6 +14,14 @@ import type { MarkerConfig } from '../schemas/map.schema';
 import { ControlsManager } from './controls-manager';
 import { MarkersManager } from './markers-manager';
 import { loadDocumentImages } from './images-loader';
+import { ChromeLayout } from './chrome-layout';
+import type { ChromeCorner } from './chrome-layout';
+import {
+  ParamsBuilder,
+  hasPanelContent,
+  type ParamsPanelConfig,
+  type ParameterMeta,
+} from './params-builder';
 import type { ImageConfig } from '../schemas/map.schema';
 import type { CapabilityPolicy } from "../capabilities.js";
 import {
@@ -85,6 +93,13 @@ export interface MapRendererOptions {
    * added, so `icon-image`/`*-pattern` references resolve on first render.
    */
   images?: Record<string, ImageConfig>;
+  /**
+   * `parameters:` presentation metadata — rendered as the params panel
+   * (U8), each control writing its state key via `setGlobalStateProperty`.
+   * Loosely typed to match the schema's passthrough record; the panel
+   * builder reads it as {@link ParameterMeta}.
+   */
+  parameters?: Record<string, unknown>;
 }
 
 /**
@@ -120,6 +135,9 @@ export class MapRenderer {
   private containerEl: HTMLElement | null;
   private controlsAdded: boolean;
   private legendBuilt: boolean;
+  private paramsBuilt = false;
+  /** Lazily created on the first chrome mount (KTD10 corner system). */
+  private chrome: ChromeLayout | null = null;
   /** Set by destroy(); late async continuations (image loads) check it. */
   private destroyed = false;
   private autoLegendContainer: HTMLElement | null;
@@ -266,10 +284,10 @@ export class MapRenderer {
       // null. `setGlobalStateProperty` exists from maplibre-gl 5.6; on older
       // runtimes a declared `state:` block warns once instead of silently
       // doing nothing (the declared-absence posture, R5/U8).
+      const setState = (this.map as unknown as {
+        setGlobalStateProperty?: (name: string, value: unknown) => void;
+      }).setGlobalStateProperty;
       if (options.state && Object.keys(options.state).length > 0) {
-        const setState = (this.map as unknown as {
-          setGlobalStateProperty?: (name: string, value: unknown) => void;
-        }).setGlobalStateProperty;
         if (typeof setState === 'function') {
           for (const [key, entry] of Object.entries(options.state)) {
             // Spec shape is { default: value }. An object without `default`
@@ -304,6 +322,55 @@ export class MapRenderer {
       }
       if (options.legend && !this.legendBuilt) {
         this.buildLegend(this.createLegendContainer(options.legend), layers, options.legend);
+      }
+
+      // Params/toggle panel (U8, R11): parameter controls joined from
+      // `parameters:` metadata and `state:` defaults, plus visibility
+      // checkboxes for layers the author labeled. Registered into the
+      // shared corner system (KTD10), defaulting top-right.
+      if (!this.paramsBuilt) {
+        const toggleableLayers = layers.flatMap((layer) => {
+          const l = layer as unknown as Record<string, unknown>;
+          if (typeof l['label'] !== 'string' || l['toggleable'] === false) return [];
+          return [
+            {
+              id: String(l['id']),
+              label: l['label'],
+              visible: l['visible'] !== false,
+            },
+          ];
+        });
+        const panelConfig: ParamsPanelConfig = {
+          ...(options.parameters
+            ? { parameters: options.parameters as Record<string, ParameterMeta> }
+            : {}),
+          ...(options.state ? { state: options.state } : {}),
+          toggleableLayers,
+          stateSupported: typeof setState === 'function',
+        };
+        if (hasPanelContent(panelConfig)) {
+          this.paramsBuilt = true;
+          const mount = document.createElement('div');
+          this.chromeLayout().mount('top-right', mount);
+          new ParamsBuilder().build(mount, panelConfig, {
+            onStateChange: (key, value) => {
+              setState?.call(this.map, key, value);
+            },
+            onToggleLayer: (layerId, visible) => {
+              this.layerManager.setVisibility(layerId, visible);
+            },
+          });
+          if (
+            Object.keys(panelConfig.parameters ?? {}).length > 0 &&
+            typeof setState !== 'function'
+          ) {
+            console.warn(
+              '[maplibre-yaml] this document declares `parameters:`, but the ' +
+                'running maplibre-gl has no setGlobalStateProperty (needs >= 5.6); ' +
+                'the panel shows a notice instead of controls.',
+            );
+          }
+        }
       }
 
       // Standalone markers: DOM pins with the document's popup content run
@@ -451,18 +518,23 @@ export class MapRenderer {
     this.legendBuilder.build(container, layers, config);
   }
 
+  /** The shared corner system (KTD10), created on first chrome mount. */
+  private chromeLayout(): ChromeLayout {
+    if (!this.chrome) {
+      this.chrome = new ChromeLayout(this.containerEl ?? this.map.getContainer());
+    }
+    return this.chrome;
+  }
+
   /**
-   * Create a positioned container inside the map element for the auto legend
+   * Create a container for the auto legend, registered into the shared
+   * corner system (KTD10) — same placement contract as the params panel
+   * and (U9) author slots; same-corner occupants stack.
    */
   private createLegendContainer(config: LegendConfig): HTMLElement {
     const el = document.createElement('div');
     el.className = 'ml-map-legend';
-    const position = config.position ?? 'top-left';
-    el.style.position = 'absolute';
-    el.style.zIndex = '1';
-    el.style[position.includes('top') ? 'top' : 'bottom'] = '10px';
-    el.style[position.includes('left') ? 'left' : 'right'] = '10px';
-    (this.containerEl ?? this.map.getContainer()).appendChild(el);
+    this.chromeLayout().mount((config.position ?? 'top-left') as ChromeCorner, el);
     this.autoLegendContainer = el;
     return el;
   }
@@ -518,6 +590,8 @@ export class MapRenderer {
     this.controlsManager.removeAllControls();
     this.autoLegendContainer?.remove();
     this.autoLegendContainer = null;
+    this.chrome?.destroy();
+    this.chrome = null;
     this.eventListeners.clear();
     this.map.remove();
   }
