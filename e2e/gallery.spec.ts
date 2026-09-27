@@ -141,6 +141,10 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
     layers: ["islands"],
     rendered: "islands",
   },
+  // U6 `images:` — icon, coalesce fallback, and fill-pattern twins
+  { slug: "add-an-icon-to-the-map", layers: ["logo"], rendered: "logo" },
+  { slug: "use-a-fallback-image", layers: ["fallback"], rendered: "fallback" },
+  { slug: "add-a-pattern-to-a-polygon", layers: ["patterned"], rendered: "patterned" },
 ];
 
 async function openExample(page: Page, slug: string, layers: string[]): Promise<void> {
@@ -549,6 +553,50 @@ test.describe("markers: DOM pins from the markers: block (U5)", () => {
     await marker.click(); // toggle off — MapLibre's built-in behavior
     await expect(popup).toHaveCount(0);
 
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
+test.describe("images: declared images register before layers (U6)", () => {
+  test("add-an-icon-to-the-map: the image is registered and the symbol renders it", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openExample(page, "add-an-icon-to-the-map", ["logo"]);
+
+    const state = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return {
+        hasImage: map.hasImage("osgeo-logo"),
+        rendered: map.queryRenderedFeatures(undefined, { layers: ["logo"] }).length,
+      };
+    });
+    expect(state.hasImage, "images: entry never reached map.addImage").toBe(true);
+    expect(state.rendered, "symbol layer rendered nothing").toBeGreaterThan(0);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("use-a-fallback-image: the missing name warns once and coalesce falls back", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const warnings: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "warning") warnings.push(message.text());
+    });
+    await openExample(page, "use-a-fallback-image", ["fallback"]);
+
+    const state = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return {
+        hasFallback: map.hasImage("fallback-marker"),
+        rendered: map.queryRenderedFeatures(undefined, { layers: ["fallback"] }).length,
+      };
+    });
+    expect(state.hasFallback).toBe(true);
+    expect(state.rendered).toBeGreaterThan(0);
+    // The warn-once styleimagemissing handler names the missing image.
+    expect(warnings.filter((w) => w.includes("primary-icon")).length).toBeLessThanOrEqual(1);
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 });

@@ -1,0 +1,22 @@
+---
+title: Add an icon to the map
+description: "The MapLibre icon example — a named images: entry on a symbol layer"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-an-icon-to-the-map.yaml?raw';
+
+Replicates the MapLibre example [Add an icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/add-an-icon-to-the-map/). The upstream `map.loadImage(...)` + `map.addImage(...)` pair becomes a declarative `images:` entry.
+
+<LiveMap src="/configs/gallery/add-an-icon-to-the-map.yaml" height="440px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-an-icon-to-the-map.yaml" />
+
+## What to notice
+
+- `images:` names load **before** layers, so `icon-image: osgeo-logo` resolves on first render — no `styleimagemissing` race.
+- On eject (`mlym emit`), the image is fetched at compile time and merged into the document sprite; the layer's reference is rewritten to `mlym:osgeo-logo`. The `images:` construct fully compiles — class **ejects**, so `--strict` accepts it.
+- Options ride along per entry: `{ url, sdf, pixelRatio }` instead of the bare URL string.

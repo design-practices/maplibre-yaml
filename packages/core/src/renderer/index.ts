@@ -13,6 +13,7 @@ export { EventHandler } from "./event-handler";
 export type { EventHandlerCallbacks } from "./event-handler";
 
 export { MarkersManager } from "./markers-manager";
+export { loadDocumentImages } from "./images-loader";
 export type { MarkersManagerCallbacks } from "./markers-manager";
 
 export { PopupBuilder } from "./popup-builder";

@@ -118,8 +118,49 @@ markers:
 Markers are a **fallback-class** construct on eject: `mlym emit
 --with-fallbacks` lowers them to a symbol layer with generated pin sprites
 (the pins render; dragging and popup content do not compile), and `--strict`
-refuses marker documents. See the [eject classes
-reference](/reference/eject-classes/).
+refuses marker documents. `icon:` URLs are fetched into the document sprite
+at compile time, so ejected icon markers keep their images. See the [eject
+classes reference](/reference/eject-classes/).
+
+## Images
+
+`images:` declares named images for symbol layers and patterns — a
+document-root key, a sibling of `config:`. Each entry is a URL string or an
+options object:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `url` | string | Image URL (required; a bare string is shorthand for `{ url }`) |
+| `sdf` | boolean | Treat as a signed-distance-field icon (tintable via `icon-color`) |
+| `pixelRatio` | number | Source density — `2` means the file is @2x its CSS size |
+
+```yaml
+type: map
+id: iconic
+config:
+  center: [0, 0]
+  zoom: 2
+images:
+  poi: https://example.com/poi.png
+  arrow:
+    url: https://example.com/arrow.png
+    sdf: true
+layers:
+  - id: spots
+    type: symbol
+    source: pts
+    layout:
+      icon-image: poi
+```
+
+Live, every image loads **before** layers are added, so references resolve
+on first render. On eject the construct fully compiles (class **ejects**):
+`mlym emit` fetches each URL into the document sprite and rewrites literal
+references (`icon-image`, `fill-pattern`, `line-pattern`,
+`background-pattern`, `fill-extrusion-pattern`) to `mlym:<name>` —
+`--strict` accepts image documents. Dynamic references
+(`["image", ["get", "icon"]]`) resolve live but cannot be rewritten at
+compile time.
 
 ## View Options
 

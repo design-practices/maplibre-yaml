@@ -588,6 +588,67 @@ runtime:
   });
 });
 
+describe("AE2 — images (U6)", () => {
+  it("v1 root images and v2 style.images normalize deep-equal", () => {
+    const v1 = model(`
+type: map
+id: iconic
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: ${BASEMAP}
+images:
+  poi: https://x.example/poi.png
+  arrow:
+    url: https://x.example/arrow.png
+    sdf: true
+    pixelRatio: 2
+`);
+    const v2 = model(`
+version: 2
+type: map
+id: iconic
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 2
+  images:
+    poi: https://x.example/poi.png
+    arrow:
+      url: https://x.example/arrow.png
+      sdf: true
+      pixelRatio: 2
+`);
+    expect(Object.keys(v2.style.images ?? {})).toHaveLength(2);
+    expect(v2).toEqual(v1);
+  });
+
+  it("empty images records normalize away in both formats", () => {
+    const v1 = model(`
+type: map
+id: iconic
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: ${BASEMAP}
+images: {}
+`);
+    const v2 = model(`
+version: 2
+type: map
+id: iconic
+style:
+  basemap: ${BASEMAP}
+  center: [0, 0]
+  zoom: 2
+  images: {}
+`);
+    expect(v1.style.images).toBeUndefined();
+    expect(v2.style.images).toBeUndefined();
+    expect(v2).toEqual(v1);
+  });
+});
+
 describe("AE2 round-trip — the emitter sees only the model", () => {
   it("a v2 doc and its v1 twin project to the same style.json", () => {
     const v1 = model(`

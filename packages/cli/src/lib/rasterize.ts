@@ -18,6 +18,7 @@ import {
   buildSpriteIndex,
   DOCUMENT_SPRITE_ID,
   type EmitAsset,
+  type EmitImageRef,
 } from '@maplibre-yaml/core';
 
 /** One file the rasterizer produced, ready to write beside the style. */
@@ -28,22 +29,86 @@ export interface SpriteFile {
 }
 
 /**
+ * An {@link EmitImageRef} resolved: fetched, measured, ready to composite.
+ * `width`/`height` are CSS pixels — the fetched pixels divided by the ref's
+ * declared `pixelRatio` — so layout stays in the same unit as generated
+ * assets.
+ */
+export interface ResolvedImage {
+  name: string;
+  url: string;
+  data: Buffer;
+  width: number;
+  height: number;
+  sdf?: boolean;
+}
+
+/**
+ * Fetch every image ref — the pipeline's second networked step, beside
+ * `resolveBasemap`, and failure follows the same rule: an image the author
+ * declared that cannot be fetched is an error, not a silent hole in the
+ * sprite.
+ */
+export async function resolveImageRefs(
+  refs: readonly EmitImageRef[]
+): Promise<ResolvedImage[]> {
+  return Promise.all(
+    refs.map(async (ref) => {
+      if (!/^https?:/i.test(ref.url)) {
+        throw new Error(
+          `image "${ref.name}": "${ref.url}" is not an absolute http(s) URL — ` +
+            'compile-time fetch has no page to resolve a relative URL against.'
+        );
+      }
+      const response = await fetch(ref.url);
+      if (!response.ok) {
+        throw new Error(
+          `image "${ref.name}": ${response.status} ${response.statusText} fetching ${ref.url}`
+        );
+      }
+      const data = Buffer.from(await response.arrayBuffer());
+      const meta = await sharp(data).metadata();
+      if (!meta.width || !meta.height) {
+        throw new Error(`image "${ref.name}": could not read dimensions from ${ref.url}`);
+      }
+      const density = ref.pixelRatio ?? 1;
+      return {
+        name: ref.name,
+        url: ref.url,
+        data,
+        width: Math.round(meta.width / density),
+        height: Math.round(meta.height / density),
+        ...(ref.sdf !== undefined ? { sdf: ref.sdf } : {}),
+      };
+    })
+  );
+}
+
+/** True when the layout item is a generated SVG asset. */
+function isSvgAsset(item: EmitAsset | ResolvedImage): item is EmitAsset {
+  return 'svg' in item;
+}
+
+/**
  * Rasterize descriptors into the standard four-file sprite set
- * (`<id>.png`, `<id>.json`, `<id>@2x.png`, `<id>@2x.json`).
+ * (`<id>.png`, `<id>.json`, `<id>@2x.png`, `<id>@2x.json`). Generated SVG
+ * assets and fetched raster images share one sheet.
  */
 export async function rasterizeSpriteFiles(
   assets: readonly EmitAsset[],
+  images: readonly ResolvedImage[] = [],
   id: string = DOCUMENT_SPRITE_ID
 ): Promise<SpriteFile[]> {
   const files: SpriteFile[] = [];
+  const items: (EmitAsset | ResolvedImage)[] = [...assets, ...images];
 
   for (const pixelRatio of [1, 2] as const) {
-    const layout = buildSpriteIndex(assets, pixelRatio);
+    const layout = buildSpriteIndex(items, pixelRatio);
     const suffix = pixelRatio === 2 ? '@2x' : '';
 
     const composites = await Promise.all(
       layout.placements.map(async ({ asset, x, y }) => ({
-        input: await sharp(Buffer.from(asset.svg))
+        input: await sharp(isSvgAsset(asset) ? Buffer.from(asset.svg) : asset.data)
           .resize(asset.width * pixelRatio, asset.height * pixelRatio)
           .png()
           .toBuffer(),

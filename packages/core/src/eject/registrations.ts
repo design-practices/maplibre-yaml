@@ -157,16 +157,29 @@ ejectClasses.register("markers", {
   // share ONE implementation — buildMarkersLowering — and a parity test pins
   // that they cannot drift.
   eject: (ctx) => {
-    const { sourceSpec, layerSpec, assets, warnings } = buildMarkersLowering(
+    const { sourceSpec, layerSpec, assets, images, warnings } = buildMarkersLowering(
       ctx.value as MarkerConfig[]
     );
     return {
       sources: { [MARKERS_SOURCE_ID]: sourceSpec },
       layers: [layerSpec],
       assets,
+      images,
       warnings,
     };
   },
+});
+
+// Style-half construct (U6): registered so the docs eject-class table and
+// programmatic consumers can see its declared behavior, but it never reaches
+// the projection's runtime loop — `images:` compiles fully, so emit has
+// nothing to warn about.
+ejectClasses.register("images", {
+  class: "ejects",
+  onEmit:
+    "Named images are fetched at compile time and merged into the document " +
+    "sprite; layer references are rewritten to `mlym:<name>` so they resolve " +
+    "in the emitted style.",
 });
 
 ejectClasses.register("x-*", {

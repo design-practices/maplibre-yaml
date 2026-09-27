@@ -2719,6 +2719,46 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                 }
               },
               "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+            },
+            "images": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "description": "Image URL (shorthand for \`{ url }\`)"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "description": "Image URL"
+                      },
+                      "sdf": {
+                        "type": "boolean",
+                        "description": "Treat as a signed-distance-field icon (tintable via icon-color)"
+                      },
+                      "pixelRatio": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "Source density — 2 means the file is @2x (half its pixels in CSS px)"
+                      }
+                    },
+                    "required": [
+                      "url"
+                    ],
+                    "additionalProperties": false,
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  }
+                ]
+              },
+              "propertyNames": {
+                "pattern": "^[a-zA-Z0-9_-]+$"
+              },
+              "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
             }
           },
           "required": [
@@ -3338,6 +3378,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "markers": {
                               "$ref": "#/$defs/any/oneOf/0/properties/markers",
                               "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+                            },
+                            "images": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/images",
+                              "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
                             }
                           },
                           "required": [
@@ -6159,6 +6203,46 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
             }
           },
           "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+        },
+        "images": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "Image URL (shorthand for \`{ url }\`)"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "Image URL"
+                  },
+                  "sdf": {
+                    "type": "boolean",
+                    "description": "Treat as a signed-distance-field icon (tintable via icon-color)"
+                  },
+                  "pixelRatio": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Source density — 2 means the file is @2x (half its pixels in CSS px)"
+                  }
+                },
+                "required": [
+                  "url"
+                ],
+                "additionalProperties": false,
+                "patternProperties": {
+                  "^x-": {}
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
         }
       },
       "required": [
@@ -9146,6 +9230,46 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                             }
                           },
                           "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+                        },
+                        "images": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "Image URL (shorthand for \`{ url }\`)"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "url": {
+                                    "type": "string",
+                                    "description": "Image URL"
+                                  },
+                                  "sdf": {
+                                    "type": "boolean",
+                                    "description": "Treat as a signed-distance-field icon (tintable via icon-color)"
+                                  },
+                                  "pixelRatio": {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0,
+                                    "description": "Source density — 2 means the file is @2x (half its pixels in CSS px)"
+                                  }
+                                },
+                                "required": [
+                                  "url"
+                                ],
+                                "additionalProperties": false,
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
+                              }
+                            ]
+                          },
+                          "propertyNames": {
+                            "pattern": "^[a-zA-Z0-9_-]+$"
+                          },
+                          "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
                         }
                       },
                       "required": [
@@ -9216,6 +9340,10 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "markers": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/markers",
                           "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+                        },
+                        "images": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/images",
+                          "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
                         }
                       },
                       "required": [

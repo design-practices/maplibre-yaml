@@ -162,6 +162,64 @@ markers:
     }
   });
 
+  it('fetches images: at emit time into the sprite, refs rewritten to mlym: (U6)', async () => {
+    const { createServer } = await import('node:http');
+    const { once } = await import('node:events');
+    const sharp = (await import('sharp')).default;
+    const png = await sharp({
+      create: { width: 6, height: 6, channels: 4, background: { r: 0, g: 128, b: 255, alpha: 1 } },
+    })
+      .png()
+      .toBuffer();
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'image/png' });
+      res.end(png);
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const port = (server.address() as { port: number }).port;
+
+    try {
+      const dir = await mkdir();
+      const doc = join(dir, 'iconic.yaml');
+      const out = join(dir, 'style.json');
+      await writeFile(
+        doc,
+        `type: map
+id: iconic
+config:
+  center: [0, 0]
+  zoom: 2
+images:
+  poi: http://127.0.0.1:${port}/poi.png
+sources:
+  pts:
+    type: geojson
+    data: { type: FeatureCollection, features: [] }
+layers:
+  - id: spots
+    type: symbol
+    source: pts
+    layout: { icon-image: poi }
+`,
+      );
+
+      // images: compiles fully — --strict accepts it (with the sprite args).
+      await execAsync(
+        `node "${CLI}" emit "${doc}" --strict --out "${out}" --sprite-base https://maps.example.com/iconic`,
+      );
+      const style = JSON.parse(await readFile(out, 'utf-8'));
+      expect(style.layers[0].layout['icon-image']).toBe('mlym:poi');
+      expect(style.sprite).toEqual([
+        { id: 'mlym', url: 'https://maps.example.com/iconic/mlym' },
+      ]);
+      const index = JSON.parse(await readFile(join(dir, 'mlym.json'), 'utf-8'));
+      expect(index['poi']).toMatchObject({ width: 6, height: 6 });
+    } finally {
+      server.close();
+    }
+  });
+
   it('rejects a scrollytelling document — only map compiles', async () => {
     const dir = await mkdir();
     const doc = join(dir, 'story.yaml');

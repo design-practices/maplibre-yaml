@@ -453,6 +453,49 @@ export const MarkerSchema = z.object({
 /** The document-root `markers:` list. */
 export const MarkersSchema = z.array(MarkerSchema);
 
+/**
+ * One named image (U6, R9) — for symbol-layer icons and `*-pattern` fills.
+ *
+ * @remarks
+ * A bare string is the URL shorthand. Images live in the STYLE half: live,
+ * the renderer loads and `addImage`s them before layers; on eject they are
+ * fetched at compile time and merged into the document sprite, with layer
+ * references rewritten to `mlym:<name>` — a full compile, class `ejects`.
+ */
+export const ImageConfigSchema = z.union([
+  z.string().describe("Image URL (shorthand for `{ url }`)"),
+  z.object({
+    url: z.string().describe("Image URL"),
+    sdf: z
+      .boolean()
+      .optional()
+      .describe("Treat as a signed-distance-field icon (tintable via icon-color)"),
+    pixelRatio: z
+      .number()
+      .positive()
+      .optional()
+      .describe("Source density — 2 means the file is @2x (half its pixels in CSS px)"),
+  }),
+]);
+
+/**
+ * The `images:` record. Names are restricted to sprite-safe characters — a
+ * colon would collide with the `mlym:` sprite-namespace separator.
+ */
+export const ImagesSchema = z.record(
+  z
+    .string()
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      "Image names may only contain letters, digits, `-` and `_`"
+    ),
+  ImageConfigSchema
+);
+
+/** Inferred image types. */
+export type ImageConfig = z.infer<typeof ImageConfigSchema>;
+export type ImagesConfig = z.infer<typeof ImagesSchema>;
+
 /** Inferred marker type. */
 export type MarkerConfig = z.infer<typeof MarkerSchema>;
 
@@ -572,6 +615,9 @@ export const MapBlockSchema: z.ZodObject<any> = z
     markers: MarkersSchema.optional().describe(
       "Standalone markers — DOM pins live, symbol layers + sprite on eject"
     ),
+    images: ImagesSchema.optional().describe(
+      "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+    ),
   })
   .describe("Standard map block");
 
@@ -631,6 +677,9 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     ),
     markers: MarkersSchema.optional().describe(
       "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+    ),
+    images: ImagesSchema.optional().describe(
+      "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
     ),
   })
   .describe("Full-page map block");

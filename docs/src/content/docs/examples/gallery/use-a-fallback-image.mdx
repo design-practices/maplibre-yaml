@@ -1,0 +1,22 @@
+---
+title: Use a fallback image
+description: "The MapLibre fallback-image example — coalesce over images: entries"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/use-a-fallback-image.yaml?raw';
+
+Replicates the MapLibre example [Use a fallback image](https://maplibre.org/maplibre-gl-js/docs/examples/use-a-fallback-image/). The `coalesce` expression tries `primary-icon` (which no one supplies), misses, and falls back to the declared `images:` entry.
+
+<LiveMap src="/configs/gallery/use-a-fallback-image.yaml" height="440px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="use-a-fallback-image.yaml" />
+
+## What to notice
+
+- The missing `primary-icon` produces one console note (the warn-once `styleimagemissing` handler), never a crash — and the coalesce falls through exactly as upstream.
+- On eject, literal image names inside `icon-image` rewrite to the document sprite (`mlym:fallback-marker`); the undeclared name is left alone, so the emitted style falls back identically.
+- Dynamic references (`["image", ["get", "icon"]]`) resolve live but cannot be rewritten at compile time — use literal names when a document should eject cleanly.

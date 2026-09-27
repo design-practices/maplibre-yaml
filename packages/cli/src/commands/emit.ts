@@ -26,11 +26,13 @@ import {
   applyRuntimeGate,
   finalizeSpriteBaseUrl,
   attachSpriteAssets,
+  attachSpriteImages,
   lowerMarkers,
   EmitError,
   type EmitMode,
   type EmitWarning,
   type EmitAsset,
+  type EmitImageRef,
   type CapabilityPolicy,
   type TrustContext,
 } from '@maplibre-yaml/core';
@@ -55,6 +57,7 @@ export async function emitStyle(
   style: Record<string, unknown>;
   warnings: EmitWarning[];
   assets?: EmitAsset[];
+  images?: EmitImageRef[];
 }> {
   let model = toModel(block as never);
 
@@ -63,17 +66,22 @@ export async function emitStyle(
   // as a lossy warning inside projectStyle, which is exactly what makes
   // --strict refuse the document instead of silently substituting.
   let loweringAssets: EmitAsset[] = [];
+  let loweringImages: EmitImageRef[] = [];
   let loweringWarnings: EmitWarning[] = [];
   if (mode === 'with-fallbacks') {
     const lowered = lowerMarkers(model);
     model = lowered.model;
     loweringAssets = lowered.assets;
+    loweringImages = lowered.images;
     loweringWarnings = lowered.warnings;
   }
 
   let projected = applyRuntimeGate(projectStyle(model, mode), policy);
   if (loweringAssets.length > 0) {
     projected = attachSpriteAssets(projected, loweringAssets);
+  }
+  if (loweringImages.length > 0) {
+    projected = attachSpriteImages(projected, loweringImages);
   }
   projected = { ...projected, warnings: [...loweringWarnings, ...projected.warnings] };
 
@@ -99,6 +107,7 @@ export async function emitStyle(
       style: projected.style,
       warnings: projected.warnings,
       ...(projected.assets ? { assets: projected.assets } : {}),
+      ...(projected.images ? { images: projected.images } : {}),
     };
   }
 
@@ -108,6 +117,7 @@ export async function emitStyle(
     style: merged.style,
     warnings: merged.warnings,
     ...(merged.assets ? { assets: merged.assets } : {}),
+    ...(merged.images ? { images: merged.images } : {}),
   };
 }
 
@@ -121,11 +131,13 @@ export function spriteAssetArgsError(
   assets: EmitAsset[] | undefined,
   out: string | undefined,
   spriteBase: string | undefined,
+  images?: EmitImageRef[],
 ): string | null {
-  if (!assets || assets.length === 0) return null;
+  const count = (assets?.length ?? 0) + (images?.length ?? 0);
+  if (count === 0) return null;
   if (!out) {
     return (
-      `This document generates ${assets.length} sprite asset(s); the emitted style ` +
+      `This document generates ${count} sprite asset(s); the emitted style ` +
       'is not self-contained without them. Pass --out <dir/style.json> (and ' +
       '--sprite-base) so the sprite files are written beside the style.'
     );
@@ -227,8 +239,9 @@ export const emitCommand = defineCommand({
     let style: Record<string, unknown>;
     let warnings: EmitWarning[];
     let assets: EmitAsset[] | undefined;
+    let images: EmitImageRef[] | undefined;
     try {
-      ({ style, warnings, assets } = await emitStyle(parsed.data, mode, policy));
+      ({ style, warnings, assets, images } = await emitStyle(parsed.data, mode, policy));
     } catch (err) {
       if (err instanceof EmitError) {
         logger.error(err.message);
@@ -256,12 +269,13 @@ export const emitCommand = defineCommand({
       assets,
       args.out as string | undefined,
       args['sprite-base'] as string | undefined,
+      images,
     );
     if (assetArgsError) {
       logger.error(assetArgsError);
       process.exit(EXIT_CODES.VALIDATION_ERROR);
     }
-    if (assets && assets.length > 0) {
+    if ((assets && assets.length > 0) || (images && images.length > 0)) {
       style = finalizeSpriteBaseUrl(style, args['sprite-base'] as string);
     }
 
@@ -270,15 +284,20 @@ export const emitCommand = defineCommand({
     if (args.out) {
       const outPath = resolve(args.out as string);
 
-      // Rasterize BEFORE any write: a sharp failure must not leave a
-      // valid-looking style referencing sprite files that don't exist.
+      // Fetch + rasterize BEFORE any write: a fetch or sharp failure must
+      // not leave a valid-looking style referencing sprite files that don't
+      // exist. Image fetching is the pipeline's second networked step,
+      // beside resolveBasemap, with the same failure-is-an-error posture.
       let spriteFiles: { filename: string; data: Buffer }[] = [];
-      if (assets && assets.length > 0) {
+      if ((assets && assets.length > 0) || (images && images.length > 0)) {
         try {
-          const { rasterizeSpriteFiles } = await import('../lib/rasterize.js');
-          spriteFiles = await rasterizeSpriteFiles(assets);
+          const { rasterizeSpriteFiles, resolveImageRefs } = await import(
+            '../lib/rasterize.js'
+          );
+          const resolved = images && images.length > 0 ? await resolveImageRefs(images) : [];
+          spriteFiles = await rasterizeSpriteFiles(assets ?? [], resolved);
         } catch (err) {
-          logger.error('Failed to rasterize sprite assets; nothing written', err as Error);
+          logger.error('Failed to fetch or rasterize sprite assets; nothing written', err as Error);
           process.exit(EXIT_CODES.UNKNOWN_ERROR);
         }
       }

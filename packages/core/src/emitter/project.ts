@@ -25,7 +25,8 @@
  */
 
 import type { MapModel, LayerModel } from "../model/types";
-import type { EmitAsset } from "./assets";
+import type { EmitAsset, EmitImageRef } from "./assets";
+import { DOCUMENT_SPRITE_ID } from "./assets";
 import { ejectClasses } from "../eject";
 import type { EjectClassDefinition } from "../eject";
 import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
@@ -76,6 +77,13 @@ export interface EmitResult {
    * them beside the style (KTD3). Absent when the document generates none.
    */
   assets?: EmitAsset[];
+  /**
+   * Fetch-at-emit image refs (`images:`, marker icons — U6). Core describes;
+   * the CLI fetches each URL at compile time and merges the image into the
+   * document sprite next to the generated assets. Absent when the document
+   * declares none.
+   */
+  images?: EmitImageRef[];
   /**
    * Placement intent for the document's own layers.
    *
@@ -129,6 +137,39 @@ function transformLayer(layer: LayerModel): Record<string, unknown> {
   }
 
   return spec;
+}
+
+/**
+ * The layer properties whose string values name sprite images. Only these
+ * are rewritten to the `mlym:` document-sprite namespace — a string that
+ * happens to match an image name anywhere else (a label, a source id) is
+ * not an image reference.
+ */
+const IMAGE_VALUED_PROPS = new Set([
+  "icon-image",
+  "fill-pattern",
+  "line-pattern",
+  "background-pattern",
+  "fill-extrusion-pattern",
+]);
+
+/**
+ * Rewrite references to declared document images to `mlym:<name>` (KTD3).
+ *
+ * @remarks
+ * Live, `map.addImage(name)` makes the bare name resolvable; in the emitted
+ * style the image lives in the document sprite, whose entries are addressed
+ * `mlym:<name>` under the array sprite form. Literal strings rewrite
+ * directly; inside an expression, every string literal equal to a declared
+ * name rewrites — within an image-valued property a matching literal is an
+ * image ref by construction (`["match", ..., "icon-a", "icon-b"]`), and
+ * MapLibre resolves whatever the expression evaluates to against the sprite.
+ */
+function rewriteImageRefs(value: unknown, names: ReadonlySet<string>): unknown {
+  if (typeof value === "string")
+    return names.has(value) ? `${DOCUMENT_SPRITE_ID}:${value}` : value;
+  if (Array.isArray(value)) return value.map((v) => rewriteImageRefs(v, names));
+  return value;
 }
 
 /**
@@ -338,9 +379,26 @@ export function projectStyle(
     }
   }
 
+  const imageNames = new Set(Object.keys(model.style.images ?? {}));
+
   const positioned = model.style.layers.map((layer) => {
     const spec = transformLayer(layer);
     const id = String(spec["id"] ?? "");
+
+    // Declared document images: rewrite the image-valued properties to the
+    // document-sprite namespace so refs resolve in the emitted style.
+    if (imageNames.size > 0) {
+      for (const block of ["layout", "paint"] as const) {
+        const props = spec[block];
+        if (!isPlainObject(props)) continue;
+        const rewritten = { ...props };
+        for (const key of Object.keys(rewritten)) {
+          if (IMAGE_VALUED_PROPS.has(key))
+            rewritten[key] = rewriteImageRefs(rewritten[key], imageNames);
+        }
+        spec[block] = rewritten;
+      }
+    }
 
     // Captured before the hoist below replaces the inline object with a
     // generated source name — the contract/lossy split needs it.
@@ -417,6 +475,27 @@ export function projectStyle(
   }));
 
   if (model.style.state !== undefined) style["state"] = model.style.state;
+  // `images:` compiles fully (class `ejects`): the refs ride the result for
+  // the fetch stage, and the document sprite is declared so the rewritten
+  // `mlym:` references resolve. The CLI enforces that sprite files actually
+  // get written (--out/--sprite-base); a direct caller holds the same
+  // obligation via `result.images`.
+  const imageRefs: EmitImageRef[] = Object.entries(model.style.images ?? {}).map(
+    ([name, config]) =>
+      typeof config === "string"
+        ? { name, url: config }
+        : {
+            name,
+            url: config.url,
+            ...(config.sdf !== undefined ? { sdf: config.sdf } : {}),
+            ...(config.pixelRatio !== undefined
+              ? { pixelRatio: config.pixelRatio }
+              : {}),
+          }
+  );
+  if (imageRefs.length > 0) {
+    style["sprite"] = [{ id: DOCUMENT_SPRITE_ID, url: DOCUMENT_SPRITE_ID }];
+  }
   // `style.metadata` (v2 style-root slot, ml-tay) compiles through to the
   // style.json root `metadata` — the spec carries it, so it is not dropped.
   if (model.style.metadata !== undefined)
@@ -509,5 +588,10 @@ export function projectStyle(
   // projection bug and fails closed rather than shipping.
   assertClean(cleaned, "", opaque);
 
-  return { style: cleaned, warnings, placements };
+  return {
+    style: cleaned,
+    warnings,
+    placements,
+    ...(imageRefs.length > 0 ? { images: imageRefs } : {}),
+  };
 }

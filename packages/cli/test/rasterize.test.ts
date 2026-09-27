@@ -9,8 +9,14 @@
 
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
-import { hatchTileSvg } from '@maplibre-yaml/core';
-import { rasterizeSpriteFiles } from '../src/lib/rasterize.js';
+import { hatchTileSvg, pinSvg } from '@maplibre-yaml/core';
+import { createServer, type Server } from 'node:http';
+import { once } from 'node:events';
+import {
+  rasterizeSpriteFiles,
+  resolveImageRefs,
+  type ResolvedImage,
+} from '../src/lib/rasterize.js';
 import { spriteAssetArgsError } from '../src/commands/emit.js';
 
 const decode = (png: Buffer) =>
@@ -109,6 +115,84 @@ describe('rasterizeSpriteFiles', () => {
   });
 });
 
+describe('resolveImageRefs + mixed-sheet rasterization (U6)', () => {
+  /** A tiny deterministic PNG (4x4 opaque red) minted through sharp. */
+  const redPng = () =>
+    sharp({
+      create: { width: 4, height: 4, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
+    })
+      .png()
+      .toBuffer();
+
+  const serve = async (): Promise<{ server: Server; url: string }> => {
+    const png = await redPng();
+    const server = createServer((req, res) => {
+      if (req.url === '/icon.png') {
+        res.writeHead(200, { 'content-type': 'image/png' });
+        res.end(png);
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const address = server.address() as { port: number };
+    return { server, url: `http://127.0.0.1:${address.port}` };
+  };
+
+  it('fetches, measures, and divides by the declared pixelRatio', async () => {
+    const { server, url } = await serve();
+    try {
+      const [plain, dense] = await resolveImageRefs([
+        { name: 'plain', url: `${url}/icon.png` },
+        { name: 'dense', url: `${url}/icon.png`, pixelRatio: 2, sdf: true },
+      ]);
+      expect(plain).toMatchObject({ width: 4, height: 4 });
+      expect(dense).toMatchObject({ width: 2, height: 2, sdf: true });
+    } finally {
+      server.close();
+    }
+  });
+
+  it('a fetch failure or relative URL throws — never a silent hole in the sprite', async () => {
+    const { server, url } = await serve();
+    try {
+      await expect(
+        resolveImageRefs([{ name: 'gone', url: `${url}/missing.png` }])
+      ).rejects.toThrow(/404/);
+    } finally {
+      server.close();
+    }
+    await expect(
+      resolveImageRefs([{ name: 'rel', url: './local.png' }])
+    ).rejects.toThrow(/absolute http/);
+  });
+
+  it('fetched images share the sheet with generated assets, sdf carried into the index', async () => {
+    const image: ResolvedImage = {
+      name: 'fetched-icon',
+      url: 'https://x.example/icon.png',
+      data: await redPng(),
+      width: 4,
+      height: 4,
+      sdf: true,
+    };
+    const files = await rasterizeSpriteFiles([pinSvg()], [image]);
+    const index = JSON.parse(files.find((f) => f.filename === 'mlym.json')!.data.toString());
+    expect(Object.keys(index)).toHaveLength(2);
+    expect(index['fetched-icon']).toMatchObject({ width: 4, height: 4, sdf: true });
+    expect(index[pinSvg().name]).toBeDefined();
+
+    // The fetched pixels actually landed on the sheet: the entry's region is red.
+    const sheet = files.find((f) => f.filename === 'mlym.png')!.data;
+    const { data, info } = await decode(sheet);
+    const { x, y } = index['fetched-icon'];
+    const px = (y * info.width + x) * info.channels;
+    expect([data[px], data[px + 1], data[px + 2]]).toEqual([255, 0, 0]);
+  });
+});
+
 describe('spriteAssetArgsError (the emit argument contract for assets)', () => {
   const asset = hatchTileSvg();
 
@@ -127,5 +211,16 @@ describe('spriteAssetArgsError (the emit argument contract for assets)', () => {
 
   it('assets with both args pass', () => {
     expect(spriteAssetArgsError([asset], 'dist/style.json', 'https://x.example')).toBeNull();
+  });
+
+  it('image refs alone trigger the same contract (U6)', () => {
+    const ref = { name: 'poi', url: 'https://x.example/poi.png' };
+    expect(spriteAssetArgsError(undefined, undefined, undefined, [ref])).toMatch(/--out/);
+    expect(spriteAssetArgsError(undefined, 'dist/style.json', undefined, [ref])).toMatch(
+      /--sprite-base/,
+    );
+    expect(
+      spriteAssetArgsError(undefined, 'dist/style.json', 'https://x.example', [ref]),
+    ).toBeNull();
   });
 });

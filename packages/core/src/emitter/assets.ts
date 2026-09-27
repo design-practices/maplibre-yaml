@@ -41,6 +41,34 @@ export interface EmitAsset {
 }
 
 /**
+ * One image to fetch at compile time and merge into the document sprite
+ * (U6, R9). Core *describes* — name, URL, flags — and the CLI fetches,
+ * measures, and composites (KTD3's split, extended to the network step:
+ * fetching lives beside `resolveBasemap`, the pipeline's one networked
+ * stage). A programmatic consumer without the CLI receives everything
+ * needed to resolve the refs itself.
+ */
+export interface EmitImageRef {
+  /** Sprite entry name; layers reference it as `mlym:<name>`. */
+  name: string;
+  /** Where to fetch the image at emit time. */
+  url: string;
+  /** Signed-distance-field icon (tintable via `icon-color`). */
+  sdf?: boolean;
+  /** Source density — 2 means the file's pixels are @2x its CSS size. */
+  pixelRatio?: number;
+}
+
+/**
+ * KTD6 name for a URL-sourced image asset (marker icons): the content is
+ * unknown until fetch, so the hash covers the URL — same URL, same name,
+ * so a document referencing one icon twice yields one sprite entry.
+ */
+export function imageAssetName(url: string): string {
+  return assetName("icon", [], url);
+}
+
+/**
  * 32-bit FNV-1a, hex-encoded — 8 chars, dependency-free, stable across
  * platforms. Not cryptographic; it only needs to make names collision-proof
  * across differing content (KTD6).
@@ -195,14 +223,30 @@ export interface SpriteIndexEntry {
   width: number;
   height: number;
   pixelRatio: number;
+  /** Present (true) only for SDF entries. */
+  sdf?: boolean;
+}
+
+/**
+ * What the shelf layout needs from an item: a name, CSS-pixel dimensions,
+ * and content identity for dedupe. `EmitAsset` satisfies it via `svg`;
+ * the CLI's fetched images satisfy it via `url` (+ optional `sdf`).
+ */
+export interface SpriteLayoutItem {
+  name: string;
+  width: number;
+  height: number;
+  svg?: string;
+  url?: string;
+  sdf?: boolean;
 }
 
 /** A computed sheet layout: index JSON plus the composite positions. */
-export interface SpriteSheetLayout {
+export interface SpriteSheetLayout<T extends SpriteLayoutItem = EmitAsset> {
   /** The `<name>.json` sprite index, ready to serialize. */
   index: Record<string, SpriteIndexEntry>;
   /** Where each asset's raster lands on the sheet (in sheet pixels). */
-  placements: { asset: EmitAsset; x: number; y: number }[];
+  placements: { asset: T; x: number; y: number }[];
   /** Sheet dimensions in sheet pixels (already scaled by pixelRatio). */
   width: number;
   height: number;
@@ -221,13 +265,13 @@ const SHEET_WRAP_WIDTH = 1024;
  * Deterministic beats optimal here — a stable layout keeps emitted
  * artifacts diffable.
  */
-export function buildSpriteIndex(
-  assets: readonly EmitAsset[],
+export function buildSpriteIndex<T extends SpriteLayoutItem>(
+  assets: readonly T[],
   pixelRatio: 1 | 2 = 1
-): SpriteSheetLayout {
+): SpriteSheetLayout<T> {
   const sorted = [...dedupeAssets(assets)].sort((a, b) => a.name.localeCompare(b.name));
   const index: Record<string, SpriteIndexEntry> = {};
-  const placements: { asset: EmitAsset; x: number; y: number }[] = [];
+  const placements: { asset: T; x: number; y: number }[] = [];
 
   let x = 0;
   let y = 0;
@@ -241,7 +285,14 @@ export function buildSpriteIndex(
       x = 0;
       shelfHeight = 0;
     }
-    index[asset.name] = { x, y, width: w, height: h, pixelRatio };
+    index[asset.name] = {
+      x,
+      y,
+      width: w,
+      height: h,
+      pixelRatio,
+      ...(asset.sdf === true ? { sdf: true } : {}),
+    };
     placements.push({ asset, x, y });
     x += w;
     if (h > shelfHeight) shelfHeight = h;
@@ -257,15 +308,17 @@ export function buildSpriteIndex(
  * DIFFERENT content is a collision that would silently render one authored
  * pattern as another — thrown, never shipped.
  */
-export function dedupeAssets(assets: readonly EmitAsset[]): EmitAsset[] {
-  const byName = new Map<string, EmitAsset>();
+export function dedupeAssets<T extends SpriteLayoutItem>(assets: readonly T[]): T[] {
+  const byName = new Map<string, T>();
   for (const asset of assets) {
     const existing = byName.get(asset.name);
     if (existing === undefined) {
       byName.set(asset.name, asset);
       continue;
     }
-    if (existing.svg !== asset.svg) {
+    // Content identity: generated assets carry deterministic SVG; fetched
+    // images carry the URL they came from.
+    if ((existing.svg ?? existing.url) !== (asset.svg ?? asset.url)) {
       throw new Error(
         `[assets] sprite name "${asset.name}" is claimed by two different images — ` +
           "a name collision would silently render one authored pattern as another. " +
@@ -339,4 +392,33 @@ export function attachSpriteAssets(
     style,
     assets: dedupeAssets([...(result.assets ?? []), ...assets]),
   };
+}
+
+/**
+ * Attach fetch-at-emit image refs to an emit result — the {@link EmitImageRef}
+ * analog of {@link attachSpriteAssets}: records the (deduped) refs and
+ * declares the document sprite on the style root, since the style's
+ * `mlym:<name>` references only resolve once the sprite exists.
+ */
+export function attachSpriteImages(
+  result: EmitResult,
+  images: readonly EmitImageRef[]
+): EmitResult {
+  if (images.length === 0) return result;
+  const style = { ...result.style };
+  if (!Array.isArray(style["sprite"])) {
+    style["sprite"] = [{ id: DOCUMENT_SPRITE_ID, url: DOCUMENT_SPRITE_ID }];
+  }
+  const byName = new Map<string, EmitImageRef>();
+  for (const ref of [...(result.images ?? []), ...images]) {
+    const existing = byName.get(ref.name);
+    if (existing !== undefined && existing.url !== ref.url) {
+      throw new Error(
+        `[assets] sprite image name "${ref.name}" is claimed by two different URLs — ` +
+          "a name collision would silently render one authored image as another. Rename one."
+      );
+    }
+    if (existing === undefined) byName.set(ref.name, ref);
+  }
+  return { ...result, style, images: [...byName.values()] };
 }

@@ -13,6 +13,8 @@ import { LegendBuilder } from './legend-builder';
 import type { MarkerConfig } from '../schemas/map.schema';
 import { ControlsManager } from './controls-manager';
 import { MarkersManager } from './markers-manager';
+import { loadDocumentImages } from './images-loader';
+import type { ImageConfig } from '../schemas/map.schema';
 import type { CapabilityPolicy } from "../capabilities.js";
 import {
   denormalizeConfig,
@@ -78,6 +80,11 @@ export interface MapRendererOptions {
   state?: Record<string, unknown>;
   /** Standalone `markers:` — DOM pins added on load, removed on destroy. */
   markers?: MarkerConfig[];
+  /**
+   * Named images (`images:`) registered via `map.addImage` before layers are
+   * added, so `icon-image`/`*-pattern` references resolve on first render.
+   */
+  images?: Record<string, ImageConfig>;
 }
 
 /**
@@ -95,6 +102,7 @@ export interface MapRendererEvents {
   'markers:added': { count: number };
   'marker:click': { index: number; at: [number, number] };
   'marker:icon-error': { index: number; icon: string };
+  'image:error': { name: string; url: string };
 }
 
 /**
@@ -308,8 +316,19 @@ export class MapRenderer {
         this.markersManager.add(options.markers as MarkerConfig[]);
       }
 
+      // Declared images register BEFORE layers so icon-image/*-pattern
+      // references resolve on first render (never rejects — a failed image
+      // warns and the layer draws without it, per ml-blj).
+      const imagesReady =
+        options.images && Object.keys(options.images).length > 0
+          ? loadDocumentImages(this.map, options.images, (name, url) =>
+              this.emit('image:error', { name, url })
+            )
+          : Promise.resolve();
+
       // Add layers
-      Promise.all(layers.map((layer) => this.addLayer(layer)))
+      imagesReady
+        .then(() => Promise.all(layers.map((layer) => this.addLayer(layer))))
         .then(() => {
           this.emit('load', undefined);
           options.onLoad?.();
@@ -317,6 +336,18 @@ export class MapRenderer {
         .catch((error) => {
           options.onError?.(error, true);
         });
+    });
+
+    // An image name no declared image or sprite supplies: warn once per
+    // name instead of letting MapLibre spam one warning per render.
+    const missingWarned = new Set<string>();
+    this.map.on('styleimagemissing', (e: { id: string }) => {
+      if (missingWarned.has(e.id)) return;
+      missingWarned.add(e.id);
+      console.warn(
+        `[maplibre-yaml] layer references image "${e.id}" but no images: entry, ` +
+          'sprite, or addImage call supplies it.'
+      );
     });
 
     // Handle errors. Runtime maplibre error events are non-fatal: the map
