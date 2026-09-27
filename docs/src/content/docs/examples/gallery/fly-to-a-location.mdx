@@ -30,6 +30,6 @@ Replicates the MapLibre example [Fly to a location](https://maplibre.org/maplibr
 
 ## What to notice
 
-- `getMap()` on the `<ml-map>` element returns the live `maplibregl.Map` — the whole imperative API is available without ejecting from YAML.
+- `await mapEl.mapReady()` resolves with the live `maplibregl.Map` — the whole imperative API is available without ejecting from YAML, and the promise replaces the old load-listener + `getMap()` null-guard boilerplate.
 - The division of labor is deliberate: the *map* is declarative state (YAML); a camera *flight* is an event, so it lives in event-handling code.
 - The same page pattern covers `easeTo`, `jumpTo`, and `fitBounds`.

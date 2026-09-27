@@ -7,10 +7,10 @@
  * object). Each twin here loads the SAME JS file the docs page ships
  * (docs/public/gallery-js/<slug>.js) against a hermetic config, and the
  * tests assert the hatch's BEHAVIOR — the camera flies, the filter filters,
- * the paint repaints — not just that a map appeared. The pmtiles/protocol
- * hatch has no page at all yet: addProtocol lives on the maplibre-gl module
- * instance core bundles, which no consumer can reach (dogfood finding for
- * the 0.7 scoping; see plans/feat-maplibre-examples-gallery.md).
+ * the paint repaints — not just that a map appeared. The protocol hatch
+ * (pmtiles-source-and-protocol) exercises U2's `@maplibre-yaml/core/maplibre`
+ * subpath: a stub scheme registered through it must serve a document source,
+ * proving the subpath and the renderer share one maplibre-gl instance.
  */
 import { test, expect, type Page } from "@playwright/test";
 
@@ -169,5 +169,26 @@ test.describe("escape-hatch pages: the shipped JS drives the shipped YAML", () =
     await openHatch(page, "style-labels-with-web-fonts", ["backdrop", "city-labels"]);
     // backdrop comes from the INLINE style object; city-labels from layers:.
     expect(errors).toEqual([]);
+  });
+
+  test("pmtiles-source-and-protocol: addProtocol via the core/maplibre subpath serves a document source (U2)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openHatch(page, "pmtiles-source-and-protocol", ["protocol-cities"]);
+
+    // The source URL (stub://cities.geojson) is resolvable ONLY through the
+    // protocol registered via the subpath — features on screen prove the
+    // subpath and the renderer share one maplibre-gl module instance.
+    await page.waitForFunction(
+      () =>
+        (document.getElementById("map") as any)
+          .getMap()
+          .queryRenderedFeatures(undefined, { layers: ["protocol-cities"] }).length > 0,
+      undefined,
+      { timeout: 30_000 }
+    );
+
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 });

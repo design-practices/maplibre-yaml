@@ -40,6 +40,17 @@ const QUERYABLE = new Set(["circle", "line", "fill", "fill-extrusion", "symbol",
 // Heatmap draws a density surface; qRF support varies — presence is enough.
 QUERYABLE.delete("heatmap");
 
+// Configs that cannot render without page JS registering a protocol — the
+// sweep drives bare configs through the raw viewer, which has no page JS.
+// Each entry names its replacement regression test so nothing is silently
+// untested; every skip is printed in the run output.
+const PROTOCOL_PAGES = new Map([
+  [
+    "pmtiles-source-and-protocol",
+    "needs the page's pmtiles protocol registration; hermetic twin covers the hatch (e2e/gallery-hatch.spec.ts)",
+  ],
+]);
+
 const slugs = readdirSync(CONFIG_DIR)
   .filter((f) => f.endsWith(".yaml"))
   .map((f) => f.replace(/\.yaml$/, ""))
@@ -49,6 +60,10 @@ const browser = await chromium.launch();
 const failures = [];
 
 for (const slug of slugs) {
+  if (PROTOCOL_PAGES.has(slug)) {
+    console.log(`SKIP ${slug} — ${PROTOCOL_PAGES.get(slug)}`);
+    continue;
+  }
   const doc = parseYAML(readFileSync(`${CONFIG_DIR}/${slug}.yaml`, "utf8"));
   const layers = doc.layers ?? [];
   const layerIds = layers.map((l) => l.id);

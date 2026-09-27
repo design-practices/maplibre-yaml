@@ -19,6 +19,10 @@
       "types": "./dist/register.d.ts",
       "import": "./dist/register.browser.js"
     },
+    "./maplibre": {
+      "types": "./dist/maplibre.d.ts",
+      "import": "./dist/maplibre.js"
+    },
     "./schemas": {
       "types": "./dist/schemas/index.d.ts",
       "import": "./dist/schemas/index.js"
@@ -34,6 +38,7 @@
     "dist",
     "schemas",
     "register.js",
+    "maplibre.js",
     "README.md"
   ],
   "scripts": {

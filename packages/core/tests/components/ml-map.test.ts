@@ -648,4 +648,44 @@ layers: []
       expect(element.getMap()).toBeNull();
     });
   });
+
+  describe("mapReady (U2, R3)", () => {
+    it("resolves with the map when ml-map:load fires", async () => {
+      const element = document.createElement('ml-map') as MLMap;
+      const ready = element.mapReady();
+
+      // Simulate the renderer wiring: a map exists and the load event fires.
+      const fakeMap = { on: vi.fn(), off: vi.fn() };
+      (element as any).renderer = {
+        isMapLoaded: () => true,
+        getMap: () => fakeMap,
+      };
+      element.dispatchEvent(new CustomEvent("ml-map:load", { detail: {} }));
+
+      await expect(ready).resolves.toBe(fakeMap);
+    });
+
+    it("resolves immediately when the map is already loaded", async () => {
+      const element = document.createElement('ml-map') as MLMap;
+      const fakeMap = { on: vi.fn(), off: vi.fn() };
+      (element as any).renderer = {
+        isMapLoaded: () => true,
+        getMap: () => fakeMap,
+      };
+
+      await expect(element.mapReady()).resolves.toBe(fakeMap);
+    });
+
+    it("rejects when ml-map:error fires first", async () => {
+      const element = document.createElement('ml-map') as MLMap;
+      const ready = element.mapReady();
+      const boom = new Error("bad document");
+
+      element.dispatchEvent(
+        new CustomEvent("ml-map:error", { detail: { error: boom } })
+      );
+
+      await expect(ready).rejects.toBe(boom);
+    });
+  });
 });

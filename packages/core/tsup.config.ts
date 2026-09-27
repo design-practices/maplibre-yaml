@@ -8,6 +8,7 @@ export default defineConfig([
       "src/schemas/index.ts",
       "src/components/index.ts",
       "src/register.ts",
+      "src/maplibre.ts",
     ],
     format: ["esm"],
     dts: true,

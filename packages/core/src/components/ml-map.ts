@@ -711,6 +711,51 @@ export class MLMap extends HTMLElement {
   }
 
   /**
+   * Resolve with the underlying MapLibre map once the document has loaded.
+   *
+   * @remarks
+   * The readiness idiom (R3): replaces the `ml-map:load` listener +
+   * `getMap()` null-guard boilerplate every escape-hatch snippet needed.
+   * Resolves immediately when the map is already loaded; otherwise resolves
+   * on the next `ml-map:load` and rejects on `ml-map:error` (config parse
+   * failure, renderer construction failure, or a runtime map error).
+   *
+   * @example
+   * ```javascript
+   * const map = await document.querySelector('ml-map').mapReady();
+   * map.flyTo({ center: [-122.4, 37.8], zoom: 14 });
+   * ```
+   */
+  mapReady(): Promise<MapLibreMap> {
+    const loaded = this.renderer?.isMapLoaded() ? this.renderer.getMap() : null;
+    if (loaded) return Promise.resolve(loaded);
+
+    return new Promise<MapLibreMap>((resolve, reject) => {
+      const onLoad = () => {
+        cleanup();
+        const map = this.getMap();
+        if (map) resolve(map);
+        else reject(new Error("[ml-map] loaded without a map instance"));
+      };
+      const onError = (event: Event) => {
+        cleanup();
+        const detail = (event as CustomEvent).detail;
+        reject(
+          detail?.error instanceof Error
+            ? detail.error
+            : new Error(`[ml-map] failed to load: ${JSON.stringify(detail ?? {})}`)
+        );
+      };
+      const cleanup = () => {
+        this.removeEventListener("ml-map:load", onLoad);
+        this.removeEventListener("ml-map:error", onError);
+      };
+      this.addEventListener("ml-map:load", onLoad);
+      this.addEventListener("ml-map:error", onError);
+    });
+  }
+
+  /**
    * Get the MapRenderer instance
    *
    * @returns The MapRenderer instance, or null if not initialized

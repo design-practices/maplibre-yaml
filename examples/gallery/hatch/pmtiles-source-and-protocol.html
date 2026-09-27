@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>hatch: pmtiles-source-and-protocol</title>
+  <!-- Hatch twin: the addProtocol escape hatch (U2). The docs page registers
+       the pmtiles protocol; this twin registers a hermetic stub scheme via
+       the SAME subpath (@maplibre-yaml/core/maplibre → dist/maplibre.js) and
+       renders a document whose source URL only that protocol can resolve.
+       Registration precedes the component import, mirroring the docs page.
+       Serve from the repo root: pnpm verify:serve -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 440px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>hatch twin: pmtiles-source-and-protocol (stub protocol)</header>
+  <ml-map id="map" src="../configs/pmtiles-source-and-protocol.yaml"></ml-map>
+  <script type="module">
+    // The escape hatch under test: the maplibre module core runs on, reached
+    // through the package subpath. Because maplibre-gl is external in every
+    // core build, this import and <ml-map>'s renderer share one module —
+    // so the protocol registered here is the one the document's source
+    // request goes through.
+    import { addProtocol } from "../../../packages/core/dist/maplibre.js";
+
+    addProtocol("stub", async () => ({
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", geometry: { type: "Point", coordinates: [-0.1276, 51.5072] }, properties: { name: "London" } },
+          { type: "Feature", geometry: { type: "Point", coordinates: [139.6917, 35.6895] }, properties: { name: "Tokyo" } },
+          { type: "Feature", geometry: { type: "Point", coordinates: [-46.6333, -23.5505] }, properties: { name: "São Paulo" } },
+        ],
+      },
+    }));
+
+    // Component import AFTER registration, same ordering the docs page uses.
+    await import("../../../packages/core/register.js");
+  </script>
+</body>
+</html>

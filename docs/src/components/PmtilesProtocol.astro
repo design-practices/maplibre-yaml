@@ -1,0 +1,20 @@
+---
+/**
+ * Registers the pmtiles protocol for the current page.
+ *
+ * The import goes through `@maplibre-yaml/core/maplibre` — the maplibre-gl
+ * module core itself runs on (U2's escape hatch). Because this script and
+ * the `<ml-map>` component are bundled from the same dependency graph, the
+ * protocol lands on the exact module instance the document's source request
+ * goes through. Registering on a separately-loaded maplibre-gl copy (e.g. a
+ * CDN import) would silently register on a module the map never consults.
+ */
+---
+
+<script>
+  import { addProtocol } from "@maplibre-yaml/core/maplibre";
+  import { Protocol } from "pmtiles";
+
+  const protocol = new Protocol();
+  addProtocol("pmtiles", protocol.tile);
+</script>
