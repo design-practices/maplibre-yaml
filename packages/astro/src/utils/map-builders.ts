@@ -304,26 +304,35 @@ function buildPolygonLayers(
   const fillOpacity = region.fillOpacity ?? DEFAULT_FILL_OPACITY;
   const popupContent = buildPopupContent(region.name, region.description);
 
+  // Both layers carry their own inline copy of this source. The outline
+  // previously referenced "region-fill" — a LAYER id, which is not a source
+  // name (the renderer names a layer's inline source "<layerId>-source"),
+  // so the outline never rendered; the failure only became visible once
+  // renderer errors got loud (ml-tfd.8). A bare-name reference can only
+  // resolve against a block-level `sources:` record, which a layers-only
+  // builder cannot emit.
+  const regionSource = {
+    type: "geojson",
+    data: {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry,
+          properties: {
+            name: region.name ?? "",
+            description: region.description ?? "",
+          },
+        },
+      ],
+    },
+  } as const;
+
   return [
     {
       id: "region-fill",
       type: "fill",
-      source: {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [
-            {
-              type: "Feature",
-              geometry,
-              properties: {
-                name: region.name ?? "",
-                description: region.description ?? "",
-              },
-            },
-          ],
-        },
-      },
+      source: regionSource,
       paint: {
         "fill-color": fillColor,
         "fill-opacity": fillOpacity,
@@ -340,7 +349,7 @@ function buildPolygonLayers(
     {
       id: "region-outline",
       type: "line",
-      source: "region-fill",
+      source: regionSource,
       paint: {
         "line-color": strokeColor,
         "line-width": 2,
