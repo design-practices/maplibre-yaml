@@ -242,6 +242,10 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   // an emit lossy, and zero markers lose nothing.
   if (input.markers !== undefined && input.markers.length > 0)
     model.runtime.markers = input.markers;
+  // Style half: images fully compile (sprite merge on eject). An empty
+  // record normalizes away like an empty markers list.
+  if (input.images !== undefined && Object.keys(input.images).length > 0)
+    model.style.images = input.images;
   if (input.className !== undefined || input.style !== undefined) {
     model.runtime.container = {};
     if (input.className !== undefined) model.runtime.container.className = input.className;
@@ -319,12 +323,14 @@ export function denormalizeOptions(model: MapModel): {
   legend?: LegendConfig;
   state?: Record<string, unknown>;
   markers?: MapModel["runtime"]["markers"];
+  images?: MapModel["style"]["images"];
 } {
   const options: {
     controls?: ControlsConfig;
     legend?: LegendConfig;
     state?: Record<string, unknown>;
     markers?: MapModel["runtime"]["markers"];
+    images?: MapModel["style"]["images"];
   } = {};
   if (model.runtime.controls !== undefined) options.controls = model.runtime.controls;
   if (model.runtime.legend !== undefined) options.legend = model.runtime.legend;
@@ -336,5 +342,9 @@ export function denormalizeOptions(model: MapModel): {
   // a `global-state` expression reads null and the document silently breaks
   // (the U1 twin caught exactly that).
   if (model.style.state !== undefined) options.state = model.style.state;
+  // Style half too, for the same reason as `state:`: the live style is built
+  // from `mapStyle` + addLayer, so images must be registered imperatively
+  // (`map.addImage`) — they cannot ride in on the style object.
+  if (model.style.images !== undefined) options.images = model.style.images;
   return options;
 }

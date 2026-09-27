@@ -1,0 +1,22 @@
+---
+title: Add a pattern to a polygon
+description: "The MapLibre pattern example — fill-pattern over an images: entry"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-pattern-to-a-polygon.yaml?raw';
+
+Replicates the MapLibre example [Add a pattern to a polygon](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-pattern-to-a-polygon/). The upstream `loadImage` + `addImage` + `fill-pattern` chain becomes one `images:` entry and a plain paint property.
+
+<LiveMap src="/configs/gallery/add-a-pattern-to-a-polygon.yaml" height="440px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-pattern-to-a-polygon.yaml" />
+
+## What to notice
+
+- `fill-pattern: wave` is a literal reference to the declared image — the same name works for `icon-image`, `line-pattern`, and `background-pattern`.
+- On eject the pattern is fetched into the document sprite and the reference rewrites to `mlym:wave`; `--strict` accepts the document because nothing is lost.
+- `images:` hosts must send CORS headers (the loader uses `crossOrigin="anonymous"` for the texture upload) — unlike marker `icon:` URLs, which are plain DOM images.

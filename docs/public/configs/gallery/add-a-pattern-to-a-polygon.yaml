@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-a-pattern-to-a-polygon/
+# fill-pattern references a declared images: entry, live and on eject.
+# images: hosts must allow cross-origin access (CORS) — the live loader
+# fetches with crossOrigin=anonymous so the texture upload isn't tainted.
+type: map
+id: add-a-pattern-to-a-polygon
+config:
+  center: [10, 10]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+images:
+  wave: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Cat_silhouette.svg/120px-Cat_silhouette.svg.png"
+sources:
+  shape:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry:
+            type: Polygon
+            coordinates: [[[0, 0], [20, 0], [20, 20], [0, 20], [0, 0]]]
+          properties: {}
+layers:
+  - id: patterned
+    type: fill
+    source: shape
+    paint:
+      fill-pattern: wave

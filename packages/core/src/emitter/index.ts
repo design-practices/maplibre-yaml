@@ -15,8 +15,12 @@ export {
   pinSvg,
   buildSpriteIndex,
   attachSpriteAssets,
+  attachSpriteImages,
   dedupeAssets,
   finalizeSpriteBaseUrl,
+  imageAssetName,
+  DEFAULT_PIN_WIDTH,
+  DEFAULT_PIN_HEIGHT,
 } from "./assets";
 export {
   lowerMarkers,
@@ -30,7 +34,9 @@ export type { BasemapFetcher } from "./basemap";
 export type { EmitMode, EmitWarning, EmitWarningKind, EmitResult, LayerPlacement } from "./project";
 export type {
   EmitAsset,
+  EmitImageRef,
   HatchTileOptions,
   SpriteIndexEntry,
+  SpriteLayoutItem,
   SpriteSheetLayout,
 } from "./assets";

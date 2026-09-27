@@ -141,6 +141,10 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
     layers: ["islands"],
     rendered: "islands",
   },
+  // U6 `images:` — icon, coalesce fallback, and fill-pattern twins
+  { slug: "add-an-icon-to-the-map", layers: ["logo"], rendered: "logo" },
+  { slug: "use-a-fallback-image", layers: ["fallback"], rendered: "fallback" },
+  { slug: "add-a-pattern-to-a-polygon", layers: ["patterned"], rendered: "patterned" },
 ];
 
 async function openExample(page: Page, slug: string, layers: string[]): Promise<void> {
@@ -549,6 +553,71 @@ test.describe("markers: DOM pins from the markers: block (U5)", () => {
     await marker.click(); // toggle off — MapLibre's built-in behavior
     await expect(popup).toHaveCount(0);
 
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
+test.describe("images: declared images register before layers (U6)", () => {
+  test("add-an-icon-to-the-map: the image is registered and the symbol renders it", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openExample(page, "add-an-icon-to-the-map", ["logo"]);
+
+    const state = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return {
+        hasImage: map.hasImage("osgeo-logo"),
+        rendered: map.queryRenderedFeatures(undefined, { layers: ["logo"] }).length,
+      };
+    });
+    expect(state.hasImage, "images: entry never reached map.addImage").toBe(true);
+    expect(state.rendered, "symbol layer rendered nothing").toBeGreaterThan(0);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("use-a-fallback-image: coalesce falls back; a hard-missing ref warns exactly once", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const warnings: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "warning") warnings.push(message.text());
+    });
+    await openExample(page, "use-a-fallback-image", ["fallback"]);
+
+    const state = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return {
+        hasFallback: map.hasImage("fallback-marker"),
+        rendered: map.queryRenderedFeatures(undefined, { layers: ["fallback"] }).length,
+      };
+    });
+    expect(state.hasFallback).toBe(true);
+    expect(state.rendered).toBeGreaterThan(0);
+    // A coalesce miss is HANDLED — maplibre never fires styleimagemissing
+    // for it, so the document produces no warning at all.
+    expect(warnings.filter((w) => w.includes("primary-icon")).length).toBe(0);
+
+    // A hard-missing reference (no coalesce) DOES fire it — and the renderer
+    // warns once, not once per render.
+    await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      map.setLayoutProperty("fallback", "icon-image", "definitely-missing");
+    });
+    await page.waitForFunction(() =>
+      (document.getElementById("map") as any).getMap().isStyleLoaded()
+    );
+    await page.evaluate(async () => {
+      const map = (document.getElementById("map") as any).getMap();
+      // Force additional renders — the warning must not repeat.
+      map.panBy([30, 0], { duration: 0 });
+      map.panBy([-30, 0], { duration: 0 });
+      await new Promise((r) => setTimeout(r, 300));
+    });
+    expect(
+      warnings.filter((w) => w.includes('references image "definitely-missing"')).length
+    ).toBe(1);
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 });

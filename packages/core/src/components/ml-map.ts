@@ -67,6 +67,7 @@ import { escapeHtml } from "../utils/html.js";
  * @fires ml-map:markers-added - Standalone `markers:` pins were added
  * @fires ml-map:marker-click - User clicked a standalone marker
  * @fires ml-map:marker-icon-error - A marker icon failed (unsafe scheme or load error); the default pin was substituted
+ * @fires ml-map:image-error - A declared `images:` entry failed (unsafe scheme, load or register error)
  */
 export class MLMap extends HTMLElement {
   /** Internal MapRenderer instance */
@@ -642,6 +643,16 @@ export class MLMap extends HTMLElement {
         new CustomEvent("ml-map:marker-icon-error", {
           bubbles: true,
           detail: { index, icon },
+        })
+      );
+    });
+
+    // Declared images (U6): a failed entry — the document keeps rendering
+    this.renderer.on("image:error", ({ name, url }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:image-error", {
+          bubbles: true,
+          detail: { name, url },
         })
       );
     });

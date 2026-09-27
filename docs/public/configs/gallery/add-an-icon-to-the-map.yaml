@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-an-icon-to-the-map/
+# images: declares named images the document's layers reference; they load
+# before layers live, and merge into the emitted sprite on eject.
+type: map
+id: add-an-icon-to-the-map
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+images:
+  osgeo-logo: "https://maplibre.org/maplibre-gl-js/docs/assets/osgeo-logo.png"
+sources:
+  point:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry: { type: Point, coordinates: [0, 0] }
+          properties: {}
+layers:
+  - id: logo
+    type: symbol
+    source: point
+    layout:
+      icon-image: osgeo-logo

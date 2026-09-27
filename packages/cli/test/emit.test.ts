@@ -118,4 +118,42 @@ describe('CLI config-loader merge parity (ml-he2.4)', () => {
     const parsed = parse('base: &b { a: 1 }\ncfg:\n  <<: *b\n  c: 2\n', { merge: true });
     expect(parsed.cfg).toEqual({ a: 1, c: 2 });
   });
+
+  it('strict means strict over the whole pipeline — merge-added lossy warnings refuse too', async () => {
+    // An images: document whose INLINE basemap already claims the "mlym"
+    // sprite id: the merge orphans one of them (lossy) after projectStyle's
+    // own strict gate has already passed.
+    const doc = parse(`
+type: map
+id: shadowed
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle:
+    version: 8
+    sources: {}
+    layers: []
+    sprite:
+      - { id: mlym, url: "https://tiles.example/own-mlym" }
+images:
+  poi: https://x.example/poi.png
+sources:
+  pts:
+    type: geojson
+    data: { type: FeatureCollection, features: [] }
+layers:
+  - id: spots
+    type: symbol
+    source: pts
+    layout: { icon-image: poi }
+`);
+    await expect(emitStyle(doc, 'strict', { trust: 'untrusted' })).rejects.toThrow(
+      /strict/,
+    );
+    // with-fallbacks still emits, carrying the collision warning.
+    const { warnings } = await emitStyle(doc, 'with-fallbacks', { trust: 'untrusted' });
+    expect(warnings.some((w) => w.kind === 'lossy' && w.path.startsWith('sprite'))).toBe(
+      true,
+    );
+  });
 });

@@ -120,6 +120,16 @@ describe("dedupeAssets / name collisions", () => {
     expect(layout.width).toBe(asset.width);
   });
 
+  it("carries sdf flags into index entries, only when true", () => {
+    const items = [
+      { name: "sdf-arrow", width: 16, height: 16, url: "https://x.example/a.png", sdf: true },
+      { name: "plain", width: 16, height: 16, url: "https://x.example/b.png" },
+    ];
+    const layout = buildSpriteIndex(items);
+    expect(layout.index["sdf-arrow"]).toMatchObject({ sdf: true });
+    expect("sdf" in layout.index["plain"]!).toBe(false);
+  });
+
   it("buildSpriteIndex wraps to new shelves instead of growing one endless row", () => {
     // Marker documents make asset counts author-driven; without wrapping, a
     // hundred distinct pins would exceed WebGL texture limits at @2x.

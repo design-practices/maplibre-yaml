@@ -73,11 +73,12 @@ describe("lowerMarkers (KTD4 pre-pass)", () => {
     ]);
   });
 
-  it("icon URLs substitute the default pin with a lossy warning (until U6 embeds them)", () => {
-    const { warnings } = lowerMarkers(doc([{ at: [0, 0], icon: "https://x.example/pin.png" }]));
-    const iconWarning = warnings.find((w) => w.path === "markers[0].icon");
-    expect(iconWarning?.kind).toBe("lossy");
-    expect(iconWarning?.message).toMatch(/default pin/);
+  it("http(s) icon URLs embed as fetch-at-emit refs — no pin substitution (U6)", () => {
+    const { images, warnings } = lowerMarkers(
+      doc([{ at: [0, 0], icon: "https://x.example/pin.png" }])
+    );
+    expect(images).toHaveLength(1);
+    expect(warnings.find((w) => w.path === "markers[0].icon")).toBeUndefined();
   });
 
   it("passes a marker-less model through by reference", () => {

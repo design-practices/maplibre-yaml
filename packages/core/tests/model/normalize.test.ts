@@ -275,6 +275,19 @@ describe("round trip — the fidelity proof", () => {
     expect(denormalizeOptions(model).markers).toEqual(markers);
   });
 
+  it("carries images through the style half into renderer options (U6)", () => {
+    const images = { poi: "https://x.example/poi.png" };
+    const model = normalizeMapBlock(minimalInput({ images } as never));
+    expect(model.style.images).toEqual(images);
+    expect(denormalizeOptions(model).images).toEqual(images);
+  });
+
+  it("an empty images record normalizes away (U6)", () => {
+    const model = normalizeMapBlock(minimalInput({ images: {} } as never));
+    expect(model.style.images).toBeUndefined();
+    expect(denormalizeOptions(model).images).toBeUndefined();
+  });
+
   it("carries the state block into renderer options (global-state defaults, U1)", () => {
     const state = { minPop: { default: 5 } };
     const model = normalizeMapBlock(minimalInput({ state } as never));

@@ -24,7 +24,8 @@ import type { MarkerConfig } from "../schemas/map.schema";
 import type { EmitAsset } from "./assets";
 import type { EmitWarning } from "./project";
 import { EmitError } from "./project";
-import { pinSvg } from "./assets";
+import { pinSvg, imageAssetName } from "./assets";
+import type { EmitImageRef } from "./assets";
 
 /** What the pre-pass produced. */
 export interface LoweredMarkers {
@@ -32,6 +33,8 @@ export interface LoweredMarkers {
   model: MapModel;
   /** Pin sprite descriptors for the sheet (deduped by the pipeline). */
   assets: EmitAsset[];
+  /** Marker icon URLs to fetch into the sprite at emit time (U6). */
+  images: EmitImageRef[];
   warnings: EmitWarning[];
 }
 
@@ -44,6 +47,8 @@ export interface MarkersLowering {
   sourceSpec: Record<string, unknown>;
   layerSpec: Record<string, unknown>;
   assets: EmitAsset[];
+  /** Marker icon URLs to fetch into the sprite at emit time (U6). */
+  images: EmitImageRef[];
   warnings: EmitWarning[];
 }
 
@@ -55,12 +60,28 @@ export interface MarkersLowering {
  */
 export function buildMarkersLowering(markers: readonly MarkerConfig[]): MarkersLowering {
   const assets: EmitAsset[] = [];
+  const images: EmitImageRef[] = [];
   const warnings: EmitWarning[] = [];
+  let hasIconMarkers = false;
 
   const features = markers.map((marker: MarkerConfig, index: number) => {
-    // Icon URLs embed via the `images:`/fetch-at-emit stage (U6); until a
-    // marker's icon can be fetched into the sprite, the honest fallback is
-    // the default pin, said out loud.
+    // Icon URLs embed at compile time (U6): the emit pipeline fetches each
+    // into the document sprite. Only absolute http(s) URLs embed — matching
+    // what the live renderer's safeUrl gate accepts and what a compile-time
+    // fetch can reach; anything else falls back to the default pin, said
+    // out loud.
+    if (marker.icon !== undefined && /^https?:/i.test(marker.icon)) {
+      hasIconMarkers = true;
+      const name = imageAssetName(marker.icon);
+      images.push({ name, url: marker.icon });
+      return {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: marker.at },
+        // Icons anchor center, matching the live DOM marker default; pins
+        // anchor bottom (the tip points at the coordinate).
+        properties: { "mlym:icon": name, "mlym:anchor": "center" },
+      };
+    }
     if (marker.icon !== undefined) {
       warnings.push({
         path: `markers[${index}].icon`,
@@ -68,8 +89,8 @@ export function buildMarkersLowering(markers: readonly MarkerConfig[]): MarkersL
         construct: "markers",
         ejectClass: "fallback",
         message:
-          `\`icon\` URLs are not embedded at compile time yet; the emitted marker ` +
-          "uses the default pin instead.",
+          `\`icon\` URL scheme is not fetchable at compile time; the emitted ` +
+          "marker uses the default pin instead.",
       });
     }
     const pin = pinSvg({
@@ -83,7 +104,7 @@ export function buildMarkersLowering(markers: readonly MarkerConfig[]): MarkersL
     return {
       type: "Feature",
       geometry: { type: "Point", coordinates: marker.at },
-      properties: { "mlym:icon": pin.name },
+      properties: { "mlym:icon": pin.name, "mlym:anchor": "bottom" },
     };
   });
 
@@ -99,6 +120,7 @@ export function buildMarkersLowering(markers: readonly MarkerConfig[]): MarkersL
   });
 
   return {
+    images,
     sourceSpec: {
       type: "geojson",
       data: { type: "FeatureCollection", features },
@@ -111,9 +133,10 @@ export function buildMarkersLowering(markers: readonly MarkerConfig[]): MarkersL
         // Prefixed per KTD3: document sprite assets live under `mlym:`.
         "icon-image": ["concat", "mlym:", ["get", "mlym:icon"]],
         "icon-allow-overlap": true,
-        // The pin's tip is its bottom-center — anchor there so the pin
-        // points at the coordinate, exactly like a DOM marker.
-        "icon-anchor": "bottom",
+        // Pins anchor at their tip (bottom-center), exactly like a DOM
+        // marker; embedded icon images anchor center, matching the live
+        // default. Data-driven only when the document mixes both.
+        "icon-anchor": hasIconMarkers ? ["get", "mlym:anchor"] : "bottom",
       },
     },
     assets,
@@ -128,7 +151,7 @@ export function buildMarkersLowering(markers: readonly MarkerConfig[]): MarkersL
 export function lowerMarkers(model: MapModel): LoweredMarkers {
   const markers = model.runtime.markers;
   if (!markers || markers.length === 0) {
-    return { model, assets: [], warnings: [] };
+    return { model, assets: [], images: [], warnings: [] };
   }
 
   // Refuse loudly on id collision — an authored source/layer named like the
@@ -147,7 +170,7 @@ export function lowerMarkers(model: MapModel): LoweredMarkers {
     );
   }
 
-  const { sourceSpec, layerSpec, assets, warnings } = buildMarkersLowering(markers);
+  const { sourceSpec, layerSpec, assets, images, warnings } = buildMarkersLowering(markers);
 
   // The runtime half loses `markers`; the style half gains the lowering.
   const runtime = { ...model.runtime };
@@ -167,5 +190,5 @@ export function lowerMarkers(model: MapModel): LoweredMarkers {
     },
   };
 
-  return { model: lowered, assets, warnings };
+  return { model: lowered, assets, images, warnings };
 }
