@@ -1,38 +1,19 @@
-# Hermetic twin of docs/public/configs/gallery/create-a-hover-effect.yaml (local basemap).
+# Hermetic twin of docs/public/configs/gallery/create-a-hover-effect.yaml.
+# Matches the docs page's LOAD MODE (url-fetched geojson + generateId +
+# highlight) against a local file — the twin-fidelity rule.
 type: map
 id: create-a-hover-effect
 config:
-  center: [-100.486, 37.83]
-  zoom: 3.5
+  center: [-100.486, 38.0]
+  zoom: 3
   mapStyle: "/examples/verification/configs/local-style.json"
 layers:
   - id: states
     type: fill
     source:
       type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            properties: { name: West Block }
-            geometry:
-              type: Polygon
-              coordinates:
-                - - [-109, 37]
-                  - [-102, 37]
-                  - [-102, 41]
-                  - [-109, 41]
-                  - [-109, 37]
-          - type: Feature
-            properties: { name: East Block }
-            geometry:
-              type: Polygon
-              coordinates:
-                - - [-101, 37]
-                  - [-94.6, 37]
-                  - [-94.6, 40]
-                  - [-101, 40]
-                  - [-101, 37]
+      url: "/examples/gallery/data/states-sample.geojson"
+      generateId: true
     paint:
       fill-color: "#627BC1"
       fill-opacity: 0.6

@@ -13,8 +13,8 @@ layers:
     source:
       type: raster
       tiles:
-        - "https://img.nj.gov/imagerywms/Natural2015?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&layers=Natural2015"
+        - "https://ows.terrestris.de/osm/service?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&layers=OSM-WMS&styles="
       tileSize: 256
-      attribution: "NJ Office of GIS"
+      attribution: "© OpenStreetMap contributors, rendered by terrestris"
     paint:
       raster-opacity: 0.9

@@ -7,7 +7,7 @@ import LiveMap from '../../../../components/LiveMap.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/add-a-wms-source.yaml?raw';
 
-Replicates the MapLibre example [Add a WMS source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-wms-source/): New Jersey aerial imagery served by a WMS endpoint.
+Replicates the MapLibre example [Add a WMS source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-wms-source/): OpenStreetMap imagery served by terrestris' WMS endpoint. (The upstream example's NJ WMS does not serve CORS headers, so it fails in a browser — a WMS you embed must.)
 
 <LiveMap src="/configs/gallery/add-a-wms-source.yaml" height="460px" />
 

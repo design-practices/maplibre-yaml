@@ -6,6 +6,10 @@ config:
   center: [-77.0353, 38.8895]
   zoom: 12
   mapStyle: "https://demotiles.maplibre.org/style.json"
+# customAttribution gives the control text: declaring controls.attribution
+# replaces the built-in control, and if neither it nor any source
+# contributes attribution text the control renders empty — i.e. invisible.
 controls:
   attribution:
     position: top-left
+    customAttribution: "MapLibre demo tiles"
