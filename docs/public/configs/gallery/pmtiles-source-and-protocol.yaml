@@ -1,0 +1,33 @@
+# PMTiles vector source via the pmtiles:// protocol. The page registers the
+# protocol through `@maplibre-yaml/core/maplibre` (see the docs page); this
+# config is plain declarative YAML — the URL scheme is the only hint a
+# protocol plugin is involved. Data: Protomaps' Florence sample (ODbL).
+#
+# NOTE for the live sweep: this config cannot render without the page's
+# protocol registration — scripts/verify-docs-gallery.mjs skips it by name;
+# the hermetic regression test is e2e/gallery-hatch.spec.ts (stub protocol).
+type: map
+id: pmtiles-source-and-protocol
+config:
+  center: [11.2558, 43.7696]
+  zoom: 12.5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  firenze:
+    type: vector
+    url: "pmtiles://https://pmtiles.io/protomaps(vector)ODbL_firenze.pmtiles"
+layers:
+  - id: firenze-landuse
+    type: fill
+    source: firenze
+    source-layer: landuse
+    paint:
+      fill-color: "#7b2cbf"
+      fill-opacity: 0.25
+  - id: firenze-roads
+    type: line
+    source: firenze
+    source-layer: roads
+    paint:
+      line-color: "#5a189a"
+      line-width: 1

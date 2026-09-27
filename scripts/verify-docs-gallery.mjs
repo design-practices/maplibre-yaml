@@ -40,6 +40,17 @@ const QUERYABLE = new Set(["circle", "line", "fill", "fill-extrusion", "symbol",
 // Heatmap draws a density surface; qRF support varies — presence is enough.
 QUERYABLE.delete("heatmap");
 
+// Configs that cannot render without page JS registering a protocol — the
+// sweep drives bare configs through the raw viewer, which has no page JS.
+// Each entry names its replacement regression test so nothing is silently
+// untested; every skip is printed in the run output.
+const PROTOCOL_PAGES = new Map([
+  [
+    "pmtiles-source-and-protocol",
+    "needs the page's pmtiles protocol registration; hermetic twin covers the hatch (e2e/gallery-hatch.spec.ts)",
+  ],
+]);
+
 const slugs = readdirSync(CONFIG_DIR)
   .filter((f) => f.endsWith(".yaml"))
   .map((f) => f.replace(/\.yaml$/, ""))
@@ -48,7 +59,23 @@ const slugs = readdirSync(CONFIG_DIR)
 const browser = await chromium.launch();
 const failures = [];
 
+// A skip entry must point at a real replacement test — a dangling pointer
+// would quietly reduce "explicitly covered elsewhere" to "covered nowhere".
+const hatchSpec = readFileSync("e2e/gallery-hatch.spec.ts", "utf8");
+for (const [slug] of PROTOCOL_PAGES) {
+  if (!hatchSpec.includes(slug)) {
+    console.error(`PROTOCOL_PAGES names "${slug}" but e2e/gallery-hatch.spec.ts has no test mentioning it`);
+    process.exit(1);
+  }
+}
+
+let skipped = 0;
 for (const slug of slugs) {
+  if (PROTOCOL_PAGES.has(slug)) {
+    console.log(`SKIP ${slug} — ${PROTOCOL_PAGES.get(slug)}`);
+    skipped += 1;
+    continue;
+  }
   const doc = parseYAML(readFileSync(`${CONFIG_DIR}/${slug}.yaml`, "utf8"));
   const layers = doc.layers ?? [];
   const layerIds = layers.map((l) => l.id);
@@ -133,6 +160,9 @@ for (const slug of slugs) {
 }
 
 await browser.close();
-console.log(`\n${slugs.length - failures.length}/${slugs.length} pages verified` +
-  (failures.length ? `; FAILURES: ${failures.join(", ")}` : ""));
+console.log(
+  `\n${slugs.length - failures.length - skipped}/${slugs.length - skipped} pages verified` +
+    (skipped ? ` (${skipped} skipped — see SKIP lines above)` : "") +
+    (failures.length ? `; FAILURES: ${failures.join(", ")}` : "")
+);
 process.exit(failures.length ? 1 : 0);

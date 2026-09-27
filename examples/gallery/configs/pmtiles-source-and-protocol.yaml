@@ -1,0 +1,23 @@
+# Hermetic twin of the pmtiles-source-and-protocol docs page (U2, R2).
+# The docs page registers the real pmtiles protocol; this twin registers a
+# stub `stub://` protocol through the SAME escape hatch — addProtocol
+# imported from @maplibre-yaml/core/maplibre — and proves the registration
+# lands on the module instance <ml-map> actually requests through. The
+# hatch HTML performs the registration before the component upgrades.
+type: map
+id: pmtiles-source-and-protocol
+config:
+  center: [0, 20]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: protocol-cities
+    type: circle
+    source:
+      type: geojson
+      data: "stub://cities.geojson"
+    paint:
+      circle-radius: 7
+      circle-color: "#7b2cbf"
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"

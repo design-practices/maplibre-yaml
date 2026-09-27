@@ -1964,14 +1964,14 @@ const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
       });
     }
 
-    // Control buttons
+    // Control buttons — mapReady() resolves with the live map (immediately
+    // once loaded), so an early click waits instead of silently no-oping.
     if (controls) {
-      controls.addEventListener('click', (e) => {
+      controls.addEventListener('click', async (e) => {
         const btn = (e.target as HTMLElement).closest('[data-action]');
         if (!btn) return;
 
-        const map = mapEl.getMap();
-        if (!map) return;
+        const map = await mapEl.mapReady();
 
         const action = btn.dataset.action;
 
