@@ -70,6 +70,12 @@ export interface EmitResult {
   style: Record<string, unknown>;
   warnings: EmitWarning[];
   /**
+   * Generated raster-asset descriptors (marker pins, pattern tiles) the
+   * style's sprite references. Core describes; the CLI rasterizes and writes
+   * them beside the style (KTD3). Absent when the document generates none.
+   */
+  assets?: import("./assets").EmitAsset[];
+  /**
    * Placement intent for the document's own layers.
    *
    * @remarks

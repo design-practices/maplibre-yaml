@@ -27,6 +27,7 @@ import {
   EmitError,
   type EmitMode,
   type EmitWarning,
+  type EmitAsset,
   type CapabilityPolicy,
   type TrustContext,
 } from '@maplibre-yaml/core';
@@ -47,7 +48,11 @@ export async function emitStyle(
   block: unknown,
   mode: EmitMode,
   policy: CapabilityPolicy,
-): Promise<{ style: Record<string, unknown>; warnings: EmitWarning[] }> {
+): Promise<{
+  style: Record<string, unknown>;
+  warnings: EmitWarning[];
+  assets?: EmitAsset[];
+}> {
   const model = toModel(block as never);
   const projected = applyRuntimeGate(projectStyle(model, mode), policy);
 
@@ -69,12 +74,20 @@ export async function emitStyle(
 
   const basemap = model.style.basemap;
   if (basemap === undefined) {
-    return { style: projected.style, warnings: projected.warnings };
+    return {
+      style: projected.style,
+      warnings: projected.warnings,
+      ...(projected.assets ? { assets: projected.assets } : {}),
+    };
   }
 
   const base = await resolveBasemap(basemap);
   const merged = mergeBasemap(base, projected);
-  return { style: merged.style, warnings: merged.warnings };
+  return {
+    style: merged.style,
+    warnings: merged.warnings,
+    ...(merged.assets ? { assets: merged.assets } : {}),
+  };
 }
 
 export const emitCommand = defineCommand({
@@ -156,8 +169,9 @@ export const emitCommand = defineCommand({
 
     let style: Record<string, unknown>;
     let warnings: EmitWarning[];
+    let assets: EmitAsset[] | undefined;
     try {
-      ({ style, warnings } = await emitStyle(parsed.data, mode, policy));
+      ({ style, warnings, assets } = await emitStyle(parsed.data, mode, policy));
     } catch (err) {
       if (err instanceof EmitError) {
         logger.error(err.message);
@@ -188,9 +202,34 @@ export const emitCommand = defineCommand({
         process.exit(EXIT_CODES.UNKNOWN_ERROR);
       }
       consola.success(`Wrote style to ${outPath}`);
+
+      // Generated sprite assets land beside the style, where the emitted
+      // sprite's relative URL (`mlym`) resolves. Rasterization (sharp) is
+      // loaded lazily — documents without assets never pay for it.
+      if (assets && assets.length > 0) {
+        try {
+          const { rasterizeSpriteFiles } = await import('../lib/rasterize.js');
+          const files = await rasterizeSpriteFiles(assets);
+          for (const file of files) {
+            writeFileSync(resolve(dirname(outPath), file.filename), file.data);
+          }
+          consola.success(
+            `Wrote ${files.length} sprite file(s) (${assets.length} asset(s)) beside the style`,
+          );
+        } catch (err) {
+          logger.error('Failed to rasterize sprite assets', err as Error);
+          process.exit(EXIT_CODES.UNKNOWN_ERROR);
+        }
+      }
       return;
     }
 
+    if (assets && assets.length > 0) {
+      consola.warn(
+        `This document generates ${assets.length} sprite asset(s), which need ` +
+          'files beside the style — use --out to write them; stdout carries the style only.',
+      );
+    }
     console.log(json);
   },
 });

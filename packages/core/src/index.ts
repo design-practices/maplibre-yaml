@@ -78,6 +78,20 @@ export type {
 // Emitter — projects the model's style half to spec-valid style.json
 export { projectStyle, EmitError, mergeBasemap, resolveBasemap, applyRuntimeGate } from "./emitter";
 export {
+  DOCUMENT_SPRITE_ID,
+  contentHash8,
+  assetName,
+  hatchTileSvg,
+  buildSpriteIndex,
+  attachSpriteAssets,
+} from "./emitter";
+export type {
+  EmitAsset,
+  HatchTileOptions,
+  SpriteIndexEntry,
+  SpriteSheetLayout,
+} from "./emitter";
+export {
   EjectClassRegistry,
   ejectClasses,
   type EjectClass,
