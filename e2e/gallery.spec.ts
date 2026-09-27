@@ -420,6 +420,63 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 
+  test("display-a-popup-on-hover: preview on hover, pin on click, suppress while pinned (U7)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openExample(page, "display-a-popup-on-hover", ["places"]);
+
+    // Project a feature to screen coordinates and wait until hit-testable.
+    const pointFor = async (lngLat: [number, number]) =>
+      page.evaluate((coords) => {
+        const map = (document.getElementById("map") as any).getMap();
+        const p = map.project(coords);
+        const rect = map.getCanvas().getBoundingClientRect();
+        return { x: rect.left + p.x, y: rect.top + p.y };
+      }, lngLat);
+    const dc: [number, number] = [-77.032, 38.913];
+    const chicago: [number, number] = [-87.65, 41.84];
+    const pt = await pointFor(dc);
+    await page.waitForFunction(
+      ({ x, y }) => {
+        const map = (document.getElementById("map") as any).getMap();
+        const rect = map.getCanvas().getBoundingClientRect();
+        return map.queryRenderedFeatures([x - rect.left, y - rect.top], { layers: ["places"] }).length > 0;
+      },
+      pt,
+      { timeout: 30_000 }
+    );
+
+    // Hover: a chromeless preview appears.
+    await page.mouse.move(pt.x, pt.y);
+    const popup = page.locator(".maplibregl-popup");
+    await expect(popup).toBeVisible();
+    await expect(popup.locator("h3")).toHaveText("Washington DC");
+    await expect(popup.locator(".maplibregl-popup-close-button")).toHaveCount(0);
+
+    // Leave: the preview dismisses.
+    await page.mouse.move(pt.x + 220, pt.y + 220);
+    await expect(popup).toHaveCount(0);
+
+    // Click pins: close button present, and hovering ANOTHER feature is
+    // suppressed while the pin is open.
+    await page.mouse.move(pt.x, pt.y);
+    await page.mouse.click(pt.x, pt.y);
+    await expect(popup.locator(".maplibregl-popup-close-button")).toHaveCount(1);
+    const chi = await pointFor(chicago);
+    await page.mouse.move(chi.x, chi.y);
+    await expect(popup).toHaveCount(1);
+    await expect(popup.locator("h3")).toHaveText("Washington DC");
+
+    // Dismiss the pin: hover previews resume.
+    await popup.locator(".maplibregl-popup-close-button").click();
+    await expect(popup).toHaveCount(0);
+    await page.mouse.move(chi.x, chi.y);
+    await expect(popup.locator("h3")).toHaveText("Chicago");
+
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
   test("filter-features-with-global-state: a `state:` doc's global-state filter renders live (U1, seeds U8)", async ({
     page,
   }) => {
@@ -452,6 +509,44 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
         .filter((f: any) => (f.properties?.pop ?? 0) < 5).length;
     });
     expect(belowThreshold, "sub-threshold features rendered — filter fell open").toBe(0);
+
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
+test.describe("touch posture: hover popups don't exist on touch; tap uses click.popup (U7)", () => {
+  test.use({ hasTouch: true });
+
+  test("a tap opens the pinned click popup, never the chromeless hover one", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openExample(page, "display-a-popup-on-hover", ["places"]);
+
+    const pt = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      const p = map.project([-77.032, 38.913]);
+      const rect = map.getCanvas().getBoundingClientRect();
+      return { x: rect.left + p.x, y: rect.top + p.y };
+    });
+    await page.waitForFunction(
+      ({ x, y }) => {
+        const map = (document.getElementById("map") as any).getMap();
+        const rect = map.getCanvas().getBoundingClientRect();
+        return map.queryRenderedFeatures([x - rect.left, y - rect.top], { layers: ["places"] }).length > 0;
+      },
+      pt,
+      { timeout: 30_000 }
+    );
+
+    await page.touchscreen.tap(pt.x, pt.y);
+
+    // The popup that opens is the PINNED one (close button present) — the
+    // click.popup path, not the chromeless hover preview.
+    const popup = page.locator(".maplibregl-popup");
+    await expect(popup).toBeVisible();
+    await expect(popup.locator(".maplibregl-popup-close-button")).toHaveCount(1);
+    await expect(popup.locator("h3")).toHaveText("Washington DC");
 
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });

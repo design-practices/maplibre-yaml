@@ -293,6 +293,7 @@ export const InteractiveConfigSchema: z.ZodType<
         cursor?: string;
         highlight?: boolean;
         emit?: EmitConfig;
+        popup?: PopupContent;
       };
       click?: {
         popup?: PopupContent;
@@ -324,6 +325,11 @@ export const InteractiveConfigSchema: z.ZodType<
         emit: EmitConfigSchema.optional().describe(
           "Dispatch a named host event with a declarative payload once per " +
             "feature entered on hover (per-feature dedupe, not per mousemove)"
+        ),
+        popup: PopupContentSchema.optional().describe(
+          "Popup shown while hovering a feature (no close button; dismissed " +
+            "on leave). A pinned click popup suppresses hover popups until " +
+            "it is dismissed. Touch has no hover: tap uses `click.popup`."
         ),
       })
       .optional()

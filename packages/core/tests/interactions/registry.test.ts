@@ -94,6 +94,7 @@ describe("InteractionRegistry — order is behavior", () => {
     expect(registry.hoverInteractions().map((i) => i.name)).toEqual([
       "highlight",
       "emit",
+      "popup",
     ]);
   });
 
@@ -131,6 +132,7 @@ describe("InteractionRegistry — instance, not singleton", () => {
       "emit",
       "highlight",
       "emit",
+      "popup",
     ]);
     expect(names(a)).toEqual(names(b));
   });

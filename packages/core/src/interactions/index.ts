@@ -10,6 +10,7 @@
 export type {
   InteractionContext,
   InteractionDeps,
+  ShowPopupOptions,
   Interaction,
   InteractionRuntime,
   PopupContent,

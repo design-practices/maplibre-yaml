@@ -323,4 +323,68 @@ export const HOVER_INTERACTIONS: readonly Interaction[] = [
       };
     },
   }),
+  // The hover popup (U7/R10, KTD8): the same logical `popup` interaction as
+  // the click built-in — same content schema, same PopupBuilder trust gate,
+  // reached through the same `showPopup` dep — but driven by `mousemove` with
+  // per-feature dedupe, shown chromeless (`closeButton: false`), and
+  // dismissed on leave via the `hidePopup` dep. Coexistence and the touch
+  // posture both fall out of the seams rather than local logic here: the
+  // host's one-popup slot means a pinned click popup suppresses hover popups
+  // until dismissed (see ShowPopupOptions.kind), and MapLibre never fires
+  // layer `mousemove` for touch input, so tap routes to `click.popup` and
+  // hover popups simply do not exist on touch.
+  defineInteraction<PopupContent>({
+    name: "popup",
+    select: (trigger) => trigger.popup,
+    create: (deps) => {
+      /** The feature last shown per layer — per handler instance, never shared. */
+      const lastShown = new Map<string, string | number>();
+      /** Warn once per layer about the id-less fallback, not per mousemove. */
+      const warned = new Set<string>();
+
+      /**
+       * Dedupe key. Unlike highlight (which NEEDS ids — feature-state is
+       * addressed by them), a popup can fall back to keying on the feature's
+       * geometry when ids are missing: approximate, but it keeps id-less
+       * sources working instead of dead. Warn once so authors know the fix.
+       */
+      const keyFor = (ctx: { feature?: any; layerId: string }): string | number | null => {
+        const id = ctx.feature?.id;
+        if (id !== undefined && id !== null) return id;
+        const coordinates = ctx.feature?.geometry?.coordinates;
+        if (coordinates === undefined) return null;
+        if (!warned.has(ctx.layerId)) {
+          warned.add(ctx.layerId);
+          console.warn(
+            `[maplibre-yaml] hover.popup on layer "${ctx.layerId}" is deduping ` +
+              "by feature geometry because features have no ids — set " +
+              "`generateId: true` on the source, or `promoteId`, for exact tracking."
+          );
+        }
+        return JSON.stringify(coordinates);
+      };
+
+      return {
+        run(content: PopupContent, ctx) {
+          const key = keyFor(ctx);
+          if (key === null) return;
+          if (lastShown.get(ctx.layerId) === key) return; // same feature, no churn
+          lastShown.set(ctx.layerId, key);
+
+          deps.showPopup(content, ctx.feature, ctx.lngLat, {
+            closeButton: false,
+            closeOnClick: false,
+            kind: "hover",
+          });
+        },
+
+        clearLayer(layerId) {
+          // mouseleave/detach/destroy: drop the popup and the tracked feature
+          // so re-entering shows it again.
+          lastShown.delete(layerId);
+          deps.hidePopup?.();
+        },
+      };
+    },
+  }),
 ];

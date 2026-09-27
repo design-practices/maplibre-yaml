@@ -314,13 +314,38 @@ export function attachInteractions(
   // The compiled-path XSS gate: the popup sink runs through PopupBuilder(policy)
   // so `!html` and feature escaping apply exactly as in the renderer.
   const popupBuilder = new PopupBuilder(policy);
+  // ONE popup slot (KTD8 coexistence): a pinned popup (click) owns it until
+  // the user dismisses it; a hover popup never displaces a pinned one and is
+  // itself replaced freely. `kind` tracks which occupies the slot.
   let activePopup: Popup | null = null;
+  let activePopupKind: "pinned" | "hover" = "pinned";
 
   const deps: InteractionDeps = {
-    showPopup: (content, feature, lngLat) => {
+    showPopup: (content, feature, lngLat, options) => {
+      const kind = options?.kind ?? "pinned";
+      if (kind === "hover" && activePopup && activePopupKind === "pinned") return;
       activePopup?.remove();
       const html = popupBuilder.build(content, feature?.properties ?? {});
-      activePopup = new Popup().setLngLat(lngLat).setHTML(html).addTo(map);
+      const popup = new Popup({
+        ...(options?.closeButton !== undefined ? { closeButton: options.closeButton } : {}),
+        ...(options?.closeOnClick !== undefined ? { closeOnClick: options.closeOnClick } : {}),
+      })
+        .setLngLat(lngLat)
+        .setHTML(html)
+        .addTo(map);
+      // User dismissal (close button / closeOnClick) frees the slot, which is
+      // what lets hover popups resume after a pin.
+      popup.on("close", () => {
+        if (activePopup === popup) activePopup = null;
+      });
+      activePopup = popup;
+      activePopupKind = kind;
+    },
+    hidePopup: () => {
+      if (activePopup && activePopupKind === "hover") {
+        activePopup.remove();
+        activePopup = null;
+      }
     },
     hostHandlers,
     policy,

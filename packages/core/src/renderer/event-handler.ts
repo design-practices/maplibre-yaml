@@ -14,6 +14,7 @@ import {
   type InteractionRegistry,
   type Interaction,
   type InteractionDeps,
+  type ShowPopupOptions,
   type InteractionRuntime,
   type InteractionHostHandlers,
 } from "../interactions";
@@ -67,6 +68,8 @@ export class EventHandler {
   private callbacks: EventHandlerCallbacks;
   private popupBuilder: PopupBuilder;
   private activePopup: Popup | null;
+  /** Which kind occupies the one popup slot (KTD8 coexistence). */
+  private activePopupKind: "pinned" | "hover" = "pinned";
   private attachedLayers: Set<string>;
   private boundHandlers: Map<string, any>;
   private registry: InteractionRegistry;
@@ -98,8 +101,9 @@ export class EventHandler {
     // supplies today) denies silently. `MapRenderer` passes no `hostHandlers`,
     // so `click.emit` stays inert under `<ml-map>` — fail-closed by default.
     this.interactionDeps = {
-      showPopup: (content, feature, lngLat) =>
-        this.showPopup(content, feature, lngLat),
+      showPopup: (content, feature, lngLat, options) =>
+        this.showPopup(content, feature, lngLat, options),
+      hidePopup: () => this.hidePopup(),
       hostHandlers,
       policy,
     };
@@ -179,15 +183,45 @@ export class EventHandler {
    * directly — it is absorbed into `interactionDeps.showPopup`, mirroring
    * `attachInteractions`. The single `PopupBuilder(policy)` gates `!html`.
    */
-  private showPopup(content: PopupContent, feature: any, lngLat: LngLat): void {
+  private showPopup(
+    content: PopupContent,
+    feature: any,
+    lngLat: LngLat,
+    options?: ShowPopupOptions
+  ): void {
+    // ONE popup slot (KTD8 coexistence), mirroring `attachInteractions`: a
+    // pinned popup (click) owns the slot until the user dismisses it; a hover
+    // popup never displaces a pinned one and is itself replaced freely.
+    const kind = options?.kind ?? "pinned";
+    if (kind === "hover" && this.activePopup && this.activePopupKind === "pinned") {
+      return;
+    }
     this.activePopup?.remove();
 
     const html = this.popupBuilder.build(content, feature.properties);
 
-    this.activePopup = new Popup()
+    const popup = new Popup({
+      ...(options?.closeButton !== undefined ? { closeButton: options.closeButton } : {}),
+      ...(options?.closeOnClick !== undefined ? { closeOnClick: options.closeOnClick } : {}),
+    })
       .setLngLat(lngLat)
       .setHTML(html)
       .addTo(this.map);
+    // User dismissal (close button / closeOnClick) frees the slot — what lets
+    // hover popups resume after a pin.
+    popup.on("close", () => {
+      if (this.activePopup === popup) this.activePopup = null;
+    });
+    this.activePopup = popup;
+    this.activePopupKind = kind;
+  }
+
+  /** Dismiss the current HOVER popup only; a pinned popup belongs to the user. */
+  private hidePopup(): void {
+    if (this.activePopup && this.activePopupKind === "hover") {
+      this.activePopup.remove();
+      this.activePopup = null;
+    }
   }
 
   /**
