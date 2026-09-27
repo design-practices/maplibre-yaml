@@ -270,7 +270,10 @@ export function buildSpriteIndex<T extends SpriteLayoutItem>(
   pixelRatio: 1 | 2 = 1
 ): SpriteSheetLayout<T> {
   const sorted = [...dedupeAssets(assets)].sort((a, b) => a.name.localeCompare(b.name));
-  const index: Record<string, SpriteIndexEntry> = {};
+  // Null prototype: the index is a serialization buffer keyed by
+  // author-influenced names — with a live prototype chain, a name like
+  // `__proto__` would re-prototype the object and vanish from the JSON.
+  const index: Record<string, SpriteIndexEntry> = Object.create(null);
   const placements: { asset: T; x: number; y: number }[] = [];
 
   let x = 0;
@@ -353,6 +356,22 @@ export function dedupeAssets<T extends SpriteLayoutItem>(assets: readonly T[]): 
  * cannot know where the style will be served), and whoever writes the files
  * finalizes. Returns a new style; entries already absolute are untouched.
  */
+/**
+ * Declare the document sprite on a style root (KTD3's array form). The ONE
+ * place the entry literal lives — projectStyle, attachSpriteAssets, and
+ * attachSpriteImages all route through it, so the placeholder scheme cannot
+ * drift between producers.
+ */
+export function declareDocumentSprite(
+  style: Record<string, unknown>,
+  spriteBaseUrl?: string
+): Record<string, unknown> {
+  const url = spriteBaseUrl
+    ? `${spriteBaseUrl.replace(/\/$/, "")}/${DOCUMENT_SPRITE_ID}`
+    : DOCUMENT_SPRITE_ID;
+  return { ...style, sprite: [{ id: DOCUMENT_SPRITE_ID, url }] };
+}
+
 export function finalizeSpriteBaseUrl(
   style: Record<string, unknown>,
   spriteBaseUrl: string
@@ -382,14 +401,9 @@ export function attachSpriteAssets(
   spriteBaseUrl?: string
 ): EmitResult {
   if (assets.length === 0) return result;
-  const url = spriteBaseUrl
-    ? `${spriteBaseUrl.replace(/\/$/, "")}/${DOCUMENT_SPRITE_ID}`
-    : DOCUMENT_SPRITE_ID;
-  const style = { ...result.style };
-  style["sprite"] = [{ id: DOCUMENT_SPRITE_ID, url }];
   return {
     ...result,
-    style,
+    style: declareDocumentSprite(result.style, spriteBaseUrl),
     assets: dedupeAssets([...(result.assets ?? []), ...assets]),
   };
 }
@@ -405,10 +419,9 @@ export function attachSpriteImages(
   images: readonly EmitImageRef[]
 ): EmitResult {
   if (images.length === 0) return result;
-  const style = { ...result.style };
-  if (!Array.isArray(style["sprite"])) {
-    style["sprite"] = [{ id: DOCUMENT_SPRITE_ID, url: DOCUMENT_SPRITE_ID }];
-  }
+  const style = Array.isArray(result.style["sprite"])
+    ? { ...result.style }
+    : declareDocumentSprite(result.style);
   const byName = new Map<string, EmitImageRef>();
   for (const ref of [...(result.images ?? []), ...images]) {
     const existing = byName.get(ref.name);

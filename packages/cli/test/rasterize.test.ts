@@ -15,6 +15,7 @@ import { once } from 'node:events';
 import {
   rasterizeSpriteFiles,
   resolveImageRefs,
+  IMAGE_MAX_CSS_PX,
   type ResolvedImage,
 } from '../src/lib/rasterize.js';
 import { spriteAssetArgsError } from '../src/commands/emit.js';
@@ -155,6 +156,53 @@ describe('resolveImageRefs + mixed-sheet rasterization (U6)', () => {
     }
   });
 
+  it('a hanging server times out with a clear error instead of hanging emit', async () => {
+    const server = createServer(() => {
+      /* never respond */
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const { port } = server.address() as { port: number };
+    try {
+      await expect(
+        resolveImageRefs(
+          [{ name: 'tarpit', url: `http://127.0.0.1:${port}/never.png` }],
+          200,
+        ),
+      ).rejects.toThrow(/timed out after 200ms/);
+    } finally {
+      server.close();
+      server.closeAllConnections?.();
+    }
+  });
+
+  it('an image over the CSS-pixel ceiling is refused loudly', async () => {
+    const huge = await sharp({
+      create: {
+        width: IMAGE_MAX_CSS_PX + 8,
+        height: 4,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'image/png' });
+      res.end(huge);
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const { port } = server.address() as { port: number };
+    try {
+      await expect(
+        resolveImageRefs([{ name: 'huge', url: `http://127.0.0.1:${port}/huge.png` }]),
+      ).rejects.toThrow(/exceeds the 1024px sprite-entry ceiling/);
+    } finally {
+      server.close();
+    }
+  });
+
   it('a fetch failure or relative URL throws — never a silent hole in the sprite', async () => {
     const { server, url } = await serve();
     try {
@@ -190,6 +238,23 @@ describe('resolveImageRefs + mixed-sheet rasterization (U6)', () => {
     const { x, y } = index['fetched-icon'];
     const px = (y * info.width + x) * info.channels;
     expect([data[px], data[px + 1], data[px + 2]]).toEqual([255, 0, 0]);
+
+    // The @2x pair carries the raster too: doubled entry, red pixels.
+    const index2x = JSON.parse(
+      files.find((f) => f.filename === 'mlym@2x.json')!.data.toString(),
+    );
+    expect(index2x['fetched-icon']).toMatchObject({
+      width: 8,
+      height: 8,
+      pixelRatio: 2,
+      sdf: true,
+    });
+    const sheet2x = files.find((f) => f.filename === 'mlym@2x.png')!.data;
+    const d2 = await decode(sheet2x);
+    const p2 =
+      (index2x['fetched-icon'].y * d2.info.width + index2x['fetched-icon'].x) *
+      d2.info.channels;
+    expect([d2.data[p2], d2.data[p2 + 1], d2.data[p2 + 2]]).toEqual([255, 0, 0]);
   });
 });
 

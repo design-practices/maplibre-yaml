@@ -5,6 +5,8 @@
 import { describe, it, expect } from "vitest";
 import { projectStyle } from "../../src/emitter/project";
 import { attachSpriteImages, DOCUMENT_SPRITE_ID } from "../../src/emitter/assets";
+import { mergeBasemap } from "../../src/emitter/basemap";
+import { ImagesSchema } from "../../src/schemas/map.schema";
 import { lowerMarkers } from "../../src/emitter/lower-markers";
 import { normalizeMapBlock } from "../../src/model/normalize";
 import { ejectClasses } from "../../src/eject/registrations";
@@ -90,6 +92,99 @@ describe("projectStyle with images:", () => {
     ]);
   });
 
+  it("rewrites only output positions — labels, get-args, and operators survive name collisions", () => {
+    const result = projectStyle(
+      doc(
+        {
+          // Hostile names: an image named like a match label, one named like
+          // a property, and one named like an expression operator.
+          restaurant: "https://x.example/r.png",
+          kind: "https://x.example/k.png",
+          get: "https://x.example/g.png",
+        },
+        [
+          {
+            id: "pois",
+            type: "symbol",
+            source: "pois",
+            layout: {
+              "icon-image": [
+                "match",
+                ["get", "kind"],
+                "restaurant",
+                "restaurant",
+                "get",
+              ],
+            },
+          },
+        ]
+      )
+    );
+    const [pois] = result.style["layers"] as Record<string, any>[];
+    expect(pois!["layout"]["icon-image"]).toEqual([
+      "match",
+      ["get", "kind"], // operator and property arg untouched
+      "restaurant", // match LABEL untouched — it is feature data
+      "mlym:restaurant", // output position rewrites
+      "mlym:get", // default output rewrites
+    ]);
+  });
+
+  it("rewrites case and image() argument positions, leaves conditions alone", () => {
+    const result = projectStyle(
+      doc(IMAGES, [
+        {
+          id: "pois",
+          type: "symbol",
+          source: "pois",
+          layout: {
+            "icon-image": [
+              "case",
+              ["==", ["get", "kind"], "poi-icon"],
+              ["image", "poi-icon"],
+              "arrow",
+            ],
+          },
+        },
+      ])
+    );
+    const [pois] = result.style["layers"] as Record<string, any>[];
+    expect(pois!["layout"]["icon-image"]).toEqual([
+      "case",
+      ["==", ["get", "kind"], "poi-icon"], // condition untouched
+      ["image", "mlym:poi-icon"],
+      "mlym:arrow",
+    ]);
+  });
+
+  it("a dynamic image reference warns as contract — live/eject divergence is never silent", () => {
+    const result = projectStyle(
+      doc(IMAGES, [
+        {
+          id: "pois",
+          type: "symbol",
+          source: "pois",
+          layout: { "icon-image": ["get", "icon"] },
+        },
+      ])
+    );
+    const warning = result.warnings.find((w) => w.path === "layers.pois.icon-image");
+    expect(warning?.kind).toBe("contract");
+    expect(warning?.message).toMatch(/mlym:<name>/);
+    // Contract, not lossy: it may legitimately target basemap icons.
+    expect(() => projectStyle(doc(IMAGES), "strict")).not.toThrow();
+  });
+
+  it("a relative image URL is lossy — strict refuses, the ref never reaches the fetch stage", () => {
+    const relative = { local: "./assets/icon.png" };
+    const result = projectStyle(doc(relative));
+    const warning = result.warnings.find((w) => w.path === "images.local");
+    expect(warning?.kind).toBe("lossy");
+    expect(warning?.message).toMatch(/absolute http/);
+    expect(result.images).toBeUndefined();
+    expect(() => projectStyle(doc(relative), "strict")).toThrow(/strict/);
+  });
+
   it("a document without images has no refs and no sprite", () => {
     const result = projectStyle(doc(undefined));
     expect(result.images).toBeUndefined();
@@ -156,6 +251,48 @@ describe("marker icon embedding (U6 lifts the U5 icon fallback)", () => {
     expect(new Set(images.map((i) => i.name)).size).toBe(1);
     const attached = attachSpriteImages(projectStyle(model), images);
     expect(attached.images).toHaveLength(1);
+  });
+});
+
+describe("ImagesSchema names", () => {
+  const URL = "https://x.example/i.png";
+
+  it("accepts sprite-safe names in both value forms", () => {
+    expect(
+      ImagesSchema.safeParse({ "poi-icon_2": URL, arrow: { url: URL, sdf: true } }).success
+    ).toBe(true);
+  });
+
+  it("rejects names that would break the mlym: separator or the prototype chain", () => {
+    expect(ImagesSchema.safeParse({ "poi:icon": URL }).success).toBe(false);
+    expect(ImagesSchema.safeParse({ "poi icon": URL }).success).toBe(false);
+    // Literal { __proto__: ... } sets the prototype, not a key — build the
+    // hostile object the way YAML actually produces it.
+    expect(ImagesSchema.safeParse(JSON.parse(`{"__proto__": "${URL}"}`)).success).toBe(
+      false
+    );
+    expect(ImagesSchema.safeParse({ constructor: URL }).success).toBe(false);
+  });
+});
+
+describe("images through the basemap merge", () => {
+  it("the document sprite joins the basemap's under its own id, refs intact", () => {
+    const projected = projectStyle(doc(IMAGES));
+    const merged = mergeBasemap(
+      {
+        version: 8,
+        sources: {},
+        layers: [],
+        sprite: "https://tiles.example/sprite",
+      },
+      projected
+    );
+    expect(merged.style["sprite"]).toEqual([
+      { id: "default", url: "https://tiles.example/sprite" },
+      { id: DOCUMENT_SPRITE_ID, url: DOCUMENT_SPRITE_ID },
+    ]);
+    expect(merged.images).toEqual(projected.images);
+    expect(merged.warnings.filter((w) => w.kind === "lossy")).toHaveLength(0);
   });
 });
 

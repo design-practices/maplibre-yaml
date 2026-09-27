@@ -486,8 +486,11 @@ export const ImagesSchema = z.record(
   z
     .string()
     .regex(
-      /^[a-zA-Z0-9_-]+$/,
-      "Image names may only contain letters, digits, `-` and `_`"
+      // Sprite-safe characters only, and never a prototype-chain key —
+      // `__proto__` as a record key silently vanishes through every plain
+      // object assignment between YAML and the sprite index.
+      /^(?!(?:__proto__|constructor|prototype)$)[a-zA-Z0-9_-]+$/,
+      "Image names may only contain letters, digits, `-` and `_`, and may not be prototype-chain keys"
     ),
   ImageConfigSchema
 );

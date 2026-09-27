@@ -113,6 +113,19 @@ export async function emitStyle(
 
   const base = await resolveBasemap(basemap);
   const merged = mergeBasemap(base, projected);
+  // The merge can ADD lossy warnings too (a document sprite shadowing a
+  // basemap sprite id orphans basemap icons) — strict means strict over the
+  // WHOLE pipeline, so re-check after the last warning producer.
+  if (mode === 'strict') {
+    const lossy = merged.warnings.filter((w) => w.kind === 'lossy');
+    if (lossy.length > 0) {
+      throw new EmitError(
+        `Emit failed in strict mode: ${lossy.length} item(s) could not be represented ` +
+          'without changing what the map shows.',
+        merged.warnings,
+      );
+    }
+  }
   return {
     style: merged.style,
     warnings: merged.warnings,

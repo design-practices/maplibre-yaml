@@ -171,15 +171,16 @@ ejectClasses.register("markers", {
 });
 
 // Style-half construct (U6): registered so the docs eject-class table and
-// programmatic consumers can see its declared behavior, but it never reaches
-// the projection's runtime loop — `images:` compiles fully, so emit has
-// nothing to warn about.
+// programmatic consumers can see its declared behavior. It never reaches the
+// projection's RUNTIME loop; the projection itself reports the two edges
+// (relative URLs are lossy, dynamic references warn as contract).
 ejectClasses.register("images", {
   class: "ejects",
   onEmit:
-    "Named images are fetched at compile time and merged into the document " +
-    "sprite; layer references are rewritten to `mlym:<name>` so they resolve " +
-    "in the emitted style.",
+    "Named images with absolute http(s) URLs are fetched at compile time and " +
+    "merged into the document sprite; literal layer references are rewritten " +
+    "to `mlym:<name>` so they resolve in the emitted style. Relative URLs " +
+    "cannot compile (lossy).",
 });
 
 ejectClasses.register("x-*", {

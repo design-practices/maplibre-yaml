@@ -26,7 +26,7 @@
 
 import type { MapModel, LayerModel } from "../model/types";
 import type { EmitAsset, EmitImageRef } from "./assets";
-import { DOCUMENT_SPRITE_ID } from "./assets";
+import { DOCUMENT_SPRITE_ID, declareDocumentSprite } from "./assets";
 import { ejectClasses } from "../eject";
 import type { EjectClassDefinition } from "../eject";
 import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
@@ -154,22 +154,84 @@ const IMAGE_VALUED_PROPS = new Set([
 ]);
 
 /**
+ * Operators whose arguments can never be image references — property names,
+ * variable names, comparison inputs. Recursing into these would rewrite an
+ * author's data vocabulary that merely collides with an image name.
+ */
+const NON_IMAGE_OPERATORS = new Set([
+  "get",
+  "has",
+  "var",
+  "let",
+  "global-state",
+  "feature-state",
+  "properties",
+  "concat",
+  "literal",
+]);
+
+/**
  * Rewrite references to declared document images to `mlym:<name>` (KTD3).
  *
  * @remarks
  * Live, `map.addImage(name)` makes the bare name resolvable; in the emitted
  * style the image lives in the document sprite, whose entries are addressed
- * `mlym:<name>` under the array sprite form. Literal strings rewrite
- * directly; inside an expression, every string literal equal to a declared
- * name rewrites — within an image-valued property a matching literal is an
- * image ref by construction (`["match", ..., "icon-a", "icon-b"]`), and
- * MapLibre resolves whatever the expression evaluates to against the sprite.
+ * `mlym:<name>` under the array sprite form.
+ *
+ * The walk is POSITION-AWARE, not string-global: only positions that MapLibre
+ * resolves as image names rewrite — a bare string value, `["image", <name>]`
+ * arguments, and the output positions of `match`/`case`/`step`/`coalesce`
+ * (labels, inputs, operators, and `["get", ...]` property arguments are the
+ * author's data vocabulary and must survive a name collision untouched).
+ * Operators without a known output shape do not rewrite; a dynamic reference
+ * (`["get", ...]`, `concat`) cannot be rewritten at all — the caller reports
+ * those (see the projection loop) so the divergence is never silent.
  */
 function rewriteImageRefs(value: unknown, names: ReadonlySet<string>): unknown {
   if (typeof value === "string")
     return names.has(value) ? `${DOCUMENT_SPRITE_ID}:${value}` : value;
-  if (Array.isArray(value)) return value.map((v) => rewriteImageRefs(v, names));
+  if (!Array.isArray(value) || value.length === 0) return value;
+
+  const op = value[0];
+  if (typeof op !== "string") return value;
+  const out = (v: unknown) => rewriteImageRefs(v, names);
+
+  if (op === "image") return [op, ...value.slice(1).map(out)];
+  if (op === "coalesce") return [op, ...value.slice(1).map(out)];
+  if (op === "match") {
+    // ["match", input, label, output, ..., default] — inputs and labels are
+    // feature-data values, never image refs; outputs and the default are.
+    return value.map((v, i) =>
+      i >= 3 && (i === value.length - 1 || i % 2 === 1) ? out(v) : v
+    );
+  }
+  if (op === "case") {
+    // ["case", cond, output, ..., default] — conditions stay, outputs rewrite.
+    return value.map((v, i) =>
+      i >= 2 && (i === value.length - 1 || i % 2 === 0) ? out(v) : v
+    );
+  }
+  if (op === "step") {
+    // ["step", input, output0, stop, output, ...] — stops are numbers;
+    // rewrite only the output positions (2, 4, 6, ...).
+    return value.map((v, i) => (i >= 2 && i % 2 === 0 ? out(v) : v));
+  }
+  if (NON_IMAGE_OPERATORS.has(op)) return value;
+  // Unknown operator: no known output shape — conservatively untouched.
   return value;
+}
+
+/**
+ * True when an image-valued expression contains a dynamic name producer —
+ * a reference the rewrite above cannot reach, which therefore resolves live
+ * (bare `addImage` names) but misses the namespaced document sprite on eject.
+ */
+function hasDynamicImageRef(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  const op = value[0];
+  if (op === "get" || op === "concat" || op === "var" || op === "feature-state")
+    return true;
+  return value.some((v) => hasDynamicImageRef(v));
 }
 
 /**
@@ -393,8 +455,25 @@ export function projectStyle(
         if (!isPlainObject(props)) continue;
         const rewritten = { ...props };
         for (const key of Object.keys(rewritten)) {
-          if (IMAGE_VALUED_PROPS.has(key))
-            rewritten[key] = rewriteImageRefs(rewritten[key], imageNames);
+          if (!IMAGE_VALUED_PROPS.has(key)) continue;
+          rewritten[key] = rewriteImageRefs(rewritten[key], imageNames);
+          // A dynamic name (["get", ...], concat) resolves live against bare
+          // addImage names but cannot be rewritten here — if its runtime
+          // values name declared images, they miss the mlym: sprite in the
+          // emitted style. Said out loud, never silently divergent.
+          if (hasDynamicImageRef(rewritten[key])) {
+            warnings.push({
+              path: `layers.${id}.${key}`,
+              kind: "contract",
+              construct: "images",
+              ejectClass: "ejects",
+              message:
+                `\`${key}\` computes image names from data; compile-time rewriting ` +
+                `only reaches literal names. Runtime values that name declared ` +
+                `\`images:\` entries must spell \`${DOCUMENT_SPRITE_ID}:<name>\` ` +
+                `themselves to resolve in the emitted style.`,
+            });
+          }
         }
         spec[block] = rewritten;
       }
@@ -480,21 +559,40 @@ export function projectStyle(
   // `mlym:` references resolve. The CLI enforces that sprite files actually
   // get written (--out/--sprite-base); a direct caller holds the same
   // obligation via `result.images`.
-  const imageRefs: EmitImageRef[] = Object.entries(model.style.images ?? {}).map(
-    ([name, config]) =>
-      typeof config === "string"
-        ? { name, url: config }
-        : {
-            name,
-            url: config.url,
-            ...(config.sdf !== undefined ? { sdf: config.sdf } : {}),
-            ...(config.pixelRatio !== undefined
-              ? { pixelRatio: config.pixelRatio }
-              : {}),
-          }
-  );
+  const imageRefs: EmitImageRef[] = [];
+  for (const [name, config] of Object.entries(model.style.images ?? {})) {
+    const url = typeof config === "string" ? config : config.url;
+    // Only absolute http(s) URLs are fetchable at compile time. A relative
+    // URL resolves against the live page, which emit does not have — the
+    // reference cannot compile, which is a visual change: lossy, so
+    // `--strict` refuses it and `--with-fallbacks` emits with the icon
+    // absent, said out loud (never the hard crash of a failed fetch).
+    if (!/^https?:/i.test(url)) {
+      warnings.push({
+        path: `images.${name}`,
+        kind: "lossy",
+        construct: "images",
+        ejectClass: "ejects",
+        message:
+          `\`images.${name}\` ("${url}") is not an absolute http(s) URL, so it ` +
+          "cannot be fetched at compile time; the emitted style renders " +
+          "without it. Use an absolute URL to compile this image.",
+      });
+      continue;
+    }
+    if (typeof config === "string") {
+      imageRefs.push({ name, url });
+    } else {
+      imageRefs.push({
+        name,
+        url,
+        ...(config.sdf !== undefined ? { sdf: config.sdf } : {}),
+        ...(config.pixelRatio !== undefined ? { pixelRatio: config.pixelRatio } : {}),
+      });
+    }
+  }
   if (imageRefs.length > 0) {
-    style["sprite"] = [{ id: DOCUMENT_SPRITE_ID, url: DOCUMENT_SPRITE_ID }];
+    style["sprite"] = declareDocumentSprite({})["sprite"];
   }
   // `style.metadata` (v2 style-root slot, ml-tay) compiles through to the
   // style.json root `metadata` — the spec carries it, so it is not dropped.

@@ -20,5 +20,12 @@ index), and rewrites literal image references to `mlym:<name>`. Marker
 `icon:` URLs ride the same pipeline, lifting U5's icon limitation: ejected
 icon markers now render their images instead of substituting default pins.
 `EmitResult` widens with `images?` (fetch-at-emit refs) for programmatic
-consumers. Three more gallery pages flip to Pure YAML (add an icon,
-fallback image, polygon pattern).
+consumers. Reference rewriting is expression-position-aware (match labels,
+`["get"]` arguments, and operators survive name collisions); dynamic
+references and relative URLs are reported instead of silently diverging
+(relative URLs are lossy — `--strict` refuses them). Emit fetches are
+bounded (30s timeout, 20MB/1024px ceilings, batched concurrency), live
+image loads time out after 10s instead of stalling `mapReady()`, and
+`--strict` now also refuses lossy warnings added by the basemap merge.
+Three more gallery pages flip to Pure YAML (add an icon, fallback image,
+polygon pattern).

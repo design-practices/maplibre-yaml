@@ -2756,7 +2756,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                 ]
               },
               "propertyNames": {
-                "pattern": "^[a-zA-Z0-9_-]+$"
+                "pattern": "^(?!(?:__proto__|constructor|prototype)$)[a-zA-Z0-9_-]+$"
               },
               "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
             }
@@ -6240,7 +6240,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
             ]
           },
           "propertyNames": {
-            "pattern": "^[a-zA-Z0-9_-]+$"
+            "pattern": "^(?!(?:__proto__|constructor|prototype)$)[a-zA-Z0-9_-]+$"
           },
           "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
         }
@@ -9267,7 +9267,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                             ]
                           },
                           "propertyNames": {
-                            "pattern": "^[a-zA-Z0-9_-]+$"
+                            "pattern": "^(?!(?:__proto__|constructor|prototype)$)[a-zA-Z0-9_-]+$"
                           },
                           "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
                         }

@@ -26,6 +26,14 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { safeUrl } from "../utils/html";
 import type { ImageConfig } from "../schemas/map.schema";
 
+/**
+ * How long one image may take before the document stops waiting for it.
+ * Layer adds (and therefore the `load` event and `mapReady()`) queue behind
+ * image loading, so an unresponsive image host must not hang the document —
+ * on timeout the image is treated exactly like a failed load.
+ */
+export const IMAGE_LOAD_TIMEOUT_MS = 10_000;
+
 /** Options `map.addImage` understands, drawn from the declaration. */
 function addImageOptions(config: ImageConfig): Record<string, unknown> {
   if (typeof config === "string") return {};
@@ -42,7 +50,8 @@ function addImageOptions(config: ImageConfig): Record<string, unknown> {
 export function loadDocumentImages(
   map: MapLibreMap,
   images: Record<string, ImageConfig>,
-  onImageError?: (name: string, url: string) => void
+  onImageError?: (name: string, url: string) => void,
+  timeoutMs: number = IMAGE_LOAD_TIMEOUT_MS
 ): Promise<void> {
   const loads = Object.entries(images).map(([name, config]) => {
     const url = typeof config === "string" ? config : config.url;
@@ -55,11 +64,38 @@ export function loadDocumentImages(
       return Promise.resolve();
     }
     return new Promise<void>((resolve) => {
+      let settled = false;
+      const settle = () => {
+        if (settled) return true;
+        settled = true;
+        clearTimeout(timer);
+        return false;
+      };
+      const timer = setTimeout(() => {
+        if (settle()) return;
+        console.warn(
+          `[maplibre-yaml] image "${name}" did not load within ${timeoutMs}ms; ` +
+            "the document stops waiting for it."
+        );
+        onImageError?.(name, url);
+        resolve();
+      }, timeoutMs);
+
       const img = document.createElement("img");
       img.crossOrigin = "anonymous";
       img.addEventListener("load", () => {
+        if (settle()) return;
         try {
-          if (!map.hasImage(name)) {
+          if (map.hasImage(name)) {
+            // A basemap sprite icon (or an earlier addImage) already owns
+            // this name — live, the existing image wins the shared
+            // namespace, while the ejected style's mlym:-rewritten
+            // references select the document's. Never silent.
+            console.warn(
+              `[maplibre-yaml] image "${name}" is already registered on the map ` +
+                "(basemap sprite?); the document's declaration is shadowed live."
+            );
+          } else {
             map.addImage(name, img, addImageOptions(config) as never);
           }
         } catch (error) {
@@ -69,6 +105,7 @@ export function loadDocumentImages(
         resolve();
       });
       img.addEventListener("error", () => {
+        if (settle()) return;
         console.warn(
           `[maplibre-yaml] image "${name}" failed to load from ${url}; ` +
             "layers referencing it render without it."

@@ -160,7 +160,17 @@ references (`icon-image`, `fill-pattern`, `line-pattern`,
 `background-pattern`, `fill-extrusion-pattern`) to `mlym:<name>` —
 `--strict` accepts image documents. Dynamic references
 (`["image", ["get", "icon"]]`) resolve live but cannot be rewritten at
-compile time.
+compile time; emit reports them, and runtime values naming declared images
+must spell `mlym:<name>` themselves. Relative URLs render live but cannot
+be fetched at compile time — emit reports them as lossy, so `--strict`
+refuses them.
+
+:::caution
+`mlym emit` performs a network request for **every** `images:` entry and
+marker `icon:` URL in the document (bounded: 30s timeout, 20MB and
+1024px-per-image ceilings). Only emit documents whose URLs you trust — the
+fetched bytes are embedded verbatim into the sprite files you publish.
+:::
 
 ## View Options
 

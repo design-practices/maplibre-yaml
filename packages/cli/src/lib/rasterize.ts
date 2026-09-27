@@ -43,45 +43,87 @@ export interface ResolvedImage {
   sdf?: boolean;
 }
 
+/** Hard ceilings for author-declared image fetches. A doc handed to
+ * `mlym emit` chooses the URLs, so the fetch must fail loudly after bounded
+ * time/bytes instead of hanging the CLI or buffering an unbounded body; the
+ * dimension cap keeps one oversized image from dictating a sprite sheet
+ * beyond WebGL texture floors (assets.ts SHEET_WRAP_WIDTH reasoning). */
+export const IMAGE_FETCH_TIMEOUT_MS = 30_000;
+export const IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+export const IMAGE_MAX_CSS_PX = 1024;
+const FETCH_CONCURRENCY = 8;
+
 /**
  * Fetch every image ref — the pipeline's second networked step, beside
  * `resolveBasemap`, and failure follows the same rule: an image the author
  * declared that cannot be fetched is an error, not a silent hole in the
- * sprite.
+ * sprite. Fetches run in bounded batches with per-request timeouts.
  */
 export async function resolveImageRefs(
-  refs: readonly EmitImageRef[]
+  refs: readonly EmitImageRef[],
+  timeoutMs: number = IMAGE_FETCH_TIMEOUT_MS
 ): Promise<ResolvedImage[]> {
-  return Promise.all(
-    refs.map(async (ref) => {
-      if (!/^https?:/i.test(ref.url)) {
+  const resolveOne = async (ref: EmitImageRef): Promise<ResolvedImage> => {
+    if (!/^https?:/i.test(ref.url)) {
+      throw new Error(
+        `image "${ref.name}": "${ref.url}" is not an absolute http(s) URL — ` +
+          'compile-time fetch has no page to resolve a relative URL against.'
+      );
+    }
+    let response: Response;
+    try {
+      response = await fetch(ref.url, { signal: AbortSignal.timeout(timeoutMs) });
+    } catch (err) {
+      if ((err as Error).name === 'TimeoutError') {
         throw new Error(
-          `image "${ref.name}": "${ref.url}" is not an absolute http(s) URL — ` +
-            'compile-time fetch has no page to resolve a relative URL against.'
+          `image "${ref.name}": timed out after ${timeoutMs}ms fetching ${ref.url}`
         );
       }
-      const response = await fetch(ref.url);
-      if (!response.ok) {
-        throw new Error(
-          `image "${ref.name}": ${response.status} ${response.statusText} fetching ${ref.url}`
-        );
-      }
-      const data = Buffer.from(await response.arrayBuffer());
-      const meta = await sharp(data).metadata();
-      if (!meta.width || !meta.height) {
-        throw new Error(`image "${ref.name}": could not read dimensions from ${ref.url}`);
-      }
-      const density = ref.pixelRatio ?? 1;
-      return {
-        name: ref.name,
-        url: ref.url,
-        data,
-        width: Math.round(meta.width / density),
-        height: Math.round(meta.height / density),
-        ...(ref.sdf !== undefined ? { sdf: ref.sdf } : {}),
-      };
-    })
-  );
+      throw err;
+    }
+    if (!response.ok) {
+      throw new Error(
+        `image "${ref.name}": ${response.status} ${response.statusText} fetching ${ref.url}`
+      );
+    }
+    const data = Buffer.from(await response.arrayBuffer());
+    if (data.length > IMAGE_MAX_BYTES) {
+      throw new Error(
+        `image "${ref.name}": ${data.length} bytes from ${ref.url} exceeds the ` +
+          `${IMAGE_MAX_BYTES}-byte sprite-image ceiling`
+      );
+    }
+    const meta = await sharp(data).metadata();
+    if (!meta.width || !meta.height) {
+      throw new Error(`image "${ref.name}": could not read dimensions from ${ref.url}`);
+    }
+    const density = ref.pixelRatio ?? 1;
+    const width = Math.max(1, Math.round(meta.width / density));
+    const height = Math.max(1, Math.round(meta.height / density));
+    if (width > IMAGE_MAX_CSS_PX || height > IMAGE_MAX_CSS_PX) {
+      throw new Error(
+        `image "${ref.name}": ${width}x${height} CSS px exceeds the ` +
+          `${IMAGE_MAX_CSS_PX}px sprite-entry ceiling — sprite icons should be small; ` +
+          'declare pixelRatio for high-density sources.'
+      );
+    }
+    return {
+      name: ref.name,
+      url: ref.url,
+      data,
+      width,
+      height,
+      ...(ref.sdf !== undefined ? { sdf: ref.sdf } : {}),
+    };
+  };
+
+  const resolved: ResolvedImage[] = [];
+  for (let i = 0; i < refs.length; i += FETCH_CONCURRENCY) {
+    resolved.push(
+      ...(await Promise.all(refs.slice(i, i + FETCH_CONCURRENCY).map(resolveOne)))
+    );
+  }
+  return resolved;
 }
 
 /** True when the layout item is a generated SVG asset. */
@@ -94,6 +136,10 @@ function isSvgAsset(item: EmitAsset | ResolvedImage): item is EmitAsset {
  * (`<id>.png`, `<id>.json`, `<id>@2x.png`, `<id>@2x.json`). Generated SVG
  * assets and fetched raster images share one sheet.
  */
+// Param order note: `images` sits before `id` because every real caller
+// passes (assets, images) and none has ever passed `id` positionally; this
+// package is bin-only (no exports entry), so the ordering is revisitable if
+// a programmatic entry point ever ships.
 export async function rasterizeSpriteFiles(
   assets: readonly EmitAsset[],
   images: readonly ResolvedImage[] = [],

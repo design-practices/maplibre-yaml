@@ -576,7 +576,7 @@ test.describe("images: declared images register before layers (U6)", () => {
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 
-  test("use-a-fallback-image: the missing name warns once and coalesce falls back", async ({
+  test("use-a-fallback-image: coalesce falls back; a hard-missing ref warns exactly once", async ({
     page,
   }) => {
     const errors = await guard(page);
@@ -595,8 +595,29 @@ test.describe("images: declared images register before layers (U6)", () => {
     });
     expect(state.hasFallback).toBe(true);
     expect(state.rendered).toBeGreaterThan(0);
-    // The warn-once styleimagemissing handler names the missing image.
-    expect(warnings.filter((w) => w.includes("primary-icon")).length).toBeLessThanOrEqual(1);
+    // A coalesce miss is HANDLED — maplibre never fires styleimagemissing
+    // for it, so the document produces no warning at all.
+    expect(warnings.filter((w) => w.includes("primary-icon")).length).toBe(0);
+
+    // A hard-missing reference (no coalesce) DOES fire it — and the renderer
+    // warns once, not once per render.
+    await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      map.setLayoutProperty("fallback", "icon-image", "definitely-missing");
+    });
+    await page.waitForFunction(() =>
+      (document.getElementById("map") as any).getMap().isStyleLoaded()
+    );
+    await page.evaluate(async () => {
+      const map = (document.getElementById("map") as any).getMap();
+      // Force additional renders — the warning must not repeat.
+      map.panBy([30, 0], { duration: 0 });
+      map.panBy([-30, 0], { duration: 0 });
+      await new Promise((r) => setTimeout(r, 300));
+    });
+    expect(
+      warnings.filter((w) => w.includes('references image "definitely-missing"')).length
+    ).toBe(1);
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 });

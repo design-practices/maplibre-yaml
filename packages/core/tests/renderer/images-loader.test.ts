@@ -84,7 +84,8 @@ describe("loadDocumentImages", () => {
     create.mockRestore();
   });
 
-  it("skips names the map already carries", async () => {
+  it("a name the map already carries is shadowed — warned, never silently skipped", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const map = mapMock();
     map.added.set("taken", {});
     const create = vi.spyOn(document, "createElement");
@@ -92,6 +93,44 @@ describe("loadDocumentImages", () => {
     for (const img of createdImages(create)) img.dispatchEvent(new Event("load"));
     await done;
     expect(map.addImage).not.toHaveBeenCalled();
+    expect(warn.mock.calls[0]![0]).toContain("shadowed");
+    warn.mockRestore();
     create.mockRestore();
+  });
+
+  it("an addImage throw is contained — warned, signaled, promise still resolves", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errors: string[] = [];
+    const map = mapMock();
+    map.addImage.mockImplementation(() => {
+      throw new Error("style is gone");
+    });
+    const create = vi.spyOn(document, "createElement");
+    const done = loadDocumentImages(map, { doomed: "https://x.example/d.png" }, (name) =>
+      errors.push(name)
+    );
+    for (const img of createdImages(create)) img.dispatchEvent(new Event("load"));
+    await done;
+    expect(errors).toEqual(["doomed"]);
+    expect(warn.mock.calls[0]![0]).toContain("Could not register");
+    warn.mockRestore();
+    create.mockRestore();
+  });
+
+  it("an image that never loads times out — the document stops waiting", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errors: string[] = [];
+    const map = mapMock();
+    // A 5ms timeout; the img never fires load/error.
+    await loadDocumentImages(
+      map,
+      { stuck: "https://x.example/tarpit.png" },
+      (name) => errors.push(name),
+      5
+    );
+    expect(errors).toEqual(["stuck"]);
+    expect(warn.mock.calls[0]![0]).toContain("did not load within");
+    expect(map.addImage).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

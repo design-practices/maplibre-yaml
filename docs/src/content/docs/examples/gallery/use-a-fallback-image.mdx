@@ -17,6 +17,6 @@ Replicates the MapLibre example [Use a fallback image](https://maplibre.org/mapl
 
 ## What to notice
 
-- The missing `primary-icon` produces one console note (the warn-once `styleimagemissing` handler), never a crash — and the coalesce falls through exactly as upstream.
+- The missing `primary-icon` is *handled* by the `coalesce` — MapLibre falls through to the next image without even a warning, exactly as upstream. (A hard-missing reference outside a coalesce gets one console note from the warn-once missing-image handler.)
 - On eject, literal image names inside `icon-image` rewrite to the document sprite (`mlym:fallback-marker`); the undeclared name is left alone, so the emitted style falls back identically.
 - Dynamic references (`["image", ["get", "icon"]]`) resolve live but cannot be rewritten at compile time — use literal names when a document should eject cleanly.
