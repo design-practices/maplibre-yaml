@@ -25,6 +25,9 @@
  */
 
 import type { MapModel, LayerModel } from "../model/types";
+import { ejectClasses } from "../eject";
+import type { EjectClassDefinition } from "../eject";
+import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
 
 /** How unrepresentable content is handled. */
 export type EmitMode = "strict" | "with-fallbacks";
@@ -46,6 +49,14 @@ export interface EmitWarning {
   path: string;
   message: string;
   kind: EmitWarningKind;
+  /**
+   * The registered construct this warning is about (`layer.interactive`,
+   * `controls`, `x-*`), when the warning is registry-driven. Machine-readable
+   * — consumers should key on this, not parse `message`.
+   */
+  construct?: string;
+  /** The construct's declared eject class, when registry-driven. */
+  ejectClass?: "ejects" | "fallback" | "declared-absence";
 }
 
 /** Where a document layer wants to sit, by id. */
@@ -161,14 +172,24 @@ function orderLayers(
  * author's data, not an extension block. This returns a cleaned copy rather
  * than mutating, so the model the caller holds is untouched.
  */
-function stripExtensions(node: unknown, opaque: Set<string>): unknown {
-  if (Array.isArray(node)) return node.map((item) => stripExtensions(item, opaque));
+function stripExtensions(
+  node: unknown,
+  opaque: Set<string>,
+  path = "",
+  stripped?: string[]
+): unknown {
+  if (Array.isArray(node))
+    return node.map((item, i) => stripExtensions(item, opaque, `${path}[${i}]`, stripped));
   if (!isPlainObject(node)) return node;
 
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node)) {
-    if (FORBIDDEN_PREFIXES.some((p) => key.startsWith(p))) continue;
-    out[key] = opaque.has(key) ? value : stripExtensions(value, opaque);
+    if (FORBIDDEN_PREFIXES.some((p) => key.startsWith(p))) {
+      stripped?.push(path ? `${path}.${key}` : key);
+      continue;
+    }
+    const childPath = path ? `${path}.${key}` : key;
+    out[key] = opaque.has(key) ? value : stripExtensions(value, opaque, childPath, stripped);
   }
   return out;
 }
@@ -220,8 +241,81 @@ function assertClean(node: unknown, path: string, opaque: Set<string>): void {
  *
  * @remarks
  * The basemap is not merged here — that is a separate step with a network
- * dependency, and keeping it out means this function is pure and total.
+ * dependency, and keeping it out means this function is pure. It is total
+ * over every parseable document: author-side unknown runtime keys warn, never
+ * throw. The two deliberate throw paths are invariants on the projection
+ * itself — `--strict` with lossy degradation (EmitError, by design) and a
+ * runtime construct from core's own closed key lists missing its eject-class
+ * registration (EmitError, a code bug the closed world refuses to ship).
  */
+/**
+ * The registry lookup for a construct core's own closed key boundary
+ * produced. A miss here is a code bug (a runtime key added without an eject
+ * class), surfaced as an EmitError like the projection's other invariants.
+ * Never call this with an author-supplied key — passthrough unknowns get the
+ * generic warning in the loops below, not a throw (a schema-valid document
+ * must never crash emit).
+ */
+function requireEjectClass(construct: string): EjectClassDefinition {
+  try {
+    return ejectClasses.require(construct);
+  } catch (error) {
+    throw new EmitError((error as Error).message);
+  }
+}
+
+/**
+ * Keys zod materializes onto every document via schema defaults. The author
+ * never wrote them, so a declared-absence warning would attribute noise to
+ * them; suppressed exactly at the default value (an explicit non-default is
+ * an authored choice and reports normally).
+ */
+function isSchemaDefault(
+  scope: "layer" | "source" | "map",
+  key: string,
+  value: unknown
+): boolean {
+  if (scope === "layer" && key === "toggleable" && value === true) return true;
+  if (scope === "source" && key === "fetchStrategy" && value === "runtime") return true;
+  if (scope === "map" && key === "interactive" && value === true) return true;
+  return false;
+}
+
+/** One registry-driven live-data warning per source runtime key. */
+function pushSourceRuntimeWarnings(
+  warnings: EmitWarning[],
+  basePath: string,
+  runtime: Record<string, unknown>,
+  hasData: boolean
+): void {
+  for (const key of Object.keys(runtime)) {
+    if (isSchemaDefault("source", key, runtime[key])) continue;
+    if (!(SOURCE_RUNTIME_KEYS as readonly string[]).includes(key)) {
+      // A passthrough unknown (v2 runtime blocks accept forward-compat keys):
+      // warn generically, never throw — the pre-doctrine posture for
+      // author-side unknowns.
+      warnings.push({
+        path: `${basePath}.${key}`,
+        kind: "contract",
+        message: `\`${key}\` is not a recognized runtime construct and is absent from the emitted style.`,
+      });
+      continue;
+    }
+    const definition = requireEjectClass(`source.${key}`);
+    warnings.push({
+      path: `${basePath}.${key}`,
+      kind: hasData ? "contract" : "lossy",
+      construct: `source.${key}`,
+      ejectClass: definition.class,
+      message:
+        `\`${key}\` — ${definition.onEmit}` +
+        (hasData
+          ? ""
+          : " This source has no compile-time data — the emitted style renders it empty."),
+    });
+  }
+}
+
 export function projectStyle(
   model: MapModel,
   mode: EmitMode = "with-fallbacks"
@@ -233,22 +327,17 @@ export function projectStyle(
     sources[name] = isPlainObject(source.spec) ? { ...source.spec } : source.spec;
     if (Object.keys(source.runtime).length > 0) {
       const hasData = isPlainObject(source.spec) && "data" in source.spec;
-      warnings.push({
-        path: `sources.${name}`,
-        kind: hasData ? "contract" : "lossy",
-        message: hasData
-          ? `Live-data configuration (${Object.keys(source.runtime).join(", ")}) ` +
-            "does not compile; the emitted source carries the data present at compile time."
-          : `Live-data configuration (${Object.keys(source.runtime).join(", ")}) ` +
-            "does not compile, and this source has no compile-time data — the " +
-            "emitted style renders it empty.",
-      });
+      pushSourceRuntimeWarnings(warnings, `sources.${name}`, source.runtime, hasData);
     }
   }
 
   const positioned = model.style.layers.map((layer) => {
     const spec = transformLayer(layer);
     const id = String(spec["id"] ?? "");
+
+    // Captured before the hoist below replaces the inline object with a
+    // generated source name — the contract/lossy split needs it.
+    const inlineHasData = isPlainObject(spec["source"]) && "data" in spec["source"];
 
     // The style spec has no inline-source concept: `layer.source` must name an
     // entry in `sources:`. An inline source is hoisted into a generated one.
@@ -259,12 +348,44 @@ export function projectStyle(
     }
 
     if (Object.keys(layer.runtime).length > 0) {
-      const dropped = Object.keys(layer.runtime).filter((k) => k !== "before");
-      if (dropped.length > 0) {
+      // Registry-driven declared absences (R6): one warning per construct,
+      // wording and class from its registration, so the report and the
+      // construct list cannot drift. `before` ejects (honored via ordering
+      // below); `source` holds an inline source's own runtime half, reported
+      // at source granularity with the same contract/lossy split as named
+      // sources. A key outside the closed lists (v2 runtime blocks are
+      // passthrough) warns generically — a schema-valid document never
+      // crashes emit.
+      for (const key of Object.keys(layer.runtime)) {
+        if (key === "before") continue;
+        if (key === "source") {
+          const sourceRuntime = layer.runtime["source"];
+          if (isPlainObject(sourceRuntime)) {
+            pushSourceRuntimeWarnings(
+              warnings,
+              `layers.${id}.source`,
+              sourceRuntime,
+              inlineHasData
+            );
+          }
+          continue;
+        }
+        if (isSchemaDefault("layer", key, layer.runtime[key])) continue;
+        if (!(LAYER_RUNTIME_KEYS as readonly string[]).includes(key)) {
+          warnings.push({
+            path: `layers.${id}.${key}`,
+            kind: "contract",
+            message: `\`${key}\` is not a recognized runtime construct and is absent from the emitted style.`,
+          });
+          continue;
+        }
+        const definition = requireEjectClass(`layer.${key}`);
         warnings.push({
-          path: `layers.${id}`,
+          path: `layers.${id}.${key}`,
           kind: "contract",
-          message: `${dropped.join(", ")} do not compile and are absent from the emitted style.`,
+          construct: `layer.${key}`,
+          ejectClass: definition.class,
+          message: `\`${key}\` — ${definition.onEmit}`,
         });
       }
     }
@@ -294,15 +415,65 @@ export function projectStyle(
   if (model.style.metadata !== undefined)
     style["metadata"] = model.style.metadata;
 
-  const runtimeKeys = Object.keys(model.runtime.map);
+  const runtimeKeys = Object.keys(model.runtime.map).filter(
+    (key) => !isSchemaDefault("map", key, model.runtime.map[key])
+  );
   if (runtimeKeys.length > 0) {
+    const definition = requireEjectClass("map.options");
     warnings.push({
       path: "runtime.map",
       kind: "contract",
-      message:
-        `Map options (${runtimeKeys.join(", ")}) are constructor-only and have no ` +
-        "style-spec equivalent; the emitted style uses MapLibre's defaults.",
+      construct: "map.options",
+      ejectClass: definition.class,
+      message: `Map options (${runtimeKeys.join(", ")}) — ${definition.onEmit}`,
     });
+  }
+
+  // Root chrome constructs previously vanished from emit with no trace at
+  // all — the exact silent omission the doctrine forbids (R5/R6). Iterating
+  // the model's own keys (not a hand-kept list) means a future RuntimeHalf
+  // field cannot silently opt out: registered fields report with their
+  // wording, and an unknown one still surfaces generically.
+  for (const [construct, value] of Object.entries(model.runtime)) {
+    if (construct === "map" || value === undefined) continue;
+    const definition = ejectClasses.get(construct);
+    if (definition) {
+      warnings.push({
+        path: construct,
+        kind: "contract",
+        construct,
+        ejectClass: definition.class,
+        message: `\`${construct}\` — ${definition.onEmit}`,
+      });
+    } else {
+      warnings.push({
+        path: construct,
+        kind: "contract",
+        message: `\`${construct}\` is not a recognized runtime construct and is absent from the emitted style.`,
+      });
+    }
+  }
+
+  // Extension strips are collected BEFORE the strict gate so a strict
+  // failure's EmitError.warnings still carries them — the failure report
+  // must be the complete report. One warning per stripped location.
+  const opaque = new Set(["data", "properties", "clusterProperties", "metadata"]);
+  const strippedExtensions: string[] = [];
+  const cleaned = stripExtensions(style, opaque, "", strippedExtensions) as Record<
+    string,
+    unknown
+  >;
+  if (strippedExtensions.length > 0) {
+    const definition = requireEjectClass("x-*");
+    for (const strippedPath of strippedExtensions) {
+      warnings.push({
+        path: strippedPath,
+        kind: "contract",
+        construct: "x-*",
+        ejectClass: definition.class,
+        message: `\`${strippedPath.split(".").pop()}\` — ${definition.onEmit}`,
+      });
+    }
   }
 
   // `--strict` means no *lossy* degradation was required, not "the document
@@ -317,9 +488,6 @@ export function projectStyle(
       warnings
     );
   }
-
-  const opaque = new Set(["data", "properties", "clusterProperties", "metadata"]);
-  const cleaned = stripExtensions(style, opaque) as Record<string, unknown>;
   // The invariant, now over the stripped output: `x-*` is gone by the strip
   // above, so anything assertClean still finds — a `runtime` key — is a real
   // projection bug and fails closed rather than shipping.

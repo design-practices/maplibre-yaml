@@ -1,0 +1,66 @@
+---
+title: "Eject classes: what every construct does on emit"
+description: "The 0.7 doctrine — every construct in the format declares whether it ejects, ejects via fallback, or is a declared absence"
+---
+
+`mlym emit` compiles a document to spec-valid `style.json`. Not everything in
+the format *can* compile — popups are runtime behavior, a legend is DOM chrome —
+so every construct declares an **eject class**: what emit does with it. There
+is no fourth class and no undeclared construct; a runtime construct reaching
+the emitter without a registration is a thrown error, not a silent drop.
+
+## The three classes
+
+| Class | Meaning |
+| --- | --- |
+| **ejects** | Has an honest `style.json` representation and compiles to it. |
+| **ejects via fallback** | Compiles to a documented approximation (a marker becomes a symbol layer + sprite; an animated effect becomes its static preset). Reported as `lossy` when the visual result differs. |
+| **declared absence** | Interactive-only; no honest style form exists. Reported by emit as a `contract` warning naming the construct — never silently omitted. |
+
+## Every construct, classified
+
+This table mirrors the registry in core
+(`packages/core/src/eject/registrations.ts`); a drift test fails if they
+disagree.
+
+| Construct | Class | On emit |
+| --- | --- | --- |
+| `center` / `zoom` / `pitch` / `bearing` | ejects | Style-spec root camera properties; compile through. |
+| `state` | ejects | A style-spec root property; compiles through on supporting runtimes, and below the global-state floor the defaults are inlined into expressions (the `inlineState` gate). |
+| `layer.before` | ejects | Placement compiles honestly: the emitted layers array is ordered accordingly, and `EmitResult.placements` carries the intent. |
+| `layer.interactive` | declared absence | Popups, hover, and highlight are runtime behavior; `attachInteractions()` restores them over an ejected style. |
+| `layer.legend` | declared absence | Legend entries are chrome, not cartography. |
+| `layer.label` | declared absence | Display labels are chrome metadata. |
+| `layer.toggleable` | declared absence | The emitted style carries the layer's authored visibility and no toggle. |
+| `source.refresh` / `source.stream` / `source.cache` / `source.loading` / `source.prefetchedData` / `source.fetchStrategy` / `source.refreshInterval` / `source.updateStrategy` / `source.updateKey` | declared absence | Live-data machinery; the emitted source carries the data present at compile time (lossy when there is none). |
+| `map.options` | declared absence | MapLibre constructor options are host decisions; the emitted style uses MapLibre's defaults. |
+| `controls` | declared absence | DOM chrome; the emitted map gets MapLibre's default control set only. |
+| `legend` | declared absence | DOM chrome; no legend surface exists in a style. |
+| `container` | declared absence | `className` / inline style belong to the host page. |
+| `parameters` | declared absence | Presentation metadata for `state` keys; the values themselves eject via `state`. |
+| `x-*` | declared absence | Extension blocks are host-side data; never part of the emitted style. |
+
+The 0.7 chrome tier adds `markers:` and `images:` as the first
+**ejects-via-fallback** constructs (symbol layers + generated sprites), and the
+effects catalog follows the same law — every effect registers a mandatory
+fallback.
+
+## Reading the emit report
+
+```bash
+mlym emit map.yaml --out dist/
+```
+
+Declared absences arrive as `contract` warnings — expected, documented drops
+that don't fail `--strict`:
+
+```
+contract layers.quakes.interactive: `interactive` — Interactions (popups, hover,
+  highlight) are runtime behavior with no style.json form; …
+contract controls: `controls` — Controls are DOM chrome; …
+```
+
+`lossy` warnings are different — something the map *shows* changed (a live
+source with no compile-time data, a fallback that approximates). Those fail
+`--strict`, because they are the cases where the ejected map is not the map
+you authored.
