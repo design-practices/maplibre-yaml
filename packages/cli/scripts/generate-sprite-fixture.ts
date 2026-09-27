@@ -77,7 +77,11 @@ const html = `<!DOCTYPE html>
     center: [0, 0],
     zoom: 2,
     // The spec's pixel probe reads the canvas back; WebGL buffers are
-    // cleared after compositing without this.
+    // cleared after compositing without this. Passed in BOTH shapes because
+    // the CI matrix runs this page on maplibre-gl v4 (top-level key) and v5
+    // (canvasContextAttributes) — each major ignores the other's form. The
+    // v4 matrix leg caught the v5-only version reading back an empty canvas.
+    preserveDrawingBuffer: true,
     canvasContextAttributes: { preserveDrawingBuffer: true },
   });
   window.__sprite = { map, pattern: ${JSON.stringify(`${DOCUMENT_SPRITE_ID}:${asset.name}`)} };
