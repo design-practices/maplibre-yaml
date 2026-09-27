@@ -11,10 +11,17 @@
   },
   "changesets": [
     "astro-html-loader-fix",
+    "background-layer-fix",
+    "contract-audit-sweep",
+    "geojson-source-options-passthrough",
     "geojson-sugar-normalization",
+    "hover-emit",
     "interactions-bind-core-convergence",
     "interactions-registry",
+    "named-source-url-fix",
     "parse-options-consistency",
+    "polygon-outline-source-fix",
+    "spec-key-allowlist",
     "v1-geojson-warning",
     "v2-style-metadata",
     "v2-surface-parser"
