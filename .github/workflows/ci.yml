@@ -124,8 +124,19 @@ jobs:
     # Every asset (maplibre-gl, its CSS, the basemap style, the DEM tiles) is
     # served locally by e2e/server.mjs, so no external service can turn this
     # red. That is what makes it safe as a required check.
+    #
+    # The maplibre-version matrix (U1, ml-tfd.1) runs the suites against both
+    # ends of the supported peer range. The peer range advertised ^3||^4||^5
+    # while CI tested only one pinned version -- the v5 named-import break
+    # shipped undetected in 0.2.1/0.2.2. A pnpm override forces every
+    # workspace package (and the e2e vendor resolution) onto the matrix
+    # version, so the advertised range is the tested range.
     browser-verification:
         runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                maplibre-version: ["^4.7.1", "^5.24.0"]
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -138,8 +149,21 @@ jobs:
                   node-version: 20
                   cache: "pnpm"
 
+            - name: Pin maplibre-gl ${{ matrix.maplibre-version }} via pnpm override
+              run: |
+                  node -e "
+                    const fs = require('fs');
+                    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+                    pkg.pnpm = pkg.pnpm ?? {};
+                    pkg.pnpm.overrides = { ...pkg.pnpm.overrides, 'maplibre-gl': '${{ matrix.maplibre-version }}' };
+                    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+                  "
+
             - name: Install dependencies
-              run: pnpm install --frozen-lockfile
+              run: pnpm install --no-frozen-lockfile
+
+            - name: Assert resolved maplibre-gl matches the matrix leg
+              run: node -e "console.log('maplibre-gl', require('maplibre-gl/package.json').version)"
 
             - name: Resolve Playwright version
               id: pw
@@ -164,6 +188,9 @@ jobs:
             - name: Build
               run: pnpm build
 
+            - name: Run core unit tests against the matrix version
+              run: pnpm --filter @maplibre-yaml/core test
+
             - name: Run browser verification
               run: pnpm verify:browser
 
@@ -171,7 +198,7 @@ jobs:
               uses: actions/upload-artifact@v4
               if: failure()
               with:
-                  name: browser-verification-report
+                  name: browser-verification-report-${{ strategy.job-index }}
                   path: |
                       e2e/report
                       e2e/results
