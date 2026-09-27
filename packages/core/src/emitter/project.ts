@@ -445,12 +445,20 @@ export function projectStyle(
     if (construct === "map" || value === undefined) continue;
     const definition = ejectClasses.get(construct);
     if (definition) {
+      // A fallback-class construct reaching the projection UN-lowered means
+      // the emit pipeline's pre-pass didn't run (a direct projectStyle
+      // caller) — the construct is being dropped where a lowering exists,
+      // which is a visual change: lossy, so `--strict` refuses it.
+      const unloweredFallback = definition.class === "fallback";
       warnings.push({
         path: construct,
-        kind: "contract",
+        kind: unloweredFallback ? "lossy" : "contract",
         construct,
         ejectClass: definition.class,
-        message: `\`${construct}\` — ${definition.onEmit}`,
+        message: unloweredFallback
+          ? `\`${construct}\` was not lowered — the emit pipeline substitutes its ` +
+            `fallback (${definition.onEmit}); a direct projectStyle call drops it.`
+          : `\`${construct}\` — ${definition.onEmit}`,
       });
     } else {
       warnings.push({

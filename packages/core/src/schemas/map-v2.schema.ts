@@ -44,6 +44,7 @@ import {
   LegendConfigSchema,
   StateSchema,
   ParametersSchema,
+  MarkersSchema,
 } from "./map.schema";
 import {
   GeoJSONSourceSchema,
@@ -429,6 +430,9 @@ export const RuntimeV2Schema: z.ZodTypeAny = z
     legend: LegendConfigSchema.optional().describe("Legend configuration"),
     parameters: ParametersSchema.optional().describe(
       "Presentation metadata for `state` keys — label, type, range"
+    ),
+    markers: MarkersSchema.optional().describe(
+      "Standalone markers — DOM pins live, symbol layers + sprite on eject"
     ),
     container: z
       .object({

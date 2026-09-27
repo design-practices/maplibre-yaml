@@ -46,6 +46,7 @@ export const removeProtocol: typeof maplibre.removeProtocol = gl.removeProtocol;
 
 export const Map: typeof maplibre.Map = gl.Map;
 export const Popup: typeof maplibre.Popup = gl.Popup;
+export const Marker: typeof maplibre.Marker = gl.Marker;
 export const NavigationControl: typeof maplibre.NavigationControl =
   gl.NavigationControl;
 export const GeolocateControl: typeof maplibre.GeolocateControl =
@@ -60,6 +61,7 @@ export const AttributionControl: typeof maplibre.AttributionControl =
 // works in both value and type position (mirroring maplibre-gl's own names).
 export type Map = maplibre.Map;
 export type Popup = maplibre.Popup;
+export type Marker = maplibre.Marker;
 export type NavigationControl = maplibre.NavigationControl;
 export type GeolocateControl = maplibre.GeolocateControl;
 export type ScaleControl = maplibre.ScaleControl;

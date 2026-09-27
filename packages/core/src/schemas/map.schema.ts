@@ -17,7 +17,7 @@ import {
   LngLatBoundsSchema,
   ZoomLevelSchema,
 } from "./base.schema";
-import { LayerOrReferenceSchema } from "./layer.schema";
+import { LayerOrReferenceSchema, PopupContentSchema } from "./layer.schema";
 import { LayerSourceSchema } from "./source.schema";
 import { markOpenSchema } from "../parser/validation-utils";
 
@@ -421,6 +421,41 @@ export const StateSchema = z
   )
   .describe("Runtime-tunable values, keyed by name");
 
+/**
+ * One standalone marker (U5, R8).
+ *
+ * @remarks
+ * Markers are the runtime half's answer to "put a pin here": DOM markers
+ * live (`maplibregl.Marker`), lowered to a symbol layer + generated pin
+ * sprite on eject (the format's first fallback-class construct). `size` is
+ * a scale multiplier over MapLibre's default pin size, not pixels.
+ */
+export const MarkerSchema = z.object({
+  at: LngLatSchema.describe("Marker position [lng, lat]"),
+  color: z
+    .string()
+    .optional()
+    .describe("Pin color (the default pin only; ignored when `icon` is set)"),
+  size: z
+    .number()
+    .positive()
+    .optional()
+    .describe("Scale multiplier for the pin (1 = MapLibre's default size)"),
+  icon: z
+    .string()
+    .optional()
+    .describe("Image URL replacing the default pin"),
+  popup: PopupContentSchema.optional().describe(
+    "Popup opened by clicking the marker (same structured content as layer popups)"
+  ),
+});
+
+/** The document-root `markers:` list. */
+export const MarkersSchema = z.array(MarkerSchema);
+
+/** Inferred marker type. */
+export type MarkerConfig = z.infer<typeof MarkerSchema>;
+
 /** Inferred type for the state block. */
 export type State = z.infer<typeof StateSchema>;
 
@@ -534,6 +569,9 @@ export const MapBlockSchema: z.ZodObject<any> = z
     parameters: ParametersSchema.optional().describe(
       "Presentation metadata for `state` keys — label, type, range"
     ),
+    markers: MarkersSchema.optional().describe(
+      "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+    ),
   })
   .describe("Standard map block");
 
@@ -590,6 +628,9 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     ),
     parameters: ParametersSchema.optional().describe(
       "Presentation metadata for `state` keys — label, type, range"
+    ),
+    markers: MarkersSchema.optional().describe(
+      "Standalone markers — DOM pins live, symbol layers + sprite on eject"
     ),
   })
   .describe("Full-page map block");

@@ -140,6 +140,45 @@ export function hatchTileSvg(options: HatchTileOptions = {}): EmitAsset {
   };
 }
 
+/** Options for {@link pinSvg}. */
+export interface PinOptions {
+  /** Pin fill color. Defaults to MapLibre's default-marker blue. */
+  color?: string;
+  /** Scale multiplier over the default 27×41 pin. */
+  size?: number;
+}
+
+/** MapLibre's default-marker blue, so an unstyled pin ejects looking native. */
+export const DEFAULT_PIN_COLOR = "#3FB1CE";
+
+/**
+ * The default marker pin as a deterministic SVG asset (U5) — the raster half
+ * of the markers fallback: a live `maplibregl.Marker` lowers to a symbol
+ * layer whose icon is this teardrop, shaped and colored like MapLibre's own
+ * default marker so the ejected map reads the same.
+ */
+export function pinSvg(options: PinOptions = {}): EmitAsset {
+  const color = options.color ?? DEFAULT_PIN_COLOR;
+  const size = options.size ?? 1;
+  const width = Math.round(27 * size);
+  const height = Math.round(41 * size);
+
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
+    `viewBox="0 0 27 41">` +
+    `<path fill="${color}" stroke="#ffffff" stroke-width="1.5" ` +
+    `d="M13.5 0.75C6.6 0.75 1 6.35 1 13.25c0 9.5 12.5 26.5 12.5 26.5S26 22.75 26 13.25C26 6.35 20.4 0.75 13.5 0.75z"/>` +
+    `<circle cx="13.5" cy="13.25" r="4.5" fill="#ffffff" opacity="0.9"/>` +
+    `</svg>`;
+
+  return {
+    name: assetName("pin", [color.replace(/^#/, ""), size], svg),
+    svg,
+    width,
+    height,
+  };
+}
+
 /** One sprite-index entry, per the MapLibre sprite index format. */
 export interface SpriteIndexEntry {
   x: number;

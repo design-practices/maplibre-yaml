@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/attach-a-popup-to-a-marker-instance/
+# A marker with structured popup content — same trust-gated vocabulary
+# as layer popups.
+type: map
+id: attach-a-popup-to-a-marker-instance
+config:
+  center: [12.55, 55.665]
+  zoom: 8
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+markers:
+  - at: [12.55, 55.665]
+    color: "#e63946"
+    popup:
+      - h3:
+          - str: "Hello Copenhagen!"
+      - p:
+          - str: "Click the pin to toggle me."

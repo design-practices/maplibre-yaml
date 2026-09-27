@@ -186,7 +186,7 @@ export function normalizeLayer(layer: Layer): LayerModel {
  * **The document root is enumerated, not partitioned**, so the never-drop
  * invariant is scoped to the objects above, not the root. A root key outside
  * the recognized set (`id`, `config`, `layers`, `sources`, `controls`,
- * `legend`, `className`, `style`, `state`, `parameters`) does not reach the
+ * `legend`, `className`, `style`, `state`, `parameters`, `markers`) does not reach the
  * model — including `type` (structural) and `x-*` extensions, which the
  * extension registry reads from the raw parsed document, not from the model.
  * The emitter strips `x-*` regardless, so nothing is lost that should survive.
@@ -238,6 +238,7 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   if (input.parameters !== undefined) model.runtime.parameters = input.parameters;
   if (input.controls !== undefined) model.runtime.controls = input.controls;
   if (input.legend !== undefined) model.runtime.legend = input.legend;
+  if (input.markers !== undefined) model.runtime.markers = input.markers;
   if (input.className !== undefined || input.style !== undefined) {
     model.runtime.container = {};
     if (input.className !== undefined) model.runtime.container.className = input.className;
@@ -314,14 +315,17 @@ export function denormalizeOptions(model: MapModel): {
   controls?: ControlsConfig;
   legend?: LegendConfig;
   state?: Record<string, unknown>;
+  markers?: MapModel["runtime"]["markers"];
 } {
   const options: {
     controls?: ControlsConfig;
     legend?: LegendConfig;
     state?: Record<string, unknown>;
+    markers?: MapModel["runtime"]["markers"];
   } = {};
   if (model.runtime.controls !== undefined) options.controls = model.runtime.controls;
   if (model.runtime.legend !== undefined) options.legend = model.runtime.legend;
+  if (model.runtime.markers !== undefined) options.markers = model.runtime.markers;
   // `state:` lives in the style half (it is a style-spec root property), but
   // the renderer builds the live style from `mapStyle` + addLayer calls, so
   // the block never reaches MapLibre through the style object. The renderer

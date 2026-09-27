@@ -174,6 +174,8 @@ export function readV2Block(doc: MapBlockV2): MapModel {
     model.runtime.parameters = docParameters as Record<string, unknown>;
   if (runtime["controls"] !== undefined)
     model.runtime.controls = runtime["controls"] as ControlsConfig;
+  if (runtime["markers"] !== undefined)
+    model.runtime.markers = runtime["markers"] as MapModel["runtime"]["markers"];
   if (runtime["legend"] !== undefined)
     model.runtime.legend = runtime["legend"] as LegendConfig;
   if (runtime["container"] !== undefined)

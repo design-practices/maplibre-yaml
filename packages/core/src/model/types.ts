@@ -122,6 +122,8 @@ export interface RuntimeHalf {
   container?: { className?: string; style?: string };
   /** Presentation metadata for `state` keys, keyed by state name. */
   parameters?: Record<string, unknown>;
+  /** Standalone markers (U5) — DOM pins live, lowered to a symbol layer on eject. */
+  markers?: import("../schemas/map.schema").MarkerConfig[];
 }
 
 /** A whole map document, normalized. */
@@ -145,4 +147,6 @@ export interface V1MapInput {
   state?: Record<string, unknown>;
   /** Presentation metadata for `state` keys — label, type, range. */
   parameters?: Record<string, unknown>;
+  /** Standalone markers, authored at the document root. */
+  markers?: import("../schemas/map.schema").MarkerConfig[];
 }

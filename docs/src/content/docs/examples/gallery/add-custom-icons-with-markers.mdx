@@ -1,0 +1,22 @@
+---
+title: Add custom icons with markers
+description: "The MapLibre custom-icons example — icon URLs on markers: entries"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-custom-icons-with-markers.yaml?raw';
+
+Replicates the MapLibre example [Add custom icons with markers](https://maplibre.org/maplibre-gl-js/docs/examples/add-custom-icons-with-markers/). Each upstream `Marker({ element })` with a hand-built div becomes a `markers:` entry with an `icon:` URL.
+
+<LiveMap src="/configs/gallery/add-custom-icons-with-markers.yaml" height="440px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-custom-icons-with-markers.yaml" />
+
+## What to notice
+
+- `icon:` swaps the default pin for any image URL; `size:` scales it.
+- A failed icon load falls back to the default pin with one console note — never a blank marker.
+- On eject the icons aren't embeddable yet (that arrives with `images:`), so the emitted style substitutes default pins and says so as a lossy warning.

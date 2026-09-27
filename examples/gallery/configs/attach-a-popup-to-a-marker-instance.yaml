@@ -1,0 +1,15 @@
+# Hermetic twin of docs/public/configs/gallery/attach-a-popup-to-a-marker-instance.yaml (local basemap).
+type: map
+id: attach-a-popup-to-a-marker-instance
+config:
+  center: [12.55, 55.665]
+  zoom: 8
+  mapStyle: "/examples/verification/configs/local-style.json"
+markers:
+  - at: [12.55, 55.665]
+    color: "#e63946"
+    popup:
+      - h3:
+          - str: "Hello Copenhagen!"
+      - p:
+          - str: "Click the pin to toggle me."

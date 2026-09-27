@@ -516,6 +516,43 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
   });
 });
 
+test.describe("markers: DOM pins from the markers: block (U5)", () => {
+  test("add-a-default-marker: one real DOM marker at the coordinate", async ({ page }) => {
+    const errors = await guard(page);
+    await openExample(page, "add-a-default-marker", []);
+    await expect(page.locator(".maplibregl-marker")).toHaveCount(1);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("add-custom-icons-with-markers: icon URLs render as img markers", async ({ page }) => {
+    const errors = await guard(page);
+    await openExample(page, "add-custom-icons-with-markers", []);
+    const icons = page.locator("img.maplibregl-marker, .maplibregl-marker img, img[src*='icon-']");
+    await expect(icons).toHaveCount(2);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("attach-a-popup-to-a-marker-instance: clicking the pin toggles its trust-gated popup", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openExample(page, "attach-a-popup-to-a-marker-instance", []);
+
+    const marker = page.locator(".maplibregl-marker");
+    await expect(marker).toHaveCount(1);
+    await marker.click();
+
+    const popup = page.locator(".maplibregl-popup");
+    await expect(popup).toBeVisible();
+    await expect(popup.locator("h3")).toHaveText("Hello Copenhagen!");
+
+    await marker.click(); // toggle off — MapLibre's built-in behavior
+    await expect(popup).toHaveCount(0);
+
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
 test.describe("touch posture: hover popups don't exist on touch; tap uses click.popup (U7)", () => {
   test.use({ hasTouch: true });
 

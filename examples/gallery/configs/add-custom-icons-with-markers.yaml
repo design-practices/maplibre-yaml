@@ -1,0 +1,14 @@
+# Hermetic twin of docs/public/configs/gallery/add-custom-icons-with-markers.yaml (local basemap).
+type: map
+id: add-custom-icons-with-markers
+config:
+  center: [-65.017, -16.457]
+  zoom: 5
+  mapStyle: "/examples/verification/configs/local-style.json"
+markers:
+  - at: [-66.324462, -16.024695]
+    icon: "/examples/gallery/assets/icon-a.png"
+    size: 1
+  - at: [-61.21582, -15.971891]
+    icon: "/examples/gallery/assets/icon-b.png"
+    size: 1.4

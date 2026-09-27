@@ -25,6 +25,8 @@ import {
   mergeBasemap,
   applyRuntimeGate,
   finalizeSpriteBaseUrl,
+  attachSpriteAssets,
+  lowerMarkers,
   EmitError,
   type EmitMode,
   type EmitWarning,
@@ -54,8 +56,26 @@ export async function emitStyle(
   warnings: EmitWarning[];
   assets?: EmitAsset[];
 }> {
-  const model = toModel(block as never);
-  const projected = applyRuntimeGate(projectStyle(model, mode), policy);
+  let model = toModel(block as never);
+
+  // Fallback lowerings (markers → symbol layer + pin sprites, KTD4) run only
+  // under --with-fallbacks: in strict mode the un-lowered construct surfaces
+  // as a lossy warning inside projectStyle, which is exactly what makes
+  // --strict refuse the document instead of silently substituting.
+  let loweringAssets: EmitAsset[] = [];
+  let loweringWarnings: EmitWarning[] = [];
+  if (mode === 'with-fallbacks') {
+    const lowered = lowerMarkers(model);
+    model = lowered.model;
+    loweringAssets = lowered.assets;
+    loweringWarnings = lowered.warnings;
+  }
+
+  let projected = applyRuntimeGate(projectStyle(model, mode), policy);
+  if (loweringAssets.length > 0) {
+    projected = attachSpriteAssets(projected, loweringAssets);
+  }
+  projected = { ...projected, warnings: [...loweringWarnings, ...projected.warnings] };
 
   // projectStyle enforces --strict over its own warnings, but the runtime
   // gate can ADD lossy ones (state inlined below the target floor). Without

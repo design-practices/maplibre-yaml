@@ -14,6 +14,11 @@
  */
 
 import { EjectClassRegistry } from "./registry";
+import {
+  buildMarkersLowering,
+  MARKERS_SOURCE_ID,
+} from "../emitter/lower-markers";
+import type { MarkerConfig } from "../schemas/map.schema";
 
 /**
  * The default registry every emit path consults.
@@ -133,6 +138,28 @@ ejectClasses.register("state", {
     "`state:` is a style-spec root property and compiles through verbatim on runtimes " +
     "that support it; below the global-state floor the defaults are inlined into " +
     "expressions instead (the inlineState gate).",
+});
+
+ejectClasses.register("markers", {
+  class: "fallback",
+  onEmit:
+    "Markers lower to a symbol layer with generated pin sprites — the pins " +
+    "render in the emitted style (lossy: DOM-marker behavior like dragging " +
+    "and built-in popups does not compile).",
+  // The doctrine's mechanical contract for a fallback-class construct: the
+  // lowering IS the registration. `lowerMarkers` (the emit pre-pass) and this
+  // hook share one implementation.
+  eject: (ctx) => {
+    const { sourceSpec, layerSpec, assets, warnings } = buildMarkersLowering(
+      ctx.value as MarkerConfig[]
+    );
+    return {
+      sources: { [MARKERS_SOURCE_ID]: sourceSpec },
+      layers: [layerSpec],
+      assets,
+      warnings,
+    };
+  },
 });
 
 ejectClasses.register("x-*", {
