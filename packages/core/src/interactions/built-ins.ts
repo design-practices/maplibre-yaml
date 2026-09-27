@@ -339,29 +339,44 @@ export const HOVER_INTERACTIONS: readonly Interaction[] = [
     create: (deps) => {
       /** The feature last shown per layer — per handler instance, never shared. */
       const lastShown = new Map<string, string | number>();
+      /**
+       * The layer whose feature the live hover popup belongs to. Runtimes are
+       * shared across layers and every hover-configured layer's mouseleave
+       * calls clearLayer — without this scope, leaving layer B would dismiss
+       * layer A's popup. One scalar suffices: hosts hold a single popup slot.
+       */
+      let shownForLayer: string | null = null;
       /** Warn once per layer about the id-less fallback, not per mousemove. */
       const warned = new Set<string>();
 
       /**
        * Dedupe key. Unlike highlight (which NEEDS ids — feature-state is
-       * addressed by them), a popup can fall back to keying on the feature's
-       * geometry when ids are missing: approximate, but it keeps id-less
-       * sources working instead of dead. Warn once so authors know the fix.
+       * addressed by them), a popup can fall back to approximate keys when
+       * ids are missing, so id-less sources work instead of dying. Points
+       * key by coordinates; other geometries key by type + properties,
+       * because queryRenderedFeatures returns TILE-CLIPPED geometry — the
+       * same id-less polygon yields different coordinates per tile, and a
+       * coordinate key would tear the popup down at every tile boundary.
+       * (Distinct id-less features with identical properties collapse to one
+       * key — acceptable for a preview; exact tracking is what ids are for.)
+       * Warn once so authors know the fix.
        */
       const keyFor = (ctx: { feature?: any; layerId: string }): string | number | null => {
         const id = ctx.feature?.id;
         if (id !== undefined && id !== null) return id;
-        const coordinates = ctx.feature?.geometry?.coordinates;
-        if (coordinates === undefined) return null;
+        const geometry = ctx.feature?.geometry;
+        if (!geometry) return null;
         if (!warned.has(ctx.layerId)) {
           warned.add(ctx.layerId);
           console.warn(
             `[maplibre-yaml] hover.popup on layer "${ctx.layerId}" is deduping ` +
-              "by feature geometry because features have no ids — set " +
+              "approximately because features have no ids — set " +
               "`generateId: true` on the source, or `promoteId`, for exact tracking."
           );
         }
-        return JSON.stringify(coordinates);
+        return geometry.type === "Point"
+          ? `pt:${JSON.stringify(geometry.coordinates)}`
+          : `${geometry.type}:${JSON.stringify(ctx.feature?.properties ?? {})}`;
       };
 
       return {
@@ -369,20 +384,30 @@ export const HOVER_INTERACTIONS: readonly Interaction[] = [
           const key = keyFor(ctx);
           if (key === null) return;
           if (lastShown.get(ctx.layerId) === key) return; // same feature, no churn
-          lastShown.set(ctx.layerId, key);
 
-          deps.showPopup(content, ctx.feature, ctx.lngLat, {
-            closeButton: false,
-            closeOnClick: false,
-            kind: "hover",
-          });
+          const shown =
+            deps.showPopup(content, ctx.feature, ctx.lngLat, {
+              closeButton: false,
+              closeOnClick: false,
+              kind: "hover",
+            }) !== false;
+          // Record only what actually appeared: a preview suppressed by a
+          // pinned popup must show once the pin is dismissed, even with no
+          // intervening mouseleave to re-arm the dedupe.
+          if (shown) {
+            lastShown.set(ctx.layerId, key);
+            shownForLayer = ctx.layerId;
+          }
         },
 
         clearLayer(layerId) {
-          // mouseleave/detach/destroy: drop the popup and the tracked feature
-          // so re-entering shows it again.
+          // mouseleave/detach/destroy for THIS layer: re-arm its dedupe, and
+          // dismiss the popup only if this layer owns it.
           lastShown.delete(layerId);
-          deps.hidePopup?.();
+          if (shownForLayer === layerId) {
+            deps.hidePopup?.();
+            shownForLayer = null;
+          }
         },
       };
     },

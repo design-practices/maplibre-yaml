@@ -108,12 +108,17 @@ export interface ShowPopupOptions {
 }
 
 export interface InteractionDeps {
+  /**
+   * Show a popup. Returns `false` when the slot contract suppressed it (a
+   * hover popup while a pinned one is open) — a `void` return counts as
+   * shown, so legacy three-argument implementations keep working unchanged.
+   */
   showPopup: (
     content: PopupContent,
     feature: any,
     lngLat: LngLat,
     options?: ShowPopupOptions
-  ) => void;
+  ) => boolean | void;
   /**
    * Dismiss the current HOVER popup, if one is showing. A pinned popup is
    * never touched — its dismissal belongs to the user (close button /

@@ -194,6 +194,7 @@ schema fields handled by the renderer — not something you wire up yourself.
 |----------|------|-------------|
 | `cursor` | string | CSS cursor while the pointer is over a feature |
 | `highlight` | boolean | Recolour the hovered feature |
+| `popup` | popup content | Chromeless preview popup while hovering (once per feature entered, dismissed on leave). A pinned `click.popup` suppresses hover previews until dismissed; touch devices tap into `click.popup` instead |
 
 `highlight: true` wraps the layer's primary colour in a `feature-state` expression
 for you, so no paint authoring is required. Two things follow from how

@@ -16,13 +16,20 @@ const popupInstances: any[] = [];
 
 vi.mock("maplibre-gl", () => {
   const Popup = vi.fn((options?: unknown) => {
+    const handlers = new Map<string, Function[]>();
     const instance = {
       options,
       setLngLat: vi.fn().mockReturnThis(),
       setHTML: vi.fn().mockReturnThis(),
       addTo: vi.fn().mockReturnThis(),
-      remove: vi.fn(),
-      on: vi.fn(),
+      // Real maplibre fires 'close' SYNCHRONOUSLY on remove() — the mock
+      // must too, or the slot's close-listener ordering goes untested.
+      remove: vi.fn(() => {
+        for (const cb of handlers.get("close") ?? []) cb();
+      }),
+      on: vi.fn((event: string, cb: Function) => {
+        handlers.set(event, [...(handlers.get(event) ?? []), cb]);
+      }),
     };
     popupInstances.push(instance);
     return instance;
@@ -113,21 +120,71 @@ describe("hover popup built-in (unit)", () => {
     expect(deps.hidePopup).toHaveBeenCalledTimes(1);
     expect(deps.showPopup).toHaveBeenCalledTimes(2);
   });
+
+  it("clearLayer for ANOTHER layer leaves this layer's popup alone", () => {
+    // Runtimes are shared across layers and every hover-configured layer's
+    // mouseleave (and every live-data resetFeatureState) calls clearLayer —
+    // dismissal must be scoped to the layer that owns the popup.
+    const deps = makeDeps();
+    const runtime = hoverPopup.create(deps);
+
+    runtime.run(CONTENT, { layerId: "a", feature: { id: 1 }, lngLat: LNGLAT } as any);
+    runtime.clearLayer!("b", {} as any); // leaving/refreshing an unrelated layer
+
+    expect(deps.hidePopup).not.toHaveBeenCalled();
+
+    runtime.clearLayer!("a", {} as any);
+    expect(deps.hidePopup).toHaveBeenCalledTimes(1);
+  });
+
+  it("a preview suppressed by a pin shows once the pin is dismissed, without mouseleave", () => {
+    const deps = makeDeps();
+    // Simulate the host slot: suppressed (false) while pinned, then free.
+    deps.showPopup.mockReturnValueOnce(false);
+    const runtime = hoverPopup.create(deps);
+    const ctx = { layerId: "pts", feature: { id: 7 }, lngLat: LNGLAT } as any;
+
+    runtime.run(CONTENT, ctx); // suppressed — must NOT consume the dedupe key
+    runtime.run(CONTENT, ctx); // pin dismissed (keyboard), pointer never moved
+
+    expect(deps.showPopup).toHaveBeenCalledTimes(2);
+  });
+
+  it("id-less non-Point features key by properties, surviving tile-clipped geometry", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const deps = makeDeps();
+    const runtime = hoverPopup.create(deps);
+    // The same id-less polygon, clipped differently by two tiles: geometry
+    // coordinates differ, properties are identical — one popup, no flicker.
+    const tileA = {
+      geometry: { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1]]] },
+      properties: { name: "park" },
+    };
+    const tileB = {
+      geometry: { type: "Polygon", coordinates: [[[1, 0], [2, 0], [2, 1]]] },
+      properties: { name: "park" },
+    };
+
+    runtime.run(CONTENT, { layerId: "polys", feature: tileA, lngLat: LNGLAT } as any);
+    runtime.run(CONTENT, { layerId: "polys", feature: tileB, lngLat: LNGLAT } as any);
+
+    expect(deps.showPopup).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
 });
 
 /** A one-layer projection with hover.popup + click.popup on the same layer. */
 const BOTH_POPUPS: InteractionsProjection = {
-  layers: [
-    {
-      layerId: "pts",
-      sourceId: "pts-src",
+  layers: {
+    pts: {
+      source: "pts-src",
       interactive: {
         hover: { popup: [{ p: [{ text: "preview" }] }] },
         click: { popup: [{ p: [{ text: "pinned" }] }] },
       },
     },
-  ],
-} as any;
+  },
+} as InteractionsProjection;
 
 /** Fire the listener registered for `event` on the mock map. */
 function fire(map: any, event: string, feature: any) {

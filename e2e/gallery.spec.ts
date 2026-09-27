@@ -459,9 +459,11 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
     await expect(popup).toHaveCount(0);
 
     // Click pins: close button present, and hovering ANOTHER feature is
-    // suppressed while the pin is open.
-    await page.mouse.move(pt.x, pt.y);
-    await page.mouse.click(pt.x, pt.y);
+    // suppressed while the pin is open. Click 3px off the projected anchor —
+    // still inside the 8px circle, but clear of the hover popup's tip DOM,
+    // which sits exactly at the anchor pixel and would absorb the click.
+    await page.mouse.move(pt.x + 3, pt.y + 3);
+    await page.mouse.click(pt.x + 3, pt.y + 3);
     await expect(popup.locator(".maplibregl-popup-close-button")).toHaveCount(1);
     const chi = await pointFor(chicago);
     await page.mouse.move(chi.x, chi.y);
