@@ -60,6 +60,19 @@ All layers share these base properties:
       description: "Initial visibility",
     },
     {
+      name: "label",
+      type: "string",
+      description:
+        "Display label — chrome metadata. A labeled layer also gets a visibility checkbox on the params panel",
+    },
+    {
+      name: "toggleable",
+      type: "boolean",
+      default: "true",
+      description:
+        "Allow users to toggle visibility; set false to keep a labeled layer off the params panel",
+    },
+    {
       name: "before",
       type: "string",
       description: "Insert before this layer ID",
