@@ -9,8 +9,12 @@
     from the repo root (pnpm verify:serve), then open:
       /packages/spike-deck-hatch/page/crosshatch.html
     Query params:
-      fx    = crosshatch | none     (none = the static preset alone — the
-                                     same document's fallback)
+      route = static | deck | post  (static = the document alone, i.e. the
+                                     fallback; deck = route 1, deck.gl
+                                     geometry + Tangram shader; post = route
+                                     3, screen-space post-process over
+                                     MapLibre's own extrusions)
+      fx    = crosshatch | none     (legacy aliases: deck | static)
       tiles = live | fixture        (fixture = the vendored lower-Manhattan
                                      z13–14 tiles; hermetic, no glyphs)
       z, b, p, lng, lat             camera overrides
@@ -19,6 +23,14 @@
   <style>
     html, body { margin: 0; height: 100%; background: #4d4d4e; }
     ml-map { display: block; height: 100%; }
+    #hud {
+      position: fixed; z-index: 10; left: 12px; bottom: 28px; padding: 8px 10px;
+      background: rgba(249, 243, 227, 0.94); color: #222; border-radius: 6px;
+      font: 13px/1.5 system-ui, sans-serif; box-shadow: 0 1px 6px rgba(0,0,0,.35);
+    }
+    #hud a { color: #222; margin-right: 8px; }
+    #hud a.on { font-weight: 700; text-decoration: none; }
+    #hud .fps { font-variant-numeric: tabular-nums; font-weight: 600; }
   </style>
   <script type="importmap">
     { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
@@ -30,7 +42,9 @@
     import * as spike from "../dist/spike.js";
 
     const q = new URLSearchParams(location.search);
-    const fx = q.get("fx") ?? "crosshatch";
+    const legacy = { crosshatch: "deck", none: "static" };
+    const route = q.get("route") ?? legacy[q.get("fx")] ?? "deck";
+    const fx = route === "static" ? "none" : "crosshatch";
     const tiles = q.get("tiles") ?? "live";
 
     const doc = spike.parse(await (await fetch("./crosshatch.yaml")).text());
@@ -57,6 +71,14 @@
 
     let handle = null;
     const attach = async () => {
+      if (route === "post") {
+        handle = await spike.attachCrosshatchPost(map, doc, {
+          atlasUrl: "./crosshatch/hatch-atlas.png",
+          gainScale: q.has("gs") ? Number(q.get("gs")) : undefined,
+          cellPx: q.has("cell") ? Number(q.get("cell")) : undefined,
+        });
+        return { placementOk: handle.placementOk };
+      }
       handle = await spike.attachCrosshatch(map, doc, {
         atlasUrl: "./crosshatch/hatch-atlas.png",
         plain: q.get("shade") === "plain",
@@ -64,10 +86,71 @@
       });
       return { placementOk: handle.placementOk, slots: handle.slots };
     };
-    if (fx === "crosshatch") await attach();
+    if (route !== "static") await attach();
+
+    // --- evaluation HUD: route switcher, rolling fps, orbit stress ----------
+    const hud = document.createElement("div");
+    hud.id = "hud";
+    const link = (r) => {
+      const u = new URLSearchParams(location.search);
+      u.set("route", r); u.delete("fx");
+      return `<a href="?${u}" class="${r === route ? "on" : ""}">${r}</a>`;
+    };
+    hud.innerHTML =
+      `route: ${["static", "deck", "post"].map(link).join("")}` +
+      ` · <a href="/e2e/generated/spike-crosshatch/index.html" title="the document ejected to plain maplibre-gl (run the demo script once)">ejected</a>` +
+      `<br><span class="fps">– fps</span> · <label><input type="checkbox" id="orbit"> orbit</label>` +
+      ` · <button id="tour" type="button">tour</button>` +
+      ` · <span id="gpu"></span>`;
+    document.body.appendChild(hud);
+    const gl = map.getCanvas().getContext("webgl2");
+    const dbg = gl?.getExtension("WEBGL_debug_renderer_info");
+    hud.querySelector("#gpu").textContent = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL).replace(/\(0x[0-9A-F]+\)/gi, "").slice(0, 60) : "";
+    let frames = 0;
+    map.on("render", () => frames++);
+    setInterval(() => { hud.querySelector(".fps").textContent = `${frames} fps`; frames = 0; }, 1000);
+    let orbiting = false;
+    const spin = () => { if (!orbiting) return; map.setBearing(map.getBearing() + 0.2); requestAnimationFrame(spin); };
+    hud.querySelector("#orbit").addEventListener("change", (e) => { orbiting = e.target.checked; spin(); });
+
+    // Scripted view-change tour (rotation, then zoom out/in): the same path
+    // for every route, so they can be compared by eye and by fps.
+    const home = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
+    const leg = (opts) => new Promise((r) => { map.once("moveend", r); map.easeTo({ easing: (t) => t, ...opts }); });
+    const TOUR = [
+      { name: "rotate +120", bearing: home.bearing + 120, duration: 4000 },
+      { name: "rotate +240", bearing: home.bearing + 240, duration: 4000 },
+      { name: "rotate +360", bearing: home.bearing + 360, duration: 4000 },
+      { name: "zoom out z14", zoom: 14, duration: 3000 },
+      { name: "zoom in z17.5", zoom: 17.5, duration: 4000 },
+      { name: "back home", zoom: home.zoom, duration: 3000 },
+    ];
+    async function tour(onLeg) {
+      map.jumpTo(home);
+      const legs = [];
+      for (const l of TOUR) {
+        let n = 0; const count = () => n++; map.on("render", count);
+        const t0 = performance.now();
+        await leg(l);
+        map.off("render", count);
+        const ms = performance.now() - t0;
+        const r = { leg: l.name, fps: +((n * 1000) / ms).toFixed(1), zoom: +map.getZoom().toFixed(2), bearing: +map.getBearing().toFixed(0) };
+        legs.push(r);
+        await onLeg?.(r);
+      }
+      map.jumpTo(home);
+      return legs;
+    }
+    hud.querySelector("#tour").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      const legs = await tour();
+      console.table(legs);
+      e.target.textContent = `tour (${Math.round(legs.reduce((a, l) => a + l.fps, 0) / legs.length)} fps avg)`;
+      e.target.disabled = false;
+    });
 
     window.__spike = {
-      map, doc, spike, counters, fx, tiles,
+      map, doc, spike, counters, fx, route, tiles, tour,
       get handle() { return handle; },
       attach,
       detach() { handle?.destroy(); handle = null; },

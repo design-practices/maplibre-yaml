@@ -2,10 +2,11 @@
   "name": "@maplibre-yaml/spike-deck-hatch",
   "version": "0.0.0",
   "private": true,
-  "description": "U12 SPIKE (throwaway): hatch-fill on @deck.gl/maplibre MapLibreOverlay interleaved. Evidence for the 0.7 effects gate (ml-rzm) — never published; graduates into U13 packages only on a green verdict, otherwise deleted.",
+  "description": "U12 SPIKE (throwaway): hatch-fill on @deck.gl/maplibre MapLibreOverlay interleaved. Evidence for the 0.7 effects gate (ml-rzm) \u2014 never published; graduates into U13 packages only on a green verdict, otherwise deleted.",
   "type": "module",
   "scripts": {
-    "bundle": "esbuild src/entry.ts --bundle --format=esm --target=es2022 --outfile=dist/spike.js --external:maplibre-gl --sourcemap"
+    "bundle": "esbuild src/entry.ts --bundle --format=esm --target=es2022 --outfile=dist/spike.js --external:maplibre-gl --sourcemap",
+    "demo": "node scripts/demo.mjs"
   },
   "devDependencies": {
     "@deck.gl/core": "9.4.0",

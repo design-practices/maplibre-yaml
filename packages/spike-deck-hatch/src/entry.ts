@@ -10,5 +10,6 @@ import { HatchLayer } from "./hatch-layer";
 import { sampleFps, installCounters, idle, gridFeatures } from "./harness";
 import { attachCrosshatch, heightExaggeration } from "./crosshatch-runtime";
 import { CrosshatchLayer } from "./crosshatch-layer";
+import { attachCrosshatchPost } from "./crosshatch-post";
 
-export { parse, attachEffects, toHatchParams, HatchLayer, sampleFps, installCounters, idle, gridFeatures, attachCrosshatch, heightExaggeration, CrosshatchLayer };
+export { parse, attachEffects, toHatchParams, HatchLayer, sampleFps, installCounters, idle, gridFeatures, attachCrosshatch, heightExaggeration, CrosshatchLayer, attachCrosshatchPost };
