@@ -1,0 +1,67 @@
+# Hermetic twin of docs/public/configs/gallery/crosshatch.yaml (local basemap).
+# URLs are ABSOLUTE localhost ones (served by e2e/server.mjs) rather than
+# root-relative like other twins: the crosshatch classic's claim includes
+# "its ejected style is the same map", and `mlym emit` can only fetch
+# absolute http(s) URLs — so e2e/classics-crosshatch.spec.ts emits THIS
+# document through the real CLI pipeline and renders the result vanilla.
+# The tiles are the docs site's own committed PNGs (one copy, no drift).
+type: map
+id: crosshatch
+config:
+  center: [11, 47]
+  zoom: 4
+  mapStyle: "http://localhost:4174/examples/verification/configs/local-style.json"
+images:
+  hatch-light:
+    url: "http://localhost:4174/docs/public/configs/gallery/assets/crosshatch-light.png"
+    pixelRatio: 2
+  hatch-dark:
+    url: "http://localhost:4174/docs/public/configs/gallery/assets/crosshatch-dark.png"
+    pixelRatio: 2
+sources:
+  regions:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          properties: { name: Uplands, tone: dark }
+          geometry:
+            type: Polygon
+            coordinates: [[[5, 45], [11, 44], [14, 47], [10, 50], [5, 49], [5, 45]]]
+        - type: Feature
+          properties: { name: Lowlands, tone: light }
+          geometry:
+            type: Polygon
+            coordinates: [[[11, 44], [18, 43], [20, 47], [14, 47], [11, 44]]]
+        - type: Feature
+          properties: { name: Coast, tone: none }
+          geometry:
+            type: Polygon
+            coordinates: [[[14, 47], [20, 47], [19, 51], [10, 50], [14, 47]]]
+layers:
+  # No `before:` — the local basemap has no label layer to slot under.
+  - id: crosshatch-wash
+    type: fill
+    source: regions
+    paint:
+      fill-color: "#f3e9d2"
+      fill-opacity: 0.9
+  - id: crosshatch-light
+    type: fill
+    source: regions
+    filter: ["==", ["get", "tone"], "light"]
+    paint:
+      fill-pattern: hatch-light
+  - id: crosshatch-dark
+    type: fill
+    source: regions
+    filter: ["==", ["get", "tone"], "dark"]
+    paint:
+      fill-pattern: hatch-dark
+  - id: crosshatch-outline
+    type: line
+    source: regions
+    paint:
+      line-color: "#1d3557"
+      line-width: 1.5

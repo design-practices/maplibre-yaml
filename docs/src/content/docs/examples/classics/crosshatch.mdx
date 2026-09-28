@@ -1,0 +1,33 @@
+---
+title: Crosshatch
+description: "Mapzen classic — engraved crosshatch shading as a pure style-spec document: generated hatch tiles, images:, fill-pattern"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/crosshatch.yaml?raw';
+
+The first of the **Mapzen classics** — the expressive looks Tangram made famous, rebuilt as plain maplibre-yaml documents. Crosshatch shades regions like an engraving: a single diagonal for the light tone, a true crosshatch for the dark one, inked over a paper wash.
+
+It is a **static preset**: pure style spec, no runtime, no effect code. That makes its ejected `style.json` the *same map* — and the fallback a future animated hatch effect degrades to.
+
+<LiveMap src="/configs/gallery/crosshatch.yaml" height="440px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="crosshatch.yaml" />
+
+## What to notice
+
+- **The tiles are generated, not drawn.** Both PNGs come from core's seamless `hatchTileSvg` generator (a 32px tile rendered at @2x, hence `pixelRatio: 2`), so strokes run unbroken across tile seams at any angle the generator snaps to.
+- **Tone is a filter, not a shader.** One `fill` layer per tone, each with a literal `fill-pattern`; the "Coast" region has neither and stays wash-only. Add tones by adding tiles and layers.
+- **The wash is optional.** Drop `crosshatch-wash` and the hatch inks straight over the basemap. All four layers sit `before: countries-label`, so labels stay on top — and that placement survives eject.
+- **It ejects without loss.** `mlym emit --strict` accepts the document: the two tiles are fetched into the document sprite, `fill-pattern: hatch-dark` rewrites to `mlym:hatch-dark`, and nothing runtime-only remains. The browser suite renders the ejected style in plain `maplibre-gl` beside the live one and compares the ink.
+
+```bash
+mlym emit crosshatch.yaml --strict --out dist/style.json --sprite-base https://maps.example.com/dist
+```
+
+## Make it yours
+
+Change the ink color, angle, or spacing by regenerating the tiles (`packages/cli/scripts/crosshatch-tiles.ts` in the repo), or point `images:` at any seamless tile you like — the document doesn't care where the pattern came from.

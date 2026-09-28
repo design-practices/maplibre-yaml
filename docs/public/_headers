@@ -1,0 +1,8 @@
+# Cloudflare Pages response headers.
+#
+# Gallery configs and their assets (e.g. the crosshatch classic's hatch
+# tiles) are meant to be reused: a document copied off this site keeps
+# pointing at these absolute URLs, and `images:` loads with
+# crossOrigin=anonymous — so the host must allow cross-origin reads.
+/configs/*
+  Access-Control-Allow-Origin: *

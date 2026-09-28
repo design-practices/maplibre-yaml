@@ -99,6 +99,10 @@ export default defineConfig({
           items: [
             { label: "Overview", link: "/examples/" },
             { label: "MapLibre Gallery", link: "/examples/gallery/" },
+            {
+              label: "Mapzen Classics",
+              items: [{ label: "Crosshatch", link: "/examples/classics/crosshatch/" }],
+            },
             { label: "Basic Map", link: "/examples/basic-map/" },
             {
               label: "Earthquake Tracker",
