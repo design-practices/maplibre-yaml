@@ -1,5 +1,101 @@
 # @maplibre-yaml/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- ac9c677: The sprite/asset pipeline (R7) — shared infrastructure for every construct
+  that ejects via generated raster assets (marker pins, pattern presets, effect
+  fallbacks). Core describes: deterministic SVG asset descriptors with
+  content-hashed names (`fx-hatch-45-8-a1b2c3d4`), a name-sorted sprite-index
+  layout (duplicate names dedupe when identical, throw when they'd alias
+  different images), seamless hatch tiles (requested angle/spacing snap to the
+  nearest periodic lattice so strokes never jog at tile boundaries), and
+  `attachSpriteAssets()`/`finalizeSpriteBaseUrl()` declaring the document
+  sprite under the fixed `mlym` id in the spec's array form. `EmitResult`
+  gains an optional `assets` field; `EjectLowering.assets` now shares the same
+  `EmitAsset` vocabulary (the placeholder `EjectAssetDescriptor` type is gone
+  before anything consumed it).
+
+  The CLI rasterizes: `mlym emit --out` writes the standard four-file sprite
+  set (`mlym.png`/`mlym.json` + `@2x`) beside the style (sharp, pinned exact,
+  loaded lazily). MapLibre rejects relative sprite URLs, so asset-bearing
+  documents require `--sprite-base <url-prefix>` (the deployed location) and
+  `--out` — emitting a style whose sprite could never resolve now fails loudly
+  instead of shipping broken. Rasterization runs before anything is written,
+  so a sharp failure never leaves a style referencing missing files. Basemap
+  sprite merging is fixed in the process: basemap icons survive under
+  `default` while document assets ride `mlym` (id collisions warn as lossy) —
+  previously a document sprite silently clobbered the basemap's entire icon
+  set. cli's `engines.node` floor rises to match sharp's
+  (`^18.17.0 || ^20.3.0 || >=21`).
+
+- e05add1: `markers:` — standalone map pins as first-class YAML (R8), and the format's
+  first _ejects-via-fallback_ construct (R5). Live, each entry is a real
+  `maplibregl.Marker` DOM pin: `at:` position, `color:`/`size:` on the default
+  pin, `icon:` swapping in any image URL (a failed load or unsafe URL scheme
+  falls back to the pin with one console note), and `popup:` carrying the same
+  trust-gated structured content as layer popups. Authored at the v1 document
+  root or v2 `runtime.markers` — the two normalize identically. `<ml-map>`
+  surfaces marker lifecycle as `ml-map:markers-added`, `ml-map:marker-click`,
+  and `ml-map:marker-icon-error` events (mirroring the layer events), and
+  `MarkerSchema`/`MarkersSchema`/`MarkerConfig` are exported from the schemas
+  barrel. `color:` validates as a real color, not any string.
+
+  On eject, `mlym emit --with-fallbacks` lowers markers to a symbol layer
+  ("mlym-markers") with generated pin sprites through the sprite pipeline,
+  reported as a `lossy` warning; `--strict` refuses marker documents, because a
+  DOM marker and a symbol layer are close but not identical. Icon URLs are not
+  embedded yet (that arrives with `images:`) — the emitted style substitutes
+  the default pin and says so. The eject-class registry carries the lowering as
+  its `eject()` hook, so the doctrine's fallback contract is mechanical, not
+  prose. Three gallery pages flip Gap → Pure YAML (default marker, custom
+  icons, marker popup).
+
+- 42189d3: `images:` — named images for symbol layers and patterns (R9), the format's
+  first style-half construct that ejects through the sprite pipeline. Each
+  entry (`name: url` or `{url, sdf?, pixelRatio?}`, at the v1 document root or
+  under the v2 style half) loads via `map.addImage` BEFORE layers are added,
+  so `icon-image`/`*-pattern` references resolve on first render; failures
+  warn once per name (with an `ml-map:image-error` event) and never kill the
+  document, and an unknown referenced name gets a warn-once
+  `styleimagemissing` note instead of MapLibre's per-render spam.
+
+  On eject the construct fully compiles — class **ejects**, so `--strict`
+  accepts it: `mlym emit` fetches every image at compile time (the pipeline's
+  second networked step, beside basemap resolution), merges it into the
+  document sprite next to generated assets (SDF flags carried into the sprite
+  index), and rewrites literal image references to `mlym:<name>`. Marker
+  `icon:` URLs ride the same pipeline, lifting U5's icon limitation: ejected
+  icon markers now render their images instead of substituting default pins.
+  `EmitResult` widens with `images?` (fetch-at-emit refs) for programmatic
+  consumers. Reference rewriting is expression-position-aware (match labels,
+  `["get"]` arguments, and operators survive name collisions); dynamic
+  references and relative URLs are reported instead of silently diverging
+  (relative URLs are lossy — `--strict` refuses them). Emit fetches are
+  bounded (30s timeout, 20MB/1024px ceilings, batched concurrency), live
+  image loads time out after 10s instead of stalling `mapReady()`, and
+  `--strict` now also refuses lossy warnings added by the basemap merge.
+  Three more gallery pages flip to Pure YAML (add an icon, fallback image,
+  polygon pattern).
+
+### Patch Changes
+
+- 4d1177a: `mlym emit --strict` now fails when the runtime gate degrades lossily —
+  previously a state-using document emitted with `--strict --target 4.0.0`
+  inlined its `state:` defaults (a lossy transformation) and still exited 0,
+  because strictness was only enforced over the projection stage. Strict now
+  means strict over the whole pipeline.
+- Updated dependencies [e28d149]
+- Updated dependencies [d3fc9b7]
+- Updated dependencies [32e4601]
+- Updated dependencies [ac9c677]
+- Updated dependencies [e05add1]
+- Updated dependencies [42189d3]
+- Updated dependencies [a1b280c]
+- Updated dependencies [81fc5a0]
+  - @maplibre-yaml/core@0.7.0
+
 ## 0.3.0
 
 ### Minor Changes
