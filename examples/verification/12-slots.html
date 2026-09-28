@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ml-map slots</title>
+  <!--
+    U9 — <ml-map> slots. Author markup placed as slot children rides the
+    element's corner system, the same one the legend and params panel use.
+    PASS = top-right corner shows, stacked without overlap: the legend, the
+    params panel (on maplibre-gl < 5.6 a one-line notice instead), then the
+    three zoom/reset buttons — and the buttons move the map. Bottom-left
+    shows the caption. Click "Reload" and everything comes back in place.
+    FAIL = buttons floating over the legend, dead buttons, or chrome
+    vanishing after reload (the pre-0.7 innerHTML wipe).
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/12-slots.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 520px; }
+    .controls { display: flex; flex-direction: column; gap: 6px; }
+    .controls button {
+      width: 36px; height: 36px; border: none; border-radius: 4px;
+      background: white; box-shadow: 0 1px 4px rgba(0,0,0,.25); cursor: pointer;
+      font-size: 18px;
+    }
+    .caption {
+      background: rgba(255,255,255,.9); padding: 6px 10px; border-radius: 4px;
+      font-size: 12px;
+    }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>
+    PASS = top-right stacks legend → params → buttons (buttons work); caption bottom-left; all survive
+    <button id="reload" type="button">Reload</button>
+  </header>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: slots
+config:
+  center: [-74.006, 40.7128]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+legend:
+  position: top-right
+  title: Places
+  items:
+    - { color: "#e63946", label: Point of interest, shape: circle }
+state:
+  showPoi: { default: true }
+parameters:
+  showPoi: { label: Show point, type: toggle }
+layers:
+  - id: poi
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: {}
+    paint:
+      circle-radius: 12
+      circle-color: "#e63946"
+    </script>
+    <div slot="top-right" class="controls" id="controls">
+      <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
+      <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
+      <button type="button" data-action="reset" aria-label="Reset view">⟲</button>
+    </div>
+    <div slot="bottom-left" class="caption" id="caption">Author markup in a slot</div>
+  </ml-map>
+  <script type="module">
+    import "../../packages/core/register.js";
+
+    // The FullPageMap wiring pattern: read the live map at click time via
+    // getMap(), and re-capture "home" on every document load.
+    const el = document.getElementById("map");
+    let home = null;
+    const captureHome = () => {
+      const map = el.getMap();
+      if (map) home = { center: map.getCenter(), zoom: map.getZoom() };
+    };
+    el.addEventListener("ml-map:load", captureHome);
+    customElements.whenDefined("ml-map").then(() => el.mapReady()).then(captureHome, () => {});
+
+    document.getElementById("controls").addEventListener("click", (event) => {
+      const action = event.target.closest("[data-action]")?.dataset.action;
+      const map = el.getMap();
+      if (!action || !map) return;
+      if (action === "zoom-in") map.zoomIn({ duration: 0 });
+      if (action === "zoom-out") map.zoomOut({ duration: 0 });
+      if (action === "reset" && home) map.jumpTo(home);
+    });
+    document.getElementById("reload").addEventListener("click", () => el.reload());
+  </script>
+</body>
+</html>
