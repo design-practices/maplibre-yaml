@@ -1,9 +1,12 @@
 /**
- * @maplibre-yaml/core
+ * Declarative web maps with YAML configuration: the schemas, parser,
+ * renderer, interactions, and data layer behind `<ml-map>`.
  *
- * Declarative web maps with YAML configuration.
+ * The `<ml-map>` element itself lives in `@maplibre-yaml/core/components`
+ * (or auto-registers via `@maplibre-yaml/core/register`); the Zod schemas are
+ * also available standalone from `@maplibre-yaml/core/schemas`.
  *
- * @packageDocumentation
+ * @module @maplibre-yaml/core
  */
 
 // Schemas

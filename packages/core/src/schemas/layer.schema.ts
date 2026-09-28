@@ -342,9 +342,21 @@ export const InteractiveConfigSchema: z.ZodType<
         action: z.string().optional().describe("Custom action name to trigger"),
         flyTo: z
           .object({
-            center: z.tuple([z.number(), z.number()]).optional(),
-            zoom: ZoomLevelSchema.optional(),
-            duration: z.number().optional(),
+            center: z
+              .tuple([z.number(), z.number()])
+              .optional()
+              .describe(
+                "Target center [longitude, latitude]; defaults to the clicked point"
+              ),
+            zoom: ZoomLevelSchema.optional().describe(
+              "Target zoom level; MapLibre keeps the current zoom when unset"
+            ),
+            duration: z
+              .number()
+              .optional()
+              .describe(
+                "Animation duration in milliseconds; MapLibre's default when unset"
+              ),
           })
           .optional()
           .describe("Fly to location on click"),
@@ -374,12 +386,20 @@ export const InteractiveConfigSchema: z.ZodType<
       .object({
         action: z.string().optional().describe("Custom action on mouse enter"),
       })
-      .optional(),
+      .optional()
+      .describe(
+        "Legacy mouse-enter trigger. Its only key, `action`, is deprecated " +
+          "and never dispatched; use `hover` or listen for `ml-map:layer-hover`"
+      ),
     mouseleave: z
       .object({
         action: z.string().optional().describe("Custom action on mouse leave"),
       })
-      .optional(),
+      .optional()
+      .describe(
+        "Legacy mouse-leave trigger. Its only key, `action`, is deprecated " +
+          "and never dispatched; use `hover` or listen for `ml-map:layer-hover`"
+      ),
   })
   .optional()
   .describe("Interactive event configuration");

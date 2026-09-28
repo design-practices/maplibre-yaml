@@ -12,6 +12,10 @@ docs/public/schema/
 docs/public/llms.txt
 docs/public/llms-full.txt
 
+# Generated reference docs (generate-on-build from core; see docs/astro.config.mjs)
+docs/src/content/docs/reference/yaml/
+docs/src/content/docs/reference/api/
+
 # IDE
 .vscode/
 .idea/
