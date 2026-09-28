@@ -334,6 +334,9 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 | `ml-map:parameter-change` | `{ key, value }` | A params-panel control wrote a state key |
 | `ml-map:layer-visibility` | `{ layerId, visible }` | A params-panel checkbox toggled a layer |
 
+The element's methods, properties, and this event list (from its `@fires`
+JSDoc) are also in the generated [`MLMap` API reference](/reference/api/maplibre-yaml/core/components/classes/mlmap/).
+
 ## Accessing the MapLibre Instance
 
 For advanced customization, access the underlying MapLibre GL map. Since 0.7,

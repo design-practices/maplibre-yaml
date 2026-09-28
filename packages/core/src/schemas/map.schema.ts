@@ -521,7 +521,15 @@ export const ParametersSchema = z
     z
       .object({
         label: z.string().optional().describe("Human-readable control label"),
-        type: z.string().optional().describe("Control type hint, e.g. enum or range"),
+        type: z
+          .string()
+          .optional()
+          .describe(
+            "Params-panel control kind: `enum`/`select` (dropdown over `values`), " +
+              "`range` (slider over `min`/`max`/`step`), or `toggle` (checkbox). " +
+              "When omitted it is inferred: `values` gives a dropdown, a boolean " +
+              "default gives a toggle; other values render no control"
+          ),
         values: z.array(z.any()).optional().describe("Allowed values, for enum parameters"),
         min: z.number().optional().describe("Lower bound, for range parameters"),
         max: z.number().optional().describe("Upper bound, for range parameters"),

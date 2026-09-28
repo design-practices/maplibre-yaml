@@ -405,12 +405,30 @@ export const GeoJSONSourceSchema = z
       .optional()
       .describe("Aggregate cluster properties"),
     // Additional MapLibre options (passthrough)
-    tolerance: z.number().optional(),
-    buffer: z.number().optional(),
-    lineMetrics: z.boolean().optional(),
-    generateId: z.boolean().optional(),
-    promoteId: z.union([z.string(), z.record(z.string())]).optional(),
-    attribution: z.string().optional(),
+    tolerance: z
+      .number()
+      .optional()
+      .describe("Douglas-Peucker simplification tolerance (higher = simpler geometry)"),
+    buffer: z
+      .number()
+      .optional()
+      .describe("Tile buffer size on each side, in pixels at tile scale"),
+    lineMetrics: z
+      .boolean()
+      .optional()
+      .describe("Calculate line distance metrics (required for `line-gradient`)"),
+    generateId: z
+      .boolean()
+      .optional()
+      .describe("Assign feature ids from each feature's index (enables feature-state)"),
+    promoteId: z
+      .union([z.string(), z.record(z.string())])
+      .optional()
+      .describe(
+        "Feature property to use as the feature id (for feature-state), or a " +
+          "map of source-layer name to property name"
+      ),
+    attribution: z.string().optional().describe("Attribution text"),
   })
   .passthrough()
   // DX guard, not a security check. Both validations live in a single
@@ -503,8 +521,17 @@ export const VectorSourceSchema = z
       .optional()
       .describe("Tile coordinate scheme"),
     attribution: z.string().optional().describe("Attribution text"),
-    promoteId: z.union([z.string(), z.record(z.string())]).optional(),
-    volatile: z.boolean().optional(),
+    promoteId: z
+      .union([z.string(), z.record(z.string())])
+      .optional()
+      .describe(
+        "Feature property to use as the feature id (for feature-state), or a " +
+          "map of source-layer name to property name"
+      ),
+    volatile: z
+      .boolean()
+      .optional()
+      .describe("Skip the tile cache (MapLibre `volatile`); for frequently changing tiles"),
   })
   .passthrough()
   .refine((data) => data.url || data.tiles, {
@@ -570,7 +597,10 @@ export const RasterSourceSchema = z
       .optional()
       .describe("Tile coordinate scheme"),
     attribution: z.string().optional().describe("Attribution text"),
-    volatile: z.boolean().optional(),
+    volatile: z
+      .boolean()
+      .optional()
+      .describe("Skip the tile cache (MapLibre `volatile`); for frequently changing tiles"),
   })
   .passthrough()
   .refine((data) => data.url || data.tiles, {
@@ -642,7 +672,10 @@ export const RasterDEMSourceSchema = z
       .optional()
       .describe("Bounding box [west, south, east, north]"),
     attribution: z.string().optional().describe("Attribution text"),
-    volatile: z.boolean().optional(),
+    volatile: z
+      .boolean()
+      .optional()
+      .describe("Skip the tile cache (MapLibre `volatile`); for frequently changing tiles"),
   })
   .passthrough()
   .refine((data) => data.url || data.tiles, {
