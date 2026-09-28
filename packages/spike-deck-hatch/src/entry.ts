@@ -8,9 +8,9 @@ import { parse } from "yaml";
 import { attachEffects, toHatchParams } from "./runtime";
 import { HatchLayer } from "./hatch-layer";
 import { sampleFps, installCounters, idle, gridFeatures } from "./harness";
-import { attachCrosshatch, heightExaggeration } from "./crosshatch-runtime";
+import { attachCrosshatch, heightExaggeration, DECK_BEFORE, DECK_AFTER } from "./crosshatch-runtime";
 import { CrosshatchLayer } from "./crosshatch-layer";
 import { attachCrosshatchPost } from "./crosshatch-post";
 import { attachCrosshatchCustom, buildTileMesh } from "./crosshatch-custom";
 
-export { parse, attachEffects, toHatchParams, HatchLayer, sampleFps, installCounters, idle, gridFeatures, attachCrosshatch, heightExaggeration, CrosshatchLayer, attachCrosshatchPost, attachCrosshatchCustom, buildTileMesh };
+export { parse, attachEffects, toHatchParams, HatchLayer, sampleFps, installCounters, idle, gridFeatures, attachCrosshatch, heightExaggeration, DECK_BEFORE, DECK_AFTER, CrosshatchLayer, attachCrosshatchPost, attachCrosshatchCustom, buildTileMesh };

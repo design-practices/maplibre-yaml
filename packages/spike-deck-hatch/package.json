@@ -5,7 +5,7 @@
   "description": "U12 SPIKE (throwaway): hatch-fill on @deck.gl/maplibre MapLibreOverlay interleaved. Evidence for the 0.7 effects gate (ml-rzm) — never published; graduates into U13 packages only on a green verdict, otherwise deleted.",
   "type": "module",
   "scripts": {
-    "bundle": "esbuild src/entry.ts --bundle --format=esm --target=es2022 --outfile=dist/spike.js --external:maplibre-gl --sourcemap",
+    "bundle": "esbuild spike=src/entry.ts crosshatch-mesh-worker=src/crosshatch-mesh-worker.ts --bundle --format=esm --target=es2022 --outdir=dist --external:maplibre-gl --sourcemap && node -e \"require('fs').copyFileSync('node_modules/@loaders.gl/mvt/dist/mvt-worker.js', 'dist/mvt-worker.js')\"",
     "demo": "node scripts/demo.mjs"
   },
   "devDependencies": {

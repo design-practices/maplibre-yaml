@@ -17,6 +17,14 @@
                                      shader over MapLibre's own tile bytes;
                                      post = route 3, screen-space
                                      post-process over MapLibre's extrusions)
+      r1    = after | before | knobs (route 1 = deck tuning, session 3:
+                                     after = optimized (default); before =
+                                     the session-2 route; or a comma list
+                                     of DeckTuning knobs over `before`, e.g.
+                                     r1=geom=mesh,cull,loop=map — see
+                                     src/crosshatch-runtime.ts)
+      clip  = 0                     (route 1 geom=mvt diagnostic: strip
+                                     MVTLayer's ClipExtension)
       cull  = 0 | prepass = 0       (route 2 diagnostics: disable back-face
                                      culling / the depth prepass)
       shade = flat                  (route 2 diagnostic: trivial fragment shader)
@@ -81,6 +89,16 @@
     let contextLosses = 0;
     map.on("webglcontextlost", () => contextLosses++);
 
+    // Route-1 tuning (session 3): r1=after (default, the optimized route) |
+    // before (the session-2 route, for before/after runs) | a comma list of
+    // knobs applied on top of `before`, e.g. r1=cull,prepass,frontFace=cw
+    const r1 = q.get("r1") ?? "after";
+    const r1Tuning = r1 === "after" ? spike.DECK_AFTER : r1 === "before" ? spike.DECK_BEFORE
+      : Object.fromEntries(r1.split(",").map((kv) => {
+          const [k, v] = kv.split("=");
+          return [k, v === undefined ? true : v === "0" ? false : v === "1" ? true : v];
+        }));
+
     let handle = null;
     const attach = async () => {
       if (route === "custom") {
@@ -105,6 +123,7 @@
         atlasUrl: "./crosshatch/hatch-atlas.png",
         plain: q.get("shade") === "plain",
         noClip: q.get("clip") === "0",
+        tuning: r1Tuning,
       });
       return { placementOk: handle.placementOk, slots: handle.slots };
     };

@@ -41,6 +41,7 @@ mkdirSync(outDir, { recursive: true });
           out.elevationScale = +lyr.props.elevationScale.toFixed(3);
           out.expected = +s.spike.heightExaggeration(m.getZoom()).toFixed(3);
           out.tilesSelected = lyr.state.tileset?.selectedTiles?.length;
+          out.deckStats = s.handle.stats ? { ...s.handle.stats, buildMs: Math.round(s.handle.stats.buildMs) } : undefined;
         } else if (s.route === "custom") {
           out.placement = order[order.indexOf("buildings__custom") + 1] === "place-labels";
           out.staticHidden = m.getLayoutProperty("buildings", "visibility") === "none";
@@ -56,7 +57,9 @@ mkdirSync(outDir, { recursive: true });
       }));
       checks[checks.length - 1].leg = leg.leg;
     });
-    await page.goto(`${origin}/packages/spike-deck-hatch/page/crosshatch.html?route=${route}`);
+    // "deck-before" = route 1 as session 2 left it (r1=before); "deck" = optimized
+    const q = route === "deck-before" ? "route=deck&r1=before" : `route=${route}`;
+    await page.goto(`${origin}/packages/spike-deck-hatch/page/crosshatch.html?${q}`);
     await page.waitForFunction(() => window.__spike?.ready, null, { timeout: 90000 });
     await page.evaluate(async () => {
       const s = window.__spike;

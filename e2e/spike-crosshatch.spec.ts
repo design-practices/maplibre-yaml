@@ -15,8 +15,9 @@
  *     ejected style renders the hatched fill-extrusion in plain maplibre-gl);
  *  3. KTD7 static clause (no triggerRepaint while idle) + clean teardown;
  *  4. KTD7 perf on this real workload: effect vs the static preset, same run,
- *     5 s rotating-camera samples — route 1 (deck, + deck's stock extrusion
- *     as `deckPlain`), route 2 (`custom`: MapLibre custom layer) and route 3
+ *     5 s rotating-camera samples — route 1 (deck: optimized as `effect`,
+ *     the session-2 version as `deckBefore`, deck's stock extrusion as
+ *     `deckPlain`), route 2 (`custom`: MapLibre custom layer) and route 3
  *     (`post`: screen-space post-process). SPIKE_VIEWPORT / SPIKE_DSF /
  *     SPIKE_UNCAPPED / SPIKE_TAG select the high-resolution GPU leg.
  *
@@ -170,6 +171,9 @@ test("3. static clause + teardown", async ({ page }) => {
   });
   console.log(`[spike] idle 2s with effect: ${JSON.stringify(idle)}`);
   expect(idle.triggerRepaint).toBe(0);
+  // session 3: deck's animation loop is ticked by MapLibre's render events
+  // (loop=map), so an idle map no longer polls rAF (~60/s before)
+  expect(idle.raf).toBeLessThanOrEqual(2);
 
   const after = await page.evaluate(async () => {
     const s = (window as any).__spike;
@@ -191,7 +195,7 @@ test("3. static clause + teardown", async ({ page }) => {
 });
 
 test("4. KTD7 perf: crosshatch vs the static preset, same run", async ({ page, browser }) => {
-  test.setTimeout(480_000);
+  test.setTimeout(900_000);
   await guard(page);
   const lossLog: Array<{ variant: string; fps: number; lost: number; lostDuring: number }> = [];
   // A fresh context per sample: ten navigations of one page accumulate GL
@@ -224,11 +228,14 @@ test("4. KTD7 perf: crosshatch vs the static preset, same run", async ({ page, b
   // `plain` = deck's stock extrusion over the same tiles (no hatch shader):
   // separates the deck/MVT route's cost from the shader's.
   // `custom` = route 2 (MapLibre custom layer, same shader); `post` = route 3.
-  const runs: Record<string, number[]> = { none: [], crosshatch: [], plain: [], custom: [], post: [] };
+  // `before` = route 1 as session 2 left it (r1=before); `crosshatch` =
+  // route 1 optimized (session 3, the page default r1=after).
+  const runs: Record<string, number[]> = { none: [], crosshatch: [], before: [], plain: [], custom: [], post: [] };
   for (let i = 0; i < 2; i++) {
     runs.none!.push((await sample("none")).fps);
+    runs.before!.push((await sample("crosshatch", "&r1=before")).fps);
     runs.crosshatch!.push((await sample("crosshatch")).fps);
-    runs.plain!.push((await sample("crosshatch", "&shade=plain")).fps);
+    runs.plain!.push((await sample("crosshatch", "&shade=plain&r1=before")).fps);
     runs.custom!.push((await sample("custom")).fps);
     runs.post!.push((await sample("post")).fps);
   }
@@ -247,8 +254,9 @@ test("4. KTD7 perf: crosshatch vs the static preset, same run", async ({ page, b
     renderer,
     buildingFeaturesInSource: features,
     viewport: { width: VW, height: VH, deviceScaleFactor: Number(process.env.SPIKE_DSF ?? 1), uncapped: !!process.env.SPIKE_UNCAPPED },
-    fps: { static: runs.none, effect: runs.crosshatch, deckPlain: runs.plain, custom: runs.custom, post: runs.post },
+    fps: { static: runs.none, deckBefore: runs.before, effect: runs.crosshatch, deckPlain: runs.plain, custom: runs.custom, post: runs.post },
     ratio: mean(runs.crosshatch!) / mean(runs.none!),
+    deckBeforeRatio: mean(runs.before!) / mean(runs.none!),
     deckPlainRatio: mean(runs.plain!) / mean(runs.none!),
     customRatio: mean(runs.custom!) / mean(runs.none!),
     postRatio: mean(runs.post!) / mean(runs.none!),
