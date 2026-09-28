@@ -1,0 +1,6 @@
+---
+"@maplibre-yaml/core": minor
+"@maplibre-yaml/astro": minor
+---
+
+`<ml-map>` gains named slots: a child with `slot="top-left" | "top-right" | "bottom-left" | "bottom-right"` is mounted into that corner of the map on load, stacking with the built-in legend and params panel instead of overlapping them, and `slot="legend"` replaces the built-in legend. The element also stops wiping its children when it renders or shows an error card; it now removes only its own map container and error card. Slot children, the inline `<script type="text/yaml">` and any other author markup survive `reload()`, a config change, and an error-then-fix cycle. As a result, `reload()` now works for inline-YAML documents, where the script used to be destroyed on first render. If you placed non-slot content inside `<ml-map>` expecting it to be cleared, it now stays. `FullPageMap`'s zoom/reset buttons and legend now work. They previously read a `.map` property the element never had. The buttons ride the `top-right` slot, and `showLegend` now adds core's legend (a default `legend:` at `legendPosition` when a `config` document has none). With `src`, the document is loaded by `<ml-map>` itself, and `showLegend` has no effect, so declare `legend:` in the YAML.

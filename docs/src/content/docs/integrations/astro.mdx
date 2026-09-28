@@ -581,8 +581,8 @@ The `FullPageMap` component creates a full-viewport map with built-in controls a
 ### Features
 
 - **Full Viewport**: Fixed positioning that fills the entire viewport (100vw × 100vh)
-- **Built-in Controls**: Zoom in/out and reset view buttons
-- **Optional Legend**: Auto-generated legend with configurable positioning
+- **Built-in Controls**: Zoom in/out and reset view buttons, placed in the map's top-right corner through `<ml-map>`'s [slots](/integrations/web-components/#slots-your-own-chrome-over-the-map)
+- **Optional Legend**: the core legend, with configurable positioning
 - **Same Loading Options**: Supports both `src` (runtime) and `config` (build-time) loading
 - **Responsive Design**: Optimized layouts for mobile and desktop
 
@@ -618,7 +618,7 @@ interface FullPageMapProps {
 
   // Control options
   showControls?: boolean;          // Show zoom/reset controls (default: true)
-  showLegend?: boolean;            // Show auto-generated legend (default: false)
+  showLegend?: boolean;            // Add a default legend: when the document has none (default: false)
   legendPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
                                    // Legend position (default: 'top-right')
 
@@ -691,17 +691,17 @@ const mapConfig = await loadMapConfig('./src/configs/geospatial-data.yaml');
 
 ### Legend
 
-When `showLegend` is enabled, the component automatically generates a legend based on your map's layers:
+`showLegend` uses the core legend — the same one a document's own `legend:`
+block produces. When the document has no `legend:`, the component adds a
+default one at `legendPosition` (v1: root `legend:`, v2: `runtime.legend`);
+when the document declares its own `legend:`, that one wins untouched. Legend
+entries come from the layers' `legend:` fields (see
+[the layers reference](/schema/layers/)).
 
-- **Fill layers**: Colored squares with fill color and opacity
-- **Line layers**: Horizontal lines with stroke color
-- **Circle layers**: Circular symbols with fill color
-
-The legend automatically:
-- Groups layers by source and type
-- Extracts paint properties for visualization
-- Filters out MapLibre internal layers
-- Displays human-readable layer names
+`showLegend` needs the document at build time, so it applies to `config`.
+With `src`, the document is fetched in the browser — declare `legend:` in the
+YAML instead (the component warns at build time if you pass both `src` and
+`showLegend`).
 
 ### Controls
 
@@ -709,9 +709,19 @@ The built-in controls provide:
 
 - **Zoom In** (+): Increases zoom level by 1
 - **Zoom Out** (−): Decreases zoom level by 1
-- **Reset View** (↻): Returns to initial center, zoom, bearing, and pitch
+- **Reset View** (↻): Returns to the document's initial center, zoom, bearing, and pitch (re-captured on every load)
 
-Controls are accessible with ARIA labels and keyboard navigation.
+Controls are accessible with ARIA labels and keyboard navigation. They share
+the top-right corner with anything else placed there (a top-right legend, the
+params panel, a navigation control) and stack below it instead of
+overlapping.
+
+<Aside type="note" title="Before 0.7">
+Earlier versions drew their own buttons and legend over the map, wired to a
+`.map` property `<ml-map>` never had — so neither ever worked. If you styled
+around those elements, note the legend now carries core's `.ml-map-legend`
+markup and the buttons live inside `<ml-map>`.
+</Aside>
 
 ## Chapter Component
 
