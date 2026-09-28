@@ -9,11 +9,19 @@
     from the repo root (pnpm verify:serve), then open:
       /packages/spike-deck-hatch/page/crosshatch.html
     Query params:
-      route = static | deck | post  (static = the document alone, i.e. the
+      route = static | deck | custom | post
+                                    (static = the document alone, i.e. the
                                      fallback; deck = route 1, deck.gl
-                                     geometry + Tangram shader; post = route
-                                     3, screen-space post-process over
-                                     MapLibre's own extrusions)
+                                     geometry + Tangram shader; custom =
+                                     route 2, MapLibre custom layer + the same
+                                     shader over MapLibre's own tile bytes;
+                                     post = route 3, screen-space
+                                     post-process over MapLibre's extrusions)
+      cull  = 0 | prepass = 0       (route 2 diagnostics: disable back-face
+                                     culling / the depth prepass)
+      shade = flat                  (route 2 diagnostic: trivial fragment shader)
+      filter = minor | off | N      (route 2 atlas anti-smear: minor-axis LOD
+                                     (default) | isotropic | Nx anisotropic)
       fx    = crosshatch | none     (legacy aliases: deck | static)
       tiles = live | fixture        (fixture = the vendored lower-Manhattan
                                      z13–14 tiles; hermetic, no glyphs)
@@ -68,9 +76,23 @@
     document.body.appendChild(el);
     const map = await el.mapReady();
     const counters = spike.installCounters(map);
+    // WebGL context losses (seen on this box under memory pressure): a sample
+    // taken across one is not comparable, since deck/post don't restore.
+    let contextLosses = 0;
+    map.on("webglcontextlost", () => contextLosses++);
 
     let handle = null;
     const attach = async () => {
+      if (route === "custom") {
+        handle = await spike.attachCrosshatchCustom(map, doc, {
+          atlasUrl: "./crosshatch/hatch-atlas.png",
+          cull: q.get("cull") !== "0",
+          prepass: q.get("prepass") !== "0",
+          flat: q.get("shade") === "flat",
+          filter: !q.has("filter") ? undefined : /^\d+$/.test(q.get("filter")) ? Number(q.get("filter")) : q.get("filter"),
+        });
+        return { placementOk: handle.placementOk, slots: handle.slots };
+      }
       if (route === "post") {
         handle = await spike.attachCrosshatchPost(map, doc, {
           atlasUrl: "./crosshatch/hatch-atlas.png",
@@ -97,7 +119,7 @@
       return `<a href="?${u}" class="${r === route ? "on" : ""}">${r}</a>`;
     };
     hud.innerHTML =
-      `route: ${["static", "deck", "post"].map(link).join("")}` +
+      `route: ${["static", "deck", "custom", "post"].map(link).join("")}` +
       ` · <a href="/e2e/generated/spike-crosshatch/index.html" title="the document ejected to plain maplibre-gl (run the demo script once)">ejected</a>` +
       `<br><span class="fps">– fps</span> · <label><input type="checkbox" id="orbit"> orbit</label>` +
       ` · <button id="tour" type="button">tour</button>` +
@@ -116,7 +138,12 @@
     // Scripted view-change tour (rotation, then zoom out/in): the same path
     // for every route, so they can be compared by eye and by fps.
     const home = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
-    const leg = (opts) => new Promise((r) => { map.once("moveend", r); map.easeTo({ easing: (t) => t, ...opts }); });
+    // moveend never fires if a WebGL context loss interrupts the ease: fall back to a timeout
+    const leg = (opts) => new Promise((r) => {
+      const t = setTimeout(r, opts.duration + 5000);
+      map.once("moveend", () => { clearTimeout(t); r(); });
+      map.easeTo({ easing: (t) => t, ...opts });
+    });
     const TOUR = [
       { name: "rotate +120", bearing: home.bearing + 120, duration: 4000 },
       { name: "rotate +240", bearing: home.bearing + 240, duration: 4000 },
@@ -151,6 +178,7 @@
 
     window.__spike = {
       map, doc, spike, counters, fx, route, tiles, tour,
+      get contextLosses() { return contextLosses; },
       get handle() { return handle; },
       attach,
       detach() { handle?.destroy(); handle = null; },

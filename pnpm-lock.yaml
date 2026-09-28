@@ -257,12 +257,21 @@ importers:
       '@luma.gl/webgl':
         specifier: ~9.4.0
         version: 9.4.2(@luma.gl/core@9.4.2)
+      '@mapbox/vector-tile':
+        specifier: 2.0.4
+        version: 2.0.4
       '@maplibre-yaml/core':
         specifier: workspace:*
         version: link:../core
+      earcut:
+        specifier: 3.0.2
+        version: 3.0.2
       esbuild:
         specifier: 0.25.12
         version: 0.25.12
+      pbf:
+        specifier: 4.0.1
+        version: 4.0.1
       sharp:
         specifier: 0.34.5
         version: 0.34.5

@@ -15,7 +15,10 @@
  *     ejected style renders the hatched fill-extrusion in plain maplibre-gl);
  *  3. KTD7 static clause (no triggerRepaint while idle) + clean teardown;
  *  4. KTD7 perf on this real workload: effect vs the static preset, same run,
- *     5 s rotating-camera samples.
+ *     5 s rotating-camera samples — route 1 (deck, + deck's stock extrusion
+ *     as `deckPlain`), route 2 (`custom`: MapLibre custom layer) and route 3
+ *     (`post`: screen-space post-process). SPIKE_VIEWPORT / SPIKE_DSF /
+ *     SPIKE_UNCAPPED / SPIKE_TAG select the high-resolution GPU leg.
  *
  * SPIKE_GPU=1 runs on the host GPU (ANGLE); default is SwiftShader. Numbers
  * land in e2e/generated/spike-crosshatch-perf.json.
@@ -32,14 +35,18 @@ const OUT = join(ROOT, "e2e/generated/spike-crosshatch");
 const PORT = Number(process.env.VERIFY_PORT ?? 4174);
 const ORIGIN = `http://localhost:${PORT}`;
 
+// SPIKE_UNCAPPED=1 lifts vsync / the frame-rate limit (GPU headroom above 60).
+const UNCAP = process.env.SPIKE_UNCAPPED ? ["--disable-gpu-vsync", "--disable-frame-rate-limit"] : [];
 if (process.env.SPIKE_GPU) {
   test.use({
     launchOptions: {
-      args: ["--use-angle=vulkan", "--enable-features=Vulkan", "--ignore-gpu-blocklist", "--enable-gpu"],
+      args: ["--use-angle=vulkan", "--enable-features=Vulkan", "--ignore-gpu-blocklist", "--enable-gpu", ...UNCAP],
     },
   });
 }
-test.use({ viewport: { width: 1200, height: 800 } });
+// SPIKE_VIEWPORT=1920x1200 SPIKE_DSF=2 for the high-resolution GPU leg.
+const [VW, VH] = (process.env.SPIKE_VIEWPORT ?? "1200x800").split("x").map(Number);
+test.use({ viewport: { width: VW!, height: VH! }, deviceScaleFactor: Number(process.env.SPIKE_DSF ?? 1) });
 test.describe.configure({ mode: "serial" });
 
 async function guard(page: Page): Promise<string[]> {
@@ -60,8 +67,10 @@ async function guard(page: Page): Promise<string[]> {
 }
 
 /** Open the page and wait until maplibre is idle and deck's tiles are in. */
-async function open(page: Page, fx: "crosshatch" | "none", extra = ""): Promise<void> {
-  await page.goto(`${PAGE}?tiles=fixture&fx=${fx}${extra}`, { waitUntil: "domcontentloaded" });
+async function open(page: Page, fx: "crosshatch" | "none" | "custom" | "post", extra = ""): Promise<void> {
+  // "custom" / "post" select routes 2 / 3 by the page's `route` param
+  const sel = fx === "custom" || fx === "post" ? `route=${fx}` : `fx=${fx}`;
+  await page.goto(`${PAGE}?tiles=fixture&${sel}${extra}`, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => (window as any).__spike?.ready, undefined, { timeout: 60_000 });
   await page.evaluate(async () => {
     const s = (window as any).__spike;
@@ -181,24 +190,47 @@ test("3. static clause + teardown", async ({ page }) => {
   expect(errors, errors.join("\n")).toEqual([]);
 });
 
-test("4. KTD7 perf: crosshatch vs the static preset, same run", async ({ page }) => {
-  test.setTimeout(240_000);
+test("4. KTD7 perf: crosshatch vs the static preset, same run", async ({ page, browser }) => {
+  test.setTimeout(480_000);
   await guard(page);
-  const sample = async (fx: "crosshatch" | "none", extra = "") => {
-    await open(page, fx, extra);
-    return page.evaluate(() => {
-      const s = (window as any).__spike;
-      return s.spike.sampleFps(s.map, 5000);
+  const lossLog: Array<{ variant: string; fps: number; lost: number; lostDuring: number }> = [];
+  // A fresh context per sample: ten navigations of one page accumulate GL
+  // and tile memory (ERR_INSUFFICIENT_RESOURCES on a memory-tight box).
+  const sample = async (fx: "crosshatch" | "none" | "custom" | "post", extra = "") => {
+    const ctx = await browser.newContext({
+      baseURL: ORIGIN,
+      viewport: { width: VW!, height: VH! },
+      deviceScaleFactor: Number(process.env.SPIKE_DSF ?? 1),
     });
+    const p = await ctx.newPage();
+    await guard(p);
+    try {
+      await open(p, fx, extra);
+      const r = await p.evaluate(async () => {
+        const s = (window as any).__spike;
+        const before = s.contextLosses;
+        const f = await s.spike.sampleFps(s.map, 5000);
+        return { fps: f.fps as number, lost: s.contextLosses as number, lostDuring: (s.contextLosses - before) as number };
+      });
+      // WebGL context loss (seen on a memory-starved box): deck/post don't
+      // restore, so a sample across a loss is not a measurement — record it.
+      lossLog.push({ variant: `${fx}${extra}`, ...r });
+      return r;
+    } finally {
+      await ctx.close();
+    }
   };
   // Interleave baseline/effect so drift on a loaded box hits both.
   // `plain` = deck's stock extrusion over the same tiles (no hatch shader):
   // separates the deck/MVT route's cost from the shader's.
-  const runs: Record<string, number[]> = { none: [], crosshatch: [], plain: [] };
+  // `custom` = route 2 (MapLibre custom layer, same shader); `post` = route 3.
+  const runs: Record<string, number[]> = { none: [], crosshatch: [], plain: [], custom: [], post: [] };
   for (let i = 0; i < 2; i++) {
     runs.none!.push((await sample("none")).fps);
     runs.crosshatch!.push((await sample("crosshatch")).fps);
     runs.plain!.push((await sample("crosshatch", "&shade=plain")).fps);
+    runs.custom!.push((await sample("custom")).fps);
+    runs.post!.push((await sample("post")).fps);
   }
   const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
   const renderer = await page.evaluate(() => {
@@ -206,6 +238,7 @@ test("4. KTD7 perf: crosshatch vs the static preset, same run", async ({ page })
     const ext = gl.getExtension("WEBGL_debug_renderer_info");
     return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "unknown";
   });
+  await open(page, "none");
   const features = await page.evaluate(() => {
     const s = (window as any).__spike;
     return s.map.querySourceFeatures("omt", { sourceLayer: "building" }).length;
@@ -213,15 +246,20 @@ test("4. KTD7 perf: crosshatch vs the static preset, same run", async ({ page })
   const report = {
     renderer,
     buildingFeaturesInSource: features,
-    fps: { static: runs.none, effect: runs.crosshatch, deckPlain: runs.plain },
+    viewport: { width: VW, height: VH, deviceScaleFactor: Number(process.env.SPIKE_DSF ?? 1), uncapped: !!process.env.SPIKE_UNCAPPED },
+    fps: { static: runs.none, effect: runs.crosshatch, deckPlain: runs.plain, custom: runs.custom, post: runs.post },
     ratio: mean(runs.crosshatch!) / mean(runs.none!),
     deckPlainRatio: mean(runs.plain!) / mean(runs.none!),
+    customRatio: mean(runs.custom!) / mean(runs.none!),
+    postRatio: mean(runs.post!) / mean(runs.none!),
+    contextLosses: lossLog.filter((l) => l.lost > 0),
   };
   console.log("[spike] perf", JSON.stringify(report));
   mkdirSync(join(ROOT, "e2e/generated"), { recursive: true });
   writeFileSync(
-    join(ROOT, `e2e/generated/spike-crosshatch-perf${process.env.SPIKE_GPU ? "-gpu" : ""}.json`),
+    join(ROOT, `e2e/generated/spike-crosshatch-perf${process.env.SPIKE_GPU ? "-gpu" : ""}${process.env.SPIKE_TAG ?? ""}.json`),
     JSON.stringify(report, null, 2)
   );
   expect.soft(report.ratio, "KTD7 budget: effect >= 80% of the static preset").toBeGreaterThanOrEqual(0.8);
+  expect.soft(report.customRatio, "KTD7 budget: route 2 (custom) >= 80% of the static preset").toBeGreaterThanOrEqual(0.8);
 });

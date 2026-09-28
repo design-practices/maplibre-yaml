@@ -9,7 +9,7 @@ const { mkdirSync, writeFileSync, renameSync } = require("node:fs");
 const { join } = require("node:path");
 
 const [origin, outDir, gpu] = process.argv.slice(2);
-const ROUTES = ["static", "deck", "post"];
+const ROUTES = (process.env.ROUTES ?? "static,deck,custom,post").split(",");
 const SIZE = { width: 1000, height: 700 };
 mkdirSync(outDir, { recursive: true });
 
@@ -30,18 +30,28 @@ mkdirSync(outDir, { recursive: true });
     await page.exposeFunction("__onLeg", async (leg) => {
       await page.screenshot({ path: join(outDir, `${route}-${++shot}.png`) });
       checks.push(await page.evaluate(() => {
-        const s = window.__spike, m = s.map, order = m.getLayersOrder();
-        const out = { leg: null };
+        const s = window.__spike, m = s.map;
+        const out = { leg: null, contextLosses: s.contextLosses };
+        // a WebGL context loss nulls the style until it is restored: record, don't throw
+        if (!m.style) { out.styleMissing = true; return out; }
+        const order = m.getLayersOrder();
         if (s.route === "deck") {
           const lyr = s.handle.overlay._deck.layerManager.getLayers().find((l) => l.id.startsWith("buildings__fx"));
           out.placement = order.includes("deck-maplibre-layer-group-before:place-labels");
           out.elevationScale = +lyr.props.elevationScale.toFixed(3);
           out.expected = +s.spike.heightExaggeration(m.getZoom()).toFixed(3);
           out.tilesSelected = lyr.state.tileset?.selectedTiles?.length;
+        } else if (s.route === "custom") {
+          out.placement = order[order.indexOf("buildings__custom") + 1] === "place-labels";
+          out.staticHidden = m.getLayoutProperty("buildings", "visibility") === "none";
+          out.tilesDrawn = s.handle.stats.tilesDrawn;
+          out.meshes = s.handle.stats.meshes;
+          out.builds = s.handle.stats.builds;
+          out.buildMs = Math.round(s.handle.stats.buildMs);
         } else if (s.route === "post") {
           out.placement = order[order.indexOf("buildings__post") + 1] === "place-labels";
         }
-        out.staticBuildingsRendered = s.route === "deck" ? "hidden" : m.queryRenderedFeatures(undefined, { layers: ["buildings"] }).length;
+        out.staticBuildingsRendered = s.route === "deck" || s.route === "custom" ? "hidden" : m.queryRenderedFeatures(undefined, { layers: ["buildings"] }).length;
         return out;
       }));
       checks[checks.length - 1].leg = leg.leg;

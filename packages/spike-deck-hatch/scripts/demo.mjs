@@ -48,6 +48,7 @@ Crosshatch demo — open in a browser on this machine (Chrome/Edge/Firefox):
 
   static   ${page}?route=static     the document alone = the fallback
   deck     ${page}?route=deck       route 1: deck.gl geometry + Tangram shader
+  custom   ${page}?route=custom     route 2: MapLibre custom layer + the same shader
   post     ${page}?route=post       route 3: screen-space post-process
   ejected  ${ORIGIN}/e2e/generated/spike-crosshatch/index.html
                                      the document ejected to plain maplibre-gl
