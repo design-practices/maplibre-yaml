@@ -145,6 +145,12 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
   { slug: "add-an-icon-to-the-map", layers: ["logo"], rendered: "logo" },
   { slug: "use-a-fallback-image", layers: ["fallback"], rendered: "fallback" },
   { slug: "add-a-pattern-to-a-polygon", layers: ["patterned"], rendered: "patterned" },
+  // U10 classics — pixel + eject proof lives in e2e/classics-crosshatch.spec.ts
+  {
+    slug: "crosshatch",
+    layers: ["crosshatch-wash", "crosshatch-light", "crosshatch-dark", "crosshatch-outline"],
+    rendered: "crosshatch-dark",
+  },
 ];
 
 async function openExample(page: Page, slug: string, layers: string[]): Promise<void> {

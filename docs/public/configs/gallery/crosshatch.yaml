@@ -1,0 +1,78 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Mapzen classic: crosshatch (static preset, U10). Pure style spec — no
+# runtime, no effect code. Two generated hatch tiles (a single diagonal and
+# a true crosshatch, from core's seamless hatch generator) are declared as
+# `images:` and chosen per feature by `fill-pattern`, over a paper wash.
+# Because nothing here needs a runtime, the ejected style.json is the SAME
+# map: `mlym emit --strict` accepts it with zero lossy warnings — the
+# static preset is its own fallback, and the eject target a future animated
+# hatch effect degrades to.
+type: map
+id: crosshatch
+config:
+  center: [11, 47]
+  zoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+images:
+  # Absolute URLs so `mlym emit` can fetch them into the document sprite.
+  # Tiles are 64px @2x of a 32px seamless tile — declare the density.
+  hatch-light:
+    url: "https://docs.maplibre-yaml.org/configs/gallery/assets/crosshatch-light.png"
+    pixelRatio: 2
+  hatch-dark:
+    url: "https://docs.maplibre-yaml.org/configs/gallery/assets/crosshatch-dark.png"
+    pixelRatio: 2
+sources:
+  regions:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          properties: { name: Uplands, tone: dark }
+          geometry:
+            type: Polygon
+            coordinates: [[[5, 45], [11, 44], [14, 47], [10, 50], [5, 49], [5, 45]]]
+        - type: Feature
+          properties: { name: Lowlands, tone: light }
+          geometry:
+            type: Polygon
+            coordinates: [[[11, 44], [18, 43], [20, 47], [14, 47], [11, 44]]]
+        - type: Feature
+          properties: { name: Coast, tone: none }
+          geometry:
+            type: Polygon
+            coordinates: [[[14, 47], [20, 47], [19, 51], [10, 50], [14, 47]]]
+layers:
+  # The optional wash: a flat paper tone under every region, so the hatch
+  # reads as ink on paper rather than lines over the basemap.
+  - id: crosshatch-wash
+    type: fill
+    source: regions
+    before: countries-label
+    paint:
+      fill-color: "#f3e9d2"
+      fill-opacity: 0.9
+  # The hatch: tone picks the tile — one layer per tone, each a literal
+  # fill-pattern ("none" features stay wash-only).
+  - id: crosshatch-light
+    type: fill
+    source: regions
+    before: countries-label
+    filter: ["==", ["get", "tone"], "light"]
+    paint:
+      fill-pattern: hatch-light
+  - id: crosshatch-dark
+    type: fill
+    source: regions
+    before: countries-label
+    filter: ["==", ["get", "tone"], "dark"]
+    paint:
+      fill-pattern: hatch-dark
+  - id: crosshatch-outline
+    type: line
+    source: regions
+    before: countries-label
+    paint:
+      line-color: "#1d3557"
+      line-width: 1.5
