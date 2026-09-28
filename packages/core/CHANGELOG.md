@@ -1,5 +1,167 @@
 # @maplibre-yaml/core
 
+## 0.7.0
+
+### Minor Changes
+
+- e28d149: maplibre-gl v5 foundations. `maplibre-gl` is no longer a runtime `dependency`
+  of core — it was pinned `^4.1.0` alongside the peer declaration, so package
+  managers could install a second, private v4 copy next to your v5; it is now
+  peer (+ dev) only, matching the documented architecture. A document's `state:`
+  block now actually reaches the live map: defaults are applied via
+  `setGlobalStateProperty` on load (maplibre-gl ≥ 5.6), so `global-state`
+  expressions in filters and paint read the declared values instead of null; on
+  older runtimes a declared `state:` warns once instead of silently doing
+  nothing. The flat WebGL context keys (`antialias`, `preserveDrawingBuffer`,
+  `failIfMajorPerformanceCaveat`) are handed to MapLibre in both the v4 shape
+  and v5's `canvasContextAttributes`, so they keep working across the peer
+  range. Validation allowlists regenerate from style-spec 26.4.4, adding six
+  newer spec keys (`fill-layer-opacity`, `line-layer-opacity`, `resampling`,
+  `fill-extrusion-rounded-corner-distance`, `symbol-height-anchor`,
+  `symbol-height-offset`) that no longer trip unknown-key warnings.
+- d3fc9b7: Two new escape hatches close the census's F2 gap. `@maplibre-yaml/core/maplibre`
+  re-exports the maplibre-gl module core renders with — `addProtocol` (pmtiles,
+  COG, custom schemes) finally registers on the module instance the document's
+  requests actually go through, instead of a copy the map never consults. The
+  subpath re-exports named runtime values off the interop-resolved namespace, so
+  it works under real Node ESM where `export * from "maplibre-gl"` silently
+  loses every named export. And `<ml-map>` gains `mapReady(): Promise<Map>` —
+  resolves with the live map once loaded (immediately if already loaded),
+  rejects on `ml-map:error` — replacing the load-listener + `getMap()`
+  null-guard boilerplate in every escape-hatch snippet.
+- 32e4601: Every construct in the format now declares its eject class — ejects, ejects
+  via fallback, or declared absence — in a closed-world registry
+  (`ejectClasses`, exported). `mlym emit` reports declared absences instead of
+  silently dropping them: chrome that previously vanished from emitted styles
+  with no trace (`controls:`, `legend:`, layer `interactive:`/`toggleable:`,
+  `parameters:`, stripped `x-*` extension blocks) now arrives as `contract`
+  warnings naming the construct and what emit did with it.
+
+  Consumer-visible changes to `EmitResult.warnings`: warnings are now emitted
+  **per construct** (path `layers.<id>.<key>`, `sources.<name>.<key>`) instead
+  of one grouped warning per layer/source, and registry-driven warnings carry
+  two new machine-readable fields — `construct` (e.g. `"layer.interactive"`)
+  and `ejectClass` — so programmatic consumers no longer parse message prose.
+  Schema-default keys the author never wrote (`toggleable: true`,
+  `fetchStrategy: "runtime"`, `interactive: true`) no longer generate warning
+  noise. An inline live source with no compile-time data is now `lossy` (fails
+  `--strict`), matching its named-source twin. Unknown runtime keys in
+  passthrough positions warn and never throw; the one new throw
+  (`EmitError`) fires only when a key from core's own closed runtime lists is
+  missing its registration — a code bug, not a document condition. Documented
+  at `/guides/eject-classes/`, with drift tests binding the docs table (names
+  AND classes) and the model's runtime-key boundaries to the registry.
+
+- ac9c677: The sprite/asset pipeline (R7) — shared infrastructure for every construct
+  that ejects via generated raster assets (marker pins, pattern presets, effect
+  fallbacks). Core describes: deterministic SVG asset descriptors with
+  content-hashed names (`fx-hatch-45-8-a1b2c3d4`), a name-sorted sprite-index
+  layout (duplicate names dedupe when identical, throw when they'd alias
+  different images), seamless hatch tiles (requested angle/spacing snap to the
+  nearest periodic lattice so strokes never jog at tile boundaries), and
+  `attachSpriteAssets()`/`finalizeSpriteBaseUrl()` declaring the document
+  sprite under the fixed `mlym` id in the spec's array form. `EmitResult`
+  gains an optional `assets` field; `EjectLowering.assets` now shares the same
+  `EmitAsset` vocabulary (the placeholder `EjectAssetDescriptor` type is gone
+  before anything consumed it).
+
+  The CLI rasterizes: `mlym emit --out` writes the standard four-file sprite
+  set (`mlym.png`/`mlym.json` + `@2x`) beside the style (sharp, pinned exact,
+  loaded lazily). MapLibre rejects relative sprite URLs, so asset-bearing
+  documents require `--sprite-base <url-prefix>` (the deployed location) and
+  `--out` — emitting a style whose sprite could never resolve now fails loudly
+  instead of shipping broken. Rasterization runs before anything is written,
+  so a sharp failure never leaves a style referencing missing files. Basemap
+  sprite merging is fixed in the process: basemap icons survive under
+  `default` while document assets ride `mlym` (id collisions warn as lossy) —
+  previously a document sprite silently clobbered the basemap's entire icon
+  set. cli's `engines.node` floor rises to match sharp's
+  (`^18.17.0 || ^20.3.0 || >=21`).
+
+- e05add1: `markers:` — standalone map pins as first-class YAML (R8), and the format's
+  first _ejects-via-fallback_ construct (R5). Live, each entry is a real
+  `maplibregl.Marker` DOM pin: `at:` position, `color:`/`size:` on the default
+  pin, `icon:` swapping in any image URL (a failed load or unsafe URL scheme
+  falls back to the pin with one console note), and `popup:` carrying the same
+  trust-gated structured content as layer popups. Authored at the v1 document
+  root or v2 `runtime.markers` — the two normalize identically. `<ml-map>`
+  surfaces marker lifecycle as `ml-map:markers-added`, `ml-map:marker-click`,
+  and `ml-map:marker-icon-error` events (mirroring the layer events), and
+  `MarkerSchema`/`MarkersSchema`/`MarkerConfig` are exported from the schemas
+  barrel. `color:` validates as a real color, not any string.
+
+  On eject, `mlym emit --with-fallbacks` lowers markers to a symbol layer
+  ("mlym-markers") with generated pin sprites through the sprite pipeline,
+  reported as a `lossy` warning; `--strict` refuses marker documents, because a
+  DOM marker and a symbol layer are close but not identical. Icon URLs are not
+  embedded yet (that arrives with `images:`) — the emitted style substitutes
+  the default pin and says so. The eject-class registry carries the lowering as
+  its `eject()` hook, so the doctrine's fallback contract is mechanical, not
+  prose. Three gallery pages flip Gap → Pure YAML (default marker, custom
+  icons, marker popup).
+
+- 42189d3: `images:` — named images for symbol layers and patterns (R9), the format's
+  first style-half construct that ejects through the sprite pipeline. Each
+  entry (`name: url` or `{url, sdf?, pixelRatio?}`, at the v1 document root or
+  under the v2 style half) loads via `map.addImage` BEFORE layers are added,
+  so `icon-image`/`*-pattern` references resolve on first render; failures
+  warn once per name (with an `ml-map:image-error` event) and never kill the
+  document, and an unknown referenced name gets a warn-once
+  `styleimagemissing` note instead of MapLibre's per-render spam.
+
+  On eject the construct fully compiles — class **ejects**, so `--strict`
+  accepts it: `mlym emit` fetches every image at compile time (the pipeline's
+  second networked step, beside basemap resolution), merges it into the
+  document sprite next to generated assets (SDF flags carried into the sprite
+  index), and rewrites literal image references to `mlym:<name>`. Marker
+  `icon:` URLs ride the same pipeline, lifting U5's icon limitation: ejected
+  icon markers now render their images instead of substituting default pins.
+  `EmitResult` widens with `images?` (fetch-at-emit refs) for programmatic
+  consumers. Reference rewriting is expression-position-aware (match labels,
+  `["get"]` arguments, and operators survive name collisions); dynamic
+  references and relative URLs are reported instead of silently diverging
+  (relative URLs are lossy — `--strict` refuses them). Emit fetches are
+  bounded (30s timeout, 20MB/1024px ceilings, batched concurrency), live
+  image loads time out after 10s instead of stalling `mapReady()`, and
+  `--strict` now also refuses lossy warnings added by the basemap merge.
+  Three more gallery pages flip to Pure YAML (add an icon, fallback image,
+  polygon pattern).
+
+- a1b280c: Hover popups join click popups as a built-in (R10): `hover.popup` shows a
+  chromeless preview while hovering a feature — deduped per feature entered,
+  not per mousemove — and dismisses when the pointer leaves. Coexistence is
+  part of the contract: with both `hover.popup` and `click.popup` on one
+  layer, a click pins the popup (close button included) and hover previews are
+  suppressed until it's dismissed. Touch devices never see hover popups (no
+  layer mousemove on touch); a tap opens the `click.popup`. Sources without
+  feature ids still work, keyed by geometry with a one-time console hint
+  (`generateId: true` gives exact tracking). For interaction hosts and
+  `attachInteractions` consumers, `InteractionDeps` gains `hidePopup` and
+  `showPopup` accepts `ShowPopupOptions` (`closeButton`/`closeOnClick`/`kind`)
+  — the pinned-vs-hover popup slot both built-in hosts now implement.
+- 81fc5a0: The params/toggle panel — the first reader of `parameters:` (R11). Declaring
+  `parameters:` renders a control panel (default top-right): `range`, `select`
+  (alias `enum`), and `toggle` controls, each seeded from its `state:` default
+  and writing live via `setGlobalStateProperty`; unrecognized types degrade to
+  a labeled read-only row. Layers with an authored `label:` get a visibility
+  checkbox (consuming `toggleable:` — set it false to opt out); layer toggles
+  are plain visibility and work on every supported runtime, while parameter
+  controls need maplibre-gl ≥ 5.6 and degrade to one declared-absence notice
+  below it. The legend, the panel, and (soon) author slots share one
+  overlay-chrome corner system: four corners, same-corner occupants stack,
+  `pointer-events` pass through empty chrome. **Legend DOM shape change:**
+  the auto-built `.ml-map-legend` no longer positions itself as a direct
+  child of the host — it now sits inside a positioned
+  `.ml-map-chrome-<corner>` container; CSS that overrode the legend's own
+  `top`/`left` should target the corner container instead. Panel writes are
+  observable: `parameter:change` and `layer:visibility` renderer events,
+  forwarded as `ml-map:parameter-change` / `ml-map:layer-visibility`.
+  Toggles made before the layer chain settles are deferred and applied when
+  layers land. On eject nothing changes —
+  parameters remain declared-absent and state defaults inline below the
+  runtime floor. Three more gallery pages flip to Pure YAML (time slider,
+  global-state symbol filter, color buttons — census 59).
+
 ## 0.6.0
 
 ### Minor Changes
