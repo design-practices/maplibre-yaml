@@ -1,0 +1,31 @@
+# Verification twin (not a gallery page): `parameters:` + `state:` with no
+# global-state expression in any layer, so it renders on EVERY matrix leg —
+# the v4 leg asserts the params panel degrades to the declared-absence
+# notice; the 5.24 leg asserts a live control.
+type: map
+id: params-declared-absence
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+state:
+  radius:
+    default: 6
+parameters:
+  radius:
+    label: Radius
+    type: range
+    min: 2
+    max: 12
+layers:
+  - id: dot
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, geometry: { type: Point, coordinates: [0, 0] }, properties: {} }
+    paint:
+      circle-radius: 6
+      circle-color: "#2a6f97"

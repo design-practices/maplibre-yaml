@@ -18,7 +18,9 @@ Map configuration defines the initial view, interaction settings, controls, and 
     bearing: 0
     # ... additional options
   state: {...}         # Runtime-tunable values (optional)
-  parameters: {...}    # Control metadata for state keys (optional)
+  parameters: {...}    # Control metadata for state keys → params panel (optional)
+  markers: [...]       # Standalone DOM pins (optional)
+  images: {...}        # Named images for icons and patterns (optional)
   layers: [...]        # Map layers
   controls: {...}      # Map controls (optional)
   legend: {...}        # Legend (optional)
@@ -80,6 +82,28 @@ parameters:
     type: enum
     values: [built, potential]
 ```
+
+Declaring `parameters:` renders the built-in **params panel** (top-right, in
+the same corner system as the legend): each entry becomes a control writing
+its state key via `setGlobalStateProperty`, seeded from the key's `state:`
+default. Each entry:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `label` | string | Control caption (defaults to the state key) |
+| `type` | string | `range`, `select` (alias `enum`), or `toggle`; unrecognized types render a labeled read-only row. Omitted: inferred — `values` present → select, boolean default → toggle |
+| `values` | array | The options, for `select` — authored value types survive (a numeric enum writes numbers) |
+| `min` / `max` | number | Bounds, for `range` (both required — a range without them renders read-only) |
+| `step` | number | Increment, for `range` |
+
+The panel also lists a **visibility checkbox for every layer with an
+authored `label:`** (set `toggleable: false` to opt a labeled layer out).
+The label is the opt-in on purpose: `toggleable` defaults to `true` on
+every layer, so it cannot signal intent by itself. Layer toggles write
+plain layout visibility and work on every supported runtime; parameter
+controls need maplibre-gl ≥ 5.6 and degrade to one notice below it. Panel
+writes are observable as `ml-map:parameter-change` and
+`ml-map:layer-visibility` events.
 
 :::note
 `state` and `global-state` require **maplibre-gl 5.6.0 or later**, and are

@@ -275,6 +275,13 @@ describe("round trip — the fidelity proof", () => {
     expect(denormalizeOptions(model).markers).toEqual(markers);
   });
 
+  it("carries parameters through the runtime half into renderer options (U8)", () => {
+    const parameters = { minPop: { label: "Min population", type: "range" } };
+    const model = normalizeMapBlock(minimalInput({ parameters } as never));
+    expect(model.runtime.parameters).toEqual(parameters);
+    expect(denormalizeOptions(model).parameters).toEqual(parameters);
+  });
+
   it("carries images through the style half into renderer options (U6)", () => {
     const images = { poi: "https://x.example/poi.png" };
     const model = normalizeMapBlock(minimalInput({ images } as never));

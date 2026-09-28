@@ -1,11 +1,21 @@
-# Hermetic twin of docs/public/configs/gallery/change-a-layers-color-with-buttons.yaml (local basemap;
-# driven by the SAME JS file the docs page loads).
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Hermetic twin of docs/public/configs/gallery/change-a-layers-color-with-buttons.yaml — see https://maplibre.org/maplibre-gl-js/docs/examples/change-a-layers-color-with-buttons/
+# A select parameter drives fill-color through global-state — the upstream
+# swatch buttons become a params-panel control; no JS.
 type: map
 id: change-a-layers-color-with-buttons
 config:
   center: [12.338, 45.4385]
   zoom: 11
   mapStyle: "/examples/verification/configs/local-style.json"
+state:
+  fill:
+    default: "#3b9ddd"
+parameters:
+  fill:
+    label: District color
+    type: select
+    values: ["#3b9ddd", "#e63946", "#2a9d8f", "#f4a261"]
 layers:
   - id: district
     type: fill
@@ -20,5 +30,5 @@ layers:
             - [12.25, 45.52]
             - [12.25, 45.36]
     paint:
-      fill-color: "#3b9ddd"
+      fill-color: ["global-state", "fill"]
       fill-opacity: 0.6

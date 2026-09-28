@@ -177,6 +177,129 @@ describe("MapRenderer", () => {
     });
   });
 
+  describe("params panel wiring (U8)", () => {
+    const config = {
+      center: [0, 0] as [number, number],
+      zoom: 2,
+      mapStyle: "https://example.com/style.json",
+    };
+    const layers = [
+      { id: "roads", type: "line", source: "s", label: "Roads" },
+      { id: "unlabeled", type: "line", source: "s" },
+      { id: "locked", type: "line", source: "s", label: "Locked", toggleable: false },
+    ] as any[];
+
+    it("builds the panel top-right with controls and label-gated layer toggles", () => {
+      renderer = new MapRenderer(container, config, layers, {
+        parameters: { minPop: { type: "range", min: 0, max: 20 } },
+        state: { minPop: { default: 5 } },
+      });
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+      map.emit("load");
+
+      const corner = container.querySelector(".ml-map-chrome-top-right")!;
+      expect(corner).not.toBeNull();
+      const panel = corner.querySelector(".ml-map-params")!;
+      expect(panel.querySelector("input[type=range]")).not.toBeNull();
+      // Label gate: only the labeled, toggleable layer gets a checkbox.
+      const layerRows = panel.querySelectorAll(".ml-map-params-layer");
+      expect(layerRows).toHaveLength(1);
+      expect(layerRows[0]!.textContent).toContain("Roads");
+    });
+
+    it("panel writes reach the map and emit renderer events", () => {
+      renderer = new MapRenderer(container, config, layers, {
+        parameters: { minPop: { type: "range", min: 0, max: 20 } },
+        state: { minPop: { default: 5 } },
+      });
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+      map.getLayer = vi.fn(() => ({ id: "roads" }));
+      const paramEvents: any[] = [];
+      const visEvents: any[] = [];
+      renderer.on("parameter:change", (e) => paramEvents.push(e));
+      renderer.on("layer:visibility", (e) => visEvents.push(e));
+      map.emit("load");
+
+      const slider = container.querySelector(
+        ".ml-map-params input[type=range]"
+      ) as HTMLInputElement;
+      slider.value = "12";
+      slider.dispatchEvent(new Event("input"));
+      expect(map.setGlobalStateProperty).toHaveBeenCalledWith("minPop", 12);
+      expect(paramEvents).toEqual([{ key: "minPop", value: 12 }]);
+
+      const toggle = container.querySelector(
+        ".ml-map-params-layer input"
+      ) as HTMLInputElement;
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event("change"));
+      expect(visEvents).toEqual([{ layerId: "roads", visible: false }]);
+    });
+
+    it("a second load never duplicates the panel; destroy removes the chrome", () => {
+      renderer = new MapRenderer(container, config, layers, {
+        parameters: { minPop: { type: "range", min: 0, max: 20 } },
+      });
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+      map.emit("load");
+      map.emit("load");
+      expect(container.querySelectorAll(".ml-map-params")).toHaveLength(1);
+
+      renderer.destroy();
+      expect(container.querySelectorAll(".ml-map-chrome")).toHaveLength(0);
+      renderer = null as any;
+    });
+
+    it("no parameters and no labeled layers → no panel, no chrome", () => {
+      renderer = new MapRenderer(container, config, [
+        { id: "plain", type: "line", source: "s" },
+      ] as any);
+      renderer.getMap().emit("load");
+      expect(container.querySelector(".ml-map-params")).toBeNull();
+      expect(container.querySelector(".ml-map-chrome")).toBeNull();
+    });
+
+    it("parameters below the state floor warn once and render the notice", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      renderer = new MapRenderer(container, config, [], {
+        parameters: { minPop: { type: "range", min: 0, max: 20 } },
+        state: { minPop: { default: 5 } },
+      });
+      // MockMap has no setGlobalStateProperty — that IS the sub-5.6 runtime.
+      renderer.getMap().emit("load");
+
+      expect(container.querySelector(".ml-map-params-notice")).not.toBeNull();
+      expect(container.querySelector(".ml-map-params input")).toBeNull();
+      const panelWarns = warn.mock.calls.filter((c) =>
+        String(c[0]).includes("parameters")
+      );
+      expect(panelWarns).toHaveLength(1);
+      warn.mockRestore();
+    });
+
+    it("the auto legend registers into the same corner system", () => {
+      renderer = new MapRenderer(container, config, [], {
+        legend: { title: "Legend" },
+        parameters: { minPop: { type: "range", min: 0, max: 20 } },
+        state: { minPop: { default: 5 } },
+      });
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+      map.emit("load");
+
+      // Legend defaults top-left; panel top-right — both inside chrome corners.
+      expect(
+        container.querySelector(".ml-map-chrome-top-left .ml-map-legend")
+      ).not.toBeNull();
+      expect(
+        container.querySelector(".ml-map-chrome-top-right .ml-map-params")
+      ).not.toBeNull();
+    });
+  });
+
   describe("state defaults (`state:` block → setGlobalStateProperty)", () => {
     const config = {
       center: [0, 0] as [number, number],
