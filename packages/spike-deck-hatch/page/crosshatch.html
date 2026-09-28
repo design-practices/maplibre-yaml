@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>U12 spike — Tangram crosshatch buildings</title>
+  <!--
+    U12 SPIKE session 2 page (demo + fixture for e2e/spike-crosshatch.spec.ts).
+    Bundle first (pnpm --filter @maplibre-yaml/spike-deck-hatch bundle), serve
+    from the repo root (pnpm verify:serve), then open:
+      /packages/spike-deck-hatch/page/crosshatch.html
+    Query params:
+      fx    = crosshatch | none     (none = the static preset alone — the
+                                     same document's fallback)
+      tiles = live | fixture        (fixture = the vendored lower-Manhattan
+                                     z13–14 tiles; hermetic, no glyphs)
+      z, b, p, lng, lat             camera overrides
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #4d4d4e; }
+    ml-map { display: block; height: 100%; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <script type="module">
+    import "/packages/core/register.js";
+    import * as spike from "../dist/spike.js";
+
+    const q = new URLSearchParams(location.search);
+    const fx = q.get("fx") ?? "crosshatch";
+    const tiles = q.get("tiles") ?? "live";
+
+    const doc = spike.parse(await (await fetch("./crosshatch.yaml")).text());
+    if (tiles === "fixture") {
+      // Absolute: tile fetches run in MapLibre's worker (relative URLs fail).
+      delete doc.sources.omt.url;
+      doc.sources.omt.tiles = [`${location.origin}/packages/spike-deck-hatch/fixtures/omt/{z}/{x}/{y}.pbf`];
+      doc.sources.omt.minzoom = 13;
+      doc.sources.omt.maxzoom = 14;
+      doc.sources.omt.bounds = [-74.035, 40.695, -73.985, 40.735];
+      doc.config.mapStyle = "/examples/verification/configs/local-style.json";
+    }
+    for (const [k, key] of [["z", "zoom"], ["b", "bearing"], ["p", "pitch"]]) {
+      if (q.has(k)) doc.config[key] = Number(q.get(k));
+    }
+    if (q.has("lng")) doc.config.center = [Number(q.get("lng")), Number(q.get("lat"))];
+
+    const el = document.createElement("ml-map");
+    el.id = "map";
+    el.config = doc;
+    document.body.appendChild(el);
+    const map = await el.mapReady();
+    const counters = spike.installCounters(map);
+
+    let handle = null;
+    const attach = async () => {
+      handle = await spike.attachCrosshatch(map, doc, {
+        atlasUrl: "./crosshatch/hatch-atlas.png",
+        plain: q.get("shade") === "plain",
+        noClip: q.get("clip") === "0",
+      });
+      return { placementOk: handle.placementOk, slots: handle.slots };
+    };
+    if (fx === "crosshatch") await attach();
+
+    window.__spike = {
+      map, doc, spike, counters, fx, tiles,
+      get handle() { return handle; },
+      attach,
+      detach() { handle?.destroy(); handle = null; },
+      ready: true,
+    };
+  </script>
+</body>
+</html>

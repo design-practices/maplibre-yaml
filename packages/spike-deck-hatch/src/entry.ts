@@ -8,5 +8,7 @@ import { parse } from "yaml";
 import { attachEffects, toHatchParams } from "./runtime";
 import { HatchLayer } from "./hatch-layer";
 import { sampleFps, installCounters, idle, gridFeatures } from "./harness";
+import { attachCrosshatch, heightExaggeration } from "./crosshatch-runtime";
+import { CrosshatchLayer } from "./crosshatch-layer";
 
-export { parse, attachEffects, toHatchParams, HatchLayer, sampleFps, installCounters, idle, gridFeatures };
+export { parse, attachEffects, toHatchParams, HatchLayer, sampleFps, installCounters, idle, gridFeatures, attachCrosshatch, heightExaggeration, CrosshatchLayer };
