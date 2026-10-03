@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>U12 spike — deck hatch-fill</title>
+  <!--
+    U12 SPIKE page (demo + the fixture e2e/spike-deck-hatch.spec.ts drives).
+    Serve from the repo root (pnpm verify:serve) after bundling
+    (pnpm --filter @maplibre-yaml/spike-deck-hatch bundle), then open:
+      /packages/spike-deck-hatch/page/index.html?fx=interleaved
+    Query params:
+      fx   = none | interleaved | overlaid   (default interleaved)
+      data = demo | grid                     (grid = 10k-feature perf set)
+    With fx=none the document renders exactly the U10 static preset.
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 480px; }
+    #controls { padding: 8px 16px; font-size: 13px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header id="title">U12 spike: hatch-fill on MapLibreOverlay</header>
+  <div id="controls">
+    angle <input id="angle" type="range" min="0" max="180" value="45" />
+    spacing <input id="spacing" type="range" min="3" max="48" value="8" />
+  </div>
+  <script type="module">
+    import "/packages/core/register.js";
+    import * as spike from "../dist/spike.js";
+
+    const params = new URLSearchParams(location.search);
+    const fx = params.get("fx") ?? "interleaved";
+    const data = params.get("data") ?? "demo";
+
+    const doc = spike.parse(await (await fetch("./hatch-effect.yaml")).text());
+    if (data === "grid") {
+      doc.sources.regions.data.features = spike.gridFeatures(100);
+      // The perf view: every cell hatched, wash under all of them.
+    }
+
+    const el = document.createElement("ml-map");
+    el.id = "map";
+    el.config = doc;
+    document.body.appendChild(el);
+    const map = await el.mapReady();
+    const counters = spike.installCounters(map);
+
+    let handle = null;
+    const attach = async (mode, opts = {}) => {
+      handle = await spike.attachEffects(map, doc, { interleaved: mode === "interleaved", ...opts });
+      return { placementOk: handle.placementOk, slots: handle.slots };
+    };
+    if (fx !== "none") await attach(fx, { waitForStyle: params.get("wait") !== "0" });
+
+    for (const key of ["angle", "spacing"]) {
+      document.getElementById(key).addEventListener("input", (e) => {
+        for (const s of handle?.slots ?? []) handle.setParams(s.layerId, { [key]: Number(e.target.value) });
+      });
+    }
+
+    window.__spike = {
+      map, doc, spike, counters,
+      get handle() { return handle; },
+      attach,
+      detach() { handle?.destroy(); handle = null; },
+    };
+    document.getElementById("title").textContent = `U12 spike: fx=${fx} data=${data}`;
+  </script>
+</body>
+</html>

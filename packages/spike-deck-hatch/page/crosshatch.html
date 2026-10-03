@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>U12 spike — Tangram crosshatch buildings</title>
+  <!--
+    U12 SPIKE session 2 page (demo + fixture for e2e/spike-crosshatch.spec.ts).
+    Bundle first (pnpm --filter @maplibre-yaml/spike-deck-hatch bundle), serve
+    from the repo root (pnpm verify:serve), then open:
+      /packages/spike-deck-hatch/page/crosshatch.html
+    Query params:
+      route = static | deck | custom | post
+                                    (static = the document alone, i.e. the
+                                     fallback; deck = route 1, deck.gl
+                                     geometry + Tangram shader; custom =
+                                     route 2, MapLibre custom layer + the same
+                                     shader over MapLibre's own tile bytes;
+                                     post = route 3, screen-space
+                                     post-process over MapLibre's extrusions)
+      r1    = after | before | knobs (route 1 = deck tuning, session 3:
+                                     after = optimized (default); before =
+                                     the session-2 route; or a comma list
+                                     of DeckTuning knobs over `before`, e.g.
+                                     r1=geom=mesh,cull,loop=map — see
+                                     src/crosshatch-runtime.ts)
+      clip  = 0                     (route 1 geom=mvt diagnostic: strip
+                                     MVTLayer's ClipExtension)
+      cull  = 0 | prepass = 0       (route 2 diagnostics: disable back-face
+                                     culling / the depth prepass)
+      shade = flat                  (route 2 diagnostic: trivial fragment shader)
+      filter = minor | off | N      (route 2 atlas anti-smear: minor-axis LOD
+                                     (default) | isotropic | Nx anisotropic)
+      fx    = crosshatch | none     (legacy aliases: deck | static)
+      tiles = live | fixture        (fixture = the vendored lower-Manhattan
+                                     z13–14 tiles; hermetic, no glyphs)
+      z, b, p, lng, lat             camera overrides
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #4d4d4e; }
+    ml-map { display: block; height: 100%; }
+    #hud {
+      position: fixed; z-index: 10; left: 12px; bottom: 28px; padding: 8px 10px;
+      background: rgba(249, 243, 227, 0.94); color: #222; border-radius: 6px;
+      font: 13px/1.5 system-ui, sans-serif; box-shadow: 0 1px 6px rgba(0,0,0,.35);
+    }
+    #hud a { color: #222; margin-right: 8px; }
+    #hud a.on { font-weight: 700; text-decoration: none; }
+    #hud .fps { font-variant-numeric: tabular-nums; font-weight: 600; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <script type="module">
+    import "/packages/core/register.js";
+    import * as spike from "../dist/spike.js";
+
+    const q = new URLSearchParams(location.search);
+    const legacy = { crosshatch: "deck", none: "static" };
+    const route = q.get("route") ?? legacy[q.get("fx")] ?? "deck";
+    const fx = route === "static" ? "none" : "crosshatch";
+    const tiles = q.get("tiles") ?? "live";
+
+    const doc = spike.parse(await (await fetch("./crosshatch.yaml")).text());
+    if (tiles === "fixture") {
+      // Absolute: tile fetches run in MapLibre's worker (relative URLs fail).
+      delete doc.sources.omt.url;
+      doc.sources.omt.tiles = [`${location.origin}/packages/spike-deck-hatch/fixtures/omt/{z}/{x}/{y}.pbf`];
+      doc.sources.omt.minzoom = 13;
+      doc.sources.omt.maxzoom = 14;
+      doc.sources.omt.bounds = [-74.035, 40.695, -73.985, 40.735];
+      doc.config.mapStyle = "/examples/verification/configs/local-style.json";
+    }
+    for (const [k, key] of [["z", "zoom"], ["b", "bearing"], ["p", "pitch"]]) {
+      if (q.has(k)) doc.config[key] = Number(q.get(k));
+    }
+    if (q.has("lng")) doc.config.center = [Number(q.get("lng")), Number(q.get("lat"))];
+
+    const el = document.createElement("ml-map");
+    el.id = "map";
+    el.config = doc;
+    document.body.appendChild(el);
+    const map = await el.mapReady();
+    const counters = spike.installCounters(map);
+    // WebGL context losses (seen on this box under memory pressure): a sample
+    // taken across one is not comparable, since deck/post don't restore.
+    let contextLosses = 0;
+    map.on("webglcontextlost", () => contextLosses++);
+
+    // Route-1 tuning (session 3): r1=after (default, the optimized route) |
+    // before (the session-2 route, for before/after runs) | a comma list of
+    // knobs applied on top of `before`, e.g. r1=cull,prepass,frontFace=cw
+    const r1 = q.get("r1") ?? "after";
+    const r1Tuning = r1 === "after" ? spike.DECK_AFTER : r1 === "before" ? spike.DECK_BEFORE
+      : Object.fromEntries(r1.split(",").map((kv) => {
+          const [k, v] = kv.split("=");
+          return [k, v === undefined ? true : v === "0" ? false : v === "1" ? true : v];
+        }));
+
+    let handle = null;
+    const attach = async () => {
+      if (route === "custom") {
+        handle = await spike.attachCrosshatchCustom(map, doc, {
+          atlasUrl: "./crosshatch/hatch-atlas.png",
+          cull: q.get("cull") !== "0",
+          prepass: q.get("prepass") !== "0",
+          parse: q.get("parse") === "main" ? "main" : "worker",
+          flat: q.get("shade") === "flat",
+          filter: !q.has("filter") ? undefined : /^\d+$/.test(q.get("filter")) ? Number(q.get("filter")) : q.get("filter"),
+        });
+        return { placementOk: handle.placementOk, slots: handle.slots };
+      }
+      if (route === "post") {
+        handle = await spike.attachCrosshatchPost(map, doc, {
+          atlasUrl: "./crosshatch/hatch-atlas.png",
+          gainScale: q.has("gs") ? Number(q.get("gs")) : undefined,
+          cellPx: q.has("cell") ? Number(q.get("cell")) : undefined,
+        });
+        return { placementOk: handle.placementOk };
+      }
+      handle = await spike.attachCrosshatch(map, doc, {
+        atlasUrl: "./crosshatch/hatch-atlas.png",
+        plain: q.get("shade") === "plain",
+        noClip: q.get("clip") === "0",
+        tuning: r1Tuning,
+      });
+      return { placementOk: handle.placementOk, slots: handle.slots };
+    };
+    if (route !== "static") await attach();
+
+    // --- evaluation HUD: route switcher, rolling fps, orbit stress ----------
+    const hud = document.createElement("div");
+    hud.id = "hud";
+    const link = (r) => {
+      const u = new URLSearchParams(location.search);
+      u.set("route", r); u.delete("fx");
+      return `<a href="?${u}" class="${r === route ? "on" : ""}">${r}</a>`;
+    };
+    hud.innerHTML =
+      `route: ${["static", "deck", "custom", "post"].map(link).join("")}` +
+      ` · <a href="/e2e/generated/spike-crosshatch/index.html" title="the document ejected to plain maplibre-gl (run the demo script once)">ejected</a>` +
+      `<br><span class="fps">– fps</span> · <label><input type="checkbox" id="orbit"> orbit</label>` +
+      ` · <button id="tour" type="button">tour</button>` +
+      ` · <span id="gpu"></span>`;
+    document.body.appendChild(hud);
+    const gl = map.getCanvas().getContext("webgl2");
+    const dbg = gl?.getExtension("WEBGL_debug_renderer_info");
+    hud.querySelector("#gpu").textContent = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL).replace(/\(0x[0-9A-F]+\)/gi, "").slice(0, 60) : "";
+    let frames = 0;
+    map.on("render", () => frames++);
+    setInterval(() => { hud.querySelector(".fps").textContent = `${frames} fps`; frames = 0; }, 1000);
+    let orbiting = false;
+    const spin = () => { if (!orbiting) return; map.setBearing(map.getBearing() + 0.2); requestAnimationFrame(spin); };
+    hud.querySelector("#orbit").addEventListener("change", (e) => { orbiting = e.target.checked; spin(); });
+
+    // Scripted view-change tour (rotation, then zoom out/in): the same path
+    // for every route, so they can be compared by eye and by fps.
+    const home = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
+    // moveend never fires if a WebGL context loss interrupts the ease: fall back to a timeout
+    const leg = (opts) => new Promise((r) => {
+      const t = setTimeout(r, opts.duration + 5000);
+      map.once("moveend", () => { clearTimeout(t); r(); });
+      map.easeTo({ easing: (t) => t, ...opts });
+    });
+    const TOUR = [
+      { name: "rotate +120", bearing: home.bearing + 120, duration: 4000 },
+      { name: "rotate +240", bearing: home.bearing + 240, duration: 4000 },
+      { name: "rotate +360", bearing: home.bearing + 360, duration: 4000 },
+      { name: "zoom out z14", zoom: 14, duration: 3000 },
+      { name: "zoom in z17.5", zoom: 17.5, duration: 4000 },
+      { name: "back home", zoom: home.zoom, duration: 3000 },
+    ];
+    async function tour(onLeg) {
+      map.jumpTo(home);
+      const legs = [];
+      for (const l of TOUR) {
+        let n = 0; const count = () => n++; map.on("render", count);
+        const t0 = performance.now();
+        await leg(l);
+        map.off("render", count);
+        const ms = performance.now() - t0;
+        const r = { leg: l.name, fps: +((n * 1000) / ms).toFixed(1), zoom: +map.getZoom().toFixed(2), bearing: +map.getBearing().toFixed(0) };
+        legs.push(r);
+        await onLeg?.(r);
+      }
+      map.jumpTo(home);
+      return legs;
+    }
+    hud.querySelector("#tour").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      const legs = await tour();
+      console.table(legs);
+      e.target.textContent = `tour (${Math.round(legs.reduce((a, l) => a + l.fps, 0) / legs.length)} fps avg)`;
+      e.target.disabled = false;
+    });
+
+    window.__spike = {
+      map, doc, spike, counters, fx, route, tiles, tour,
+      get contextLosses() { return contextLosses; },
+      get handle() { return handle; },
+      attach,
+      detach() { handle?.destroy(); handle = null; },
+      ready: true,
+    };
+  </script>
+</body>
+</html>

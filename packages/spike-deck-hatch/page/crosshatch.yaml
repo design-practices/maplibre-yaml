@@ -1,0 +1,112 @@
+# Mapzen classic: crosshatch — after Tangram's crosshatch style
+# (tangrams/tangram-sandbox styles/crosshatch.yaml, @patriciogv 2015, MIT).
+#
+# Every layer is plain style spec, so this document is its own static
+# fallback: ground, landuse and water reproduce Tangram exactly (Tangram
+# draws them unlit — tile-repeated hatch textures and a pre-lit crumpled-paper
+# water, baked by scripts/bake-crosshatch.ts). Buildings are the one lit
+# layer: statically they get a single mid-tone hatch on every face; the
+# `x-effect: crosshatch-buildings` block lets the effects runtime replace
+# them with Tangram's tonal hatching (stroke DENSITY follows light per face).
+type: map
+id: crosshatch
+config:
+  center: [-74.0118, 40.7075]
+  zoom: 15.9
+  pitch: 60
+  bearing: 29
+  mapStyle: "./crosshatch/base-style.json"
+images:
+  earth: { url: "./crosshatch/earth.png", pixelRatio: 2 }
+  landuse: { url: "./crosshatch/landuse.png", pixelRatio: 2 }
+  water: { url: "./crosshatch/water.png", pixelRatio: 1 }
+  building-hatch: { url: "./crosshatch/building-fallback.png", pixelRatio: 4 }
+sources:
+  omt:
+    type: vector
+    url: "https://tiles.openfreemap.org/planet"
+    attribution: '<a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+layers:
+  # Tangram `earth`: paper, hatched with hatch_0 repeated per tile.
+  - id: earth
+    type: background
+    paint:
+      background-pattern: earth
+  # Tangram `landuse`: the denser hatch_2.
+  - id: parks
+    type: fill
+    source: omt
+    source-layer: park
+    paint:
+      fill-pattern: landuse
+  - id: landcover
+    type: fill
+    source: omt
+    source-layer: landcover
+    filter: ["match", ["get", "class"], ["grass", "wood", "farmland", "sand"], true, false]
+    paint:
+      fill-pattern: landuse
+  # Tangram `water`: #343434 lit through a crumpled-paper normal map.
+  - id: water
+    type: fill
+    source: omt
+    source-layer: water
+    paint:
+      fill-pattern: water
+  - id: roads
+    type: line
+    source: omt
+    source-layer: transportation
+    filter: ["match", ["get", "class"], ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"], true, false]
+    layout:
+      line-join: round
+      line-cap: round
+    paint:
+      line-color: "#343434"
+      line-width:
+        - interpolate
+        - ["exponential", 1.6]
+        - ["zoom"]
+        - 13
+        - ["match", ["get", "class"], ["motorway", "trunk"], 2, 0.6]
+        - 18
+        - ["match", ["get", "class"], ["motorway", "trunk"], 16, ["primary", "secondary"], 10, 6]
+  - id: buildings
+    type: fill-extrusion
+    source: omt
+    source-layer: building
+    minzoom: 13
+    paint:
+      fill-extrusion-pattern: building-hatch
+      # Tangram exaggerates height by max(1, 0.5 + (1 - zoom/20) * 5) — linear
+      # in zoom (2.25x at z13 → 1x at z18), so one interpolate reproduces it
+      # and the effect's elevationScale tracks the same curve.
+      fill-extrusion-height:
+        - interpolate
+        - ["linear"]
+        - ["zoom"]
+        - 13
+        - ["*", ["coalesce", ["get", "render_height"], 10], 2.25]
+        - 18
+        - ["coalesce", ["get", "render_height"], 10]
+      fill-extrusion-base: ["coalesce", ["get", "render_min_height"], 0]
+      fill-extrusion-vertical-gradient: true
+    x-effect:
+      type: crosshatch-buildings
+      # Tangram's brightness exposure; ~0.72 matches the reference tone.
+      gain: 0.72
+  - id: place-labels
+    type: symbol
+    source: omt
+    source-layer: place
+    filter: ["match", ["get", "class"], ["neighbourhood", "suburb", "quarter"], true, false]
+    layout:
+      text-field: ["coalesce", ["get", "name:en"], ["get", "name"]]
+      text-font: ["Noto Sans Italic"]
+      text-size: 22
+      text-max-width: 7
+      text-pitch-alignment: viewport
+    paint:
+      text-color: "#000000"
+      text-halo-color: "#f9f3e3"
+      text-halo-width: 3.5

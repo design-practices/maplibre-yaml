@@ -1,0 +1,101 @@
+# U12 SPIKE document — the U10 crosshatch preset, progressively enhanced.
+#
+# The static layers ARE the fallback: with no effects runtime (plain
+# <ml-map>, or `mlym emit`) this renders exactly the U10 crosshatch preset.
+# With the spike runtime, each layer carrying `x-effect` is hidden and
+# replaced — in the same slot (beforeId) — by a deck.gl HatchLayer whose
+# strokes are screen-space (constant density across zoom).
+#
+# `x-effect` is an EXTENSION key on purpose: the spike adds no core schema
+# surface (AE4 — `runtime.effects` lands only in U13, and only on green).
+#
+# `labels-proxy` is a red line ABOVE the hatch — the stand-in for basemap
+# labels (the hermetic basemap has none). Interleaving is proven when the
+# red line stays on top of the deck-drawn hatch.
+type: map
+id: spike-deck-hatch
+config:
+  center: [11, 47]
+  zoom: 4
+  mapStyle: "http://localhost:4174/examples/verification/configs/local-style.json"
+images:
+  hatch-light:
+    url: "http://localhost:4174/docs/public/configs/gallery/assets/crosshatch-light.png"
+    pixelRatio: 2
+  hatch-dark:
+    url: "http://localhost:4174/docs/public/configs/gallery/assets/crosshatch-dark.png"
+    pixelRatio: 2
+sources:
+  regions:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          properties: { name: Uplands, tone: dark }
+          geometry:
+            type: Polygon
+            coordinates: [[[5, 45], [11, 44], [14, 47], [10, 50], [5, 49], [5, 45]]]
+        - type: Feature
+          properties: { name: Lowlands, tone: light }
+          geometry:
+            type: Polygon
+            coordinates: [[[11, 44], [18, 43], [20, 47], [14, 47], [11, 44]]]
+        - type: Feature
+          properties: { name: Coast, tone: none }
+          geometry:
+            type: Polygon
+            coordinates: [[[14, 47], [20, 47], [19, 51], [10, 50], [14, 47]]]
+  proxy:
+    type: geojson
+    data:
+      type: Feature
+      properties: {}
+      geometry:
+        type: LineString
+        coordinates: [[4, 47.5], [21, 45.5]]
+layers:
+  - id: crosshatch-wash
+    type: fill
+    source: regions
+    paint:
+      fill-color: "#f3e9d2"
+      fill-opacity: 0.9
+  - id: crosshatch-light
+    type: fill
+    source: regions
+    filter: ["==", ["get", "tone"], "light"]
+    paint:
+      fill-pattern: hatch-light
+    x-effect:
+      type: hatch-fill
+      angle: 45
+      spacing: 8
+      thickness: 1.25
+      cross: false
+      color: "#1d3557"
+  - id: crosshatch-dark
+    type: fill
+    source: regions
+    filter: ["==", ["get", "tone"], "dark"]
+    paint:
+      fill-pattern: hatch-dark
+    x-effect:
+      type: hatch-fill
+      angle: 45
+      spacing: 8
+      thickness: 1.25
+      cross: true
+      color: "#1d3557"
+  - id: crosshatch-outline
+    type: line
+    source: regions
+    paint:
+      line-color: "#1d3557"
+      line-width: 1.5
+  - id: labels-proxy
+    type: line
+    source: proxy
+    paint:
+      line-color: "#e63946"
+      line-width: 6

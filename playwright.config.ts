@@ -13,6 +13,8 @@ import { defineConfig, devices } from "@playwright/test";
  * but deterministic. The fixtures fetch demotiles and terrain tiles over the
  * network, so these are excluded from the default unit run.
  */
+const PORT = Number(process.env.VERIFY_PORT ?? 4174);
+
 export default defineConfig({
   testDir: "./e2e",
   // Software rendering plus real tile fetches; generous but bounded.
@@ -23,7 +25,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { outputFolder: "e2e/report", open: "never" }]],
   outputDir: "e2e/results",
   use: {
-    baseURL: "http://localhost:4174",
+    baseURL: `http://localhost:${PORT}`,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
@@ -45,7 +47,7 @@ export default defineConfig({
   ],
   webServer: {
     command: "node e2e/server.mjs",
-    url: "http://localhost:4174/vendor/maplibre-gl.esm.js",
+    url: `http://localhost:${PORT}/vendor/maplibre-gl.esm.js`,
     reuseExistingServer: true,
     timeout: 30_000,
   },
