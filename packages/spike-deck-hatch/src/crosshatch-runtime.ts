@@ -209,7 +209,7 @@ function waitForMaplibre(map: MapLibreMap, sourceId: string, z: number, x: numbe
 // --- mesh builds: bundled local worker pool or main thread -----------------
 
 interface BuildResult { mesh: TileMesh | null; ms: number }
-class MeshWorkers {
+export class MeshWorkers {
   private workers: Worker[] = [];
   private next = 0;
   private seq = 0;

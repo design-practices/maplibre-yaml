@@ -46,7 +46,7 @@
  * Mercator only (no globe variant) — spike scope.
  */
 import type { Map as MapLibreMap, CustomLayerInterface, CustomRenderMethodInput } from "maplibre-gl";
-import { heightExaggeration } from "./crosshatch-runtime";
+import { heightExaggeration, MeshWorkers } from "./crosshatch-runtime";
 import { buildTileMesh, type MeshData } from "./crosshatch-mesh-build";
 export { buildTileMesh, type MeshData };
 
@@ -198,6 +198,13 @@ export async function attachCrosshatchCustom(
      * "off" = plain isotropic trilinear (smears).
      */
     filter?: "minor" | "off" | number;
+    /**
+     * Where tile meshes are built: "worker" (default) = route 1's bundled
+     * mesh worker pool, off the main thread; "main" = inside render() under
+     * buildBudgetMs (the session-3 behaviour: ~47 ms per tile on an M2 Air,
+     * i.e. stutter whenever panning/zooming brings in a tile).
+     */
+    parse?: "worker" | "main";
   }
 ): Promise<CustomHandle> {
   const layer = doc.layers.find((l) => l["x-effect"]?.type === "crosshatch-buildings");
@@ -229,7 +236,21 @@ export async function attachCrosshatchCustom(
     (map as unknown as { style: { tileManagers: Record<string, { getVisibleCoordinates(): Coord[]; getTileByID(k: string): TileLike | undefined }> } })
       .style.tileManagers[sourceId];
 
-  const stats = { tilesDrawn: 0, meshes: 0, builds: 0, buildMs: 0, fetched: 0, triangles: 0, droppedBoundaryWalls: 0 };
+  const stats = {
+    tilesDrawn: 0, meshes: 0, builds: 0, buildMs: 0, fetched: 0, triangles: 0, droppedBoundaryWalls: 0,
+    /** builds done in the worker pool / on the main thread */
+    workerBuilds: 0, mainBuilds: 0,
+    /** max main-thread ms spent in one render() on uploads/builds (stutter indicator) */
+    maxFrameBuildMs: 0,
+    /** draws that used a cached ancestor/child mesh while a tile was building */
+    fallbackDraws: 0,
+  };
+  const parse = opts.parse ?? "worker";
+  const workers = parse === "worker" ? new MeshWorkers(2) : null;
+  /** keys with a worker build in flight */
+  const building = new Set<string>();
+  /** finished worker builds awaiting GL upload (uploads must happen in render()) */
+  const ready = new Map<string, { data: MeshData | null; rawLen: number; ms: number }>();
   const meshes = new Map<string, GpuMesh | null>(); // null = tile has no buildings
   const fetched = new Map<string, ArrayBuffer | "pending" | "failed">();
   let pendingBuilds = 0;
@@ -352,38 +373,92 @@ export async function attachCrosshatchCustom(
 
       const t0 = performance.now();
       let pending = 0;
+
+      // Upload finished worker builds (GL calls must happen here), under the
+      // frame budget so a burst of arriving tiles never blocks one frame.
+      for (const [key, r] of ready) {
+        if (performance.now() - t0 > budget) { pending++; break; }
+        free(meshes.get(key) ?? null);
+        meshes.set(key, r.data ? upload(r.data, r.rawLen) : null);
+        ready.delete(key);
+        stats.builds++;
+        stats.workerBuilds++;
+        stats.buildMs += r.ms;
+      }
+
       const draws: Array<{ mesh: GpuMesh; matrix: Float32Array }> = [];
+      const drawn = new Set<string>();
+      const pushDraw = (mesh: GpuMesh, z: number, x: number, y: number, wrap: number) => {
+        const dk = `${z}/${x}/${y}@${wrap}`;
+        if (drawn.has(dk)) return;
+        drawn.add(dk);
+        mesh.lastUsed = frame;
+        const n = 2 ** z;
+        const s = 1 / (n * mesh.extent);
+        T.fill(0);
+        T[0] = s; T[5] = s; T[10] = zScale; T[15] = 1;
+        T[12] = (x + wrap * n) / n;
+        T[13] = y / n;
+        mul(M, main, T);
+        draws.push({ mesh, matrix: Float32Array.from(M) });
+      };
+      /**
+       * While a tile's mesh is building, draw what MapLibre would: the
+       * nearest cached ancestor, else whichever cached children exist — so a
+       * pan or zoom never shows holes or pops.
+       */
+      const fallback = (z: number, x: number, y: number, wrap: number): boolean => {
+        for (let dz = 1; dz <= 4 && z - dz >= 0; dz++) {
+          const m = meshes.get(`${z - dz}/${x >> dz}/${y >> dz}`);
+          if (m) { pushDraw(m, z - dz, x >> dz, y >> dz, wrap); return true; }
+        }
+        let any = false;
+        for (let i = 0; i < 4; i++) {
+          const cx = x * 2 + (i & 1), cy = y * 2 + (i >> 1);
+          const m = meshes.get(`${z + 1}/${cx}/${cy}`);
+          if (m) { pushDraw(m, z + 1, cx, cy, wrap); any = true; }
+        }
+        return any;
+      };
+
       for (const coord of tm.getVisibleCoordinates()) {
         const { z, x, y } = coord.canonical;
         const key = `${z}/${x}/${y}`;
         const tile = tm.getTileByID(coord.key);
         let mesh = meshes.get(key);
         const raw = rawFor(coord, tile);
-        if (raw && (mesh === undefined || (mesh && mesh.rawLen !== raw.byteLength))) {
-          if (performance.now() - t0 > budget) { pending++; }
-          else {
+        const stale = mesh !== undefined && mesh !== null && raw !== null && mesh.rawLen !== raw.byteLength;
+        if (raw && (mesh === undefined || stale) && !building.has(key) && !ready.has(key)) {
+          if (workers) {
+            // Copy: the buffer is MapLibre's and must not be transferred away.
+            building.add(key);
+            const rawLen = raw.byteLength;
+            workers
+              .build({ raw: raw.slice(0), sourceLayer, opts: {} })
+              .then((r) => ready.set(key, { data: (r.mesh as MeshData | null) ?? null, rawLen, ms: r.ms }))
+              .catch(() => ready.set(key, { data: null, rawLen, ms: 0 }))
+              .finally(() => { building.delete(key); map.triggerRepaint(); });
+          } else if (performance.now() - t0 > budget) {
+            pending++;
+          } else {
             const b0 = performance.now();
             free(mesh ?? null);
             const data = buildTileMesh(raw, sourceLayer);
             mesh = data ? upload(data, raw.byteLength) : null;
             meshes.set(key, mesh);
             stats.builds++;
+            stats.mainBuilds++;
             stats.buildMs += performance.now() - b0;
           }
-        } else if (!raw && mesh === undefined) {
-          pending++;
         }
-        if (!mesh) continue;
-        mesh.lastUsed = frame;
-        const n = 2 ** z;
-        const s = 1 / (n * mesh.extent);
-        T.fill(0);
-        T[0] = s; T[5] = s; T[10] = zScale; T[15] = 1;
-        T[12] = (x + coord.wrap * n) / n;
-        T[13] = y / n;
-        mul(M, main, T);
-        draws.push({ mesh, matrix: Float32Array.from(M) });
+        // No raw yet = MapLibre is still loading the tile; its arrival
+        // triggers a render on its own, so no repaint request here (the
+        // session-3 code requested one every frame — a never-idle loop).
+        mesh = meshes.get(key);
+        if (mesh) pushDraw(mesh, z, x, y, coord.wrap);
+        else if (mesh === undefined && fallback(z, x, y, coord.wrap)) stats.fallbackDraws++;
       }
+      stats.maxFrameBuildMs = Math.max(stats.maxFrameBuildMs, performance.now() - t0);
 
       // pass 1 (optional): depth only — MapLibre's 3D depth mode (LEQUAL, write) is already set
       if (prepass && draws.length) {
@@ -411,8 +486,8 @@ export async function attachCrosshatchCustom(
       stats.tilesDrawn = draws.length;
       gl.bindVertexArray(null);
       gl.disable(gl.CULL_FACE);
-      pendingBuilds = pending;
-      if (pending > 0) map.triggerRepaint();
+      pendingBuilds = pending + building.size + ready.size;
+      if (pending > 0 || ready.size > 0) map.triggerRepaint();
 
       // evict meshes unused for ~10 s of frames once the cache grows
       if (meshes.size > 96) {
@@ -421,6 +496,7 @@ export async function attachCrosshatchCustom(
       stats.meshes = meshes.size;
     },
     onRemove() {
+      workers?.terminate();
       for (const m of meshes.values()) free(m);
       meshes.clear();
       if (program) gl.deleteProgram(program);
@@ -445,6 +521,7 @@ export async function attachCrosshatchCustom(
     depthProgram = null;
     atlasTex = null;
     meshes.clear();
+    ready.clear();
   };
   const onRestored = () => {
     const again = () => {

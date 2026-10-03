@@ -106,6 +106,7 @@
           atlasUrl: "./crosshatch/hatch-atlas.png",
           cull: q.get("cull") !== "0",
           prepass: q.get("prepass") !== "0",
+          parse: q.get("parse") === "main" ? "main" : "worker",
           flat: q.get("shade") === "flat",
           filter: !q.has("filter") ? undefined : /^\d+$/.test(q.get("filter")) ? Number(q.get("filter")) : q.get("filter"),
         });
