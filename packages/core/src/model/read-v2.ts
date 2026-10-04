@@ -192,6 +192,13 @@ export function readV2Block(doc: MapBlockV2): MapModel {
   const v2Markers = runtime["markers"] as MapModel["runtime"]["markers"];
   if (v2Markers !== undefined && v2Markers.length > 0)
     model.runtime.markers = v2Markers;
+  // U14: v1 authors these as `config.fitTo` / root `popups:`; normalize lands
+  // them in the same runtime slots (AE2).
+  if (runtime["fitTo"] !== undefined)
+    model.runtime.fitTo = runtime["fitTo"] as MapModel["runtime"]["fitTo"];
+  const v2Popups = runtime["popups"] as MapModel["runtime"]["popups"];
+  if (v2Popups !== undefined && v2Popups.length > 0)
+    model.runtime.popups = v2Popups;
   if (runtime["legend"] !== undefined)
     model.runtime.legend = runtime["legend"] as LegendConfig;
   if (runtime["container"] !== undefined)

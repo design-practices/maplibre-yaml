@@ -27,6 +27,7 @@ import {
   STATE_RUNTIME_FLOOR,
   SKY_RUNTIME_FLOOR,
   GLOBE_RUNTIME_FLOOR,
+  COLOR_RELIEF_RUNTIME_FLOOR,
   meetsVersion,
   supportsState,
 } from "../capabilities";
@@ -111,7 +112,7 @@ export function applyRuntimeGate(
   result: EmitResult,
   policy: CapabilityPolicy
 ): EmitResult {
-  return gateState(gateScene(result, policy), policy);
+  return gateState(gateScene(gateLayerTypes(result, policy), policy), policy);
 }
 
 /**
@@ -161,7 +162,36 @@ function gateScene(result: EmitResult, policy: CapabilityPolicy): EmitResult {
     : result;
 }
 
-/** Compile `state:` away when the target runtime cannot carry it. */
+
+/**
+ * Report layer types the declared target cannot render (U14: `color-relief`
+ * needs maplibre-gl 5.6). Nothing can be inlined for a layer type — the layer
+ * compiles through verbatim either way — so this only speaks: `lossy` when a
+ * DECLARED target is below the floor (the emitted style will be rejected or
+ * render without the layer there). An undeclared target makes no claim, and
+ * the layer is spec-valid, so it stays quiet.
+ */
+function gateLayerTypes(result: EmitResult, policy: CapabilityPolicy): EmitResult {
+  if (!policy.target || meetsVersion(policy.target, COLOR_RELIEF_RUNTIME_FLOOR)) return result;
+  const layers = Array.isArray(result.style["layers"]) ? result.style["layers"] : [];
+  const warnings: EmitWarning[] = [];
+  for (const layer of layers) {
+    if (!isPlainObject(layer) || layer["type"] !== "color-relief") continue;
+    warnings.push({
+      path: `layers.${String(layer["id"])}`,
+      kind: "lossy",
+      construct: "color-relief",
+      ejectClass: "ejects",
+      message:
+        `\`color-relief\` layers need maplibre-gl ${COLOR_RELIEF_RUNTIME_FLOOR} or later; ` +
+        `the target is ${policy.target}, which rejects the layer type — the map ` +
+        "renders without it there.",
+    });
+  }
+  return warnings.length > 0 ? { ...result, warnings: [...result.warnings, ...warnings] } : result;
+}
+
+/** The `state:` half of the gate (see {@link applyRuntimeGate}). */
 function gateState(result: EmitResult, policy: CapabilityPolicy): EmitResult {
   const state = result.style["state"];
   if (!isPlainObject(state) || Object.keys(state).length === 0) return result;

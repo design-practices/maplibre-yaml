@@ -21,6 +21,8 @@
  *                                  so 3D terrain twins have relief to show
  *  - `/landcover/{z}/{x}/{y}.png`  a raster coloured by the same relief,
  *                                  standing in for satellite imagery
+ *  - `/dem-hills/{z}/{x}/{y}.png`  synthesised rolling terrain (0-3500 m),
+ *                                  so the color-relief twin shows its ramp
  *  - everything else               static from the repo root
  */
 import { createServer } from "node:http";
@@ -206,6 +208,34 @@ function crc32(buf) {
 const DEM_TILE = terrariumTile();
 const SYNTHETIC_TILES = new Map();
 
+/**
+ * Rolling synthetic hills for the color-relief twin (U14): elevation is a
+ * smooth function of the WORLD position (not the tile pixel), so neighbouring
+ * tiles agree at their seams and every zoom shows the same landscape. Spans
+ * 0-3500 m so the full upstream color ramp appears on screen. Terrarium:
+ * elevation + 32768 = R * 256 + G + B / 256.
+ */
+const HILL_PERIOD = 1 / 1600; // world units per hill (several per zoom-10 view)
+const HILLS_CACHE = new Map();
+function hillsTile(z, x, y) {
+  const key = `${z}/${x}/${y}`;
+  if (!HILLS_CACHE.has(key)) {
+    const scale = 2 ** z;
+    const k = (2 * Math.PI) / HILL_PERIOD;
+    HILLS_CACHE.set(
+      key,
+      encodeRgbTile((px, py) => {
+        const u = (x + px / 256) / scale;
+        const v = (y + py / 256) / scale;
+        const e = 1750 + 1750 * Math.sin(u * k) * Math.cos(v * k);
+        const t = Math.max(0, Math.min(65535.99, e + 32768));
+        return [Math.floor(t / 256), Math.floor(t) % 256, Math.floor((t % 1) * 256)];
+      })
+    );
+  }
+  return HILLS_CACHE.get(key);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = decodeURIComponent(url.pathname);
@@ -246,6 +276,11 @@ const server = createServer(async (req, res) => {
         SYNTHETIC_TILES.set(key, tile);
       }
       return send(200, tile, TYPES[".png"]);
+    }
+    const hills = path.match(/^\/dem-hills\/(\d+)\/(\d+)\/(\d+)\.png$/);
+    if (hills) {
+      const [z, x, y] = hills.slice(1).map(Number);
+      return send(200, hillsTile(z, x, y), TYPES[".png"]);
     }
     if (path.startsWith("/glyphs/") && path.endsWith(".pbf")) {
       // An empty buffer is a valid (empty) glyphs protobuf message: symbol

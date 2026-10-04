@@ -212,6 +212,15 @@ export class LayerManager {
     return absolutizeVectorTiles(mapLibreSpec);
   }
 
+  /**
+   * The GeoJSON this manager last delivered to a fetched/refreshed source, by
+   * source id — what `fitTo` (U14) frames once a `url:` source's first fetch
+   * lands. Undefined for sources whose data never passed through here.
+   */
+  getSourceData(sourceId: string): FeatureCollection | undefined {
+    return this.sourceData.get(sourceId);
+  }
+
   /** The MapLibre source a layer draws from. */
   getSourceIdForLayer(layerId: string): string | undefined {
     return this.layerToSource.get(layerId);

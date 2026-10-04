@@ -44,6 +44,17 @@ export const addProtocol: typeof maplibre.addProtocol = gl.addProtocol;
 /** Remove a handler registered with {@link addProtocol}. */
 export const removeProtocol: typeof maplibre.removeProtocol = gl.removeProtocol;
 
+/**
+ * The running maplibre-gl version, or undefined when the module does not
+ * report one. Used to declare absence for version-gated layer types
+ * (`color-relief`, U14) instead of letting MapLibre reject the document.
+ */
+export function runtimeVersion(): string | undefined {
+  const getVersion = (gl as unknown as { getVersion?: () => string }).getVersion;
+  if (typeof getVersion === "function") return getVersion();
+  return undefined;
+}
+
 export const Map: typeof maplibre.Map = gl.Map;
 export const Popup: typeof maplibre.Popup = gl.Popup;
 export const Marker: typeof maplibre.Marker = gl.Marker;

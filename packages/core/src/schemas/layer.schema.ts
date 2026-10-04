@@ -983,6 +983,65 @@ export const HillshadeLayerSchema = BaseLayerPropertiesSchema.extend({
 export type HillshadeLayer = z.infer<typeof HillshadeLayerSchema>;
 
 /**
+ * Color-relief layer: hypsometric tinting of a raster DEM (maplibre-gl ≥ 5.6).
+ *
+ * @remarks
+ * Colors each DEM pixel by its elevation. `color-relief-color` is a color
+ * ramp over the `["elevation"]` expression, exactly like `heatmap-color` is
+ * a ramp over `["heatmap-density"]`. The source must be `raster-dem` — the
+ * same sources hillshade layers draw from.
+ *
+ * **Runtime floor:** the layer type exists from maplibre-gl 5.6.0. On an
+ * older runtime the renderer skips the layer with one warning (a declared
+ * absence) instead of letting MapLibre reject the document; emit with a
+ * `--target` below 5.6 reports the layer as `lossy`.
+ *
+ * @example
+ * ```yaml
+ * - id: relief
+ *   type: color-relief
+ *   source:
+ *     type: raster-dem
+ *     url: "https://demotiles.maplibre.org/terrain-tiles/tiles.json"
+ *     tileSize: 256
+ *   paint:
+ *     color-relief-color:
+ *       - interpolate
+ *       - ["linear"]
+ *       - ["elevation"]
+ *       - 400
+ *       - "rgb(4, 0, 108)"
+ *       - 3500
+ *       - "rgb(215, 5, 13)"
+ * ```
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/layers/#color-relief | MapLibre Color Relief Layer}
+ */
+export const ColorReliefLayerSchema = BaseLayerPropertiesSchema.extend({
+  type: z.literal("color-relief").describe("Layer type (maplibre-gl >= 5.6)"),
+  paint: z
+    .object({
+      "color-relief-color": ColorOrExpressionSchema.optional().describe(
+        'Color ramp over ["elevation"] — an interpolate/step expression'
+      ),
+      "color-relief-opacity": NumberOrExpressionSchema.optional().describe(
+        "Layer opacity (0-1)"
+      ),
+    })
+    .passthrough()
+    .optional()
+    .describe("Color-relief paint properties"),
+  layout: z
+    .object({})
+    .passthrough()
+    .optional()
+    .describe("Color-relief layout properties"),
+}).passthrough();
+
+/** Inferred type for color-relief layer. */
+export type ColorReliefLayer = z.infer<typeof ColorReliefLayerSchema>;
+
+/**
  * Background layer for solid color backgrounds.
  *
  * @remarks
@@ -1040,17 +1099,35 @@ export type BackgroundLayer = z.infer<typeof BackgroundLayerSchema>;
  * };
  * ```
  */
-export const LayerSchema = z.discriminatedUnion("type", [
-  CircleLayerSchema,
-  LineLayerSchema,
-  FillLayerSchema,
-  SymbolLayerSchema,
-  RasterLayerSchema,
-  FillExtrusionLayerSchema,
-  HeatmapLayerSchema,
-  HillshadeLayerSchema,
-  BackgroundLayerSchema,
-]);
+// Annotated (TS7056): the tenth member (color-relief, U14) tipped the
+// union's inferred type past the compiler's serialization limit. The
+// annotation names each member by `typeof`, which serializes as a reference
+// rather than an expansion — `Layer` stays exactly the inferred union.
+type LayerUnionMembers = [
+  typeof CircleLayerSchema,
+  typeof LineLayerSchema,
+  typeof FillLayerSchema,
+  typeof SymbolLayerSchema,
+  typeof RasterLayerSchema,
+  typeof FillExtrusionLayerSchema,
+  typeof HeatmapLayerSchema,
+  typeof HillshadeLayerSchema,
+  typeof ColorReliefLayerSchema,
+  typeof BackgroundLayerSchema,
+];
+export const LayerSchema: z.ZodDiscriminatedUnion<"type", LayerUnionMembers> =
+  z.discriminatedUnion("type", [
+    CircleLayerSchema,
+    LineLayerSchema,
+    FillLayerSchema,
+    SymbolLayerSchema,
+    RasterLayerSchema,
+    FillExtrusionLayerSchema,
+    HeatmapLayerSchema,
+    HillshadeLayerSchema,
+    ColorReliefLayerSchema,
+    BackgroundLayerSchema,
+  ]);
 
 /** Inferred type for any layer. */
 export type Layer = z.infer<typeof LayerSchema>;
@@ -1095,10 +1172,9 @@ export type LayerReference = z.infer<typeof LayerReferenceSchema>;
  * @remarks
  * Layers can be defined inline or referenced from global definitions.
  */
-export const LayerOrReferenceSchema = z.union([
-  LayerSchema,
-  LayerReferenceSchema,
-]);
+export const LayerOrReferenceSchema: z.ZodUnion<
+  [typeof LayerSchema, typeof LayerReferenceSchema]
+> = z.union([LayerSchema, LayerReferenceSchema]);
 
 /** Inferred type for layer or reference. */
 export type LayerOrReference = z.infer<typeof LayerOrReferenceSchema>;

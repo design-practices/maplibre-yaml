@@ -83,6 +83,7 @@ const MAP_CONTAINER_CLASS = "ml-map-container";
  * @fires ml-map:image-error - A declared `images:` entry failed (unsafe scheme, load or register error)
  * @fires ml-map:parameter-change - A params-panel control wrote a state key
  * @fires ml-map:layer-visibility - A params-panel checkbox toggled a layer
+ * @fires ml-map:camera-fit - The `fitTo` camera framed its source's data (detail: source, bounds)
  */
 export class MLMap extends HTMLElement {
   /** Internal MapRenderer instance */
@@ -659,6 +660,16 @@ export class MLMap extends HTMLElement {
         new CustomEvent("ml-map:marker-icon-error", {
           bubbles: true,
           detail: { index, icon },
+        })
+      );
+    });
+
+    // fitTo (U14): the initial camera framed its source's data
+    this.renderer.on("camera:fit", ({ source, bounds }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:camera-fit", {
+          bubbles: true,
+          detail: { source, bounds },
         })
       );
     });

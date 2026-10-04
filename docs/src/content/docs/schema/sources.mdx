@@ -12,7 +12,7 @@ Data sources provide the data for map layers. maplibre-yaml supports all MapLibr
 | `geojson` | GeoJSON point, line, and polygon data | Primary data source, supports real-time updates |
 | `vector` | Vector tiles (Mapbox Vector Tiles) | Efficient large datasets, base maps |
 | `raster` | Raster tile imagery | Satellite imagery, basemaps |
-| `raster-dem` | Elevation (DEM) tiles | Hillshade layers, 3D `terrain:` |
+| `raster-dem` | Elevation (DEM) tiles | Hillshade and color-relief layers, 3D `terrain:` |
 | `image` | Single image overlay | Map overlays, floor plans |
 | `video` | Video overlay | Animated overlays |
 
@@ -536,7 +536,7 @@ source:
 
 ## Raster DEM Source
 
-Elevation tiles for `hillshade` layers. Shaped like a raster source, plus an
+Elevation tiles for `hillshade` and `color-relief` layers. Shaped like a raster source, plus an
 `encoding` describing how elevation is packed into the tile's RGB channels.
 
 ### Structure

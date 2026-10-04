@@ -91,7 +91,7 @@ pages:
 `);
     expect(result.success).toBe(false);
     expect(result.errors[0].message).toBe(
-      'Unknown layer type "circl". Valid types: circle, line, fill, symbol, raster, fill-extrusion, heatmap, hillshade, background. Did you mean "circle"?'
+      'Unknown layer type "circl". Valid types: circle, line, fill, symbol, raster, fill-extrusion, heatmap, hillshade, color-relief, background. Did you mean "circle"?'
     );
   });
 
@@ -103,7 +103,7 @@ pages:
     );
     expect(result.success).toBe(false);
     expect(result.errors[0].message).toBe(
-      'Unknown layer type "circl". Valid types: circle, line, fill, symbol, raster, fill-extrusion, heatmap, hillshade, background. Did you mean "circle"?'
+      'Unknown layer type "circl". Valid types: circle, line, fill, symbol, raster, fill-extrusion, heatmap, hillshade, color-relief, background. Did you mean "circle"?'
     );
   });
 

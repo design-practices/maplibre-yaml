@@ -195,6 +195,53 @@ export const LegendConfigSchema = z
 export type LegendConfig = z.infer<typeof LegendConfigSchema>;
 
 /**
+ * Fit the initial camera to a source's data (U14, ml-chh.9).
+ *
+ * @remarks
+ * The data-driven sibling of `bounds:` — where `bounds` takes literal
+ * coordinates, `fitTo` names a GeoJSON entry in `sources:` and the camera
+ * frames whatever that source holds. It reuses the bounds walk the
+ * `zoomToFeature` click interaction uses, applied to the whole source on
+ * load instead of one clicked feature on click.
+ *
+ * - **Inline `data:`** — the bounds are known before the map exists, so the
+ *   map is constructed already framed (no camera jump).
+ * - **`url:`** — the map opens at the authored `center`/`zoom`, then jumps
+ *   to the data's bounds once the first fetch lands (refreshes do not
+ *   re-fit: the user owns the camera after load).
+ * - **vector / raster / raster-dem** — not supported: tiled sources have no
+ *   client-side extent before they render. The renderer warns once and keeps
+ *   the authored camera.
+ *
+ * `center`/`zoom` stay required: they are the camera before the data
+ * arrives, the camera when the fit cannot apply, and the fallback emit uses
+ * when the data is not inline. `fitTo` wins over `bounds` when both are set.
+ *
+ * On emit (`fallback` class) an inline source's bounds compile to a
+ * concrete `center`/`zoom` computed for a 1024×768 reference viewport —
+ * lossy, because a live map fits its own container.
+ */
+export const FitToSchema = z
+  .object({
+    source: z
+      .string()
+      .min(1)
+      .describe("Name of a GeoJSON entry in `sources:` whose data the camera frames"),
+    padding: z
+      .number()
+      .min(0)
+      .optional()
+      .describe("Padding in pixels around the fitted bounds"),
+    maxZoom: ZoomLevelSchema.optional().describe(
+      "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+    ),
+  })
+  .describe("Fit the initial camera to a GeoJSON source's data");
+
+/** Inferred type for `fitTo`. */
+export type FitToConfig = z.infer<typeof FitToSchema>;
+
+/**
  * Map configuration with MapLibre options.
  *
  * @remarks
@@ -308,6 +355,9 @@ export const MapConfigSchema = z
       .union([LngLatBoundsSchema, z.array(z.number())])
       .optional()
       .describe("Fit map to bounds"),
+    fitTo: FitToSchema.optional().describe(
+      "Fit the initial camera to a GeoJSON source's data (wins over `bounds`)"
+    ),
 
     // Constraints
     minZoom: ZoomLevelSchema.optional().describe("Minimum zoom level"),
@@ -460,6 +510,45 @@ export const MarkerSchema = z.object({
 
 /** The document-root `markers:` list. */
 export const MarkersSchema = z.array(MarkerSchema);
+
+/**
+ * One standalone popup, open at a coordinate (U14).
+ *
+ * @remarks
+ * MapLibre's `display-a-popup`: a popup with no layer under it and no pin
+ * above it. A marker with its pin hidden is NOT the same thing — a marker's
+ * popup opens on click, so a pinless marker would be content nobody can
+ * open. This construct is open from load and closes like any MapLibre popup.
+ *
+ * `content` is the same structured popup vocabulary layer and marker popups
+ * use, rendered through the same `PopupBuilder(policy)` trust gate — there
+ * is no feature, so `property:` lookups resolve empty and `str:` carries the
+ * text. Eject class: declared absence (a popup is DOM, not cartography).
+ */
+export const StandalonePopupSchema = z.object({
+  at: LngLatSchema.describe("Popup anchor position [lng, lat]"),
+  content: PopupContentSchema.describe(
+    "Popup content (same structured items as layer popups; `str:` for text)"
+  ),
+  closeButton: z
+    .boolean()
+    .optional()
+    .describe("Show the close button (MapLibre default: true)"),
+  closeOnClick: z
+    .boolean()
+    .optional()
+    .describe("Close when the map is clicked (MapLibre default: true)"),
+  maxWidth: z
+    .string()
+    .optional()
+    .describe('CSS max-width of the popup, e.g. "300px" (MapLibre default: 240px)'),
+});
+
+/** The document-root `popups:` list. */
+export const PopupsSchema = z.array(StandalonePopupSchema);
+
+/** Inferred standalone popup type. */
+export type StandalonePopupConfig = z.infer<typeof StandalonePopupSchema>;
 
 /**
  * One named image (U6, R9) — for symbol-layer icons and `*-pattern` fills.
@@ -798,6 +887,9 @@ export const MapBlockSchema: z.ZodObject<any> = z
     markers: MarkersSchema.optional().describe(
       "Standalone markers — DOM pins live, symbol layers + sprite on eject"
     ),
+    popups: PopupsSchema.optional().describe(
+      "Standalone popups open at a coordinate — no layer, no marker"
+    ),
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
     ),
@@ -872,6 +964,9 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     ),
     markers: MarkersSchema.optional().describe(
       "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+    ),
+    popups: PopupsSchema.optional().describe(
+      "Standalone popups open at a coordinate — no layer, no marker"
     ),
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"

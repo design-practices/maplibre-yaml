@@ -30,6 +30,7 @@
 
 import type { EmitAsset, EmitImageRef } from "../emitter/assets";
 import type { EmitWarning } from "../emitter/project";
+import type { MapModel } from "../model/types";
 
 /** What `mlym emit` does with a construct. */
 export type EjectClass = "ejects" | "fallback" | "declared-absence";
@@ -42,6 +43,11 @@ export interface EjectLowering {
   assets?: EmitAsset[];
   /** Fetch-at-emit image refs the lowering references (marker icons). */
   images?: EmitImageRef[];
+  /**
+   * A replacement root camera, for constructs that lower to one (`fitTo` →
+   * the computed `center`/`zoom`).
+   */
+  camera?: { center: [number, number]; zoom: number };
   warnings?: EmitWarning[];
 }
 
@@ -51,6 +57,12 @@ export interface EjectContext {
   value: unknown;
   /** Dotted path of the node carrying it (for warning paths). */
   path: string;
+  /**
+   * The whole document, for constructs whose lowering reads beyond their own
+   * value (`fitTo` reads the source it names). Optional: a lowering that
+   * needs it must declare absence-with-warning when it is missing.
+   */
+  model?: MapModel;
 }
 
 /** A construct's declared eject behavior. */
