@@ -224,7 +224,11 @@ layers:
 
 - Browser doesn't process `<script type="text/yaml">` content
 - Whitespace and indentation are preserved exactly
-- Works in React, Vue, Astro, MDX - everywhere!
+- Works in plain HTML, Astro, MDX and Svelte templates; in React, pass the
+  YAML as a string child (`<script type="text/yaml">{yaml}</script>`)
+- **Not in Vue templates:** Vue's compiler rejects `<script>` tags in a
+  template — use `src` or `config` there (see
+  [Framework Compatibility](#framework-compatibility))
 - Good for examples that need to be self-contained
 
 ### Method 3: JSON Attribute (Programmatic)
@@ -628,14 +632,50 @@ Each `<ml-map>` is independent:
 
 ## Framework Compatibility
 
-The `<ml-map>` web component works in any framework:
+`<ml-map>` is a standard custom element, so any framework can render it. Import
+`@maplibre-yaml/core/register` once (it defines the element) and import
+`maplibre-gl/dist/maplibre-gl.css` in your entry point. Three things differ
+from framework to framework: how `config` reaches the element, how you listen
+for `ml-map:*` events, and TypeScript.
+
+| Framework | `config` object | `ml-map:*` events | TypeScript |
+|-----------|-----------------|-------------------|------------|
+| React 19 | Set as a **property**: pass the object or a JSON string | `onml-map:load={…}` prop, or a ref + `addEventListener` | Needs a [JSX declaration](#typescript-with-react) |
+| React 18 | Set as an **attribute**: you must `JSON.stringify` it (an object becomes `"[object Object]"`) | Ref + `addEventListener` only | Needs a [JSX declaration](#typescript-with-react) |
+| Vue 3 | Set as a property: pass the object | `@ml-map:load="…"` | Works (add `isCustomElement`, below) |
+| Svelte 5 | Set as a property: pass the object | `bind:this` + `addEventListener` | Works out of the box |
+
+`src="/map.yaml"` works the same everywhere. The snippets below were verified
+with React 18.3 and 19.2, Vue 3.5 and Svelte 5 on Vite 8 (dev server and
+production build), and with Next.js 16. `mapReady()` needs 0.7 or later. On
+0.6, listen for `ml-map:load` and then call `getMap()`.
+
+<Aside type="caution" title="Keep the config value stable">
+  Every new `config` value tears down the map and builds a fresh one, which
+  also resets the camera. Frameworks that set `config` as a property hand the
+  element a new value whenever the bound object's identity changes, so an
+  inline object literal (`config={{ ... }}`) rebuilds the map on every parent
+  re-render. Pass a module constant, a memoized or computed object, or a JSON
+  string, which compares by value. Tracked as bead `ml-i10`.
+</Aside>
+
+<Aside type="caution" title="Known issue: a property set at creation skips validation">
+  React 19, Vue and Svelte set `config` before the element is attached. That
+  path currently skips schema validation, so an invalid document fails inside
+  the renderer instead of showing the "Configuration Error" card, and schema
+  defaults are not applied. Until bead `ml-jh6` is fixed, prefer `src` for
+  documents you have not validated (for example with `mlym validate`). React
+  18 (attribute) and `src` are unaffected.
+</Aside>
 
 ### React
+
+Rendering a map, for React 18 and 19:
 
 ```jsx
 import "@maplibre-yaml/core/register";
 
-function Map({ config }) {
+function YamlMap({ config }) {
   const configJson = JSON.stringify(config);
 
   return (
@@ -647,35 +687,195 @@ function Map({ config }) {
 }
 ```
 
+A JSON string works on both majors. React 18 sets it as the attribute before
+the element connects. React 19 sets the `config` property, which parses the
+string. On React 19 alone you can pass the object directly
+(`config={config}`), as long as it is stable (see above).
+
+**Events and the map instance.** React 18 cannot attach listeners for custom
+events through props, so use a ref. The same code works on React 19:
+
+```jsx
+import "@maplibre-yaml/core/register";
+import { useEffect, useRef } from "react";
+
+function YamlMap({ src }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    const onError = (event) =>
+      console.error(event.detail.error ?? event.detail.errors);
+    el.addEventListener("ml-map:error", onError);
+
+    let cancelled = false;
+    el.mapReady().then(
+      (map) => !cancelled && map.flyTo({ zoom: 3 }),
+      () => {} // a failed document also fires ml-map:error
+    );
+
+    return () => {
+      cancelled = true;
+      el.removeEventListener("ml-map:error", onError);
+    };
+  }, []);
+
+  return (
+    <ml-map ref={ref} src={src} style={{ display: "block", height: "400px" }} />
+  );
+}
+```
+
+React 19 also attaches `on*` props on custom elements as listeners, using the
+rest of the name as the event type. `onml-map:load={handler}` therefore
+listens for `ml-map:load`. React 18 ignores these props. The colon makes this
+a namespaced JSX attribute. Vite and TypeScript compile it; if your JSX
+compiler rejects namespaced attributes, spread it in:
+`{...{ "onml-map:load": handler }}`.
+
+**Lifecycle.** Unmounting removes the element, and its `disconnectedCallback`
+destroys the MapLibre map: no leaked canvas, and a remount creates exactly one
+new map. StrictMode's double-run effects do not re-create the element, so
+keep listener setup in an effect that has a cleanup, as shown above. In React
+18, `config` should arrive as the JSON-string attribute: a ref or effect only
+runs after the element has connected, so assigning `el.config` there briefly
+shows the "No configuration provided" card, and a `mapReady()` call made
+before the assignment rejects (bead `ml-mpm`).
+
+#### TypeScript with React
+
+React's JSX types do not know `<ml-map>`, so `tsc` reports *Property 'ml-map'
+does not exist on type 'JSX.IntrinsicElements'*. Add a declaration file to
+your project, for example `src/ml-map.d.ts` (works with `@types/react` 18.3
+and 19):
+
+```ts
+import type { DetailedHTMLProps, HTMLAttributes } from "react";
+import type { MLMap } from "@maplibre-yaml/core/register";
+
+declare module "react" {
+  namespace JSX {
+    interface IntrinsicElements {
+      "ml-map": DetailedHTMLProps<HTMLAttributes<MLMap>, MLMap> & {
+        src?: string;
+        /** JSON string; React 19 also accepts a config object. */
+        config?: string;
+        /** React 19 only: `onml-map:load`, `onml-map:error`, … */
+        [event: `onml-map:${string}`]: ((event: CustomEvent) => void) | undefined;
+      };
+    }
+  }
+}
+```
+
+Then `useRef<MLMap>(null)` gives a typed `ref.current.mapReady()`. Shipping
+these typings from core is tracked as bead `ml-f84`. Since 0.7, core declares
+`HTMLElementTagNameMap["ml-map"]`, so `document.querySelector("ml-map")` and
+`document.createElement("ml-map")` are typed as `MLMap` without a cast.
+
+#### Next.js (App Router)
+
+Client components still render on the server, and the element class extends
+`HTMLElement`, which does not exist there. A top-level
+`import "@maplibre-yaml/core/register"` in a `"use client"` file therefore
+fails the build with `ReferenceError: HTMLElement is not defined`. Register the
+element from an effect instead:
+
+```jsx
+"use client";
+import { useEffect } from "react";
+
+export default function YamlMap({ src }) {
+  useEffect(() => {
+    import("@maplibre-yaml/core/register");
+  }, []);
+
+  return <ml-map src={src} style={{ display: "block", height: "400px" }} />;
+}
+```
+
+The server sends a plain `<ml-map>` tag, and it upgrades once the import
+resolves. Import the MapLibre CSS in `app/layout`.
+
 ### Vue
+
+Vue sets `config` as a DOM property, so pass the object as it is:
 
 ```vue
 <template>
   <ml-map
-    :config="configJson"
+    ref="mapEl"
+    :config="config"
     style="width: 100%; height: 400px; display: block;"
+    @ml-map:error="(e) => console.error(e.detail.error ?? e.detail.errors)"
   />
 </template>
 
 <script setup>
 import "@maplibre-yaml/core/register";
-import { computed } from "vue";
+import { onMounted, ref } from "vue";
 
-const props = defineProps(["config"]);
-const configJson = computed(() => JSON.stringify(props.config));
+defineProps(["config"]);
+const mapEl = ref(null);
+
+onMounted(async () => {
+  const map = await mapEl.value.mapReady();
+  map.flyTo({ zoom: 3 });
+});
 </script>
 ```
+
+Tell Vue's compiler that `ml-*` tags are custom elements. Without this, every
+render logs *Failed to resolve component: ml-map* in development:
+
+```js
+// vite.config.js
+import { defineConfig } from "vite";
+import vue from "@vitejs/plugin-vue";
+
+export default defineConfig({
+  plugins: [
+    vue({
+      template: {
+        compilerOptions: { isCustomElement: (tag) => tag.startsWith("ml-") },
+      },
+    }),
+  ],
+});
+```
+
+`vue-tsc` accepts `<ml-map>` by default. Under `strictTemplates` it reports
+the element as unknown.
 
 ### Svelte
 
+Svelte 5 sets `config` as a property, so pass the object as it is:
+
 ```svelte
 <script>
-  import '@maplibre-yaml/core/register';
-  export let config;
+  import "@maplibre-yaml/core/register";
+  import { onMount } from "svelte";
+
+  let { config } = $props();
+  let mapEl;
+
+  onMount(() => {
+    const onError = (e) => console.error(e.detail.error ?? e.detail.errors);
+    mapEl.addEventListener("ml-map:error", onError);
+    mapEl.mapReady().then((map) => map.flyTo({ zoom: 3 }), () => {});
+    return () => mapEl.removeEventListener("ml-map:error", onError);
+  });
 </script>
 
-<ml-map config={JSON.stringify(config)} style="width: 100%; height: 400px; display: block;" />
+<ml-map bind:this={mapEl} {config} style="width: 100%; height: 400px; display: block;"></ml-map>
 ```
+
+Close the tag explicitly: Svelte 5 warns about self-closing non-void elements
+such as `<ml-map />`. `onml-map:load={…}` attaches a listener, but Svelte warns
+that attribute names should not contain `:`, so use `bind:this` as shown.
+`svelte-check` accepts `<ml-map>` and its attributes out of the box. With
+`lang="ts"`, type the binding as `let mapEl: MLMap` (imported from
+`@maplibre-yaml/core/register`).
 
 ## Troubleshooting
 

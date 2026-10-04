@@ -971,6 +971,17 @@ export class MLMap extends HTMLElement {
   }
 }
 
+declare global {
+  /**
+   * Types `document.querySelector("ml-map")` and
+   * `document.createElement("ml-map")` as {@link MLMap}, so `mapReady()` /
+   * `getMap()` type-check without a cast.
+   */
+  interface HTMLElementTagNameMap {
+    "ml-map": MLMap;
+  }
+}
+
 /**
  * Register the ml-map custom element
  */
