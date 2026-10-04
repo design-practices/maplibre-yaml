@@ -1,0 +1,15 @@
+# Assertion: `controls.attribution.customAttribution` from an untrusted
+# document renders as text plus plain links (GHSA-jrc7-96c5-q579).
+type: map
+id: attribution-sanitize-control
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "/examples/verification/configs/local-style.json"
+controls:
+  attribution:
+    compact: false
+    customAttribution:
+      - '<img src="/__attribution_probe.png"><span data-probe="custom">CUSTOM ATTRIB</span>'
+      - '<a href="mailto:data@example.test" data-probe="custom-link">custom link</a>'
+layers: []
