@@ -40,6 +40,13 @@ export type TrustContext =
 /** The maplibre-gl release that introduced `state` and `global-state`. */
 export const STATE_RUNTIME_FLOOR = "5.6.0";
 
+/**
+ * The earliest maplibre-gl that knows the `color-relief` layer type (U14).
+ * Below it the renderer skips such layers with one warning (declared
+ * absence) and emit for a lower `--target` reports them as lossy.
+ */
+export const COLOR_RELIEF_RUNTIME_FLOOR = "5.6.0";
+
 export interface CapabilityPolicy {
   /**
    * Target maplibre-gl version, as a semver string.

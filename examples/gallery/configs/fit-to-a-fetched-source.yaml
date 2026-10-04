@@ -1,0 +1,24 @@
+# Behavioral fixture (not a gallery page): `fitTo` over a FETCHED source.
+# The map opens at the authored camera, then frames the data once the first
+# fetch lands — the deferred half of fitTo that the inline gallery twin
+# cannot exercise.
+type: map
+id: fit-to-a-fetched-source
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo:
+    source: route
+    padding: 20
+sources:
+  route:
+    type: geojson
+    url: "/examples/gallery/data/route-linestring.geojson"
+layers:
+  - id: route
+    type: line
+    source: route
+    paint:
+      line-color: "#BF93E4"
+      line-width: 5

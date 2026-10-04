@@ -92,7 +92,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · X = out of 
 | customize-the-map-transform-constrain | X | transform internals |
 | enter-a-360-photosphere | X | bespoke immersive UI |
 | fit-a-map-to-a-bounding-box | E | `config.bounds` |
-| fit-to-the-bounds-of-a-linestring | **G** | fit-to-data: `bounds` takes literals only (gap theme) |
+| fit-to-the-bounds-of-a-linestring | E | `config.fitTo: { source }` — shipped in 0.7 U14 (ml-chh.9); was G (fit-to-data gap) |
 | fly-to-a-location-based-on-scroll-position | E | Astro `Scrollytelling` — this is the library's home turf |
 | hash-routing | E | `config.hash: true` |
 | level-of-detail-control | X | LoD internals |
@@ -182,7 +182,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · X = out of 
 | 3d-terrain | **G** | `terrain:` map-level field absent (declared non-goal — revisit) |
 | add-a-hillshade-layer | E | hillshade layer + raster-dem source |
 | add-3d-terrain-from-quantized-mesh-tiles | H | quantized-mesh protocol plugin + terrain gap |
-| add-a-color-relief-layer | **G** | `color-relief` layer type missing (v5; pairs with ml-tfd.1) |
+| add-a-color-relief-layer | E | `color-relief` layer type — shipped in 0.7 U14 (ml-chh.8; maplibre-gl ≥ 5.6, declared absence below); was G |
 | add-a-multidirectional-hillshade-layer | E | v5 hillshade props ride passthrough (curated-key theme) |
 | add-contour-lines | H | maplibre-contour plugin |
 | display-a-hybrid-satellite-map-with-terrain-elevation | **G** | terrain theme |
@@ -213,7 +213,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · X = out of 
 | create-a-draggable-marker | X | drag interaction |
 | animate-a-marker | X | rAF loop |
 | create-a-draggable-point | X | drag events on layer |
-| display-a-popup | **G** | no standalone popup-at-coords (markers/annotations theme) |
+| display-a-popup | E | root `popups:` (popup at a coordinate, no layer/marker) — shipped in 0.7 U14; was G |
 | display-a-popup-on-click | E | `interactive.click.popup` — flagship parity page |
 | display-a-popup-on-hover | **G** | hover has only `highlight` (hover-popup theme; relates ml-fn9) |
 | attach-a-popup-to-a-marker-instance | **G** | markers theme |

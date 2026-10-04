@@ -146,6 +146,43 @@ refuses marker documents. `icon:` URLs are fetched into the document sprite
 at compile time, so ejected icon markers keep their images. See the [eject
 classes reference](/reference/eject-classes/).
 
+## Popups
+
+`popups:` opens standalone popups at coordinates: a popup with no layer
+under it and no marker above it (MapLibre's `new Popup().setLngLat(...)
+.addTo(map)`). It is a document-root key, a sibling of `config:`. Each entry:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `at` | [number, number] | Popup anchor [longitude, latitude] (required) |
+| `content` | popup content | Same structured content as [layer popups](/schema/interactivity/) (required) |
+| `closeButton` | boolean | Show the close button (MapLibre default: `true`) |
+| `closeOnClick` | boolean | Close when the map is clicked (MapLibre default: `true`) |
+| `maxWidth` | string | CSS max-width, e.g. `"300px"` (MapLibre default: `240px`) |
+
+```yaml
+type: map
+id: hello
+config:
+  center: [-96, 37.8]
+  zoom: 3
+popups:
+  - at: [-96, 37.8]
+    closeOnClick: false
+    content:
+      - h1:
+          - str: Hello World!
+```
+
+Popups are open from load. Content runs through the same trust gate as every
+other popup: tags are allowlisted, `str:` values are escaped, and there is no
+feature, so `property:` lookups resolve empty. A marker with its pin hidden
+can't stand in for this. A marker's popup opens on a click on the pin, so a
+pinless marker's popup could never open.
+
+On eject, popups are a **declared absence**. `mlym emit` reports them as a
+contract warning, and the emitted style has no popups.
+
 ## Images
 
 `images:` declares named images for symbol layers and patterns — a
@@ -209,6 +246,7 @@ Control the camera position and orientation.
 | `pitch` | number | `0` | 0-85 | Camera tilt angle in degrees |
 | `bearing` | number | `0` | -180 to 180 | Camera rotation in degrees |
 | `bounds` | array | - | - | Fit map to geographic bounds |
+| `fitTo` | object | - | - | Fit the initial camera to a GeoJSON source's data (see below) |
 
 ### Examples
 
@@ -232,6 +270,52 @@ config:
   bounds: [-74.3, 40.5, -73.7, 40.9]  # [west, south, east, north]
   mapStyle: "https://demotiles.maplibre.org/style.json"
 ```
+
+#### Fit to a Source's Data
+
+`fitTo` is the data-driven sibling of `bounds`. Instead of literal
+coordinates it names a GeoJSON entry in `sources:`, and the camera frames
+whatever that source holds.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `source` | string | Name of a GeoJSON entry in `sources:` (required) |
+| `padding` | number | Padding in pixels around the fitted bounds |
+| `maxZoom` | number | Upper zoom limit for the fit. Without it, a single point zooms all the way in. |
+
+```yaml
+type: map
+id: route
+config:
+  center: [-77.02, 38.89]   # Before the data arrives, and the fallback
+  zoom: 12
+  fitTo:
+    source: route
+    padding: 20
+sources:
+  route:
+    type: geojson
+    url: https://example.com/route.geojson
+layers:
+  - id: route
+    type: line
+    source: route
+```
+
+- **Inline `data:`**: the map is constructed already framed, with no camera jump.
+- **`url:`**: the map opens at `center`/`zoom`, then frames the data when the
+  first fetch lands. Refreshes don't re-fit, because the user owns the camera
+  after load. An `ml-map:camera-fit` event fires when the fit applies.
+- **vector / raster / raster-dem**: not supported. Tiled sources have no
+  client-side extent. The renderer warns once and keeps `center`/`zoom`.
+- `fitTo` wins over `bounds` when both are set. In format v2 it lives at
+  `runtime.fitTo`.
+
+On eject `fitTo` **ejects via fallback**. `mlym emit --with-fallbacks`
+computes the fitted `center`/`zoom` from an inline source for a 1024×768
+reference viewport. That's lossy, because a live map fits its own container.
+For a fetched source the authored camera stands in, also reported as lossy.
+`--strict` refuses `fitTo` documents.
 
 ## Constraints
 

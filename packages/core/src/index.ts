@@ -91,6 +91,10 @@ export {
   buildMarkersLowering,
   MARKERS_SOURCE_ID,
   MARKERS_LAYER_ID,
+  lowerFitTo,
+  buildFitToLowering,
+  cameraForBounds,
+  FIT_TO_REFERENCE_VIEWPORT,
   DEFAULT_PIN_COLOR,
   buildSpriteIndex,
   attachSpriteAssets,
@@ -108,6 +112,8 @@ export type {
   PinOptions,
   LoweredMarkers,
   MarkersLowering,
+  LoweredFitTo,
+  FitToLowering,
   SpriteIndexEntry,
   SpriteLayoutItem,
   SpriteSheetLayout,
@@ -132,6 +138,7 @@ export type {
 // Capability policy — what a document may do, given where it is compiled
 export {
   STATE_RUNTIME_FLOOR,
+  COLOR_RELIEF_RUNTIME_FLOOR,
   DEFAULT_POLICY,
   meetsVersion,
   supportsState,
