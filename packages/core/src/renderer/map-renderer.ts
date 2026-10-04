@@ -24,7 +24,14 @@ import {
   type ParamsPanelConfig,
   type ParameterMeta,
 } from './params-builder';
-import type { ImageConfig, LightConfig } from '../schemas/map.schema';
+import type {
+  ImageConfig,
+  LightConfig,
+  TerrainConfig,
+  SkyConfig,
+  ProjectionConfig,
+} from '../schemas/map.schema';
+import { applyProjection, applySky, applyTerrain, type Scene3DMap } from './scene-3d';
 import type { CapabilityPolicy } from "../capabilities.js";
 import {
   denormalizeConfig,
@@ -161,6 +168,16 @@ export interface MapRendererOptions {
    * builder reads it as {@link ParameterMeta}.
    */
   parameters?: Record<string, unknown>;
+  /**
+   * Map-level 3D terrain (`terrain:`, U15). Applied via `map.setTerrain`
+   * once its `raster-dem` source exists — the live style is built from
+   * `mapStyle` + addLayer, so it cannot ride in on the style object.
+   */
+  terrain?: TerrainConfig;
+  /** Sky / fog / atmosphere (`sky:`, U15) — `map.setSky`, maplibre-gl >= 4.5. */
+  sky?: SkyConfig;
+  /** Projection (`projection:`, U15) — `map.setProjection`, maplibre-gl >= 5. */
+  projection?: ProjectionConfig;
   /**
    * Host-supplied chrome elements (U9 — `<ml-map>` slot children), mounted
    * into the shared corner system (KTD10) on load, after the built-in
@@ -390,7 +407,9 @@ export class MapRenderer {
     this.layerManager = new LayerManager(this.map, layerCallbacks);
     this.eventHandler = new EventHandler(this.map, eventCallbacks, options.capabilities);
     this.legendBuilder = new LegendBuilder();
-    this.controlsManager = new ControlsManager(this.map);
+    this.controlsManager = new ControlsManager(this.map, {
+      ...(options.terrain ? { terrain: options.terrain } : {}),
+    });
 
     // Set up load handler
     this.map.on('load', () => {
@@ -444,6 +463,18 @@ export class MapRenderer {
         }
       }
 
+      // Map-level 3D (U15). Projection and sky first — neither depends on a
+      // source. Terrain needs its raster-dem source to exist: named sources
+      // just registered above, and basemap sources arrived with the style,
+      // so most documents resolve here; a miss retries once layers settle
+      // (an inline layer source), and only that retry warns. Each setter is
+      // feature-detected and degrades with one warning, never a throw.
+      const map3d = this.map as unknown as Scene3DMap;
+      if (options.projection) applyProjection(map3d, options.projection);
+      if (options.sky) applySky(map3d, options.sky);
+      const terrainPending =
+        options.terrain !== undefined &&
+        applyTerrain(map3d, options.terrain, false) === 'pending';
       // The document's light shades fill-extrusion faces from the first
       // frame. A rejected light (setLight validates against the spec) warns
       // and the document keeps rendering under the basemap's light.
@@ -529,6 +560,9 @@ export class MapRenderer {
           if (this.destroyed) return;
           return Promise.all(layers.map((layer) => this.addLayer(layer))).then(() => {
             this.layersAdded = true;
+            if (terrainPending && options.terrain) {
+              applyTerrain(map3d, options.terrain, true);
+            }
             // Panel toggles made while layers were still loading apply now.
             for (const [layerId, visible] of this.pendingVisibility) {
               if (this.map.getLayer(layerId)) {

@@ -46,6 +46,9 @@ import {
   ParametersSchema,
   MarkersSchema,
   ImagesSchema,
+  TerrainSchema,
+  SkySchema,
+  ProjectionSchema,
   FitToSchema,
   PopupsSchema,
   LightSchema,
@@ -388,6 +391,15 @@ export const StyleV2Schema: z.ZodTypeAny = z
     ),
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — style half, merged into the sprite on eject"
+    ),
+    terrain: TerrainSchema.optional().describe(
+      "3D terrain from a raster-dem source — style half, compiles to style.json `terrain`"
+    ),
+    sky: SkySchema.optional().describe(
+      "Sky, fog, and globe atmosphere — style half, compiles to style.json `sky`"
+    ),
+    projection: ProjectionSchema.optional().describe(
+      "Map projection (`globe` needs maplibre-gl >= 5) — style half, compiles to style.json `projection`"
     ),
     light: LightSchema.optional().describe(
       "The style-spec light shading fill-extrusion faces — style half, compiles to style.json `light`"

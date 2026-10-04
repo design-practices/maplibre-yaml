@@ -145,7 +145,7 @@ Markers are a **fallback-class** construct on eject: `mlym emit
 (the pins render; dragging and popup content do not compile), and `--strict`
 refuses marker documents. `icon:` URLs are fetched into the document sprite
 at compile time, so ejected icon markers keep their images. See the [eject
-classes reference](/reference/eject-classes/).
+classes reference](/guides/eject-classes/).
 
 ## Popups
 
@@ -241,6 +241,108 @@ marker `icon:` URL in the document (bounded: 30s timeout, 20MB and
 fetched bytes are embedded verbatim into the sprite files you publish.
 :::
 
+## Terrain, sky & projection
+
+Three document-root keys, siblings of `config:`, author the map-level 3D
+scene. Each one is the style spec's own root property, in the spec's own
+shape, so what you write is exactly what an ejected `style.json` carries. In
+a format-v2 document they live under `style:` instead
+(`style.terrain`, `style.sky`, `style.projection`).
+
+```yaml
+type: map
+id: alps
+config:
+  center: [11.39, 47.27]
+  zoom: 12
+  pitch: 70
+  maxPitch: 85
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  terrainSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+terrain:
+  source: terrainSource
+  exaggeration: 1.5
+sky:
+  sky-color: "#199EF3"
+  horizon-color: "#ffffff"
+  fog-color: "#ffffff"
+  fog-ground-blend: 0.1
+  atmosphere-blend: ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0]
+projection:
+  type: globe
+controls:
+  navigation: true
+  globe: true
+  terrain: true
+```
+
+### `terrain:`
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `source` | string | Name of a `raster-dem` source: one in `sources:`, or one the basemap supplies (required) |
+| `exaggeration` | number ≥ 0 | Vertical exaggeration (spec default `1`) |
+
+Declare the DEM as a **named** source. Give a `hillshade` layer its own DEM
+source rather than sharing the terrain's; one source serving both renders at
+reduced quality. A `source` that names nothing, or a non-DEM source, warns
+once and the map renders flat.
+
+### `sky:`
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `sky-color` | color or expression | The sky above the horizon |
+| `horizon-color` | color or expression | The band where sky meets fog |
+| `fog-color` | color or expression | Fog over distant 3D terrain |
+| `sky-horizon-blend` | 0–1 or expression | How far the horizon color blends up into the sky |
+| `horizon-fog-blend` | 0–1 or expression | How far the horizon color blends down into the fog |
+| `fog-ground-blend` | 0–1 or expression | Where fog starts: `0` at the camera, `1` at the horizon |
+| `atmosphere-blend` | 0–1 or expression | Globe atmosphere opacity; draws under globe projection only |
+
+`sky: {}` turns on MapLibre's default sky. The sky is only visible when a
+pitched camera can see the horizon, and fog only affects 3D terrain.
+
+### `projection:`
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `type` | `mercator` \| `globe` | `mercator` is the default |
+
+### Runtime requirements
+
+The live map applies each key with its MapLibre setter. Each setter is
+feature-detected: on a runtime that lacks one, the document logs one console
+warning naming the minimum version and keeps rendering without that effect.
+It never throws.
+
+| Key | Needs maplibre-gl | On an older runtime |
+|-----|-------------------|---------------------|
+| `terrain:` | 2.2.0 (`setTerrain`) | Every supported peer version has it |
+| `sky:` | 4.5.0 (`setSky`) | Renders without sky or fog |
+| `sky.atmosphere-blend` | 5.0.0 (draws under globe only) | No atmosphere (there is no globe) |
+| `projection: globe` | 5.0.0 (`setProjection`) | Renders in mercator |
+| `controls.globe` | 5.0.0 (`GlobeControl`) | The control is omitted |
+
+The minimums come from the maplibre-gl changelog: 3D terrain arrived in
+2.2.0, the spec `sky` in 4.5.0, and globe projection with its atmosphere in
+5.0.0.
+
+### On eject
+
+All three keys are class **ejects**. `mlym emit` copies them verbatim to the
+style.json root. When the basemap also defines one, the document's value
+replaces the basemap's wholesale, as it does live, and emit notes the
+override. A `terrain.source` that resolves to no `raster-dem` source, after
+the basemap merge, is dropped with a lossy warning rather than shipped as a
+style MapLibre would reject. With `--target` below a key's floor, emit keeps
+the key (it still validates on 4.x) and reports the visual difference as
+lossy, so `--strict --target 4.7.1` refuses a globe document. See the
+[eject classes reference](/guides/eject-classes/).
 ## Light
 
 `light:` is the style-spec root [light](https://maplibre.org/maplibre-style-spec/light/)
@@ -514,6 +616,8 @@ controls:
 | `scale` | `bottom-left` | Distance scale indicator |
 | `fullscreen` | `top-right` | Fullscreen toggle |
 | `attribution` | `bottom-right` | Attribution text |
+| `globe` | `top-right` | Globe/mercator projection toggle (maplibre-gl ≥ 5.0.0; older runtimes warn and omit it) |
+| `terrain` | `top-right` | 3D terrain on/off toggle for the document's [`terrain:`](#terrain-sky--projection) (warns and is omitted when the document declares none) |
 
 ### Control Positions
 

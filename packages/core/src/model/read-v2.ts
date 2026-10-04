@@ -173,6 +173,14 @@ export function readV2Block(doc: MapBlockV2): MapModel {
   const v2Images = style["images"] as MapModel["style"]["images"];
   if (v2Images !== undefined && Object.keys(v2Images).length > 0)
     model.style.images = v2Images;
+  // U15's 3D trio — v1 authors them at the root, v2 under `style:`; both
+  // land in the same style-half slots (AE2).
+  if (style["terrain"] !== undefined)
+    model.style.terrain = style["terrain"] as MapModel["style"]["terrain"];
+  if (style["sky"] !== undefined)
+    model.style.sky = style["sky"] as MapModel["style"]["sky"];
+  if (style["projection"] !== undefined)
+    model.style.projection = style["projection"] as MapModel["style"]["projection"];
   if (style["light"] !== undefined)
     model.style.light = style["light"] as MapModel["style"]["light"];
 

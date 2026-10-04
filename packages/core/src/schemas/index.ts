@@ -164,6 +164,9 @@ export {
   FitToSchema,
   ImageConfigSchema,
   ImagesSchema,
+  TerrainSchema,
+  SkySchema,
+  ProjectionSchema,
   LightSchema,
   ParametersSchema,
 } from "./map.schema";
@@ -182,6 +185,9 @@ export type {
   FitToConfig,
   ImageConfig,
   ImagesConfig,
+  TerrainConfig,
+  SkyConfig,
+  ProjectionConfig,
   LightConfig,
 } from "./map.schema";
 

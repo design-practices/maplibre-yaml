@@ -240,6 +240,34 @@ ejectClasses.register("images", {
     "cannot compile (lossy).",
 });
 
+// Style-half 3D constructs (U15). Like `images`, registered for the docs
+// table and programmatic consumers; the projection compiles them directly
+// and reports their edges itself (an unresolvable terrain source is lossy;
+// a declared emit target below a floor is lossy via the runtime gate).
+ejectClasses.register("terrain", {
+  class: "ejects",
+  onEmit:
+    "`terrain:` is a style-spec root property and compiles through verbatim; the " +
+    "document's terrain wins over a basemap's. A `source` that resolves to no " +
+    "raster-dem source is dropped (lossy) rather than shipped invalid.",
+});
+
+ejectClasses.register("sky", {
+  class: "ejects",
+  onEmit:
+    "`sky:` is a style-spec root property and compiles through verbatim; the " +
+    "document's sky wins over a basemap's. Runtimes below maplibre-gl 4.5.0 do not " +
+    "draw it (reported as lossy against a declared --target).",
+});
+
+ejectClasses.register("projection", {
+  class: "ejects",
+  onEmit:
+    "`projection:` is a style-spec root property and compiles through verbatim; the " +
+    "document's projection wins over a basemap's. Globe needs maplibre-gl 5.0.0 — " +
+    "older runtimes render mercator (reported as lossy against a declared --target).",
+});
+
 // Style-half construct (U10′): the style-spec root `light`, applied live
 // with `map.setLight` and compiled through verbatim on eject.
 ejectClasses.register("light", {

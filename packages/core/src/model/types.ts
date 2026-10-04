@@ -111,6 +111,19 @@ export interface StyleHalf {
    */
   images?: Record<string, import("../schemas/map.schema").ImageConfig>;
   /**
+   * Map-level 3D terrain (U15) — the style-spec root `terrain`.
+   *
+   * @remarks
+   * Style half: it compiles verbatim (class `ejects`). Live, the renderer
+   * applies it with `setTerrain` because the live style is built from the
+   * basemap + addLayer, never from this model's style object.
+   */
+  terrain?: import("../schemas/map.schema").TerrainConfig;
+  /** Sky / fog / globe atmosphere (U15) — the style-spec root `sky`. */
+  sky?: import("../schemas/map.schema").SkyConfig;
+  /** Map projection (U15) — the style-spec root `projection`. */
+  projection?: import("../schemas/map.schema").ProjectionConfig;
+  /**
    * The style-spec root `light` (U10′).
    *
    * @remarks
@@ -181,6 +194,12 @@ export interface V1MapInput {
   popups?: import("../schemas/map.schema").StandalonePopupConfig[];
   /** Named images for symbol layers and patterns, authored at the root. */
   images?: Record<string, import("../schemas/map.schema").ImageConfig>;
+  /** Map-level 3D terrain, authored at the root (v2: `style.terrain`). */
+  terrain?: import("../schemas/map.schema").TerrainConfig;
+  /** Sky / fog / atmosphere, authored at the root (v2: `style.sky`). */
+  sky?: import("../schemas/map.schema").SkyConfig;
+  /** Map projection, authored at the root (v2: `style.projection`). */
+  projection?: import("../schemas/map.schema").ProjectionConfig;
   /** The style-spec light shading fill-extrusion faces, authored at the root. */
   light?: import("../schemas/map.schema").LightConfig;
 }

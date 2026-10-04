@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/3d-terrain/
+# Map-level `terrain:` drapes the whole map over a raster-dem source. As
+# upstream, terrain and hillshade read separate DEM sources (one source
+# serving both renders at reduced quality).
+type: map
+id: 3d-terrain
+config:
+  center: [11.39085, 47.27574]
+  zoom: 12
+  pitch: 70
+  maxZoom: 18
+  maxPitch: 85
+  hash: true
+  mapStyle: { version: 8, sources: {}, layers: [] }
+sources:
+  osm:
+    type: raster
+    tiles:
+      - "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    tileSize: 256
+    maxzoom: 19
+    attribution: "© OpenStreetMap contributors"
+  terrainSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+  hillshadeSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+layers:
+  - id: osm
+    type: raster
+    source: osm
+  - id: hills
+    type: hillshade
+    source: hillshadeSource
+    paint:
+      hillshade-shadow-color: "#473B24"
+terrain:
+  source: terrainSource
+  exaggeration: 1
+sky: {}
+controls:
+  navigation: true
+  terrain: true

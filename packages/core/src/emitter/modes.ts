@@ -25,6 +25,8 @@
 import type { CapabilityPolicy } from "../capabilities";
 import {
   STATE_RUNTIME_FLOOR,
+  SKY_RUNTIME_FLOOR,
+  GLOBE_RUNTIME_FLOOR,
   COLOR_RELIEF_RUNTIME_FLOOR,
   meetsVersion,
   supportsState,
@@ -95,21 +97,71 @@ function inlineReads(
 }
 
 /**
- * Compile `state:` away when the target runtime cannot carry it.
+ * Gate the emitted style on the target runtime.
  *
  * @remarks
- * A no-op when the target meets the floor, or when the style declares no
+ * Two passes. `state:` compiles away when the target cannot carry it — a
+ * no-op when the target meets the floor, or when the style declares no
  * `state` at all. The policy's `target` being undefined counts as *not* meeting
  * the floor — a caller who has not said which runtime they target has not made
  * a claim about it, and guessing generously ships a style that validates in CI
- * and renders blank in production.
+ * and renders blank in production. The 3D trio (U15) is only *reported* below
+ * its floors — see `gateScene`.
  */
 export function applyRuntimeGate(
   result: EmitResult,
   policy: CapabilityPolicy
 ): EmitResult {
-  return gateState(gateLayerTypes(result, policy), policy);
+  return gateState(gateScene(gateLayerTypes(result, policy), policy), policy);
 }
+
+/**
+ * Report the 3D trio (U15) against a DECLARED target below its floor.
+ *
+ * @remarks
+ * Unlike `state`, nothing is rewritten: `sky` and `projection` validate
+ * against the 4.x style spec and are simply not drawn there (globe renders as
+ * mercator; a pre-4.5 runtime ignores sky), so the style stays loadable and
+ * the keys stay for the runtime that can use them. The visual difference on
+ * the declared target is real, though, so it is `lossy` — `--strict` refuses
+ * it. An undeclared target makes no claim and gets no warning: the emitted
+ * keys are correct for every runtime that renders them.
+ */
+function gateScene(result: EmitResult, policy: CapabilityPolicy): EmitResult {
+  if (!policy.target) return result;
+  const added: EmitWarning[] = [];
+  const projection = result.style["projection"];
+  if (
+    isPlainObject(projection) &&
+    projection["type"] === "globe" &&
+    !meetsVersion(policy.target, GLOBE_RUNTIME_FLOOR)
+  ) {
+    added.push({
+      path: "projection",
+      kind: "lossy",
+      construct: "projection",
+      ejectClass: "ejects",
+      message:
+        `\`projection: globe\` needs maplibre-gl ${GLOBE_RUNTIME_FLOOR} or later; the ` +
+        `target is ${policy.target}, which renders the emitted style in mercator.`,
+    });
+  }
+  if (result.style["sky"] !== undefined && !meetsVersion(policy.target, SKY_RUNTIME_FLOOR)) {
+    added.push({
+      path: "sky",
+      kind: "lossy",
+      construct: "sky",
+      ejectClass: "ejects",
+      message:
+        `\`sky:\` needs maplibre-gl ${SKY_RUNTIME_FLOOR} or later; the target is ` +
+        `${policy.target}, which renders the emitted style without sky or fog.`,
+    });
+  }
+  return added.length > 0
+    ? { ...result, warnings: [...result.warnings, ...added] }
+    : result;
+}
+
 
 /**
  * Report layer types the declared target cannot render (U14: `color-relief`
