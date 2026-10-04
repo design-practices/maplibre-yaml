@@ -649,6 +649,72 @@ style:
   });
 });
 
+describe("AE2 — map-level 3D (U15)", () => {
+  const V1 = `
+type: map
+id: alps
+config:
+  center: [11.39, 47.27]
+  zoom: 12
+  pitch: 70
+  mapStyle: ${BASEMAP}
+sources:
+  terrainSource:
+    type: raster-dem
+    tiles: ["https://dem.example/{z}/{x}/{y}.png"]
+    encoding: terrarium
+terrain:
+  source: terrainSource
+  exaggeration: 1.5
+sky:
+  sky-color: "#199EF3"
+  fog-ground-blend: 0.1
+  atmosphere-blend: [interpolate, [linear], [zoom], 0, 1, 7, 0]
+projection:
+  type: globe
+`;
+  const V2 = `
+version: 2
+type: map
+id: alps
+style:
+  basemap: ${BASEMAP}
+  center: [11.39, 47.27]
+  zoom: 12
+  pitch: 70
+  sources:
+    terrainSource:
+      type: raster-dem
+      tiles: ["https://dem.example/{z}/{x}/{y}.png"]
+      encoding: terrarium
+  terrain:
+    source: terrainSource
+    exaggeration: 1.5
+  sky:
+    sky-color: "#199EF3"
+    fog-ground-blend: 0.1
+    atmosphere-blend: [interpolate, [linear], [zoom], 0, 1, 7, 0]
+  projection:
+    type: globe
+`;
+
+  it("v1 root terrain/sky/projection and v2 style.* normalize deep-equal", () => {
+    const v1 = model(V1);
+    const v2 = model(V2);
+    expect(v1.style.terrain).toEqual({ source: "terrainSource", exaggeration: 1.5 });
+    expect(v1.style.projection).toEqual({ type: "globe" });
+    expect(v1.style.sky?.["sky-color"]).toBe("#199EF3");
+    expect(v2).toEqual(v1);
+  });
+
+  it("both formats project the trio to the same style.json root", () => {
+    const a = projectStyle(model(V1)).style;
+    const b = projectStyle(model(V2)).style;
+    expect(a["terrain"]).toEqual({ source: "terrainSource", exaggeration: 1.5 });
+    expect(b).toEqual(a);
+  });
+});
+
 describe("AE2 round-trip — the emitter sees only the model", () => {
   it("a v2 doc and its v1 twin project to the same style.json", () => {
     const v1 = model(`

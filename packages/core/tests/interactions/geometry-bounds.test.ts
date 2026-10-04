@@ -12,7 +12,46 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { geometryBounds } from "../../src/interactions/geometry-bounds";
+import { geometryBounds, geojsonBounds } from "../../src/interactions/geometry-bounds";
+
+describe("geojsonBounds (U14 fitTo — whole-source bounds)", () => {
+  it("bounds a FeatureCollection across all features", () => {
+    expect(
+      geojsonBounds({
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [1, 2] } },
+          {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates: [[-3, 5], [4, -6]] },
+          },
+        ],
+      })
+    ).toEqual([
+      [-3, -6],
+      [4, 5],
+    ]);
+  });
+
+  it("accepts a bare Feature or a bare geometry", () => {
+    const point = { type: "Point", coordinates: [7, 8] };
+    expect(geojsonBounds({ type: "Feature", properties: {}, geometry: point })).toEqual([
+      [7, 8],
+      [7, 8],
+    ]);
+    expect(geojsonBounds(point)).toEqual([
+      [7, 8],
+      [7, 8],
+    ]);
+  });
+
+  it("returns null for empty or coordinate-free data", () => {
+    expect(geojsonBounds({ type: "FeatureCollection", features: [] })).toBeNull();
+    expect(geojsonBounds({ type: "Feature", properties: {}, geometry: null })).toBeNull();
+    expect(geojsonBounds(null)).toBeNull();
+  });
+});
 
 describe("geometryBounds — per geometry type", () => {
   it("returns a degenerate bbox for a Point", () => {

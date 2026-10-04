@@ -1,0 +1,23 @@
+---
+title: Display a popup
+description: "The MapLibre display-a-popup example — a popup open at a coordinate, no layer, no marker"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-popup.yaml?raw';
+
+Replicates the MapLibre example [Display a popup](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup/). Upstream's `new Popup({closeOnClick: false}).setLngLat(...).setHTML(...).addTo(map)` becomes one `popups:` entry. The popup is open from load and has no layer under it and no marker above it.
+
+<LiveMap src="/configs/gallery/display-a-popup.yaml" height="440px" caption="Clicking the map leaves it open; the × closes it" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-popup.yaml" />
+
+## What to notice
+
+- `content` uses the same structured vocabulary as layer and marker popups, through the same trust gate. Tags are allowlisted and `str:` values are escaped, so an untrusted document can't inject markup the way upstream's `setHTML` string could.
+- `closeOnClick` and `closeButton` are MapLibre's own popup options. Unset, MapLibre's defaults apply.
+- Why not a marker without a pin? A marker's popup opens when the pin is clicked. Hide the pin and nothing can open it. A standalone popup is open from the start, so it's a construct of its own.
+- **Eject class: declared absence.** A popup is DOM, not cartography. `mlym emit` reports it as a contract warning and the emitted style renders the map without it.

@@ -13,9 +13,12 @@ import { defineConfig, devices } from "@playwright/test";
  * but deterministic. The fixtures fetch demotiles and terrain tiles over the
  * network, so these are excluded from the default unit run.
  */
-// One port for the fixture server and the browser; VERIFY_PORT moves both
-// (e2e/server.mjs reads the same variable), so concurrent lanes on one box
-// do not collide on 4174.
+/**
+ * Same env var e2e/server.mjs listens on. `reuseExistingServer` means a
+ * server another worktree left on the default port would otherwise be
+ * silently reused — serving THAT tree's files — so parallel worktrees each
+ * pick their own port: `VERIFY_PORT=4175 pnpm verify:browser`.
+ */
 const PORT = Number(process.env.VERIFY_PORT ?? 4174);
 
 export default defineConfig({

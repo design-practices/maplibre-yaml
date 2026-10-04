@@ -17,6 +17,8 @@ import {
   LngLatBoundsSchema,
   ZoomLevelSchema,
   ColorSchema,
+  ColorOrExpressionSchema,
+  ExpressionSchema,
 } from "./base.schema";
 import { LayerOrReferenceSchema, PopupContentSchema } from "./layer.schema";
 import { LayerSourceSchema } from "./source.schema";
@@ -121,6 +123,12 @@ export const ControlsConfigSchema = z
     attribution: AttributionControlConfigSchema.optional().describe(
       "Attribution control",
     ),
+    globe: ControlConfigSchema.optional().describe(
+      "Globe/mercator projection toggle (maplibre-gl >= 5.0.0)",
+    ),
+    terrain: ControlConfigSchema.optional().describe(
+      "3D terrain on/off toggle — toggles the document's `terrain:`",
+    ),
   })
   .describe("Map controls configuration");
 
@@ -185,6 +193,53 @@ export const LegendConfigSchema = z
 
 /** Inferred type for legend config. */
 export type LegendConfig = z.infer<typeof LegendConfigSchema>;
+
+/**
+ * Fit the initial camera to a source's data (U14, ml-chh.9).
+ *
+ * @remarks
+ * The data-driven sibling of `bounds:` — where `bounds` takes literal
+ * coordinates, `fitTo` names a GeoJSON entry in `sources:` and the camera
+ * frames whatever that source holds. It reuses the bounds walk the
+ * `zoomToFeature` click interaction uses, applied to the whole source on
+ * load instead of one clicked feature on click.
+ *
+ * - **Inline `data:`** — the bounds are known before the map exists, so the
+ *   map is constructed already framed (no camera jump).
+ * - **`url:`** — the map opens at the authored `center`/`zoom`, then jumps
+ *   to the data's bounds once the first fetch lands (refreshes do not
+ *   re-fit: the user owns the camera after load).
+ * - **vector / raster / raster-dem** — not supported: tiled sources have no
+ *   client-side extent before they render. The renderer warns once and keeps
+ *   the authored camera.
+ *
+ * `center`/`zoom` stay required: they are the camera before the data
+ * arrives, the camera when the fit cannot apply, and the fallback emit uses
+ * when the data is not inline. `fitTo` wins over `bounds` when both are set.
+ *
+ * On emit (`fallback` class) an inline source's bounds compile to a
+ * concrete `center`/`zoom` computed for a 1024×768 reference viewport —
+ * lossy, because a live map fits its own container.
+ */
+export const FitToSchema = z
+  .object({
+    source: z
+      .string()
+      .min(1)
+      .describe("Name of a GeoJSON entry in `sources:` whose data the camera frames"),
+    padding: z
+      .number()
+      .min(0)
+      .optional()
+      .describe("Padding in pixels around the fitted bounds"),
+    maxZoom: ZoomLevelSchema.optional().describe(
+      "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+    ),
+  })
+  .describe("Fit the initial camera to a GeoJSON source's data");
+
+/** Inferred type for `fitTo`. */
+export type FitToConfig = z.infer<typeof FitToSchema>;
 
 /**
  * Map configuration with MapLibre options.
@@ -300,6 +355,9 @@ export const MapConfigSchema = z
       .union([LngLatBoundsSchema, z.array(z.number())])
       .optional()
       .describe("Fit map to bounds"),
+    fitTo: FitToSchema.optional().describe(
+      "Fit the initial camera to a GeoJSON source's data (wins over `bounds`)"
+    ),
 
     // Constraints
     minZoom: ZoomLevelSchema.optional().describe("Minimum zoom level"),
@@ -454,6 +512,45 @@ export const MarkerSchema = z.object({
 export const MarkersSchema = z.array(MarkerSchema);
 
 /**
+ * One standalone popup, open at a coordinate (U14).
+ *
+ * @remarks
+ * MapLibre's `display-a-popup`: a popup with no layer under it and no pin
+ * above it. A marker with its pin hidden is NOT the same thing — a marker's
+ * popup opens on click, so a pinless marker would be content nobody can
+ * open. This construct is open from load and closes like any MapLibre popup.
+ *
+ * `content` is the same structured popup vocabulary layer and marker popups
+ * use, rendered through the same `PopupBuilder(policy)` trust gate — there
+ * is no feature, so `property:` lookups resolve empty and `str:` carries the
+ * text. Eject class: declared absence (a popup is DOM, not cartography).
+ */
+export const StandalonePopupSchema = z.object({
+  at: LngLatSchema.describe("Popup anchor position [lng, lat]"),
+  content: PopupContentSchema.describe(
+    "Popup content (same structured items as layer popups; `str:` for text)"
+  ),
+  closeButton: z
+    .boolean()
+    .optional()
+    .describe("Show the close button (MapLibre default: true)"),
+  closeOnClick: z
+    .boolean()
+    .optional()
+    .describe("Close when the map is clicked (MapLibre default: true)"),
+  maxWidth: z
+    .string()
+    .optional()
+    .describe('CSS max-width of the popup, e.g. "300px" (MapLibre default: 240px)'),
+});
+
+/** The document-root `popups:` list. */
+export const PopupsSchema = z.array(StandalonePopupSchema);
+
+/** Inferred standalone popup type. */
+export type StandalonePopupConfig = z.infer<typeof StandalonePopupSchema>;
+
+/**
  * One named image (U6, R9) — for symbol-layer icons and `*-pattern` fills.
  *
  * @remarks
@@ -498,6 +595,178 @@ export const ImagesSchema = z.record(
 /** Inferred image types. */
 export type ImageConfig = z.infer<typeof ImageConfigSchema>;
 export type ImagesConfig = z.infer<typeof ImagesSchema>;
+
+/**
+ * Map-level 3D terrain (U15, ml-chh.5) — the style spec's root `terrain`.
+ *
+ * @remarks
+ * The authored shape IS the spec's shape: `source` names a `raster-dem`
+ * source (one declared in `sources:`, or one the basemap supplies) and
+ * `exaggeration` scales its heights. Style half: live, the renderer calls
+ * `map.setTerrain` once the source exists; on eject it compiles verbatim to
+ * the style.json root (class `ejects`), and the document's `terrain` wins
+ * over one inherited from the basemap. maplibre-gl has carried terrain since
+ * 2.2.0, so the whole supported peer range renders it.
+ *
+ * Give terrain its own `raster-dem` source rather than sharing the one a
+ * `hillshade` layer reads — MapLibre's own examples do this, because one
+ * source serving both purposes renders at reduced quality.
+ *
+ * @example
+ * ```yaml
+ * terrain:
+ *   source: terrainSource
+ *   exaggeration: 1.5
+ * ```
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/terrain/ | Style spec: terrain}
+ */
+export const TerrainSchema = z
+  .object({
+    source: z
+      .string()
+      .min(1)
+      .describe("Name of the `raster-dem` source supplying elevation"),
+    exaggeration: z
+      .number()
+      .min(0)
+      .optional()
+      .describe("Vertical exaggeration multiplier (spec default 1)"),
+  })
+  .describe("Map-level 3D terrain — the style spec's root `terrain`");
+
+/** Inferred terrain type. */
+export type TerrainConfig = z.infer<typeof TerrainSchema>;
+
+/** A sky blend factor: 0–1, or a zoom expression producing one. */
+const SkyBlendSchema = z.union([z.number().min(0).max(1), ExpressionSchema]);
+
+/**
+ * Sky, horizon, fog, and globe atmosphere (U15, ml-chh.7) — the style spec's
+ * root `sky`.
+ *
+ * @remarks
+ * Every property is the spec's own, spelled the spec's way, and each takes a
+ * value or a zoom expression. Style half: live, `map.setSky`; on eject it
+ * compiles verbatim to the style.json root (class `ejects`).
+ *
+ * Runtime minimums: `sky` needs maplibre-gl **4.5.0** (`Map#setSky`); on an
+ * older runtime it warns once and the map renders without it.
+ * `atmosphere-blend` only draws under `projection: { type: globe }`, so it
+ * needs **5.0.0** in practice. The sky itself is only visible when the camera
+ * can see the horizon — a pitched map — and fog only affects 3D terrain.
+ *
+ * @example
+ * ```yaml
+ * sky:
+ *   sky-color: "#199EF3"
+ *   horizon-color: "#ffffff"
+ *   fog-color: "#ffffff"
+ *   sky-horizon-blend: 0.5
+ *   horizon-fog-blend: 0.5
+ *   fog-ground-blend: 0.1
+ * ```
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/sky/ | Style spec: sky}
+ */
+export const SkySchema = z
+  .object({
+    "sky-color": ColorOrExpressionSchema.optional().describe(
+      "Color of the sky above the horizon"
+    ),
+    "horizon-color": ColorOrExpressionSchema.optional().describe(
+      "Color at the horizon, where sky meets fog"
+    ),
+    "fog-color": ColorOrExpressionSchema.optional().describe(
+      "Color of the fog over distant 3D terrain"
+    ),
+    "sky-horizon-blend": SkyBlendSchema.optional().describe(
+      "How far the horizon color blends up into the sky (0-1)"
+    ),
+    "horizon-fog-blend": SkyBlendSchema.optional().describe(
+      "How far the horizon color blends down into the fog (0-1)"
+    ),
+    "fog-ground-blend": SkyBlendSchema.optional().describe(
+      "Where fog starts over terrain: 0 at the camera, 1 at the horizon"
+    ),
+    "atmosphere-blend": SkyBlendSchema.optional().describe(
+      "Globe atmosphere opacity (0-1); draws under globe projection only (maplibre-gl >= 5)"
+    ),
+  })
+  .describe("Sky, horizon, fog, and globe atmosphere — the style spec's root `sky`");
+
+/** Inferred sky type. */
+export type SkyConfig = z.infer<typeof SkySchema>;
+
+/**
+ * Map projection (U15, ml-chh.6) — the style spec's root `projection`.
+ *
+ * @remarks
+ * `mercator` (the default) or `globe`. Style half: live, `map.setProjection`;
+ * on eject it compiles verbatim to the style.json root (class `ejects`).
+ *
+ * Globe needs maplibre-gl **5.0.0**. On a 4.x runtime there is no
+ * `setProjection`: the document warns once and renders in mercator — a
+ * declared absence at runtime, never a silent one.
+ *
+ * @example
+ * ```yaml
+ * projection:
+ *   type: globe
+ * ```
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/projection/ | Style spec: projection}
+ */
+export const ProjectionSchema = z
+  .object({
+    type: z
+      .enum(["mercator", "globe"])
+      .describe("Projection: `mercator` (default) or `globe` (maplibre-gl >= 5.0.0)"),
+  })
+  .describe("Map projection — the style spec's root `projection`");
+
+/** Inferred projection type. */
+export type ProjectionConfig = z.infer<typeof ProjectionSchema>;
+
+/**
+ * The style-spec root `light` (U10′) — the single light that shades
+ * `fill-extrusion` faces.
+ *
+ * @remarks
+ * Spec-native, so it compiles straight through to the emitted style.json
+ * root (class `ejects`); live, the renderer applies it with `map.setLight`
+ * once the style has loaded. Every property accepts a zoom expression, as
+ * the spec allows. Closed object: an unknown key is a typo, never a
+ * silently ignored setting.
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/light/ | MapLibre Light}
+ */
+export const LightSchema = z
+  .object({
+    anchor: z
+      .union([z.enum(["map", "viewport"]), ExpressionSchema])
+      .optional()
+      .describe(
+        "`map` fixes the light to the map (it turns with the bearing); `viewport` (default) fixes it to the screen"
+      ),
+    position: z
+      .union([z.tuple([z.number(), z.number(), z.number()]), ExpressionSchema])
+      .optional()
+      .describe(
+        "[radial, azimuthal°, polar°] — distance from the centre of the base of an object, direction clockwise from north (0° = north at anchor map), height above the horizon (0° = overhead). Default [1.15, 210, 30]"
+      ),
+    color: ColorOrExpressionSchema.optional().describe(
+      "Light color (default white)"
+    ),
+    intensity: z
+      .union([z.number().min(0).max(1), ExpressionSchema])
+      .optional()
+      .describe("Light intensity, 0–1; higher is more extreme contrast (default 0.5)"),
+  })
+  .strict();
+
+/** Inferred light type. */
+export type LightConfig = z.infer<typeof LightSchema>;
 
 /** Inferred marker type. */
 export type MarkerConfig = z.infer<typeof MarkerSchema>;
@@ -618,8 +887,23 @@ export const MapBlockSchema: z.ZodObject<any> = z
     markers: MarkersSchema.optional().describe(
       "Standalone markers — DOM pins live, symbol layers + sprite on eject"
     ),
+    popups: PopupsSchema.optional().describe(
+      "Standalone popups open at a coordinate — no layer, no marker"
+    ),
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+    ),
+    terrain: TerrainSchema.optional().describe(
+      "3D terrain from a raster-dem source — setTerrain live, style.json `terrain` on eject"
+    ),
+    sky: SkySchema.optional().describe(
+      "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json `sky` on eject"
+    ),
+    projection: ProjectionSchema.optional().describe(
+      "Map projection (`globe` needs maplibre-gl >= 5) — style.json `projection` on eject"
+    ),
+    light: LightSchema.optional().describe(
+      "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on eject"
     ),
   })
   .describe("Standard map block");
@@ -681,8 +965,23 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     markers: MarkersSchema.optional().describe(
       "Standalone markers — DOM pins live, symbol layers + sprite on eject"
     ),
+    popups: PopupsSchema.optional().describe(
+      "Standalone popups open at a coordinate — no layer, no marker"
+    ),
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+    ),
+    terrain: TerrainSchema.optional().describe(
+      "3D terrain from a raster-dem source — setTerrain live, style.json `terrain` on eject"
+    ),
+    sky: SkySchema.optional().describe(
+      "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json `sky` on eject"
+    ),
+    projection: ProjectionSchema.optional().describe(
+      "Map projection (`globe` needs maplibre-gl >= 5) — style.json `projection` on eject"
+    ),
+    light: LightSchema.optional().describe(
+      "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on eject"
     ),
   })
   .describe("Full-page map block");

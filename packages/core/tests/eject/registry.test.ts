@@ -81,8 +81,15 @@ describe("closed-world exhaustiveness (R4)", () => {
       "container",
       "parameters",
       "markers",
+      "fitTo",
+      "popups",
       "state",
       "images",
+      "terrain",
+      "sky",
+      "projection",
+      "color-relief",
+      "light",
       "x-*",
     ]) {
       expect(

@@ -42,6 +42,12 @@ const INHERITED_ROOT_KEYS = [
   "name",
 ] as const;
 
+/**
+ * The inherited root keys a document can also AUTHOR (U15: `terrain:`,
+ * `sky:`, `projection:`). When both sides carry one, the document wins.
+ */
+const SCENE_ROOT_KEYS = ["terrain", "sky", "projection"] as const;
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -158,6 +164,56 @@ export function mergeBasemap(base: unknown, projected: EmitResult): EmitResult {
   for (const [key, value] of Object.entries(documentStyle)) {
     if (key === "sources" || key === "layers") continue;
     style[key] = value;
+  }
+
+  // The 3D trio (U15) follows the same precedence as everything else here:
+  // the document's authored value WINS over the basemap's, wholesale — no
+  // per-property merge, because a half-basemap/half-document sky is a look
+  // nobody authored. Live, the renderer's setTerrain/setSky/setProjection
+  // calls override the basemap's in exactly the same way, so emit and live
+  // agree. Overriding is the point of authoring the key, so the note is a
+  // `contract` warning (visible, never a --strict failure).
+  for (const key of SCENE_ROOT_KEYS) {
+    if (key in base && key in documentStyle) {
+      warnings.push({
+        path: key,
+        kind: "contract",
+        construct: key,
+        ejectClass: "ejects",
+        message:
+          `The document's \`${key}:\` replaces the basemap's \`${key}\` in the ` +
+          "emitted style (the document wins, as it does live).",
+      });
+    }
+  }
+
+  // Terrain's source can live in the basemap, so projectStyle deferred its
+  // resolution to here, where the whole source set is finally known. A
+  // terrain whose source is absent, or is not raster-dem, would make the
+  // merged style fail spec validation — drop it, said out loud. An INHERITED
+  // basemap terrain can break the same way (a document source shadowing the
+  // basemap's DEM), so whichever terrain survived is checked.
+  const terrain = style["terrain"];
+  if (isPlainObject(terrain) && typeof terrain["source"] === "string") {
+    const target = sources[terrain["source"]];
+    const targetType = isPlainObject(target) ? target["type"] : undefined;
+    if (targetType !== "raster-dem") {
+      warnings.push({
+        path: "terrain.source",
+        kind: "lossy",
+        construct: "terrain",
+        ejectClass: "ejects",
+        message:
+          target === undefined
+            ? `\`terrain.source\` names "${terrain["source"]}", which neither the ` +
+              "document nor the basemap declares; the emitted style omits `terrain` " +
+              "and renders flat."
+            : `\`terrain.source\` names "${terrain["source"]}", a ${String(targetType)} ` +
+              "source; terrain needs raster-dem, so the emitted style omits `terrain` " +
+              "and renders flat.",
+      });
+      delete style["terrain"];
+    }
   }
 
   // Sprite is the one root key MERGED rather than won (KTD3): the basemap

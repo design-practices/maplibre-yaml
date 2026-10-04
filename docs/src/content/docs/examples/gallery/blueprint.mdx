@@ -1,0 +1,48 @@
+---
+title: Blueprint
+description: "Classic-style example — a drafting-sheet city as a pure style-spec document that is its own eject"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/blueprint.yaml?raw';
+
+A **classic-style example**: lower Manhattan as a drafting sheet, made in
+the Mapzen spirit. It is not a port of a Tangram original. The ground is a
+drafting grid. Water is dark with a pale shoreline, streets are thin and
+pale, park outlines are dashed, and the buildings are flat-shaded blue
+extrusions.
+
+<LiveMap src="/configs/gallery/blueprint.yaml" height="520px" />
+
+## The static tier
+
+Like [Crosshatch](/examples/gallery/crosshatch/), this page is the
+**static tier**. It is one plain style-spec document, so it is its own
+eject: `mlym emit --strict` compiles it with zero warnings, and the emitted
+`style.json` renders the same map in vanilla MapLibre. The only baked asset
+is the grid, which `mlym bake blueprint --out <dir>` regenerates.
+
+## What the effect will add
+
+The runtime effect for this classic draws a metre-scaled grid on every
+building face, so the lines never stretch with building height, and gives
+the edges a glow. It is **not shipped yet**. When it lands, it will upgrade
+the `buildings` layer in place. Until then, and in every ejected style, the
+flat-shaded buildings shown here are the fallback.
+
+## The complete document
+
+<Code code={config} lang="yaml" title="blueprint.yaml" />
+
+## What to notice
+
+- **`background-pattern`.** The grid is a declared image repeated across
+  the whole sheet. On eject it becomes the `mlym:grid` sprite entry.
+- **One source, five looks.** Water fill and shoreline line both read the
+  `water` source-layer. Parks are drawn only as dashed outlines.
+- **No `light:` needed.** The buildings use the default light, which
+  already reads as drafting shading. Add a [`light:`](/schema/map-config/#light)
+  block to retune it.
+
+Map data © OpenStreetMap contributors, served by OpenFreeMap.

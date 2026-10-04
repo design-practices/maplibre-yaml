@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-a-fill-extrusion-layer/
+# Fill extrusions hundreds of kilometres tall, standing on the globe.
+type: map
+id: display-a-globe-with-a-fill-extrusion-layer
+config:
+  center: [30.0, 40.0]
+  zoom: 0
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+projection:
+  type: globe
+controls:
+  globe:
+    enabled: true
+    position: top-right
+layers:
+  - id: extrude-polygon-layer
+    type: fill-extrusion
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: { height: 150000, color: "#ff0044" }
+            geometry:
+              type: Polygon
+              coordinates:
+                - [[-120.0, 10.0], [120.0, 10.0], [120.0, -10.0], [-120.0, -10.0], [-120.0, 10.0]]
+          - type: Feature
+            properties: { height: 450000, color: "#22ff44" }
+            geometry:
+              type: Polygon
+              coordinates:
+                - [[10.0, 50.0], [20.0, 50.0], [20.0, 40.0], [10.0, 40.0], [10.0, 50.0]]
+          - type: Feature
+            properties: { height: 600000, color: "#4400ff" }
+            geometry:
+              type: Polygon
+              coordinates:
+                - [[-70.0, 55.0], [-65.0, 55.0], [-65.0, 50.0], [-70.0, 50.0], [-70.0, 55.0]]
+    paint:
+      fill-extrusion-color: ["get", "color"]
+      fill-extrusion-opacity: 1
+      fill-extrusion-height: ["get", "height"]

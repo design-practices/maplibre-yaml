@@ -1,0 +1,23 @@
+---
+title: Sky, fog and terrain
+description: The MapLibre sky, fog and terrain example — the style-spec sky as a YAML block
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/sky-fog-terrain.yaml?raw';
+
+Replicates the MapLibre example [Sky, fog and terrain](https://maplibre.org/maplibre-gl-js/docs/examples/sky-fog-terrain/).
+
+<LiveMap src="/configs/gallery/sky-fog-terrain.yaml" height="500px" caption="Pitch toward the horizon to see sky, horizon and fog blend" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="sky-fog-terrain.yaml" />
+
+## What to notice
+
+- `sky:` takes the style spec's own properties, spelled the spec's way: three colors (`sky-color`, `horizon-color`, `fog-color`) and three 0–1 blends. Each also accepts a zoom expression.
+- The values are upstream's initial picker settings: deliberately loud, so you can see where each color applies. Fog only shows over 3D terrain.
+- Upstream's live color pickers call `setSky` from page script. That interactivity is JS territory; the look is pure YAML, and it ejects to the style.json `sky` unchanged.
+- `sky:` needs **maplibre-gl 4.5.0** or later; an older runtime warns once and renders without it.

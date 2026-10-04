@@ -28,6 +28,7 @@ const main = defineCommand({
     init: () => import('./commands/init.js').then(m => m.initCommand),
     schema: () => import('./commands/schema.js').then(m => m.schemaCommand),
     emit: () => import('./commands/emit.js').then(m => m.emitCommand),
+    bake: () => import('./commands/bake.js').then(m => m.bakeCommand),
   },
 });
 

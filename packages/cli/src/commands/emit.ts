@@ -28,6 +28,7 @@ import {
   attachSpriteAssets,
   attachSpriteImages,
   lowerMarkers,
+  lowerFitTo,
   EmitError,
   type EmitMode,
   type EmitWarning,
@@ -61,7 +62,8 @@ export async function emitStyle(
 }> {
   let model = toModel(block as never);
 
-  // Fallback lowerings (markers → symbol layer + pin sprites, KTD4) run only
+  // Fallback lowerings (markers → symbol layer + pin sprites, fitTo → a
+  // computed camera; KTD4) run only
   // under --with-fallbacks: in strict mode the un-lowered construct surfaces
   // as a lossy warning inside projectStyle, which is exactly what makes
   // --strict refuse the document instead of silently substituting.
@@ -74,6 +76,10 @@ export async function emitStyle(
     loweringAssets = lowered.assets;
     loweringImages = lowered.images;
     loweringWarnings = lowered.warnings;
+    // fitTo → a concrete camera computed from inline source data (U14).
+    const fitted = lowerFitTo(model);
+    model = fitted.model;
+    loweringWarnings = [...loweringWarnings, ...fitted.warnings];
   }
 
   let projected = applyRuntimeGate(projectStyle(model, mode), policy);

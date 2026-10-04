@@ -193,7 +193,7 @@ describe("ControlsManager", () => {
       const order: string[] = [];
       const hooked = new ControlsManager(
         { ...mockMap, addControl: vi.fn(() => order.push("add")) } as any,
-        () => order.push("scrub")
+        { beforeAttribution: () => order.push("scrub") }
       );
       hooked.addControls({ attribution: true } as any);
       expect(order).toEqual(["scrub", "add"]);
