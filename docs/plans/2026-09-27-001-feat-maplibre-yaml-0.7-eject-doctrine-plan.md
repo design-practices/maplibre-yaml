@@ -433,3 +433,14 @@ Public-surface deltas downstream consumers (mapparty first) see:
 
 ### Definition of Done, amended
 U1–U11, U13′ and U14–U18 shipped and green. KTD7 is met per D-A2 (real GPU, with the CI tripwire armed). The launch page is live with both classics. The census is refreshed. The spike branch is closed unmerged, with its code graduated. All other DoD clauses stand.
+
+## Amendment A2 (2026-10-04): maplibre-gl v6 and the attribution XSS advisory, ratified by Mario
+
+- **D-A7. maplibre-gl v6 support moves into 0.7** as unit **U19** (ml-vw4.9). *Supersedes the Deferred-to-Follow-Up "v6 environment migration" and KTD1's "core's peer range stays ^3 || ^4 || ^5" for 0.7.*
+  - **Why:** v6 is npm `latest`, and it's the only line patched for GHSA-jrc7-96c5-q579 (critical XSS sanitizer bypass in `DOM.sanitize`, fixed in ≥ 6.4.1).
+  - The peer range widens to include `^6.4.1` in the same PR as the v6 call-site fixes and a v6 CI matrix leg, so the advertised range never exceeds the tested range.
+  - Docs install pins move to v6.
+  - The U13′ effects backend's MapLibre-internals adapter must pass on v6.
+- **D-A8. Library-side attribution sanitizing, shipped as a 0.6.x maintenance patch and in 0.7** (ml-rfk, under ml-2l7).
+  - The exposure: maplibre's AttributionControl is the only caller of the vulnerable sanitizer, and documents forward `attribution:` text to it. Untrusted documents therefore reach it on every currently supported version.
+  - The fix: maplibre-yaml sanitizes document attribution itself (plain text + safe `<a href>`), at runtime and in emit.
