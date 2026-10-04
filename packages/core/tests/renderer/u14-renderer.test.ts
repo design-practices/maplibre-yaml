@@ -58,7 +58,10 @@ vi.mock("maplibre-gl", () => {
     return instance;
   });
   const getVersion = () => runtime.version;
-  const mod = { Map: MockMap, Popup, getVersion };
+  // The renderer always adds its own (sanitizing) attribution control
+  // (GHSA-jrc7-96c5-q579, attribution-guard.ts).
+  const AttributionControl = vi.fn(() => ({ type: "attribution" }));
+  const mod = { Map: MockMap, Popup, getVersion, AttributionControl };
   return { default: mod, ...mod };
 });
 

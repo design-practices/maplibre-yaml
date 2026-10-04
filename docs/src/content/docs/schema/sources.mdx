@@ -431,7 +431,7 @@ MapLibre GL JS GeoJSON options are supported:
 | `lineMetrics` | boolean | Enable line distance metrics |
 | `generateId` | boolean | Auto-generate feature IDs |
 | `promoteId` | string \| object | Promote property to feature ID |
-| `attribution` | string | Attribution text |
+| `attribution` | string | Attribution text ([sanitized](#attribution-is-sanitized)) |
 
 ### Example
 
@@ -444,6 +444,20 @@ source:
   buffer: 128
   attribution: "© Data Provider"
 ```
+
+## Attribution is sanitized
+
+Every source type's `attribution` is shown in MapLibre's attribution
+control, which renders it as HTML. maplibre-yaml sanitizes it first, under
+every trust policy: plain text, character references such as `&copy;`, and
+`<a href="…">` links with an `http:`, `https:` or `mailto:` URL (keeping only
+`href`, `target` and `rel`) pass through; any other markup is escaped and
+shows as literal text. The same rule applies to attribution that arrives from
+a TileJSON `url:` or a basemap style, and to the `style.json` that
+`mlym emit` writes (which reports a `contract` warning when it changes one).
+See [Trust and attribution](/integrations/web-components/#trust-and-attribution)
+for why: MapLibre's own attribution sanitizer can be bypassed on every
+supported maplibre-gl.
 
 ## Vector Source
 
@@ -478,7 +492,7 @@ source:
 | `maxzoom` | number | No | Maximum zoom level |
 | `bounds` | number[] | No | Bounds [west, south, east, north] |
 | `scheme` | `"xyz"` \| `"tms"` | No | Tile coordinate scheme |
-| `attribution` | string | No | Attribution text |
+| `attribution` | string | No | Attribution text ([sanitized](#attribution-is-sanitized)) |
 
 ### Example
 
@@ -520,7 +534,7 @@ source:
 | `maxzoom` | number | - | Maximum zoom level |
 | `bounds` | number[] | - | Bounds [west, south, east, north] |
 | `scheme` | `"xyz"` \| `"tms"` | - | Tile coordinate scheme |
-| `attribution` | string | - | Attribution text |
+| `attribution` | string | - | Attribution text ([sanitized](#attribution-is-sanitized)) |
 
 ### Example
 
@@ -561,7 +575,7 @@ source:
 | `minzoom` | number | - | Minimum zoom level |
 | `maxzoom` | number | - | Maximum zoom level |
 | `bounds` | number[] | - | Bounds [west, south, east, north] |
-| `attribution` | string | - | Attribution text |
+| `attribution` | string | - | Attribution text ([sanitized](#attribution-is-sanitized)) |
 
 Either `url` or `tiles` is required. A `custom` encoding also accepts MapLibre's
 `redFactor`, `greenFactor`, `blueFactor`, and `baseShift`.

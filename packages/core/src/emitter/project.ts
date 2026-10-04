@@ -30,7 +30,39 @@ import { DOCUMENT_SPRITE_ID, declareDocumentSprite } from "./assets";
 import { ejectClasses } from "../eject";
 import type { EjectClassDefinition } from "../eject";
 import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
+import { sanitizeSourcesAttribution } from "../utils/attribution";
 import { lowerEffectLayer } from "./lower-effects";
+
+/**
+ * Sanitize every `sources.*.attribution` in an emitted style, in place on the
+ * given sources map, warning (`contract`) for each one whose content was
+ * stripped.
+ *
+ * @remarks
+ * An emitted style.json is rendered by whatever maplibre-gl the consumer
+ * runs, and every release up to 6.4.0 renders attribution through a
+ * bypassable sanitizer (GHSA-jrc7-96c5-q579). So the artifact carries only
+ * what the live renderer would show: text and http(s)/mailto links (see
+ * utils/attribution.ts). A `contract` warning, not `lossy` — the attribution
+ * is still there, minus markup no consumer could safely render.
+ */
+export function sanitizeEmittedAttribution(
+  sources: Record<string, unknown>,
+  warnings: EmitWarning[],
+  origin: "document" | "basemap" = "document"
+): Record<string, unknown> {
+  const cleaned = sanitizeSourcesAttribution(sources, (id) => {
+    warnings.push({
+      path: `sources.${id}.attribution`,
+      kind: "contract",
+      message:
+        `${origin === "basemap" ? "Basemap source" : "Source"} "${id}" attribution ` +
+        "contained markup other than text and http(s)/mailto links; it was " +
+        "escaped or removed, because maplibre-gl renders attribution as HTML.",
+    });
+  }) as Record<string, unknown>;
+  return cleaned;
+}
 
 /** How unrepresentable content is handled. */
 export type EmitMode = "strict" | "with-fallbacks";
@@ -573,7 +605,7 @@ export function projectStyle(
   const style: Record<string, unknown> = {
     version: 8,
     ...model.style.camera,
-    sources,
+    sources: sanitizeEmittedAttribution(sources, warnings),
     layers: orderLayers(positioned),
   };
   const placements: LayerPlacement[] = positioned.map((l) => ({
