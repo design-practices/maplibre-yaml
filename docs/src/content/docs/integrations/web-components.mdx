@@ -333,7 +333,7 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 |-------|--------|------------|
 | `ml-map:loading` | `{ url }` | A `src` document fetch begins |
 | `ml-map:load` | `{}` | The document is fully loaded — basemap and every layer |
-| `ml-map:error` | `{ error, fatal }` or `{ errors }` | Runtime or map-creation failure (`error`; `fatal: true` aborts the document), or a configuration that failed to fetch, parse or validate (`errors`: an array of `{ path, message }`) |
+| `ml-map:error` | `{ error, fatal }` or `{ errors }` | Initialization or runtime failure (`fatal: true` aborts the document); a document that fails to parse or validate carries `errors` — the structured `{ path, message }[]` the error card shows — instead |
 | `ml-map:layer-added` | `{ layerId }` | A layer was added to the map |
 | `ml-map:layer-removed` | `{ layerId }` | A layer was removed |
 | `ml-map:layer-data-loading` | `{ layerId }` | A layer's data fetch begins |
@@ -803,17 +803,17 @@ mapEl.addEventListener("ml-map:error", (event) => {
 
 ### Methods
 
-| Method                   | Returns                 | Description                          |
-| ------------------------ | ----------------------- | ------------------------------------ |
-| `mapReady()`             | `Promise<maplibregl.Map>` | Resolves with the live map once the document loads (immediately if loaded); rejects on `ml-map:error` |
-| `getMap()`               | `maplibregl.Map`        | Returns the MapLibre GL map instance (`null` before load) |
-| `getRenderer()`          | `MapRenderer`           | Returns the MapRenderer instance (`null` before render) |
-| `isLoaded()`             | `boolean`               | Whether the map has loaded           |
-| `addLayer(layer)`        | `Promise<void>`         | Add a layer at runtime               |
-| `removeLayer(layerId)`   | `void`                  | Remove a layer                       |
-| `setLayerVisibility(layerId, visible)` | `void`    | Show or hide a layer                 |
-| `updateLayerData(layerId, data)` | `void`          | Replace a GeoJSON layer's data       |
-| `reload()`               | `Promise<void>`         | Re-read `src` (or the inline YAML) and re-render |
+| Method                          | Returns                   | Description |
+| ------------------------------- | ------------------------- | ----------- |
+| `mapReady()`                    | `Promise<maplibregl.Map>` | Resolves with the live map once the document loads (immediately if loaded); rejects on `ml-map:error` |
+| `getMap()`                      | `maplibregl.Map \| null`  | The MapLibre GL map instance (`null` before a render) |
+| `getRenderer()`                 | `MapRenderer \| null`     | The underlying renderer |
+| `isLoaded()`                    | `boolean`                 | Whether the map finished loading |
+| `reload()`                      | `Promise<void>`           | Re-fetch `src` and re-render |
+| `addLayer(layer)`               | `Promise<void>`           | Add a layer (same shape as a document layer) |
+| `removeLayer(layerId)`          | `void`                    | Remove a layer |
+| `setLayerVisibility(id, on)`    | `void`                    | Show or hide a layer |
+| `updateLayerData(id, geojson)`  | `void`                    | Replace a GeoJSON layer's data |
 
 Refresh control (`pauseRefresh` / `resumeRefresh` / `refreshNow`) is not
 exposed yet — see bead `ml-few`.

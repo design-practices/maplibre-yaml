@@ -1,9 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// `VERIFY_PORT` lets parallel worktrees each run their own server; the server
-// (e2e/server.mjs) reads the same variable.
-const PORT = Number(process.env.VERIFY_PORT ?? 4174);
-
 /**
  * Browser verification for the Phase 1 (schema truthfulness) units.
  *
@@ -17,6 +13,14 @@ const PORT = Number(process.env.VERIFY_PORT ?? 4174);
  * but deterministic. The fixtures fetch demotiles and terrain tiles over the
  * network, so these are excluded from the default unit run.
  */
+/**
+ * Same env var e2e/server.mjs listens on. `reuseExistingServer` means a
+ * server another worktree left on the default port would otherwise be
+ * silently reused — serving THAT tree's files — so parallel worktrees each
+ * pick their own port: `VERIFY_PORT=4175 pnpm verify:browser`.
+ */
+const PORT = Number(process.env.VERIFY_PORT ?? 4174);
+
 export default defineConfig({
   testDir: "./e2e",
   // Software rendering plus real tile fetches; generous but bounded.
