@@ -12,6 +12,7 @@
 
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Popup } from "./maplibre-interop";
+import { liftPopup } from "./chrome-layout";
 import { PopupBuilder } from "./popup-builder";
 import type { CapabilityPolicy } from "../capabilities";
 import type { StandalonePopupConfig } from "../schemas/map.schema";
@@ -37,7 +38,7 @@ export class PopupsManager {
       if (config.closeOnClick !== undefined) options.closeOnClick = config.closeOnClick;
       if (config.maxWidth !== undefined) options.maxWidth = config.maxWidth;
 
-      const popup = new Popup(options)
+      const popup = liftPopup(new Popup(options))
         .setLngLat(config.at as [number, number])
         .setHTML(this.popupBuilder.build(config.content, {}))
         .addTo(this.map);
