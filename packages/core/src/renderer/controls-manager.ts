@@ -13,6 +13,7 @@ import {
 } from "./maplibre-interop";
 import type { z } from "zod";
 import { ControlsConfigSchema } from "../schemas";
+import { sanitizeCustomAttribution } from "../utils/attribution";
 
 type ControlsConfig = z.infer<typeof ControlsConfigSchema>;
 
@@ -22,10 +23,17 @@ type ControlsConfig = z.infer<typeof ControlsConfigSchema>;
 export class ControlsManager {
   private map: MapLibreMap;
   private addedControls: IControl[];
+  private beforeAttribution?: () => void;
 
-  constructor(map: MapLibreMap) {
+  /**
+   * @param beforeAttribution - called immediately before an attribution
+   *   control is added; the renderer passes its attribution guard's `scrub`,
+   *   because the control renders source attributions synchronously in `onAdd`.
+   */
+  constructor(map: MapLibreMap, beforeAttribution?: () => void) {
     this.map = map;
     this.addedControls = [];
+    this.beforeAttribution = beforeAttribution;
   }
 
   /**
@@ -76,10 +84,14 @@ export class ControlsManager {
       const options =
         typeof config.attribution === "object" ? config.attribution : {};
       const position = (options as any).position || "bottom-right";
+      // MapLibre renders customAttribution through a sanitizer that can be
+      // bypassed (GHSA-jrc7-96c5-q579); ours runs first, whatever the trust
+      // context — see utils/attribution.ts.
       const control = new AttributionControl({
         compact: (options as any).compact,
-        customAttribution: (options as any).customAttribution,
+        customAttribution: sanitizeCustomAttribution((options as any).customAttribution).value,
       });
+      this.beforeAttribution?.();
       this.map.addControl(control, position as any);
       this.addedControls.push(control);
     }
