@@ -352,6 +352,78 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 | `ml-map:parameter-change` | `{ key, value }` | A params-panel control wrote a state key |
 | `ml-map:layer-visibility` | `{ layerId, visible }` | A params-panel checkbox toggled a layer |
 
+## Slots: your own chrome over the map
+
+Author markup placed inside `<ml-map>` with a `slot` attribute rides the
+element's corner system — the same one the legend and the params panel use —
+so page chrome (buttons, captions, a custom legend) sits over the map without
+hand-rolled absolute positioning:
+
+```html
+<ml-map src="/configs/map.yaml">
+  <div slot="top-right" class="my-controls">
+    <button data-action="zoom-in">+</button>
+    <button data-action="reset">⟲</button>
+  </div>
+  <div slot="bottom-left">Data: city open data portal</div>
+</ml-map>
+
+<script type="module">
+  const el = document.querySelector("ml-map");
+  const home = await el.mapReady().then((map) => ({
+    center: map.getCenter(),
+    zoom: map.getZoom(),
+  }));
+  document.querySelector(".my-controls").addEventListener("click", (e) => {
+    const map = el.getMap(); // read at click time — reload() makes a new map
+    const action = e.target.closest("[data-action]")?.dataset.action;
+    if (action === "zoom-in") map.zoomIn();
+    if (action === "reset") map.jumpTo(home);
+  });
+</script>
+```
+
+| Slot | Placement |
+|------|-----------|
+| `top-left`, `top-right`, `bottom-left`, `bottom-right` | Mounted into that corner of the map |
+| `legend` | **Replaces** the built-in legend, at the document's `legend.position` (default `top-left`) |
+
+How it behaves:
+
+- **Stacking, not overlap.** Pieces sharing a corner stack in registration
+  order: the built-in legend first, then the params panel, then slot
+  children in document order. Bottom corners grow upward. A corner also
+  steps past a MapLibre control (e.g. `navigation`) already in it.
+- **Mounted on load.** Slot children are hidden until the map's `load`, then
+  moved into their corner. They stay the same elements, so event listeners
+  you attached keep working.
+- **They survive the map.** `reload()`, a new `config`/`src`, and an error
+  card all tear the map down but park slot children back on the element;
+  the next successful render mounts them again. Slot children added after
+  load are picked up on the next render (`reload()`).
+- **Pointer events.** Empty corner areas pass gestures through to the map;
+  your slot content receives clicks normally.
+- An unknown slot name logs a warning and the child is left where it is.
+
+Only children with a recognized `slot` are moved. Other children you place
+inside `<ml-map>` (including the inline `<script type="text/yaml">`) are left
+alone: the element removes only what it created itself — its map container
+and its error card.
+
+<Aside type="note">
+Slots are page markup, not part of the map document: they never appear in
+`mlym emit` output, and there is nothing to eject. See the
+[eject classes guide](/guides/eject-classes/).
+</Aside>
+
+<Aside type="caution" title="Astro: spread the slot attribute inside expressions">
+Inside a `{condition && (...)}` expression, Astro's compiler reads a literal
+`slot="top-right"` as its own named-slot directive and strips it (wrapped in
+a `Fragment`, the child disappears entirely). Write
+`{...{ slot: "top-right" }}` there instead; a literal `slot` outside an
+expression is passed through unchanged.
+</Aside>
+
 ## Accessing the MapLibre Instance
 
 For advanced customization, access the underlying MapLibre GL map. Since 0.7,
@@ -1009,7 +1081,7 @@ mapEl.addEventListener("ml-map:error", (event) => {
 | `getMap()`                      | `maplibregl.Map \| null`  | The MapLibre GL map instance (`null` before a render) |
 | `getRenderer()`                 | `MapRenderer \| null`     | The underlying renderer |
 | `isLoaded()`                    | `boolean`                 | Whether the map finished loading |
-| `reload()`                      | `Promise<void>`           | Re-fetch `src` and re-render |
+| `reload()`                      | `Promise<void>`           | Re-render from `src` or the inline YAML script; slot children are kept |
 | `addLayer(layer)`               | `Promise<void>`           | Add a layer (same shape as a document layer) |
 | `removeLayer(layerId)`          | `void`                    | Remove a layer |
 | `setLayerVisibility(id, on)`    | `void`                    | Show or hide a layer |

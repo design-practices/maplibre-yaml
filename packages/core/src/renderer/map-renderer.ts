@@ -14,7 +14,7 @@ import type { MarkerConfig } from '../schemas/map.schema';
 import { ControlsManager } from './controls-manager';
 import { MarkersManager } from './markers-manager';
 import { loadDocumentImages } from './images-loader';
-import { ChromeLayout } from './chrome-layout';
+import { ChromeLayout, type ChromeCorner } from './chrome-layout';
 import {
   ParamsBuilder,
   hasPanelContent,
@@ -99,6 +99,27 @@ export interface MapRendererOptions {
    * builder reads it as {@link ParameterMeta}.
    */
   parameters?: Record<string, unknown>;
+  /**
+   * Host-supplied chrome elements (U9 — `<ml-map>` slot children), mounted
+   * into the shared corner system (KTD10) on load, after the built-in
+   * legend and params panel so those keep the corner edge. The renderer
+   * BORROWS these elements: destroy() removes the corner containers they sit
+   * in, so a host that wants them back (re-render, error card) must move
+   * them out first — `<ml-map>` parks them on itself.
+   */
+  chrome?: ChromeMount[];
+  /**
+   * Host-supplied legend element that REPLACES the built-in legend (the
+   * `legend` slot). Mounted at `legend.position` (default `top-left`); the
+   * auto legend is not built. Borrowed, like {@link chrome}.
+   */
+  legendElement?: HTMLElement;
+}
+
+/** One host-supplied chrome element and the corner it mounts into. */
+export interface ChromeMount {
+  position: ChromeCorner;
+  element: HTMLElement;
 }
 
 /**
@@ -318,13 +339,14 @@ export class MapRenderer {
       // Apply YAML-declared controls and legend once the map is ready.
       // The guards keep manual addControls()/buildLegend() calls made before
       // load from being duplicated here.
-      // NOTE: packages/astro/src/components/FullPageMap.astro has its own
-      // hand-rolled controls/legend implementation; consolidating the two is
-      // tracked in the perf/hygiene backlog.
       if (options.controls && !this.controlsAdded) {
         this.addControls(options.controls);
       }
-      if (options.legend && !this.legendBuilt) {
+      if (options.legendElement && !this.legendBuilt) {
+        // The `legend` slot replaces the built-in legend outright.
+        this.legendBuilt = true;
+        this.chromeLayout().mount(options.legend?.position ?? 'top-left', options.legendElement);
+      } else if (options.legend && !this.legendBuilt) {
         this.buildLegend(this.createLegendContainer(options.legend), layers, options.legend);
       }
 
@@ -335,6 +357,12 @@ export class MapRenderer {
         this.buildParamsPanel(layers, options, setState);
       } catch (error) {
         console.warn('[maplibre-yaml] params panel failed to build:', error);
+      }
+
+      // Host chrome (U9 slots) mounts last: built-in pieces keep the corner
+      // edge and author children stack after them (KTD10 registration order).
+      for (const { position, element } of options.chrome ?? []) {
+        this.chromeLayout().mount(position, element);
       }
 
       // Standalone markers: DOM pins with the document's popup content run
