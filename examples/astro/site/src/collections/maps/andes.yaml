@@ -1,0 +1,32 @@
+# A map document as a content-collection data entry. `title` and `blurb`
+# are this site's own fields (extendSchema in src/content.config.ts); the
+# rest is an ordinary maplibre-yaml map document.
+title: The Andean arc
+blurb: Active volcanoes along the Nazca subduction zone, sized by elevation.
+type: map
+id: andes
+config:
+  center: [-72, -20]
+  zoom: 2.6
+  mapStyle: "https://tiles.openfreemap.org/styles/bright"
+layers:
+  - id: volcanoes
+    type: circle
+    source:
+      type: geojson
+      url: "/data/volcanoes.geojson"
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "elevation"], 0, 4, 6000, 14]
+      circle-color: "#d62828"
+      circle-opacity: 0.85
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - property: elevation
+              - str: " m"

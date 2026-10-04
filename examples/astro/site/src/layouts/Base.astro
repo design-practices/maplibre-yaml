@@ -1,0 +1,51 @@
+---
+import "../styles/site.css";
+
+interface Props {
+  title: string;
+  /** Full-bleed pages (FullPageMap, stories) drop the centred column. */
+  bleed?: boolean;
+}
+const { title, bleed = false } = Astro.props;
+const path = Astro.url.pathname.replace(/\/$/, "") || "/";
+const nav = [
+  { href: "/", label: "Home" },
+  { href: "/explore", label: "Explore" },
+  { href: "/story", label: "Story" },
+  { href: "/story-runtime", label: "Runtime story" },
+  { href: "/volcanoes", label: "Volcanoes" },
+  { href: "/gallery", label: "Gallery" },
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} · Ring of Fire</title>
+  </head>
+  <body class:list={{ bleed }}>
+    <header class="site-header">
+      <a href="/" class="brand"><span class="brand-mark" aria-hidden="true"></span>Ring of Fire</a>
+      <nav aria-label="Site">
+        {
+          nav.map((item) => (
+            <a
+              href={item.href}
+              aria-current={
+                path === item.href || (item.href !== "/" && path.startsWith(item.href + "/"))
+                  ? "page"
+                  : undefined
+              }
+            >
+              {item.label}
+            </a>
+          ))
+        }
+      </nav>
+    </header>
+    <slot />
+  </body>
+</html>

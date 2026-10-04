@@ -32,6 +32,14 @@
  * <Map src="/configs/map.yaml" height="400px" />
  * ```
  *
+ * @example Corner slots (forwarded to `<ml-map>`'s corner system)
+ * ```astro
+ * <Map config={config}>
+ *   <p slot="top-left" class="caption">Ring of Fire</p>
+ *   <a slot="bottom-right" href="/about">About this map</a>
+ * </Map>
+ * ```
+ *
  * @example With custom styling
  * ```astro
  * <Map
@@ -84,7 +92,40 @@ const serializedConfig = config ? JSON.stringify(config) : null;
     id={mapId}
     config={serializedConfig ?? undefined}
     src={serializedConfig ? undefined : src}
-  />
+  >
+    {/*
+      Corner slots (ml-l4y.3). Astro reads a child's `slot="top-left"` as a
+      named slot of THIS component, so it would never reach <ml-map>; each
+      one is re-emitted as an <ml-map> slot child. The attribute is spread
+      because the compiler strips a literal `slot="…"` inside an expression,
+      and slot names are spelled out because <slot name> must be static.
+    */}
+    {Astro.slots.has("top-left") && (
+      <div {...{ slot: "top-left" }} class="ml-astro-slot" data-ml-slot="top-left">
+        <slot name="top-left" />
+      </div>
+    )}
+    {Astro.slots.has("top-right") && (
+      <div {...{ slot: "top-right" }} class="ml-astro-slot" data-ml-slot="top-right">
+        <slot name="top-right" />
+      </div>
+    )}
+    {Astro.slots.has("bottom-left") && (
+      <div {...{ slot: "bottom-left" }} class="ml-astro-slot" data-ml-slot="bottom-left">
+        <slot name="bottom-left" />
+      </div>
+    )}
+    {Astro.slots.has("bottom-right") && (
+      <div {...{ slot: "bottom-right" }} class="ml-astro-slot" data-ml-slot="bottom-right">
+        <slot name="bottom-right" />
+      </div>
+    )}
+    {Astro.slots.has("legend") && (
+      <div {...{ slot: "legend" }} class="ml-astro-slot" data-ml-slot="legend">
+        <slot name="legend" />
+      </div>
+    )}
+  </ml-map>
 </div>
 
 <script>

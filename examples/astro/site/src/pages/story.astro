@@ -1,0 +1,57 @@
+---
+import Base from "../layouts/Base.astro";
+import { Scrollytelling, loadScrollytellingConfig } from "@maplibre-yaml/astro";
+
+const story = await loadScrollytellingConfig("./src/stories/ring-of-fire.yaml");
+---
+
+<Base title="Story" bleed>
+  <Scrollytelling config={story}>
+    <p slot="bottom-left" class="caption">Positions approximate · eruption years: Smithsonian GVP</p>
+  </Scrollytelling>
+  <div class="banner" id="story-banner" role="status" aria-live="polite" hidden></div>
+</Base>
+
+<script>
+  // The Tonga chapter's `action: custom` runs nothing itself; it dispatches
+  // `ml-scrollytelling:action` for the page to handle.
+  const banner = document.getElementById("story-banner")!;
+  document.addEventListener("ml-scrollytelling:action", (event) => {
+    const { action } = (event as CustomEvent).detail;
+    banner.textContent = String(action.options?.banner ?? "");
+    banner.hidden = false;
+    banner.classList.remove("show");
+    void banner.offsetWidth; // restart the animation
+    banner.classList.add("show");
+  });
+  document.addEventListener("ml-scrollytelling:chapter", (event) => {
+    if ((event as CustomEvent).detail.chapterId !== "tonga") banner.hidden = true;
+  });
+</script>
+
+<style>
+  .banner {
+    position: fixed;
+    left: 50%;
+    bottom: 2rem;
+    transform: translateX(-50%);
+    z-index: 30;
+    padding: 0.75rem 1.25rem;
+    border-radius: 999px;
+    background: #ffd166;
+    color: #1c1917;
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .banner.show {
+    animation: pop 0.5s ease-out;
+  }
+
+  @keyframes pop {
+    from {
+      transform: translateX(-50%) scale(0.6);
+      opacity: 0;
+    }
+  }
+</style>

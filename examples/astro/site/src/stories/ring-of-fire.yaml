@@ -1,0 +1,161 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json
+# Build-time story: `await loadScrollytellingConfig("./src/stories/ring-of-fire.yaml")`
+# in src/pages/story.astro, rendered with <Scrollytelling config={...}>.
+# Every chapter moves the camera; chapters toggle layers and run actions.
+type: scrollytelling
+id: ring-of-fire-story
+theme: dark
+showMarkers: true
+markerColor: "#f4a261"
+config:
+  center: [-170, 10]
+  zoom: 1.2
+  mapStyle: "https://tiles.openfreemap.org/styles/dark"
+  interactive: false
+
+# A story's layers carry inline sources (a story has no `sources:` block).
+layers:
+  - id: ring
+    type: line
+    source:
+      type: geojson
+      url: "/data/ring-of-fire.geojson"
+    layout:
+      visibility: none
+    paint:
+      line-color: "#f4a261"
+      line-width: 3
+      line-opacity: 0.8
+  - id: volcanoes
+    type: circle
+    source:
+      type: geojson
+      url: "/data/volcanoes.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#e76f51"
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"
+  - id: spotlight
+    type: circle
+    source:
+      type: geojson
+      url: "/data/volcanoes.geojson"
+    filter: ["==", ["get", "country"], "none"]
+    paint:
+      circle-radius: 14
+      circle-color: "rgba(0,0,0,0)"
+      circle-stroke-width: 3
+      circle-stroke-color: "#ffd166"
+
+chapters:
+  - id: pacific
+    title: The Ring of Fire
+    description: >-
+      <p>Three quarters of Earth's active volcanoes sit on a 40,000 km horseshoe
+      around the Pacific, where ocean plates dive beneath their neighbours.</p>
+      <p>Scroll to travel around it.</p>
+    center: [-170, 10]
+    zoom: 1.2
+    alignment: left
+
+  - id: boundaries
+    title: Where plates meet
+    description: >-
+      <p>The orange line traces the subduction zones. This chapter turns the
+      <code>ring</code> layer on (<code>layers.show</code>).</p>
+    center: [-170, 15]
+    zoom: 1.5
+    alignment: left
+    layers:
+      show: [ring]
+
+  - id: japan
+    title: Japan
+    description: >-
+      <p>Fuji and Sakurajima: the Pacific and Philippine Sea plates subducting
+      under the Eurasian plate. An <code>onChapterEnter</code> <code>setFilter</code>
+      spotlights Japan's volcanoes.</p>
+    center: [135, 34]
+    zoom: 4.6
+    pitch: 45
+    bearing: -15
+    alignment: right
+    onChapterEnter:
+      - action: setFilter
+        layer: spotlight
+        filter: ["==", ["get", "country"], "Japan"]
+    onChapterExit:
+      - action: setFilter
+        layer: spotlight
+        filter: ["==", ["get", "country"], "none"]
+
+  - id: cascades
+    title: The Cascades
+    description: >-
+      <p>Mount St. Helens and Mount Rainier ride the Cascadia subduction zone.
+      This chapter recolours the volcanoes with <code>setPaintProperty</code>.</p>
+    center: [-122, 46.5]
+    zoom: 6.3
+    animation: easeTo
+    alignment: left
+    onChapterEnter:
+      - action: setPaintProperty
+        layer: volcanoes
+        property: circle-color
+        value: "#ffd166"
+    onChapterExit:
+      - action: setPaintProperty
+        layer: volcanoes
+        property: circle-color
+        value: "#e76f51"
+
+  - id: andes
+    title: The Andes
+    description: >-
+      <p>From Colombia to Patagonia, the Nazca plate sinks under South America.
+      This chapter frames the whole range with a <code>fitBounds</code> action.</p>
+    center: [-75, -18]
+    zoom: 3
+    alignment: right
+    onChapterEnter:
+      - action: fitBounds
+        bounds: [-84, -45, -64, 6]
+        options:
+          padding: 40
+          duration: 2500
+
+  - id: tonga
+    title: Hunga Tonga, 2022
+    description: >-
+      <p>The largest explosion ever recorded by modern instruments. A
+      <code>custom</code> action fires an event this page listens for.</p>
+    center: [-175.4, -20.5]
+    zoom: 6
+    alignment: left
+    onChapterEnter:
+      - action: custom
+        options:
+          banner: "Pressure wave circled the globe four times"
+
+  - id: home
+    title: Back to the Pacific
+    description: >-
+      <p>A <code>flyTo</code> action returns to the whole basin, and
+      <code>spinGlobe</code> keeps it drifting while you read.</p>
+    center: [-170, 10]
+    zoom: 1.4
+    spinGlobe: true
+    alignment: center
+    layers:
+      hide: [spotlight]
+    onChapterEnter:
+      - action: flyTo
+        options:
+          center: [-165, 12]
+          zoom: 1.3
+          duration: 3000
+
+footer: >-
+  <p>Data: approximate positions and Smithsonian GVP eruption years. Built with
+  <code>@maplibre-yaml/astro</code>.</p>

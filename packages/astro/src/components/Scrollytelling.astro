@@ -13,10 +13,18 @@
  * - **Scroll-Driven Navigation**: Map transitions triggered by scroll position
  * - **Smooth Camera Transitions**: flyTo, easeTo, or jumpTo animations
  * - **Layer Control**: Show/hide layers per chapter
- * - **Chapter Actions**: Execute custom actions on enter/exit
- * - **Optional Markers**: Visual chapter indicators on the map
- * - **Dual Loading**: Build-time or runtime YAML loading
+ * - **Chapter Actions**: setFilter / setPaintProperty / setLayoutProperty,
+ *   camera moves (flyTo / easeTo / fitBounds) and `custom` events, on enter
+ *   and on exit
+ * - **Optional Markers**: A clickable chapter rail on the map
+ * - **Dual Loading**: Build-time (`config`) or runtime (`src`) YAML loading
+ * - **Corner slots**: `slot="top-left|top-right|bottom-left|bottom-right|legend"`
+ *   children are forwarded to the story's `<ml-map>`
  * - **Debug Mode**: Visual indicators for development
+ *
+ * The browser half lives in `../client/scrollytelling.ts` (bundled), which
+ * documents the `ml-scrollytelling:chapter` / `ml-scrollytelling:action`
+ * events it dispatches.
  *
  * @example Runtime loading
  * ```astro
@@ -42,6 +50,7 @@
  */
 
 import Chapter from "./Chapter.astro";
+import { storyMapDocument } from "../client/scrollytelling";
 import type { ScrollytellingProps } from "../types";
 import type { Chapter as ChapterType } from "@maplibre-yaml/core/schemas";
 
@@ -60,7 +69,6 @@ if (!src && !config) {
 const chapters: ChapterType[] = config?.chapters ?? [];
 const theme = config?.theme ?? "light";
 const showMarkers = config?.showMarkers ?? false;
-const markerColor = config?.markerColor ?? "#3FB1CE";
 const footer = config?.footer;
 
 // Generate unique ID for this instance
@@ -70,32 +78,23 @@ const storyId = `scrolly-${Math.random().toString(36).substring(2, 11)}`;
 const serializedConfig = config ? JSON.stringify(config) : null;
 
 // The map half of the story as a real map document, rendered straight onto
-// <ml-map>. The controller used to wait for <ml-map> to gain a `config`
-// attribute and only then set one -- so it waited forever and the map showed
-// "No configuration provided" -- and the document it would have set
-// (`{ version, map, sources }`) was not a valid map block anyway.
-const mapDocument = config
-  ? JSON.stringify({
-      type: "map",
-      id: `${config.id}-map`,
-      config: config.config,
-      layers: config.layers ?? [],
-    })
-  : undefined;
+// <ml-map>. (A `src` story gets the same document from the client loader.)
+const mapDocument = config ? JSON.stringify(storyMapDocument(config)) : undefined;
+
 ---
 
 <div
   class:list={[
     "scrollytelling-container",
     `theme-${theme}`,
+    config?.className,
     className,
     { debug },
   ]}
+  style={config?.style}
   id={storyId}
-  data-src={src}
+  data-src={config ? undefined : src}
   data-config={serializedConfig}
-  data-show-markers={showMarkers}
-  data-marker-color={markerColor}
 >
   <!-- Sticky map container -->
   <div class="scrolly-map-container">
@@ -103,7 +102,40 @@ const mapDocument = config
       id={`${storyId}-map`}
       config={mapDocument}
       style="width: 100%; height: 100%; display: block;"
-    />
+    >
+      {/*
+        Corner slots (ml-l4y.3). Astro reads a child's `slot="top-left"` as a
+        named slot of THIS component, so it would never reach <ml-map>; each
+        one is re-emitted as an <ml-map> slot child. The attribute is spread
+        because the compiler strips a literal `slot="…"` inside an expression,
+        and slot names are spelled out because <slot name> must be static.
+      */}
+      {Astro.slots.has("top-left") && (
+        <div {...{ slot: "top-left" }} class="ml-astro-slot" data-ml-slot="top-left">
+          <slot name="top-left" />
+        </div>
+      )}
+      {Astro.slots.has("top-right") && (
+        <div {...{ slot: "top-right" }} class="ml-astro-slot" data-ml-slot="top-right">
+          <slot name="top-right" />
+        </div>
+      )}
+      {Astro.slots.has("bottom-left") && (
+        <div {...{ slot: "bottom-left" }} class="ml-astro-slot" data-ml-slot="bottom-left">
+          <slot name="bottom-left" />
+        </div>
+      )}
+      {Astro.slots.has("bottom-right") && (
+        <div {...{ slot: "bottom-right" }} class="ml-astro-slot" data-ml-slot="bottom-right">
+          <slot name="bottom-right" />
+        </div>
+      )}
+      {Astro.slots.has("legend") && (
+        <div {...{ slot: "legend" }} class="ml-astro-slot" data-ml-slot="legend">
+          <slot name="legend" />
+        </div>
+      )}
+    </ml-map>
 
     {
       showMarkers && (
@@ -148,355 +180,12 @@ const mapDocument = config
 <script>
   import "@maplibre-yaml/core/register";
   import "maplibre-gl/dist/maplibre-gl.css";
-</script>
+  import { initAllScrollytelling } from "../client/scrollytelling";
 
-{
-  src && !config && (
-    <script is:inline define:vars={{ storyId, src }}>
-      // Deliberate duplicates of core's escapeHtml/safeUrl: this script is
-      // `is:inline` (it cannot use a bundled import), and the dynamic import of
-      // core below sits inside the very `try` whose `catch` renders an error
-      // card. An error path that depends on the module that may have just
-      // failed to load is not an error path.
-      const escapeHtml = (value) =>
-        String(value).replace(
-          /[&<>"']/g,
-          (char) =>
-            ({
-              "&": "&amp;",
-              "<": "&lt;",
-              ">": "&gt;",
-              '"': "&quot;",
-              "'": "&#39;",
-            })[char]
-        );
-
-      // Media URLs are schema-validated with zod's `.url()`, which accepts
-      // `javascript:` and `data:` as well-formed. Relative and http(s) only.
-      const safeSrc = (value) => {
-        const cleaned = String(value).replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
-        if (/^(\/|\.\.?\/|#|\?)/.test(cleaned)) return cleaned;
-        if (/^https?:\/\//i.test(cleaned)) return cleaned;
-        return /^[^/?#]*:/.test(cleaned) ? null : cleaned;
-      };
-
-      // Runtime YAML loading for src prop
-      (async () => {
-        try {
-          const container = document.getElementById(storyId);
-          if (!container) return;
-
-          const response = await fetch(src);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch ${src}: ${response.statusText}`);
-          }
-
-          const yamlText = await response.text();
-          const { YAMLParser } = await import("@maplibre-yaml/core");
-          const result = YAMLParser.safeParseScrollytellingBlock(yamlText);
-
-          if (!result.success) {
-            console.error("Scrollytelling validation failed:", result.errors);
-            const chaptersEl = container.querySelector(".scrolly-chapters");
-            if (chaptersEl) {
-              chaptersEl.innerHTML = `
-                <div style="padding: 40px; text-align: center; color: #c33;">
-                  <h2>Configuration Error</h2>
-                  <ul style="text-align: left; max-width: 600px; margin: 20px auto;">
-                    ${result.errors.map((err) => `<li>${err.path ? escapeHtml(err.path) + ": " : ""}${escapeHtml(err.message)}</li>`).join("")}
-                  </ul>
-                </div>
-              `;
-            }
-            return;
-          }
-
-          // Store parsed config
-          container.setAttribute("data-config", JSON.stringify(result.data));
-
-          // Render chapters
-          const chaptersContainer = container.querySelector(".scrolly-chapters");
-          const loading = chaptersContainer?.querySelector(".chapters-loading");
-          if (loading) loading.remove();
-
-          result.data.chapters.forEach((chapter, index) => {
-            const section = document.createElement("section");
-            section.className = `scrolly-chapter align-${chapter.alignment || "center"} theme-${result.data.theme || "light"}`;
-            if (chapter.hidden) section.classList.add("is-hidden");
-            if (index === 0) section.classList.add("is-active");
-            section.setAttribute("data-chapter-id", chapter.id);
-            section.setAttribute("role", "region");
-            section.setAttribute("aria-labelledby", `chapter-title-${chapter.id}`);
-
-            if (!chapter.hidden) {
-              const contentDiv = document.createElement("div");
-              contentDiv.className = "chapter-content";
-
-              let html = "";
-              if (chapter.image) {
-                const imageSrc = safeSrc(chapter.image);
-                if (imageSrc !== null) {
-                  html += `<div class="chapter-media"><img src="${escapeHtml(imageSrc)}" alt="${escapeHtml(chapter.title)}" loading="lazy" decoding="async" /></div>`;
-                }
-              }
-              if (chapter.video) {
-                const videoSrc = safeSrc(chapter.video);
-                if (videoSrc !== null) {
-                  html += `<div class="chapter-media"><video src="${escapeHtml(videoSrc)}" controls playsinline preload="metadata">Your browser does not support the video element.</video></div>`;
-                }
-              }
-              html += `<h2 class="chapter-title" id="chapter-title-${escapeHtml(chapter.id)}">${escapeHtml(chapter.title)}</h2>`;
-              if (chapter.description) {
-                // NOT escaped: the schema documents this as
-                // "Chapter description (HTML/markdown supported)", so escaping
-                // would break documented behavior. Choosing between an
-                // allowlist sanitizer and a trusted-author contract is a
-                // product decision tracked as ml-2l7.2 (trust model for
-                // HTML-bearing Astro props) -- not an oversight here.
-                html += `<div class="chapter-description">${chapter.description}</div>`;
-              }
-
-              contentDiv.innerHTML = html;
-              section.appendChild(contentDiv);
-            }
-
-            chaptersContainer?.appendChild(section);
-          });
-
-          // Add footer
-          if (result.data.footer) {
-            const footer = document.createElement("footer");
-            footer.className = "scrolly-footer";
-            // NOT escaped: schema documents this as "Footer content (HTML)".
-            // Same open trust-model decision as chapter.description (ml-2l7.2).
-            footer.innerHTML = result.data.footer;
-            chaptersContainer?.appendChild(footer);
-          }
-        } catch (error) {
-          console.error("Failed to load scrollytelling config:", error);
-        }
-      })();
-    </script>
-  )
-}
-
-<script is:inline define:vars={{ storyId }}>
-  // Scrollytelling controller
-  (async () => {
-    const container = document.getElementById(storyId);
-    if (!container) return;
-
-    // Wait for config to be available
-    let config = container.getAttribute("data-config");
-    if (!config) {
-      // Wait for runtime loading
-      await new Promise((resolve) => {
-        const observer = new MutationObserver(() => {
-          config = container.getAttribute("data-config");
-          if (config) {
-            observer.disconnect();
-            resolve(null);
-          }
-        });
-        observer.observe(container, { attributes: true });
-        setTimeout(resolve, 5000); // Timeout after 5s
-      });
-    }
-
-    if (!config) {
-      console.error("Scrollytelling: No config available");
-      return;
-    }
-
-    const scrollyConfig = JSON.parse(config);
-    const mapEl = container.querySelector("ml-map");
-    if (!mapEl) return;
-
-    // A runtime-loaded (`src`) story has no map document on <ml-map> yet:
-    // hand it one. A build-time (`config`) story was rendered with it.
-    if (!mapEl.hasAttribute("config")) {
-      mapEl.setAttribute(
-        "config",
-        JSON.stringify({
-          type: "map",
-          id: `${scrollyConfig.id}-map`,
-          config: scrollyConfig.config,
-          layers: scrollyConfig.layers || [],
-        })
-      );
-    }
-
-    // This inline script runs before the bundled register module defines
-    // <ml-map>: wait for the upgrade, then for the map itself (`.map` never
-    // existed on the element). A failed map shows <ml-map>'s own error
-    // card; there is nothing to drive.
-    let map;
-    try {
-      await customElements.whenDefined("ml-map");
-      map = await mapEl.mapReady();
-    } catch (error) {
-      console.warn("Scrollytelling: map failed to load", error);
-      return;
-    }
-
-    // Setup chapters data
-    const chapters = scrollyConfig.chapters.map((chapter) => ({
-      id: chapter.id,
-      center: chapter.center,
-      zoom: chapter.zoom,
-      pitch: chapter.pitch ?? 0,
-      bearing: chapter.bearing ?? 0,
-      speed: chapter.speed ?? 0.6,
-      curve: chapter.curve ?? 1,
-      animation: chapter.animation ?? "flyTo",
-      layers: chapter.layers,
-      onChapterEnter: chapter.onChapterEnter ?? [],
-      onChapterExit: chapter.onChapterExit ?? [],
-    }));
-
-    let activeChapterId = chapters[0]?.id || null;
-
-    // Setup markers if enabled
-    if (scrollyConfig.showMarkers) {
-      const markersContainer = container.querySelector(".chapter-markers");
-      if (markersContainer) {
-        chapters.forEach((chapter, index) => {
-          const marker = document.createElement("button");
-          marker.className = "chapter-marker";
-          marker.setAttribute("data-chapter-id", chapter.id);
-          marker.setAttribute("aria-label", `Go to chapter ${index + 1}`);
-          marker.style.background = scrollyConfig.markerColor || "#3FB1CE";
-          if (index === 0) marker.classList.add("active");
-
-          marker.addEventListener("click", () => {
-            const section = container.querySelector(`[data-chapter-id="${chapter.id}"]`);
-            if (section) {
-              section.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
-          });
-
-          markersContainer.appendChild(marker);
-        });
-      }
-    }
-
-    // Chapter activation function
-    function activateChapter(chapterId) {
-      const previousId = activeChapterId;
-      activeChapterId = chapterId;
-
-      // Update DOM active states
-      container.querySelectorAll(".scrolly-chapter").forEach((section) => {
-        const isActive = section.getAttribute("data-chapter-id") === chapterId;
-        section.classList.toggle("is-active", isActive);
-      });
-
-      container.querySelectorAll(".chapter-marker").forEach((marker) => {
-        const isActive = marker.getAttribute("data-chapter-id") === chapterId;
-        marker.classList.toggle("active", isActive);
-      });
-
-      const chapter = chapters.find((c) => c.id === chapterId);
-      if (!chapter) return;
-
-      // Execute exit actions for previous chapter
-      if (previousId) {
-        const prevChapter = chapters.find((c) => c.id === previousId);
-        if (prevChapter) {
-          executeActions(prevChapter.onChapterExit);
-        }
-      }
-
-      // Transition map
-      const options = {
-        center: chapter.center,
-        zoom: chapter.zoom,
-        pitch: chapter.pitch,
-        bearing: chapter.bearing,
-        speed: chapter.speed,
-        curve: chapter.curve,
-      };
-
-      switch (chapter.animation) {
-        case "flyTo":
-          map.flyTo(options);
-          break;
-        case "easeTo":
-          map.easeTo(options);
-          break;
-        case "jumpTo":
-          map.jumpTo(options);
-          break;
-      }
-
-      // Update layer visibility
-      if (chapter.layers) {
-        chapter.layers.show?.forEach((layerId) => {
-          if (map.getLayer(layerId)) {
-            map.setLayoutProperty(layerId, "visibility", "visible");
-          }
-        });
-
-        chapter.layers.hide?.forEach((layerId) => {
-          if (map.getLayer(layerId)) {
-            map.setLayoutProperty(layerId, "visibility", "none");
-          }
-        });
-      }
-
-      // Execute enter actions
-      executeActions(chapter.onChapterEnter);
-    }
-
-    // Execute chapter actions
-    function executeActions(actions) {
-      if (!actions || !actions.length) return;
-
-      actions.forEach((action) => {
-        switch (action.action) {
-          case "setFilter":
-            if (action.layer && map.getLayer(action.layer)) {
-              map.setFilter(action.layer, action.filter);
-            }
-            break;
-          case "setPaintProperty":
-            if (action.layer && map.getLayer(action.layer)) {
-              map.setPaintProperty(action.layer, action.property, action.value);
-            }
-            break;
-          case "setLayoutProperty":
-            if (action.layer && map.getLayer(action.layer)) {
-              map.setLayoutProperty(action.layer, action.property, action.value);
-            }
-            break;
-        }
-      });
-    }
-
-    // Setup IntersectionObserver for scroll-based activation
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const chapterId = entry.target.getAttribute("data-chapter-id");
-            if (chapterId && chapterId !== activeChapterId) {
-              activateChapter(chapterId);
-            }
-          }
-        });
-      },
-      {
-        root: null,
-        rootMargin: "-40% 0px -40% 0px",
-        threshold: 0,
-      }
-    );
-
-    // Observe all chapters
-    container.querySelectorAll(".scrolly-chapter").forEach((section) => {
-      observer.observe(section);
-    });
-  })();
+  // One bundled script for every story on the page: the `src` loader and the
+  // scroll controller. (Both used to be per-instance `is:inline` scripts; the
+  // loader's bare `import("@maplibre-yaml/core")` never resolved -- ml-euv.)
+  initAllScrollytelling();
 </script>
 
 <style>
@@ -561,8 +250,10 @@ const mapDocument = config
     }
   }
 
-  /* Chapter markers */
-  .chapter-markers {
+  /* Chapter markers. :global -- a `src` story builds the rail and its
+     buttons in the browser, where they carry no scope attribute (the
+     buttons always did: they were unstyled 0x0 boxes before 0.7). */
+  .scrolly-map-container :global(.chapter-markers) {
     position: absolute;
     top: 50%;
     right: 20px;
@@ -573,7 +264,7 @@ const mapDocument = config
     z-index: 10;
   }
 
-  .chapter-marker {
+  .scrolly-map-container :global(.chapter-marker) {
     width: 12px;
     height: 12px;
     border: 2px solid white;
@@ -584,18 +275,18 @@ const mapDocument = config
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   }
 
-  .chapter-marker:hover {
+  .scrolly-map-container :global(.chapter-marker:hover) {
     transform: scale(1.3);
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
   }
 
-  .chapter-marker.active {
+  .scrolly-map-container :global(.chapter-marker.active) {
     transform: scale(1.5);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   }
 
-  /* Footer */
-  .scrolly-footer {
+  /* Footer (:global: a `src` story renders it in the browser) */
+  .scrolly-chapters :global(.scrolly-footer) {
     min-height: 50vh;
     padding: 40px 20px;
     background: var(--footer-bg, #f8fafc);
@@ -603,9 +294,24 @@ const mapDocument = config
     text-align: center;
   }
 
-  .theme-dark .scrolly-footer {
+  .scrollytelling-container.theme-dark :global(.scrolly-footer) {
     --footer-bg: #1f2937;
     --footer-text: #f9fafb;
+  }
+
+  /* A `src` story that failed to load or validate */
+  .scrolly-chapters :global(.scrolly-error) {
+    min-height: 100vh;
+    padding: 40px;
+    text-align: center;
+    color: #b91c1c;
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  .scrolly-chapters :global(.scrolly-error ul) {
+    text-align: left;
+    max-width: 600px;
+    margin: 20px auto;
   }
 
   /* Debug mode (:global for the same Chapter.astro scoping reason as above) */
@@ -620,12 +326,12 @@ const mapDocument = config
 
   /* Responsive */
   @media (max-width: 768px) {
-    .chapter-markers {
+    .scrolly-map-container :global(.chapter-markers) {
       right: 10px;
       gap: 8px;
     }
 
-    .chapter-marker {
+    .scrolly-map-container :global(.chapter-marker) {
       width: 10px;
       height: 10px;
     }

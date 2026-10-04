@@ -11,8 +11,17 @@ Astro components for creating interactive maps and scrollytelling experiences us
 npm install @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^5
 ```
 
-Supports Astro 4 and 5, and maplibre-gl 4 or 5. Pin both: npm's `latest` for
-each is now a newer major.
+Supports **Astro 4, 5, 6 and 7**, each tested in CI by building and driving the
+example site [`examples/astro/site`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/astro/site) in a browser.
+On Astro 6 and 7, import `z` from `astro/zod` in your content config (the
+schema helpers here are built from it). Astro 4 needs a few content-layer
+settings; see the [supported versions](https://docs.maplibre-yaml.org/integrations/astro/#supported-versions)
+table. maplibre-gl must be 4 or 5: pin it, because npm's `latest` is now v6.
+
+`Map`, `FullPageMap` and `Scrollytelling` forward corner slots to `<ml-map>`:
+`<Map config={c}><p slot="top-left">Caption</p></Map>` puts the caption in the
+map's top-left corner (`top-left`, `top-right`, `bottom-left`, `bottom-right`,
+`legend`).
 
 ## Two import paths: `@maplibre-yaml/astro` vs `@maplibre-yaml/astro/utils`
 
@@ -21,12 +30,12 @@ This package exposes two entry points:
 | Path | What it includes | Import from |
 |------|------------------|------------|
 | `@maplibre-yaml/astro` | Astro components (`Map`, `FullPageMap`, `Scrollytelling`) **plus** all utilities, schemas, and builders | Astro pages and components (`.astro` files) |
-| `@maplibre-yaml/astro/utils` | Schemas, builders, loaders, and helpers **only** -- no Astro components | `src/content/config.ts` and any other Node-only context |
+| `@maplibre-yaml/astro/utils` | Schemas, builders, loaders, and helpers **only** -- no Astro components | `src/content.config.ts` and any other Node-only context |
 
-**Why this matters:** `src/content/config.ts` is evaluated by Astro's content layer in a Node context that can't load `.astro` component files. Importing schemas from `@maplibre-yaml/astro` (the main entry) in your content config triggers errors like `Content config not loaded` or `Cannot read properties of undefined (reading 'get')`. Always use `@maplibre-yaml/astro/utils` in content configs.
+**Why this matters:** `src/content.config.ts` is evaluated by Astro's content layer in a Node context that can't load `.astro` component files. Importing schemas from `@maplibre-yaml/astro` (the main entry) in your content config triggers errors like `Content config not loaded` or `Cannot read properties of undefined (reading 'get')`. Always use `@maplibre-yaml/astro/utils` in content configs.
 
 ```typescript
-// ✅ src/content/config.ts -- use the /utils subpath
+// ✅ src/content.config.ts -- use the /utils subpath
 import { LocationPointSchema, FeatureRefSchema } from "@maplibre-yaml/astro/utils";
 
 // ✅ src/pages/index.astro -- use the main entry (gets components + utils)
@@ -184,11 +193,12 @@ You can add map support to any Astro content collection by importing the geograp
 
 ### Schema setup
 
-> **Important:** When importing schemas in `src/content/config.ts`, use the `@maplibre-yaml/astro/utils` subpath rather than the main package entry. The main entry re-exports Astro components (`Map`, `FullPageMap`, `Scrollytelling`) which can't be loaded outside the Astro component pipeline. The `/utils` subpath contains only the schema and builder utilities that are safe to import in your content config.
+> **Important:** When importing schemas in `src/content.config.ts`, use the `@maplibre-yaml/astro/utils` subpath rather than the main package entry. The main entry re-exports Astro components (`Map`, `FullPageMap`, `Scrollytelling`) which can't be loaded outside the Astro component pipeline. The `/utils` subpath contains only the schema and builder utilities that are safe to import in your content config.
 
 ```typescript
-// src/content/config.ts
-import { defineCollection, z } from "astro:content";
+// src/content.config.ts
+import { defineCollection } from "astro:content";
+import { z } from "astro/zod";
 import { glob } from "astro/loaders";
 import {
   LocationPointSchema,
@@ -197,7 +207,7 @@ import {
 } from "@maplibre-yaml/astro/utils";
 
 const projects = defineCollection({
-  loader: glob({ pattern: "**/*.md", base: "./src/content/projects" }),
+  loader: glob({ pattern: "**/*.md", base: "./src/collections/projects" }),
   schema: z.object({
     title: z.string(),
     status: z.string(),
@@ -333,8 +343,9 @@ When multiple collection items share geometry from a single source-of-truth GeoJ
 **1. Add `feature_ref` to your collection schema**
 
 ```typescript
-// src/content/config.ts
-import { defineCollection, z } from "astro:content";
+// src/content.config.ts
+import { defineCollection } from "astro:content";
+import { z } from "astro/zod";
 import { glob } from "astro/loaders";
 import {
   FeatureRefSchema,
@@ -345,7 +356,7 @@ import {
 
 export const collections = {
   poas: defineCollection({
-    loader: glob({ pattern: "**/*.md", base: "./src/content/poas" }),
+    loader: glob({ pattern: "**/*.md", base: "./src/collections/poas" }),
     schema: z.object({
       title: z.string(),
       gotf_id: z.number(),
@@ -690,17 +701,18 @@ const maps = await loadFromGlob(
 Use with Astro Content Collections for type-safe YAML management:
 
 ```typescript
-// src/content/config.ts
+// src/content.config.ts
 import { defineCollection } from 'astro:content';
+import { glob } from 'astro/loaders';
 import { getMapSchema, getScrollytellingSchema } from '@maplibre-yaml/astro/utils';
 
 export const collections = {
   maps: defineCollection({
-    type: 'data',
+    loader: glob({ pattern: '**/*.yaml', base: './src/collections/maps' }),
     schema: getMapSchema()
   }),
   stories: defineCollection({
-    type: 'data',
+    loader: glob({ pattern: '**/*.yaml', base: './src/collections/stories' }),
     schema: getScrollytellingSchema()
   })
 };
@@ -711,8 +723,10 @@ export const collections = {
 Pre-built schemas for adding location data to content collections (blog posts, articles, etc.):
 
 ```typescript
-// src/content/config.ts
+// src/content.config.ts
 import { defineCollection } from 'astro:content';
+import { glob } from 'astro/loaders';
+import { z } from 'astro/zod';
 import {
   getCollectionItemWithLocationSchema,
   getCollectionItemWithLocationsSchema,
@@ -724,31 +738,31 @@ import {
 export const collections = {
   // Posts with a single location
   posts: defineCollection({
-    type: 'content',
+    loader: glob({ pattern: '**/*.md', base: './src/collections/posts' }),
     schema: getCollectionItemWithLocationSchema()
   }),
 
   // Travel posts with multiple locations
   travel: defineCollection({
-    type: 'content',
+    loader: glob({ pattern: '**/*.md', base: './src/collections/travel' }),
     schema: getCollectionItemWithLocationsSchema()
   }),
 
   // Neighborhood guides with regions
   neighborhoods: defineCollection({
-    type: 'content',
+    loader: glob({ pattern: '**/*.md', base: './src/collections/neighborhoods' }),
     schema: getCollectionItemWithRegionSchema()
   }),
 
   // Hiking guides with routes
   trails: defineCollection({
-    type: 'content',
+    loader: glob({ pattern: '**/*.md', base: './src/collections/trails' }),
     schema: getCollectionItemWithRouteSchema()
   }),
 
   // Mixed geographic content
   adventures: defineCollection({
-    type: 'content',
+    loader: glob({ pattern: '**/*.md', base: './src/collections/adventures' }),
     schema: getCollectionItemWithGeoSchema({
       author: z.string(),
       category: z.enum(['travel', 'hiking', 'city-guide'])
@@ -817,9 +831,9 @@ const routeMap = buildRouteMapConfig(
 Extend built-in schemas with custom metadata:
 
 ```typescript
-// In src/content/config.ts -- use /utils subpath for content schemas
+// In src/content.config.ts -- use /utils subpath for content schemas
 import { extendSchema, getMapSchema } from '@maplibre-yaml/astro/utils';
-import { z } from 'zod';
+import { z } from 'astro/zod';
 
 const customMapSchema = extendSchema(getMapSchema(), {
   author: z.string(),

@@ -1,0 +1,71 @@
+---
+import Base from "../layouts/Base.astro";
+import { Map, loadMapConfig } from "@maplibre-yaml/astro";
+
+// Build time: read, parse and validate the YAML; a bad document fails the build.
+const ringOfFire = await loadMapConfig("./src/maps/ring-of-fire.yaml");
+---
+
+<Base title="Home">
+  <main>
+    <h1>The Ring of Fire</h1>
+    <p class="lede">
+      A tour of the Pacific's volcanoes, built entirely from YAML map documents with
+      <code>@maplibre-yaml/astro</code>. Every page here is also a CI check: it is
+      built and driven in a browser on every supported Astro major.
+    </p>
+
+    <!-- <Map config> with corner slots: slot="…" children land in <ml-map>'s corners. -->
+    <div class="map-frame" data-testid="hero-map">
+      <Map config={ringOfFire} height="480px">
+        <p slot="top-left" class="caption" data-testid="hero-caption">
+          <strong>16 volcanoes, one plate boundary</strong>
+          Hover a dot for its name and height.
+        </p>
+        <a slot="bottom-right" class="caption" href="/explore">Explore full screen &rarr;</a>
+      </Map>
+    </div>
+
+    <section class="section">
+      <h2>Loaded at runtime</h2>
+      <p>
+        <code>&lt;Map src="/maps/japan-arc.yaml" /&gt;</code> fetches its document from
+        <code>public/</code> in the browser. Click a volcano.
+      </p>
+      <div class="map-frame" data-testid="runtime-map">
+        <Map src="/maps/japan-arc.yaml" height="380px" />
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>More of the example</h2>
+      <div class="cards">
+        <a class="card" href="/explore">
+          <h3>Explorer</h3>
+          <p>Full-page map with zoom/reset controls, a legend, markers, a parameters panel and hover popups.</p>
+          <span class="tag">&lt;FullPageMap&gt;</span>
+        </a>
+        <a class="card" href="/story">
+          <h3>Story</h3>
+          <p>Scroll around the Pacific: chapters move the camera, toggle layers and run actions.</p>
+          <span class="tag">&lt;Scrollytelling config&gt;</span>
+        </a>
+        <a class="card" href="/story-runtime">
+          <h3>Runtime story</h3>
+          <p>The same component, with the story fetched and validated in the browser.</p>
+          <span class="tag">&lt;Scrollytelling src&gt;</span>
+        </a>
+        <a class="card" href="/volcanoes">
+          <h3>Volcanoes</h3>
+          <p>A Markdown content collection with point locations, one page and map per entry.</p>
+          <span class="tag">glob() + LocationPointSchema</span>
+        </a>
+        <a class="card" href="/gallery">
+          <h3>Gallery</h3>
+          <p>Whole map documents stored as a YAML data collection.</p>
+          <span class="tag">getMapSchema() + extendSchema()</span>
+        </a>
+      </div>
+    </section>
+  </main>
+</Base>

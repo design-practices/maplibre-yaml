@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Loaded at RUNTIME: <Map src="/maps/japan-arc.yaml" /> hands the URL to
+# <ml-map src>, which fetches, parses and validates it in the browser.
+type: map
+id: japan-arc
+config:
+  center: [136.5, 34]
+  zoom: 4.3
+  pitch: 30
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: ring
+    type: line
+    source:
+      type: geojson
+      url: "/data/ring-of-fire.geojson"
+    paint:
+      line-color: "#e4572e"
+      line-width: 4
+      line-opacity: 0.6
+  - id: volcanoes
+    type: circle
+    source:
+      type: geojson
+      url: "/data/volcanoes.geojson"
+    paint:
+      circle-radius: 9
+      circle-color: ["match", ["get", "status"], "active", "#d62828", "#f77f00"]
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+    interactive:
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - str: "Last eruption: "
+              - property: lastEruption

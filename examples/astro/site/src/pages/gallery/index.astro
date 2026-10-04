@@ -1,0 +1,56 @@
+---
+import Base from "../../layouts/Base.astro";
+import { Map } from "@maplibre-yaml/astro";
+import { getCollection } from "astro:content";
+
+// Each entry is a whole map document plus this site's `title`/`blurb`,
+// validated by extendSchema(getMapSchema(), …) in src/content.config.ts.
+const maps = await getCollection("maps");
+---
+
+<Base title="Gallery">
+  <main>
+    <h1>Gallery</h1>
+    <p class="lede">
+      Map documents stored as a YAML data collection and rendered with
+      <code>&lt;Map config=&#123;entry.data&#125; /&gt;</code>.
+    </p>
+    <div class="gallery">
+      {
+        maps.map((entry) => (
+          <figure class="map-frame" data-map-entry={entry.id}>
+            <Map config={entry.data} height="320px" />
+            <figcaption>
+              <strong>{entry.data.title}</strong>
+              <span>{entry.data.blurb}</span>
+            </figcaption>
+          </figure>
+        ))
+      }
+    </div>
+  </main>
+</Base>
+
+<style>
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+    gap: 1.5rem;
+  }
+
+  figure {
+    margin: 0;
+  }
+
+  figcaption {
+    padding: 0.8rem 1rem;
+    background: #fff;
+    display: grid;
+    gap: 0.2rem;
+  }
+
+  figcaption span {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+</style>

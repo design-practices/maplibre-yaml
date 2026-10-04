@@ -1,0 +1,26 @@
+{
+  "name": "@maplibre-yaml/example-astro-site",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Ring of Fire: the @maplibre-yaml/astro example site, built and browser-tested on every supported Astro major",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check",
+    "astro": "astro",
+    "matrix": "node ../../../scripts/astro-matrix.mjs"
+  },
+  "dependencies": {
+    "@maplibre-yaml/astro": "workspace:*",
+    "@maplibre-yaml/core": "workspace:*",
+    "astro": "^5.18.2",
+    "maplibre-gl": "^5.24.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "typescript": "^5.9.3",
+    "@types/node": "^22.0.0"
+  }
+}

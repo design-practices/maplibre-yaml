@@ -227,3 +227,81 @@ jobs:
                       e2e/report
                       e2e/results
                   retention-days: 7
+
+    # The Astro example site on every Astro major the peer range claims
+    # (U20, ml-vw4.13; plan Amendment A3, D-A9/D-A11). The peer range said
+    # ^4 || ^5 while nothing ran either, and Astro 6/7 broke every
+    # content-collection helper (zod 3 vs 4) without a red check anywhere.
+    #
+    # scripts/astro-matrix.mjs packs core + astro, installs the example site
+    # OUTSIDE the workspace with npm (no --legacy-peer-deps, so the peer range
+    # itself is under test), then runs astro check, astro build, the full
+    # Playwright suite against astro preview, and the @dev smoke tests against
+    # astro dev (the audit's npm-install dev-mode break never shows in a
+    # build). Hermetic: the suite stubs the basemap style and fails on any
+    # other off-origin request.
+    astro-example:
+        name: Astro ${{ matrix.astro }} example site
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                astro: ["4", "5", "6", "7"]
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v3
+
+            # Astro 7 needs Node >= 22.12; 4-6 run on it too.
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Resolve Playwright version
+              id: pw
+              run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+            - name: Cache Playwright browsers
+              uses: actions/cache@v4
+              id: pw-cache
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+            - name: Install Chromium
+              run: pnpm exec playwright install --with-deps chromium
+              if: steps.pw-cache.outputs.cache-hit != 'true'
+
+            - name: Install Chromium system deps
+              run: pnpm exec playwright install-deps chromium
+              if: steps.pw-cache.outputs.cache-hit == 'true'
+
+            - name: Cache npm (the matrix site installs with npm)
+              uses: actions/cache@v4
+              with:
+                  path: ~/.npm
+                  key: npm-astro-${{ matrix.astro }}-${{ hashFiles('examples/astro/site/package.json') }}
+                  restore-keys: npm-astro-${{ matrix.astro }}-
+
+            - name: Build core
+              run: pnpm --filter @maplibre-yaml/core build
+
+            - name: Build and drive the example site on Astro ${{ matrix.astro }}
+              env:
+                  ASTRO_MATRIX_DIR: ${{ runner.temp }}/astro-matrix
+              run: node scripts/astro-matrix.mjs --majors ${{ matrix.astro }}
+
+            - name: Upload Playwright results on failure
+              uses: actions/upload-artifact@v4
+              if: failure()
+              with:
+                  name: astro-${{ matrix.astro }}-example-results
+                  path: ${{ runner.temp }}/astro-matrix/results-*
+                  retention-days: 7

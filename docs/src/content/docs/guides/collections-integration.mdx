@@ -28,13 +28,14 @@ The collection item integration approach uses three key concepts:
 Choose the schema that matches your content type:
 
 ```typescript
-// src/content/config.ts
+// src/content.config.ts
 import { defineCollection } from "astro:content";
+import { glob } from "astro/loaders";
 import { getCollectionItemWithLocationSchema } from "@maplibre-yaml/astro/utils";
 
 export const collections = {
   posts: defineCollection({
-    type: "content",
+    loader: glob({ pattern: "**/*.md", base: "./src/collections/posts" }),
     schema: getCollectionItemWithLocationSchema(),
   }),
 };
@@ -49,14 +50,19 @@ export const collections = {
   either entry.
 </Aside>
 
-`type: "content"` is the legacy collection API, which Astro 4 and 5 both
-support. That is why `post.slug` and `post.render()` work in the page below.
+A `glob()` loader works on Astro 5, 6 and 7 as written. On Astro 4 it needs
+`experimental: { contentLayer: true }`, the config file at
+`src/content/config.ts`, and a `base` outside `src/content/` (see
+[Supported versions](/integrations/astro/#supported-versions)). Loader entries
+have an `id` (the file name without its extension) and render with `render()`
+from `astro:content`; the legacy `type: "content"` API (`post.slug`,
+`post.render()`) is gone in Astro 6.
 
 ### 2. Add Location to Your Posts
 
 ```yaml
 ---
-# src/content/posts/my-trip.md
+# src/collections/posts/my-trip.md
 title: "My Trip to Paris"
 pubDate: 2024-03-15
 location:
@@ -72,20 +78,20 @@ We arrived in Paris on a crisp spring morning...
 ```astro
 ---
 // src/pages/posts/[...slug].astro
-import { getCollection, getEntry } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import { Map, buildPointMapConfig } from '@maplibre-yaml/astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts');
   return posts.map(post => ({
-    params: { slug: post.slug },
+    params: { slug: post.id },
     props: { post }
   }));
 }
 
 const { post } = Astro.props;
-const { Content } = await post.render();
+const { Content } = await render(post);
 
 // Build map config if location exists
 const mapConfig = post.data.location
@@ -230,7 +236,7 @@ route:
 For collection items with mixed content types, use the comprehensive schema:
 
 ```typescript
-import { z } from "astro:content";
+import { z } from "astro/zod";
 import { getCollectionItemWithGeoSchema } from "@maplibre-yaml/astro/utils";
 
 const schema = getCollectionItemWithGeoSchema({
@@ -379,7 +385,7 @@ Here's a full example of a collection item post template with conditional map re
 ```astro
 ---
 // src/pages/posts/[...slug].astro
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import {
   Map,
   buildPointMapConfig,
@@ -392,13 +398,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 export async function getStaticPaths() {
   const posts = await getCollection('posts');
   return posts.map(post => ({
-    params: { slug: post.slug },
+    params: { slug: post.id },
     props: { post }
   }));
 }
 
 const { post } = Astro.props;
-const { Content } = await post.render();
+const { Content } = await render(post);
 const { location, locations, region, route } = post.data;
 
 const MAP_STYLE = 'https://demotiles.maplibre.org/style.json';

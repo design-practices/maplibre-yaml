@@ -7,6 +7,23 @@ import type { z } from 'zod';
 import { LayerSchema, LegendConfigSchema, LegendItemSchema } from '../schemas';
 import { escapeHtml } from '../utils/html';
 
+/**
+ * Inline base styles, matching the params panel's box. Core ships no
+ * stylesheet, so without these the legend rendered as bare text and every
+ * swatch was a 0x0 span. Inline (not a stylesheet) for the same reason the
+ * params panel is: nothing to load, and an author `slot="legend"` replaces it.
+ */
+const LEGEND_BOX_STYLE =
+  'display:block;background:rgba(255,255,255,0.95);border-radius:4px;' +
+  'box-shadow:0 1px 4px rgba(0,0,0,0.3);padding:8px 12px;' +
+  'font:12px/1.5 system-ui,sans-serif;color:#333;min-width:140px;';
+
+const SYMBOL_STYLE = {
+  circle: 'display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;',
+  square: 'display:inline-block;flex:none;width:12px;height:12px;border-radius:2px;',
+  line: 'display:inline-block;flex:none;width:16px;height:3px;border-radius:2px;',
+} as const;
+
 type Layer = z.infer<typeof LayerSchema>;
 type LegendConfig = z.infer<typeof LegendConfigSchema>;
 type LegendItem = z.infer<typeof LegendItemSchema>;
@@ -43,8 +60,8 @@ export class LegendBuilder {
     // toggle, `collapsed: true` starts closed, default stays fully visible.
     // The summary needs content to be clickable, so an untitled legend gets
     // the literal "Legend".
-    let html = `<details class="maplibre-legend"${config?.collapsed ? "" : " open"}>`;
-    html += `<summary class="legend-title">${escapeHtml(config?.title ?? "Legend")}</summary>`;
+    let html = `<details class="maplibre-legend" style="${LEGEND_BOX_STYLE}"${config?.collapsed ? "" : " open"}>`;
+    html += `<summary class="legend-title" style="cursor:pointer;font-weight:600;">${escapeHtml(config?.title ?? "Legend")}</summary>`;
     html += '<div class="legend-items">';
     for (const item of items) {
       html += this.renderItem(item);
@@ -61,25 +78,28 @@ export class LegendBuilder {
     const shape = item.shape || 'square';
     let symbol = '';
 
+    const swatch = (kind: 'circle' | 'line' | 'square') =>
+      `<span class="legend-symbol ${kind}" style="background:${escapeHtml(item.color)};${SYMBOL_STYLE[kind]}"></span>`;
+
     switch (shape) {
       case 'circle':
-        symbol = `<span class="legend-symbol circle" style="background:${escapeHtml(item.color)}"></span>`;
+        symbol = swatch('circle');
         break;
       case 'line':
-        symbol = `<span class="legend-symbol line" style="background:${escapeHtml(item.color)}"></span>`;
+        symbol = swatch('line');
         break;
       case 'icon':
         if (item.icon) {
           symbol = `<span class="legend-symbol icon">${escapeHtml(item.icon)}</span>`;
         } else {
-          symbol = `<span class="legend-symbol square" style="background:${escapeHtml(item.color)}"></span>`;
+          symbol = swatch('square');
         }
         break;
       default:
-        symbol = `<span class="legend-symbol square" style="background:${escapeHtml(item.color)}"></span>`;
+        symbol = swatch('square');
     }
 
-    return `<div class="legend-item">${symbol}<span class="legend-label">${escapeHtml(item.label)}</span></div>`;
+    return `<div class="legend-item" style="display:flex;align-items:center;gap:6px;margin-top:4px;">${symbol}<span class="legend-label">${escapeHtml(item.label)}</span></div>`;
   }
 
   /**

@@ -32,6 +32,8 @@ const DOCS = [
 interface Fence {
   file: string;
   lang: string;
+  /** The fence's info string after the language, e.g. `title="…"`. */
+  meta: string;
   body: string;
 }
 
@@ -39,14 +41,14 @@ interface Fence {
 function fences(file: string): Fence[] {
   const text = readFileSync(join(REPO, file), "utf8");
   const out: Fence[] = [];
-  const re = /^([ \t]*)```(\w*)[^\n]*\n([\s\S]*?)^\1```[ \t]*$/gm;
+  const re = /^([ \t]*)```(\w*)([^\n]*)\n([\s\S]*?)^\1```[ \t]*$/gm;
   for (const m of text.matchAll(re)) {
     const indent = m[1].length;
-    const body = m[3]
+    const body = m[4]
       .split("\n")
       .map((line) => line.slice(Math.min(indent, line.search(/\S|$/))))
       .join("\n");
-    out.push({ file, lang: m[2], body });
+    out.push({ file, lang: m[2], meta: m[3], body });
   }
   return out;
 }
@@ -153,12 +155,44 @@ describe("the documented story renders through <Scrollytelling config>", () => {
       "earthquake-circles"
     );
 
-    // Every chapter is in the page, and the controller reads the map through
-    // the element's real API (`.map` never existed on <ml-map>).
+    // Every chapter is in the page, and the (bundled) controller reads the
+    // map through the element's real API (`.map` never existed on <ml-map>).
     for (const chapter of parsed.data!.chapters) {
       expect(html).toContain(`data-chapter-id="${chapter.id}"`);
     }
-    expect(html).toContain("mapReady()");
-    expect(html).not.toMatch(/mapEl\.map\b/);
+    const controller = readFileSync(
+      join(REPO, "packages/astro/src/client/scrollytelling.ts"),
+      "utf8"
+    );
+    expect(controller).toContain("mapReady()");
+    expect(controller).not.toMatch(/mapEl\.map\b/);
+  });
+});
+
+describe("snippets titled with an example-site file are copied from it", () => {
+  // A fence like ```astro title="examples/astro/site/src/pages/index.astro"
+  // claims to come from the example site, which CI builds and drives in a
+  // browser on every supported Astro major. Hold it to that: its lines
+  // (indentation aside) must appear in the file, contiguously and in order.
+  const titled = ALL.map((f) => ({
+    ...f,
+    source: f.meta.match(/title="(examples\/astro\/site\/[^"]+)"/)?.[1],
+  })).filter((f) => f.source);
+
+  it("finds the example-site excerpts", () => {
+    expect(titled.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it.each(titled.map((f) => [`${f.file}: ${f.source}`, f]))("%s", (_l, f) => {
+    const fence = f as (typeof titled)[number];
+    const norm = (text: string) =>
+      text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+    const excerpt = norm(fence.body);
+    const file = norm(readFileSync(join(REPO, fence.source!), "utf8"));
+    const at = file.findIndex((_, i) => excerpt.every((line, j) => file[i + j] === line));
+    expect(at, `excerpt not found verbatim in ${fence.source}`).toBeGreaterThanOrEqual(0);
   });
 });

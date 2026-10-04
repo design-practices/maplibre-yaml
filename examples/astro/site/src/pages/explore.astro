@@ -1,0 +1,30 @@
+---
+import Base from "../layouts/Base.astro";
+import { FullPageMap, loadMapConfig } from "@maplibre-yaml/astro";
+
+const explorer = await loadMapConfig("./src/maps/explorer.yaml");
+---
+
+<Base title="Explore" bleed>
+  <!--
+    showControls (default) puts zoom-in / zoom-out / reset in the top-right
+    corner; showLegend shows core's legend built from the layers' `legend:`
+    fields. The document's own `parameters:` add the panel, `markers:` the
+    purple pins, and `interactive.hover` the popups.
+  -->
+  <FullPageMap config={explorer} showLegend legendPosition="bottom-right">
+    <div slot="top-left" class="caption" data-testid="explore-caption">
+      <strong>Volcano explorer</strong>
+      Toggle the plate boundary and filter by elevation. Purple pins are
+      landmark eruptions; click one.
+    </div>
+  </FullPageMap>
+</Base>
+
+<style is:global>
+  /* FullPageMap is position: fixed over the viewport; keep the site header on top. */
+  body.bleed .ml-fullpage-map {
+    top: var(--header-h);
+    height: calc(100vh - var(--header-h));
+  }
+</style>

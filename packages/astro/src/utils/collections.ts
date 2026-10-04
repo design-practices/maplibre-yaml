@@ -42,13 +42,32 @@
  * ```
  */
 
-import { z } from "zod";
+import { z } from "astro/zod";
 import {
   MapBlockSchema,
   ScrollytellingBlockSchema,
   ChapterSchema,
   MapConfigSchema,
 } from "@maplibre-yaml/core/schemas";
+import type {
+  MapBlock,
+  MapConfig,
+  ScrollytellingBlock,
+  Chapter,
+} from "@maplibre-yaml/core/schemas";
+import { bridgeSchema, HOST_ZOD_IS_V4, type CoreSchemaLike } from "./zod-bridge";
+
+/**
+ * Core schema behind each bridged schema, so {@link extendSchema} can extend
+ * a bridged (zod-4 host) schema by validating with the core one.
+ */
+const CORE_OF = new WeakMap<object, CoreSchemaLike<unknown>>();
+
+function bridged<T>(core: CoreSchemaLike<T>): z.ZodType<T> {
+  const schema = bridgeSchema(core);
+  CORE_OF.set(schema as object, core as CoreSchemaLike<unknown>);
+  return schema;
+}
 
 /**
  * Get the Zod schema for map block configurations.
@@ -107,8 +126,8 @@ import {
  * </div>
  * ```
  */
-export function getMapSchema() {
-  return MapBlockSchema;
+export function getMapSchema(): z.ZodType<MapBlock> {
+  return bridged<MapBlock>(MapBlockSchema as CoreSchemaLike<MapBlock>);
 }
 
 /**
@@ -172,8 +191,10 @@ export function getMapSchema() {
  * <Scrollytelling config={entry.data} />
  * ```
  */
-export function getScrollytellingSchema() {
-  return ScrollytellingBlockSchema;
+export function getScrollytellingSchema(): z.ZodType<ScrollytellingBlock> {
+  return bridged<ScrollytellingBlock>(
+    ScrollytellingBlockSchema as CoreSchemaLike<ScrollytellingBlock>
+  );
 }
 
 /**
@@ -231,8 +252,8 @@ export function getScrollytellingSchema() {
  * <Scrollytelling config={storyConfig} />
  * ```
  */
-export function getChapterSchema() {
-  return ChapterSchema;
+export function getChapterSchema(): z.ZodType<Chapter> {
+  return bridged<Chapter>(ChapterSchema as CoreSchemaLike<Chapter>);
 }
 
 /**
@@ -294,8 +315,8 @@ export function getChapterSchema() {
  * mapStyle: "https://demotiles.maplibre.org/style.json"
  * ```
  */
-export function getSimpleMapSchema() {
-  return MapConfigSchema;
+export function getSimpleMapSchema(): z.ZodType<MapConfig> {
+  return bridged<MapConfig>(MapConfigSchema as CoreSchemaLike<MapConfig>);
 }
 
 /**
@@ -371,13 +392,49 @@ export function getSimpleMapSchema() {
  * ))}
  * ```
  */
-export function extendSchema<T extends z.ZodTypeAny>(
+export function extendSchema<T extends z.ZodTypeAny, E extends z.ZodRawShape>(
   baseSchema: T,
-  extensions: z.ZodRawShape
-): z.ZodObject<z.ZodRawShape> {
+  extensions: E
+): z.ZodType<z.output<T> & { [K in keyof E]: z.output<E[K]> }> {
+  return extendSchemaImpl(baseSchema, extensions) as unknown as z.ZodType<
+    z.output<T> & { [K in keyof E]: z.output<E[K]> }
+  >;
+}
+
+function extendSchemaImpl(baseSchema: z.ZodTypeAny, extensions: z.ZodRawShape): z.ZodTypeAny {
+  const core = CORE_OF.get(baseSchema as object);
+
+  // zod-4 host (Astro 6+) with a bridged core schema: the core half cannot
+  // be `.extend()`ed by host zod, so validate both halves and merge. Both
+  // strip unknown keys, so each sees only its own fields in the output.
+  if (HOST_ZOD_IS_V4 && core) {
+    const extra = z.object(extensions);
+    return z.unknown().transform((value, ctx) => {
+      const base = core.safeParse(value);
+      const ext = extra.safeParse(value);
+      if (!base.success) {
+        for (const issue of base.error.issues) {
+          ctx.addIssue({ code: "custom", message: issue.message, path: issue.path });
+        }
+      }
+      if (!ext.success) {
+        for (const issue of ext.error.issues) {
+          ctx.addIssue({
+            code: "custom",
+            message: issue.message,
+            path: issue.path as (string | number)[],
+          });
+        }
+      }
+      if (!base.success || !ext.success) return z.NEVER;
+      return { ...(base.data as object), ...(ext.data as object) };
+    });
+  }
+
   // If base schema is an object, merge with extensions
-  if (baseSchema instanceof z.ZodObject) {
-    return baseSchema.extend(extensions);
+  const extend = (baseSchema as { extend?: unknown }).extend;
+  if (typeof extend === "function" && typeof (baseSchema as { shape?: unknown }).shape === "object") {
+    return (baseSchema as unknown as z.ZodObject<z.ZodRawShape>).extend(extensions);
   }
 
   // Otherwise, create a new object schema with extensions

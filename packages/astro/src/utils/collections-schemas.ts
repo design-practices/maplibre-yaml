@@ -39,7 +39,7 @@
  * ```
  */
 
-import { z } from "zod";
+import { z } from "astro/zod";
 
 /**
  * Location coordinate pair schema.
