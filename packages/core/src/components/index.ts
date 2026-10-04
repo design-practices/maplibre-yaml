@@ -65,7 +65,7 @@
  * ```
  */
 
-export { MLMap, registerMLMap } from "./ml-map.js";
+export { MLMap, registerMLMap, ML_MAP_SLOTS } from "./ml-map.js";
 export { defaultStyles, injectStyles } from "./styles";
 
 // Auto-inject styles when module is imported
