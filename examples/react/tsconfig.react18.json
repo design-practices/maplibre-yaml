@@ -1,0 +1,19 @@
+{
+  // The same source against @types/react 18 (installed under the npm aliases
+  // react-types-18 / react-dom-types-18). `paths` points every `react` and
+  // `react-dom` import at them — including the one inside
+  // @maplibre-yaml/core/react — and swaps the React-19-only module for its
+  // stub, mirroring `vite build --mode react18`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "react": ["./node_modules/react-types-18"],
+      "react/*": ["./node_modules/react-types-18/*"],
+      "react-dom": ["./node_modules/react-dom-types-18"],
+      "react-dom/*": ["./node_modules/react-dom-types-18/*"],
+      "#react19-only": ["./src/react19/stub.tsx"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["src/react19/**"]
+}

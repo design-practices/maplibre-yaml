@@ -73,6 +73,13 @@ describe("ml-map events: @fires, dispatch sites, and the docs table agree", () =
     expect(sorted(new Set(firesTags()))).toEqual(names);
   });
 
+  it("MLMapEventMap (the typed listeners + React props) names exactly the dispatched events", () => {
+    const body = SOURCE.match(/export interface MLMapEventMap \{([\s\S]*?)\n\}/);
+    expect(body, "MLMapEventMap is gone from ml-map.ts").not.toBeNull();
+    const typed = [...body![1].matchAll(/"(ml-map:[a-z-]+)":/g)].map((m) => m[1]);
+    expect(sorted(typed)).toEqual(sorted(dispatched().keys()));
+  });
+
   it.skipIf(!existsSync(DOCS_ROOT))(
     "the web-components event table names every event with its detail keys",
     () => {

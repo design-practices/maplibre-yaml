@@ -273,13 +273,14 @@ For dynamic or generated configurations:
 - Building configs programmatically
 - Framework-based dynamic rendering
 
-<Aside type="caution" title="Known issue: a transient error before `config` is set">
+<Aside type="note" title="When the config arrives after the element">
   The element upgrades as soon as `register.js` loads, before the line that
-  assigns `config`. Finding no configuration yet, it dispatches one
-  `ml-map:error` ("No configuration provided.") and paints its error card,
-  then renders normally once `config` arrives. Assigning `config` *before*
-  `register.js` loads does not work: the value is ignored. Tracked as bead
-  `ml-mpm`.
+  assigns `config`. Since 0.7 an element with no configuration waits until
+  the end of the next frame before it reports "No configuration provided.",
+  so a `config` assigned right after the import (or from a framework effect)
+  renders without a transient error, and a `mapReady()` called in between
+  waits for it. A `config` assigned *before* `register.js` loads is picked up
+  when the element upgrades. On 0.6, the error card flashed in both cases.
 </Aside>
 
 ## Component Lifecycle
@@ -712,48 +713,58 @@ for `ml-map:*` events, and TypeScript.
 
 | Framework | `config` object | `ml-map:*` events | TypeScript |
 |-----------|-----------------|-------------------|------------|
-| React 19 | Set as a **property**: pass the object or a JSON string | `onml-map:load={…}` prop, or a ref + `addEventListener` | Needs a [JSX declaration](#typescript-with-react) |
-| React 18 | Set as an **attribute**: you must `JSON.stringify` it (an object becomes `"[object Object]"`) | Ref + `addEventListener` only | Needs a [JSX declaration](#typescript-with-react) |
+| React 19 | Set as a **property**: pass the object or a JSON string | `onml-map:load={…}` prop, or a ref + `addEventListener` | [`@maplibre-yaml/core/react`](#typescript-with-react) |
+| React 18 | Set as an **attribute**: you must `JSON.stringify` it (an object becomes `"[object Object]"`) | Ref + `addEventListener` only | [`@maplibre-yaml/core/react`](#typescript-with-react) |
 | Vue 3 | Set as a property: pass the object | `@ml-map:load="…"` | Works (add `isCustomElement`, below) |
 | Svelte 5 | Set as a property: pass the object | `bind:this` + `addEventListener` | Works out of the box |
 
-`src="/map.yaml"` works the same everywhere. The snippets below were verified
-with React 18.3 and 19.2, Vue 3.5 and Svelte 5 on Vite 8 (dev server and
-production build), and with Next.js 16. `mapReady()` needs 0.7 or later. On
-0.6, listen for `ml-map:load` and then call `getMap()`.
+`src="/map.yaml"` works the same everywhere. The React snippets below are
+files from [`examples/react`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/react),
+a Vite + TypeScript app that CI builds against React 18 and React 19 and
+drives in a browser; a test fails if a snippet here and its file differ. The
+Vue and Svelte snippets were verified with Vue 3.5 and Svelte 5 on Vite 8
+(dev server and production build), and the Next.js one with Next.js 16.
+`mapReady()` needs 0.7 or later. On 0.6, listen for `ml-map:load` and then
+call `getMap()`.
 
-<Aside type="caution" title="Keep the config value stable">
-  Every new `config` value tears down the map and builds a fresh one, which
-  also resets the camera. Frameworks that set `config` as a property hand the
-  element a new value whenever the bound object's identity changes, so an
-  inline object literal (`config={{ ... }}`) rebuilds the map on every parent
-  re-render. Pass a module constant, a memoized or computed object, or a JSON
-  string, which compares by value. Tracked as bead `ml-i10`.
+<Aside type="note" title="Re-renders and the config value">
+  A *changed* `config` tears down the map and builds a fresh one, which also
+  resets the camera. An *equal* one is a no-op: since 0.7 the element
+  compares the new value with the one it is showing (by its JSON), so a
+  framework that hands it a fresh but identical object on every render (an
+  inline `config={{ ... }}`, say) no longer rebuilds the map each time. The
+  comparison serializes the document, so for very large inline GeoJSON a
+  stable (module-level or memoized) value is still cheaper. On 0.6 every
+  assignment rebuilt the map.
 </Aside>
 
-<Aside type="caution" title="Known issue: a property set at creation skips validation">
-  React 19, Vue and Svelte set `config` before the element is attached. That
-  path currently skips schema validation, so an invalid document fails inside
-  the renderer instead of showing the "Configuration Error" card, and schema
-  defaults are not applied. Until bead `ml-jh6` is fixed, prefer `src` for
-  documents you have not validated (for example with `mlym validate`). React
-  18 (attribute) and `src` are unaffected.
-</Aside>
+Since 0.7, a `config` property set before the element is attached (what React
+19, Vue and Svelte do) is validated and given its schema defaults like every
+other path: an invalid document shows the "Configuration Error" card. On 0.6
+that path skipped validation.
 
 ### React
 
-Rendering a map, for React 18 and 19:
+The complete, runnable version of everything below is
+[`examples/react`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/react),
+with YAML and object configs, events, `mapReady()`, slot children, the params
+panel, mount/unmount under StrictMode, and the React 19 props. See also the
+short [React guide](/integrations/react/).
 
-```jsx
+Rendering a map from a config object, for React 18 and 19:
+
+{/* snippet: examples/react/src/snippets/ConfigMap.tsx */}
+```tsx
 import "@maplibre-yaml/core/register";
+import type { MapBlock } from "@maplibre-yaml/core";
 
-function YamlMap({ config }) {
-  const configJson = JSON.stringify(config);
-
+export function ConfigMap({ config }: { config: MapBlock }) {
+  // A JSON string works on React 18 (set as the attribute) and React 19
+  // (set as the property). An equal string never re-renders the map.
   return (
     <ml-map
-      style={{ width: "100%", height: "400px", display: "block" }}
-      config={configJson}
+      config={JSON.stringify(config)}
+      style={{ display: "block", width: "100%", height: "400px" }}
     />
   );
 }
@@ -762,88 +773,176 @@ function YamlMap({ config }) {
 A JSON string works on both majors. React 18 sets it as the attribute before
 the element connects. React 19 sets the `config` property, which parses the
 string. On React 19 alone you can pass the object directly
-(`config={config}`), as long as it is stable (see above).
+(`config={config}`), shown further down.
 
 **Events and the map instance.** React 18 cannot attach listeners for custom
-events through props, so use a ref. The same code works on React 19:
+events through props, so use a ref. The same code works on React 19, and the
+listeners are typed from `MLMapEventMap`:
 
-```jsx
+{/* snippet: examples/react/src/snippets/YamlMap.tsx */}
+```tsx
 import "@maplibre-yaml/core/register";
-import { useEffect, useRef } from "react";
+import type { MLMap, MLMapEventMap } from "@maplibre-yaml/core/register";
+import { useEffect, useRef, useState } from "react";
 
-function YamlMap({ src }) {
-  const ref = useRef(null);
+export function YamlMap({ src }: { src: string }) {
+  const ref = useRef<MLMap>(null);
+  const [clicked, setClicked] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
 
   useEffect(() => {
-    const el = ref.current;
-    const onError = (event) =>
+    const el = ref.current!;
+    const onClick = (event: MLMapEventMap["ml-map:layer-click"]) =>
+      setClicked(String(event.detail.feature?.properties?.name));
+    const onError = (event: MLMapEventMap["ml-map:error"]) =>
       console.error(event.detail.error ?? event.detail.errors);
+    el.addEventListener("ml-map:layer-click", onClick);
     el.addEventListener("ml-map:error", onError);
 
+    // mapReady() resolves with the MapLibre map once the document loaded.
     let cancelled = false;
     el.mapReady().then(
-      (map) => !cancelled && map.flyTo({ zoom: 3 }),
+      (map) => {
+        if (cancelled) return;
+        setZoom(map.getZoom());
+        map.on("zoomend", () => setZoom(map.getZoom()));
+      },
       () => {} // a failed document also fires ml-map:error
     );
 
     return () => {
       cancelled = true;
+      el.removeEventListener("ml-map:layer-click", onClick);
       el.removeEventListener("ml-map:error", onError);
     };
   }, []);
 
   return (
-    <ml-map ref={ref} src={src} style={{ display: "block", height: "400px" }} />
+    <>
+      <ml-map ref={ref} src={src} style={{ display: "block", height: "400px" }} />
+      <p>
+        Zoom {zoom?.toFixed(1) ?? "…"} · clicked: {clicked ?? "nothing yet"}
+      </p>
+    </>
   );
 }
 ```
 
-React 19 also attaches `on*` props on custom elements as listeners, using the
-rest of the name as the event type. `onml-map:load={handler}` therefore
-listens for `ml-map:load`. React 18 ignores these props. The colon makes this
-a namespaced JSX attribute. Vite and TypeScript compile it; if your JSX
-compiler rejects namespaced attributes, spread it in:
+**React 19: object `config` and event props.** React 19 sets custom-element
+props as properties and attaches `on*` props as listeners, using the rest of
+the name as the event type: `onml-map:load={handler}` listens for
+`ml-map:load`. With the typings, each handler gets its event's `detail` type.
+React 18 ignores these props, and the typings reject an object `config` there:
+
+{/* snippet: examples/react/src/react19/EventPropsMap.tsx */}
+```tsx
+import "@maplibre-yaml/core/register";
+import type { MapBlock } from "@maplibre-yaml/core";
+
+// React 19 only: `config` takes the object itself (React 19 sets it as a
+// property), and `onml-map:*` props attach listeners, typed per event.
+export function EventPropsMap({
+  config,
+  onLoad,
+  onLayerClick,
+}: {
+  config: MapBlock;
+  onLoad: () => void;
+  onLayerClick: (layerId: string) => void;
+}) {
+  return (
+    <ml-map
+      config={config}
+      onml-map:load={() => onLoad()}
+      onml-map:layer-click={(event) => onLayerClick(event.detail.layerId)}
+      onml-map:error={(event) =>
+        console.error(event.detail.error ?? event.detail.errors)
+      }
+      style={{ display: "block", height: "400px" }}
+    />
+  );
+}
+```
+
+The colon makes these namespaced JSX attributes. Vite and TypeScript compile
+them; if your JSX compiler rejects namespaced attributes, spread them in:
 `{...{ "onml-map:load": handler }}`.
+
+**Slot children.** React can render your own controls into the map's corners
+(see [Slots](#slots-your-own-chrome-over-the-map)). The element moves slot children into the map, so render
+them unconditionally: React may update what is inside them, but must not add
+or remove the slotted elements themselves. Toggle one with `hidden` or CSS
+instead.
+
+{/* snippet: examples/react/src/snippets/SlotControls.tsx */}
+```tsx
+import "@maplibre-yaml/core/register";
+import type { MLMap } from "@maplibre-yaml/core/register";
+import { useRef } from "react";
+
+export function MapWithControls({ src }: { src: string }) {
+  const ref = useRef<MLMap>(null);
+  const zoomBy = (delta: number) => {
+    const map = ref.current?.getMap();
+    map?.easeTo({ zoom: map.getZoom() + delta, duration: 300 });
+  };
+
+  // Children with slot="top-left" (and the other corners, or "legend") are
+  // placed in the map's corner, stacked with the built-in chrome. Render
+  // slot children unconditionally: the element moves them into the map, so
+  // React may update their contents but must not add or remove them.
+  return (
+    <ml-map ref={ref} src={src} style={{ display: "block", height: "400px" }}>
+      <div slot="top-left" className="map-buttons">
+        <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1)}>
+          +
+        </button>
+        <button type="button" aria-label="Zoom out" onClick={() => zoomBy(-1)}>
+          −
+        </button>
+      </div>
+    </ml-map>
+  );
+}
+```
 
 **Lifecycle.** Unmounting removes the element, and its `disconnectedCallback`
 destroys the MapLibre map: no leaked canvas, and a remount creates exactly one
 new map. StrictMode's double-run effects do not re-create the element, so
 keep listener setup in an effect that has a cleanup, as shown above. In React
-18, `config` should arrive as the JSON-string attribute: a ref or effect only
-runs after the element has connected, so assigning `el.config` there briefly
-shows the "No configuration provided" card, and a `mapReady()` call made
-before the assignment rejects (bead `ml-mpm`).
+18 a ref or effect only runs after the element has connected, so a `config`
+assigned there arrives late; since 0.7 the element waits for it (see the note
+under [Method 3](#method-3-json-attribute-programmatic)), but the JSON-string
+attribute, present at connect, remains the simplest React 18 path.
 
 #### TypeScript with React
 
-React's JSX types do not know `<ml-map>`, so `tsc` reports *Property 'ml-map'
-does not exist on type 'JSX.IntrinsicElements'*. Add a declaration file to
-your project, for example `src/ml-map.d.ts` (works with `@types/react` 18.3
-and 19):
+React's JSX types do not know `<ml-map>`, so without help `tsc` reports
+*Property 'ml-map' does not exist on type 'JSX.IntrinsicElements'*. Core ships
+the typings as a types-only entry. Reference it once, for example in Vite's
+`src/vite-env.d.ts`:
 
 ```ts
-import type { DetailedHTMLProps, HTMLAttributes } from "react";
-import type { MLMap } from "@maplibre-yaml/core/register";
-
-declare module "react" {
-  namespace JSX {
-    interface IntrinsicElements {
-      "ml-map": DetailedHTMLProps<HTMLAttributes<MLMap>, MLMap> & {
-        src?: string;
-        /** JSON string; React 19 also accepts a config object. */
-        config?: string;
-        /** React 19 only: `onml-map:load`, `onml-map:error`, … */
-        [event: `onml-map:${string}`]: ((event: CustomEvent) => void) | undefined;
-      };
-    }
-  }
-}
+/// <reference types="@maplibre-yaml/core/react" />
 ```
 
-Then `useRef<MLMap>(null)` gives a typed `ref.current.mapReady()`. Shipping
-these typings from core is tracked as bead `ml-f84`. Since 0.7, core declares
-`HTMLElementTagNameMap["ml-map"]`, so `document.querySelector("ml-map")` and
-`document.createElement("ml-map")` are typed as `MLMap` without a cast.
+(`import "@maplibre-yaml/core/react";` in any module works too; the module
+is empty at runtime.) It works with `@types/react` 18 and 19 and adapts to
+the one you have installed:
+
+| | `@types/react` 19 | `@types/react` 18 |
+|---|---|---|
+| `src` | `string` | `string` |
+| `config` | `MapBlock` object or JSON `string` | JSON `string` only (an object would arrive as `"[object Object]"`) |
+| `ref` | `useRef<MLMap>(null)`: `mapReady()`, `getMap()` typed | same |
+| `onml-map:*` props | typed per event, for example `event.detail.layerId` on `onml-map:layer-click` | not typed (React 18 ignores them) |
+| `children` | slot children, inline `<script type="text/yaml">` | same |
+
+`MLMap` and `MLMapEventMap` are exported from `@maplibre-yaml/core/register`,
+and `el.addEventListener("ml-map:layer-click", …)` is typed on any `MLMap`
+without React. Core also declares `HTMLElementTagNameMap["ml-map"]`, so
+`document.querySelector("ml-map")` and `document.createElement("ml-map")` are
+typed as `MLMap` without a cast.
 
 #### Next.js (App Router)
 

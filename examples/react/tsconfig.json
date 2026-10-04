@@ -1,4 +1,6 @@
 {
+  // Type-checks the app against @types/react 19 and the typings entry
+  // `@maplibre-yaml/core/react` (referenced once, in src/vite-env.d.ts).
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -8,12 +10,10 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
+    "isolatedModules": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "types": []
   },
-  "files": [
-    "tag-name-map.ts",
-    "react-common.tsx",
-    "react19.tsx",
-    "tmp/docs-react.d.ts"
-  ]
+  "include": ["src"]
 }
