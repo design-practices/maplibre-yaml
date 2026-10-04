@@ -30,6 +30,7 @@ disagree.
 | `layer.before` | ejects | Placement compiles honestly: the emitted layers array is ordered accordingly, and `EmitResult.placements` carries the intent. |
 | `images` | ejects | Named images are fetched at compile time and merged into the document sprite; layer references are rewritten to `mlym:<name>` so they resolve in the emitted style. |
 | `markers` | ejects via fallback | Markers lower to a symbol layer with generated pin sprites — the pins render in the emitted style; DOM-marker behavior (dragging, built-in popups) does not compile, reported as lossy. |
+| `layer.effect` | ejects via fallback | *Experimental.* A shader effect has no style.json form; the emitted style carries the layer's own static style — the effect's fallback — with one `lossy` warning per effect, so `--strict` refuses. A registered effect may adjust that layer or declare absence (`null`) through its `fallback()`. See [Effects](/guides/effects/). |
 | `layer.interactive` | declared absence | Popups, hover, and highlight are runtime behavior; `attachInteractions()` restores them over an ejected style. |
 | `layer.legend` | declared absence | Legend entries are chrome, not cartography. |
 | `layer.label` | declared absence | Display labels are chrome metadata. |
@@ -44,8 +45,9 @@ disagree.
 
 `markers` is the first **ejects-via-fallback** construct (marker `icon:`
 URLs are fetched into the sprite at emit time, like `images:` entries), and
-the effects catalog obeys the same law — every effect registers a mandatory
-fallback.
+the experimental effects obey the same law — every effect registers a
+mandatory `fallback()`, and the layer an effect sits on *is* that fallback,
+so an ejected effect is never a silent hole in the map.
 
 ## Reading the emit report
 

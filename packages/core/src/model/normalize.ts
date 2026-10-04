@@ -88,6 +88,10 @@ export const LAYER_RUNTIME_KEYS = [
   // ignores into the emitted style — and `validateStyleMin` accepts unknown
   // layer properties, so nothing downstream would catch it.
   "before",
+  // Experimental (0.7): a shader effect enhancing this layer. It never
+  // compiles — the layer's own static style is its fallback (eject class
+  // `fallback`, lowered by emitter/lower-effects.ts).
+  "effect",
 ] as const;
 
 /** Partition an object's own keys, preserving presence exactly. */

@@ -1221,6 +1221,21 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "^x-": {}
                             }
                           },
+                          "effect": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "A registered effect type, e.g. tonal-hatch or blueprint"
+                              }
+                            },
+                            "required": [
+                              "type"
+                            ],
+                            "additionalProperties": true,
+                            "description": "Experimental: a registered shader effect (\`type\` + flat params) that enhances this layer; the layer itself is the static fallback"
+                          },
                           "metadata": {
                             "type": "object",
                             "additionalProperties": {},
@@ -1367,6 +1382,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           },
                           "legend": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                          },
+                          "effect": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                           },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -1520,6 +1538,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "legend": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
                           },
+                          "effect": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                          },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                           },
@@ -1630,6 +1651,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           },
                           "legend": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                          },
+                          "effect": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                           },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -2042,6 +2066,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "legend": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
                           },
+                          "effect": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                          },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                           },
@@ -2143,6 +2170,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           },
                           "legend": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                          },
+                          "effect": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                           },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -2254,6 +2284,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "legend": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
                           },
+                          "effect": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                          },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                           },
@@ -2341,6 +2374,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           },
                           "legend": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                          },
+                          "effect": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                           },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -4705,6 +4741,21 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                           "^x-": {}
                         }
                       },
+                      "effect": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "A registered effect type, e.g. tonal-hatch or blueprint"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": true,
+                        "description": "Experimental: a registered shader effect (\`type\` + flat params) that enhances this layer; the layer itself is the static fallback"
+                      },
                       "metadata": {
                         "type": "object",
                         "additionalProperties": {},
@@ -4851,6 +4902,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       },
                       "legend": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                      },
+                      "effect": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -5004,6 +5058,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "legend": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
                       },
+                      "effect": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -5114,6 +5171,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       },
                       "legend": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                      },
+                      "effect": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -5526,6 +5586,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "legend": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
                       },
+                      "effect": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -5627,6 +5690,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       },
                       "legend": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                      },
+                      "effect": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -5738,6 +5804,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "legend": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
                       },
+                      "effect": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -5825,6 +5894,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       },
                       "legend": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                      },
+                      "effect": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -7310,6 +7382,21 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                       "^x-": {}
                     }
                   },
+                  "effect": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "A registered effect type, e.g. tonal-hatch or blueprint"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "additionalProperties": true,
+                    "description": "Experimental: a registered shader effect (\`type\` + flat params) that enhances this layer; the layer itself is the static fallback"
+                  },
                   "metadata": {
                     "type": "object",
                     "additionalProperties": {},
@@ -7456,6 +7543,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   },
                   "legend": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/legend"
+                  },
+                  "effect": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
                   },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
@@ -7609,6 +7699,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   "legend": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/legend"
                   },
+                  "effect": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
+                  },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
                   },
@@ -7719,6 +7812,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   },
                   "legend": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/legend"
+                  },
+                  "effect": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
                   },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
@@ -8131,6 +8227,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   "legend": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/legend"
                   },
+                  "effect": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
+                  },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
                   },
@@ -8232,6 +8331,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   },
                   "legend": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/legend"
+                  },
+                  "effect": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
                   },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
@@ -8343,6 +8445,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   "legend": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/legend"
                   },
+                  "effect": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
+                  },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
                   },
@@ -8430,6 +8535,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   },
                   "legend": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/legend"
+                  },
+                  "effect": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
                   },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
@@ -10962,6 +11070,21 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                           "^x-": {}
                         }
                       },
+                      "effect": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "A registered effect type, e.g. tonal-hatch or blueprint"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": true,
+                        "description": "Experimental: a registered shader effect (\`type\` + flat params) that enhances this layer; the layer itself is the static fallback"
+                      },
                       "metadata": {
                         "type": "object",
                         "additionalProperties": {},
@@ -11108,6 +11231,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       },
                       "legend": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                      },
+                      "effect": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -11261,6 +11387,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "legend": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
                       },
+                      "effect": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -11371,6 +11500,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       },
                       "legend": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                      },
+                      "effect": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -11783,6 +11915,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "legend": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
                       },
+                      "effect": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -11884,6 +12019,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       },
                       "legend": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                      },
+                      "effect": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -11995,6 +12133,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "legend": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
                       },
+                      "effect": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -12082,6 +12223,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       },
                       "legend": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                      },
+                      "effect": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"

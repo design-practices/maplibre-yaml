@@ -71,6 +71,7 @@ import {
   BackgroundLayerSchema,
   InteractiveConfigSchema,
   LegendItemSchema,
+  EffectConfigSchema,
 } from "./layer.schema";
 import { GeoJSONSchema } from "./geojson.schema";
 import { SOURCE_RUNTIME_KEYS } from "../model/normalize";
@@ -290,6 +291,9 @@ export const LayerRuntimeSchema = z
       .boolean()
       .optional()
       .describe("Allow users to toggle visibility"),
+    // Experimental (0.7): runtime half, because an effect never compiles —
+    // it ejects to the layer's own static style (class `fallback`).
+    effect: EffectConfigSchema.optional(),
   })
   .passthrough()
   .describe("Per-layer experience configuration (v2 `layer.runtime`)");

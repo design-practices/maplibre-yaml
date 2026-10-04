@@ -87,8 +87,70 @@ All layers share these base properties:
       type: "object",
       description: "Legend entry configuration",
     },
+    {
+      name: "effect",
+      type: "object",
+      description:
+        "Experimental: a registered shader effect (`type` + flat params) enhancing this layer; the layer itself is the effect's static fallback. In format v2 it lives under the layer's `runtime:`. See the Effects guide.",
+    },
   ]}
 />
+
+### `effect:` (experimental)
+
+:::caution[Experimental]
+`effect:` and `@maplibre-yaml/effects` are experimental in 0.7: the key's
+params and the effects API may change in a minor release.
+:::
+
+An `effect:` block names a registered effect and carries its params flat
+beside `type`. The layer it sits on stays a complete, ordinary layer — it is
+what renders without the effects package, under an unsupported projection,
+and in the ejected style.
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `type` | string | A registered effect: `tonal-hatch` or `blueprint` built in, or one page JavaScript registered. |
+| *any other key* | per effect | The effect's params, validated against its schema when `@maplibre-yaml/effects` is loaded. |
+
+Built-in params:
+
+| Effect | Layer type | Params (defaults) |
+| --- | --- | --- |
+| `tonal-hatch` | `fill-extrusion` | `ink` (`#4d4d4e`), `paper` (`#f9f3e3`), `atlas` (`hatch-atlas` — an `images:` name), `gain` (`0.72`), `outline` (`0.85`), `exaggerate` (`false`) |
+| `blueprint` | `fill-extrusion` | `line` (`#cfeeff`), `ground` (`#1a56b0`), `grid` (`4` metres), `gain` (`0.72`) |
+
+```yaml
+type: map
+id: blueprint-example
+config:
+  center: [-74.0118, 40.7075]
+  zoom: 15.9
+  pitch: 60
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  omt:
+    type: vector
+    url: "https://tiles.openfreemap.org/planet"
+layers:
+  - id: buildings
+    type: fill-extrusion
+    source: omt
+    source-layer: building
+    paint:
+      fill-extrusion-color: "#1a56b0"
+      fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
+    effect:
+      type: blueprint
+      grid: 4
+```
+
+Without the package, validation reports one `unimplemented` warning per
+effect (never an error) and the layer renders statically. With it, a bad
+param is a positioned parse error. On `mlym emit`, each effect is one
+`lossy` warning: `--strict` refuses, `--with-fallbacks` ships the static
+layer ([eject classes](/guides/eject-classes/)). Full guide:
+[Effects](/guides/effects/).
 
 ---
 
