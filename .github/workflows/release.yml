@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+      # Maintenance lines (e.g. release/0.6.x, branched from a release tag).
+      # changesets/action opens the "Version Packages" PR against the branch
+      # that was pushed, and publishing from it uses a non-`latest` dist-tag
+      # once main has released a newer minor (see scripts/release.sh).
+      - "release/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
