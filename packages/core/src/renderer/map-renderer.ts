@@ -4,15 +4,18 @@
  */
 
 import type { LngLat } from 'maplibre-gl';
-import { Map as MapLibreMap } from './maplibre-interop';
+import { Map as MapLibreMap, runtimeVersion } from './maplibre-interop';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
 import { EventHandler, type EventHandlerCallbacks } from './event-handler';
 import { LegendBuilder } from './legend-builder';
-import type { MarkerConfig } from '../schemas/map.schema';
+import type { MarkerConfig, StandalonePopupConfig, FitToConfig } from '../schemas/map.schema';
 import { ControlsManager } from './controls-manager';
 import { MarkersManager } from './markers-manager';
+import { PopupsManager } from './popups-manager';
+import { geojsonBounds, type Bounds } from '../interactions/geometry-bounds';
+import { COLOR_RELIEF_RUNTIME_FLOOR, meetsVersion } from '../capabilities';
 import { loadDocumentImages } from './images-loader';
 import { ChromeLayout, type ChromeCorner } from './chrome-layout';
 import {
@@ -53,6 +56,57 @@ function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
 }
 
 /**
+ * How a `fitTo` (U14) resolves against the document's named sources.
+ *
+ * - `bounds` — inline data: known before the map exists.
+ * - `deferred` — a fetched geojson source: fit on its first data load.
+ * - `unsupported` — missing name, non-geojson source, or empty data: the
+ *   authored center/zoom stand, with one warning naming why.
+ */
+type FitResolution =
+  | { kind: 'bounds'; bounds: Bounds }
+  | { kind: 'deferred' }
+  | { kind: 'unsupported'; reason: string };
+
+function resolveFitTo(
+  fitTo: FitToConfig,
+  sources: Record<string, unknown> | undefined
+): FitResolution {
+  const keep = 'keeping the authored center/zoom.';
+  const source = sources?.[fitTo.source] as Record<string, unknown> | undefined;
+  if (!source || typeof source !== 'object') {
+    return {
+      kind: 'unsupported',
+      reason:
+        `fitTo.source "${fitTo.source}" names no entry in \`sources:\` ` +
+        `(inline layer sources cannot be named — move it to \`sources:\`); ${keep}`,
+    };
+  }
+  if (source['type'] !== 'geojson') {
+    return {
+      kind: 'unsupported',
+      reason:
+        `fitTo.source "${fitTo.source}" is a ${String(source['type'])} source; only ` +
+        `GeoJSON sources have a client-side extent to fit (tiled sources do not); ${keep}`,
+    };
+  }
+  const inline = source['data'] ?? source['prefetchedData'];
+  if (inline !== undefined && !source['url']) {
+    const bounds = geojsonBounds(inline);
+    if (bounds) return { kind: 'bounds', bounds };
+    return {
+      kind: 'unsupported',
+      reason: `fitTo.source "${fitTo.source}" has no coordinates to fit; ${keep}`,
+    };
+  }
+  if (source['prefetchedData'] !== undefined) {
+    const bounds = geojsonBounds(source['prefetchedData']);
+    if (bounds) return { kind: 'bounds', bounds };
+  }
+  return { kind: 'deferred' };
+}
+
+/**
  * Options for MapRenderer
  */
 export interface MapRendererOptions {
@@ -87,6 +141,8 @@ export interface MapRendererOptions {
   state?: Record<string, unknown>;
   /** Standalone `markers:` — DOM pins added on load, removed on destroy. */
   markers?: MarkerConfig[];
+  /** Standalone `popups:` (U14) — opened at their coordinates on load. */
+  popups?: StandalonePopupConfig[];
   /**
    * Named images (`images:`) registered via `map.addImage` before layers are
    * added, so `icon-image`/`*-pattern` references resolve on first render.
@@ -146,6 +202,8 @@ export interface MapRendererEvents {
   'image:error': { name: string; url: string };
   'parameter:change': { key: string; value: unknown };
   'layer:visibility': { layerId: string; visible: boolean };
+  /** The `fitTo` camera (U14) framed its source's data. */
+  'camera:fit': { source: string; bounds: Bounds };
 }
 
 /**
@@ -157,6 +215,9 @@ export class MapRenderer {
   private eventHandler: EventHandler;
   private legendBuilder: LegendBuilder;
   private markersManager: MarkersManager | null = null;
+  private popupsManager: PopupsManager | null = null;
+  /** Layer types this runtime cannot render, warned once each (U14). */
+  private warnedUnsupportedTypes = new Set<string>();
   private controlsManager: ControlsManager;
   private eventListeners: Map<string, Set<Function>>;
   private isLoaded: boolean;
@@ -171,6 +232,10 @@ export class MapRenderer {
   private layersAdded = false;
   /** Set by destroy(); late async continuations (image loads) check it. */
   private destroyed = false;
+  /** `fitTo` (U14): the inline-data fit the constructor applied, if any. */
+  private mapReadyFit: { source: string; bounds: Bounds } | null = null;
+  /** `fitTo` (U14): set once the camera framed its source — never re-fit. */
+  private fitApplied = false;
   private autoLegendContainer: HTMLElement | null;
 
 
@@ -244,9 +309,28 @@ export class MapRenderer {
       if (value !== undefined) contextAttributes[key] = value;
     }
 
+    // `fitTo` (U14) is ours, not a MapLibre option: strip it from what the
+    // constructor sees. Inline data resolves to bounds NOW, so the map is
+    // constructed already framed (MapLibre's own `bounds` option — no
+    // camera jump); fetched data fits once its first load lands (below).
+    const { fitTo, ...mapConfig } = config as MapConfig & { fitTo?: FitToConfig };
+    const fit = fitTo ? resolveFitTo(fitTo, sources) : null;
+    const initialFit =
+      fit && fit.kind === 'bounds'
+        ? {
+            bounds: fit.bounds,
+            fitBoundsOptions: {
+              ...(fitTo!.padding !== undefined ? { padding: fitTo!.padding } : {}),
+              ...(fitTo!.maxZoom !== undefined ? { maxZoom: fitTo!.maxZoom } : {}),
+            },
+          }
+        : {};
+    if (fit && fit.kind === 'unsupported') console.warn(`[maplibre-yaml] ${fit.reason}`);
+
     // Initialize MapLibre map
     this.map = new MapLibreMap({
-      ...config,
+      ...mapConfig,
+      ...initialFit,
       ...(Object.keys(contextAttributes).length > 0
         ? { canvasContextAttributes: contextAttributes }
         : {}),
@@ -265,11 +349,29 @@ export class MapRenderer {
       // comes from `...config` alone (i.e. only if the author set it).
       ...(attributionControlConfigured ? { attributionControl: false } : {}),
     } as any);
+    if (fitTo && fit && fit.kind === 'bounds') {
+      this.mapReadyFit = { source: fitTo.source, bounds: fit.bounds };
+    }
 
     // Initialize managers
     const layerCallbacks: LayerManagerCallbacks = {
       onDataLoading: (layerId) => this.emit('layer:data-loading', { layerId }),
       onDataLoaded: (layerId, featureCount) => {
+        // A fetched `fitTo` source frames the camera on its FIRST load only:
+        // after that the user owns the camera, and a refresh must not yank it.
+        if (fitTo && fit && fit.kind === 'deferred' && !this.fitApplied) {
+          const data = this.layerManager.getSourceData(fitTo.source);
+          const bounds = data ? geojsonBounds(data) : null;
+          if (bounds) {
+            this.fitApplied = true;
+            this.map.fitBounds(bounds, {
+              ...(fitTo.padding !== undefined ? { padding: fitTo.padding } : {}),
+              ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
+              animate: false,
+            });
+            this.emit('camera:fit', { source: fitTo.source, bounds });
+          }
+        }
         // Refreshed data means new features. Feature-state is keyed by id and
         // survives setData, so a retained highlight id would light up whichever
         // feature now holds it — a different one. Drop it; the next mousemove
@@ -394,6 +496,19 @@ export class MapRenderer {
         this.markersManager.add(options.markers as MarkerConfig[]);
       }
 
+      // Standalone popups (U14): open at their coordinates, same trust gate.
+      if (options.popups && options.popups.length > 0) {
+        this.popupsManager = new PopupsManager(this.map, options.capabilities);
+        this.popupsManager.add(options.popups);
+      }
+
+      // An inline-data fit was applied by the constructor; announce it now
+      // that listeners (attached after construction) can hear it.
+      if (this.mapReadyFit) {
+        this.fitApplied = true;
+        this.emit('camera:fit', this.mapReadyFit);
+      }
+
       // Declared images register BEFORE layers so icon-image/*-pattern
       // references resolve on first render (never rejects — a failed image
       // warns and the layer draws without it, per ml-blj).
@@ -483,9 +598,40 @@ export class MapRenderer {
    * Add a layer to the map
    */
   async addLayer(layer: Layer): Promise<void> {
+    // Version-gated layer types declare absence below their floor (U14,
+    // the U8 precedent): one warning per type, the layer skipped, the rest
+    // of the document unaffected — instead of MapLibre rejecting it.
+    if (!this.supportsLayerType(layer.type)) {
+      if (!this.warnedUnsupportedTypes.has(layer.type)) {
+        this.warnedUnsupportedTypes.add(layer.type);
+        console.warn(
+          `[maplibre-yaml] \`${layer.type}\` layers need maplibre-gl ` +
+            `${COLOR_RELIEF_RUNTIME_FLOOR} or later (running ${this.mapVersion()}); ` +
+            `skipping layer "${layer.id}" and any other ${layer.type} layers.`
+        );
+      }
+      return;
+    }
     await this.layerManager.addLayer(layer);
     this.eventHandler.attachEvents(layer);
     this.emit('layer:added', { layerId: layer.id });
+  }
+
+  /** The running maplibre-gl version, as best the runtime reports it. */
+  private mapVersion(): string | undefined {
+    const fromMap = (this.map as unknown as { version?: unknown }).version;
+    return typeof fromMap === 'string' ? fromMap : runtimeVersion();
+  }
+
+  /**
+   * Whether the running maplibre-gl can render a layer type. Only
+   * `color-relief` is gated today (5.6+). An unknown version is not a claim
+   * — the layer is attempted and MapLibre has the final word.
+   */
+  private supportsLayerType(type: string): boolean {
+    if (type !== 'color-relief') return true;
+    const version = this.mapVersion();
+    return version === undefined || meetsVersion(version, COLOR_RELIEF_RUNTIME_FLOOR);
   }
 
   /**
@@ -695,6 +841,8 @@ export class MapRenderer {
     this.destroyed = true;
     this.markersManager?.destroy();
     this.markersManager = null;
+    this.popupsManager?.destroy();
+    this.popupsManager = null;
     this.controlsManager.removeAllControls();
     this.autoLegendContainer?.remove();
     this.autoLegendContainer = null;

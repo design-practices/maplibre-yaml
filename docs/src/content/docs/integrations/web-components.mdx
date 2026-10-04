@@ -333,6 +333,7 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 | `ml-map:image-error` | `{ name, url }` | An `images:` entry failed (unsafe scheme, CORS, load or register error) |
 | `ml-map:parameter-change` | `{ key, value }` | A params-panel control wrote a state key |
 | `ml-map:layer-visibility` | `{ layerId, visible }` | A params-panel checkbox toggled a layer |
+| `ml-map:camera-fit` | `{ source, bounds }` | The `fitTo` camera framed its source's data (once, on the first data load for fetched sources) |
 
 ## Slots: your own chrome over the map
 
@@ -865,7 +866,7 @@ mapEl.addEventListener("ml-map:error", (event) => {
 ### Events
 
 See the [event reference](#event-reference) above for the complete list —
-sixteen events covering lifecycle, layer data, interactions, markers,
+seventeen events covering lifecycle, layer data, interactions, markers,
 images, and the params panel.
 
 ## Upgrading to 0.6

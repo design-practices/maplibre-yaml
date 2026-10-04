@@ -58,7 +58,7 @@ const CORPUS: Expectation[] = [
     line: 8,
     column: 5,
     messageContains:
-      'Unknown layer type "circl". Valid types: circle, line, fill, symbol, raster, fill-extrusion, heatmap, hillshade, background. Did you mean "circle"?',
+      'Unknown layer type "circl". Valid types: circle, line, fill, symbol, raster, fill-extrusion, heatmap, hillshade, color-relief, background. Did you mean "circle"?',
   },
   {
     file: "unknown-source-type.yaml",

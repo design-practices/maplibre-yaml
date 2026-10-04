@@ -81,8 +81,11 @@ describe("closed-world exhaustiveness (R4)", () => {
       "container",
       "parameters",
       "markers",
+      "fitTo",
+      "popups",
       "state",
       "images",
+      "color-relief",
       "light",
       "x-*",
     ]) {

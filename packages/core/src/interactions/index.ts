@@ -29,7 +29,7 @@ export {
   HOVER_FEATURE_STATE_KEY,
 } from "./built-ins";
 
-export { geometryBounds } from "./geometry-bounds";
+export { geometryBounds, geojsonBounds } from "./geometry-bounds";
 export type { Bounds } from "./geometry-bounds";
 
 export { InteractionRegistry, createInteractionRegistry } from "./registry";

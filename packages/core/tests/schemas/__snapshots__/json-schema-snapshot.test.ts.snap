@@ -119,14 +119,41 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   ],
                   "description": "Fit map to bounds"
                 },
+                "fitTo": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                    },
+                    "padding": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Padding in pixels around the fitted bounds"
+                    },
+                    "maxZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 24,
+                      "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
+                  "patternProperties": {
+                    "^x-": {}
+                  }
+                },
                 "minZoom": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 24,
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
                   "description": "Minimum zoom level"
                 },
                 "maxZoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/minZoom",
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
                   "description": "Maximum zoom level"
                 },
                 "minPitch": {
@@ -918,11 +945,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "description": "Source layer name (for vector sources)"
                           },
                           "minzoom": {
-                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/minZoom",
+                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
                             "description": "Minimum zoom level to show layer"
                           },
                           "maxzoom": {
-                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/minZoom",
+                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
                             "description": "Maximum zoom level to show layer"
                           },
                           "filter": {
@@ -1103,7 +1130,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                         ]
                                       },
                                       "zoom": {
-                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/minZoom",
+                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
                                         "description": "Map zoom level (0-24)"
                                       },
                                       "duration": {
@@ -1124,7 +1151,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                         "description": "Padding in pixels around the fitted bounds"
                                       },
                                       "maxZoom": {
-                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/minZoom",
+                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
                                         "description": "Maximum zoom level when fitting the feature's bounds"
                                       },
                                       "duration": {
@@ -2422,6 +2449,82 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "type": "object",
                         "properties": {
                           "id": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/id"
+                          },
+                          "label": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/label"
+                          },
+                          "source": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/source"
+                          },
+                          "source-layer": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/source-layer"
+                          },
+                          "minzoom": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/minzoom"
+                          },
+                          "maxzoom": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/maxzoom"
+                          },
+                          "filter": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                          },
+                          "visible": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/visible"
+                          },
+                          "toggleable": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/toggleable"
+                          },
+                          "before": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/before"
+                          },
+                          "interactive": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/interactive"
+                          },
+                          "legend": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                          },
+                          "metadata": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
+                          },
+                          "type": {
+                            "type": "string",
+                            "const": "color-relief",
+                            "description": "Layer type (maplibre-gl >= 5.6)"
+                          },
+                          "paint": {
+                            "type": "object",
+                            "properties": {
+                              "color-relief-color": {
+                                "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+                                "description": "Color ramp over [\\"elevation\\"] — an interpolate/step expression"
+                              },
+                              "color-relief-opacity": {
+                                "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
+                                "description": "Layer opacity (0-1)"
+                              }
+                            },
+                            "additionalProperties": true,
+                            "description": "Color-relief paint properties"
+                          },
+                          "layout": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": true,
+                            "description": "Color-relief layout properties"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "source",
+                          "type"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
                             "type": "string",
                             "description": "Unique layer identifier"
                           },
@@ -2747,6 +2850,56 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                 }
               },
               "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+            },
+            "popups": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "at": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": [
+                      {
+                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/0"
+                      },
+                      {
+                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
+                      }
+                    ],
+                    "description": "Popup anchor position [lng, lat]"
+                  },
+                  "content": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/popup/items"
+                    },
+                    "description": "Popup content (same structured items as layer popups; \`str:\` for text)"
+                  },
+                  "closeButton": {
+                    "type": "boolean",
+                    "description": "Show the close button (MapLibre default: true)"
+                  },
+                  "closeOnClick": {
+                    "type": "boolean",
+                    "description": "Close when the map is clicked (MapLibre default: true)"
+                  },
+                  "maxWidth": {
+                    "type": "string",
+                    "description": "CSS max-width of the popup, e.g. \\"300px\\" (MapLibre default: 240px)"
+                  }
+                },
+                "required": [
+                  "at",
+                  "content"
+                ],
+                "additionalProperties": false,
+                "patternProperties": {
+                  "^x-": {}
+                }
+              },
+              "description": "Standalone popups open at a coordinate — no layer, no marker"
             },
             "images": {
               "type": "object",
@@ -3473,6 +3626,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "$ref": "#/$defs/any/oneOf/0/properties/markers",
                               "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
                             },
+                            "popups": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/popups",
+                              "description": "Standalone popups open at a coordinate — no layer, no marker"
+                            },
                             "images": {
                               "$ref": "#/$defs/any/oneOf/0/properties/images",
                               "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
@@ -3701,14 +3858,41 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
               ],
               "description": "Fit map to bounds"
             },
+            "fitTo": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                },
+                "padding": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Padding in pixels around the fitted bounds"
+                },
+                "maxZoom": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 24,
+                  "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                }
+              },
+              "required": [
+                "source"
+              ],
+              "additionalProperties": false,
+              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
+              "patternProperties": {
+                "^x-": {}
+              }
+            },
             "minZoom": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 24,
+              "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
               "description": "Minimum zoom level"
             },
             "maxZoom": {
-              "$ref": "#/$defs/map/properties/config/properties/minZoom",
+              "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
               "description": "Maximum zoom level"
             },
             "minPitch": {
@@ -4500,11 +4684,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         "description": "Source layer name (for vector sources)"
                       },
                       "minzoom": {
-                        "$ref": "#/$defs/map/properties/config/properties/minZoom",
+                        "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
                         "description": "Minimum zoom level to show layer"
                       },
                       "maxzoom": {
-                        "$ref": "#/$defs/map/properties/config/properties/minZoom",
+                        "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
                         "description": "Maximum zoom level to show layer"
                       },
                       "filter": {
@@ -4685,7 +4869,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                     ]
                                   },
                                   "zoom": {
-                                    "$ref": "#/$defs/map/properties/config/properties/minZoom",
+                                    "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
                                     "description": "Map zoom level (0-24)"
                                   },
                                   "duration": {
@@ -4706,7 +4890,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                     "description": "Padding in pixels around the fitted bounds"
                                   },
                                   "maxZoom": {
-                                    "$ref": "#/$defs/map/properties/config/properties/minZoom",
+                                    "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
                                     "description": "Maximum zoom level when fitting the feature's bounds"
                                   },
                                   "duration": {
@@ -6004,6 +6188,82 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "type": "object",
                     "properties": {
                       "id": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/id"
+                      },
+                      "label": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/label"
+                      },
+                      "source": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/source"
+                      },
+                      "source-layer": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/source-layer"
+                      },
+                      "minzoom": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/minzoom"
+                      },
+                      "maxzoom": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/maxzoom"
+                      },
+                      "filter": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                      },
+                      "visible": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/visible"
+                      },
+                      "toggleable": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/toggleable"
+                      },
+                      "before": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/before"
+                      },
+                      "interactive": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/interactive"
+                      },
+                      "legend": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                      },
+                      "metadata": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "color-relief",
+                        "description": "Layer type (maplibre-gl >= 5.6)"
+                      },
+                      "paint": {
+                        "type": "object",
+                        "properties": {
+                          "color-relief-color": {
+                            "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+                            "description": "Color ramp over [\\"elevation\\"] — an interpolate/step expression"
+                          },
+                          "color-relief-opacity": {
+                            "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
+                            "description": "Layer opacity (0-1)"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Color-relief paint properties"
+                      },
+                      "layout": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": true,
+                        "description": "Color-relief layout properties"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "source",
+                      "type"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
                         "type": "string",
                         "description": "Unique layer identifier"
                       },
@@ -6329,6 +6589,56 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
             }
           },
           "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+        },
+        "popups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": [
+                  {
+                    "$ref": "#/$defs/map/properties/config/properties/center/items/0"
+                  },
+                  {
+                    "$ref": "#/$defs/map/properties/config/properties/center/items/1"
+                  }
+                ],
+                "description": "Popup anchor position [lng, lat]"
+              },
+              "content": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/popup/items"
+                },
+                "description": "Popup content (same structured items as layer popups; \`str:\` for text)"
+              },
+              "closeButton": {
+                "type": "boolean",
+                "description": "Show the close button (MapLibre default: true)"
+              },
+              "closeOnClick": {
+                "type": "boolean",
+                "description": "Close when the map is clicked (MapLibre default: true)"
+              },
+              "maxWidth": {
+                "type": "string",
+                "description": "CSS max-width of the popup, e.g. \\"300px\\" (MapLibre default: 240px)"
+              }
+            },
+            "required": [
+              "at",
+              "content"
+            ],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          },
+          "description": "Standalone popups open at a coordinate — no layer, no marker"
         },
         "images": {
           "type": "object",
@@ -8703,6 +9013,82 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                 "type": "object",
                 "properties": {
                   "id": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/id"
+                  },
+                  "label": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/label"
+                  },
+                  "source": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source"
+                  },
+                  "source-layer": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source-layer"
+                  },
+                  "minzoom": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom"
+                  },
+                  "maxzoom": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/maxzoom"
+                  },
+                  "filter": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                  },
+                  "visible": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/visible"
+                  },
+                  "toggleable": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/toggleable"
+                  },
+                  "before": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/before"
+                  },
+                  "interactive": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/interactive"
+                  },
+                  "legend": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/legend"
+                  },
+                  "metadata": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "color-relief",
+                    "description": "Layer type (maplibre-gl >= 5.6)"
+                  },
+                  "paint": {
+                    "type": "object",
+                    "properties": {
+                      "color-relief-color": {
+                        "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color",
+                        "description": "Color ramp over [\\"elevation\\"] — an interpolate/step expression"
+                      },
+                      "color-relief-opacity": {
+                        "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-radius",
+                        "description": "Layer opacity (0-1)"
+                      }
+                    },
+                    "additionalProperties": true,
+                    "description": "Color-relief paint properties"
+                  },
+                  "layout": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": true,
+                    "description": "Color-relief layout properties"
+                  }
+                },
+                "required": [
+                  "id",
+                  "source",
+                  "type"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
                     "type": "string",
                     "description": "Unique layer identifier"
                   },
@@ -9029,6 +9415,33 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 }
                               ],
                               "description": "Fit map to bounds"
+                            },
+                            "fitTo": {
+                              "type": "object",
+                              "properties": {
+                                "source": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                                },
+                                "padding": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "description": "Padding in pixels around the fitted bounds"
+                                },
+                                "maxZoom": {
+                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
+                                  "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                                }
+                              },
+                              "required": [
+                                "source"
+                              ],
+                              "additionalProperties": false,
+                              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
+                              "patternProperties": {
+                                "^x-": {}
+                              }
                             },
                             "minZoom": {
                               "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
@@ -9451,6 +9864,56 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           },
                           "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
                         },
+                        "popups": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "at": {
+                                "type": "array",
+                                "minItems": 2,
+                                "maxItems": 2,
+                                "items": [
+                                  {
+                                    "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/0"
+                                  },
+                                  {
+                                    "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
+                                  }
+                                ],
+                                "description": "Popup anchor position [lng, lat]"
+                              },
+                              "content": {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/interactive/properties/hover/properties/popup/items"
+                                },
+                                "description": "Popup content (same structured items as layer popups; \`str:\` for text)"
+                              },
+                              "closeButton": {
+                                "type": "boolean",
+                                "description": "Show the close button (MapLibre default: true)"
+                              },
+                              "closeOnClick": {
+                                "type": "boolean",
+                                "description": "Close when the map is clicked (MapLibre default: true)"
+                              },
+                              "maxWidth": {
+                                "type": "string",
+                                "description": "CSS max-width of the popup, e.g. \\"300px\\" (MapLibre default: 240px)"
+                              }
+                            },
+                            "required": [
+                              "at",
+                              "content"
+                            ],
+                            "additionalProperties": false,
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          },
+                          "description": "Standalone popups open at a coordinate — no layer, no marker"
+                        },
                         "images": {
                           "type": "object",
                           "additionalProperties": {
@@ -9626,6 +10089,10 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "markers": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/markers",
                           "description": "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+                        },
+                        "popups": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/popups",
+                          "description": "Standalone popups open at a coordinate — no layer, no marker"
                         },
                         "images": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/images",
@@ -10138,14 +10605,41 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
               ],
               "description": "Fit map to bounds"
             },
+            "fitTo": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                },
+                "padding": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Padding in pixels around the fitted bounds"
+                },
+                "maxZoom": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 24,
+                  "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                }
+              },
+              "required": [
+                "source"
+              ],
+              "additionalProperties": false,
+              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
+              "patternProperties": {
+                "^x-": {}
+              }
+            },
             "minZoom": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 24,
+              "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
               "description": "Minimum zoom level"
             },
             "maxZoom": {
-              "$ref": "#/$defs/scrollytelling/properties/config/properties/minZoom",
+              "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
               "description": "Maximum zoom level"
             },
             "minPitch": {
@@ -10949,11 +11443,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                         "description": "Source layer name (for vector sources)"
                       },
                       "minzoom": {
-                        "$ref": "#/$defs/scrollytelling/properties/config/properties/minZoom",
+                        "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
                         "description": "Minimum zoom level to show layer"
                       },
                       "maxzoom": {
-                        "$ref": "#/$defs/scrollytelling/properties/config/properties/minZoom",
+                        "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
                         "description": "Maximum zoom level to show layer"
                       },
                       "filter": {
@@ -11134,7 +11628,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     ]
                                   },
                                   "zoom": {
-                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/minZoom",
+                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
                                     "description": "Map zoom level (0-24)"
                                   },
                                   "duration": {
@@ -11155,7 +11649,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Padding in pixels around the fitted bounds"
                                   },
                                   "maxZoom": {
-                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/minZoom",
+                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
                                     "description": "Maximum zoom level when fitting the feature's bounds"
                                   },
                                   "duration": {
@@ -12440,6 +12934,82 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                         "properties": {},
                         "additionalProperties": true,
                         "description": "Hillshade layout properties"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "source",
+                      "type"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/id"
+                      },
+                      "label": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/label"
+                      },
+                      "source": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source"
+                      },
+                      "source-layer": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source-layer"
+                      },
+                      "minzoom": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/minzoom"
+                      },
+                      "maxzoom": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/maxzoom"
+                      },
+                      "filter": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                      },
+                      "visible": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/visible"
+                      },
+                      "toggleable": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/toggleable"
+                      },
+                      "before": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/before"
+                      },
+                      "interactive": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/interactive"
+                      },
+                      "legend": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/legend"
+                      },
+                      "metadata": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "color-relief",
+                        "description": "Layer type (maplibre-gl >= 5.6)"
+                      },
+                      "paint": {
+                        "type": "object",
+                        "properties": {
+                          "color-relief-color": {
+                            "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+                            "description": "Color ramp over [\\"elevation\\"] — an interpolate/step expression"
+                          },
+                          "color-relief-opacity": {
+                            "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
+                            "description": "Layer opacity (0-1)"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Color-relief paint properties"
+                      },
+                      "layout": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": true,
+                        "description": "Color-relief layout properties"
                       }
                     },
                     "required": [

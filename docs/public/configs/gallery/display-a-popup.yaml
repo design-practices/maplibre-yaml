@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup/
+# A popup open at a coordinate from load — no layer under it, no marker
+# above it. Content runs through the same trust gate as every popup.
+type: map
+id: display-a-popup
+config:
+  center: [-96, 37.8]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+popups:
+  - at: [-96, 37.8]
+    closeOnClick: false
+    content:
+      - h1:
+          - str: "Hello World!"

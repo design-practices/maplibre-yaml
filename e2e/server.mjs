@@ -17,6 +17,8 @@
  *  - `/vendor/maplibre-gl.css`     resolved from node_modules
  *  - `/dem/{z}/{x}/{y}.png`        a synthesised elevation tile, so the
  *                                  hillshade fixture loads without S3
+ *  - `/dem-hills/{z}/{x}/{y}.png`  synthesised rolling terrain (0-3500 m),
+ *                                  so the color-relief twin shows its ramp
  *  - everything else               static from the repo root
  */
 import { createServer } from "node:http";
@@ -77,16 +79,18 @@ export const AttributionControl = gl.AttributionControl;
  * Terrarium decodes as (R * 256 + G + B / 256) - 32768, so R=128,G=0,B=0 is
  * elevation 0 — flat, valid, and enough to prove the source is consumed.
  */
-function terrariumTile() {
+function terrariumTile(elevationAt = () => 0) {
   const size = 256;
   const raw = Buffer.alloc((size * 4 + 1) * size);
   let o = 0;
   for (let y = 0; y < size; y++) {
     raw[o++] = 0; // PNG filter: none
     for (let x = 0; x < size; x++) {
-      raw[o++] = 128; // R
-      raw[o++] = 0; // G
-      raw[o++] = 0; // B
+      // Terrarium: elevation + 32768 = R * 256 + G + B / 256.
+      const v = Math.max(0, Math.min(65535.99, elevationAt(x, y) + 32768));
+      raw[o++] = Math.floor(v / 256); // R
+      raw[o++] = Math.floor(v) % 256; // G
+      raw[o++] = Math.floor((v % 1) * 256); // B
       raw[o++] = 255; // A
     }
   }
@@ -130,6 +134,31 @@ function crc32(buf) {
 
 const DEM_TILE = terrariumTile();
 
+/**
+ * Rolling synthetic hills for the color-relief twin: elevation is a smooth
+ * function of the WORLD position (not the tile pixel), so neighbouring tiles
+ * agree at their seams and every zoom shows the same landscape. Spans
+ * 0-3500 m so the full upstream color ramp appears on screen.
+ */
+const HILL_PERIOD = 1 / 1600; // world units per hill (several per zoom-10 view)
+const HILLS_CACHE = new Map();
+function hillsTile(z, x, y) {
+  const key = `${z}/${x}/${y}`;
+  if (!HILLS_CACHE.has(key)) {
+    const scale = 2 ** z;
+    HILLS_CACHE.set(
+      key,
+      terrariumTile((px, py) => {
+        const u = (x + px / 256) / scale;
+        const v = (y + py / 256) / scale;
+        const k = (2 * Math.PI) / HILL_PERIOD;
+        return 1750 + 1750 * Math.sin(u * k) * Math.cos(v * k);
+      })
+    );
+  }
+  return HILLS_CACHE.get(key);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = decodeURIComponent(url.pathname);
@@ -155,6 +184,11 @@ const server = createServer(async (req, res) => {
     }
     if (path.startsWith("/dem/") && path.endsWith(".png")) {
       return send(200, DEM_TILE, TYPES[".png"]);
+    }
+    const hills = path.match(/^\/dem-hills\/(\d+)\/(\d+)\/(\d+)\.png$/);
+    if (hills) {
+      const [z, x, y] = hills.slice(1).map(Number);
+      return send(200, hillsTile(z, x, y), TYPES[".png"]);
     }
     if (path.startsWith("/glyphs/") && path.endsWith(".pbf")) {
       // An empty buffer is a valid (empty) glyphs protobuf message: symbol
