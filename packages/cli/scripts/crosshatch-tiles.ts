@@ -48,7 +48,7 @@ export const TILES = {
 } as const;
 
 /** Rasterize SVG layers at @2x and composite them onto one transparent tile. */
-async function render(svgs: string[]): Promise<Buffer> {
+export async function render(svgs: string[]): Promise<Buffer> {
   const px = TILE_SIZE * 2;
   const layers = await Promise.all(
     svgs.map((svg) =>
