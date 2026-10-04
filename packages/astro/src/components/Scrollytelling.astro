@@ -68,6 +68,20 @@ const storyId = `scrolly-${Math.random().toString(36).substring(2, 11)}`;
 
 // Serialize config for client-side if provided
 const serializedConfig = config ? JSON.stringify(config) : null;
+
+// The map half of the story as a real map document, rendered straight onto
+// <ml-map>. The controller used to wait for <ml-map> to gain a `config`
+// attribute and only then set one -- so it waited forever and the map showed
+// "No configuration provided" -- and the document it would have set
+// (`{ version, map, sources }`) was not a valid map block anyway.
+const mapDocument = config
+  ? JSON.stringify({
+      type: "map",
+      id: `${config.id}-map`,
+      config: config.config,
+      layers: config.layers ?? [],
+    })
+  : undefined;
 ---
 
 <div
@@ -87,6 +101,7 @@ const serializedConfig = config ? JSON.stringify(config) : null;
   <div class="scrolly-map-container">
     <ml-map
       id={`${storyId}-map`}
+      config={mapDocument}
       style="width: 100%; height: 100%; display: block;"
     />
 
@@ -297,37 +312,30 @@ const serializedConfig = config ? JSON.stringify(config) : null;
     const mapEl = container.querySelector("ml-map");
     if (!mapEl) return;
 
-    // Wait for map to be ready
-    await new Promise((resolve) => {
-      if (mapEl.hasAttribute("config") || mapEl.map) {
-        setTimeout(resolve, 100);
-      } else {
-        const observer = new MutationObserver(() => {
-          if (mapEl.hasAttribute("config") || mapEl.map) {
-            observer.disconnect();
-            setTimeout(resolve, 100);
-          }
-        });
-        observer.observe(mapEl, { attributes: true });
-      }
-    });
-
-    // Initialize map with base configuration
-    if (scrollyConfig.config) {
-      mapEl.setAttribute("config", JSON.stringify({
-        version: "1.0",
-        map: scrollyConfig.config,
-        sources: scrollyConfig.sources || {},
-        layers: scrollyConfig.layers || [],
-      }));
+    // A runtime-loaded (`src`) story has no map document on <ml-map> yet:
+    // hand it one. A build-time (`config`) story was rendered with it.
+    if (!mapEl.hasAttribute("config")) {
+      mapEl.setAttribute(
+        "config",
+        JSON.stringify({
+          type: "map",
+          id: `${scrollyConfig.id}-map`,
+          config: scrollyConfig.config,
+          layers: scrollyConfig.layers || [],
+        })
+      );
     }
 
-    // Wait a bit more for map instance
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    const map = mapEl.map;
-    if (!map) {
-      console.warn("Map instance not available");
+    // This inline script runs before the bundled register module defines
+    // <ml-map>: wait for the upgrade, then for the map itself (`.map` never
+    // existed on the element). A failed map shows <ml-map>'s own error
+    // card; there is nothing to drive.
+    let map;
+    try {
+      await customElements.whenDefined("ml-map");
+      map = await mapEl.mapReady();
+    } catch (error) {
+      console.warn("Scrollytelling: map failed to load", error);
       return;
     }
 
@@ -511,10 +519,19 @@ const serializedConfig = config ? JSON.stringify(config) : null;
   .scrolly-chapters {
     position: relative;
     z-index: 1;
+    /* Overlay the sticky map instead of starting below it. Without this the
+       first screen was bare map: no chapter visible, and the wheel zoomed the
+       map rather than scrolling the story. */
+    margin-top: -100vh;
     pointer-events: none;
   }
 
-  .scrolly-chapters > * {
+  /* :global -- the chapter sections are rendered by Chapter.astro and carry
+     ITS scope attribute, so a scoped `> *` never matched them: every chapter
+     inherited `pointer-events: none`, the mouse wheel fell through to the
+     map (which zoomed instead of the page scrolling), and links/videos in a
+     chapter were unclickable. */
+  .scrolly-chapters > :global(*) {
     pointer-events: auto;
   }
 
@@ -591,13 +608,13 @@ const serializedConfig = config ? JSON.stringify(config) : null;
     --footer-text: #f9fafb;
   }
 
-  /* Debug mode */
-  .scrollytelling-container.debug .scrolly-chapter {
+  /* Debug mode (:global for the same Chapter.astro scoping reason as above) */
+  .scrollytelling-container.debug :global(.scrolly-chapter) {
     outline: 2px dashed rgba(255, 0, 0, 0.5);
     outline-offset: -2px;
   }
 
-  .scrollytelling-container.debug .scrolly-chapter.is-active {
+  .scrollytelling-container.debug :global(.scrolly-chapter.is-active) {
     outline-color: rgba(0, 255, 0, 0.8);
   }
 

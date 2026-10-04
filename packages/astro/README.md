@@ -8,8 +8,11 @@ Astro components for creating interactive maps and scrollytelling experiences us
 ## Installation
 
 ```bash
-npm install @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl
+npm install @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^5
 ```
+
+Supports Astro 4 and 5, and maplibre-gl 4 or 5. Pin both: npm's `latest` for
+each is now a newer major.
 
 ## Two import paths: `@maplibre-yaml/astro` vs `@maplibre-yaml/astro/utils`
 
@@ -59,10 +62,14 @@ import { FullPageMap } from '@maplibre-yaml/astro';
 
 ```astro
 ---
-import { Scrollytelling } from '@maplibre-yaml/astro';
+import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
+const story = await loadScrollytellingConfig('./src/stories/earthquake-history.yaml');
 ---
-<Scrollytelling src="/stories/earthquake-history.yaml" />
+<Scrollytelling config={story} />
 ```
+
+Load stories at build time as shown. Runtime loading (`src`) does not work for
+`Scrollytelling` yet (tracked as `ml-euv`).
 
 ## Components
 
@@ -113,6 +120,8 @@ Immersive narrative experiences with scroll-driven map transitions.
 ### Chapter
 
 Individual chapter component (typically used internally by Scrollytelling).
+Import it from the components subpath: `import { Chapter } from '@maplibre-yaml/astro/components'`.
+The package root does not export it.
 
 **Props:**
 - `id: string` - Unique chapter identifier
@@ -584,7 +593,13 @@ const feature = findFeature(fc, { source: "...", featureId: "poa-1.1" });
 
 > **The `src` prop is a URL path, not a filesystem path.** Files in `/public`
 > are served from the root, so `public/configs/map.yaml` should be referenced
-> as `src="/configs/map.yaml"`.
+> as `src="/configs/map.yaml"`. (`src` on `Map`/`FullPageMap` needs a release
+> newer than 0.4.1, and `Scrollytelling` `src` is not working yet: `ml-euv`.)
+
+> **`astro dev` with `@maplibre-yaml/core` 0.6.0 or earlier** fails every map
+> with *Map is not a constructor* (builds are fine). Add
+> `vite: { optimizeDeps: { include: ["maplibre-gl"] } }` to `astro.config.mjs`,
+> or upgrade core.
 
 ## YAML Configuration
 
@@ -668,8 +683,11 @@ const story = await loadScrollytellingConfig('./src/stories/earthquake.yaml');
 // Load raw YAML
 const raw = await loadYAML('./src/configs/custom.yaml');
 
-// Load multiple files via glob
-const maps = await loadFromGlob('./src/configs/*.yaml');
+// Load multiple files via glob: pass import.meta.glob's result, not a pattern
+// string. A leading "/" is the project root.
+const maps = await loadFromGlob(
+  import.meta.glob<string>('/src/configs/*.yaml', { query: '?raw', import: 'default' }),
+);
 ```
 
 ### Content Collections

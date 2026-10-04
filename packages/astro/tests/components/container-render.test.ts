@@ -12,6 +12,8 @@
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import Map from "../../src/components/Map.astro";
 import FullPageMap from "../../src/components/FullPageMap.astro";
@@ -59,14 +61,25 @@ describe("Map", () => {
     expect(html).toContain("height: 512px");
   });
 
-  it("renders the runtime-src variant with data-src and the loader script", async () => {
+  it("hands a runtime src straight to <ml-map src>", async () => {
     const html = await container.renderToString(Map as any, {
       props: { src: "/configs/demo.yaml" },
     });
 
-    expect(html).toContain('data-src="/configs/demo.yaml"');
-    // The inline loader script is the runtime path's engine.
-    expect(html).toContain("<script");
+    expect(html).toMatch(/<ml-map[^>]*\ssrc="\/configs\/demo.yaml"/);
+    // The old engine was an is:inline script doing import("@maplibre-yaml/core"):
+    // a bare specifier no browser resolves, so every <Map src> failed.
+    expect(html).not.toContain('import("@maplibre-yaml/core")');
+    expect(html).not.toContain("data-src");
+  });
+
+  it("prefers config when given both, and does not also set src", async () => {
+    const html = await container.renderToString(Map as any, {
+      props: { src: "/configs/demo.yaml", config: MAP_CONFIG },
+    });
+
+    expect(html).toMatch(/<ml-map[^>]*\sconfig="/);
+    expect(html).not.toMatch(/<ml-map[^>]*\ssrc=/);
   });
 
   it("throws without either src or config", async () => {
@@ -118,6 +131,23 @@ describe("Scrollytelling", () => {
     expect(html).toContain("chapter-markers");
     // footer is injected via set:html — the markup must arrive unescaped.
     expect(html).toContain("<p>The end</p>");
+  });
+
+  it("styles Chapter.astro's sections through :global selectors", () => {
+    // The sections carry Chapter.astro's scope attribute, never this
+    // component's, so a scoped selector cannot reach them. Scoped, the
+    // overlay's `pointer-events: auto` never applied: the wheel zoomed the
+    // map instead of scrolling the story, and debug outlines never showed.
+    // Container rendering doesn't emit component CSS, so read the source.
+    const source = readFileSync(
+      fileURLToPath(
+        new URL("../../src/components/Scrollytelling.astro", import.meta.url)
+      ),
+      "utf8"
+    );
+    expect(source).toContain(".scrolly-chapters > :global(*)");
+    expect(source).toContain(".scrollytelling-container.debug :global(.scrolly-chapter)");
+    expect(source).not.toMatch(/\.scrolly-chapters > \*\s*\{/);
   });
 });
 
