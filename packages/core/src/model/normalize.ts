@@ -252,6 +252,8 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   if (input.terrain !== undefined) model.style.terrain = input.terrain;
   if (input.sky !== undefined) model.style.sky = input.sky;
   if (input.projection !== undefined) model.style.projection = input.projection;
+  // Style half: `light` is a style-spec root property, compiled through as-is.
+  if (input.light !== undefined) model.style.light = input.light;
   if (input.className !== undefined || input.style !== undefined) {
     model.runtime.container = {};
     if (input.className !== undefined) model.runtime.container.className = input.className;
@@ -334,6 +336,7 @@ export function denormalizeOptions(model: MapModel): {
   terrain?: MapModel["style"]["terrain"];
   sky?: MapModel["style"]["sky"];
   projection?: MapModel["style"]["projection"];
+  light?: MapModel["style"]["light"];
 } {
   const options: {
     controls?: ControlsConfig;
@@ -345,6 +348,7 @@ export function denormalizeOptions(model: MapModel): {
     terrain?: MapModel["style"]["terrain"];
     sky?: MapModel["style"]["sky"];
     projection?: MapModel["style"]["projection"];
+    light?: MapModel["style"]["light"];
   } = {};
   if (model.runtime.controls !== undefined) options.controls = model.runtime.controls;
   if (model.runtime.legend !== undefined) options.legend = model.runtime.legend;
@@ -370,5 +374,7 @@ export function denormalizeOptions(model: MapModel): {
   if (model.style.terrain !== undefined) options.terrain = model.style.terrain;
   if (model.style.sky !== undefined) options.sky = model.style.sky;
   if (model.style.projection !== undefined) options.projection = model.style.projection;
+  // Same again for `light`: applied with `map.setLight` once the style loads.
+  if (model.style.light !== undefined) options.light = model.style.light;
   return options;
 }

@@ -123,6 +123,16 @@ export interface StyleHalf {
   sky?: import("../schemas/map.schema").SkyConfig;
   /** Map projection (U15) — the style-spec root `projection`. */
   projection?: import("../schemas/map.schema").ProjectionConfig;
+  /**
+   * The style-spec root `light` (U10′).
+   *
+   * @remarks
+   * Spec-native, so it compiles straight through to the emitted style.json
+   * root (class `ejects`). Live, the renderer applies it with `map.setLight`
+   * — the live style is built from `mapStyle` + addLayer, so it cannot ride
+   * in on the style object.
+   */
+  light?: import("../schemas/map.schema").LightConfig;
   sources: Record<string, SourceModel>;
   layers: LayerModel[];
 }
@@ -179,4 +189,6 @@ export interface V1MapInput {
   sky?: import("../schemas/map.schema").SkyConfig;
   /** Map projection, authored at the root (v2: `style.projection`). */
   projection?: import("../schemas/map.schema").ProjectionConfig;
+  /** The style-spec light shading fill-extrusion faces, authored at the root. */
+  light?: import("../schemas/map.schema").LightConfig;
 }

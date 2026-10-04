@@ -211,6 +211,15 @@ ejectClasses.register("projection", {
     "older runtimes render mercator (reported as lossy against a declared --target).",
 });
 
+// Style-half construct (U10′): the style-spec root `light`, applied live
+// with `map.setLight` and compiled through verbatim on eject.
+ejectClasses.register("light", {
+  class: "ejects",
+  onEmit:
+    "`light:` is the style-spec root light and compiles through verbatim to the " +
+    "emitted style's `light`, replacing any basemap light.",
+});
+
 ejectClasses.register("x-*", {
   class: "declared-absence",
   onEmit:

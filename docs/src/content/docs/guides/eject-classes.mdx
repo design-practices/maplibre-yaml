@@ -32,6 +32,7 @@ disagree.
 | `terrain` | ejects | A style-spec root property; compiles through verbatim, and the document's terrain wins over a basemap's. A `source` that resolves to no `raster-dem` source is dropped and reported as lossy rather than shipped invalid. |
 | `sky` | ejects | A style-spec root property; compiles through verbatim, and the document's sky wins over a basemap's. Not drawn below maplibre-gl 4.5.0 — lossy against a declared `--target` below that. |
 | `projection` | ejects | A style-spec root property; compiles through verbatim, and the document's projection wins over a basemap's. Globe needs maplibre-gl 5.0.0; older runtimes render mercator — lossy against a declared `--target` below that. |
+| `light` | ejects | The style-spec root light; compiles through verbatim to the emitted style's `light`, replacing any basemap light. |
 | `markers` | ejects via fallback | Markers lower to a symbol layer with generated pin sprites — the pins render in the emitted style; DOM-marker behavior (dragging, built-in popups) does not compile, reported as lossy. |
 | `layer.interactive` | declared absence | Popups, hover, and highlight are runtime behavior; `attachInteractions()` restores them over an ejected style. |
 | `layer.legend` | declared absence | Legend entries are chrome, not cartography. |
@@ -49,6 +50,12 @@ disagree.
 URLs are fetched into the sprite at emit time, like `images:` entries), and
 the effects catalog obeys the same law — every effect registers a mandatory
 fallback.
+
+`<ml-map>` [slots](/integrations/web-components/#slots-your-own-chrome-over-the-map)
+are not in the table because they are not in the document: slot children
+are page markup the host places around the map, so `mlym emit` never sees
+them and there is nothing to eject. A page that ejects to vanilla
+maplibre-gl keeps its own markup and positions it itself.
 
 ## Reading the emit report
 

@@ -49,6 +49,7 @@ import {
   TerrainSchema,
   SkySchema,
   ProjectionSchema,
+  LightSchema,
 } from "./map.schema";
 import {
   GeoJSONSourceSchema,
@@ -395,6 +396,9 @@ export const StyleV2Schema: z.ZodTypeAny = z
     ),
     projection: ProjectionSchema.optional().describe(
       "Map projection (`globe` needs maplibre-gl >= 5) — style half, compiles to style.json `projection`"
+    ),
+    light: LightSchema.optional().describe(
+      "The style-spec light shading fill-extrusion faces — style half, compiles to style.json `light`"
     ),
     sources: z
       .record(z.string(), SourceV2Schema)

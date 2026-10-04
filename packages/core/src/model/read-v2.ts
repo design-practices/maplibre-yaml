@@ -181,6 +181,8 @@ export function readV2Block(doc: MapBlockV2): MapModel {
     model.style.sky = style["sky"] as MapModel["style"]["sky"];
   if (style["projection"] !== undefined)
     model.style.projection = style["projection"] as MapModel["style"]["projection"];
+  if (style["light"] !== undefined)
+    model.style.light = style["light"] as MapModel["style"]["light"];
 
   if (docParameters !== undefined)
     model.runtime.parameters = docParameters as Record<string, unknown>;

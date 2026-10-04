@@ -1410,7 +1410,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 }
                               },
                               "line-pattern": {
-                                "type": "string"
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                                  }
+                                ]
                               },
                               "line-gradient": {
                                 "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
@@ -1567,7 +1574,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 ]
                               },
                               "fill-pattern": {
-                                "type": "string"
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                                  }
+                                ]
                               }
                             },
                             "additionalProperties": true,
@@ -2184,7 +2198,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 ]
                               },
                               "fill-extrusion-pattern": {
-                                "type": "string"
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                                  }
+                                ]
                               },
                               "fill-extrusion-height": {
                                 "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
@@ -2417,7 +2438,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 "description": "Color value or MapLibre expression"
                               },
                               "background-pattern": {
-                                "type": "string"
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                                  }
+                                ]
                               },
                               "background-opacity": {
                                 "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
@@ -2855,6 +2883,72 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               ],
               "additionalProperties": false,
               "description": "Map projection (\`globe\` needs maplibre-gl >= 5) — style.json \`projection\` on eject",
+              "patternProperties": {
+                "^x-": {}
+              }
+            },
+            "light": {
+              "type": "object",
+              "properties": {
+                "anchor": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "map",
+                        "viewport"
+                      ]
+                    },
+                    {
+                      "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                    }
+                  ],
+                  "description": "\`map\` fixes the light to the map (it turns with the bearing); \`viewport\` (default) fixes it to the screen"
+                },
+                "position": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "items": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    {
+                      "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                    }
+                  ],
+                  "description": "[radial, azimuthal°, polar°] — distance from the centre of the base of an object, direction clockwise from north (0° = north at anchor map), height above the horizon (0° = overhead). Default [1.15, 210, 30]"
+                },
+                "color": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+                  "description": "Light color (default white)"
+                },
+                "intensity": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    {
+                      "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                    }
+                  ],
+                  "description": "Light intensity, 0–1; higher is more extreme contrast (default 0.5)"
+                }
+              },
+              "additionalProperties": false,
+              "description": "The style-spec light shading fill-extrusion faces — map.setLight live, style.json \`light\` on eject",
               "patternProperties": {
                 "^x-": {}
               }
@@ -3493,6 +3587,10 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "projection": {
                               "$ref": "#/$defs/any/oneOf/0/properties/projection",
                               "description": "Map projection (\`globe\` needs maplibre-gl >= 5) — style.json \`projection\` on eject"
+                            },
+                            "light": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/light",
+                              "description": "The style-spec light shading fill-extrusion faces — map.setLight live, style.json \`light\` on eject"
                             }
                           },
                           "required": [
@@ -5005,7 +5103,14 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             }
                           },
                           "line-pattern": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ]
                           },
                           "line-gradient": {
                             "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
@@ -5162,7 +5267,14 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             ]
                           },
                           "fill-pattern": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ]
                           }
                         },
                         "additionalProperties": true,
@@ -5779,7 +5891,14 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             ]
                           },
                           "fill-extrusion-pattern": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ]
                           },
                           "fill-extrusion-height": {
                             "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
@@ -6012,7 +6131,14 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             "description": "Color value or MapLibre expression"
                           },
                           "background-pattern": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ]
                           },
                           "background-opacity": {
                             "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
@@ -6450,6 +6576,72 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
           ],
           "additionalProperties": false,
           "description": "Map projection (\`globe\` needs maplibre-gl >= 5) — style.json \`projection\` on eject",
+          "patternProperties": {
+            "^x-": {}
+          }
+        },
+        "light": {
+          "type": "object",
+          "properties": {
+            "anchor": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "map",
+                    "viewport"
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                }
+              ],
+              "description": "\`map\` fixes the light to the map (it turns with the bearing); \`viewport\` (default) fixes it to the screen"
+            },
+            "position": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                }
+              ],
+              "description": "[radial, azimuthal°, polar°] — distance from the centre of the base of an object, direction clockwise from north (0° = north at anchor map), height above the horizon (0° = overhead). Default [1.15, 210, 30]"
+            },
+            "color": {
+              "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+              "description": "Light color (default white)"
+            },
+            "intensity": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                }
+              ],
+              "description": "Light intensity, 0–1; higher is more extreme contrast (default 0.5)"
+            }
+          },
+          "additionalProperties": false,
+          "description": "The style-spec light shading fill-extrusion faces — map.setLight live, style.json \`light\` on eject",
           "patternProperties": {
             "^x-": {}
           }
@@ -7709,7 +7901,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         }
                       },
                       "line-pattern": {
-                        "type": "string"
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                          }
+                        ]
                       },
                       "line-gradient": {
                         "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color",
@@ -7866,7 +8065,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         ]
                       },
                       "fill-pattern": {
-                        "type": "string"
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                          }
+                        ]
                       }
                     },
                     "additionalProperties": true,
@@ -8483,7 +8689,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         ]
                       },
                       "fill-extrusion-pattern": {
-                        "type": "string"
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                          }
+                        ]
                       },
                       "fill-extrusion-height": {
                         "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-radius",
@@ -8716,7 +8929,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "description": "Color value or MapLibre expression"
                       },
                       "background-pattern": {
-                        "type": "string"
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                          }
+                        ]
                       },
                       "background-opacity": {
                         "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-radius",
@@ -9579,6 +9799,72 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "patternProperties": {
                             "^x-": {}
                           }
+                        },
+                        "light": {
+                          "type": "object",
+                          "properties": {
+                            "anchor": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "map",
+                                    "viewport"
+                                  ]
+                                },
+                                {
+                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                                }
+                              ],
+                              "description": "\`map\` fixes the light to the map (it turns with the bearing); \`viewport\` (default) fixes it to the screen"
+                            },
+                            "position": {
+                              "anyOf": [
+                                {
+                                  "type": "array",
+                                  "minItems": 3,
+                                  "maxItems": 3,
+                                  "items": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                                }
+                              ],
+                              "description": "[radial, azimuthal°, polar°] — distance from the centre of the base of an object, direction clockwise from north (0° = north at anchor map), height above the horizon (0° = overhead). Default [1.15, 210, 30]"
+                            },
+                            "color": {
+                              "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color",
+                              "description": "Light color (default white)"
+                            },
+                            "intensity": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                {
+                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                                }
+                              ],
+                              "description": "Light intensity, 0–1; higher is more extreme contrast (default 0.5)"
+                            }
+                          },
+                          "additionalProperties": false,
+                          "description": "The style-spec light shading fill-extrusion faces — map.setLight live, style.json \`light\` on eject",
+                          "patternProperties": {
+                            "^x-": {}
+                          }
                         }
                       },
                       "required": [
@@ -9665,6 +9951,10 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "projection": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/projection",
                           "description": "Map projection (\`globe\` needs maplibre-gl >= 5) — style.json \`projection\` on eject"
+                        },
+                        "light": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/light",
+                          "description": "The style-spec light shading fill-extrusion faces — map.setLight live, style.json \`light\` on eject"
                         }
                       },
                       "required": [
@@ -11472,7 +11762,14 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                             }
                           },
                           "line-pattern": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ]
                           },
                           "line-gradient": {
                             "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
@@ -11629,7 +11926,14 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                             ]
                           },
                           "fill-pattern": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ]
                           }
                         },
                         "additionalProperties": true,
@@ -12246,7 +12550,14 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                             ]
                           },
                           "fill-extrusion-pattern": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ]
                           },
                           "fill-extrusion-height": {
                             "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
@@ -12479,7 +12790,14 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                             "description": "Color value or MapLibre expression"
                           },
                           "background-pattern": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ]
                           },
                           "background-opacity": {
                             "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",

@@ -165,6 +165,14 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
     slug: "create-a-heatmap-layer-on-a-globe-with-terrain-elevation",
     layers: ["hills", "earthquakes-heat", "earthquakes-point"],
   },
+  // U10′ Mapzen classics — static presets over the vendored lower-Manhattan
+  // tile fixture. Pixel-level hatch assertions live in the classics block.
+  {
+    slug: "crosshatch",
+    layers: ["earth", "landcover", "water", "buildings"],
+    rendered: "buildings",
+  },
+  { slug: "blueprint", layers: ["ground", "water", "buildings"], rendered: "buildings" },
 ];
 
 /** True when the vendor has globe projection (maplibre-gl >= 5.0.0). */
@@ -880,6 +888,122 @@ test.describe("touch posture: hover popups don't exist on touch; tap uses click.
     await expect(popup.locator(".maplibregl-popup-close-button")).toHaveCount(1);
     await expect(popup.locator("h3")).toHaveText("Washington DC");
 
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
+/**
+ * Mapzen classics (U10′): the static presets ARE their own eject (the CLI
+ * suite pins `mlym emit --strict` → zero warnings). Here the browser proves
+ * the look actually reaches the screen: buildings are drawn, the pattern
+ * images are registered and bound, and the canvas is made of the preset's
+ * ink and paper (or drafting blue) — not a blank or default-coloured map.
+ */
+test.describe("Mapzen classics: the static presets render their look (U10′)", () => {
+  /** Count screenshot pixels within `tol` of each target colour. */
+  async function colourCounts(
+    page: Page,
+    targets: Record<string, [number, number, number]>,
+    tol = 24
+  ) {
+    const { PNG } = await import("pngjs");
+    const shot = PNG.sync.read(await page.locator("#map").screenshot());
+    const counts: Record<string, number> = Object.fromEntries(
+      Object.keys(targets).map((k) => [k, 0])
+    );
+    for (let i = 0; i < shot.data.length; i += 4) {
+      for (const [name, [r, g, b]] of Object.entries(targets)) {
+        if (
+          Math.abs(shot.data[i]! - r) <= tol &&
+          Math.abs(shot.data[i + 1]! - g) <= tol &&
+          Math.abs(shot.data[i + 2]! - b) <= tol
+        )
+          counts[name]! += 1;
+      }
+    }
+    return { counts, total: shot.width * shot.height };
+  }
+
+  const settled = (page: Page) =>
+    page.waitForFunction(
+      () => {
+        const map = (document.getElementById("map") as any)?.getMap?.();
+        return Boolean(map && map.loaded() && map.areTilesLoaded());
+      },
+      undefined,
+      { timeout: 60_000 }
+    );
+
+  test("crosshatch: hatched buildings, pre-lit water, serif labels, the document's light", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openExample(page, "crosshatch", ["buildings", "place-labels"]);
+    await settled(page);
+
+    const state = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      const q = (id: string) => map.queryRenderedFeatures(undefined, { layers: [id] }).length;
+      return {
+        images: ["earth", "landuse", "water", "building-hatch"].map((n) => map.hasImage(n)),
+        pattern: map.getPaintProperty("buildings", "fill-extrusion-pattern"),
+        landcover: map.getPaintProperty("landcover", "fill-pattern"),
+        light: map.getLight(),
+        buildings: q("buildings"),
+        water: q("water"),
+        labels: q("place-labels"),
+      };
+    });
+    expect(state.images, "a pattern image never reached map.addImage").toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+    expect(state.pattern).toBe("building-hatch");
+    // ml-gjf: a data-driven pattern survives validation and reaches MapLibre.
+    expect(state.landcover).toEqual(["match", ["get", "class"], "sand", "earth", "landuse"]);
+    expect(state.light).toMatchObject({ anchor: "map", position: [1.15, 239, 30] });
+    expect(state.buildings, "no buildings drawn").toBeGreaterThan(100);
+    expect(state.water).toBeGreaterThan(0);
+    // Self-hosted Libre Baskerville Italic ranges load from the docs tree.
+    expect(state.labels).toBeGreaterThan(0);
+
+    // The hatch is on screen: Tangram's paper and its ink strokes both
+    // cover real area.
+    const { counts, total } = await colourCounts(page, {
+      paper: [249, 243, 227],
+      ink: [77, 77, 78],
+    });
+    expect(counts.paper! / total, "too little paper — hatch missing?").toBeGreaterThan(0.1);
+    expect(counts.ink! / total, "no ink strokes — hatch missing?").toBeGreaterThan(0.01);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("blueprint: drafting-grid ground under flat-shaded blue buildings", async ({ page }) => {
+    const errors = await guard(page);
+    await openExample(page, "blueprint", ["ground", "buildings"]);
+    await settled(page);
+
+    const state = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return {
+        grid: map.hasImage("grid"),
+        ground: map.getPaintProperty("ground", "background-pattern"),
+        buildings: map.queryRenderedFeatures(undefined, { layers: ["buildings"] }).length,
+      };
+    });
+    expect(state.grid).toBe(true);
+    expect(state.ground).toBe("grid");
+    expect(state.buildings).toBeGreaterThan(100);
+
+    const { counts, total } = await colourCounts(
+      page,
+      { building: [0x1a, 0x56, 0xb0], sheet: [0x0b, 0x3d, 0x91] },
+      40
+    );
+    expect(counts.building! / total, "no blue buildings on screen").toBeGreaterThan(0.1);
+    expect(counts.sheet! / total, "no drafting sheet on screen").toBeGreaterThan(0.005);
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 });

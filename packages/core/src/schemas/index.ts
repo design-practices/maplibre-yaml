@@ -163,6 +163,7 @@ export {
   TerrainSchema,
   SkySchema,
   ProjectionSchema,
+  LightSchema,
   ParametersSchema,
 } from "./map.schema";
 export type {
@@ -181,6 +182,7 @@ export type {
   TerrainConfig,
   SkyConfig,
   ProjectionConfig,
+  LightConfig,
 } from "./map.schema";
 
 // Format-v2 map schema (U2 — validation only)

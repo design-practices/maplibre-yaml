@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { LegendBuilder } from "../../src/renderer/legend-builder";
 
 describe("LegendBuilder", () => {
@@ -106,6 +106,26 @@ describe("LegendBuilder", () => {
       const details = container.querySelector("details.maplibre-legend");
       expect(details).not.toBeNull();
       expect(details!.hasAttribute("open")).toBe(false);
+    });
+
+    it("no entries → no box, one warning naming what's missing", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      builder.build(container, [{ id: "plain", type: "fill" } as any], { title: "Key" });
+
+      expect(container.querySelector("details.maplibre-legend")).toBeNull();
+      expect(container.hidden).toBe(true);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![0])).toContain("legend:");
+      warn.mockRestore();
+    });
+
+    it("a rebuild with entries shows the box again", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      builder.build(container, [], {});
+      builder.build(container, [], { items: [{ shape: "square" as const, color: "#00f", label: "A" }] });
+      expect(container.hidden).toBe(false);
+      expect(container.querySelector("details.maplibre-legend")).not.toBeNull();
+      warn.mockRestore();
     });
 
     it("an untitled legend still gets a clickable summary", () => {
