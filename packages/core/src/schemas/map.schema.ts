@@ -17,6 +17,8 @@ import {
   LngLatBoundsSchema,
   ZoomLevelSchema,
   ColorSchema,
+  ColorOrExpressionSchema,
+  ExpressionSchema,
 } from "./base.schema";
 import { LayerOrReferenceSchema, PopupContentSchema } from "./layer.schema";
 import { LayerSourceSchema } from "./source.schema";
@@ -588,6 +590,46 @@ export const ImagesSchema = z.record(
 export type ImageConfig = z.infer<typeof ImageConfigSchema>;
 export type ImagesConfig = z.infer<typeof ImagesSchema>;
 
+/**
+ * The style-spec root `light` (U10′) — the single light that shades
+ * `fill-extrusion` faces.
+ *
+ * @remarks
+ * Spec-native, so it compiles straight through to the emitted style.json
+ * root (class `ejects`); live, the renderer applies it with `map.setLight`
+ * once the style has loaded. Every property accepts a zoom expression, as
+ * the spec allows. Closed object: an unknown key is a typo, never a
+ * silently ignored setting.
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/light/ | MapLibre Light}
+ */
+export const LightSchema = z
+  .object({
+    anchor: z
+      .union([z.enum(["map", "viewport"]), ExpressionSchema])
+      .optional()
+      .describe(
+        "`map` fixes the light to the map (it turns with the bearing); `viewport` (default) fixes it to the screen"
+      ),
+    position: z
+      .union([z.tuple([z.number(), z.number(), z.number()]), ExpressionSchema])
+      .optional()
+      .describe(
+        "[radial, azimuthal°, polar°] — distance from the centre of the base of an object, direction clockwise from north (0° = north at anchor map), height above the horizon (0° = overhead). Default [1.15, 210, 30]"
+      ),
+    color: ColorOrExpressionSchema.optional().describe(
+      "Light color (default white)"
+    ),
+    intensity: z
+      .union([z.number().min(0).max(1), ExpressionSchema])
+      .optional()
+      .describe("Light intensity, 0–1; higher is more extreme contrast (default 0.5)"),
+  })
+  .strict();
+
+/** Inferred light type. */
+export type LightConfig = z.infer<typeof LightSchema>;
+
 /** Inferred marker type. */
 export type MarkerConfig = z.infer<typeof MarkerSchema>;
 
@@ -713,6 +755,9 @@ export const MapBlockSchema: z.ZodObject<any> = z
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
     ),
+    light: LightSchema.optional().describe(
+      "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on eject"
+    ),
   })
   .describe("Standard map block");
 
@@ -778,6 +823,9 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     ),
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+    ),
+    light: LightSchema.optional().describe(
+      "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on eject"
     ),
   })
   .describe("Full-page map block");

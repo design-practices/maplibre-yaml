@@ -86,6 +86,7 @@ describe("closed-world exhaustiveness (R4)", () => {
       "state",
       "images",
       "color-relief",
+      "light",
       "x-*",
     ]) {
       expect(

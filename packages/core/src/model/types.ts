@@ -110,6 +110,16 @@ export interface StyleHalf {
    * merged into the document sprite (class `ejects`).
    */
   images?: Record<string, import("../schemas/map.schema").ImageConfig>;
+  /**
+   * The style-spec root `light` (U10′).
+   *
+   * @remarks
+   * Spec-native, so it compiles straight through to the emitted style.json
+   * root (class `ejects`). Live, the renderer applies it with `map.setLight`
+   * — the live style is built from `mapStyle` + addLayer, so it cannot ride
+   * in on the style object.
+   */
+  light?: import("../schemas/map.schema").LightConfig;
   sources: Record<string, SourceModel>;
   layers: LayerModel[];
 }
@@ -171,4 +181,6 @@ export interface V1MapInput {
   popups?: import("../schemas/map.schema").StandalonePopupConfig[];
   /** Named images for symbol layers and patterns, authored at the root. */
   images?: Record<string, import("../schemas/map.schema").ImageConfig>;
+  /** The style-spec light shading fill-extrusion faces, authored at the root. */
+  light?: import("../schemas/map.schema").LightConfig;
 }

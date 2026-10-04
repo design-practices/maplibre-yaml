@@ -300,6 +300,61 @@ describe("MapRenderer", () => {
     });
   });
 
+  describe("host chrome mounts (U9 slots)", () => {
+    const config = {
+      center: [0, 0] as [number, number],
+      zoom: 2,
+      mapStyle: "https://example.com/style.json",
+    };
+
+    function el(text: string): HTMLElement {
+      const d = document.createElement("div");
+      d.textContent = text;
+      return d;
+    }
+
+    it("mounts host chrome after the built-in legend and panel, stacking in one corner", () => {
+      const mine = el("mine");
+      renderer = new MapRenderer(container, config, [
+        { id: "roads", type: "line", source: "s", label: "Roads" },
+      ] as any, {
+        legend: { position: "top-right", collapsed: false },
+        parameters: { minPop: { type: "range", min: 0, max: 20 } },
+        chrome: [{ position: "top-right", element: mine }],
+      });
+      const map = renderer.getMap() as any;
+      map.setGlobalStateProperty = vi.fn();
+      map.emit("load");
+
+      const corner = container.querySelector(".ml-map-chrome-top-right")!;
+      const kids = Array.from(corner.children);
+      expect(kids).toHaveLength(3);
+      expect(kids[0].classList.contains("ml-map-legend")).toBe(true);
+      expect(kids[1].querySelector(".ml-map-params")).not.toBeNull();
+      expect(kids[2]).toBe(mine);
+      expect(mine.style.pointerEvents).toBe("auto");
+    });
+
+    it("a legend element replaces the built-in legend at the legend's position", () => {
+      const custom = el("custom legend");
+      renderer = new MapRenderer(container, config, [], {
+        legend: { position: "bottom-left", collapsed: false },
+        legendElement: custom,
+      });
+      renderer.getMap().emit("load");
+
+      expect(container.querySelector(".ml-map-legend")).toBeNull();
+      expect(custom.parentElement?.className).toContain("ml-map-chrome-bottom-left");
+    });
+
+    it("a legend element mounts top-left when the document declares no legend", () => {
+      const custom = el("custom legend");
+      renderer = new MapRenderer(container, config, [], { legendElement: custom });
+      renderer.getMap().emit("load");
+      expect(custom.parentElement?.className).toContain("ml-map-chrome-top-left");
+    });
+  });
+
   describe("state defaults (`state:` block → setGlobalStateProperty)", () => {
     const config = {
       center: [0, 0] as [number, number],
@@ -367,6 +422,43 @@ describe("MapRenderer", () => {
       map.emit("load");
 
       expect(map.setGlobalStateProperty).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("light (`light:` → map.setLight, U10′)", () => {
+    const config = {
+      center: [0, 0] as [number, number],
+      zoom: 2,
+      mapStyle: "https://example.com/style.json",
+    };
+
+    it("applies the document light on load", () => {
+      const light = { anchor: "map" as const, position: [1.5, 210, 30] as [number, number, number] };
+      renderer = new MapRenderer(container, config, [], { light });
+      const map = renderer.getMap() as any;
+      map.setLight = vi.fn();
+      map.emit("load");
+      expect(map.setLight).toHaveBeenCalledWith(light);
+    });
+
+    it("a rejected light warns and the document keeps loading", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      renderer = new MapRenderer(container, config, [], { light: { intensity: 0.4 } });
+      const map = renderer.getMap() as any;
+      map.setLight = vi.fn(() => {
+        throw new Error("bad light");
+      });
+      expect(() => map.emit("load")).not.toThrow();
+      expect(warn.mock.calls.some((c) => String(c[0]).includes("light"))).toBe(true);
+      warn.mockRestore();
+    });
+
+    it("touches nothing when no light was declared", () => {
+      renderer = new MapRenderer(container, config, [], {});
+      const map = renderer.getMap() as any;
+      map.setLight = vi.fn();
+      map.emit("load");
+      expect(map.setLight).not.toHaveBeenCalled();
     });
   });
 

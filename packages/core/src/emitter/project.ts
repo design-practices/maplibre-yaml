@@ -227,11 +227,24 @@ function rewriteImageRefs(value: unknown, names: ReadonlySet<string>): unknown {
  * (bare `addImage` names) but misses the namespaced document sprite on eject.
  */
 function hasDynamicImageRef(value: unknown): boolean {
-  if (!Array.isArray(value)) return false;
+  if (!Array.isArray(value) || value.length === 0) return false;
   const op = value[0];
   if (op === "get" || op === "concat" || op === "var" || op === "feature-state")
     return true;
-  return value.some((v) => hasDynamicImageRef(v));
+  if (op === "literal") return false;
+  // Position-aware, mirroring rewriteImageRefs: only OUTPUT positions name
+  // images. A `match`/`case`/`step` input or condition reading feature data
+  // (`["get", "class"]`) selects among literal names — every output is
+  // rewritable, so the reference is not dynamic (ml-gjf).
+  const dyn = (v: unknown) => hasDynamicImageRef(v);
+  if (op === "match")
+    return value.some((v, i) => i >= 3 && (i === value.length - 1 || i % 2 === 1) && dyn(v));
+  if (op === "case")
+    return value.some((v, i) => i >= 2 && (i === value.length - 1 || i % 2 === 0) && dyn(v));
+  if (op === "step") return value.some((v, i) => i >= 2 && i % 2 === 0 && dyn(v));
+  if (op === "coalesce" || op === "image") return value.slice(1).some(dyn);
+  // Unknown operator: no known output shape — conservatively any argument.
+  return value.slice(1).some(dyn);
 }
 
 /**
@@ -554,6 +567,8 @@ export function projectStyle(
   }));
 
   if (model.style.state !== undefined) style["state"] = model.style.state;
+  // `light` is a style-spec root property: it compiles through unchanged.
+  if (model.style.light !== undefined) style["light"] = model.style.light;
   // `images:` compiles fully (class `ejects`): the refs ride the result for
   // the fetch stage, and the document sprite is declared so the rewritten
   // `mlym:` references resolve. The CLI enforces that sprite files actually

@@ -1,0 +1,105 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Classic-style example: blueprint — a drafting sheet in the Mapzen spirit,
+# not a port of a Tangram original.
+#
+# The static tier: every layer is plain style spec, so this document is its
+# own eject — `mlym emit --strict` compiles it with nothing lost. A
+# drafting-grid ground (baked by `mlym bake blueprint`), dark water with a
+# pale shoreline, thin pale streets, dashed park outlines, and flat-shaded
+# blue buildings. A metre-scaled grid on every building face is the runtime
+# effect's job, not this document's.
+type: map
+id: blueprint
+config:
+  center: [-74.0118, 40.7075]
+  zoom: 15.9
+  pitch: 60
+  bearing: 29
+  # Inline base style: OpenFreeMap's glyphs for the labels; the document
+  # owns every layer.
+  mapStyle:
+    version: 8
+    glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf"
+    sources: {}
+    layers: []
+images:
+  grid: { url: "https://docs.maplibre-yaml.org/classics/blueprint/grid.png", pixelRatio: 2 }
+sources:
+  omt:
+    type: vector
+    url: "https://tiles.openfreemap.org/planet"
+    attribution: '<a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+layers:
+  - id: ground
+    type: background
+    paint:
+      background-pattern: grid
+  - id: water
+    type: fill
+    source: omt
+    source-layer: water
+    paint:
+      fill-color: "#072a63"
+  - id: shoreline
+    type: line
+    source: omt
+    source-layer: water
+    paint:
+      line-color: "#9fd3ff"
+      line-width: 1.2
+      line-opacity: 0.8
+  - id: parks
+    type: line
+    source: omt
+    source-layer: park
+    paint:
+      line-color: "#9fd3ff"
+      line-width: 1
+      line-dasharray: [3, 2]
+      line-opacity: 0.7
+  - id: roads
+    type: line
+    source: omt
+    source-layer: transportation
+    filter: ["match", ["get", "class"], ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"], true, false]
+    layout:
+      line-join: round
+      line-cap: round
+    paint:
+      line-color: "#d8f0ff"
+      line-opacity: 0.85
+      line-width:
+        - interpolate
+        - ["exponential", 1.6]
+        - ["zoom"]
+        - 13
+        - ["match", ["get", "class"], ["motorway", "trunk"], 1, 0.4]
+        - 18
+        - ["match", ["get", "class"], ["motorway", "trunk"], 5, ["primary", "secondary"], 3, 1.5]
+  - id: buildings
+    type: fill-extrusion
+    source: omt
+    source-layer: building
+    minzoom: 13
+    paint:
+      fill-extrusion-color: "#1a56b0"
+      fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
+      fill-extrusion-base: ["coalesce", ["get", "render_min_height"], 0]
+      fill-extrusion-vertical-gradient: true
+  - id: place-labels
+    type: symbol
+    source: omt
+    source-layer: place
+    filter: ["match", ["get", "class"], ["neighbourhood", "suburb", "quarter"], true, false]
+    layout:
+      text-field: ["coalesce", ["get", "name:en"], ["get", "name"]]
+      text-font: ["Noto Sans Regular"]
+      text-size: 15
+      text-transform: uppercase
+      text-letter-spacing: 0.25
+      text-max-width: 9
+      text-pitch-alignment: viewport
+    paint:
+      text-color: "#e6f6ff"
+      text-halo-color: "#0b3d91"
+      text-halo-width: 2.5

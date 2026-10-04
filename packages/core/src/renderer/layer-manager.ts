@@ -3,6 +3,7 @@
  * @module @maplibre-yaml/core/renderer
  */
 
+import { absolutizeTileTemplate, absolutizeVectorTiles } from "../utils/tile-url";
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { z } from "zod";
 import type { FeatureCollection } from "geojson";
@@ -206,7 +207,9 @@ export class LayerManager {
       fetchStrategy,
       ...mapLibreSpec
     } = spec as Record<string, unknown>;
-    return mapLibreSpec;
+    // Same-origin vector tile paths must be absolute by the time MapLibre's
+    // worker fetches them (see utils/tile-url).
+    return absolutizeVectorTiles(mapLibreSpec);
   }
 
   /**
@@ -406,7 +409,8 @@ export class LayerManager {
       const vectorSource = source as unknown as VectorSourceConfig;
       const vectorSpec: any = { type: "vector" };
       if (vectorSource.url) vectorSpec.url = vectorSource.url;
-      if (vectorSource.tiles) vectorSpec.tiles = vectorSource.tiles;
+      if (vectorSource.tiles)
+        vectorSpec.tiles = vectorSource.tiles.map((t) => absolutizeTileTemplate(t));
       if (vectorSource.minzoom !== undefined)
         vectorSpec.minzoom = vectorSource.minzoom;
       if (vectorSource.maxzoom !== undefined)

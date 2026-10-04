@@ -1,0 +1,103 @@
+# Hermetic twin of docs/public/configs/gallery/blueprint.yaml. Tiles come
+# from the vendored lower-Manhattan fixture (examples/gallery/fixtures/omt —
+# OpenStreetMap data, ODbL), the grid image is the docs site's committed
+# bake served from the repo root, and glyphs are the e2e server's empty
+# ranges. The CLI suite pins that the layers and images match the docs page.
+type: map
+id: blueprint
+config:
+  center: [-74.0118, 40.7075]
+  zoom: 15.9
+  pitch: 60
+  bearing: 29
+  # The e2e server's empty glyph ranges stand in for OpenFreeMap's: labels
+  # load hermetically, without visible text.
+  mapStyle:
+    version: 8
+    glyphs: "/glyphs/{fontstack}/{range}.pbf"
+    sources: {}
+    layers: []
+images:
+  grid: { url: "/docs/public/classics/blueprint/grid.png", pixelRatio: 2 }
+sources:
+  omt:
+    type: vector
+    tiles: ["/examples/gallery/fixtures/omt/{z}/{x}/{y}.pbf"]
+    minzoom: 13
+    maxzoom: 14
+    bounds: [-74.035, 40.695, -73.985, 40.735]
+    attribution: '© <a href="https://www.openmaptiles.org/">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+layers:
+  - id: ground
+    type: background
+    paint:
+      background-pattern: grid
+  - id: water
+    type: fill
+    source: omt
+    source-layer: water
+    paint:
+      fill-color: "#072a63"
+  - id: shoreline
+    type: line
+    source: omt
+    source-layer: water
+    paint:
+      line-color: "#9fd3ff"
+      line-width: 1.2
+      line-opacity: 0.8
+  - id: parks
+    type: line
+    source: omt
+    source-layer: park
+    paint:
+      line-color: "#9fd3ff"
+      line-width: 1
+      line-dasharray: [3, 2]
+      line-opacity: 0.7
+  - id: roads
+    type: line
+    source: omt
+    source-layer: transportation
+    filter: ["match", ["get", "class"], ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"], true, false]
+    layout:
+      line-join: round
+      line-cap: round
+    paint:
+      line-color: "#d8f0ff"
+      line-opacity: 0.85
+      line-width:
+        - interpolate
+        - ["exponential", 1.6]
+        - ["zoom"]
+        - 13
+        - ["match", ["get", "class"], ["motorway", "trunk"], 1, 0.4]
+        - 18
+        - ["match", ["get", "class"], ["motorway", "trunk"], 5, ["primary", "secondary"], 3, 1.5]
+  - id: buildings
+    type: fill-extrusion
+    source: omt
+    source-layer: building
+    minzoom: 13
+    paint:
+      fill-extrusion-color: "#1a56b0"
+      fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
+      fill-extrusion-base: ["coalesce", ["get", "render_min_height"], 0]
+      fill-extrusion-vertical-gradient: true
+  - id: place-labels
+    type: symbol
+    source: omt
+    source-layer: place
+    filter: ["match", ["get", "class"], ["neighbourhood", "suburb", "quarter"], true, false]
+    layout:
+      text-field: ["coalesce", ["get", "name:en"], ["get", "name"]]
+      text-font: ["Noto Sans Regular"]
+      text-size: 15
+      text-transform: uppercase
+      text-letter-spacing: 0.25
+      text-max-width: 9
+      text-pitch-alignment: viewport
+    paint:
+      text-color: "#e6f6ff"
+      text-halo-color: "#0b3d91"
+      text-halo-width: 2.5

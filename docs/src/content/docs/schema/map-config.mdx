@@ -21,6 +21,7 @@ Map configuration defines the initial view, interaction settings, controls, and 
   parameters: {...}    # Control metadata for state keys → params panel (optional)
   markers: [...]       # Standalone DOM pins (optional)
   images: {...}        # Named images for icons and patterns (optional)
+  light: {...}         # Style-spec light for fill-extrusion shading (optional)
   layers: [...]        # Map layers
   controls: {...}      # Map controls (optional)
   legend: {...}        # Legend (optional)
@@ -226,7 +227,10 @@ references (`icon-image`, `fill-pattern`, `line-pattern`,
 `--strict` accepts image documents. Dynamic references
 (`["image", ["get", "icon"]]`) resolve live but cannot be rewritten at
 compile time; emit reports them, and runtime values naming declared images
-must spell `mlym:<name>` themselves. Relative URLs render live but cannot
+must spell `mlym:<name>` themselves. A `*-pattern` (or `icon-image`) may be
+an expression that *selects* among declared names —
+`fill-pattern: [match, [get, class], sand, earth, landuse]` — and every
+literal output is rewritten, with no warning. Relative URLs render live but cannot
 be fetched at compile time — emit reports them as lossy, so `--strict`
 refuses them.
 
@@ -236,6 +240,40 @@ marker `icon:` URL in the document (bounded: 30s timeout, 20MB and
 1024px-per-image ceilings). Only emit documents whose URLs you trust — the
 fetched bytes are embedded verbatim into the sprite files you publish.
 :::
+
+## Light
+
+`light:` is the style-spec root [light](https://maplibre.org/maplibre-style-spec/light/)
+— the single light that shades `fill-extrusion` faces. A document-root key,
+a sibling of `config:` (in format v2 it lives in the `style:` half). Every
+property is optional and accepts a zoom expression:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `anchor` | `map` \| `viewport` | `viewport` | `map` fixes the light to the map, so shading stays put as the map turns; `viewport` fixes it to the screen |
+| `position` | `[radial, azimuthal°, polar°]` | `[1.15, 210, 30]` | Distance from the base of an object, direction clockwise from north (at `anchor: map`), and angle from overhead |
+| `color` | color | `white` | Light color |
+| `intensity` | number 0–1 | `0.5` | Higher is more extreme contrast between faces |
+
+```yaml
+type: map
+id: lit
+config:
+  center: [-74.0118, 40.7075]
+  zoom: 15.9
+  pitch: 60
+light:
+  anchor: map
+  position: [1.15, 239, 30]
+  intensity: 0.5
+```
+
+The object is closed: an unknown key is a validation error, not a silently
+ignored setting. Live, the renderer applies it with `map.setLight` once the
+style loads. On eject it compiles through verbatim to the style's `light`
+(class **ejects**), replacing any light the basemap carried. The
+[crosshatch classic](/examples/gallery/crosshatch/) uses it to shade its
+hatched buildings.
 
 ## View Options
 

@@ -50,6 +50,19 @@ import {
   denormalizeOptions,
 } from "../model/index.js";
 import { escapeHtml } from "../utils/html.js";
+import type { ChromeMount } from "../renderer/map-renderer.js";
+import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
+
+/**
+ * Named slots v1 (KTD9): the four chrome corners plus `legend`, which
+ * replaces the built-in legend. Light-DOM named containers, not shadow slots
+ * — `<ml-map>` has no shadow root; a direct child carrying one of these
+ * `slot` values is adopted into the renderer's corner system on load.
+ */
+export const ML_MAP_SLOTS: readonly string[] = [...CHROME_CORNERS, "legend"];
+
+/** Class on the element's own map container — the only child it owns while a map renders. */
+const MAP_CONTAINER_CLASS = "ml-map-container";
 
 /**
  * MLMap custom element for rendering MapLibre maps from YAML/JSON configuration.
@@ -181,8 +194,7 @@ export class MLMap extends HTMLElement {
    */
   connectedCallback(): void {
     // Create internal map container
-    this.mapContainer = document.createElement("div");
-    this.mapContainer.style.cssText = "width: 100%; height: 100%;";
+    this.mapContainer = this.createMapContainer();
 
     // Ensure the component has display: block (custom elements default to inline)
     if (!this.style.display || this.style.display === "inline") {
@@ -379,26 +391,26 @@ export class MLMap extends HTMLElement {
       return;
     }
 
-    // Destroy existing renderer
-    if (this.renderer) {
-      this.renderer.destroy();
-      this.renderer = null;
-    }
+    // Destroy existing renderer (slot children parked first — the renderer
+    // only borrows them, and its teardown removes their corner containers).
+    this.teardownRenderer();
 
     // A fresh render resets the readiness state a pending or future
     // mapReady() reads.
     this.documentLoaded = false;
     this.lastError = null;
 
-    // Clear content and set up container
-    this.innerHTML = "";
+    // Targeted teardown (KTD9): remove only what this element owns — a
+    // previous error card — never author children (the inline YAML script a
+    // later reload() re-reads, slot children, anything else).
+    this.removeErrorCards();
 
     if (!this.mapContainer) {
-      this.mapContainer = document.createElement("div");
-      this.mapContainer.style.cssText = "width: 100%; height: 100%;";
+      this.mapContainer = this.createMapContainer();
     }
 
     this.appendChild(this.mapContainer);
+    const slots = this.collectSlots();
 
     try {
       // Normalize the v1 document into the v2 internal model, then render from
@@ -414,6 +426,8 @@ export class MLMap extends HTMLElement {
         denormalizeLayers(model),
         {
           ...denormalizeOptions(model),
+          chrome: slots.chrome,
+          legendElement: slots.legendElement,
         onLoad: () => {
           // Load event is also emitted via the event system
         },
@@ -692,6 +706,76 @@ export class MLMap extends HTMLElement {
   /**
    * Handle and display errors
    */
+  private createMapContainer(): HTMLDivElement {
+    const el = document.createElement("div");
+    el.className = MAP_CONTAINER_CLASS;
+    el.style.cssText = "width: 100%; height: 100%;";
+    return el;
+  }
+
+  /**
+   * The direct children carrying a v1 slot name, split into corner mounts
+   * and the legend override. Parked slot children are direct children again,
+   * so every render (including `reload()`) re-collects them — and picks up
+   * slot children added since the last render.
+   */
+  private collectSlots(): { chrome: ChromeMount[]; legendElement?: HTMLElement } {
+    const chrome: ChromeMount[] = [];
+    let legendElement: HTMLElement | undefined;
+    for (const child of Array.from(this.children)) {
+      if (!(child instanceof HTMLElement)) continue;
+      const name = child.getAttribute("slot");
+      if (name === null) continue;
+      if (name === "legend") {
+        if (legendElement) {
+          console.warn(
+            '[ml-map] more than one slot="legend" child; only the first replaces the legend.'
+          );
+          continue;
+        }
+        legendElement = child;
+      } else if ((CHROME_CORNERS as readonly string[]).includes(name)) {
+        chrome.push({ position: name as ChromeCorner, element: child });
+      } else {
+        console.warn(
+          `[ml-map] unknown slot "${name}" — expected one of: ${ML_MAP_SLOTS.join(", ")}. ` +
+            "The child is left where it is."
+        );
+      }
+    }
+    return { chrome, legendElement };
+  }
+
+  /**
+   * Move slot children the renderer borrowed back onto this element (where
+   * the stylesheet hides them until the next mount), so tearing the map down
+   * — re-render, error card, disconnect — never destroys author markup.
+   */
+  private parkSlots(): void {
+    for (const el of Array.from(
+      this.querySelectorAll<HTMLElement>(`.${MAP_CONTAINER_CLASS} [slot]`)
+    )) {
+      if (ML_MAP_SLOTS.includes(el.getAttribute("slot") ?? "")) {
+        this.appendChild(el);
+      }
+    }
+  }
+
+  /** Park slot children, then destroy the renderer (if any). */
+  private teardownRenderer(): void {
+    this.parkSlots();
+    if (this.renderer) {
+      this.renderer.destroy();
+      this.renderer = null;
+    }
+  }
+
+  private removeErrorCards(): void {
+    for (const el of Array.from(this.children)) {
+      if (el.classList.contains("ml-map-error")) el.remove();
+    }
+  }
+
   private handleError(errors: ParseError[], showHelp = false): void {
     // Persist the failure so a mapReady() call arriving after this event
     // rejects with the structured errors instead of waiting forever.
@@ -758,7 +842,15 @@ export class MLMap extends HTMLElement {
       )
       .join("");
 
-    this.innerHTML = `
+    // Targeted replacement (KTD9): the error card takes the map container's
+    // place; author children (inline YAML, parked slot children) survive so
+    // a fixed document can reload() into the same element.
+    this.teardownRenderer();
+    this.removeErrorCards();
+    this.mapContainer?.remove();
+
+    const template = document.createElement("template");
+    template.innerHTML = `
       <div class="ml-map-error" style="
         padding: 20px;
         background: #fef2f2;
@@ -782,6 +874,8 @@ export class MLMap extends HTMLElement {
         ${helpSection}
       </div>
     `;
+    const card = template.content.firstElementChild;
+    if (card) this.appendChild(card);
   }
 
 
@@ -789,10 +883,7 @@ export class MLMap extends HTMLElement {
    * Clean up resources when component is removed
    */
   private destroy(): void {
-    if (this.renderer) {
-      this.renderer.destroy();
-      this.renderer = null;
-    }
+    this.teardownRenderer();
     this._config = null;
     this.initialized = false;
   }
