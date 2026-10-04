@@ -17,6 +17,8 @@ import {
   LngLatBoundsSchema,
   ZoomLevelSchema,
   ColorSchema,
+  ColorOrExpressionSchema,
+  ExpressionSchema,
 } from "./base.schema";
 import { LayerOrReferenceSchema, PopupContentSchema } from "./layer.schema";
 import { LayerSourceSchema } from "./source.schema";
@@ -120,6 +122,12 @@ export const ControlsConfigSchema = z
     fullscreen: ControlConfigSchema.optional().describe("Fullscreen control"),
     attribution: AttributionControlConfigSchema.optional().describe(
       "Attribution control",
+    ),
+    globe: ControlConfigSchema.optional().describe(
+      "Globe/mercator projection toggle (maplibre-gl >= 5.0.0)",
+    ),
+    terrain: ControlConfigSchema.optional().describe(
+      "3D terrain on/off toggle — toggles the document's `terrain:`",
     ),
   })
   .describe("Map controls configuration");
@@ -499,6 +507,138 @@ export const ImagesSchema = z.record(
 export type ImageConfig = z.infer<typeof ImageConfigSchema>;
 export type ImagesConfig = z.infer<typeof ImagesSchema>;
 
+/**
+ * Map-level 3D terrain (U15, ml-chh.5) — the style spec's root `terrain`.
+ *
+ * @remarks
+ * The authored shape IS the spec's shape: `source` names a `raster-dem`
+ * source (one declared in `sources:`, or one the basemap supplies) and
+ * `exaggeration` scales its heights. Style half: live, the renderer calls
+ * `map.setTerrain` once the source exists; on eject it compiles verbatim to
+ * the style.json root (class `ejects`), and the document's `terrain` wins
+ * over one inherited from the basemap. maplibre-gl has carried terrain since
+ * 2.2.0, so the whole supported peer range renders it.
+ *
+ * Give terrain its own `raster-dem` source rather than sharing the one a
+ * `hillshade` layer reads — MapLibre's own examples do this, because one
+ * source serving both purposes renders at reduced quality.
+ *
+ * @example
+ * ```yaml
+ * terrain:
+ *   source: terrainSource
+ *   exaggeration: 1.5
+ * ```
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/terrain/ | Style spec: terrain}
+ */
+export const TerrainSchema = z
+  .object({
+    source: z
+      .string()
+      .min(1)
+      .describe("Name of the `raster-dem` source supplying elevation"),
+    exaggeration: z
+      .number()
+      .min(0)
+      .optional()
+      .describe("Vertical exaggeration multiplier (spec default 1)"),
+  })
+  .describe("Map-level 3D terrain — the style spec's root `terrain`");
+
+/** Inferred terrain type. */
+export type TerrainConfig = z.infer<typeof TerrainSchema>;
+
+/** A sky blend factor: 0–1, or a zoom expression producing one. */
+const SkyBlendSchema = z.union([z.number().min(0).max(1), ExpressionSchema]);
+
+/**
+ * Sky, horizon, fog, and globe atmosphere (U15, ml-chh.7) — the style spec's
+ * root `sky`.
+ *
+ * @remarks
+ * Every property is the spec's own, spelled the spec's way, and each takes a
+ * value or a zoom expression. Style half: live, `map.setSky`; on eject it
+ * compiles verbatim to the style.json root (class `ejects`).
+ *
+ * Runtime minimums: `sky` needs maplibre-gl **4.5.0** (`Map#setSky`); on an
+ * older runtime it warns once and the map renders without it.
+ * `atmosphere-blend` only draws under `projection: { type: globe }`, so it
+ * needs **5.0.0** in practice. The sky itself is only visible when the camera
+ * can see the horizon — a pitched map — and fog only affects 3D terrain.
+ *
+ * @example
+ * ```yaml
+ * sky:
+ *   sky-color: "#199EF3"
+ *   horizon-color: "#ffffff"
+ *   fog-color: "#ffffff"
+ *   sky-horizon-blend: 0.5
+ *   horizon-fog-blend: 0.5
+ *   fog-ground-blend: 0.1
+ * ```
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/sky/ | Style spec: sky}
+ */
+export const SkySchema = z
+  .object({
+    "sky-color": ColorOrExpressionSchema.optional().describe(
+      "Color of the sky above the horizon"
+    ),
+    "horizon-color": ColorOrExpressionSchema.optional().describe(
+      "Color at the horizon, where sky meets fog"
+    ),
+    "fog-color": ColorOrExpressionSchema.optional().describe(
+      "Color of the fog over distant 3D terrain"
+    ),
+    "sky-horizon-blend": SkyBlendSchema.optional().describe(
+      "How far the horizon color blends up into the sky (0-1)"
+    ),
+    "horizon-fog-blend": SkyBlendSchema.optional().describe(
+      "How far the horizon color blends down into the fog (0-1)"
+    ),
+    "fog-ground-blend": SkyBlendSchema.optional().describe(
+      "Where fog starts over terrain: 0 at the camera, 1 at the horizon"
+    ),
+    "atmosphere-blend": SkyBlendSchema.optional().describe(
+      "Globe atmosphere opacity (0-1); draws under globe projection only (maplibre-gl >= 5)"
+    ),
+  })
+  .describe("Sky, horizon, fog, and globe atmosphere — the style spec's root `sky`");
+
+/** Inferred sky type. */
+export type SkyConfig = z.infer<typeof SkySchema>;
+
+/**
+ * Map projection (U15, ml-chh.6) — the style spec's root `projection`.
+ *
+ * @remarks
+ * `mercator` (the default) or `globe`. Style half: live, `map.setProjection`;
+ * on eject it compiles verbatim to the style.json root (class `ejects`).
+ *
+ * Globe needs maplibre-gl **5.0.0**. On a 4.x runtime there is no
+ * `setProjection`: the document warns once and renders in mercator — a
+ * declared absence at runtime, never a silent one.
+ *
+ * @example
+ * ```yaml
+ * projection:
+ *   type: globe
+ * ```
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/projection/ | Style spec: projection}
+ */
+export const ProjectionSchema = z
+  .object({
+    type: z
+      .enum(["mercator", "globe"])
+      .describe("Projection: `mercator` (default) or `globe` (maplibre-gl >= 5.0.0)"),
+  })
+  .describe("Map projection — the style spec's root `projection`");
+
+/** Inferred projection type. */
+export type ProjectionConfig = z.infer<typeof ProjectionSchema>;
+
 /** Inferred marker type. */
 export type MarkerConfig = z.infer<typeof MarkerSchema>;
 
@@ -621,6 +761,15 @@ export const MapBlockSchema: z.ZodObject<any> = z
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
     ),
+    terrain: TerrainSchema.optional().describe(
+      "3D terrain from a raster-dem source — setTerrain live, style.json `terrain` on eject"
+    ),
+    sky: SkySchema.optional().describe(
+      "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json `sky` on eject"
+    ),
+    projection: ProjectionSchema.optional().describe(
+      "Map projection (`globe` needs maplibre-gl >= 5) — style.json `projection` on eject"
+    ),
   })
   .describe("Standard map block");
 
@@ -683,6 +832,15 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     ),
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+    ),
+    terrain: TerrainSchema.optional().describe(
+      "3D terrain from a raster-dem source — setTerrain live, style.json `terrain` on eject"
+    ),
+    sky: SkySchema.optional().describe(
+      "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json `sky` on eject"
+    ),
+    projection: ProjectionSchema.optional().describe(
+      "Map projection (`globe` needs maplibre-gl >= 5) — style.json `projection` on eject"
     ),
   })
   .describe("Full-page map block");

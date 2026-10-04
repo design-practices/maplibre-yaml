@@ -1,0 +1,105 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/create-a-heatmap-layer-on-a-globe-with-terrain-elevation/
+# The heatmap and circle layers are the plain heatmap example's, unchanged;
+# globe, terrain, hillshade and the atmosphere are four more declarations.
+type: map
+id: create-a-heatmap-layer-on-a-globe-with-terrain-elevation
+config:
+  center: [-120, 37.422]
+  zoom: 7.25
+  bearing: 57
+  pitch: 71
+  maxPitch: 85
+  hash: true
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+sources:
+  terrainSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+  hillshadeSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+  earthquakes:
+    type: geojson
+    url: "https://maplibre.org/maplibre-gl-js/docs/assets/earthquakes.geojson"
+projection:
+  type: globe
+terrain:
+  source: terrainSource
+  exaggeration: 1
+sky:
+  atmosphere-blend: ["interpolate", ["linear"], ["zoom"], 0, 1, 2, 0]
+controls:
+  navigation: true
+  globe: true
+  terrain: true
+layers:
+  - id: hills
+    type: hillshade
+    source: hillshadeSource
+    paint:
+      hillshade-shadow-color: "#473B24"
+  - id: earthquakes-heat
+    type: heatmap
+    source: earthquakes
+    maxzoom: 9
+    paint:
+      heatmap-weight:
+        ["interpolate", ["linear"], ["get", "mag"], 0, 0, 6, 1]
+      heatmap-intensity:
+        ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 3]
+      heatmap-color:
+        - interpolate
+        - ["linear"]
+        - ["heatmap-density"]
+        - 0
+        - "rgba(33,102,172,0)"
+        - 0.2
+        - "rgb(103,169,207)"
+        - 0.4
+        - "rgb(209,229,240)"
+        - 0.6
+        - "rgb(253,219,199)"
+        - 0.8
+        - "rgb(239,138,98)"
+        - 1
+        - "rgb(178,24,43)"
+      heatmap-radius:
+        ["interpolate", ["linear"], ["zoom"], 0, 2, 9, 20]
+      heatmap-opacity:
+        ["interpolate", ["linear"], ["zoom"], 7, 1, 9, 0]
+  - id: earthquakes-point
+    type: circle
+    source: earthquakes
+    minzoom: 7
+    paint:
+      circle-radius:
+        - interpolate
+        - ["linear"]
+        - ["zoom"]
+        - 7
+        - ["interpolate", ["linear"], ["get", "mag"], 1, 1, 6, 4]
+        - 16
+        - ["interpolate", ["linear"], ["get", "mag"], 1, 5, 6, 50]
+      circle-color:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 1
+        - "rgba(33,102,172,0)"
+        - 2
+        - "rgb(103,169,207)"
+        - 3
+        - "rgb(209,229,240)"
+        - 4
+        - "rgb(253,219,199)"
+        - 5
+        - "rgb(239,138,98)"
+        - 6
+        - "rgb(178,24,43)"
+      circle-stroke-color: "white"
+      circle-stroke-width: 1
+      circle-opacity:
+        ["interpolate", ["linear"], ["zoom"], 7, 0, 8, 1]

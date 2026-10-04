@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/sky-fog-terrain/
+# The sky values are upstream's initial picker settings, declared once. The
+# pickers that re-call setSky live are JS territory; the look is pure YAML.
+type: map
+id: sky-fog-terrain
+config:
+  center: [11.2953, 47.5479]
+  zoom: 12
+  pitch: 77
+  maxZoom: 18
+  maxPitch: 85
+  hash: true
+  mapStyle: { version: 8, sources: {}, layers: [] }
+sources:
+  osm:
+    type: raster
+    tiles:
+      - "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    tileSize: 256
+    maxzoom: 19
+    attribution: "© OpenStreetMap contributors"
+  terrainSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+  hillshadeSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+layers:
+  - id: osm
+    type: raster
+    source: osm
+  - id: hills
+    type: hillshade
+    source: hillshadeSource
+    paint:
+      hillshade-shadow-color: "#473B24"
+terrain:
+  source: terrainSource
+  exaggeration: 1
+sky:
+  sky-color: "#0000ff"
+  horizon-color: "#00ff00"
+  fog-color: "#ff0000"
+  sky-horizon-blend: 0.5
+  horizon-fog-blend: 0.5
+  fog-ground-blend: 0.1
+controls:
+  navigation: true
+  globe: true
+  terrain: true

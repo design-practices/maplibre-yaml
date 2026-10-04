@@ -57,6 +57,18 @@ export const FullscreenControl: typeof maplibre.FullscreenControl =
 export const AttributionControl: typeof maplibre.AttributionControl =
   gl.AttributionControl;
 
+/**
+ * 3D toggle controls (U15). Possibly undefined: `GlobeControl` arrived in
+ * maplibre-gl 5.0.0, so on a 4.x runtime the binding is absent and the
+ * controls manager declares that absence instead of constructing `undefined`.
+ */
+export const GlobeControl: typeof maplibre.GlobeControl | undefined = (
+  gl as { GlobeControl?: typeof maplibre.GlobeControl }
+).GlobeControl;
+export const TerrainControl: typeof maplibre.TerrainControl | undefined = (
+  gl as { TerrainControl?: typeof maplibre.TerrainControl }
+).TerrainControl;
+
 // Instance types under the same names, so `import { Map }` from this module
 // works in both value and type position (mirroring maplibre-gl's own names).
 export type Map = maplibre.Map;

@@ -35,9 +35,9 @@ hatches.
 | Theme | Examples driving it | Notes |
 |---|---|---|
 | Markers & standalone annotations | add-a-default-marker, add-custom-icons-with-markers, display-a-popup, attach-a-popup-to-a-marker-instance | No `maplibregl.Marker` surface at all; no popup-at-coords without an interaction. Biggest single absence by example count. |
-| `terrain:` map-level 3D | 3d-terrain, display-a-hybrid-satellite-map-with-terrain-elevation | Currently a *declared* non-goal (source.schema.ts, docs). This census is the evidence to revisit: raster-dem sourcing already exists, only the map-level switch is missing. |
-| `projection:` / globe | display-a-globe-with-a-vector-map, -with-an-atmosphere, -with-a-fill-extrusion-layer, heatmap-on-globe | No surface; `spinGlobe` in scrollytelling schema is unimplemented. |
-| `sky:` / fog / atmosphere | sky-fog-terrain, display-a-globe-with-an-atmosphere | Emit already inherits `sky`/`light` from basemap; authoring is the gap. |
+| `terrain:` map-level 3D | 3d-terrain, display-a-hybrid-satellite-map-with-terrain-elevation | **Landed in 0.7 U15 (ml-vw4.5, ml-chh.5)** — the non-goal was reversed; document-root `terrain:`, ejects to style.json. Was: a *declared* non-goal (source.schema.ts, docs). |
+| `projection:` / globe | display-a-globe-with-a-vector-map, -with-an-atmosphere, -with-a-fill-extrusion-layer, heatmap-on-globe | **Landed in 0.7 U15 (ml-chh.6)** — `projection:` (maplibre-gl >= 5; 4.x warns and renders mercator). Scrollytelling `spinGlobe` stays documented-unimplemented. |
+| `sky:` / fog / atmosphere | sky-fog-terrain, display-a-globe-with-an-atmosphere | **Landed in 0.7 U15 (ml-chh.7)** — `sky:` authoring (maplibre-gl >= 4.5). `light:` remains for U10′. |
 | `images:` — icon/image loading | add-an-icon-to-the-map (anchor; 6 more ride it as H) | No `map.addImage`/sprite surface; symbol layers limited to basemap sprite icons. A declarative `images: {name: url}` block covers most icon examples. |
 | Hover popup built-in | display-a-popup-on-hover | Hover has only `highlight`; ml-fn9 (hover-emit) builds the registry-contract change a hover popup also needs. |
 | `color-relief` layer type | add-a-color-relief-layer | MapLibre v5 layer type absent from the 9-type union; pairs with ml-tfd.1 (v5 CI matrix). |

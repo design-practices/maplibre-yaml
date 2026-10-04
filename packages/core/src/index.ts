@@ -132,6 +132,9 @@ export type {
 // Capability policy — what a document may do, given where it is compiled
 export {
   STATE_RUNTIME_FLOOR,
+  TERRAIN_RUNTIME_FLOOR,
+  SKY_RUNTIME_FLOOR,
+  GLOBE_RUNTIME_FLOOR,
   DEFAULT_POLICY,
   meetsVersion,
   supportsState,

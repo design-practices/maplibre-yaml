@@ -141,6 +141,11 @@ for (const slug of slugs) {
       geolocate: Boolean(document.querySelector(".maplibregl-ctrl-geolocate")),
       fullscreen: Boolean(document.querySelector(".maplibregl-ctrl-fullscreen")),
       zoomIn: Boolean(document.querySelector(".maplibregl-ctrl-zoom-in")),
+      globe: Boolean(document.querySelector(".maplibregl-ctrl-globe, .maplibregl-ctrl-globe-enabled")),
+      terrain: Boolean(document.querySelector(".maplibregl-ctrl-terrain, .maplibregl-ctrl-terrain-enabled")),
+      // U15: the 3D trio reached the live map, not just the style.
+      terrainSource: document.getElementById("map")?.getMap?.()?.getTerrain?.()?.source ?? null,
+      projection: document.getElementById("map")?.getMap?.()?.getProjection?.()?.type ?? null,
       mlErrors: window.__mlErrors ?? [],
     }));
     problems.push(...ctl.mlErrors.map((e) => `ml-map:error: ${e}`));
@@ -149,6 +154,12 @@ for (const slug of slugs) {
     if (controls.geolocate && !ctl.geolocate) problems.push("geolocate control missing");
     if (controls.fullscreen && !ctl.fullscreen) problems.push("fullscreen control missing");
     if (controls.navigation && !ctl.zoomIn) problems.push("navigation control missing");
+    if (controls.globe && !ctl.globe) problems.push("globe control missing");
+    if (controls.terrain && !ctl.terrain) problems.push("terrain control missing");
+    if (doc.terrain && ctl.terrainSource !== doc.terrain.source)
+      problems.push(`terrain not applied (getTerrain().source = ${ctl.terrainSource})`);
+    if (doc.projection && ctl.projection !== doc.projection.type)
+      problems.push(`projection not applied (getProjection().type = ${ctl.projection})`);
   } catch (e) {
     problems.push(`FAILED: ${String(e.message).split("\n")[0]}`);
   }

@@ -705,6 +705,81 @@ describe("MapRenderer", () => {
     });
   });
 
+  describe("map-level 3D (U15)", () => {
+    const config = {
+      center: [0, 0] as [number, number],
+      zoom: 2,
+      mapStyle: "https://example.com/style.json",
+    };
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    it("applies projection, sky, and terrain on load (a v5-shaped runtime)", () => {
+      renderer = new MapRenderer(container, config, [], {
+        projection: { type: "globe" },
+        sky: { "sky-color": "#199EF3", "atmosphere-blend": 0.5 },
+        terrain: { source: "dem", exaggeration: 1.5 },
+      });
+      const map = renderer.getMap() as any;
+      map.setProjection = vi.fn();
+      map.setSky = vi.fn();
+      map.setTerrain = vi.fn();
+      map.getSource = vi.fn(() => ({ type: "raster-dem" }));
+      map.emit("load");
+
+      expect(map.setProjection).toHaveBeenCalledWith({ type: "globe" });
+      expect(map.setSky).toHaveBeenCalledWith({
+        "sky-color": "#199EF3",
+        "atmosphere-blend": 0.5,
+      });
+      expect(map.setTerrain).toHaveBeenCalledWith({ source: "dem", exaggeration: 1.5 });
+    });
+
+    it("a 4.x runtime (no setProjection) declares globe's absence with exactly one warning", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      renderer = new MapRenderer(container, config, [], { projection: { type: "globe" } });
+      // MockMap has no setProjection — that IS the 4.x runtime.
+      renderer.getMap().emit("load");
+      const globeWarns = warn.mock.calls.filter((c) => String(c[0]).includes("projection"));
+      expect(globeWarns).toHaveLength(1);
+      expect(String(globeWarns[0]![0])).toContain("5.0.0");
+      warn.mockRestore();
+    });
+
+    it("terrain whose source arrives with an inline layer source retries after layers", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      renderer = new MapRenderer(container, config, [], { terrain: { source: "late" } });
+      const map = renderer.getMap() as any;
+      map.setTerrain = vi.fn();
+      let exists = false;
+      map.getSource = vi.fn(() => (exists ? { type: "raster-dem" } : undefined));
+      map.emit("load");
+      expect(map.setTerrain).not.toHaveBeenCalled();
+      exists = true;
+      await flush();
+      expect(map.setTerrain).toHaveBeenCalledWith({ source: "late" });
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes("terrain"))).toEqual([]);
+      warn.mockRestore();
+    });
+
+    it("terrain naming no source warns once after layers settle and never throws", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const onError = vi.fn();
+      renderer = new MapRenderer(container, config, [], {
+        terrain: { source: "nope" },
+        onError,
+      });
+      const map = renderer.getMap() as any;
+      map.setTerrain = vi.fn();
+      map.getSource = vi.fn(() => undefined);
+      map.emit("load");
+      await flush();
+      expect(map.setTerrain).not.toHaveBeenCalled();
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes('"nope"'))).toHaveLength(1);
+      expect(onError).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+  });
+
   describe("destroy", () => {
     it("cleans up all resources", () => {
       const config = {

@@ -2554,6 +2554,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                     }
                   ],
                   "description": "Attribution control"
+                },
+                "globe": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/controls/properties/navigation",
+                  "description": "Globe/mercator projection toggle (maplibre-gl >= 5.0.0)"
+                },
+                "terrain": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/controls/properties/navigation",
+                  "description": "3D terrain on/off toggle — toggles the document's \`terrain:\`"
                 }
               },
               "additionalProperties": false,
@@ -2759,6 +2767,97 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                 "pattern": "^(?!(?:__proto__|constructor|prototype)$)[a-zA-Z0-9_-]+$"
               },
               "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+            },
+            "terrain": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Name of the \`raster-dem\` source supplying elevation"
+                },
+                "exaggeration": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Vertical exaggeration multiplier (spec default 1)"
+                }
+              },
+              "required": [
+                "source"
+              ],
+              "additionalProperties": false,
+              "description": "3D terrain from a raster-dem source — setTerrain live, style.json \`terrain\` on eject",
+              "patternProperties": {
+                "^x-": {}
+              }
+            },
+            "sky": {
+              "type": "object",
+              "properties": {
+                "sky-color": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+                  "description": "Color of the sky above the horizon"
+                },
+                "horizon-color": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+                  "description": "Color at the horizon, where sky meets fog"
+                },
+                "fog-color": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+                  "description": "Color of the fog over distant 3D terrain"
+                },
+                "sky-horizon-blend": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    {
+                      "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                    }
+                  ],
+                  "description": "How far the horizon color blends up into the sky (0-1)"
+                },
+                "horizon-fog-blend": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/sky/properties/sky-horizon-blend",
+                  "description": "How far the horizon color blends down into the fog (0-1)"
+                },
+                "fog-ground-blend": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/sky/properties/sky-horizon-blend",
+                  "description": "Where fog starts over terrain: 0 at the camera, 1 at the horizon"
+                },
+                "atmosphere-blend": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/sky/properties/sky-horizon-blend",
+                  "description": "Globe atmosphere opacity (0-1); draws under globe projection only (maplibre-gl >= 5)"
+                }
+              },
+              "additionalProperties": false,
+              "description": "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json \`sky\` on eject",
+              "patternProperties": {
+                "^x-": {}
+              }
+            },
+            "projection": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "mercator",
+                    "globe"
+                  ],
+                  "description": "Projection: \`mercator\` (default) or \`globe\` (maplibre-gl >= 5.0.0)"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false,
+              "description": "Map projection (\`globe\` needs maplibre-gl >= 5) — style.json \`projection\` on eject",
+              "patternProperties": {
+                "^x-": {}
+              }
             }
           },
           "required": [
@@ -2911,7 +3010,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   },
                   "spinGlobe": {
                     "type": "boolean",
-                    "description": "Spin globe animation (for low zoom levels)"
+                    "description": "Not implemented (warns, no effect). Globe projection itself is the map-level \`projection: { type: globe }\`"
                   },
                   "alignment": {
                     "type": "string",
@@ -3382,6 +3481,18 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "images": {
                               "$ref": "#/$defs/any/oneOf/0/properties/images",
                               "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+                            },
+                            "terrain": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/terrain",
+                              "description": "3D terrain from a raster-dem source — setTerrain live, style.json \`terrain\` on eject"
+                            },
+                            "sky": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/sky",
+                              "description": "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json \`sky\` on eject"
+                            },
+                            "projection": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/projection",
+                              "description": "Map projection (\`globe\` needs maplibre-gl >= 5) — style.json \`projection\` on eject"
                             }
                           },
                           "required": [
@@ -6038,6 +6149,14 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                 }
               ],
               "description": "Attribution control"
+            },
+            "globe": {
+              "$ref": "#/$defs/map/properties/controls/properties/navigation",
+              "description": "Globe/mercator projection toggle (maplibre-gl >= 5.0.0)"
+            },
+            "terrain": {
+              "$ref": "#/$defs/map/properties/controls/properties/navigation",
+              "description": "3D terrain on/off toggle — toggles the document's \`terrain:\`"
             }
           },
           "additionalProperties": false,
@@ -6243,6 +6362,97 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
             "pattern": "^(?!(?:__proto__|constructor|prototype)$)[a-zA-Z0-9_-]+$"
           },
           "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+        },
+        "terrain": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of the \`raster-dem\` source supplying elevation"
+            },
+            "exaggeration": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Vertical exaggeration multiplier (spec default 1)"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "additionalProperties": false,
+          "description": "3D terrain from a raster-dem source — setTerrain live, style.json \`terrain\` on eject",
+          "patternProperties": {
+            "^x-": {}
+          }
+        },
+        "sky": {
+          "type": "object",
+          "properties": {
+            "sky-color": {
+              "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+              "description": "Color of the sky above the horizon"
+            },
+            "horizon-color": {
+              "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+              "description": "Color at the horizon, where sky meets fog"
+            },
+            "fog-color": {
+              "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+              "description": "Color of the fog over distant 3D terrain"
+            },
+            "sky-horizon-blend": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                }
+              ],
+              "description": "How far the horizon color blends up into the sky (0-1)"
+            },
+            "horizon-fog-blend": {
+              "$ref": "#/$defs/map/properties/sky/properties/sky-horizon-blend",
+              "description": "How far the horizon color blends down into the fog (0-1)"
+            },
+            "fog-ground-blend": {
+              "$ref": "#/$defs/map/properties/sky/properties/sky-horizon-blend",
+              "description": "Where fog starts over terrain: 0 at the camera, 1 at the horizon"
+            },
+            "atmosphere-blend": {
+              "$ref": "#/$defs/map/properties/sky/properties/sky-horizon-blend",
+              "description": "Globe atmosphere opacity (0-1); draws under globe projection only (maplibre-gl >= 5)"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json \`sky\` on eject",
+          "patternProperties": {
+            "^x-": {}
+          }
+        },
+        "projection": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "mercator",
+                "globe"
+              ],
+              "description": "Projection: \`mercator\` (default) or \`globe\` (maplibre-gl >= 5.0.0)"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false,
+          "description": "Map projection (\`globe\` needs maplibre-gl >= 5) — style.json \`projection\` on eject",
+          "patternProperties": {
+            "^x-": {}
+          }
         }
       },
       "required": [
@@ -9065,6 +9275,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 }
                               ],
                               "description": "Attribution control"
+                            },
+                            "globe": {
+                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/controls/properties/navigation",
+                              "description": "Globe/mercator projection toggle (maplibre-gl >= 5.0.0)"
+                            },
+                            "terrain": {
+                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/controls/properties/navigation",
+                              "description": "3D terrain on/off toggle — toggles the document's \`terrain:\`"
                             }
                           },
                           "additionalProperties": false,
@@ -9270,6 +9488,97 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                             "pattern": "^(?!(?:__proto__|constructor|prototype)$)[a-zA-Z0-9_-]+$"
                           },
                           "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+                        },
+                        "terrain": {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string",
+                              "minLength": 1,
+                              "description": "Name of the \`raster-dem\` source supplying elevation"
+                            },
+                            "exaggeration": {
+                              "type": "number",
+                              "minimum": 0,
+                              "description": "Vertical exaggeration multiplier (spec default 1)"
+                            }
+                          },
+                          "required": [
+                            "source"
+                          ],
+                          "additionalProperties": false,
+                          "description": "3D terrain from a raster-dem source — setTerrain live, style.json \`terrain\` on eject",
+                          "patternProperties": {
+                            "^x-": {}
+                          }
+                        },
+                        "sky": {
+                          "type": "object",
+                          "properties": {
+                            "sky-color": {
+                              "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color",
+                              "description": "Color of the sky above the horizon"
+                            },
+                            "horizon-color": {
+                              "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color",
+                              "description": "Color at the horizon, where sky meets fog"
+                            },
+                            "fog-color": {
+                              "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color",
+                              "description": "Color of the fog over distant 3D terrain"
+                            },
+                            "sky-horizon-blend": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                {
+                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                                }
+                              ],
+                              "description": "How far the horizon color blends up into the sky (0-1)"
+                            },
+                            "horizon-fog-blend": {
+                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/sky/properties/sky-horizon-blend",
+                              "description": "How far the horizon color blends down into the fog (0-1)"
+                            },
+                            "fog-ground-blend": {
+                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/sky/properties/sky-horizon-blend",
+                              "description": "Where fog starts over terrain: 0 at the camera, 1 at the horizon"
+                            },
+                            "atmosphere-blend": {
+                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/sky/properties/sky-horizon-blend",
+                              "description": "Globe atmosphere opacity (0-1); draws under globe projection only (maplibre-gl >= 5)"
+                            }
+                          },
+                          "additionalProperties": false,
+                          "description": "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json \`sky\` on eject",
+                          "patternProperties": {
+                            "^x-": {}
+                          }
+                        },
+                        "projection": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "mercator",
+                                "globe"
+                              ],
+                              "description": "Projection: \`mercator\` (default) or \`globe\` (maplibre-gl >= 5.0.0)"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Map projection (\`globe\` needs maplibre-gl >= 5) — style.json \`projection\` on eject",
+                          "patternProperties": {
+                            "^x-": {}
+                          }
                         }
                       },
                       "required": [
@@ -9344,6 +9653,18 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "images": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/images",
                           "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+                        },
+                        "terrain": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/terrain",
+                          "description": "3D terrain from a raster-dem source — setTerrain live, style.json \`terrain\` on eject"
+                        },
+                        "sky": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/sky",
+                          "description": "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json \`sky\` on eject"
+                        },
+                        "projection": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/projection",
+                          "description": "Map projection (\`globe\` needs maplibre-gl >= 5) — style.json \`projection\` on eject"
                         }
                       },
                       "required": [
@@ -9496,7 +9817,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "spinGlobe": {
                                 "type": "boolean",
-                                "description": "Spin globe animation (for low zoom levels)"
+                                "description": "Not implemented (warns, no effect). Globe projection itself is the map-level \`projection: { type: globe }\`"
                               },
                               "alignment": {
                                 "type": "string",
@@ -12299,7 +12620,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
               },
               "spinGlobe": {
                 "type": "boolean",
-                "description": "Spin globe animation (for low zoom levels)"
+                "description": "Not implemented (warns, no effect). Globe projection itself is the map-level \`projection: { type: globe }\`"
               },
               "alignment": {
                 "type": "string",

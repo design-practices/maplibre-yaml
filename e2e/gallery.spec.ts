@@ -15,7 +15,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { meetsVersion, STATE_RUNTIME_FLOOR } from "../packages/core/src/capabilities";
+import {
+  meetsVersion,
+  STATE_RUNTIME_FLOOR,
+  GLOBE_RUNTIME_FLOOR,
+} from "../packages/core/src/capabilities";
 
 /**
  * The maplibre-gl version the e2e vendor serves (root devDependency — the
@@ -145,7 +149,28 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
   { slug: "add-an-icon-to-the-map", layers: ["logo"], rendered: "logo" },
   { slug: "use-a-fallback-image", layers: ["fallback"], rendered: "fallback" },
   { slug: "add-a-pattern-to-a-polygon", layers: ["patterned"], rendered: "patterned" },
+  // U15 map-level 3D — terrain/sky/projection twins over the server's
+  // synthetic /relief DEM and /landcover raster. The bespoke test below
+  // proves each 3D key reached the live map (or declared its absence on 4.x).
+  { slug: "3d-terrain", layers: ["osm", "hills"] },
+  { slug: "display-a-hybrid-satellite-map-with-terrain-elevation", layers: ["satellite", "hills"] },
+  { slug: "sky-fog-terrain", layers: ["osm", "hills"] },
+  { slug: "display-a-globe-with-a-vector-map", layers: ["land", "graticule"] },
+  { slug: "display-a-globe-with-an-atmosphere", layers: ["Satellite"] },
+  {
+    slug: "display-a-globe-with-a-fill-extrusion-layer",
+    layers: ["extrude-polygon-layer"],
+  },
+  {
+    slug: "create-a-heatmap-layer-on-a-globe-with-terrain-elevation",
+    layers: ["hills", "earthquakes-heat", "earthquakes-point"],
+  },
 ];
+
+/** True when the vendor has globe projection (maplibre-gl >= 5.0.0). */
+function vendorHasGlobe(): boolean {
+  return meetsVersion(VENDOR_MAPLIBRE_VERSION, GLOBE_RUNTIME_FLOOR);
+}
 
 async function openExample(page: Page, slug: string, layers: string[]): Promise<void> {
   await page.goto(`/examples/gallery/viewer.html?example=${slug}`, {
@@ -246,6 +271,87 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
     await expect(
       page.locator(".maplibregl-ctrl-top-left .maplibregl-ctrl-attrib")
     ).toBeVisible();
+  });
+
+  test("U15 3D trio: terrain raises the surface, sky lands, globe projects (or declares absence on 4.x)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const warnings: string[] = [];
+    page.on("console", (m) => {
+      if (m.type() === "warning") warnings.push(m.text());
+    });
+
+    // terrain: — applied from the named DEM source, the control toggles it,
+    // and the synthetic relief is actually under the camera (an elevation
+    // query only answers once terrain is live and its tiles decoded).
+    await openExample(page, "3d-terrain", ["osm", "hills"]);
+    expect(
+      await page.evaluate(() =>
+        (document.getElementById("map") as any).getMap().getTerrain()
+      )
+    ).toEqual({ source: "terrainSource", exaggeration: 1 });
+    await expect(page.locator(".maplibregl-ctrl-terrain-enabled")).toBeVisible();
+    await page.waitForFunction(
+      () => {
+        const map = (document.getElementById("map") as any).getMap();
+        const e = map.queryTerrainElevation?.(map.getCenter());
+        return typeof e === "number" && e > 100;
+      },
+      undefined,
+      { timeout: 30_000 }
+    );
+
+    // sky: — the authored block reached the style (setSky, maplibre-gl >= 4.5).
+    await openExample(page, "sky-fog-terrain", ["osm", "hills"]);
+    const sky = await page.evaluate(() =>
+      (document.getElementById("map") as any).getMap().getSky?.()
+    );
+    expect(sky?.["sky-color"]).toBe("#0000ff");
+    expect(sky?.["fog-ground-blend"]).toBe(0.1);
+
+    // projection: — globe on 5.x; on the 4.x leg, exactly one declared
+    // absence naming the floor, and the map still renders (mercator).
+    // Waiting on a document layer means the load handler (which applies the
+    // projection before adding layers) has run.
+    // A whole-viewport queryRenderedFeatures() comes back empty under globe
+    // (the viewport corners are off the planet), so features are proven at
+    // a point: where a known feature projects on screen.
+    for (const [slug, layer, at] of [
+      ["display-a-globe-with-a-vector-map", "land", [-40, 0]],
+      ["display-a-globe-with-an-atmosphere", "Satellite", null],
+      ["display-a-globe-with-a-fill-extrusion-layer", "extrude-polygon-layer", [0, 0]],
+    ] as const) {
+      warnings.length = 0;
+      await openExample(page, slug, [layer]);
+      if (at) {
+        await page.waitForFunction(
+          ({ layerId, lngLat }) => {
+            const map = (document.getElementById("map") as any).getMap();
+            const p = map.project(lngLat);
+            return map.queryRenderedFeatures([p.x, p.y], { layers: [layerId] }).length > 0;
+          },
+          { layerId: layer, lngLat: at as unknown as [number, number] },
+          { timeout: 30_000 }
+        );
+      }
+      const projection = await page.evaluate(
+        () => (document.getElementById("map") as any).getMap().getProjection?.()?.type ?? null
+      );
+      const absences = warnings.filter((w) => w.includes("projection") && w.includes("5.0.0"));
+      if (vendorHasGlobe()) {
+        expect(projection, `${slug} projection`).toBe("globe");
+        expect(absences, `${slug} must not warn on 5.x`).toEqual([]);
+      } else {
+        expect(projection, `${slug} has no projection API on 4.x`).toBeNull();
+        expect(absences, `${slug} declares globe's absence once`).toHaveLength(1);
+      }
+    }
+    if (vendorHasGlobe()) {
+      await expect(page.locator(".maplibregl-ctrl-globe-enabled")).toBeVisible();
+    }
+
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 
   test("camera-config pages: bounds frames the box, maxBounds constrains, interactive:false disables handlers", async ({

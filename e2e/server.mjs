@@ -17,6 +17,10 @@
  *  - `/vendor/maplibre-gl.css`     resolved from node_modules
  *  - `/dem/{z}/{x}/{y}.png`        a synthesised elevation tile, so the
  *                                  hillshade fixture loads without S3
+ *  - `/relief/{z}/{x}/{y}.png`     seamless synthetic mountains (terrarium),
+ *                                  so 3D terrain twins have relief to show
+ *  - `/landcover/{z}/{x}/{y}.png`  a raster coloured by the same relief,
+ *                                  standing in for satellite imagery
  *  - everything else               static from the repo root
  */
 import { createServer } from "node:http";
@@ -78,15 +82,86 @@ export const AttributionControl = gl.AttributionControl;
  * elevation 0 — flat, valid, and enough to prove the source is consumed.
  */
 function terrariumTile() {
+  return encodeRgbTile(() => [128, 0, 0]);
+}
+
+/**
+ * Synthetic mountains, as a pure function of world position (U15).
+ *
+ * @remarks
+ * The flat tile above proves a raster-dem source is consumed; 3D terrain
+ * needs relief to prove anything — a pitched camera over flat ground looks
+ * identical with terrain on or off. Elevation is computed from normalized
+ * Web-Mercator coordinates (0..1 across the world), never from tile-local
+ * pixels, so neighbouring tiles and zoom levels agree and the surface has
+ * no seams. Ridges repeat every ~20 km: at the gallery's zoom-12 alpine
+ * cameras that reads as a mountain range.
+ */
+function elevationAt(mx, my) {
+  const t = 2 * Math.PI;
+  return (
+    1400 +
+    900 * Math.sin(mx * t * 1900) * Math.cos(my * t * 1700) +
+    450 * Math.sin(mx * t * 5300 + my * t * 3100) +
+    200 * Math.cos(mx * t * 11900 - my * t * 9700)
+  );
+}
+
+/** Iterate a tile's pixels as normalized Web-Mercator coordinates. */
+function worldTile(z, x, y, pixel) {
+  const n = 2 ** z;
+  return encodeRgbTile((px, py) =>
+    pixel((x + (px + 0.5) / 256) / n, (y + (py + 0.5) / 256) / n)
+  );
+}
+
+/** A terrarium-encoded relief tile (decodes to {@link elevationAt}). */
+function reliefTile(z, x, y) {
+  return worldTile(z, x, y, (mx, my) => {
+    const v = elevationAt(mx, my) + 32768;
+    const r = Math.floor(v / 256);
+    const g = Math.floor(v) % 256;
+    const b = Math.floor((v - Math.floor(v)) * 256);
+    return [r, g, b];
+  });
+}
+
+/**
+ * A stand-in for satellite imagery over the same relief: valley green, rock
+ * brown, snow white by elevation. It gives the 3D twins something to drape
+ * over the terrain that visibly follows it.
+ */
+function landcoverTile(z, x, y) {
+  return worldTile(z, x, y, (mx, my) => {
+    // Low-frequency "continents", so a whole-world (globe) view reads as
+    // land and sea rather than aliased ridge noise.
+    const t = 2 * Math.PI;
+    const land =
+      Math.sin(mx * t * 3 + 1.2) * Math.cos(my * t * 2 - 0.4) +
+        0.35 * Math.sin(mx * t * 7 + my * t * 5) >
+      -0.25;
+    if (!land) return [62, 104, 150];
+    if (z < 6) return [112, 146, 88];
+    const e = elevationAt(mx, my);
+    if (e > 2400) return [244, 246, 248];
+    if (e > 1800) return [150, 128, 104];
+    if (e > 1100) return [92, 128, 70];
+    return [128, 160, 92];
+  });
+}
+
+/** Encode a 256x256 opaque RGBA PNG from a per-pixel colour function. */
+function encodeRgbTile(color) {
   const size = 256;
   const raw = Buffer.alloc((size * 4 + 1) * size);
   let o = 0;
   for (let y = 0; y < size; y++) {
     raw[o++] = 0; // PNG filter: none
     for (let x = 0; x < size; x++) {
-      raw[o++] = 128; // R
-      raw[o++] = 0; // G
-      raw[o++] = 0; // B
+      const [r, g, b] = color(x, y);
+      raw[o++] = r;
+      raw[o++] = g;
+      raw[o++] = b;
       raw[o++] = 255; // A
     }
   }
@@ -129,6 +204,7 @@ function crc32(buf) {
 }
 
 const DEM_TILE = terrariumTile();
+const SYNTHETIC_TILES = new Map();
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -155,6 +231,21 @@ const server = createServer(async (req, res) => {
     }
     if (path.startsWith("/dem/") && path.endsWith(".png")) {
       return send(200, DEM_TILE, TYPES[".png"]);
+    }
+    // U15 3D twins: seamless synthetic relief (terrarium) and a landcover
+    // raster coloured by the same elevation. Memoized — terrain re-requests
+    // tiles as the camera settles.
+    const synthetic = /^\/(relief|landcover)\/(\d+)\/(\d+)\/(\d+)\.png$/.exec(path);
+    if (synthetic) {
+      const [, kind, z, x, y] = synthetic;
+      const key = `${kind}/${z}/${x}/${y}`;
+      let tile = SYNTHETIC_TILES.get(key);
+      if (!tile) {
+        tile = (kind === "relief" ? reliefTile : landcoverTile)(+z, +x, +y);
+        if (SYNTHETIC_TILES.size > 2000) SYNTHETIC_TILES.clear();
+        SYNTHETIC_TILES.set(key, tile);
+      }
+      return send(200, tile, TYPES[".png"]);
     }
     if (path.startsWith("/glyphs/") && path.endsWith(".pbf")) {
       // An empty buffer is a valid (empty) glyphs protobuf message: symbol

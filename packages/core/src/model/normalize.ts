@@ -186,7 +186,8 @@ export function normalizeLayer(layer: Layer): LayerModel {
  * **The document root is enumerated, not partitioned**, so the never-drop
  * invariant is scoped to the objects above, not the root. A root key outside
  * the recognized set (`id`, `config`, `layers`, `sources`, `controls`,
- * `legend`, `className`, `style`, `state`, `parameters`, `markers`) does not reach the
+ * `legend`, `className`, `style`, `state`, `parameters`, `markers`, `images`, `terrain`, `sky`,
+ * `projection`) does not reach the
  * model — including `type` (structural) and `x-*` extensions, which the
  * extension registry reads from the raw parsed document, not from the model.
  * The emitter strips `x-*` regardless, so nothing is lost that should survive.
@@ -246,6 +247,11 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   // record normalizes away like an empty markers list.
   if (input.images !== undefined && Object.keys(input.images).length > 0)
     model.style.images = input.images;
+  // Style half (U15): the three style-spec root 3D properties compile
+  // verbatim, so they ride the model exactly as authored.
+  if (input.terrain !== undefined) model.style.terrain = input.terrain;
+  if (input.sky !== undefined) model.style.sky = input.sky;
+  if (input.projection !== undefined) model.style.projection = input.projection;
   if (input.className !== undefined || input.style !== undefined) {
     model.runtime.container = {};
     if (input.className !== undefined) model.runtime.container.className = input.className;
@@ -325,6 +331,9 @@ export function denormalizeOptions(model: MapModel): {
   parameters?: Record<string, unknown>;
   markers?: MapModel["runtime"]["markers"];
   images?: MapModel["style"]["images"];
+  terrain?: MapModel["style"]["terrain"];
+  sky?: MapModel["style"]["sky"];
+  projection?: MapModel["style"]["projection"];
 } {
   const options: {
     controls?: ControlsConfig;
@@ -333,6 +342,9 @@ export function denormalizeOptions(model: MapModel): {
     parameters?: Record<string, unknown>;
     markers?: MapModel["runtime"]["markers"];
     images?: MapModel["style"]["images"];
+    terrain?: MapModel["style"]["terrain"];
+    sky?: MapModel["style"]["sky"];
+    projection?: MapModel["style"]["projection"];
   } = {};
   if (model.runtime.controls !== undefined) options.controls = model.runtime.controls;
   if (model.runtime.legend !== undefined) options.legend = model.runtime.legend;
@@ -352,5 +364,11 @@ export function denormalizeOptions(model: MapModel): {
   // from `mapStyle` + addLayer, so images must be registered imperatively
   // (`map.addImage`) — they cannot ride in on the style object.
   if (model.style.images !== undefined) options.images = model.style.images;
+  // U15's 3D trio, for the same reason again: style-spec root properties
+  // that the live style (basemap + addLayer) never carries, so the renderer
+  // applies them imperatively (setTerrain / setSky / setProjection).
+  if (model.style.terrain !== undefined) options.terrain = model.style.terrain;
+  if (model.style.sky !== undefined) options.sky = model.style.sky;
+  if (model.style.projection !== undefined) options.projection = model.style.projection;
   return options;
 }
