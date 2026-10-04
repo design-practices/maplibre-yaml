@@ -650,6 +650,133 @@ layers: []
     });
   });
 
+  describe("slots + targeted teardown (U9, KTD9)", () => {
+    const YAML = `
+type: map
+id: slot-map
+config:
+  mapStyle: https://demotiles.maplibre.org/style.json
+  center: [0, 0]
+  zoom: 2
+layers: []
+`;
+    const tick = () => new Promise((r) => setTimeout(r, 10));
+
+    function build(children: string): MLMap {
+      const element = document.createElement("ml-map") as MLMap;
+      element.innerHTML = `<script type="text/yaml">${YAML}</script>${children}`;
+      return element;
+    }
+
+    // The mock renderer never mounts chrome; move a borrowed element into
+    // the map container the way the real renderer's corner system does.
+    function simulateMount(element: MLMap, child: Element) {
+      const corner = document.createElement("div");
+      corner.className = "ml-map-chrome ml-map-chrome-top-right";
+      element.querySelector(".ml-map-container")!.appendChild(corner);
+      corner.appendChild(child);
+    }
+
+    it("hands corner slots and the legend override to the renderer", async () => {
+      const element = build(
+        '<div slot="top-right" id="tr">tr</div>' +
+          '<div slot="bottom-left" id="bl">bl</div>' +
+          '<div slot="legend" id="lg">legend</div>'
+      );
+      document.body.appendChild(element);
+      await tick();
+
+      const options = (element.getRenderer() as any).options;
+      expect(
+        options.chrome.map((m: any) => [m.position, m.element.id])
+      ).toEqual([
+        ["top-right", "tr"],
+        ["bottom-left", "bl"],
+      ]);
+      expect(options.legendElement.id).toBe("lg");
+    });
+
+    it("warns about an unknown slot name and leaves the child in place", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const element = build('<div slot="middle" id="mid">?</div>');
+      document.body.appendChild(element);
+      await tick();
+
+      expect((element.getRenderer() as any).options.chrome).toEqual([]);
+      expect(element.querySelector("#mid")?.parentElement).toBe(element);
+      expect(warn.mock.calls.some((c) => String(c[0]).includes('unknown slot "middle"'))).toBe(true);
+      warn.mockRestore();
+    });
+
+    it("keeps the inline YAML script, so reload() re-renders from it", async () => {
+      const element = build("");
+      document.body.appendChild(element);
+      await tick();
+      const first = element.getRenderer();
+
+      expect(element.querySelector('script[type="text/yaml"]')).not.toBeNull();
+      await element.reload();
+      await tick();
+
+      const second = element.getRenderer();
+      expect(second).toBeTruthy();
+      expect(second).not.toBe(first);
+      expect((first as any).destroyed).toBe(true);
+    });
+
+    it("a mounted slot child survives reload and is handed to the new renderer", async () => {
+      const element = build('<div slot="top-right" id="tr">tr</div>');
+      document.body.appendChild(element);
+      await tick();
+      const child = element.querySelector("#tr")!;
+      simulateMount(element, child);
+
+      await element.reload();
+      await tick();
+
+      expect(child.isConnected).toBe(true);
+      const options = (element.getRenderer() as any).options;
+      expect(options.chrome[0].element).toBe(child);
+    });
+
+    it("slot children survive an error-then-reload cycle", async () => {
+      const element = build('<div slot="top-right" id="tr">tr</div>');
+      document.body.appendChild(element);
+      await tick();
+      const child = element.querySelector("#tr")!;
+      simulateMount(element, child);
+      const script = element.querySelector('script[type="text/yaml"]')!;
+
+      // Break the document: the error card replaces the map, not the host.
+      script.textContent = "type: map\nid: broken\n";
+      await element.reload();
+      await tick();
+      expect(element.querySelector(".ml-map-error")).not.toBeNull();
+      expect(element.querySelector(".ml-map-container")).toBeNull();
+      expect(child.parentElement).toBe(element);
+      expect(script.isConnected).toBe(true);
+
+      // Fix it and reload: the card goes, the map and the slot come back.
+      script.textContent = YAML;
+      await element.reload();
+      await tick();
+      expect(element.querySelector(".ml-map-error")).toBeNull();
+      expect(element.querySelector(".ml-map-container")).not.toBeNull();
+      expect((element.getRenderer() as any).options.chrome[0].element).toBe(child);
+    });
+
+    it("disconnect parks borrowed slot children back on the element", async () => {
+      const element = build('<div slot="top-left" id="tl">tl</div>');
+      document.body.appendChild(element);
+      await tick();
+      const child = element.querySelector("#tl")!;
+      simulateMount(element, child);
+
+      element.remove();
+      expect(child.parentElement).toBe(element);
+    });
+  });
+
   describe("mapReady (U2, R3)", () => {
     it("resolves with the map when ml-map:load fires", async () => {
       const element = document.createElement('ml-map') as MLMap;

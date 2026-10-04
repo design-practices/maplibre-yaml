@@ -10,6 +10,8 @@
  * - The ml-map element behaves as a block-level container
  * - The map fills the available space
  * - Proper display defaults for embedded elements
+ * - Slot children stay hidden until the renderer adopts them into a chrome
+ *   corner (they stop being direct children once mounted)
  */
 export const defaultStyles = `
   ml-map {
@@ -19,11 +21,20 @@ export const defaultStyles = `
     height: 400px;
   }
 
-  ml-map > div {
+  ml-map > .ml-map-container {
     width: 100%;
     height: 100%;
   }
 
+  ml-map > [slot="top-left"],
+  ml-map > [slot="top-right"],
+  ml-map > [slot="bottom-left"],
+  ml-map > [slot="bottom-right"],
+  ml-map > [slot="legend"] {
+    display: none;
+  }
+
+  ml-map script[type="text/yaml"],
   ml-map script[type="application/yaml"],
   ml-map script[type="application/json"] {
     display: none;
