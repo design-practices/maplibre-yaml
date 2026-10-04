@@ -33,6 +33,10 @@ vi.mock("maplibre-gl", () => {
       }
     }
 
+    off(event: string, callback: Function) {
+      this.events.get(event)?.delete(callback);
+    }
+
     remove() {}
   }
 
@@ -40,6 +44,7 @@ vi.mock("maplibre-gl", () => {
   const GeolocateControl = vi.fn(() => ({ type: "geolocate" }));
   const ScaleControl = vi.fn(() => ({ type: "scale" }));
   const FullscreenControl = vi.fn(() => ({ type: "fullscreen" }));
+  const AttributionControl = vi.fn(() => ({ type: "attribution" }));
   const Popup = vi.fn(() => ({
     setLngLat: vi.fn().mockReturnThis(),
     setHTML: vi.fn().mockReturnThis(),
@@ -54,6 +59,7 @@ vi.mock("maplibre-gl", () => {
       GeolocateControl,
       ScaleControl,
       FullscreenControl,
+      AttributionControl,
       Popup,
     },
     Map: MockMap,
@@ -61,6 +67,7 @@ vi.mock("maplibre-gl", () => {
     GeolocateControl,
     ScaleControl,
     FullscreenControl,
+    AttributionControl,
     Popup,
   };
 });

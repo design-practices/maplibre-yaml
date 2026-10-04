@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { YAMLParser } from "../../src/parser/yaml-parser";
 import { MapRenderer } from "../../src/renderer/map-renderer";
+import { AttributionControl } from "maplibre-gl";
 
 // Mock maplibre-gl before imports
 vi.mock("maplibre-gl", () => {
@@ -429,7 +430,9 @@ pages:
       await new Promise((resolve) => renderer.on("load", resolve));
 
       const map = renderer.getMap() as any;
-      expect(map.addControl).toHaveBeenCalledTimes(1);
+      // The renderer's stand-in for the built-in attribution control, plus
+      // the configured navigation control.
+      expect(map.addControl).toHaveBeenCalledTimes(2);
 
       renderer.destroy();
     });
@@ -445,7 +448,8 @@ pages:
       await new Promise((resolve) => renderer.on("load", resolve));
 
       const map = renderer.getMap() as any;
-      expect(map.addControl).toHaveBeenCalledTimes(1);
+      // Attribution stand-in + one navigation control, not two.
+      expect(map.addControl).toHaveBeenCalledTimes(2);
 
       renderer.destroy();
     });
@@ -465,7 +469,8 @@ pages:
       renderer.destroy();
     });
 
-    it("leaves the default attribution enabled when no attribution control is configured", async () => {
+    it("replaces the built-in attribution with its own control when none is configured", async () => {
+      vi.mocked(AttributionControl).mockClear();
       const renderer = new MapRenderer(container, baseConfig, [], {
         controls: { navigation: true },
       });
@@ -473,12 +478,89 @@ pages:
       await new Promise((resolve) => renderer.on("load", resolve));
 
       const map = renderer.getMap() as any;
-      // The key must be ABSENT, not present-and-undefined. MapLibre merges
-      // options over its defaults, so passing `attributionControl: undefined`
-      // overwrites the default and the map renders no attribution at all.
-      // Asserting `toBeUndefined()` here cannot tell those apart and passed
-      // while attribution was silently missing from every map.
-      expect("attributionControl" in map.options).toBe(false);
+      // The built-in is always off at construction: MapLibre would register
+      // its listeners before the attribution guard's (GHSA-jrc7-96c5-q579).
+      expect(map.options.attributionControl).toBe(false);
+      // ...and the renderer adds the equivalent itself, with no options, so
+      // each maplibre-gl major applies its own defaults. Never zero controls:
+      // a map with no attribution is a licensing problem.
+      expect(AttributionControl).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(AttributionControl).mock.calls[0]).toEqual([]);
+
+      renderer.destroy();
+    });
+
+    it("honors an explicit attributionControl: false", async () => {
+      vi.mocked(AttributionControl).mockClear();
+      const renderer = new MapRenderer(
+        container,
+        { ...baseConfig, attributionControl: false },
+        []
+      );
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+      expect(AttributionControl).not.toHaveBeenCalled();
+
+      renderer.destroy();
+    });
+
+    it("sanitizes customAttribution from an attributionControl options object", async () => {
+      vi.mocked(AttributionControl).mockClear();
+      const renderer = new MapRenderer(
+        container,
+        {
+          ...baseConfig,
+          // v2 `runtime.map` passes MapLibre options through, objects included.
+          attributionControl: {
+            compact: false,
+            customAttribution: ['<b>Bold</b> <a href="javascript:x()">link</a>'],
+          },
+        } as any,
+        []
+      );
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+      expect(vi.mocked(AttributionControl).mock.calls[0]?.[0]).toEqual({
+        compact: false,
+        customAttribution: ["&lt;b&gt;Bold&lt;/b&gt; link"],
+      });
+
+      renderer.destroy();
+    });
+
+    it("sanitizes a top-level customAttribution (maplibre-gl 3 spelling)", async () => {
+      vi.mocked(AttributionControl).mockClear();
+      const renderer = new MapRenderer(
+        container,
+        { ...baseConfig, customAttribution: "<i>x</i>" } as any,
+        []
+      );
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+      expect(vi.mocked(AttributionControl).mock.calls[0]?.[0]).toEqual({
+        customAttribution: "&lt;i&gt;x&lt;/i&gt;",
+      });
+
+      renderer.destroy();
+    });
+
+    it("sanitizes source attribution in an inline mapStyle before MapLibre sees it", async () => {
+      const renderer = new MapRenderer(
+        container,
+        {
+          ...baseConfig,
+          mapStyle: {
+            version: 8,
+            sources: { base: { type: "vector", tiles: [], attribution: "<b>x</b>" } },
+            layers: [],
+          },
+        } as any,
+        []
+      );
+
+      await new Promise((resolve) => renderer.on("load", resolve));
+      const map = renderer.getMap() as any;
+      expect(map.options.style.sources.base.attribution).toBe("&lt;b&gt;x&lt;/b&gt;");
 
       renderer.destroy();
     });
@@ -579,7 +661,8 @@ pages:
       await new Promise((resolve) => renderer.on("load", resolve));
 
       const map = renderer.getMap() as any;
-      expect(map.addControl).toHaveBeenCalledTimes(1);
+      // Attribution stand-in + navigation.
+      expect(map.addControl).toHaveBeenCalledTimes(2);
 
       const legendEl = container.querySelector(".ml-map-legend");
       expect(legendEl).toBeTruthy();
