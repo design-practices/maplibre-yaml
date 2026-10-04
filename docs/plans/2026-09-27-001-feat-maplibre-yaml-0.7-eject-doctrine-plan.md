@@ -444,3 +444,15 @@ U1–U11, U13′ and U14–U18 shipped and green. KTD7 is met per D-A2 (real GPU
 - **D-A8. Library-side attribution sanitizing, shipped as a 0.6.x maintenance patch and in 0.7** (ml-rfk, under ml-2l7).
   - The exposure: maplibre's AttributionControl is the only caller of the vulnerable sanitizer, and documents forward `attribution:` text to it. Untrusted documents therefore reach it on every currently supported version.
   - The fix: maplibre-yaml sanitizes document attribution itself (plain text + safe `<a href>`), at runtime and in emit.
+
+## Amendment A3 (2026-10-04): integrations are first-class release surface, ratified by Mario
+
+**Why:** the integration audits (#119 vanilla JS, #124 frameworks, #125 Astro) found many published paths that didn't work. Examples include the JS-API snippet, `<Map src>`, Scrollytelling, `astro dev` for npm installs, and React 18 config objects. The docs' examples were never run.
+
+- **D-A9.** Astro 6 and 7 are supported in 0.7 (**U20**, ml-vw4.13). The peer range widens only alongside a CI leg per supported Astro major.
+- **D-A10.** React typings ship from core in 0.7 (**U21**, ml-vw4.14; ml-f84).
+- **D-A11. Real example apps are release surface.**
+  - `examples/astro` and `examples/react` are real apps using the documented patterns.
+  - CI builds them and drives them in a browser on every supported major: Astro 4–7, React 18 + 19.
+  - A broken integration path fails CI, the same way the gallery twins guard the format.
+  - Docs snippets for these integrations are extracted from, or checked against, the example apps wherever practical.
