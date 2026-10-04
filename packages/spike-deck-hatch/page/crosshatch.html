@@ -59,11 +59,16 @@
 
     const q = new URLSearchParams(location.search);
     const legacy = { crosshatch: "deck", none: "static" };
-    const route = q.get("route") ?? legacy[q.get("fx")] ?? "deck";
+    // doc = crosshatch | blueprint. Blueprint is the effects-API example
+    // effect; only route 2 (custom) implements it, plus its static fallback.
+    const docName = q.get("doc") === "blueprint" ? "blueprint" : "crosshatch";
+    const ROUTES = docName === "blueprint" ? ["static", "custom"] : ["static", "deck", "custom", "post"];
+    let route = q.get("route") ?? legacy[q.get("fx")] ?? (docName === "blueprint" ? "custom" : "deck");
+    if (!ROUTES.includes(route)) route = "custom";
     const fx = route === "static" ? "none" : "crosshatch";
     const tiles = q.get("tiles") ?? "live";
 
-    const doc = spike.parse(await (await fetch("./crosshatch.yaml")).text());
+    const doc = spike.parse(await (await fetch(`./${docName}.yaml`)).text());
     if (tiles === "fixture") {
       // Absolute: tile fetches run in MapLibre's worker (relative URLs fail).
       delete doc.sources.omt.url;
@@ -138,9 +143,17 @@
       u.set("route", r); u.delete("fx");
       return `<a href="?${u}" class="${r === route ? "on" : ""}">${r}</a>`;
     };
+    const docLink = (d) => {
+      const u = new URLSearchParams(location.search);
+      u.set("doc", d); u.delete("route"); u.delete("fx");
+      return `<a href="?${u}" class="${d === docName ? "on" : ""}">${d}</a>`;
+    };
     hud.innerHTML =
-      `route: ${["static", "deck", "custom", "post"].map(link).join("")}` +
-      ` · <a href="/e2e/generated/spike-crosshatch/index.html" title="the document ejected to plain maplibre-gl (run the demo script once)">ejected</a>` +
+      `style: ${["crosshatch", "blueprint"].map(docLink).join("")}<br>` +
+      `route: ${ROUTES.map(link).join("")}` +
+      (docName === "crosshatch"
+        ? ` · <a href="/e2e/generated/spike-crosshatch/index.html" title="the document ejected to plain maplibre-gl (run the demo script once)">ejected</a>`
+        : "") +
       `<br><span class="fps">– fps</span> · <label><input type="checkbox" id="orbit"> orbit</label>` +
       ` · <button id="tour" type="button">tour</button>` +
       ` · <span id="gpu"></span>`;

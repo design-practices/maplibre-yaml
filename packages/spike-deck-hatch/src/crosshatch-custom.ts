@@ -57,11 +57,15 @@ precision highp float;
 layout(location = 0) in vec3 a_pos;   // tile units x, y; metres z
 layout(location = 1) in vec4 a_attr;  // uv.x, uv.y, diffuse, roof
 uniform mat4 u_matrix;
+uniform float u_mpu;   // metres per tile unit for this tile (world-scale effects)
+uniform float u_zex;   // the height exaggeration the matrix applies (so world z matches what's drawn)
 invariant gl_Position; // the depth prepass and the hatch pass must agree exactly
 out vec2 vHatchUV;
 out float vHatchDiffuse;
 out float vHatchRoof;
+out vec3 vWorld;       // metres: x, y within the tile; z above ground (as drawn)
 void main() {
+  vWorld = vec3(a_pos.xy * u_mpu, a_pos.z * u_zex);
   vHatchUV = a_attr.xy;
   vHatchDiffuse = a_attr.z;
   vHatchRoof = a_attr.w;
@@ -121,6 +125,53 @@ void main() {
   fragColor = vec4(mix(mix(INK, PAPER, t), INK, line * 0.85), 1.0);
 }`;
 
+/**
+ * Example user effect (the effects-API proposal's "blueprint"): a metre-scaled
+ * grid on every face, faint diffuse shading, glowing edges. The grid frame is
+ * per face from the world position: roofs use (x, y); walls use (along-wall,
+ * height), the wall's direction taken from the screen-space derivative normal
+ * — so lines never stretch, whatever the face's size.
+ */
+const FS_BLUEPRINT = `#version 300 es
+precision highp float;
+in vec2 vHatchUV;
+in float vHatchDiffuse;
+in float vHatchRoof;
+in vec3 vWorld;
+uniform vec3 u_line;
+uniform vec3 u_ground;
+uniform float u_grid;   // metres between grid lines
+uniform float u_gain;
+out vec4 fragColor;
+float gridLine(vec2 p) {
+  vec2 w = max(fwidth(p), vec2(1e-5));
+  vec2 g = abs(fract(p - 0.5) - 0.5) / w;
+  return 1.0 - clamp(min(g.x, g.y), 0.0, 1.0);
+}
+void main() {
+  vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+  vec2 q;
+  if (vHatchRoof > 0.5) q = vWorld.xy;
+  else {
+    vec2 t = normalize(vec2(-n.y, n.x) + vec2(1e-6, 0.0));
+    q = vec2(dot(vWorld.xy, t), vWorld.z);
+  }
+  q /= u_grid;
+  float dens = max(length(fwidth(q.x)), length(fwidth(q.y)));
+  float g = gridLine(q) * (1.0 - smoothstep(0.12, 0.35, dens)); // fade when lines get closer than ~3 px
+  vec2 uv = vHatchUV;
+  vec2 fw = max(fwidth(uv), vec2(1e-5));
+  float px = min(min(uv.x, 1.0 - uv.x) / fw.x, min(uv.y, 1.0 - uv.y) / fw.y);
+  float wall = 1.0 - vHatchRoof;
+  float edge = wall * (1.0 - smoothstep(0.5, 1.6, px));
+  float glow = wall * exp(-px * 0.18) * 0.35;
+  float shade = 0.55 + 0.45 * clamp(u_gain * vHatchDiffuse, 0.0, 1.0);
+  vec3 c = u_ground * shade;
+  c = mix(c, u_line, glow);
+  c = mix(c, u_line, max(g * 0.45, edge * 0.95));
+  fragColor = vec4(c, 1.0);
+}`;
+
 const FS_DEPTH = `#version 300 es
 precision highp float;
 out vec4 fragColor;
@@ -148,7 +199,7 @@ interface GpuMesh {
 
 interface Doc {
   sources: Record<string, { tiles?: string[] }>;
-  layers: Array<{ id: string; type: string; source?: string; "source-layer"?: string; minzoom?: number; layout?: Record<string, unknown>; "x-effect"?: { type: string; gain?: number } }>;
+  layers: Array<{ id: string; type: string; source?: string; "source-layer"?: string; minzoom?: number; layout?: Record<string, unknown>; "x-effect"?: { type: string; gain?: number; [k: string]: unknown } }>;
 }
 
 export interface CustomHandle {
@@ -207,10 +258,20 @@ export async function attachCrosshatchCustom(
     parse?: "worker" | "main";
   }
 ): Promise<CustomHandle> {
-  const layer = doc.layers.find((l) => l["x-effect"]?.type === "crosshatch-buildings");
+  const EFFECTS = ["crosshatch-buildings", "blueprint"];
+  const layer = doc.layers.find((l) => EFFECTS.includes(l["x-effect"]?.type ?? ""));
   if (!layer || layer.type !== "fill-extrusion" || !layer.source || !layer["source-layer"]) {
-    throw new Error("[crosshatch-custom] needs a fill-extrusion crosshatch-buildings layer on a vector source-layer");
+    throw new Error(`[crosshatch-custom] needs a fill-extrusion layer with x-effect type ${EFFECTS.join(" | ")} on a vector source-layer`);
   }
+  const fx = layer["x-effect"] as { type: string; gain?: number; line?: string; ground?: string; grid?: number; exaggerate?: boolean };
+  const blueprint = fx.type === "blueprint";
+  // Tangram's height exaggeration is part of the crosshatch look, not of the
+  // backend: blueprint draws true heights (its static layer does too).
+  const exaggerate = fx.exaggerate ?? !blueprint;
+  const hex = (h: string | undefined, d: string) => {
+    const n = parseInt((h ?? d).replace("#", ""), 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255] as const;
+  };
   const sourceId = layer.source;
   const sourceLayer = layer["source-layer"];
   const minzoom = layer.minzoom ?? 0;
@@ -262,6 +323,8 @@ export async function attachCrosshatchCustom(
   const cull = opts.cull ?? true;
   const prepass = opts.prepass ?? true;
   let atlasTex: WebGLTexture | null = null;
+  let uMpu: WebGLUniformLocation | null = null, uZex: WebGLUniformLocation | null = null, uDepthZex: WebGLUniformLocation | null = null;
+  let uLine: WebGLUniformLocation | null = null, uGround: WebGLUniformLocation | null = null, uGrid: WebGLUniformLocation | null = null;
   let uMatrix: WebGLUniformLocation, uGain: WebGLUniformLocation, uAtlas: WebGLUniformLocation, uMinorLod: WebGLUniformLocation | null;
   const filter = opts.filter ?? "minor";
   const anisotropy = typeof filter === "number" ? filter : 1;
@@ -323,13 +386,19 @@ export async function attachCrosshatchCustom(
     return prog;
   };
   const init = () => {
-    program = link(opts.flat ? FS_FLAT : FS);
+    program = link(opts.flat ? FS_FLAT : blueprint ? FS_BLUEPRINT : FS);
     depthProgram = link(FS_DEPTH);
     uDepthMatrix = gl.getUniformLocation(depthProgram, "u_matrix")!;
     uMatrix = gl.getUniformLocation(program, "u_matrix")!;
     uGain = gl.getUniformLocation(program, "u_gain")!;
     uAtlas = gl.getUniformLocation(program, "hatchAtlas")!;
     uMinorLod = gl.getUniformLocation(program, "u_minorLod");
+    uMpu = gl.getUniformLocation(program, "u_mpu");
+    uZex = gl.getUniformLocation(program, "u_zex");
+    uDepthZex = gl.getUniformLocation(depthProgram, "u_zex");
+    uLine = gl.getUniformLocation(program, "u_line");
+    uGround = gl.getUniformLocation(program, "u_ground");
+    uGrid = gl.getUniformLocation(program, "u_grid");
     atlasTex = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, atlasTex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
@@ -365,7 +434,9 @@ export async function attachCrosshatchCustom(
 
       // metres → mercator units at the map centre (what fill-extrusion uses), × Tangram's exaggeration
       const lat = (map.getCenter().lat * Math.PI) / 180;
-      const zScale = heightExaggeration(map.getZoom()) / (EARTH_CIRCUMFERENCE * Math.cos(lat));
+      const zex = exaggerate ? heightExaggeration(map.getZoom()) : 1;
+      const zScale = zex / (EARTH_CIRCUMFERENCE * Math.cos(lat));
+      const groundM = EARTH_CIRCUMFERENCE * Math.cos(lat); // metres per mercator unit at this latitude
       const main = args.defaultProjectionData.mainMatrix as unknown as ArrayLike<number>;
 
       if (cull) { gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.frontFace(gl.CW); }
@@ -386,7 +457,7 @@ export async function attachCrosshatchCustom(
         stats.buildMs += r.ms;
       }
 
-      const draws: Array<{ mesh: GpuMesh; matrix: Float32Array }> = [];
+      const draws: Array<{ mesh: GpuMesh; matrix: Float32Array; mpu: number }> = [];
       const drawn = new Set<string>();
       const pushDraw = (mesh: GpuMesh, z: number, x: number, y: number, wrap: number) => {
         const dk = `${z}/${x}/${y}@${wrap}`;
@@ -400,7 +471,7 @@ export async function attachCrosshatchCustom(
         T[12] = (x + wrap * n) / n;
         T[13] = y / n;
         mul(M, main, T);
-        draws.push({ mesh, matrix: Float32Array.from(M) });
+        draws.push({ mesh, matrix: Float32Array.from(M), mpu: groundM / (n * mesh.extent) });
       };
       /**
        * While a tile's mesh is building, draw what MapLibre would: the
@@ -478,8 +549,15 @@ export async function attachCrosshatchCustom(
       gl.uniform1i(uAtlas, 0);
       gl.uniform1f(uGain, gain);
       if (uMinorLod) gl.uniform1f(uMinorLod, filter === "minor" ? 1 : 0);
+      if (uZex) gl.uniform1f(uZex, zex);
+      if (blueprint) {
+        gl.uniform3fv(uLine, hex(fx.line, "#cfeeff"));
+        gl.uniform3fv(uGround, hex(fx.ground, "#1a56b0"));
+        gl.uniform1f(uGrid, fx.grid ?? 4);
+      }
       for (const d of draws) {
         gl.uniformMatrix4fv(uMatrix, false, d.matrix);
+        if (uMpu) gl.uniform1f(uMpu, d.mpu);
         gl.bindVertexArray(d.mesh.vao);
         gl.drawElements(gl.TRIANGLES, d.mesh.count, gl.UNSIGNED_INT, 0);
       }

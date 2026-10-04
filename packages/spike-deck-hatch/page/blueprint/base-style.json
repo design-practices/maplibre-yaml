@@ -1,0 +1,8 @@
+{
+  "version": 8,
+  "name": "blueprint-base",
+  "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+  "sources": {},
+  "layers": [],
+  "_comment": "Empty base: the blueprint document owns every layer. Only here for glyphs."
+}
