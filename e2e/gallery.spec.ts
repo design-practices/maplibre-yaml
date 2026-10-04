@@ -294,9 +294,15 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
     await expect(page.locator(".maplibregl-ctrl-terrain-enabled")).toBeVisible();
     await page.waitForFunction(
       () => {
+        // Relief, not an absolute height: 4.x reports elevation relative to
+        // the camera target, 5.x above sea level — the spread is the same.
         const map = (document.getElementById("map") as any).getMap();
-        const e = map.queryTerrainElevation?.(map.getCenter());
-        return typeof e === "number" && e > 100;
+        const c = map.getCenter();
+        const samples = [-0.06, -0.03, 0, 0.03, 0.06].map((d) =>
+          map.queryTerrainElevation?.([c.lng + d, c.lat + d / 2])
+        );
+        if (!samples.every((e: unknown) => typeof e === "number")) return false;
+        return Math.max(...samples) - Math.min(...samples) > 100;
       },
       undefined,
       { timeout: 30_000 }

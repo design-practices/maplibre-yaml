@@ -62,8 +62,10 @@ export const AttributionControl: typeof maplibre.AttributionControl =
  * maplibre-gl 5.0.0, so on a 4.x runtime the binding is absent and the
  * controls manager declares that absence instead of constructing `undefined`.
  */
-export const GlobeControl: typeof maplibre.GlobeControl | undefined = (
-  gl as { GlobeControl?: typeof maplibre.GlobeControl }
+// Typed structurally, not as `typeof maplibre.GlobeControl`: the CI matrix
+// type-checks against the 4.x declarations too, which have no such export.
+export const GlobeControl: (new () => maplibre.IControl) | undefined = (
+  gl as unknown as { GlobeControl?: new () => maplibre.IControl }
 ).GlobeControl;
 export const TerrainControl: typeof maplibre.TerrainControl | undefined = (
   gl as { TerrainControl?: typeof maplibre.TerrainControl }
