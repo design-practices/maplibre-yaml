@@ -287,6 +287,32 @@ validation and agent workflows.
 
 ---
 
+### bake
+
+Regenerate the pattern images a [Mapzen-classic](/examples/gallery/crosshatch/)
+preset references. The classics are pure style spec, so their whole look
+rides on `*-pattern` images; `bake` derives them reproducibly instead of
+leaving them as unexplained binaries.
+
+```bash
+maplibre-yaml bake [preset] --out <dir>
+```
+
+| Preset | Writes | From |
+| ------ | ------ | ---- |
+| `crosshatch` | `earth.png`, `landuse.png`, `water.png`, `building-fallback.png` | Tangram's MIT-licensed crosshatch textures, vendored unmodified in the CLI package (`assets/tangram/`, with provenance) |
+| `blueprint` | `grid.png` | A generated drafting grid |
+
+With no preset, `bake` lists them. The docs gallery's committed images are
+exactly this output — a test pins them pixel for pixel:
+
+```bash
+maplibre-yaml bake crosshatch --out docs/public/classics/crosshatch
+maplibre-yaml bake blueprint --out docs/public/classics/blueprint
+```
+
+---
+
 ## Configuration File
 
 Create `.maplibre-yaml.config.json` in your project root to set default options:

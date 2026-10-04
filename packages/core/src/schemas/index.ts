@@ -160,6 +160,7 @@ export {
   MarkersSchema,
   ImageConfigSchema,
   ImagesSchema,
+  LightSchema,
   ParametersSchema,
 } from "./map.schema";
 export type {
@@ -175,6 +176,7 @@ export type {
   MarkerConfig,
   ImageConfig,
   ImagesConfig,
+  LightConfig,
 } from "./map.schema";
 
 // Format-v2 map schema (U2 — validation only)

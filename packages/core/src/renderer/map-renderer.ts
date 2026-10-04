@@ -21,7 +21,7 @@ import {
   type ParamsPanelConfig,
   type ParameterMeta,
 } from './params-builder';
-import type { ImageConfig } from '../schemas/map.schema';
+import type { ImageConfig, LightConfig } from '../schemas/map.schema';
 import type { CapabilityPolicy } from "../capabilities.js";
 import {
   denormalizeConfig,
@@ -92,6 +92,12 @@ export interface MapRendererOptions {
    * added, so `icon-image`/`*-pattern` references resolve on first render.
    */
   images?: Record<string, ImageConfig>;
+  /**
+   * The style-spec `light` (U10′), applied with `map.setLight` on load —
+   * the live style is built from `mapStyle` + addLayer, so the document's
+   * light cannot ride in on the style object.
+   */
+  light?: LightConfig;
   /**
    * `parameters:` presentation metadata — rendered as the params panel
    * (U8), each control writing its state key via `setGlobalStateProperty`.
@@ -312,6 +318,17 @@ export class MapRenderer {
               'maplibre-gl has no setGlobalStateProperty (needs >= 5.6); ' +
               '`global-state` expressions will read null.',
           );
+        }
+      }
+
+      // The document's light shades fill-extrusion faces from the first
+      // frame. A rejected light (setLight validates against the spec) warns
+      // and the document keeps rendering under the basemap's light.
+      if (options.light) {
+        try {
+          this.map.setLight(options.light as never);
+        } catch (error) {
+          console.warn('[maplibre-yaml] `light:` could not be applied:', error);
         }
       }
 

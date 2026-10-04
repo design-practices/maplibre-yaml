@@ -573,7 +573,7 @@ export const LineLayerSchema = BaseLayerPropertiesSchema.extend({
       "line-offset": NumberOrExpressionSchema.optional(),
       "line-blur": NumberOrExpressionSchema.optional(),
       "line-dasharray": z.array(z.number()).optional(),
-      "line-pattern": z.string().optional(),
+      "line-pattern": z.union([z.string(), ExpressionSchema]).optional(),
       "line-gradient": ColorOrExpressionSchema.optional(),
       "line-translate": z.tuple([z.number(), z.number()]).optional(),
       "line-translate-anchor": z.enum(["map", "viewport"]).optional(),
@@ -628,7 +628,7 @@ export const FillLayerSchema = BaseLayerPropertiesSchema.extend({
       "fill-outline-color": ColorOrExpressionSchema.optional(),
       "fill-translate": z.tuple([z.number(), z.number()]).optional(),
       "fill-translate-anchor": z.enum(["map", "viewport"]).optional(),
-      "fill-pattern": z.string().optional(),
+      "fill-pattern": z.union([z.string(), ExpressionSchema]).optional(),
     })
     .passthrough()
     .optional()
@@ -867,7 +867,7 @@ export const FillExtrusionLayerSchema = BaseLayerPropertiesSchema.extend({
       "fill-extrusion-color": ColorOrExpressionSchema.optional(),
       "fill-extrusion-translate": z.tuple([z.number(), z.number()]).optional(),
       "fill-extrusion-translate-anchor": z.enum(["map", "viewport"]).optional(),
-      "fill-extrusion-pattern": z.string().optional(),
+      "fill-extrusion-pattern": z.union([z.string(), ExpressionSchema]).optional(),
       "fill-extrusion-height": NumberOrExpressionSchema.optional(),
       "fill-extrusion-base": NumberOrExpressionSchema.optional(),
       "fill-extrusion-vertical-gradient": z.boolean().optional(),
@@ -1006,7 +1006,7 @@ export const BackgroundLayerSchema = z
     paint: z
       .object({
         "background-color": ColorOrExpressionSchema.optional(),
-        "background-pattern": z.string().optional(),
+        "background-pattern": z.union([z.string(), ExpressionSchema]).optional(),
         "background-opacity": NumberOrExpressionSchema.optional(),
       })
       .passthrough()
