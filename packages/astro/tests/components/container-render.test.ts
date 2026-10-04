@@ -11,7 +11,7 @@
  * (Enabled by routing vitest through `getViteConfig`; see vitest.config.ts.)
  */
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import Map from "../../src/components/Map.astro";
 import FullPageMap from "../../src/components/FullPageMap.astro";
@@ -111,6 +111,21 @@ describe("FullPageMap", () => {
       props: { config: MAP_CONFIG, showControls: false },
     });
     expect(html).not.toContain('slot="top-right"');
+  });
+
+  it("showLegend with no legend entries warns at build time (no empty box)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await container.renderToString(FullPageMap as any, { props: { config: MAP_CONFIG, showLegend: true } });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("no layer declares `legend:`"))).toBe(true);
+    warn.mockClear();
+
+    const withEntries = {
+      ...MAP_CONFIG,
+      layers: [{ ...MAP_CONFIG.layers[0], legend: { label: "Points", color: "#f00" } }],
+    };
+    await container.renderToString(FullPageMap as any, { props: { config: withEntries, showLegend: true } });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("no layer declares"))).toBe(false);
+    warn.mockRestore();
   });
 
   it("showLegend adds core's legend at legendPosition when the document has none", async () => {

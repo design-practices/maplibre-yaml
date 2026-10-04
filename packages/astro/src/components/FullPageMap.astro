@@ -39,12 +39,8 @@
  * ---
  * import { FullPageMap } from '@maplibre-yaml/astro';
  * ---
- * <FullPageMap
- *   src="/configs/dashboard.yaml"
- *   showControls
- *   showLegend
- *   legendPosition="bottom-left"
- * />
+ * <!-- With `src`, declare `legend:` in the YAML itself; showLegend needs `config`. -->
+ * <FullPageMap src="/configs/dashboard.yaml" showControls />
  * ```
  *
  * @example Minimal full-page map
@@ -102,6 +98,23 @@ if (showLegend && !config && src) {
 }
 const effectiveConfig =
   config && showLegend ? withDefaultLegend(config as Record<string, any>) : config;
+
+// A legend's entries come from layers' `legend:` fields (or the block's own
+// `items:`). Core renders no box when there are none; say so at build time
+// rather than leave the author wondering where the legend went.
+if (showLegend && effectiveConfig) {
+  const doc = effectiveConfig as Record<string, any>;
+  const legend = doc.version === 2 ? doc.runtime?.legend : doc.legend;
+  const layers: any[] = Array.isArray(doc.layers) ? doc.layers : [];
+  const hasEntries =
+    (Array.isArray(legend?.items) && legend.items.length > 0) ||
+    layers.some((l) => l?.legend || l?.runtime?.legend);
+  if (!hasEntries) {
+    console.warn(
+      `FullPageMap: showLegend is set but no layer declares \`legend:\` (and the legend has no \`items:\`) — no legend will show. Add \`legend: { label, color }\` to the layers that should appear.`
+    );
+  }
+}
 
 // See the template comment on why this is spread rather than written inline.
 const controlsSlot = { slot: "top-right" };

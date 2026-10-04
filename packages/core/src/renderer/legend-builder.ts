@@ -24,6 +24,20 @@ export class LegendBuilder {
 
     const items = config?.items || this.extractItems(layers);
 
+    // Nothing to show → no box. An empty "Legend" panel reads as broken chrome;
+    // say what's missing instead (entries come from layers' `legend:` fields
+    // or the block's own `items:`).
+    if (items.length === 0) {
+      el.innerHTML = "";
+      el.hidden = true;
+      console.warn(
+        "[maplibre-yaml] legend: has no entries — add `legend:` to the layers that " +
+          "should appear, or list `items:` on the legend block. No legend is shown."
+      );
+      return;
+    }
+    el.hidden = false;
+
     // <details>/<summary> makes `collapsed:` real (the schema field existed
     // with no implementation — ml-tfd.8 contract audit): the title is the
     // toggle, `collapsed: true` starts closed, default stays fully visible.
