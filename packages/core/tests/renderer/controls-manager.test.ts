@@ -171,6 +171,35 @@ describe("ControlsManager", () => {
     });
   });
 
+  describe("attribution sanitizing (GHSA-jrc7-96c5-q579)", () => {
+    it("sanitizes customAttribution before the control is built", () => {
+      manager.addControls({
+        attribution: {
+          customAttribution: ['<b>x</b>', '<a href="javascript:y()">z</a>'],
+        },
+      } as any);
+
+      expect(mockMap.addControl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            customAttribution: ["&lt;b&gt;x&lt;/b&gt;", "z"],
+          }),
+        }),
+        "bottom-right"
+      );
+    });
+
+    it("runs the beforeAttribution hook ahead of adding the control", () => {
+      const order: string[] = [];
+      const hooked = new ControlsManager(
+        { ...mockMap, addControl: vi.fn(() => order.push("add")) } as any,
+        { beforeAttribution: () => order.push("scrub") }
+      );
+      hooked.addControls({ attribution: true } as any);
+      expect(order).toEqual(["scrub", "add"]);
+    });
+  });
+
   describe("removeAllControls", () => {
     it("removes all added controls", () => {
       const config = {

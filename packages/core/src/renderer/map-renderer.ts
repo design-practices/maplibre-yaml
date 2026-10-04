@@ -4,7 +4,9 @@
  */
 
 import type { LngLat } from 'maplibre-gl';
-import { Map as MapLibreMap, runtimeVersion } from './maplibre-interop';
+import { Map as MapLibreMap, AttributionControl, runtimeVersion } from './maplibre-interop';
+import { installAttributionGuard, type AttributionGuard } from './attribution-guard';
+import { sanitizeCustomAttribution, sanitizeSourcesAttribution } from '../utils/attribution';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
@@ -236,6 +238,7 @@ export class MapRenderer {
   /** Layer types this runtime cannot render, warned once each (U14). */
   private warnedUnsupportedTypes = new Set<string>();
   private controlsManager: ControlsManager;
+  private attributionGuard: AttributionGuard;
   private eventListeners: Map<string, Set<Function>>;
   private isLoaded: boolean;
   private containerEl: HTMLElement | null;
@@ -326,6 +329,15 @@ export class MapRenderer {
       if (value !== undefined) contextAttributes[key] = value;
     }
 
+    // An inline style object's source attributions are document-authored;
+    // sanitize them before MapLibre ever holds them (GHSA-jrc7-96c5-q579, see
+    // utils/attribution.ts). A style URL is covered by the attribution guard.
+    let mapStyle: unknown = config.mapStyle;
+    if (mapStyle && typeof mapStyle === 'object' && 'sources' in mapStyle) {
+      const styleObject = mapStyle as Record<string, unknown>;
+      const sources = sanitizeSourcesAttribution(styleObject['sources']);
+      if (sources !== styleObject['sources']) mapStyle = { ...styleObject, sources };
+    }
     // `fitTo` (U14) is ours, not a MapLibre option: strip it from what the
     // constructor sees. Inline data resolves to bounds NOW, so the map is
     // constructed already framed (MapLibre's own `bounds` option — no
@@ -352,22 +364,55 @@ export class MapRenderer {
         ? { canvasContextAttributes: contextAttributes }
         : {}),
       container: typeof container === 'string' ? container : container,
-      style: config.mapStyle as any,
+      style: mapStyle as any,
       center: config.center as [number, number],
       zoom: config.zoom,
       pitch: config.pitch ?? 0,
       bearing: config.bearing ?? 0,
       interactive: config.interactive ?? true,
-      // Set ONLY when we need to suppress the built-in control. Passing the key
-      // with an undefined value is not the same as omitting it: MapLibre merges
-      // options over its defaults, so `attributionControl: undefined` overwrites
-      // the default and the map ends up with no attribution at all — a
-      // licensing problem, not just a cosmetic one. When unconfigured, the key
-      // comes from `...config` alone (i.e. only if the author set it).
-      ...(attributionControlConfigured ? { attributionControl: false } : {}),
+      // The built-in control is ALWAYS disabled at construction; the renderer
+      // adds the equivalent control itself just below. MapLibre adds its
+      // built-in inside the constructor, which registers the control's data
+      // listeners before any of ours could be — and the attribution guard has
+      // to run first (see attribution-guard.ts).
+      attributionControl: false,
     } as any);
     if (fitTo && fit && fit.kind === 'bounds') {
       this.mapReadyFit = { source: fitTo.source, bounds: fit.bounds };
+    }
+
+    this.attributionGuard = installAttributionGuard(this.map);
+
+    // Stand-in for the built-in attribution control, added after the guard so
+    // its listeners fire second. Unless `controls.attribution` supplies one
+    // (added on load) or the author turned attribution off. An options object
+    // under `attributionControl` (v2 `runtime.map` passes it through) is
+    // honored as MapLibre would, with its customAttribution sanitized; so is a
+    // top-level `customAttribution`, maplibre-gl 3's spelling of the option.
+    const builtInAttribution = (config as Record<string, unknown>)['attributionControl'];
+    if (!attributionControlConfigured && builtInAttribution !== false) {
+      let controlOptions: Record<string, unknown> | undefined =
+        builtInAttribution && typeof builtInAttribution === 'object'
+          ? { ...(builtInAttribution as Record<string, unknown>) }
+          : undefined;
+      const topLevelCustom = (config as Record<string, unknown>)['customAttribution'];
+      if (controlOptions && 'customAttribution' in controlOptions) {
+        controlOptions['customAttribution'] = sanitizeCustomAttribution(
+          controlOptions['customAttribution']
+        ).value;
+      } else if (topLevelCustom !== undefined) {
+        controlOptions = {
+          ...(controlOptions ?? {}),
+          customAttribution: sanitizeCustomAttribution(topLevelCustom).value,
+        };
+      }
+      // No options means MapLibre's own defaults, exactly as the built-in
+      // would have used them (they differ across majors).
+      this.map.addControl(
+        controlOptions
+          ? new AttributionControl(controlOptions as any)
+          : new AttributionControl()
+      );
     }
 
     // Initialize managers
@@ -409,6 +454,7 @@ export class MapRenderer {
     this.legendBuilder = new LegendBuilder();
     this.controlsManager = new ControlsManager(this.map, {
       ...(options.terrain ? { terrain: options.terrain } : {}),
+      beforeAttribution: () => this.attributionGuard.scrub(),
     });
 
     // Set up load handler
@@ -883,6 +929,7 @@ export class MapRenderer {
     this.chrome?.destroy();
     this.chrome = null;
     this.eventListeners.clear();
+    this.attributionGuard.dispose();
     this.map.remove();
   }
 }

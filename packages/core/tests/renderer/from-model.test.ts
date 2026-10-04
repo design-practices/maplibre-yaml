@@ -21,11 +21,13 @@ vi.mock("maplibre-gl", () => {
     off: vi.fn(),
     remove: vi.fn(),
     addSource: vi.fn(),
+    addControl: vi.fn(),
     addLayer: vi.fn(),
     getCanvas: vi.fn(() => ({ style: {} })),
     getContainer: vi.fn(() => ({ classList: { add: vi.fn() } })),
   }));
-  return { default: { Map }, Map };
+  const AttributionControl = vi.fn();
+  return { default: { Map, AttributionControl }, Map, AttributionControl };
 });
 
 // Import after the mock is registered.

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Attribution renders as text and plain links</title>
+  <!--
+    PASS = both maps' attribution (bottom-right) reads as plain text, with the
+    markup visible as literal characters, plus underlined links. FAIL = any
+    image, styled span, or extra link attribute rendered inside the attribution.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/12-attribution-sanitize.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 300px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = attribution shows markup as literal text plus plain links, in both maps. FAIL = rendered images/spans in the attribution.</header>
+  <ml-map id="map" src="./configs/attribution-sanitize.yaml"></ml-map>
+  <ml-map id="map-control" src="./configs/attribution-sanitize-control.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

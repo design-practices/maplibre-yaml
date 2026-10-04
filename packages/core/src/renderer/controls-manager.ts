@@ -15,6 +15,7 @@ import {
 } from "./maplibre-interop";
 import type { z } from "zod";
 import { ControlsConfigSchema } from "../schemas";
+import { sanitizeCustomAttribution } from "../utils/attribution";
 import type { TerrainConfig } from "../schemas/map.schema";
 
 type ControlsConfig = z.infer<typeof ControlsConfigSchema>;
@@ -25,14 +26,25 @@ type ControlsConfig = z.infer<typeof ControlsConfigSchema>;
 export class ControlsManager {
   private map: MapLibreMap;
   private addedControls: IControl[];
+  private beforeAttribution?: () => void;
 
   /** The document's `terrain:` — what `controls.terrain` toggles (U15). */
   private terrain: TerrainConfig | undefined;
 
-  constructor(map: MapLibreMap, options: { terrain?: TerrainConfig } = {}) {
+  /**
+   * @param options.terrain - the document's `terrain:` (what `controls.terrain` toggles).
+   * @param options.beforeAttribution - called immediately before an attribution
+   *   control is added; the renderer passes its attribution guard's `scrub`,
+   *   because the control renders source attributions synchronously in `onAdd`.
+   */
+  constructor(
+    map: MapLibreMap,
+    options: { terrain?: TerrainConfig; beforeAttribution?: () => void } = {}
+  ) {
     this.map = map;
     this.addedControls = [];
     this.terrain = options.terrain;
+    this.beforeAttribution = options.beforeAttribution;
   }
 
   /**
@@ -126,10 +138,14 @@ export class ControlsManager {
       const options =
         typeof config.attribution === "object" ? config.attribution : {};
       const position = (options as any).position || "bottom-right";
+      // MapLibre renders customAttribution through a sanitizer that can be
+      // bypassed (GHSA-jrc7-96c5-q579); ours runs first, whatever the trust
+      // context — see utils/attribution.ts.
       const control = new AttributionControl({
         compact: (options as any).compact,
-        customAttribution: (options as any).customAttribution,
+        customAttribution: sanitizeCustomAttribution((options as any).customAttribution).value,
       });
+      this.beforeAttribution?.();
       this.map.addControl(control, position as any);
       this.addedControls.push(control);
     }
