@@ -19,7 +19,7 @@ Get a map on your page in 3 steps.
    <head>
      <!-- MapLibre GL CSS -->
      <link
-       href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+       href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
        rel="stylesheet"
      />
 
@@ -101,14 +101,16 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 
 <Aside type="note" title="maplibre-gl version">
   maplibre-yaml works with maplibre-gl **v4 and v5** (v5 recommended for new
-  projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0`. Pin whichever
-  major your project uses in the import map.
+  projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0`. maplibre-gl v6 is
+  not supported yet, and it is what unpinned installs and CDN URLs now resolve
+  to — so pin the major your project uses in the import map, the CSS URL, and
+  `npm install`, and keep all three on the same major.
 </Aside>
 
 ### npm (With Build Tools)
 
 ```bash
-npm install @maplibre-yaml/core maplibre-gl
+npm install @maplibre-yaml/core maplibre-gl@^5
 ```
 
 ```javascript
@@ -209,6 +211,8 @@ layers:
             geometry:
               type: Point
               coordinates: [-74.006, 40.7128]
+            properties:
+              name: "New York"
     paint:
       circle-radius: 10
       circle-color: "#3b82f6"
@@ -265,6 +269,15 @@ For dynamic or generated configurations:
 - Building configs programmatically
 - Framework-based dynamic rendering
 
+<Aside type="caution" title="Known issue: a transient error before `config` is set">
+  The element upgrades as soon as `register.js` loads, before the line that
+  assigns `config`. Finding no configuration yet, it dispatches one
+  `ml-map:error` ("No configuration provided.") and paints its error card,
+  then renders normally once `config` arrives. Assigning `config` *before*
+  `register.js` loads does not work: the value is ignored. Tracked as bead
+  `ml-mpm`.
+</Aside>
+
 ## Component Lifecycle
 
 ### Initialization Flow
@@ -289,9 +302,10 @@ mapEl.addEventListener("ml-map:load", (event) => {
   console.log("Map ready!");
 });
 
-// Error during initialization or runtime
+// Error during initialization or runtime. Configuration/validation failures
+// carry `errors` (an array of { path, message }); runtime failures carry `error`.
 mapEl.addEventListener("ml-map:error", (event) => {
-  console.error("Map error:", event.detail.error);
+  console.error("Map error:", event.detail.error ?? event.detail.errors);
 });
 
 // Layer data loaded
@@ -317,9 +331,9 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 
 | Event | Detail | Fires when |
 |-------|--------|------------|
-| `ml-map:loading` | `{}` | A `src` document fetch begins |
+| `ml-map:loading` | `{ url }` | A `src` document fetch begins |
 | `ml-map:load` | `{}` | The document is fully loaded — basemap and every layer |
-| `ml-map:error` | `{ error, fatal }` | Initialization or runtime failure (`fatal: true` aborts the document) |
+| `ml-map:error` | `{ error, fatal }` or `{ errors }` | Runtime or map-creation failure (`error`; `fatal: true` aborts the document), or a configuration that failed to fetch, parse or validate (`errors`: an array of `{ path, message }`) |
 | `ml-map:layer-added` | `{ layerId }` | A layer was added to the map |
 | `ml-map:layer-removed` | `{ layerId }` | A layer was removed |
 | `ml-map:layer-data-loading` | `{ layerId }` | A layer's data fetch begins |
@@ -342,6 +356,8 @@ document has loaded (immediately if it already has) and rejects if the
 document fails, so there is no load-listener or null-guard boilerplate:
 
 ```javascript
+import maplibregl from "maplibre-gl"; // resolved by the import map (or your bundler)
+
 const mapEl = document.querySelector("ml-map");
 const map = await mapEl.mapReady();
 
@@ -355,11 +371,15 @@ map.flyTo({
 // Add custom controls
 map.addControl(new maplibregl.NavigationControl());
 
-// Add custom layers
+// Add custom sources and layers
+map.addSource("custom-source", {
+  type: "geojson",
+  data: { type: "FeatureCollection", features: [] },
+});
 map.addLayer({
   id: "custom-layer",
   type: "fill",
-  source: "some-source",
+  source: "custom-source",
   paint: { "fill-color": "#ff0000" },
 });
 ```
@@ -374,24 +394,25 @@ suits code that must re-run on every reload.
 
 ## Controlling Live Data
 
-For maps with polling or streaming data:
+Polling runs on the `refreshInterval` declared in YAML, and every refresh
+fires `ml-map:layer-data-loading` / `ml-map:layer-data-loaded`, so you can
+follow it from the element:
 
 ```javascript
 const mapEl = document.querySelector("ml-map");
 
-mapEl.addEventListener("ml-map:load", () => {
-  // Pause auto-refresh
-  mapEl.pauseRefresh("earthquakes");
-
-  // Resume auto-refresh
-  mapEl.resumeRefresh("earthquakes");
-
-  // Trigger immediate refresh
-  mapEl.refreshNow("earthquakes").then(() => {
-    console.log("Data refreshed");
-  });
+mapEl.addEventListener("ml-map:layer-data-loaded", (event) => {
+  const { layerId, featureCount } = event.detail;
+  console.log(`${layerId} refreshed: ${featureCount} features`);
 });
 ```
+
+<Aside type="caution" title="No programmatic refresh control yet">
+  Earlier versions of this page showed `mapEl.pauseRefresh()`,
+  `resumeRefresh()` and `refreshNow()`. Those methods are **not** exposed on
+  `<ml-map>` (or `MapRenderer`) today — calling them throws. Exposing
+  pause/resume/refresh is tracked as bead `ml-few`.
+</Aside>
 
 ## Complete Example: Earthquake Monitor
 
@@ -405,7 +426,7 @@ This example demonstrates a complete implementation using the `src` attribute wi
   <head>
     <title>Earthquake Monitor</title>
     <link
-      href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+      href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
       rel="stylesheet"
     />
     <script type="importmap">
@@ -486,7 +507,9 @@ This example demonstrates a complete implementation using the `src` attribute wi
         statusEl.className = "status loading";
       });
 
-      mapEl.addEventListener("ml-map:load", () => {
+      // Fires on the first load and again on every refresh. The first one
+      // arrives before ml-map:load, which only fires once every layer is in.
+      mapEl.addEventListener("ml-map:layer-data-loading", () => {
         statusEl.textContent = "Loading earthquake data...";
         statusEl.className = "status loading";
       });
@@ -688,18 +711,20 @@ const configJson = computed(() => JSON.stringify(props.config));
    }
    ```
 
-### "Invalid map config in attribute" Error
+### "Configuration Error" Card
 
-**Symptoms:** Console shows Zod validation errors.
+**Symptoms:** The element shows a red "Configuration Error" card listing
+field paths and messages (for example `id: Expected string, got undefined`).
 
-**Cause:** Configuration doesn't match schema.
+**Cause:** The configuration failed to fetch, parse, or validate against the
+schema.
 
 **Debug:**
 
 ```javascript
 mapEl.addEventListener("ml-map:error", (event) => {
-  console.error("Config error:", event.detail.error);
-  // Check which fields are invalid
+  // Each entry is { path, message } — the path names the invalid field
+  console.error("Config errors:", event.detail.errors);
 });
 ```
 
@@ -782,10 +807,16 @@ mapEl.addEventListener("ml-map:error", (event) => {
 | ------------------------ | ----------------------- | ------------------------------------ |
 | `mapReady()`             | `Promise<maplibregl.Map>` | Resolves with the live map once the document loads (immediately if loaded); rejects on `ml-map:error` |
 | `getMap()`               | `maplibregl.Map`        | Returns the MapLibre GL map instance (`null` before load) |
-| `getRenderer()`          | `MapRenderer`           | Returns the MapRenderer instance     |
-| `pauseRefresh(layerId)`  | `void`           | Pause polling for a layer            |
-| `resumeRefresh(layerId)` | `void`           | Resume polling for a layer           |
-| `refreshNow(layerId)`    | `Promise<void>`  | Trigger immediate data refresh       |
+| `getRenderer()`          | `MapRenderer`           | Returns the MapRenderer instance (`null` before render) |
+| `isLoaded()`             | `boolean`               | Whether the map has loaded           |
+| `addLayer(layer)`        | `Promise<void>`         | Add a layer at runtime               |
+| `removeLayer(layerId)`   | `void`                  | Remove a layer                       |
+| `setLayerVisibility(layerId, visible)` | `void`    | Show or hide a layer                 |
+| `updateLayerData(layerId, data)` | `void`          | Replace a GeoJSON layer's data       |
+| `reload()`               | `Promise<void>`         | Re-read `src` (or the inline YAML) and re-render |
+
+Refresh control (`pauseRefresh` / `resumeRefresh` / `refreshNow`) is not
+exposed yet — see bead `ml-few`.
 
 ### Events
 
