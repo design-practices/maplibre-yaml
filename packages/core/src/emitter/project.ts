@@ -228,11 +228,24 @@ function rewriteImageRefs(value: unknown, names: ReadonlySet<string>): unknown {
  * (bare `addImage` names) but misses the namespaced document sprite on eject.
  */
 function hasDynamicImageRef(value: unknown): boolean {
-  if (!Array.isArray(value)) return false;
+  if (!Array.isArray(value) || value.length === 0) return false;
   const op = value[0];
   if (op === "get" || op === "concat" || op === "var" || op === "feature-state")
     return true;
-  return value.some((v) => hasDynamicImageRef(v));
+  if (op === "literal") return false;
+  // Position-aware, mirroring rewriteImageRefs: only OUTPUT positions name
+  // images. A `match`/`case`/`step` input or condition reading feature data
+  // (`["get", "class"]`) selects among literal names — every output is
+  // rewritable, so the reference is not dynamic (ml-gjf).
+  const dyn = (v: unknown) => hasDynamicImageRef(v);
+  if (op === "match")
+    return value.some((v, i) => i >= 3 && (i === value.length - 1 || i % 2 === 1) && dyn(v));
+  if (op === "case")
+    return value.some((v, i) => i >= 2 && (i === value.length - 1 || i % 2 === 0) && dyn(v));
+  if (op === "step") return value.some((v, i) => i >= 2 && i % 2 === 0 && dyn(v));
+  if (op === "coalesce" || op === "image") return value.slice(1).some(dyn);
+  // Unknown operator: no known output shape — conservatively any argument.
+  return value.slice(1).some(dyn);
 }
 
 /**
@@ -569,6 +582,8 @@ export function projectStyle(
   }));
 
   if (model.style.state !== undefined) style["state"] = model.style.state;
+  // `light` is a style-spec root property: it compiles through unchanged.
+  if (model.style.light !== undefined) style["light"] = model.style.light;
   // `images:` compiles fully (class `ejects`): the refs ride the result for
   // the fetch stage, and the document sprite is declared so the rewritten
   // `mlym:` references resolve. The CLI enforces that sprite files actually
@@ -609,6 +624,45 @@ export function projectStyle(
   if (imageRefs.length > 0) {
     style["sprite"] = declareDocumentSprite({})["sprite"];
   }
+  // U15's 3D trio: style-spec root properties, compiled verbatim (class
+  // `ejects`). Terrain carries a cross-reference the spec validates — its
+  // `source` must name a raster-dem source in the style — so a reference
+  // that cannot resolve is dropped with a lossy warning rather than shipped
+  // as a style MapLibre rejects. With a basemap the source may be the
+  // basemap's own, so resolution waits for the merge (mergeBasemap re-checks).
+  if (model.style.terrain !== undefined) {
+    const terrain = model.style.terrain;
+    const target = sources[terrain.source];
+    const targetType = isPlainObject(target) ? target["type"] : undefined;
+    if (target === undefined && model.style.basemap === undefined) {
+      warnings.push({
+        path: "terrain.source",
+        kind: "lossy",
+        construct: "terrain",
+        ejectClass: "ejects",
+        message:
+          `\`terrain.source\` names "${terrain.source}", which the document does not ` +
+          "declare and no basemap can supply; the emitted style omits `terrain` and " +
+          "renders flat.",
+      });
+    } else if (target !== undefined && targetType !== "raster-dem") {
+      warnings.push({
+        path: "terrain.source",
+        kind: "lossy",
+        construct: "terrain",
+        ejectClass: "ejects",
+        message:
+          `\`terrain.source\` names "${terrain.source}", a ${String(targetType)} source; ` +
+          "terrain needs raster-dem, so the emitted style omits `terrain` and renders flat.",
+      });
+    } else {
+      style["terrain"] = { ...terrain };
+    }
+  }
+  if (model.style.sky !== undefined) style["sky"] = { ...model.style.sky };
+  if (model.style.projection !== undefined)
+    style["projection"] = { ...model.style.projection };
+
   // `style.metadata` (v2 style-root slot, ml-tay) compiles through to the
   // style.json root `metadata` — the spec carries it, so it is not dropped.
   if (model.style.metadata !== undefined)

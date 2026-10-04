@@ -4,24 +4,34 @@
  */
 
 import type { LngLat } from 'maplibre-gl';
-import { Map as MapLibreMap } from './maplibre-interop';
+import { Map as MapLibreMap, runtimeVersion } from './maplibre-interop';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
 import { EventHandler, type EventHandlerCallbacks } from './event-handler';
 import { LegendBuilder } from './legend-builder';
-import type { MarkerConfig } from '../schemas/map.schema';
+import type { MarkerConfig, StandalonePopupConfig, FitToConfig } from '../schemas/map.schema';
 import { ControlsManager } from './controls-manager';
 import { MarkersManager } from './markers-manager';
+import { PopupsManager } from './popups-manager';
+import { geojsonBounds, type Bounds } from '../interactions/geometry-bounds';
+import { COLOR_RELIEF_RUNTIME_FLOOR, meetsVersion } from '../capabilities';
 import { loadDocumentImages } from './images-loader';
-import { ChromeLayout } from './chrome-layout';
+import { ChromeLayout, type ChromeCorner } from './chrome-layout';
 import {
   ParamsBuilder,
   hasPanelContent,
   type ParamsPanelConfig,
   type ParameterMeta,
 } from './params-builder';
-import type { ImageConfig } from '../schemas/map.schema';
+import type {
+  ImageConfig,
+  LightConfig,
+  TerrainConfig,
+  SkyConfig,
+  ProjectionConfig,
+} from '../schemas/map.schema';
+import { applyProjection, applySky, applyTerrain, type Scene3DMap } from './scene-3d';
 import type { CapabilityPolicy } from "../capabilities.js";
 import {
   denormalizeConfig,
@@ -50,6 +60,57 @@ type LegendConfig = z.infer<typeof LegendConfigSchema>;
 function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
   const attribution = controls?.attribution;
   return attribution != null && attribution !== false;
+}
+
+/**
+ * How a `fitTo` (U14) resolves against the document's named sources.
+ *
+ * - `bounds` — inline data: known before the map exists.
+ * - `deferred` — a fetched geojson source: fit on its first data load.
+ * - `unsupported` — missing name, non-geojson source, or empty data: the
+ *   authored center/zoom stand, with one warning naming why.
+ */
+type FitResolution =
+  | { kind: 'bounds'; bounds: Bounds }
+  | { kind: 'deferred' }
+  | { kind: 'unsupported'; reason: string };
+
+function resolveFitTo(
+  fitTo: FitToConfig,
+  sources: Record<string, unknown> | undefined
+): FitResolution {
+  const keep = 'keeping the authored center/zoom.';
+  const source = sources?.[fitTo.source] as Record<string, unknown> | undefined;
+  if (!source || typeof source !== 'object') {
+    return {
+      kind: 'unsupported',
+      reason:
+        `fitTo.source "${fitTo.source}" names no entry in \`sources:\` ` +
+        `(inline layer sources cannot be named — move it to \`sources:\`); ${keep}`,
+    };
+  }
+  if (source['type'] !== 'geojson') {
+    return {
+      kind: 'unsupported',
+      reason:
+        `fitTo.source "${fitTo.source}" is a ${String(source['type'])} source; only ` +
+        `GeoJSON sources have a client-side extent to fit (tiled sources do not); ${keep}`,
+    };
+  }
+  const inline = source['data'] ?? source['prefetchedData'];
+  if (inline !== undefined && !source['url']) {
+    const bounds = geojsonBounds(inline);
+    if (bounds) return { kind: 'bounds', bounds };
+    return {
+      kind: 'unsupported',
+      reason: `fitTo.source "${fitTo.source}" has no coordinates to fit; ${keep}`,
+    };
+  }
+  if (source['prefetchedData'] !== undefined) {
+    const bounds = geojsonBounds(source['prefetchedData']);
+    if (bounds) return { kind: 'bounds', bounds };
+  }
+  return { kind: 'deferred' };
 }
 
 /**
@@ -87,11 +148,19 @@ export interface MapRendererOptions {
   state?: Record<string, unknown>;
   /** Standalone `markers:` — DOM pins added on load, removed on destroy. */
   markers?: MarkerConfig[];
+  /** Standalone `popups:` (U14) — opened at their coordinates on load. */
+  popups?: StandalonePopupConfig[];
   /**
    * Named images (`images:`) registered via `map.addImage` before layers are
    * added, so `icon-image`/`*-pattern` references resolve on first render.
    */
   images?: Record<string, ImageConfig>;
+  /**
+   * The style-spec `light` (U10′), applied with `map.setLight` on load —
+   * the live style is built from `mapStyle` + addLayer, so the document's
+   * light cannot ride in on the style object.
+   */
+  light?: LightConfig;
   /**
    * `parameters:` presentation metadata — rendered as the params panel
    * (U8), each control writing its state key via `setGlobalStateProperty`.
@@ -99,6 +168,37 @@ export interface MapRendererOptions {
    * builder reads it as {@link ParameterMeta}.
    */
   parameters?: Record<string, unknown>;
+  /**
+   * Map-level 3D terrain (`terrain:`, U15). Applied via `map.setTerrain`
+   * once its `raster-dem` source exists — the live style is built from
+   * `mapStyle` + addLayer, so it cannot ride in on the style object.
+   */
+  terrain?: TerrainConfig;
+  /** Sky / fog / atmosphere (`sky:`, U15) — `map.setSky`, maplibre-gl >= 4.5. */
+  sky?: SkyConfig;
+  /** Projection (`projection:`, U15) — `map.setProjection`, maplibre-gl >= 5. */
+  projection?: ProjectionConfig;
+  /**
+   * Host-supplied chrome elements (U9 — `<ml-map>` slot children), mounted
+   * into the shared corner system (KTD10) on load, after the built-in
+   * legend and params panel so those keep the corner edge. The renderer
+   * BORROWS these elements: destroy() removes the corner containers they sit
+   * in, so a host that wants them back (re-render, error card) must move
+   * them out first — `<ml-map>` parks them on itself.
+   */
+  chrome?: ChromeMount[];
+  /**
+   * Host-supplied legend element that REPLACES the built-in legend (the
+   * `legend` slot). Mounted at `legend.position` (default `top-left`); the
+   * auto legend is not built. Borrowed, like {@link chrome}.
+   */
+  legendElement?: HTMLElement;
+}
+
+/** One host-supplied chrome element and the corner it mounts into. */
+export interface ChromeMount {
+  position: ChromeCorner;
+  element: HTMLElement;
 }
 
 /**
@@ -119,6 +219,8 @@ export interface MapRendererEvents {
   'image:error': { name: string; url: string };
   'parameter:change': { key: string; value: unknown };
   'layer:visibility': { layerId: string; visible: boolean };
+  /** The `fitTo` camera (U14) framed its source's data. */
+  'camera:fit': { source: string; bounds: Bounds };
 }
 
 /**
@@ -130,6 +232,9 @@ export class MapRenderer {
   private eventHandler: EventHandler;
   private legendBuilder: LegendBuilder;
   private markersManager: MarkersManager | null = null;
+  private popupsManager: PopupsManager | null = null;
+  /** Layer types this runtime cannot render, warned once each (U14). */
+  private warnedUnsupportedTypes = new Set<string>();
   private controlsManager: ControlsManager;
   private eventListeners: Map<string, Set<Function>>;
   private isLoaded: boolean;
@@ -144,6 +249,10 @@ export class MapRenderer {
   private layersAdded = false;
   /** Set by destroy(); late async continuations (image loads) check it. */
   private destroyed = false;
+  /** `fitTo` (U14): the inline-data fit the constructor applied, if any. */
+  private mapReadyFit: { source: string; bounds: Bounds } | null = null;
+  /** `fitTo` (U14): set once the camera framed its source — never re-fit. */
+  private fitApplied = false;
   private autoLegendContainer: HTMLElement | null;
 
 
@@ -217,9 +326,28 @@ export class MapRenderer {
       if (value !== undefined) contextAttributes[key] = value;
     }
 
+    // `fitTo` (U14) is ours, not a MapLibre option: strip it from what the
+    // constructor sees. Inline data resolves to bounds NOW, so the map is
+    // constructed already framed (MapLibre's own `bounds` option — no
+    // camera jump); fetched data fits once its first load lands (below).
+    const { fitTo, ...mapConfig } = config as MapConfig & { fitTo?: FitToConfig };
+    const fit = fitTo ? resolveFitTo(fitTo, sources) : null;
+    const initialFit =
+      fit && fit.kind === 'bounds'
+        ? {
+            bounds: fit.bounds,
+            fitBoundsOptions: {
+              ...(fitTo!.padding !== undefined ? { padding: fitTo!.padding } : {}),
+              ...(fitTo!.maxZoom !== undefined ? { maxZoom: fitTo!.maxZoom } : {}),
+            },
+          }
+        : {};
+    if (fit && fit.kind === 'unsupported') console.warn(`[maplibre-yaml] ${fit.reason}`);
+
     // Initialize MapLibre map
     this.map = new MapLibreMap({
-      ...config,
+      ...mapConfig,
+      ...initialFit,
       ...(Object.keys(contextAttributes).length > 0
         ? { canvasContextAttributes: contextAttributes }
         : {}),
@@ -238,11 +366,29 @@ export class MapRenderer {
       // comes from `...config` alone (i.e. only if the author set it).
       ...(attributionControlConfigured ? { attributionControl: false } : {}),
     } as any);
+    if (fitTo && fit && fit.kind === 'bounds') {
+      this.mapReadyFit = { source: fitTo.source, bounds: fit.bounds };
+    }
 
     // Initialize managers
     const layerCallbacks: LayerManagerCallbacks = {
       onDataLoading: (layerId) => this.emit('layer:data-loading', { layerId }),
       onDataLoaded: (layerId, featureCount) => {
+        // A fetched `fitTo` source frames the camera on its FIRST load only:
+        // after that the user owns the camera, and a refresh must not yank it.
+        if (fitTo && fit && fit.kind === 'deferred' && !this.fitApplied) {
+          const data = this.layerManager.getSourceData(fitTo.source);
+          const bounds = data ? geojsonBounds(data) : null;
+          if (bounds) {
+            this.fitApplied = true;
+            this.map.fitBounds(bounds, {
+              ...(fitTo.padding !== undefined ? { padding: fitTo.padding } : {}),
+              ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
+              animate: false,
+            });
+            this.emit('camera:fit', { source: fitTo.source, bounds });
+          }
+        }
         // Refreshed data means new features. Feature-state is keyed by id and
         // survives setData, so a retained highlight id would light up whichever
         // feature now holds it — a different one. Drop it; the next mousemove
@@ -261,7 +407,9 @@ export class MapRenderer {
     this.layerManager = new LayerManager(this.map, layerCallbacks);
     this.eventHandler = new EventHandler(this.map, eventCallbacks, options.capabilities);
     this.legendBuilder = new LegendBuilder();
-    this.controlsManager = new ControlsManager(this.map);
+    this.controlsManager = new ControlsManager(this.map, {
+      ...(options.terrain ? { terrain: options.terrain } : {}),
+    });
 
     // Set up load handler
     this.map.on('load', () => {
@@ -315,16 +463,40 @@ export class MapRenderer {
         }
       }
 
+      // Map-level 3D (U15). Projection and sky first — neither depends on a
+      // source. Terrain needs its raster-dem source to exist: named sources
+      // just registered above, and basemap sources arrived with the style,
+      // so most documents resolve here; a miss retries once layers settle
+      // (an inline layer source), and only that retry warns. Each setter is
+      // feature-detected and degrades with one warning, never a throw.
+      const map3d = this.map as unknown as Scene3DMap;
+      if (options.projection) applyProjection(map3d, options.projection);
+      if (options.sky) applySky(map3d, options.sky);
+      const terrainPending =
+        options.terrain !== undefined &&
+        applyTerrain(map3d, options.terrain, false) === 'pending';
+      // The document's light shades fill-extrusion faces from the first
+      // frame. A rejected light (setLight validates against the spec) warns
+      // and the document keeps rendering under the basemap's light.
+      if (options.light) {
+        try {
+          this.map.setLight(options.light as never);
+        } catch (error) {
+          console.warn('[maplibre-yaml] `light:` could not be applied:', error);
+        }
+      }
+
       // Apply YAML-declared controls and legend once the map is ready.
       // The guards keep manual addControls()/buildLegend() calls made before
       // load from being duplicated here.
-      // NOTE: packages/astro/src/components/FullPageMap.astro has its own
-      // hand-rolled controls/legend implementation; consolidating the two is
-      // tracked in the perf/hygiene backlog.
       if (options.controls && !this.controlsAdded) {
         this.addControls(options.controls);
       }
-      if (options.legend && !this.legendBuilt) {
+      if (options.legendElement && !this.legendBuilt) {
+        // The `legend` slot replaces the built-in legend outright.
+        this.legendBuilt = true;
+        this.chromeLayout().mount(options.legend?.position ?? 'top-left', options.legendElement);
+      } else if (options.legend && !this.legendBuilt) {
         this.buildLegend(this.createLegendContainer(options.legend), layers, options.legend);
       }
 
@@ -337,6 +509,12 @@ export class MapRenderer {
         console.warn('[maplibre-yaml] params panel failed to build:', error);
       }
 
+      // Host chrome (U9 slots) mounts last: built-in pieces keep the corner
+      // edge and author children stack after them (KTD10 registration order).
+      for (const { position, element } of options.chrome ?? []) {
+        this.chromeLayout().mount(position, element);
+      }
+
       // Standalone markers: DOM pins with the document's popup content run
       // through the same trust gate as every popup sink (U5).
       if (options.markers && options.markers.length > 0) {
@@ -347,6 +525,19 @@ export class MapRenderer {
             this.emit('marker:icon-error', { index, icon }),
         });
         this.markersManager.add(options.markers as MarkerConfig[]);
+      }
+
+      // Standalone popups (U14): open at their coordinates, same trust gate.
+      if (options.popups && options.popups.length > 0) {
+        this.popupsManager = new PopupsManager(this.map, options.capabilities);
+        this.popupsManager.add(options.popups);
+      }
+
+      // An inline-data fit was applied by the constructor; announce it now
+      // that listeners (attached after construction) can hear it.
+      if (this.mapReadyFit) {
+        this.fitApplied = true;
+        this.emit('camera:fit', this.mapReadyFit);
       }
 
       // Declared images register BEFORE layers so icon-image/*-pattern
@@ -369,6 +560,9 @@ export class MapRenderer {
           if (this.destroyed) return;
           return Promise.all(layers.map((layer) => this.addLayer(layer))).then(() => {
             this.layersAdded = true;
+            if (terrainPending && options.terrain) {
+              applyTerrain(map3d, options.terrain, true);
+            }
             // Panel toggles made while layers were still loading apply now.
             for (const [layerId, visible] of this.pendingVisibility) {
               if (this.map.getLayer(layerId)) {
@@ -438,9 +632,40 @@ export class MapRenderer {
    * Add a layer to the map
    */
   async addLayer(layer: Layer): Promise<void> {
+    // Version-gated layer types declare absence below their floor (U14,
+    // the U8 precedent): one warning per type, the layer skipped, the rest
+    // of the document unaffected — instead of MapLibre rejecting it.
+    if (!this.supportsLayerType(layer.type)) {
+      if (!this.warnedUnsupportedTypes.has(layer.type)) {
+        this.warnedUnsupportedTypes.add(layer.type);
+        console.warn(
+          `[maplibre-yaml] \`${layer.type}\` layers need maplibre-gl ` +
+            `${COLOR_RELIEF_RUNTIME_FLOOR} or later (running ${this.mapVersion()}); ` +
+            `skipping layer "${layer.id}" and any other ${layer.type} layers.`
+        );
+      }
+      return;
+    }
     await this.layerManager.addLayer(layer);
     this.eventHandler.attachEvents(layer);
     this.emit('layer:added', { layerId: layer.id });
+  }
+
+  /** The running maplibre-gl version, as best the runtime reports it. */
+  private mapVersion(): string | undefined {
+    const fromMap = (this.map as unknown as { version?: unknown }).version;
+    return typeof fromMap === 'string' ? fromMap : runtimeVersion();
+  }
+
+  /**
+   * Whether the running maplibre-gl can render a layer type. Only
+   * `color-relief` is gated today (5.6+). An unknown version is not a claim
+   * — the layer is attempted and MapLibre has the final word.
+   */
+  private supportsLayerType(type: string): boolean {
+    if (type !== 'color-relief') return true;
+    const version = this.mapVersion();
+    return version === undefined || meetsVersion(version, COLOR_RELIEF_RUNTIME_FLOOR);
   }
 
   /**
@@ -650,6 +875,8 @@ export class MapRenderer {
     this.destroyed = true;
     this.markersManager?.destroy();
     this.markersManager = null;
+    this.popupsManager?.destroy();
+    this.popupsManager = null;
     this.controlsManager.removeAllControls();
     this.autoLegendContainer?.remove();
     this.autoLegendContainer = null;

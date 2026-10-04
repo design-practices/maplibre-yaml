@@ -18,7 +18,8 @@ import {
   buildMarkersLowering,
   MARKERS_SOURCE_ID,
 } from "../emitter/lower-markers";
-import type { MarkerConfig } from "../schemas/map.schema";
+import { buildFitToLowering } from "../emitter/lower-fit-to";
+import type { MarkerConfig, FitToConfig } from "../schemas/map.schema";
 import { lowerEffectLayer, EFFECT_ON_EMIT } from "../emitter/lower-effects";
 
 /**
@@ -190,6 +191,62 @@ ejectClasses.register("markers", {
   },
 });
 
+// U14: the fit-to-data initial camera. Fallback: an inline GeoJSON source's
+// bounds compile to a concrete center/zoom (for a fixed reference viewport —
+// lossy, a live map fits its own container); a fetched or tiled source cannot
+// be fit at compile time and keeps the authored camera, said out loud. Same
+// one-implementation rule as markers: this hook and `lowerFitTo` share
+// buildFitToLowering (direct-file import, never the emitter barrel).
+ejectClasses.register("fitTo", {
+  class: "fallback",
+  onEmit:
+    "The fit-to-data camera lowers to a concrete center/zoom when the named " +
+    "source's GeoJSON is inline (computed for a 1024×768 reference viewport — " +
+    "lossy, a live map fits its own container); for fetched or tiled sources " +
+    "the authored center/zoom stand in.",
+  eject: (ctx) => {
+    if (!ctx.model) {
+      return {
+        warnings: [
+          {
+            path: ctx.path,
+            kind: "lossy",
+            construct: "fitTo",
+            ejectClass: "fallback",
+            message:
+              "`fitTo` needs the document's sources to compute a camera; none " +
+              "were provided, so the authored center/zoom stand in.",
+          },
+        ],
+      };
+    }
+    const { camera, warnings } = buildFitToLowering(ctx.value as FitToConfig, ctx.model);
+    return { ...(camera ? { camera } : {}), warnings };
+  },
+});
+
+// U14: popups open at a coordinate. A popup is DOM chrome with no style
+// form — a text label would silently drop its content model and its
+// open/close behavior, so the honest class is a declared absence.
+ejectClasses.register("popups", {
+  class: "declared-absence",
+  onEmit:
+    "Standalone popups are DOM chrome with no style.json form; the emitted style " +
+    "renders the map without them.",
+});
+
+// U14: the color-relief layer TYPE. A style-half construct (it compiles
+// through verbatim as a spec layer), registered so the docs table and
+// programmatic consumers see the runtime-floor caveat: the runtime gate
+// reports it lossy when a declared --target is below maplibre-gl 5.6.
+ejectClasses.register("color-relief", {
+  class: "ejects",
+  onEmit:
+    "color-relief layers compile through verbatim (a style-spec layer type); they " +
+    "need maplibre-gl 5.6+ to render, so emitting for a lower --target is " +
+    "reported as lossy.",
+});
+
 // Style-half construct (U6): registered so the docs eject-class table and
 // programmatic consumers can see its declared behavior. It never reaches the
 // projection's RUNTIME loop; the projection itself reports the two edges
@@ -201,6 +258,43 @@ ejectClasses.register("images", {
     "merged into the document sprite; literal layer references are rewritten " +
     "to `mlym:<name>` so they resolve in the emitted style. Relative URLs " +
     "cannot compile (lossy).",
+});
+
+// Style-half 3D constructs (U15). Like `images`, registered for the docs
+// table and programmatic consumers; the projection compiles them directly
+// and reports their edges itself (an unresolvable terrain source is lossy;
+// a declared emit target below a floor is lossy via the runtime gate).
+ejectClasses.register("terrain", {
+  class: "ejects",
+  onEmit:
+    "`terrain:` is a style-spec root property and compiles through verbatim; the " +
+    "document's terrain wins over a basemap's. A `source` that resolves to no " +
+    "raster-dem source is dropped (lossy) rather than shipped invalid.",
+});
+
+ejectClasses.register("sky", {
+  class: "ejects",
+  onEmit:
+    "`sky:` is a style-spec root property and compiles through verbatim; the " +
+    "document's sky wins over a basemap's. Runtimes below maplibre-gl 4.5.0 do not " +
+    "draw it (reported as lossy against a declared --target).",
+});
+
+ejectClasses.register("projection", {
+  class: "ejects",
+  onEmit:
+    "`projection:` is a style-spec root property and compiles through verbatim; the " +
+    "document's projection wins over a basemap's. Globe needs maplibre-gl 5.0.0 — " +
+    "older runtimes render mercator (reported as lossy against a declared --target).",
+});
+
+// Style-half construct (U10′): the style-spec root `light`, applied live
+// with `map.setLight` and compiled through verbatim on eject.
+ejectClasses.register("light", {
+  class: "ejects",
+  onEmit:
+    "`light:` is the style-spec root light and compiles through verbatim to the " +
+    "emitted style's `light`, replacing any basemap light.",
 });
 
 ejectClasses.register("x-*", {

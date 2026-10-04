@@ -65,6 +65,7 @@ export const LAYER_TYPES = [
   "fill-extrusion",
   "heatmap",
   "hillshade",
+  "color-relief",
   "background",
 ] as const;
 

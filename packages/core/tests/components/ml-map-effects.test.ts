@@ -127,6 +127,21 @@ describe("<ml-map> effects auto-attach", () => {
     expect(calls.attach[1]![0]).toBe(renderers[second]!.map);
   });
 
+  it("an error card detaches effects too (every teardown path goes through teardownRenderer)", async () => {
+    const { host, calls } = spyHost();
+    registerEffectsHost(host);
+    const el = await mount(true);
+    fireLoad(0);
+    expect(calls.attach).toHaveLength(1);
+    // A document that fails validation swaps the map for the error card.
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    (el as unknown as { applyValidatedConfig(c: unknown): void }).applyValidatedConfig({ type: "map" });
+    err.mockRestore();
+    expect(el.querySelector(".ml-map-error")).not.toBeNull();
+    expect(calls.detach).toBe(1);
+    expect(renderers[0]!.destroyed).toBe(true);
+  });
+
   it("a host registered after load still attaches; without one the layers stay static and it says so once", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const el = await mount(true);

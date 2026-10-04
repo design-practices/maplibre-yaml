@@ -1,0 +1,22 @@
+---
+title: Display a hybrid satellite map with terrain elevation
+description: Satellite imagery under a vector basemap's roads, on a globe, over 3D terrain — in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-hybrid-satellite-map-with-terrain-elevation.yaml?raw';
+
+Replicates the MapLibre example [Display a hybrid satellite map with terrain elevation](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-hybrid-satellite-map-with-terrain-elevation/).
+
+<LiveMap src="/configs/gallery/display-a-hybrid-satellite-map-with-terrain-elevation.yaml" height="500px" caption="Zoom out to see the globe; the atmosphere fades in below zoom 2" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-hybrid-satellite-map-with-terrain-elevation.yaml" />
+
+## What to notice
+
+- Upstream edits the basemap inside a `transformStyle` callback. Each of its four edits is one declaration here: `projection:`, `terrain:`, `sky:`, and a raster layer with `before:` naming the basemap's first road layer, so roads and labels draw over the imagery.
+- `sky.atmosphere-blend` is a zoom expression: the atmosphere is full at zoom 0 and gone by zoom 2.
+- Globe and the atmosphere need **maplibre-gl 5.0.0** or later. On 4.x the page warns once and renders in mercator; terrain still works.

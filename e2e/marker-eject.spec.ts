@@ -14,8 +14,8 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
 const OUT_DIR = join(process.cwd(), "e2e/generated/marker-eject");
-// VERIFY_PORT: the same port the server and playwright.config.ts use.
-const BASE_URL = `http://localhost:${Number(process.env.VERIFY_PORT ?? 4174)}/e2e/generated/marker-eject`;
+// Same port the server and playwright.config use (VERIFY_PORT).
+const BASE_URL = `http://localhost:${process.env.VERIFY_PORT ?? 4174}/e2e/generated/marker-eject`;
 
 /** Fail the test on any page error or off-origin request (hermeticity). */
 async function guard(page: Page): Promise<string[]> {

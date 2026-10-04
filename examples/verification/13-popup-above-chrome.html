@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Popups above chrome</title>
+  <!--
+    ml-3d0 — a popup opened near a chrome corner must sit ABOVE it.
+    PASS = the "I am on top" popup fully covers the part of the params panel
+    it overlaps (top-right). FAIL = the panel's slider and labels draw over
+    the popup. Serve from the repo root (pnpm verify:serve), then open
+    /examples/verification/13-popup-above-chrome.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; width: 800px; height: 500px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = the popup covers the params panel where they overlap. FAIL = the panel draws over it.</header>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: popup-above-chrome
+config:
+  center: [0, 20]
+  zoom: 1.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+state:
+  minPop: { default: 5 }
+parameters:
+  minPop: { label: Population at least (millions), type: range, min: 0, max: 20, step: 1 }
+popups:
+  - at: [118, 58]
+    closeOnClick: false
+    maxWidth: "320px"
+    content:
+      - h3:
+          - str: "I am on top"
+      - p:
+          - str: "This popup was opened under the params panel. It must cover it, not hide behind it."
+layers:
+  - id: dot
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [118, 58] }
+            properties: {}
+    paint:
+      circle-radius: 6
+      circle-color: "#e63946"
+    </script>
+  </ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

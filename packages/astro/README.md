@@ -47,12 +47,7 @@ import { Map } from '@maplibre-yaml/astro';
 ---
 import { FullPageMap } from '@maplibre-yaml/astro';
 ---
-<FullPageMap
-  src="/configs/dashboard.yaml"
-  showControls
-  showLegend
-  legendPosition="bottom-left"
-/>
+<FullPageMap src="/configs/dashboard.yaml" showControls />
 ```
 
 ### Scrollytelling Story
@@ -95,7 +90,7 @@ Full-viewport map with built-in controls and optional legend.
 - `src?: string` - Path to YAML config file
 - `config?: MapBlock` - Pre-loaded configuration
 - `showControls?: boolean` - Show zoom/reset controls (default: true)
-- `showLegend?: boolean` - Show auto-generated legend (default: false)
+- `showLegend?: boolean` - Add core's legend when a `config` document has no `legend:` block (default: false). Entries come from layers' `legend:` fields; with `src`, declare `legend:` in the YAML instead.
 - `legendPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'` - Legend position
 - `class?: string` - Additional CSS classes
 - `style?: string` - Additional inline styles

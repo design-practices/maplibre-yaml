@@ -1,0 +1,40 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-color-relief-layer.yaml
+# (local basemap). The e2e server's /dem-hills/ tiles stand in for the
+# demotiles terrain: synthesized terrarium hills spanning 0-3500 m, so the
+# full ramp shows. preserveDrawingBuffer lets the spec read pixels back.
+# On maplibre-gl < 5.6 the layer is skipped with one warning (declared
+# absence) — the 4.x CI leg asserts exactly that.
+type: map
+id: add-a-color-relief-layer
+config:
+  center: [11.45, 47.2]
+  zoom: 10
+  preserveDrawingBuffer: true
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: color-relief
+    type: color-relief
+    source:
+      type: raster-dem
+      tiles:
+        - "/dem-hills/{z}/{x}/{y}.png"
+      encoding: terrarium
+      tileSize: 256
+      maxzoom: 14
+    paint:
+      color-relief-color:
+        - interpolate
+        - ["linear"]
+        - ["elevation"]
+        - 400
+        - "rgb(4, 0, 108)"
+        - 1129.41
+        - "rgb(24, 69, 240)"
+        - 1676.47
+        - "rgb(57, 169, 29)"
+        - 2405.88
+        - "rgb(244, 221, 4)"
+        - 2952.94
+        - "rgb(253, 128, 20)"
+        - 3500
+        - "rgb(215, 5, 13)"

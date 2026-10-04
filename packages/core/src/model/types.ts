@@ -110,6 +110,29 @@ export interface StyleHalf {
    * merged into the document sprite (class `ejects`).
    */
   images?: Record<string, import("../schemas/map.schema").ImageConfig>;
+  /**
+   * Map-level 3D terrain (U15) — the style-spec root `terrain`.
+   *
+   * @remarks
+   * Style half: it compiles verbatim (class `ejects`). Live, the renderer
+   * applies it with `setTerrain` because the live style is built from the
+   * basemap + addLayer, never from this model's style object.
+   */
+  terrain?: import("../schemas/map.schema").TerrainConfig;
+  /** Sky / fog / globe atmosphere (U15) — the style-spec root `sky`. */
+  sky?: import("../schemas/map.schema").SkyConfig;
+  /** Map projection (U15) — the style-spec root `projection`. */
+  projection?: import("../schemas/map.schema").ProjectionConfig;
+  /**
+   * The style-spec root `light` (U10′).
+   *
+   * @remarks
+   * Spec-native, so it compiles straight through to the emitted style.json
+   * root (class `ejects`). Live, the renderer applies it with `map.setLight`
+   * — the live style is built from `mapStyle` + addLayer, so it cannot ride
+   * in on the style object.
+   */
+  light?: import("../schemas/map.schema").LightConfig;
   sources: Record<string, SourceModel>;
   layers: LayerModel[];
 }
@@ -133,6 +156,15 @@ export interface RuntimeHalf {
   parameters?: Record<string, unknown>;
   /** Standalone markers (U5) — DOM pins live, lowered to a symbol layer on eject. */
   markers?: import("../schemas/map.schema").MarkerConfig[];
+  /**
+   * Fit the initial camera to a source's data (U14). Authored as v1
+   * `config.fitTo` / v2 `runtime.fitTo`; lifted OUT of `map` because it is
+   * not a MapLibre constructor option — the renderer resolves it to
+   * `bounds`/`fitBounds`, and emit lowers it to a computed camera.
+   */
+  fitTo?: import("../schemas/map.schema").FitToConfig;
+  /** Standalone popups open at a coordinate (U14) — declared absence on eject. */
+  popups?: import("../schemas/map.schema").StandalonePopupConfig[];
 }
 
 /** A whole map document, normalized. */
@@ -158,6 +190,16 @@ export interface V1MapInput {
   parameters?: Record<string, unknown>;
   /** Standalone markers, authored at the document root. */
   markers?: import("../schemas/map.schema").MarkerConfig[];
+  /** Standalone popups, authored at the document root. */
+  popups?: import("../schemas/map.schema").StandalonePopupConfig[];
   /** Named images for symbol layers and patterns, authored at the root. */
   images?: Record<string, import("../schemas/map.schema").ImageConfig>;
+  /** Map-level 3D terrain, authored at the root (v2: `style.terrain`). */
+  terrain?: import("../schemas/map.schema").TerrainConfig;
+  /** Sky / fog / atmosphere, authored at the root (v2: `style.sky`). */
+  sky?: import("../schemas/map.schema").SkyConfig;
+  /** Map projection, authored at the root (v2: `style.projection`). */
+  projection?: import("../schemas/map.schema").ProjectionConfig;
+  /** The style-spec light shading fill-extrusion faces, authored at the root. */
+  light?: import("../schemas/map.schema").LightConfig;
 }

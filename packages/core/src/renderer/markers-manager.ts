@@ -26,6 +26,7 @@
 
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Marker, Popup } from "./maplibre-interop";
+import { liftPopup } from "./chrome-layout";
 import { PopupBuilder } from "./popup-builder";
 import { safeUrl } from "../utils/html";
 import { DEFAULT_PIN_WIDTH } from "../emitter/assets";
@@ -76,7 +77,7 @@ export class MarkersManager {
       // The document's structured popup content, through the same trust gate
       // as layer popups — feature-less, so property lookups resolve empty.
       const html = this.popupBuilder.build(config.popup, {});
-      marker.setPopup(new Popup().setHTML(html));
+      marker.setPopup(liftPopup(new Popup().setHTML(html)));
     }
 
     marker.getElement().addEventListener("click", () => {

@@ -21,6 +21,7 @@ Map configuration defines the initial view, interaction settings, controls, and 
   parameters: {...}    # Control metadata for state keys → params panel (optional)
   markers: [...]       # Standalone DOM pins (optional)
   images: {...}        # Named images for icons and patterns (optional)
+  light: {...}         # Style-spec light for fill-extrusion shading (optional)
   layers: [...]        # Map layers
   controls: {...}      # Map controls (optional)
   legend: {...}        # Legend (optional)
@@ -144,7 +145,44 @@ Markers are a **fallback-class** construct on eject: `mlym emit
 (the pins render; dragging and popup content do not compile), and `--strict`
 refuses marker documents. `icon:` URLs are fetched into the document sprite
 at compile time, so ejected icon markers keep their images. See the [eject
-classes reference](/reference/eject-classes/).
+classes reference](/guides/eject-classes/).
+
+## Popups
+
+`popups:` opens standalone popups at coordinates: a popup with no layer
+under it and no marker above it (MapLibre's `new Popup().setLngLat(...)
+.addTo(map)`). It is a document-root key, a sibling of `config:`. Each entry:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `at` | [number, number] | Popup anchor [longitude, latitude] (required) |
+| `content` | popup content | Same structured content as [layer popups](/schema/interactivity/) (required) |
+| `closeButton` | boolean | Show the close button (MapLibre default: `true`) |
+| `closeOnClick` | boolean | Close when the map is clicked (MapLibre default: `true`) |
+| `maxWidth` | string | CSS max-width, e.g. `"300px"` (MapLibre default: `240px`) |
+
+```yaml
+type: map
+id: hello
+config:
+  center: [-96, 37.8]
+  zoom: 3
+popups:
+  - at: [-96, 37.8]
+    closeOnClick: false
+    content:
+      - h1:
+          - str: Hello World!
+```
+
+Popups are open from load. Content runs through the same trust gate as every
+other popup: tags are allowlisted, `str:` values are escaped, and there is no
+feature, so `property:` lookups resolve empty. A marker with its pin hidden
+can't stand in for this. A marker's popup opens on a click on the pin, so a
+pinless marker's popup could never open.
+
+On eject, popups are a **declared absence**. `mlym emit` reports them as a
+contract warning, and the emitted style has no popups.
 
 ## Images
 
@@ -189,7 +227,10 @@ references (`icon-image`, `fill-pattern`, `line-pattern`,
 `--strict` accepts image documents. Dynamic references
 (`["image", ["get", "icon"]]`) resolve live but cannot be rewritten at
 compile time; emit reports them, and runtime values naming declared images
-must spell `mlym:<name>` themselves. Relative URLs render live but cannot
+must spell `mlym:<name>` themselves. A `*-pattern` (or `icon-image`) may be
+an expression that *selects* among declared names —
+`fill-pattern: [match, [get, class], sand, earth, landuse]` — and every
+literal output is rewritten, with no warning. Relative URLs render live but cannot
 be fetched at compile time — emit reports them as lossy, so `--strict`
 refuses them.
 
@@ -200,6 +241,142 @@ marker `icon:` URL in the document (bounded: 30s timeout, 20MB and
 fetched bytes are embedded verbatim into the sprite files you publish.
 :::
 
+## Terrain, sky & projection
+
+Three document-root keys, siblings of `config:`, author the map-level 3D
+scene. Each one is the style spec's own root property, in the spec's own
+shape, so what you write is exactly what an ejected `style.json` carries. In
+a format-v2 document they live under `style:` instead
+(`style.terrain`, `style.sky`, `style.projection`).
+
+```yaml
+type: map
+id: alps
+config:
+  center: [11.39, 47.27]
+  zoom: 12
+  pitch: 70
+  maxPitch: 85
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  terrainSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+terrain:
+  source: terrainSource
+  exaggeration: 1.5
+sky:
+  sky-color: "#199EF3"
+  horizon-color: "#ffffff"
+  fog-color: "#ffffff"
+  fog-ground-blend: 0.1
+  atmosphere-blend: ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0]
+projection:
+  type: globe
+controls:
+  navigation: true
+  globe: true
+  terrain: true
+```
+
+### `terrain:`
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `source` | string | Name of a `raster-dem` source: one in `sources:`, or one the basemap supplies (required) |
+| `exaggeration` | number ≥ 0 | Vertical exaggeration (spec default `1`) |
+
+Declare the DEM as a **named** source. Give a `hillshade` layer its own DEM
+source rather than sharing the terrain's; one source serving both renders at
+reduced quality. A `source` that names nothing, or a non-DEM source, warns
+once and the map renders flat.
+
+### `sky:`
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `sky-color` | color or expression | The sky above the horizon |
+| `horizon-color` | color or expression | The band where sky meets fog |
+| `fog-color` | color or expression | Fog over distant 3D terrain |
+| `sky-horizon-blend` | 0–1 or expression | How far the horizon color blends up into the sky |
+| `horizon-fog-blend` | 0–1 or expression | How far the horizon color blends down into the fog |
+| `fog-ground-blend` | 0–1 or expression | Where fog starts: `0` at the camera, `1` at the horizon |
+| `atmosphere-blend` | 0–1 or expression | Globe atmosphere opacity; draws under globe projection only |
+
+`sky: {}` turns on MapLibre's default sky. The sky is only visible when a
+pitched camera can see the horizon, and fog only affects 3D terrain.
+
+### `projection:`
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `type` | `mercator` \| `globe` | `mercator` is the default |
+
+### Runtime requirements
+
+The live map applies each key with its MapLibre setter. Each setter is
+feature-detected: on a runtime that lacks one, the document logs one console
+warning naming the minimum version and keeps rendering without that effect.
+It never throws.
+
+| Key | Needs maplibre-gl | On an older runtime |
+|-----|-------------------|---------------------|
+| `terrain:` | 2.2.0 (`setTerrain`) | Every supported peer version has it |
+| `sky:` | 4.5.0 (`setSky`) | Renders without sky or fog |
+| `sky.atmosphere-blend` | 5.0.0 (draws under globe only) | No atmosphere (there is no globe) |
+| `projection: globe` | 5.0.0 (`setProjection`) | Renders in mercator |
+| `controls.globe` | 5.0.0 (`GlobeControl`) | The control is omitted |
+
+The minimums come from the maplibre-gl changelog: 3D terrain arrived in
+2.2.0, the spec `sky` in 4.5.0, and globe projection with its atmosphere in
+5.0.0.
+
+### On eject
+
+All three keys are class **ejects**. `mlym emit` copies them verbatim to the
+style.json root. When the basemap also defines one, the document's value
+replaces the basemap's wholesale, as it does live, and emit notes the
+override. A `terrain.source` that resolves to no `raster-dem` source, after
+the basemap merge, is dropped with a lossy warning rather than shipped as a
+style MapLibre would reject. With `--target` below a key's floor, emit keeps
+the key (it still validates on 4.x) and reports the visual difference as
+lossy, so `--strict --target 4.7.1` refuses a globe document. See the
+[eject classes reference](/guides/eject-classes/).
+## Light
+
+`light:` is the style-spec root [light](https://maplibre.org/maplibre-style-spec/light/)
+— the single light that shades `fill-extrusion` faces. A document-root key,
+a sibling of `config:` (in format v2 it lives in the `style:` half). Every
+property is optional and accepts a zoom expression:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `anchor` | `map` \| `viewport` | `viewport` | `map` fixes the light to the map, so shading stays put as the map turns; `viewport` fixes it to the screen |
+| `position` | `[radial, azimuthal°, polar°]` | `[1.15, 210, 30]` | Distance from the base of an object, direction clockwise from north (at `anchor: map`), and angle from overhead |
+| `color` | color | `white` | Light color |
+| `intensity` | number 0–1 | `0.5` | Higher is more extreme contrast between faces |
+
+```yaml
+type: map
+id: lit
+config:
+  center: [-74.0118, 40.7075]
+  zoom: 15.9
+  pitch: 60
+light:
+  anchor: map
+  position: [1.15, 239, 30]
+  intensity: 0.5
+```
+
+The object is closed: an unknown key is a validation error, not a silently
+ignored setting. Live, the renderer applies it with `map.setLight` once the
+style loads. On eject it compiles through verbatim to the style's `light`
+(class **ejects**), replacing any light the basemap carried. The
+[crosshatch classic](/examples/gallery/crosshatch/) uses it to shade its
+hatched buildings.
+
 ## View Options
 
 Control the camera position and orientation.
@@ -209,6 +386,7 @@ Control the camera position and orientation.
 | `pitch` | number | `0` | 0-85 | Camera tilt angle in degrees |
 | `bearing` | number | `0` | -180 to 180 | Camera rotation in degrees |
 | `bounds` | array | - | - | Fit map to geographic bounds |
+| `fitTo` | object | - | - | Fit the initial camera to a GeoJSON source's data (see below) |
 
 ### Examples
 
@@ -232,6 +410,52 @@ config:
   bounds: [-74.3, 40.5, -73.7, 40.9]  # [west, south, east, north]
   mapStyle: "https://demotiles.maplibre.org/style.json"
 ```
+
+#### Fit to a Source's Data
+
+`fitTo` is the data-driven sibling of `bounds`. Instead of literal
+coordinates it names a GeoJSON entry in `sources:`, and the camera frames
+whatever that source holds.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `source` | string | Name of a GeoJSON entry in `sources:` (required) |
+| `padding` | number | Padding in pixels around the fitted bounds |
+| `maxZoom` | number | Upper zoom limit for the fit. Without it, a single point zooms all the way in. |
+
+```yaml
+type: map
+id: route
+config:
+  center: [-77.02, 38.89]   # Before the data arrives, and the fallback
+  zoom: 12
+  fitTo:
+    source: route
+    padding: 20
+sources:
+  route:
+    type: geojson
+    url: https://example.com/route.geojson
+layers:
+  - id: route
+    type: line
+    source: route
+```
+
+- **Inline `data:`**: the map is constructed already framed, with no camera jump.
+- **`url:`**: the map opens at `center`/`zoom`, then frames the data when the
+  first fetch lands. Refreshes don't re-fit, because the user owns the camera
+  after load. An `ml-map:camera-fit` event fires when the fit applies.
+- **vector / raster / raster-dem**: not supported. Tiled sources have no
+  client-side extent. The renderer warns once and keeps `center`/`zoom`.
+- `fitTo` wins over `bounds` when both are set. In format v2 it lives at
+  `runtime.fitTo`.
+
+On eject `fitTo` **ejects via fallback**. `mlym emit --with-fallbacks`
+computes the fitted `center`/`zoom` from an inline source for a 1024×768
+reference viewport. That's lossy, because a live map fits its own container.
+For a fetched source the authored camera stands in, also reported as lossy.
+`--strict` refuses `fitTo` documents.
 
 ## Constraints
 
@@ -392,6 +616,8 @@ controls:
 | `scale` | `bottom-left` | Distance scale indicator |
 | `fullscreen` | `top-right` | Fullscreen toggle |
 | `attribution` | `bottom-right` | Attribution text |
+| `globe` | `top-right` | Globe/mercator projection toggle (maplibre-gl ≥ 5.0.0; older runtimes warn and omit it) |
+| `terrain` | `top-right` | 3D terrain on/off toggle for the document's [`terrain:`](#terrain-sky--projection) (warns and is omitted when the document declares none) |
 
 ### Control Positions
 

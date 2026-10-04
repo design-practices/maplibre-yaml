@@ -3,6 +3,7 @@
  * @module @maplibre-yaml/core/renderer
  */
 
+import { absolutizeTileTemplate, absolutizeVectorTiles } from "../utils/tile-url";
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { z } from "zod";
 import type { FeatureCollection } from "geojson";
@@ -206,7 +207,18 @@ export class LayerManager {
       fetchStrategy,
       ...mapLibreSpec
     } = spec as Record<string, unknown>;
-    return mapLibreSpec;
+    // Same-origin vector tile paths must be absolute by the time MapLibre's
+    // worker fetches them (see utils/tile-url).
+    return absolutizeVectorTiles(mapLibreSpec);
+  }
+
+  /**
+   * The GeoJSON this manager last delivered to a fetched/refreshed source, by
+   * source id — what `fitTo` (U14) frames once a `url:` source's first fetch
+   * lands. Undefined for sources whose data never passed through here.
+   */
+  getSourceData(sourceId: string): FeatureCollection | undefined {
+    return this.sourceData.get(sourceId);
   }
 
   /** The MapLibre source a layer draws from. */
@@ -397,7 +409,8 @@ export class LayerManager {
       const vectorSource = source as unknown as VectorSourceConfig;
       const vectorSpec: any = { type: "vector" };
       if (vectorSource.url) vectorSpec.url = vectorSource.url;
-      if (vectorSource.tiles) vectorSpec.tiles = vectorSource.tiles;
+      if (vectorSource.tiles)
+        vectorSpec.tiles = vectorSource.tiles.map((t) => absolutizeTileTemplate(t));
       if (vectorSource.minzoom !== undefined)
         vectorSpec.minzoom = vectorSource.minzoom;
       if (vectorSource.maxzoom !== undefined)
