@@ -246,6 +246,8 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   // record normalizes away like an empty markers list.
   if (input.images !== undefined && Object.keys(input.images).length > 0)
     model.style.images = input.images;
+  // Style half: `light` is a style-spec root property, compiled through as-is.
+  if (input.light !== undefined) model.style.light = input.light;
   if (input.className !== undefined || input.style !== undefined) {
     model.runtime.container = {};
     if (input.className !== undefined) model.runtime.container.className = input.className;
@@ -325,6 +327,7 @@ export function denormalizeOptions(model: MapModel): {
   parameters?: Record<string, unknown>;
   markers?: MapModel["runtime"]["markers"];
   images?: MapModel["style"]["images"];
+  light?: MapModel["style"]["light"];
 } {
   const options: {
     controls?: ControlsConfig;
@@ -333,6 +336,7 @@ export function denormalizeOptions(model: MapModel): {
     parameters?: Record<string, unknown>;
     markers?: MapModel["runtime"]["markers"];
     images?: MapModel["style"]["images"];
+    light?: MapModel["style"]["light"];
   } = {};
   if (model.runtime.controls !== undefined) options.controls = model.runtime.controls;
   if (model.runtime.legend !== undefined) options.legend = model.runtime.legend;
@@ -352,5 +356,7 @@ export function denormalizeOptions(model: MapModel): {
   // from `mapStyle` + addLayer, so images must be registered imperatively
   // (`map.addImage`) — they cannot ride in on the style object.
   if (model.style.images !== undefined) options.images = model.style.images;
+  // Same again for `light`: applied with `map.setLight` once the style loads.
+  if (model.style.light !== undefined) options.light = model.style.light;
   return options;
 }

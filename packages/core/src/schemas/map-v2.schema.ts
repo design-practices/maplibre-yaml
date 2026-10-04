@@ -46,6 +46,7 @@ import {
   ParametersSchema,
   MarkersSchema,
   ImagesSchema,
+  LightSchema,
 } from "./map.schema";
 import {
   GeoJSONSourceSchema,
@@ -383,6 +384,9 @@ export const StyleV2Schema: z.ZodTypeAny = z
     ),
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — style half, merged into the sprite on eject"
+    ),
+    light: LightSchema.optional().describe(
+      "The style-spec light shading fill-extrusion faces — style half, compiles to style.json `light`"
     ),
     sources: z
       .record(z.string(), SourceV2Schema)

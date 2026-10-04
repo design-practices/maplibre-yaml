@@ -425,6 +425,43 @@ describe("MapRenderer", () => {
     });
   });
 
+  describe("light (`light:` → map.setLight, U10′)", () => {
+    const config = {
+      center: [0, 0] as [number, number],
+      zoom: 2,
+      mapStyle: "https://example.com/style.json",
+    };
+
+    it("applies the document light on load", () => {
+      const light = { anchor: "map" as const, position: [1.5, 210, 30] as [number, number, number] };
+      renderer = new MapRenderer(container, config, [], { light });
+      const map = renderer.getMap() as any;
+      map.setLight = vi.fn();
+      map.emit("load");
+      expect(map.setLight).toHaveBeenCalledWith(light);
+    });
+
+    it("a rejected light warns and the document keeps loading", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      renderer = new MapRenderer(container, config, [], { light: { intensity: 0.4 } });
+      const map = renderer.getMap() as any;
+      map.setLight = vi.fn(() => {
+        throw new Error("bad light");
+      });
+      expect(() => map.emit("load")).not.toThrow();
+      expect(warn.mock.calls.some((c) => String(c[0]).includes("light"))).toBe(true);
+      warn.mockRestore();
+    });
+
+    it("touches nothing when no light was declared", () => {
+      renderer = new MapRenderer(container, config, [], {});
+      const map = renderer.getMap() as any;
+      map.setLight = vi.fn();
+      map.emit("load");
+      expect(map.setLight).not.toHaveBeenCalled();
+    });
+  });
+
   describe("isMapLoaded", () => {
     it("returns false before map loads", () => {
       const config = {

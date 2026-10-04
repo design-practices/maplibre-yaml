@@ -1,0 +1,122 @@
+# Hermetic twin of docs/public/configs/gallery/crosshatch.yaml. Two things
+# differ, nothing else: tiles come from the vendored lower-Manhattan fixture
+# (examples/gallery/fixtures/omt — OpenStreetMap data, ODbL), and images and
+# glyphs are the docs site's own committed files, served from the repo root.
+# The CLI suite pins that the layers, light and images match the docs page.
+type: map
+id: crosshatch
+config:
+  center: [-74.0118, 40.7075]
+  zoom: 15.9
+  pitch: 60
+  bearing: 29
+  # An inline base style that carries only the self-hosted serif italic
+  # glyphs (Libre Baskerville Italic, OFL — Tangram labelled in Baskerville
+  # italic). The document owns every layer.
+  mapStyle:
+    version: 8
+    glyphs: "/docs/public/fonts/{fontstack}/{range}.pbf"
+    sources: {}
+    layers: []
+# Building shading. Tangram's lights are fixed to the world, so this one is
+# anchored to the map: from the south-west (239°), 30° from overhead — the
+# same light MapLibre's default gives at this camera's bearing, now staying
+# put as the map turns. Tune `position`/`intensity` to change face contrast.
+light:
+  anchor: map
+  position: [1.15, 239, 30]
+  intensity: 0.5
+images:
+  earth: { url: "/docs/public/classics/crosshatch/earth.png", pixelRatio: 2 }
+  landuse: { url: "/docs/public/classics/crosshatch/landuse.png", pixelRatio: 2 }
+  water: { url: "/docs/public/classics/crosshatch/water.png", pixelRatio: 1 }
+  building-hatch: { url: "/docs/public/classics/crosshatch/building-fallback.png", pixelRatio: 4 }
+sources:
+  omt:
+    type: vector
+    tiles: ["/examples/gallery/fixtures/omt/{z}/{x}/{y}.pbf"]
+    minzoom: 13
+    maxzoom: 14
+    bounds: [-74.035, 40.695, -73.985, 40.735]
+    attribution: '© <a href="https://www.openmaptiles.org/">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+layers:
+  # Tangram `earth`: paper, hatched with hatch_0 repeated per tile.
+  - id: earth
+    type: background
+    paint:
+      background-pattern: earth
+  # Tangram `landuse`: the denser hatch_2.
+  - id: parks
+    type: fill
+    source: omt
+    source-layer: park
+    paint:
+      fill-pattern: landuse
+  # A data-driven pattern: open sand reads as bare ground (the light earth
+  # hatch); vegetation and farmland take the dense landuse hatch.
+  - id: landcover
+    type: fill
+    source: omt
+    source-layer: landcover
+    filter: ["match", ["get", "class"], ["grass", "wood", "farmland", "sand"], true, false]
+    paint:
+      fill-pattern: ["match", ["get", "class"], "sand", "earth", "landuse"]
+  # Tangram `water`: #343434 lit through a crumpled-paper normal map.
+  - id: water
+    type: fill
+    source: omt
+    source-layer: water
+    paint:
+      fill-pattern: water
+  - id: roads
+    type: line
+    source: omt
+    source-layer: transportation
+    filter: ["match", ["get", "class"], ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"], true, false]
+    layout:
+      line-join: round
+      line-cap: round
+    paint:
+      line-color: "#343434"
+      line-width:
+        - interpolate
+        - ["exponential", 1.6]
+        - ["zoom"]
+        - 13
+        - ["match", ["get", "class"], ["motorway", "trunk"], 2, 0.6]
+        - 18
+        - ["match", ["get", "class"], ["motorway", "trunk"], 16, ["primary", "secondary"], 10, 6]
+  - id: buildings
+    type: fill-extrusion
+    source: omt
+    source-layer: building
+    minzoom: 13
+    paint:
+      fill-extrusion-pattern: building-hatch
+      # Tangram exaggerates height by max(1, 0.5 + (1 - zoom/20) * 5) — linear
+      # in zoom (2.25x at z13 → 1x at z18), so one interpolate reproduces it.
+      fill-extrusion-height:
+        - interpolate
+        - ["linear"]
+        - ["zoom"]
+        - 13
+        - ["*", ["coalesce", ["get", "render_height"], 10], 2.25]
+        - 18
+        - ["coalesce", ["get", "render_height"], 10]
+      fill-extrusion-base: ["coalesce", ["get", "render_min_height"], 0]
+      fill-extrusion-vertical-gradient: true
+  - id: place-labels
+    type: symbol
+    source: omt
+    source-layer: place
+    filter: ["match", ["get", "class"], ["neighbourhood", "suburb", "quarter"], true, false]
+    layout:
+      text-field: ["coalesce", ["get", "name:en"], ["get", "name"]]
+      text-font: ["Libre Baskerville Italic"]
+      text-size: 22
+      text-max-width: 7
+      text-pitch-alignment: viewport
+    paint:
+      text-color: "#000000"
+      text-halo-color: "#f9f3e3"
+      text-halo-width: 3.5

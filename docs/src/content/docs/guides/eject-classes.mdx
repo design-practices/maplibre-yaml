@@ -29,6 +29,7 @@ disagree.
 | `state` | ejects | A style-spec root property; compiles through on supporting runtimes, and below the global-state floor the defaults are inlined into expressions (the `inlineState` gate). |
 | `layer.before` | ejects | Placement compiles honestly: the emitted layers array is ordered accordingly, and `EmitResult.placements` carries the intent. |
 | `images` | ejects | Named images are fetched at compile time and merged into the document sprite; layer references are rewritten to `mlym:<name>` so they resolve in the emitted style. |
+| `light` | ejects | The style-spec root light; compiles through verbatim to the emitted style's `light`, replacing any basemap light. |
 | `markers` | ejects via fallback | Markers lower to a symbol layer with generated pin sprites — the pins render in the emitted style; DOM-marker behavior (dragging, built-in popups) does not compile, reported as lossy. |
 | `layer.interactive` | declared absence | Popups, hover, and highlight are runtime behavior; `attachInteractions()` restores them over an ejected style. |
 | `layer.legend` | declared absence | Legend entries are chrome, not cartography. |

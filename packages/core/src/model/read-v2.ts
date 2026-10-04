@@ -173,6 +173,8 @@ export function readV2Block(doc: MapBlockV2): MapModel {
   const v2Images = style["images"] as MapModel["style"]["images"];
   if (v2Images !== undefined && Object.keys(v2Images).length > 0)
     model.style.images = v2Images;
+  if (style["light"] !== undefined)
+    model.style.light = style["light"] as MapModel["style"]["light"];
 
   if (docParameters !== undefined)
     model.runtime.parameters = docParameters as Record<string, unknown>;
