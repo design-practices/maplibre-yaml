@@ -11,6 +11,8 @@ packages/core/schemas/*.json
 docs/public/schema/
 docs/public/llms.txt
 docs/public/llms-full.txt
+# The classics launch page's ejected styles (mlym emit at docs build time)
+docs/public/classics/*/ejected/
 
 # Generated reference docs (generate-on-build from core; see docs/astro.config.mjs)
 docs/src/content/docs/reference/yaml/

@@ -14,6 +14,10 @@
  *   node e2e/server.mjs &        # serves the repo, incl. docs configs
  *   node scripts/verify-docs-gallery.mjs
  *
+ * It also drives the built classics launch page (/examples/classics/, U11) over live
+ * tiles: both panes of each classic render, and the live pane's effect is
+ * on. That needs the docs build (`pnpm build`).
+ *
  * Exits non-zero listing every page that fails its expectations:
  *  - no page/console errors, no ml-map:error events
  *  - every document layer present in the style
@@ -181,9 +185,85 @@ for (const slug of slugs) {
   if (problems.length) failures.push(slug);
 }
 
+// ---------------------------------------------------------------------------
+// The classics launch page (U11): the BUILT page (docs/dist, which the
+// verification server mounts at /classics/) against live OpenFreeMap tiles
+// and glyphs. Its documents name their textures, sprites and glyphs on
+// docs.maplibre-yaml.org; those are answered from this tree's build (the
+// files the next deploy ships) unless VERIFY_CLASSICS_SITE=live, which
+// checks the deployed copies instead. The hermetic twin is
+// e2e/classics.spec.ts. Build the docs first (pnpm build).
+const CLASSICS = ["crosshatch", "blueprint"];
+const SITE = "https://docs.maplibre-yaml.org";
+let classicsChecked = 0;
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const problems = [];
+  page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
+  page.on("console", (m) => {
+    if (m.type() === "error") problems.push(`console: ${m.text().slice(0, 200)}`);
+  });
+  if (process.env.VERIFY_CLASSICS_SITE !== "live") {
+    await page.route(`${SITE}/**`, async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      try {
+        const body = readFileSync(`docs/dist${decodeURIComponent(path)}`);
+        await route.fulfill({ status: 200, headers: { "access-control-allow-origin": "*" }, body });
+      } catch {
+        problems.push(`not in the docs build: ${path}`);
+        await route.fulfill({ status: 404, body: "not found" });
+      }
+    });
+  }
+  try {
+    await page.goto(`${BASE}/examples/classics/`, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForFunction(
+      (n) => document.querySelectorAll('section.classic[data-ready="true"]').length === n,
+      CLASSICS.length,
+      { timeout: 45000 }
+    );
+    for (const name of CLASSICS) {
+      classicsChecked += 1;
+      const panes = page
+        .waitForFunction(
+          (n) => {
+            const { live, ejected } = document.querySelector(`section.classic[data-classic="${n}"]`).__maps;
+            const qrf = (m, id) => m.queryRenderedFeatures(undefined, { layers: [id] }).length;
+            return qrf(live, "roads") > 0 && qrf(ejected, "roads") > 0 && qrf(ejected, "buildings") > 0;
+          },
+          name,
+          { timeout: 45000 }
+        )
+        .catch(() => problems.push(`${name}: a pane rendered no roads/buildings from live tiles`));
+      const effect = page
+        .waitForFunction(
+          (n) => document.querySelector(`section.classic[data-classic="${n}"] [data-fx-status]`)?.dataset.state === "on",
+          name,
+          { timeout: 45000 }
+        )
+        .catch(async () => {
+          const text = await page
+            .locator(`section.classic[data-classic="${name}"] [data-fx-status]`)
+            .textContent();
+          problems.push(`${name}: live pane effect not on (${text})`);
+        });
+      await Promise.all([panes, effect]);
+    }
+  } catch (e) {
+    problems.push(`FAILED: ${String(e.message).split("\n")[0]}`);
+  }
+  await page.close();
+  console.log(
+    `${problems.length ? "FAIL" : "ok  "} classics launch page (${CLASSICS.join(", ")})` +
+      (problems.length ? "\n     - " + problems.join("\n     - ") : "")
+  );
+  if (problems.length) failures.push("classics");
+}
+
 await browser.close();
 console.log(
-  `\n${slugs.length - failures.length - skipped}/${slugs.length - skipped} pages verified` +
+  `\n${slugs.length - failures.filter((f) => f !== "classics").length - skipped}/${slugs.length - skipped} pages verified` +
+    `; classics launch page: ${failures.includes("classics") ? "FAIL" : "ok"} (${classicsChecked} classics)` +
     (skipped ? ` (${skipped} skipped — see SKIP lines above)` : "") +
     (failures.length ? `; FAILURES: ${failures.join(", ")}` : "")
 );

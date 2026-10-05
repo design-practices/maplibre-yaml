@@ -1,0 +1,276 @@
+---
+/**
+ * One Mapzen classic, twice, from one document (U11 / AE3):
+ *
+ *  - live:    `<ml-map>` runs public/classics/<name>.yaml, and the effects
+ *             package upgrades its `effect:` layer when it loads;
+ *  - ejected: vanilla maplibre-gl — no maplibre-yaml code — runs
+ *             public/classics/<name>/ejected/style.json, which the docs
+ *             build produced with `mlym emit --with-fallbacks`
+ *             (scripts/classics-eject.mjs).
+ *
+ * The two cameras stay synced in both directions (the maplibre-gl-compare
+ * pattern). Below 50rem the panes stack and stay synced.
+ */
+interface Props {
+  /** File stem under public/classics/ */
+  name: string;
+  /** The effect the document's buildings carry */
+  effect: string;
+  /** Pane height on wide screens */
+  height?: string;
+}
+
+const { name, effect, height = "460px" } = Astro.props;
+const doc = `/classics/${name}.yaml`;
+const style = `/classics/${name}/ejected/style.json`;
+---
+
+<section class="classic" data-classic={name} style={`--classic-pane-height: ${height}`}>
+  <!-- not-content: opt out of Starlight's markdown flow margins, which
+       would push each map (and the map inside <ml-map>) down 1rem. -->
+  <div class="classic-panes not-content">
+    <figure class="classic-pane">
+      <figcaption>
+        <span class="classic-pane-title">Live</span>
+        <span class="classic-pane-what"><code>&lt;ml-map&gt;</code> + <code>@maplibre-yaml/effects</code></span>
+        <span class="classic-fx" data-fx-status data-state="loading">effect loading…</span>
+      </figcaption>
+      <div class="classic-map" data-pane-slot="live" data-doc={doc}></div>
+    </figure>
+    <figure class="classic-pane">
+      <figcaption>
+        <span class="classic-pane-title">Ejected</span>
+        <span class="classic-pane-what">vanilla <code>maplibre-gl</code>, no library code</span>
+        <span class="classic-fx" data-state="static">static fallback</span>
+      </figcaption>
+      <div class="classic-map" data-pane="ejected" data-style={style}></div>
+    </figure>
+  </div>
+  <p class="classic-links">
+    <a href={doc} download={`${name}.yaml`} data-download="document">Download <code>{name}.yaml</code></a>
+    <span aria-hidden="true">·</span>
+    <a href={style} download={`${name}.style.json`} data-download="ejected">Download the ejected <code>style.json</code></a>
+    <span aria-hidden="true">·</span>
+    <span>effect: <code>{effect}</code></span>
+  </p>
+</section>
+
+<script>
+  import maplibregl from "maplibre-gl";
+  import "maplibre-gl/dist/maplibre-gl.css";
+  import "@maplibre-yaml/core/register";
+
+  type MLMap = maplibregl.Map;
+  /** Where the emitted sprite URLs point (the deployed docs site). */
+  const PRODUCTION_ORIGIN = "https://docs.maplibre-yaml.org";
+  type MLMapElement = HTMLElement & { mapReady(): Promise<MLMap> };
+
+  /**
+   * Keep two maps on one camera, both directions. Each mirrored move is a
+   * jumpTo on the other map; the guard stops the echo of that jumpTo from
+   * bouncing back (maplibre-gl-compare's pattern, without the dependency).
+   */
+  function syncCameras(a: MLMap, b: MLMap): void {
+    let mirroring = false;
+    const follow = (from: MLMap, to: MLMap) => () => {
+      if (mirroring) return;
+      mirroring = true;
+      to.jumpTo({
+        center: from.getCenter(),
+        zoom: from.getZoom(),
+        bearing: from.getBearing(),
+        pitch: from.getPitch(),
+      });
+      mirroring = false;
+    };
+    a.on("move", follow(a, b));
+    b.on("move", follow(b, a));
+  }
+
+  /** The effects package, loaded once for the page: progressive enhancement. */
+  let effects: Promise<typeof import("@maplibre-yaml/effects") | null> | null = null;
+  function loadEffects() {
+    effects ??= import("@maplibre-yaml/effects/register")
+      .then(() => import("@maplibre-yaml/effects"))
+      .catch((err) => {
+        console.warn("[classics] effects package failed to load; showing the static fallback", err);
+        return null;
+      });
+    return effects;
+  }
+
+  /** Report honestly whether the live pane is running its effect. */
+  async function watchEffect(section: HTMLElement, map: MLMap): Promise<void> {
+    const status = section.querySelector<HTMLElement>("[data-fx-status]")!;
+    const set = (state: string, text: string) => {
+      status.dataset.state = state;
+      status.textContent = text;
+    };
+    const fx = await loadEffects();
+    if (!fx) return set("static", "static fallback (effects unavailable)");
+    // For e2e/classics.spec.ts: what is attached to the live map right now.
+    (section as HTMLElement & { __effects?: () => unknown[] }).__effects = () => fx.getAttachedEffects(map);
+    // <ml-map> attaches once the package registers and its map has loaded.
+    for (let i = 0; i < 40; i++) {
+      const attached = fx.getAttachedEffects(map);
+      if (attached.length > 0) {
+        // ready() resolves once visible tiles are built, or at once when the
+        // effect declared absence — only then is `active` the final word.
+        await Promise.all(attached.map((e) => e.handle?.ready()));
+        const off = attached.find((e) => !e.active);
+        if (off) return set("static", `static fallback (${off.reason ?? "effect unavailable here"})`);
+        return set("on", `effect on: ${attached.map((e) => e.type).join(", ")}`);
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    set("static", "static fallback (effect did not attach)");
+  }
+
+  /** Serve a production-origin URL from this page's origin (PR previews, astro dev). */
+  const sameOrigin = (url: string): string =>
+    url.startsWith(PRODUCTION_ORIGIN) ? location.origin + url.slice(PRODUCTION_ORIGIN.length) : url;
+
+  /**
+   * Build the live `<ml-map>` from the published document. The document's
+   * image and glyph URLs are absolute production URLs (so a downloaded copy
+   * works anywhere); off production they would 404 until a deploy — a new
+   * asset such as the hatch atlas is missing there — so the YAML handed to
+   * the element points them at this page's origin. The download link still
+   * serves the file untouched.
+   */
+  async function mountLive(slot: HTMLElement): Promise<MLMapElement> {
+    const res = await fetch(slot.dataset.doc!);
+    let yaml = await res.text();
+    if (location.origin !== PRODUCTION_ORIGIN) yaml = yaml.split(`${PRODUCTION_ORIGIN}/`).join(`${location.origin}/`);
+    const el = document.createElement("ml-map") as MLMapElement;
+    // Carry the slot's attributes over — including Astro's scoped-style
+    // marker (data-astro-cid-*), without which `.classic-map` has no height.
+    for (const { name, value } of slot.attributes) {
+      if (name !== "data-pane-slot" && name !== "data-doc") el.setAttribute(name, value);
+    }
+    el.dataset.pane = "live";
+    const script = document.createElement("script");
+    script.type = "text/yaml";
+    script.textContent = yaml;
+    el.append(script);
+    slot.replaceWith(el);
+    return el;
+  }
+
+  async function mount(section: HTMLElement): Promise<void> {
+    const ejectedEl = section.querySelector<HTMLElement>('[data-pane="ejected"]')!;
+    const liveEl = await mountLive(section.querySelector<HTMLElement>('[data-pane-slot="live"]')!);
+
+    // The honesty claim: this map is plain maplibre-gl fed the emitted file.
+    // The emitted style.json carries an ABSOLUTE production sprite URL (what
+    // a downloader needs, and what `mlym emit --sprite-base` wrote). On any
+    // other origin — a PR preview, astro dev — that URL 404s until the files
+    // are deployed, and every pattern layer (buildings, ground, water)
+    // silently disappears. MapLibre's standard `transformRequest` hook serves
+    // those requests from this page's own origin instead; the file itself is
+    // untouched (still byte-identical to `mlym emit`).
+    const ejected = new maplibregl.Map({
+      container: ejectedEl,
+      style: ejectedEl.dataset.style!,
+      transformRequest: (url) => ({ url: sameOrigin(url) }),
+    });
+
+    const live = await liveEl.mapReady();
+    // Start the ejected pane on the live camera, then keep them together.
+    ejected.jumpTo({
+      center: live.getCenter(),
+      zoom: live.getZoom(),
+      bearing: live.getBearing(),
+      pitch: live.getPitch(),
+    });
+    syncCameras(live, ejected);
+    (section as HTMLElement & { __maps?: { live: MLMap; ejected: MLMap } }).__maps = { live, ejected };
+    section.dataset.ready = "true";
+    void watchEffect(section, live);
+  }
+
+  for (const section of document.querySelectorAll<HTMLElement>("section.classic")) {
+    void mount(section);
+  }
+</script>
+
+<style>
+  .classic {
+    margin: 2rem 0 2.5rem;
+  }
+  .classic-panes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .classic-pane {
+    margin: 0;
+    min-width: 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--sl-color-gray-6);
+    /* Captions wrap to different heights; the caption takes the slack so
+       both maps sit level. */
+    display: flex;
+    flex-direction: column;
+  }
+  .classic-pane figcaption {
+    flex: 1 0 auto;
+    align-content: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.6rem;
+    padding: 0.45rem 0.75rem;
+    font-size: var(--sl-text-sm);
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+  .classic-pane-title {
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+  .classic-pane-what {
+    color: var(--sl-color-gray-2);
+  }
+  .classic-fx {
+    margin-inline-start: auto;
+    font-size: var(--sl-text-xs);
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--sl-color-gray-4);
+    color: var(--sl-color-gray-2);
+  }
+  .classic-fx[data-state="on"] {
+    border-color: var(--sl-color-accent);
+    color: var(--sl-color-accent-high);
+  }
+  .classic-map {
+    display: block;
+    height: var(--classic-pane-height);
+    width: 100%;
+  }
+  .classic-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.6rem;
+    margin-top: 0.6rem;
+    font-size: var(--sl-text-sm);
+  }
+  /* Phones and narrow windows: stack, keep sync; each pane a bit shorter. */
+  @media (max-width: 50rem) {
+    .classic-panes {
+      grid-template-columns: 1fr;
+    }
+    .classic-map {
+      height: min(var(--classic-pane-height), 55vh);
+    }
+    .classic-links {
+      flex-direction: column;
+    }
+    .classic-links > [aria-hidden] {
+      display: none;
+    }
+  }
+</style>
