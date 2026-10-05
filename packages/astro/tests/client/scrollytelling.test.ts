@@ -8,6 +8,21 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
+
+// `CustomEvent` is a Node global only from Node 22; CI also runs Node 18 and
+// 20, where `Event`/`EventTarget` exist but `CustomEvent` does not. The
+// client script calls it at runtime (in browsers it always exists), so a
+// minimal polyfill here is enough for the node test environment.
+if (typeof globalThis.CustomEvent === "undefined") {
+  class NodeCustomEvent<T> extends Event {
+    readonly detail: T;
+    constructor(type: string, init?: CustomEventInit<T>) {
+      super(type, init);
+      this.detail = init?.detail as T;
+    }
+  }
+  (globalThis as { CustomEvent?: unknown }).CustomEvent = NodeCustomEvent;
+}
 import {
   runChapterAction,
   createStoryController,
