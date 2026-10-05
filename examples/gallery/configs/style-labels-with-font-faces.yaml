@@ -1,0 +1,54 @@
+# Hermetic twin of docs/public/configs/gallery/style-labels-with-font-faces.yaml
+# (U18). The glyphs URL is the e2e server's empty-pbf endpoint — so NO label
+# can draw from glyphs — and the font-faces point at same-origin subsets of
+# the same Noto fonts (examples/gallery/fixtures/fonts, OFL). Every label
+# that draws here therefore drew from a font face. The /landcover raster
+# stands in for the satellite tiles. maplibre-gl >= 6.7.0 (the spec skips below).
+type: map
+id: style-labels-with-font-faces
+config:
+  center: [42.3, 40.95]
+  zoom: 5.8
+  mapStyle:
+    version: 8
+    glyphs: "/glyphs/{fontstack}/{range}.pbf"
+    font-faces:
+      Noto Sans Regular:
+        - url: "/examples/gallery/fixtures/fonts/NotoSansGeorgian-subset.ttf"
+          unicode-range: ["U+10A0-10FF", "U+1C90-1CBF"]
+        - url: "/examples/gallery/fixtures/fonts/NotoSansArmenian-subset.ttf"
+          unicode-range: ["U+0530-058F"]
+    sources: {}
+    layers: []
+sources:
+  satellite:
+    type: raster
+    tiles:
+      - "/landcover/{z}/{x}/{y}.png"
+    tileSize: 256
+    attribution: "synthetic local tiles"
+layers:
+  - id: satellite
+    type: raster
+    source: satellite
+  - id: places
+    type: symbol
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: { name: "თბილისი" }, geometry: { type: Point, coordinates: [44.8271, 41.7151] } }
+          - { type: Feature, properties: { name: "ბათუმი" }, geometry: { type: Point, coordinates: [41.6367, 41.6168] } }
+          - { type: Feature, properties: { name: "Երևան" }, geometry: { type: Point, coordinates: [44.5152, 40.1872] } }
+          - { type: Feature, properties: { name: "Գյումրի" }, geometry: { type: Point, coordinates: [43.8453, 40.7894] } }
+          - { type: Feature, properties: { name: "Trabzon" }, geometry: { type: Point, coordinates: [39.7168, 41.0027] } }
+          - { type: Feature, properties: { name: "Erzurum" }, geometry: { type: Point, coordinates: [41.2769, 39.9043] } }
+    layout:
+      text-font: ["Noto Sans Regular"]
+      text-size: 20
+      text-field: ["get", "name"]
+    paint:
+      text-color: "white"
+      text-halo-color: "black"
+      text-halo-width: 1

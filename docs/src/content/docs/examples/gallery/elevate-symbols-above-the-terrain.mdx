@@ -1,0 +1,23 @@
+---
+title: Elevate symbols above the terrain
+description: The MapLibre symbol-height-offset example — labels floating a data-driven height above 3D terrain
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/elevate-symbols-above-the-terrain.yaml?raw';
+
+Replicates the MapLibre example [Elevate symbols above the terrain](https://maplibre.org/maplibre-gl-js/docs/examples/elevate-symbols-above-the-terrain/): three labels over Innsbruck, floating 0 m, 500 m and 1500 m above the ground.
+
+<LiveMap src="/configs/gallery/elevate-symbols-above-the-terrain.yaml" height="500px" caption="Right-drag (or Ctrl-drag) to orbit. The labels keep their height above the ground." />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="elevate-symbols-above-the-terrain.yaml" />
+
+## What to notice
+
+- `symbol-height-offset` is a data-driven layout property: `["get", "height"]` reads each feature's own height in metres. It requires `symbol-placement: point`.
+- **Requires maplibre-gl ≥ 6.6.0.** The docs site runs 6.x.
+- The base style is an empty inline object with no `glyphs` URL. maplibre-gl ≥ 5.11 then draws label text with the browser's own fonts, so nothing at the style root needs authoring and the document stays pure YAML.
+- The terrain comes from map-level `terrain:` and `sky:`, as in [3D terrain](/examples/gallery/3d-terrain/).

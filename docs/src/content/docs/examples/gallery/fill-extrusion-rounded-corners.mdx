@@ -1,0 +1,24 @@
+---
+title: Fill-extrusion rounded corners
+description: The MapLibre rounded-corners example — extruded buildings with rounded corners, height and opacity on sliders
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/fill-extrusion-rounded-corners.yaml?raw';
+
+Replicates the MapLibre example [Fill-extrusion rounded corners](https://maplibre.org/maplibre-gl-js/docs/examples/fill-extrusion-rounded-corners/): lower Manhattan extruded from the basemap's own building data, every corner rounded by 2 m.
+
+<LiveMap src="/configs/gallery/fill-extrusion-rounded-corners.yaml" height="500px" caption="Drag the sliders. Right-drag (or Ctrl-drag) to orbit." />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="fill-extrusion-rounded-corners.yaml" />
+
+## What to notice
+
+- `fill-extrusion-rounded-corner-distance` is a **layout** property, not paint. It is set in metres.
+- **Requires maplibre-gl ≥ 6.2.0.** That is the first release whose renderer draws the rounded geometry. The docs site runs 6.x.
+- Upstream has three sliders. Two of them are `parameters:` here: the panel writes `state.heightScale` and `state.opacity`, and the paint expressions read them with `global-state`.
+- The third slider, corner radius, is not here. The style spec makes the property constant-only, so no expression can drive it. Changing the radius live takes one `setLayoutProperty()` call through [`mapReady()`](/integrations/web-components/).
+- `source: openmaptiles` names the basemap's own vector source, as in [Display buildings in 3D](/examples/gallery/display-buildings-in-3d/). `before: waterway_line_label` keeps the basemap's labels on top.

@@ -556,6 +556,35 @@ describe("HillshadeLayerSchema", () => {
     };
     expect(HillshadeLayerSchema.parse(layer)).toMatchObject(layer);
   });
+
+  it("accepts multidirectional hillshade: one direction/altitude/color per light", () => {
+    const layer = {
+      id: "hillshade",
+      type: "hillshade" as const,
+      source: "terrain-source",
+      paint: {
+        "hillshade-method": "multidirectional" as const,
+        "hillshade-highlight-color": ["#FF4000", "#FFFF00", "#40ff00", "#00FF80"],
+        "hillshade-shadow-color": ["#00bfff", "#0000ff", "#bf00ff", "#FF0080"],
+        "hillshade-illumination-direction": [270, 315, 0, 45],
+        "hillshade-illumination-altitude": [30, 30, 30, 30],
+      },
+    };
+    expect(HillshadeLayerSchema.parse(layer)).toMatchObject(layer);
+  });
+
+  it("rejects an unknown hillshade-method and a non-numeric light direction", () => {
+    const base = { id: "h", type: "hillshade" as const, source: "dem" };
+    expect(
+      HillshadeLayerSchema.safeParse({ ...base, paint: { "hillshade-method": "sideways" } }).success
+    ).toBe(false);
+    expect(
+      HillshadeLayerSchema.safeParse({
+        ...base,
+        paint: { "hillshade-illumination-direction": [270, "north"] },
+      }).success
+    ).toBe(false);
+  });
 });
 
 describe("BackgroundLayerSchema", () => {

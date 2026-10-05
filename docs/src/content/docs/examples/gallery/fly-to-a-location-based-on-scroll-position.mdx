@@ -1,0 +1,24 @@
+---
+title: Fly to a location based on scroll position
+description: The MapLibre scroll-driven flyTo example — a scrollytelling document whose chapters carry the camera
+tableOfContents: false
+---
+
+import GalleryStory from '../../../../components/GalleryStory.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/fly-to-a-location-based-on-scroll-position.yaml?raw';
+
+Replicates the MapLibre example [Fly to a location based on scroll position](https://maplibre.org/maplibre-gl-js/docs/examples/fly-to-a-location-based-on-scroll-position/): *The Adventure of the Bruce-Partington Plans*, told across London. Scroll through the story below. As each chapter reaches the middle of the screen, the map flies to that chapter's camera.
+
+<GalleryStory src="/configs/gallery/fly-to-a-location-based-on-scroll-position.yaml" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="fly-to-a-location-based-on-scroll-position.yaml" />
+
+## What to notice
+
+- This is a `type: scrollytelling` document. Upstream builds a `chapters` object in JS, listens for scroll events and calls `flyTo`. Here each chapter carries its own `center`, `zoom`, `bearing`, `pitch` and `speed`, and the runtime does the rest.
+- The runtime is the [`<Scrollytelling>`](/integrations/astro/) component from `@maplibre-yaml/astro`. This page passes it the same YAML file shown above, with `src=`.
+- Upstream slows the Aldgate flight with `duration: 6000`. Chapters have no `duration`, so that chapter uses a lower `speed` instead.
+- Chapters can also show and hide layers and run actions on enter and exit. See the [scrollytelling schema](/schema/scrollytelling/).

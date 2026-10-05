@@ -35,6 +35,9 @@ importers:
       '@astrojs/starlight':
         specifier: ^0.37.1
         version: 0.37.1(astro@5.16.6(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.54.0)(sass@1.99.0)(tsx@4.23.0)(typescript@5.9.3)(yaml@2.9.1))
+      '@maplibre-yaml/astro':
+        specifier: workspace:^
+        version: link:../packages/astro
       '@maplibre-yaml/core':
         specifier: workspace:^
         version: link:../packages/core

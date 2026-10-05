@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/fill-extrusion-rounded-corners/
+# `fill-extrusion-rounded-corner-distance` (a LAYOUT property) rounds every
+# extruded corner by that many metres. Needs maplibre-gl >= 6.2.0 (the docs
+# site runs 6.x). As in display-buildings-in-3d, the layer extends the
+# basemap: `openmaptiles` is the loaded style's own vector source.
+type: map
+id: fill-extrusion-rounded-corners
+config:
+  center: [-74.0066, 40.7135]
+  zoom: 15.5
+  pitch: 45
+  bearing: -17.6
+  mapStyle: "https://tiles.openfreemap.org/styles/bright"
+# The upstream page's height and opacity sliders, as parameters: the panel
+# writes global state and the paint expressions read it. (The corner radius
+# stays fixed — the property is constant-only, so no expression can drive
+# it; changing it live is a setLayoutProperty() call.)
+state:
+  heightScale:
+    default: 1
+  opacity:
+    default: 0.8
+parameters:
+  heightScale:
+    label: Height multiplier
+    type: range
+    min: 0
+    max: 3
+    step: 0.1
+  opacity:
+    label: Opacity
+    type: range
+    min: 0
+    max: 1
+    step: 0.05
+layers:
+  - id: building-extrusion
+    type: fill-extrusion
+    source: openmaptiles
+    source-layer: building
+    minzoom: 14
+    before: waterway_line_label
+    filter: ["!=", ["get", "hide_3d"], true]
+    layout:
+      fill-extrusion-rounded-corner-distance: 2
+    paint:
+      fill-extrusion-color:
+        ["interpolate", ["linear"], ["get", "render_height"], 0, "lightgray", 200, "royalblue", 400, "lightblue"]
+      fill-extrusion-height: ["*", ["global-state", "heightScale"], ["get", "render_height"]]
+      fill-extrusion-base: ["*", ["global-state", "heightScale"], ["get", "render_min_height"]]
+      fill-extrusion-opacity: ["global-state", "opacity"]

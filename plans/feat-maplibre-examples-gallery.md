@@ -99,7 +99,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · Ext = exten
 | enter-a-360-photosphere | X | a photosphere plugin, plus `maxPitch: 175`, well above the schema's 85° cap (ml-rww). Kept X in the U17 rescore |
 | fit-a-map-to-a-bounding-box | E | `config.bounds` |
 | fit-to-the-bounds-of-a-linestring | E | `config.fitTo: { source }` — shipped in 0.7 U14 (ml-chh.9); was G (fit-to-data gap) |
-| fly-to-a-location-based-on-scroll-position | E | Astro `Scrollytelling` — this is the library's home turf |
+| fly-to-a-location-based-on-scroll-position | E | Astro `Scrollytelling` — this is the library's home turf. Page: U18 (`type: scrollytelling`, docs embed via `GalleryStory.astro`) |
 | hash-routing | E | `config.hash: true` |
 | level-of-detail-control | H | params-panel sliders (`parameters:`) feed `ml-map:parameter-change`, then one `setSourceTileLodParams()` call. Rescored in U17; was X (LoD internals) |
 | offset-the-vanishing-point-using-padding | H | camera padding via `getMap().easeTo({padding})` |
@@ -153,7 +153,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · Ext = exten
 | add-an-animated-icon-to-the-map | H | animated canvas `addImage` |
 | animate-an-icon-on-the-gpu | H | the YAML carries the point source and the symbol layer that names the icon; `addImage()` registers a `renderWithWebGL` style image after `mapReady()`. Needs maplibre-gl ≥ 6.3 (U19). The effects API doesn't fit, because effects enhance layers, not style images. Rescored in U17; was X (WebGL atlas writes) |
 | display-a-remote-svg-symbol | E | `images:` loads the SVG through an `<img>` (U6) — re-badged in U16; was H (resolver callback) |
-| elevate-symbols-above-the-terrain | H | `terrain:` landed (U15); `symbol-height-offset` only exists in maplibre-gl 6 — becomes E once 0.7 runs v6 (U19) |
+| elevate-symbols-above-the-terrain | E | `terrain:` (U15) + data-driven `symbol-height-offset` (maplibre-gl ≥ 6.6.0); no glyphs URL needed on ≥ 5.11. Page: U18 |
 | generate-and-add-a-missing-icon-to-the-map | H | `styleimagemissing` handler |
 | use-a-fallback-image | H | `coalesce` image expression works, but icons must exist (images theme) |
 | change-a-layers-color-with-buttons | H | `setPaintProperty` via `getMap()`; `state:` + `global-state` color is the declarative alternative (params-UI theme) |
@@ -189,7 +189,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · Ext = exten
 | add-a-hillshade-layer | E | hillshade layer + raster-dem source |
 | add-3d-terrain-from-quantized-mesh-tiles | H | quantized-mesh protocol plugin + terrain gap |
 | add-a-color-relief-layer | E | `color-relief` layer type — shipped in 0.7 U14 (ml-chh.8; maplibre-gl ≥ 5.6, declared absence below); was G |
-| add-a-multidirectional-hillshade-layer | E | v5 hillshade props ride passthrough (curated-key theme) |
+| add-a-multidirectional-hillshade-layer | E | `hillshade-method: multidirectional` + per-light arrays (maplibre-gl ≥ 5.5.0). U18 widened core's hillshade paint schema, which rejected a direction array. Page: U18 |
 | add-contour-lines | H | maplibre-contour plugin |
 | display-a-hybrid-satellite-map-with-terrain-elevation | **G** | terrain theme |
 | sky-fog-terrain | **G** | `sky:`/fog authoring absent (theme) |
@@ -201,7 +201,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · Ext = exten
 | add-a-3d-model-with-shadow-using-threejs | **Ext** | models backend with a shadow param (ml-chh.19). Rescored in U17; was X (custom layer) |
 | adding-3d-models-using-threejs-on-terrain | **Ext** | models backend that is terrain-aware; today's effects declare absence under terrain (ml-chh.19). Rescored in U17; was X (custom layer) |
 | extrude-polygons-for-3d-indoor-mapping | E | `fill-extrusion-height`/`-base` from properties |
-| fill-extrusion-rounded-corners | E | v5 key rides passthrough (curated-key theme) |
+| fill-extrusion-rounded-corners | E | layout `fill-extrusion-rounded-corner-distance` (maplibre-gl ≥ 6.2.0); height/opacity sliders as `parameters:` + `global-state`; the radius slider is not expressible (constant-only property). Page: U18 |
 | display-a-globe-with-a-vector-map | **G** | `projection:` absent (globe theme) |
 | display-a-globe-with-an-atmosphere | **G** | globe + sky themes |
 | add-a-custom-layer-with-tiles-to-a-globe | X | a tile-mesh renderer that reads `map.style.projection` internals. Kept X in the U17 rescore |
@@ -230,7 +230,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · Ext = exten
 |---|---|---|
 | display-and-style-rich-text-labels | E | `format` expression in `text-field` |
 | style-labels-with-web-fonts | H | `glyphs`/fonts via inline basemap object |
-| style-labels-with-font-faces | H | inline basemap `font-faces` — validated by 5.x but only applied at runtime by maplibre-gl 6 (U19); no page yet |
+| style-labels-with-font-faces | H | style-root `font-faces` in the inline `mapStyle` (no YAML field — the web-fonts hatch); rendered by maplibre-gl ≥ 6.7.0. Page: U18 |
 | change-the-case-of-labels | E | `upcase`/`downcase` expressions |
 | style-labels-with-local-fonts | H | font-stack override via inline basemap |
 | variable-label-placement | E | `text-variable-anchor` (curated) |
@@ -439,3 +439,53 @@ the upstream code):
 
 Existing beads these rows lean on: ml-rww (the 85° pitch cap) and U19 /
 ml-vw4.9 (maplibre-gl 6).
+
+## U18 final census (0.7) (2026-10-05, ml-vw4.8)
+
+The last unit before the 0.7 release. U18 built five pages, each with a
+hermetic browser test in `e2e/gallery-u18.spec.ts` that skips below the
+maplibre-gl version that first renders its feature. The floors come from
+grepping the published bundles (`npm pack maplibre-gl@x`), not the
+style-spec's sdk-support table:
+
+| Page | Verdict | maplibre-gl floor | Test asserts |
+|---|---|---|---|
+| add-a-multidirectional-hillshade-layer | E | 5.5.0 | green, blue and red-lit slopes on one screen |
+| fill-extrusion-rounded-corners | E | 6.2.0 (6.1.0 validates the key but does not draw it) | radius 0 vs 2 m changes the pixels, 2 m re-renders identically; the height slider writes `global-state` |
+| elevate-symbols-above-the-terrain | E (was H) | 6.6.0 | each label's placed box sits its height above its projected ground point |
+| style-labels-with-font-faces | H | 6.7.0 (the spec table still points at an issue) | with an empty glyphs URL only the Georgian and Armenian labels place, and both font files are fetched |
+| fly-to-a-location-based-on-scroll-position | E | none | the BUILT docs page: scrolling a chapter into view lands the camera on it |
+
+Notes:
+- **One core change.** `HillshadeLayerSchema` typed
+  `hillshade-illumination-direction` as a number, so the multidirectional
+  document failed validation. U18 accepts a number or one value per light
+  for direction, altitude, highlight color and shadow color, and adds the
+  `hillshade-method` enum (changeset: `hillshade-multidirectional-schema`).
+- **font-faces stays H.** It is a style-root key, and the inline `mapStyle`
+  object is the documented hatch, as for web fonts. A dedicated YAML field
+  would make it E. No bead is filed; it is low value.
+- **The scrollytelling page.** The docs site now depends on
+  `@maplibre-yaml/astro`. `docs/src/components/GalleryStory.astro` wraps
+  `<Scrollytelling src>` in `not-content` and sticks the map below
+  Starlight's fixed header. `e2e/server.mjs` mounts the built page at its
+  path (as for the classics page). `scripts/verify-docs-gallery.mjs` drives
+  `type: scrollytelling` configs through the built page. Chapters have no
+  `duration`, so upstream's 6 s Aldgate flight uses `speed: 0.3` instead.
+- **Still badge-only** (annotations rechecked against the upstream code):
+  add-a-cog-raster-source (H — the cog-protocol plugin from unpkg; needs a
+  hermetic COG fixture), add-3d-terrain-from-quantized-mesh-tiles (H —
+  `maplibre-gl-3dtiles-terrain@0.1.0` loaded from a CDN `src/`; no hermetic
+  fixture), locale-switching (E, ml-chh.18), and the 22 other U17 H rows
+  (ml-chh.18).
+
+**Census, before → after (139 upstream rows):**
+
+| Verdict | After U17 | After U18 (0.7 final) |
+|---|---|---|
+| E — Pure YAML | 74 (70 pages, 4 badge only) | **75** (74 pages, 1 badge only) |
+| H — Escape hatch | 55 (28 pages, 27 badge only) | **54** (29 pages, 25 badge only) |
+| G — Gap | 0 | 0 |
+| Ext — Extension | 4 | 4 |
+| X — JS territory | 6 | 6 |
+| Pages | 98 | **103** |

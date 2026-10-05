@@ -1,0 +1,22 @@
+---
+title: Add a multidirectional hillshade layer
+description: The MapLibre multidirectional hillshade example — relief lit by four colored lights at once
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-multidirectional-hillshade-layer.yaml?raw';
+
+Replicates the MapLibre example [Add a multidirectional hillshade layer](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-multidirectional-hillshade-layer/): the Inn valley lit from four directions, each light with its own highlight and shadow color.
+
+<LiveMap src="/configs/gallery/add-a-multidirectional-hillshade-layer.yaml" height="460px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="add-a-multidirectional-hillshade-layer.yaml" />
+
+## What to notice
+
+- `hillshade-method: multidirectional` turns the light paint properties into lists: entry *n* of `hillshade-illumination-direction`, `hillshade-illumination-altitude`, `hillshade-highlight-color` and `hillshade-shadow-color` together describe light *n*.
+- **Requires maplibre-gl ≥ 5.5.0.** Older runtimes reject `hillshade-method`. The docs site runs 6.x.
+- Compare the single-light [Add a hillshade layer](/examples/gallery/add-a-hillshade-layer/). The source is the same kind of `raster-dem`; only the paint differs.

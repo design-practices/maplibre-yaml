@@ -1,0 +1,31 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-multidirectional-hillshade-layer.yaml
+# (U18). The e2e server's synthetic relief (/relief, terrarium) stands in for
+# the demotiles terrain tiles; the paint — four lights — is identical.
+# Needs maplibre-gl >= 5.5.0 (e2e/gallery-u18.spec.ts skips below it).
+type: map
+id: add-a-multidirectional-hillshade-layer
+config:
+  center: [11.491, 47.274]
+  zoom: 10
+  maxZoom: 18
+  maxPitch: 85
+  renderWorldCopies: false
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  hillshadeSource:
+    type: raster-dem
+    tiles:
+      - "/relief/{z}/{x}/{y}.png"
+    encoding: terrarium
+    tileSize: 256
+    maxzoom: 14
+layers:
+  - id: hillshade
+    type: hillshade
+    source: hillshadeSource
+    paint:
+      hillshade-method: multidirectional
+      hillshade-highlight-color: ["#FF4000", "#FFFF00", "#40ff00", "#00FF80"]
+      hillshade-shadow-color: ["#00bfff", "#0000ff", "#bf00ff", "#FF0080"]
+      hillshade-illumination-direction: [270, 315, 0, 45]
+      hillshade-illumination-altitude: [30, 30, 30, 30]

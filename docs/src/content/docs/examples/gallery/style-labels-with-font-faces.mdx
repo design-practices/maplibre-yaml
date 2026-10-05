@@ -1,0 +1,22 @@
+---
+title: Style labels with font faces
+description: "The MapLibre font-faces example — font files for scripts the glyph server lacks, via the inline mapStyle"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/style-labels-with-font-faces.yaml?raw';
+
+Replicates the MapLibre example [Style labels with font faces](https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-font-faces/). The glyph server has no Georgian or Armenian, so the style names a font file for each of those scripts. Latin labels still come from the glyphs URL.
+
+<LiveMap src="/configs/gallery/style-labels-with-font-faces.yaml" height="440px" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="style-labels-with-font-faces.yaml" />
+
+## What to notice
+
+- `font-faces` belongs at the style root and has no dedicated YAML field. It rides the inline `mapStyle` object, the same hatch the [web-fonts example](/examples/gallery/style-labels-with-web-fonts/) uses for `glyphs`. That is why this row is badged *Escape hatch*.
+- Each font face is listed under the name the layer's `text-font` asks for (`Noto Sans Regular`). Its `unicode-range` limits it to one script, and characters outside every range fall back to the glyphs URL.
+- **Requires maplibre-gl ≥ 6.7.0**, the first release that renders `font-faces`. Older runtimes ignore the key and Georgian and Armenian labels do not draw. The docs site runs 6.x.

@@ -2452,7 +2452,26 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "type": "object",
                             "properties": {
                               "hillshade-illumination-direction": {
-                                "type": "number"
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "number"
+                                    },
+                                    "minItems": 1
+                                  },
+                                  {
+                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                                  }
+                                ],
+                                "description": "A number, one number per light (multidirectional), or an expression"
+                              },
+                              "hillshade-illumination-altitude": {
+                                "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/7/properties/paint/properties/hillshade-illumination-direction",
+                                "description": "A number, one number per light (multidirectional), or an expression"
                               },
                               "hillshade-illumination-anchor": {
                                 "type": "string",
@@ -2461,17 +2480,41 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                   "viewport"
                                 ]
                               },
+                              "hillshade-method": {
+                                "type": "string",
+                                "enum": [
+                                  "standard",
+                                  "basic",
+                                  "combined",
+                                  "igor",
+                                  "multidirectional"
+                                ]
+                              },
                               "hillshade-exaggeration": {
                                 "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
                                 "description": "Number value or MapLibre expression"
                               },
                               "hillshade-shadow-color": {
-                                "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
-                                "description": "Color value or MapLibre expression"
+                                "anyOf": [
+                                  {
+                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                                    },
+                                    "minItems": 1
+                                  },
+                                  {
+                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                                  }
+                                ],
+                                "description": "A color, one color per light (multidirectional), or an expression"
                               },
                               "hillshade-highlight-color": {
-                                "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
-                                "description": "Color value or MapLibre expression"
+                                "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/7/properties/paint/properties/hillshade-shadow-color",
+                                "description": "A color, one color per light (multidirectional), or an expression"
                               },
                               "hillshade-accent-color": {
                                 "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
@@ -6355,7 +6398,26 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         "type": "object",
                         "properties": {
                           "hillshade-illumination-direction": {
-                            "type": "number"
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                },
+                                "minItems": 1
+                              },
+                              {
+                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ],
+                            "description": "A number, one number per light (multidirectional), or an expression"
+                          },
+                          "hillshade-illumination-altitude": {
+                            "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/7/properties/paint/properties/hillshade-illumination-direction",
+                            "description": "A number, one number per light (multidirectional), or an expression"
                           },
                           "hillshade-illumination-anchor": {
                             "type": "string",
@@ -6364,17 +6426,41 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                               "viewport"
                             ]
                           },
+                          "hillshade-method": {
+                            "type": "string",
+                            "enum": [
+                              "standard",
+                              "basic",
+                              "combined",
+                              "igor",
+                              "multidirectional"
+                            ]
+                          },
                           "hillshade-exaggeration": {
                             "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
                             "description": "Number value or MapLibre expression"
                           },
                           "hillshade-shadow-color": {
-                            "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
-                            "description": "Color value or MapLibre expression"
+                            "anyOf": [
+                              {
+                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                                },
+                                "minItems": 1
+                              },
+                              {
+                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ],
+                            "description": "A color, one color per light (multidirectional), or an expression"
                           },
                           "hillshade-highlight-color": {
-                            "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
-                            "description": "Color value or MapLibre expression"
+                            "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/7/properties/paint/properties/hillshade-shadow-color",
+                            "description": "A color, one color per light (multidirectional), or an expression"
                           },
                           "hillshade-accent-color": {
                             "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
@@ -9332,7 +9418,26 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                     "type": "object",
                     "properties": {
                       "hillshade-illumination-direction": {
-                        "type": "number"
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 1
+                          },
+                          {
+                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                          }
+                        ],
+                        "description": "A number, one number per light (multidirectional), or an expression"
+                      },
+                      "hillshade-illumination-altitude": {
+                        "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/7/properties/paint/properties/hillshade-illumination-direction",
+                        "description": "A number, one number per light (multidirectional), or an expression"
                       },
                       "hillshade-illumination-anchor": {
                         "type": "string",
@@ -9341,17 +9446,41 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "viewport"
                         ]
                       },
+                      "hillshade-method": {
+                        "type": "string",
+                        "enum": [
+                          "standard",
+                          "basic",
+                          "combined",
+                          "igor",
+                          "multidirectional"
+                        ]
+                      },
                       "hillshade-exaggeration": {
                         "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-radius",
                         "description": "Number value or MapLibre expression"
                       },
                       "hillshade-shadow-color": {
-                        "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color",
-                        "description": "Color value or MapLibre expression"
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                            },
+                            "minItems": 1
+                          },
+                          {
+                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
+                          }
+                        ],
+                        "description": "A color, one color per light (multidirectional), or an expression"
                       },
                       "hillshade-highlight-color": {
-                        "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color",
-                        "description": "Color value or MapLibre expression"
+                        "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/7/properties/paint/properties/hillshade-shadow-color",
+                        "description": "A color, one color per light (multidirectional), or an expression"
                       },
                       "hillshade-accent-color": {
                         "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color",
@@ -13430,7 +13559,26 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                         "type": "object",
                         "properties": {
                           "hillshade-illumination-direction": {
-                            "type": "number"
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                },
+                                "minItems": 1
+                              },
+                              {
+                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ],
+                            "description": "A number, one number per light (multidirectional), or an expression"
+                          },
+                          "hillshade-illumination-altitude": {
+                            "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/7/properties/paint/properties/hillshade-illumination-direction",
+                            "description": "A number, one number per light (multidirectional), or an expression"
                           },
                           "hillshade-illumination-anchor": {
                             "type": "string",
@@ -13439,17 +13587,41 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                               "viewport"
                             ]
                           },
+                          "hillshade-method": {
+                            "type": "string",
+                            "enum": [
+                              "standard",
+                              "basic",
+                              "combined",
+                              "igor",
+                              "multidirectional"
+                            ]
+                          },
                           "hillshade-exaggeration": {
                             "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-radius",
                             "description": "Number value or MapLibre expression"
                           },
                           "hillshade-shadow-color": {
-                            "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
-                            "description": "Color value or MapLibre expression"
+                            "anyOf": [
+                              {
+                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                                },
+                                "minItems": 1
+                              },
+                              {
+                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                              }
+                            ],
+                            "description": "A color, one color per light (multidirectional), or an expression"
                           },
                           "hillshade-highlight-color": {
-                            "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
-                            "description": "Color value or MapLibre expression"
+                            "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/7/properties/paint/properties/hillshade-shadow-color",
+                            "description": "A color, one color per light (multidirectional), or an expression"
                           },
                           "hillshade-accent-color": {
                             "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",

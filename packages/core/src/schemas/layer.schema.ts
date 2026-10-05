@@ -14,6 +14,7 @@
 
 import { z } from "zod";
 import {
+  ColorSchema,
   ColorOrExpressionSchema,
   NumberOrExpressionSchema,
   ExpressionSchema,
@@ -1017,6 +1018,16 @@ export const HeatmapLayerSchema = BaseLayerPropertiesSchema.extend({
 /** Inferred type for heatmap layer. */
 export type HeatmapLayer = z.infer<typeof HeatmapLayerSchema>;
 
+/** A hillshade light number: one value, one per light (multidirectional), or an expression. */
+const HillshadeLightNumberSchema = z
+  .union([z.number(), z.array(z.number()).min(1), ExpressionSchema])
+  .describe("A number, one number per light (multidirectional), or an expression");
+
+/** A hillshade light color: one color, one per light (multidirectional), or an expression. */
+const HillshadeLightColorSchema = z
+  .union([ColorSchema, z.array(ColorSchema).min(1), ExpressionSchema])
+  .describe("A color, one color per light (multidirectional), or an expression");
+
 /**
  * Hillshade layer for terrain visualization.
  *
@@ -1035,17 +1046,32 @@ export type HeatmapLayer = z.infer<typeof HeatmapLayerSchema>;
  *     hillshade-exaggeration: 0.5
  * ```
  *
+ * @example Multidirectional (maplibre-gl >= 5.5.0) — one entry per light
+ * ```yaml
+ *   paint:
+ *     hillshade-method: multidirectional
+ *     hillshade-illumination-direction: [270, 315, 0, 45]
+ *     hillshade-highlight-color: ["#FF4000", "#FFFF00", "#40ff00", "#00FF80"]
+ *     hillshade-shadow-color: ["#00bfff", "#0000ff", "#bf00ff", "#FF0080"]
+ * ```
+ *
  * @see {@link https://maplibre.org/maplibre-style-spec/layers/#hillshade | MapLibre Hillshade Layer}
  */
 export const HillshadeLayerSchema = BaseLayerPropertiesSchema.extend({
   type: z.literal("hillshade").describe("Layer type"),
   paint: z
     .object({
-      "hillshade-illumination-direction": z.number().optional(),
+      // A number, or (maplibre-gl >= 5.5.0, `hillshade-method:
+      // multidirectional`) one entry per light source.
+      "hillshade-illumination-direction": HillshadeLightNumberSchema.optional(),
+      "hillshade-illumination-altitude": HillshadeLightNumberSchema.optional(),
       "hillshade-illumination-anchor": z.enum(["map", "viewport"]).optional(),
+      "hillshade-method": z
+        .enum(["standard", "basic", "combined", "igor", "multidirectional"])
+        .optional(),
       "hillshade-exaggeration": NumberOrExpressionSchema.optional(),
-      "hillshade-shadow-color": ColorOrExpressionSchema.optional(),
-      "hillshade-highlight-color": ColorOrExpressionSchema.optional(),
+      "hillshade-shadow-color": HillshadeLightColorSchema.optional(),
+      "hillshade-highlight-color": HillshadeLightColorSchema.optional(),
       "hillshade-accent-color": ColorOrExpressionSchema.optional(),
     })
     .passthrough()
