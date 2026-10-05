@@ -106,6 +106,52 @@ for (const [slug] of QRF_BLIND) {
   }
 }
 
+/**
+ * Drive a built scrollytelling gallery page: the story loads with every
+ * chapter, the map renders the live basemap, and scrolling the second and
+ * last chapters into view moves the camera to their centres.
+ */
+async function verifyStory(slug, doc) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const problems = [];
+  page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
+  page.on("console", (m) => {
+    if (m.type() === "error") problems.push(`console: ${m.text().slice(0, 200)}`);
+  });
+  const MAP = ".scrollytelling-container ml-map";
+  try {
+    await page.goto(`${BASE}/examples/gallery/${slug}/`, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForFunction(
+      (n) => document.querySelectorAll(".scrolly-chapter").length === n,
+      doc.chapters.length,
+      { timeout: 30000 }
+    );
+    await page.waitForFunction((sel) => document.querySelector(sel)?.getMap?.()?.loaded?.(), MAP, {
+      timeout: 45000,
+    });
+    for (const chapter of [doc.chapters[1], doc.chapters.at(-1)]) {
+      await page.evaluate((id) => {
+        document.querySelector(`.scrolly-chapter[data-chapter-id="${id}"]`).scrollIntoView({ block: "center" });
+      }, chapter.id);
+      await page
+        .waitForFunction(
+          ({ sel, center }) => {
+            const map = document.querySelector(sel).getMap();
+            const c = map.getCenter();
+            return !map.isMoving() && Math.abs(c.lng - center[0]) < 1e-3 && Math.abs(c.lat - center[1]) < 1e-3;
+          },
+          { sel: MAP, center: chapter.center },
+          { timeout: 30000 }
+        )
+        .catch(() => problems.push(`scrolling to chapter "${chapter.id}" did not fly the map there`));
+    }
+  } catch (e) {
+    problems.push(`FAILED: ${String(e.message).split("\n")[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
 let skipped = 0;
 for (const slug of slugs) {
   if (PROTOCOL_PAGES.has(slug)) {
@@ -114,6 +160,17 @@ for (const slug of slugs) {
     continue;
   }
   const doc = parseYAML(readFileSync(`${CONFIG_DIR}/${slug}.yaml`, "utf8"));
+  if (doc.type === "scrollytelling") {
+    // U18: a story's runtime is the Astro <Scrollytelling> component, so
+    // only the BUILT docs page renders it (the verification server mounts
+    // docs/dist at its path; `pnpm build` first). Live basemap; the
+    // hermetic twin is e2e/gallery-u18.spec.ts.
+    const problems = await verifyStory(slug, doc);
+    const status = problems.length ? "FAIL" : "ok";
+    console.log(`${status.padEnd(4)} ${slug} (story)${problems.length ? "\n     - " + problems.join("\n     - ") : ""}`);
+    if (problems.length) failures.push(slug);
+    continue;
+  }
   const layers = doc.layers ?? [];
   const layerIds = layers.map((l) => l.id);
   const initialZoom = doc.config?.zoom ?? 0;

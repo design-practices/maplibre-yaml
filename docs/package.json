@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@astrojs/starlight": "^0.37.1",
+    "@maplibre-yaml/astro": "workspace:^",
     "@maplibre-yaml/core": "workspace:^",
     "@maplibre-yaml/effects": "workspace:^",
     "astro": "^5.6.1",

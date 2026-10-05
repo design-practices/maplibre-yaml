@@ -353,11 +353,17 @@ const server = createServer(async (req, res) => {
     // site serves it from: Astro emits root-absolute URLs (/_astro/…), so
     // the page only works mounted at its own paths. Requires the docs build
     // (`pnpm build`); e2e/classics.spec.ts says so when it is missing.
+    // U18: the built scrollytelling gallery page (an Astro component, so only
+    // the docs build can render it), the story document it fetches from
+    // /configs/gallery/, and the favicon its Starlight <head> links.
     if (
       path.startsWith("/_astro/") ||
       path === "/classics" ||
       path.startsWith("/classics/") ||
       path.startsWith("/examples/classics/") ||
+      path.startsWith("/examples/gallery/fly-to-a-location-based-on-scroll-position/") ||
+      path.startsWith("/configs/gallery/") ||
+      path === "/favicon.svg" ||
       path.startsWith("/fonts/")
     ) {
       const DIST = join(ROOT, "docs", "dist");

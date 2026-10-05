@@ -1,0 +1,35 @@
+---
+/**
+ * A scrollytelling document embedded in a Starlight page (gallery: fly to a
+ * location based on scroll position). `<Scrollytelling>` is built for a
+ * full page: its map is `position: sticky; top: 0; height: 100vh`. Inside
+ * Starlight that would park the top of the map under the fixed header, so
+ * the wrapper sticks it just below the header instead. `not-content` keeps
+ * Starlight's Markdown typography off the chapter cards.
+ */
+import { Scrollytelling } from '@maplibre-yaml/astro';
+
+interface Props {
+  src: string;
+}
+
+const { src } = Astro.props;
+---
+
+<div class="not-content gallery-story">
+  <Scrollytelling src={src} />
+</div>
+
+<style is:global>
+  .gallery-story {
+    margin-block: 1.5rem;
+    border-block: 1px solid var(--sl-color-gray-5);
+  }
+  .gallery-story .scrollytelling-container .scrolly-map-container {
+    top: var(--sl-nav-height);
+    height: calc(100vh - var(--sl-nav-height));
+  }
+  .gallery-story .scrollytelling-container .scrolly-chapters {
+    margin-top: calc(var(--sl-nav-height) - 100vh);
+  }
+</style>
