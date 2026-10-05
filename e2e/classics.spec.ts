@@ -30,6 +30,9 @@ import { join } from "node:path";
 
 const ROOT = join(__dirname, "..");
 const DIST = join(ROOT, "docs", "dist");
+/** The maplibre-gl the docs build bundled (the CI matrix overrides it). */
+const V5 =
+  Number(JSON.parse(readFileSync(join(ROOT, "docs/node_modules/maplibre-gl/package.json"), "utf8")).version.split(".")[0]) >= 5;
 const PORT = Number(process.env.VERIFY_PORT ?? 4174);
 const ORIGIN = `http://localhost:${PORT}`;
 const SITE = "https://docs.maplibre-yaml.org";
@@ -236,19 +239,37 @@ test.describe("Mapzen classics launch page (U11)", () => {
       const emitted = JSON.parse(readFileSync(join(DIST, "classics", name, "ejected", "style.json"), "utf8"));
       expect(emitted.layers.map((l: any) => l.id)).toEqual(p.ejected.layers);
 
-      // The live pane's effect attached and is drawing (not declared absent).
       const status = page.locator(`section.classic[data-classic="${name}"] [data-fx-status]`);
-      await expect(status).toHaveAttribute("data-state", "on", { timeout: 60_000 });
-      await expect(status).toContainText(effect);
-      const fx = await page.evaluate(
-        (n) =>
-          (document.querySelector(`section.classic[data-classic="${n}"]`) as any)
-            .__effects()
-            .map((e: any) => ({ layerId: e.layerId, type: e.type, active: e.active, tiles: e.handle?.stats?.tilesDrawn ?? 0 })),
-        name
-      );
-      expect(fx).toEqual([{ layerId: "buildings", type: effect, active: true, tiles: expect.any(Number) }]);
-      expect(fx[0]!.tiles).toBeGreaterThan(0);
+      const fx = async () =>
+        page.evaluate(
+          (n) =>
+            (document.querySelector(`section.classic[data-classic="${n}"]`) as any)
+              .__effects()
+              .map((e: any) => ({ layerId: e.layerId, type: e.type, active: e.active, tiles: e.handle?.stats?.tilesDrawn ?? 0 })),
+          name
+        );
+      if (V5) {
+        // The live pane's effect attached and is drawing (not declared absent).
+        await expect(status).toHaveAttribute("data-state", "on", { timeout: 60_000 });
+        await expect(status).toContainText(effect);
+        const attached = await fx();
+        expect(attached).toEqual([{ layerId: "buildings", type: effect, active: true, tiles: expect.any(Number) }]);
+        expect(attached[0]!.tiles).toBeGreaterThan(0);
+      } else {
+        // maplibre-gl 4 (the CI matrix leg): the effect declares absence and
+        // the page says so; the document's static buildings still draw.
+        await expect(status).toHaveAttribute("data-state", "static", { timeout: 60_000 });
+        await expect(status).toContainText("static fallback");
+        expect(await fx()).toEqual([{ layerId: "buildings", type: effect, active: false, tiles: 0 }]);
+        expect(
+          await page.evaluate(
+            (n) =>
+              (document.querySelector(`section.classic[data-classic="${n}"]`) as any).__maps.live
+                .queryRenderedFeatures(undefined, { layers: ["buildings"] }).length,
+            name
+          )
+        ).toBeGreaterThan(0);
+      }
 
       expect(errors, errors.join("\n")).toEqual([]);
     });

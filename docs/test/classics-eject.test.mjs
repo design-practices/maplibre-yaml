@@ -94,7 +94,8 @@ for (const { name, effect, effectOnlyImages } of CLASSICS) {
       "--sprite-base", `${SITE}/classics/${name}/ejected`,
     ]);
     assert.equal(run.status, 0, run.output);
-    const warnings = run.output.split("\n").filter((l) => l.includes("WARN"));
+    // The CLI prints `WARN` on a terminal and `[warn]` in CI (its CI logger).
+    const warnings = run.output.split("\n").filter((l) => /\bwarn\b/i.test(l));
     assert.equal(warnings.length, 1, run.output);
     assert.match(warnings[0], new RegExp(`layers\\.buildings\\.effect: effect "${effect}"`));
     assert.match(warnings[0], /lossy/);
