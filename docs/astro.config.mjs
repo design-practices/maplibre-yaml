@@ -57,6 +57,7 @@ export default defineConfig({
             { label: "Format v2", link: "/guides/format-v2/" },
             { label: "Interactions & Eject", link: "/guides/interactions/" },
             { label: "Eject Classes", link: "/guides/eject-classes/" },
+            { label: "Effects (experimental)", link: "/guides/effects/" },
             { label: "Working with Layers", link: "/guides/layers/" },
             { label: "Data Sources", link: "/guides/data-sources/" },
             { label: "Live Data & Streaming", link: "/guides/live-data/" },

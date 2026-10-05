@@ -49,7 +49,15 @@ import {
   denormalizeSources,
   denormalizeOptions,
 } from "../model/index.js";
+import type { MapModel } from "../model/types.js";
 import { escapeHtml } from "../utils/html.js";
+import {
+  getEffectsHost,
+  onEffectsHost,
+  type EffectBlock,
+  type EffectLayerRef,
+  type EffectsAttachment,
+} from "../effects-host.js";
 import type { ChromeMount, MapRendererEvents } from "../renderer/map-renderer.js";
 import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
 
@@ -187,6 +195,14 @@ export class MLMap extends HTMLElement {
    * `null` when none is pending. See {@link scheduleEmptyConfigCheck}.
    */
   private cancelPendingEmptyCheck: (() => void) | null = null;
+
+  /**
+   * The effects attached to the current map (experimental, 0.7), and the
+   * subscription waiting for an effects host that registers late. Both are
+   * torn down with the renderer, so a reload never leaks a custom layer.
+   */
+  private effectsAttachment: EffectsAttachment | null = null;
+  private effectsWait: (() => void) | null = null;
 
   /**
    * Whether the one-time dev diagnostics have already run for this element.
@@ -625,6 +641,9 @@ export class MLMap extends HTMLElement {
       // Set up event forwarding
       this.setupEventForwarding();
 
+      // Experimental effects (`effect:` layers) attach once the map loads.
+      this.setupEffects(model);
+
       // Surface the classic silent-blank-map failure modes on the console.
       this.checkEnvironment();
     } catch (error) {
@@ -941,7 +960,14 @@ export class MLMap extends HTMLElement {
   }
 
   /** Park slot children, then destroy the renderer (if any). */
+  /**
+   * Every path that drops the map — re-render, error card, disconnect —
+   * comes through here: effects detach first (they live on the renderer's
+   * map), then slot children are parked (the renderer only borrows them),
+   * then the renderer is destroyed.
+   */
   private teardownRenderer(): void {
+    this.teardownEffects();
     this.parkSlots();
     if (this.renderer) {
       this.renderer.destroy();
@@ -1057,6 +1083,77 @@ export class MLMap extends HTMLElement {
     if (card) this.appendChild(card);
   }
 
+
+  /**
+   * Attach the document's experimental effects once the map has loaded.
+   *
+   * @remarks
+   * Core never imports `@maplibre-yaml/effects`: the package registers an
+   * effects host (see `effects-host.ts`) and this reads it. A document
+   * without `effect:` layers returns immediately — no host lookup, no
+   * listener. When the host registers after the map loads (a dynamic
+   * import), the effects attach then; without a host at all the layers
+   * stay static and say so once.
+   */
+  private setupEffects(model: MapModel): void {
+    const refs: EffectLayerRef[] = [];
+    for (const layer of model.style.layers) {
+      const effect = layer.runtime["effect"];
+      const id = layer.spec["id"];
+      if (effect && typeof effect === "object" && typeof id === "string") {
+        refs.push({ layerId: id, effect: effect as EffectBlock });
+      }
+    }
+    if (refs.length === 0 || !this.renderer) return;
+
+    const renderer = this.renderer;
+    const attach = () => {
+      if (this.renderer !== renderer || this.effectsAttachment) return;
+      const map = renderer.getMap();
+      const host = getEffectsHost();
+      if (!map || !host) return;
+      try {
+        this.effectsAttachment = host.attach(map, refs);
+      } catch (error) {
+        // A host must declare absence rather than throw; if one throws
+        // anyway, the static layers are still on the map — say so, don't
+        // kill the document.
+        console.error("[maplibre-yaml] effects failed to attach:", error);
+      }
+    };
+
+    renderer.on("load", () => {
+      if (getEffectsHost()) {
+        attach();
+        return;
+      }
+      console.warn(
+        `[maplibre-yaml] ${refs.length} layer(s) declare an effect ` +
+          `(${[...new Set(refs.map((r) => r.effect.type))].join(", ")}) but ` +
+          "@maplibre-yaml/effects is not loaded — they render as their static " +
+          'fallback. Import "@maplibre-yaml/effects/register" to enable them.'
+      );
+      this.effectsWait = onEffectsHost(() => {
+        this.effectsWait = null;
+        attach();
+      });
+    });
+  }
+
+  /** Detach effects and drop any pending host subscription. */
+  private teardownEffects(): void {
+    this.effectsWait?.();
+    this.effectsWait = null;
+    const attachment = this.effectsAttachment;
+    this.effectsAttachment = null;
+    if (attachment) {
+      try {
+        attachment.detach();
+      } catch (error) {
+        console.warn("[maplibre-yaml] effects failed to detach cleanly:", error);
+      }
+    }
+  }
 
   /**
    * Clean up resources when component is removed

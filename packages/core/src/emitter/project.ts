@@ -31,6 +31,7 @@ import { ejectClasses } from "../eject";
 import type { EjectClassDefinition } from "../eject";
 import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { sanitizeSourcesAttribution } from "../utils/attribution";
+import { lowerEffectLayer } from "./lower-effects";
 
 /**
  * Sanitize every `sources.*.attribution` in an emitted style, in place on the
@@ -489,7 +490,8 @@ export function projectStyle(
   const imageNames = new Set(Object.keys(model.style.images ?? {}));
 
   const positioned = model.style.layers.map((layer) => {
-    const spec = transformLayer(layer);
+    let spec = transformLayer(layer);
+    let dropped = false;
     const id = String(spec["id"] ?? "");
 
     // Declared document images: rewrite the image-valued properties to the
@@ -547,6 +549,18 @@ export function projectStyle(
       // crashes emit.
       for (const key of Object.keys(layer.runtime)) {
         if (key === "before") continue;
+        if (key === "effect") {
+          // Experimental (0.7): the layer itself is the effect's static
+          // fallback. One lossy warning per effect — --strict refuses,
+          // --with-fallbacks ships the static layer (or drops it when the
+          // registered effect declares absence).
+          requireEjectClass("layer.effect");
+          const lowered = lowerEffectLayer(spec, layer.runtime["effect"]);
+          warnings.push(lowered.warning);
+          if (lowered.layer === null) dropped = true;
+          else spec = lowered.layer;
+          continue;
+        }
         if (key === "source") {
           const sourceRuntime = layer.runtime["source"];
           if (isPlainObject(sourceRuntime)) {
@@ -583,9 +597,10 @@ export function projectStyle(
     return {
       id,
       spec,
+      dropped,
       ...(typeof before === "string" ? { before } : {}),
     };
-  });
+  }).filter((l) => !l.dropped);
 
   const style: Record<string, unknown> = {
     version: 8,
