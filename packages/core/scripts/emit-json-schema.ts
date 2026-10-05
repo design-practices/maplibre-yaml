@@ -47,6 +47,7 @@ import {
   LEGACY_REFRESH_FIELDS,
 } from "../src/parser/validation-utils";
 import { MapBlockSchema } from "../src/schemas/map.schema";
+import { MapBlockV2Schema } from "../src/schemas/map-v2.schema";
 import { ScrollytellingBlockSchema } from "../src/schemas/scrollytelling.schema";
 import { RootSchema } from "../src/schemas/page.schema";
 
@@ -297,6 +298,40 @@ export function buildSchemas(): Record<SchemaName, JsonSchema> {
   }
 
   return { map, scrollytelling, root, any };
+}
+
+/**
+ * Build one combined JSON Schema covering every document shape — v1 map,
+ * scrollytelling, `pages:` root, **and** the format-v2 map block — for the
+ * docs site's generated YAML reference (docs/scripts/generate-yaml-reference).
+ *
+ * @remarks
+ * Not written to disk and not published: format v2 has no hosted JSON Schema
+ * yet, and this document exists only so the reference renders from the same
+ * {@link emit} pipeline (strictness + `deprecated` annotations) as the
+ * published artifacts. Emitting all four shapes in ONE document matters: the
+ * `"root"` ref strategy turns every repeat of a shared Zod schema (layers,
+ * sources, controls, ...) into a `$ref` to its first occurrence, which is what
+ * lets the reference document a shared structure once and link to it.
+ *
+ * Branch order is the `$defs.reference.anyOf` index: 0 = v1 map, 1 = v2 map,
+ * 2 = scrollytelling, 3 = root.
+ */
+export function buildReferenceSchema(): JsonSchema {
+  return emit(
+    z.union([
+      MapBlockSchema,
+      MapBlockV2Schema,
+      ScrollytellingBlockSchema,
+      RootSchema,
+    ]),
+    "reference",
+    {
+      title: "maplibre-yaml reference (all document shapes)",
+      description:
+        "Internal: every document shape in one schema, for the generated docs reference.",
+    },
+  );
 }
 
 /** Serialize a schema document deterministically (2-space, trailing newline). */

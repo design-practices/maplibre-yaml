@@ -10,7 +10,7 @@
     "build": "node scripts/ensure-core-built.mjs && astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "typedoc": "typedoc --options ../packages/core/typedoc.json"
+    "reference:yaml": "tsx scripts/generate-yaml-reference.ts"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.37.1",
@@ -22,7 +22,9 @@
   },
   "devDependencies": {
     "sharp": "^0.33.0",
-    "typedoc": "^0.26.0",
-    "typedoc-plugin-markdown": "^4.0.0"
+    "starlight-typedoc": "~0.21.5",
+    "tsx": "^4.19.2",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.13.1"
   }
 }

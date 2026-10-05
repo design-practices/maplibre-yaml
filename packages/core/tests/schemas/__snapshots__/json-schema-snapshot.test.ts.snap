@@ -518,16 +518,20 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "description": "Aggregate cluster properties"
                       },
                       "tolerance": {
-                        "type": "number"
+                        "type": "number",
+                        "description": "Douglas-Peucker simplification tolerance (higher = simpler geometry)"
                       },
                       "buffer": {
-                        "type": "number"
+                        "type": "number",
+                        "description": "Tile buffer size on each side, in pixels at tile scale"
                       },
                       "lineMetrics": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "description": "Calculate line distance metrics (required for \`line-gradient\`)"
                       },
                       "generateId": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "description": "Assign feature ids from each feature's index (enables feature-state)"
                       },
                       "promoteId": {
                         "anyOf": [
@@ -540,10 +544,12 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "type": "string"
                             }
                           }
-                        ]
+                        ],
+                        "description": "Feature property to use as the feature id (for feature-state), or a map of source-layer name to property name"
                       },
                       "attribution": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Attribution text"
                       }
                     },
                     "required": [
@@ -626,10 +632,12 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "type": "string"
                             }
                           }
-                        ]
+                        ],
+                        "description": "Feature property to use as the feature id (for feature-state), or a map of source-layer name to property name"
                       },
                       "volatile": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                       }
                     },
                     "required": [
@@ -707,7 +715,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "description": "Attribution text"
                       },
                       "volatile": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                       }
                     },
                     "required": [
@@ -787,7 +796,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "description": "Attribution text"
                       },
                       "volatile": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                       }
                     },
                     "required": [
@@ -1127,14 +1137,16 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                           {
                                             "type": "number"
                                           }
-                                        ]
+                                        ],
+                                        "description": "Target center [longitude, latitude]; defaults to the clicked point"
                                       },
                                       "zoom": {
                                         "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
-                                        "description": "Map zoom level (0-24)"
+                                        "description": "Target zoom level; MapLibre keeps the current zoom when unset"
                                       },
                                       "duration": {
-                                        "type": "number"
+                                        "type": "number",
+                                        "description": "Animation duration in milliseconds; MapLibre's default when unset"
                                       }
                                     },
                                     "additionalProperties": false,
@@ -1186,6 +1198,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                   }
                                 },
                                 "additionalProperties": false,
+                                "description": "Legacy mouse-enter trigger. Its only key, \`action\`, is deprecated and never dispatched; use \`hover\` or listen for \`ml-map:layer-hover\`",
                                 "patternProperties": {
                                   "^x-": {}
                                 }
@@ -1200,6 +1213,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                   }
                                 },
                                 "additionalProperties": false,
+                                "description": "Legacy mouse-leave trigger. Its only key, \`action\`, is deprecated and never dispatched; use \`hover\` or listen for \`ml-map:layer-hover\`",
                                 "patternProperties": {
                                   "^x-": {}
                                 }
@@ -2828,7 +2842,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   },
                   "type": {
                     "type": "string",
-                    "description": "Control type hint, e.g. enum or range"
+                    "description": "Params-panel control kind: \`enum\`/\`select\` (dropdown over \`values\`), \`range\` (slider over \`min\`/\`max\`/\`step\`), or \`toggle\` (checkbox). When omitted it is inferred: \`values\` gives a dropdown, a boolean default gives a toggle; other values render no control"
                   },
                   "values": {
                     "type": "array",
@@ -4407,16 +4421,20 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "description": "Aggregate cluster properties"
                   },
                   "tolerance": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "Douglas-Peucker simplification tolerance (higher = simpler geometry)"
                   },
                   "buffer": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "Tile buffer size on each side, in pixels at tile scale"
                   },
                   "lineMetrics": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Calculate line distance metrics (required for \`line-gradient\`)"
                   },
                   "generateId": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Assign feature ids from each feature's index (enables feature-state)"
                   },
                   "promoteId": {
                     "anyOf": [
@@ -4429,10 +4447,12 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                           "type": "string"
                         }
                       }
-                    ]
+                    ],
+                    "description": "Feature property to use as the feature id (for feature-state), or a map of source-layer name to property name"
                   },
                   "attribution": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Attribution text"
                   }
                 },
                 "required": [
@@ -4515,10 +4535,12 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                           "type": "string"
                         }
                       }
-                    ]
+                    ],
+                    "description": "Feature property to use as the feature id (for feature-state), or a map of source-layer name to property name"
                   },
                   "volatile": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                   }
                 },
                 "required": [
@@ -4596,7 +4618,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "description": "Attribution text"
                   },
                   "volatile": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                   }
                 },
                 "required": [
@@ -4676,7 +4699,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "description": "Attribution text"
                   },
                   "volatile": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                   }
                 },
                 "required": [
@@ -5016,14 +5040,16 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                       {
                                         "type": "number"
                                       }
-                                    ]
+                                    ],
+                                    "description": "Target center [longitude, latitude]; defaults to the clicked point"
                                   },
                                   "zoom": {
                                     "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
-                                    "description": "Map zoom level (0-24)"
+                                    "description": "Target zoom level; MapLibre keeps the current zoom when unset"
                                   },
                                   "duration": {
-                                    "type": "number"
+                                    "type": "number",
+                                    "description": "Animation duration in milliseconds; MapLibre's default when unset"
                                   }
                                 },
                                 "additionalProperties": false,
@@ -5075,6 +5101,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                               }
                             },
                             "additionalProperties": false,
+                            "description": "Legacy mouse-enter trigger. Its only key, \`action\`, is deprecated and never dispatched; use \`hover\` or listen for \`ml-map:layer-hover\`",
                             "patternProperties": {
                               "^x-": {}
                             }
@@ -5089,6 +5116,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                               }
                             },
                             "additionalProperties": false,
+                            "description": "Legacy mouse-leave trigger. Its only key, \`action\`, is deprecated and never dispatched; use \`hover\` or listen for \`ml-map:layer-hover\`",
                             "patternProperties": {
                               "^x-": {}
                             }
@@ -6717,7 +6745,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
               },
               "type": {
                 "type": "string",
-                "description": "Control type hint, e.g. enum or range"
+                "description": "Params-panel control kind: \`enum\`/\`select\` (dropdown over \`values\`), \`range\` (slider over \`min\`/\`max\`/\`step\`), or \`toggle\` (checkbox). When omitted it is inferred: \`values\` gives a dropdown, a boolean default gives a toggle; other values render no control"
               },
               "values": {
                 "type": "array",
@@ -7403,16 +7431,20 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "description": "Aggregate cluster properties"
                               },
                               "tolerance": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Douglas-Peucker simplification tolerance (higher = simpler geometry)"
                               },
                               "buffer": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Tile buffer size on each side, in pixels at tile scale"
                               },
                               "lineMetrics": {
-                                "type": "boolean"
+                                "type": "boolean",
+                                "description": "Calculate line distance metrics (required for \`line-gradient\`)"
                               },
                               "generateId": {
-                                "type": "boolean"
+                                "type": "boolean",
+                                "description": "Assign feature ids from each feature's index (enables feature-state)"
                               },
                               "promoteId": {
                                 "anyOf": [
@@ -7425,10 +7457,12 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                       "type": "string"
                                     }
                                   }
-                                ]
+                                ],
+                                "description": "Feature property to use as the feature id (for feature-state), or a map of source-layer name to property name"
                               },
                               "attribution": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "Attribution text"
                               }
                             },
                             "required": [
@@ -7511,10 +7545,12 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                       "type": "string"
                                     }
                                   }
-                                ]
+                                ],
+                                "description": "Feature property to use as the feature id (for feature-state), or a map of source-layer name to property name"
                               },
                               "volatile": {
-                                "type": "boolean"
+                                "type": "boolean",
+                                "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                               }
                             },
                             "required": [
@@ -7592,7 +7628,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "description": "Attribution text"
                               },
                               "volatile": {
-                                "type": "boolean"
+                                "type": "boolean",
+                                "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                               }
                             },
                             "required": [
@@ -7672,7 +7709,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "description": "Attribution text"
                               },
                               "volatile": {
-                                "type": "boolean"
+                                "type": "boolean",
+                                "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                               }
                             },
                             "required": [
@@ -7979,14 +8017,16 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   {
                                     "type": "number"
                                   }
-                                ]
+                                ],
+                                "description": "Target center [longitude, latitude]; defaults to the clicked point"
                               },
                               "zoom": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
-                                "description": "Map zoom level (0-24)"
+                                "description": "Target zoom level; MapLibre keeps the current zoom when unset"
                               },
                               "duration": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Animation duration in milliseconds; MapLibre's default when unset"
                               }
                             },
                             "additionalProperties": false,
@@ -8038,6 +8078,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           }
                         },
                         "additionalProperties": false,
+                        "description": "Legacy mouse-enter trigger. Its only key, \`action\`, is deprecated and never dispatched; use \`hover\` or listen for \`ml-map:layer-hover\`",
                         "patternProperties": {
                           "^x-": {}
                         }
@@ -8052,6 +8093,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           }
                         },
                         "additionalProperties": false,
+                        "description": "Legacy mouse-leave trigger. Its only key, \`action\`, is deprecated and never dispatched; use \`hover\` or listen for \`ml-map:layer-hover\`",
                         "patternProperties": {
                           "^x-": {}
                         }
@@ -10129,7 +10171,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "type": {
                                 "type": "string",
-                                "description": "Control type hint, e.g. enum or range"
+                                "description": "Params-panel control kind: \`enum\`/\`select\` (dropdown over \`values\`), \`range\` (slider over \`min\`/\`max\`/\`step\`), or \`toggle\` (checkbox). When omitted it is inferred: \`values\` gives a dropdown, a boolean default gives a toggle; other values render no control"
                               },
                               "values": {
                                 "type": "array",
@@ -11478,16 +11520,20 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Aggregate cluster properties"
                                   },
                                   "tolerance": {
-                                    "type": "number"
+                                    "type": "number",
+                                    "description": "Douglas-Peucker simplification tolerance (higher = simpler geometry)"
                                   },
                                   "buffer": {
-                                    "type": "number"
+                                    "type": "number",
+                                    "description": "Tile buffer size on each side, in pixels at tile scale"
                                   },
                                   "lineMetrics": {
-                                    "type": "boolean"
+                                    "type": "boolean",
+                                    "description": "Calculate line distance metrics (required for \`line-gradient\`)"
                                   },
                                   "generateId": {
-                                    "type": "boolean"
+                                    "type": "boolean",
+                                    "description": "Assign feature ids from each feature's index (enables feature-state)"
                                   },
                                   "promoteId": {
                                     "anyOf": [
@@ -11500,10 +11546,12 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                           "type": "string"
                                         }
                                       }
-                                    ]
+                                    ],
+                                    "description": "Feature property to use as the feature id (for feature-state), or a map of source-layer name to property name"
                                   },
                                   "attribution": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "Attribution text"
                                   }
                                 },
                                 "required": [
@@ -11586,10 +11634,12 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                           "type": "string"
                                         }
                                       }
-                                    ]
+                                    ],
+                                    "description": "Feature property to use as the feature id (for feature-state), or a map of source-layer name to property name"
                                   },
                                   "volatile": {
-                                    "type": "boolean"
+                                    "type": "boolean",
+                                    "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                                   }
                                 },
                                 "required": [
@@ -11667,7 +11717,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Attribution text"
                                   },
                                   "volatile": {
-                                    "type": "boolean"
+                                    "type": "boolean",
+                                    "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                                   }
                                 },
                                 "required": [
@@ -11747,7 +11798,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Attribution text"
                                   },
                                   "volatile": {
-                                    "type": "boolean"
+                                    "type": "boolean",
+                                    "description": "Skip the tile cache (MapLibre \`volatile\`); for frequently changing tiles"
                                   }
                                 },
                                 "required": [
@@ -12063,14 +12115,16 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                       {
                                         "type": "number"
                                       }
-                                    ]
+                                    ],
+                                    "description": "Target center [longitude, latitude]; defaults to the clicked point"
                                   },
                                   "zoom": {
                                     "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
-                                    "description": "Map zoom level (0-24)"
+                                    "description": "Target zoom level; MapLibre keeps the current zoom when unset"
                                   },
                                   "duration": {
-                                    "type": "number"
+                                    "type": "number",
+                                    "description": "Animation duration in milliseconds; MapLibre's default when unset"
                                   }
                                 },
                                 "additionalProperties": false,
@@ -12122,6 +12176,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                               }
                             },
                             "additionalProperties": false,
+                            "description": "Legacy mouse-enter trigger. Its only key, \`action\`, is deprecated and never dispatched; use \`hover\` or listen for \`ml-map:layer-hover\`",
                             "patternProperties": {
                               "^x-": {}
                             }
@@ -12136,6 +12191,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                               }
                             },
                             "additionalProperties": false,
+                            "description": "Legacy mouse-leave trigger. Its only key, \`action\`, is deprecated and never dispatched; use \`hover\` or listen for \`ml-map:layer-hover\`",
                             "patternProperties": {
                               "^x-": {}
                             }
