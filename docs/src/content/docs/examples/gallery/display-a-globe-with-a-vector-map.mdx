@@ -1,0 +1,21 @@
+---
+title: Display a globe with a vector map
+description: The MapLibre globe example — projection as one YAML key
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-globe-with-a-vector-map.yaml?raw';
+
+Replicates the MapLibre example [Display a globe with a vector map](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-a-vector-map/).
+
+<LiveMap src="/configs/gallery/display-a-globe-with-a-vector-map.yaml" height="460px" caption="Drag to spin the globe" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-globe-with-a-vector-map.yaml" />
+
+## What to notice
+
+- Upstream calls `map.setProjection` in a `style.load` handler; here `projection: { type: globe }` is a document-root key in the style spec's own shape, and it ejects to the style.json root `projection`.
+- Globe needs **maplibre-gl 5.0.0** or later. On 4.x the document warns once and renders in mercator, so it never fails silently.

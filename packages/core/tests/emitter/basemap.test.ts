@@ -37,6 +37,22 @@ const doc = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("mergeBasemap", () => {
+  it("sanitizes basemap attribution and warns (GHSA-jrc7-96c5-q579)", () => {
+    const base = {
+      ...BASE_STYLE,
+      sources: {
+        basetiles: { ...BASE_STYLE.sources.basetiles, attribution: "<b>Base</b>" },
+      },
+    };
+    const { style, warnings } = mergeBasemap(base, project(doc()));
+    const sources = style["sources"] as Record<string, Record<string, unknown>>;
+    expect(sources["basetiles"]?.["attribution"]).toBe("&lt;b&gt;Base&lt;/b&gt;");
+    expect(base.sources.basetiles.attribution).toBe("<b>Base</b>");
+    expect(warnings).toContainEqual(
+      expect.objectContaining({ path: "sources.basetiles.attribution", kind: "contract" })
+    );
+  });
+
   it("produces a self-contained style carrying both sides", () => {
     const { style } = mergeBasemap(BASE_STYLE, project(doc()));
 

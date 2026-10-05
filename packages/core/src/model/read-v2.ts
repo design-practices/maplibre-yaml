@@ -173,6 +173,16 @@ export function readV2Block(doc: MapBlockV2): MapModel {
   const v2Images = style["images"] as MapModel["style"]["images"];
   if (v2Images !== undefined && Object.keys(v2Images).length > 0)
     model.style.images = v2Images;
+  // U15's 3D trio — v1 authors them at the root, v2 under `style:`; both
+  // land in the same style-half slots (AE2).
+  if (style["terrain"] !== undefined)
+    model.style.terrain = style["terrain"] as MapModel["style"]["terrain"];
+  if (style["sky"] !== undefined)
+    model.style.sky = style["sky"] as MapModel["style"]["sky"];
+  if (style["projection"] !== undefined)
+    model.style.projection = style["projection"] as MapModel["style"]["projection"];
+  if (style["light"] !== undefined)
+    model.style.light = style["light"] as MapModel["style"]["light"];
 
   if (docParameters !== undefined)
     model.runtime.parameters = docParameters as Record<string, unknown>;
@@ -182,6 +192,13 @@ export function readV2Block(doc: MapBlockV2): MapModel {
   const v2Markers = runtime["markers"] as MapModel["runtime"]["markers"];
   if (v2Markers !== undefined && v2Markers.length > 0)
     model.runtime.markers = v2Markers;
+  // U14: v1 authors these as `config.fitTo` / root `popups:`; normalize lands
+  // them in the same runtime slots (AE2).
+  if (runtime["fitTo"] !== undefined)
+    model.runtime.fitTo = runtime["fitTo"] as MapModel["runtime"]["fitTo"];
+  const v2Popups = runtime["popups"] as MapModel["runtime"]["popups"];
+  if (v2Popups !== undefined && v2Popups.length > 0)
+    model.runtime.popups = v2Popups;
   if (runtime["legend"] !== undefined)
     model.runtime.legend = runtime["legend"] as LegendConfig;
   if (runtime["container"] !== undefined)

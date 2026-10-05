@@ -1,0 +1,13 @@
+{
+  // Same consumer code, compiled against @types/react 18. Core's devDeps
+  // carry it under the alias `react-types-18`; `paths` points every `react`
+  // import (the fixtures', and dist/react.d.ts's own) at it.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "react": ["../../../node_modules/react-types-18"],
+      "react/*": ["../../../node_modules/react-types-18/*"]
+    }
+  },
+  "files": ["react-common.tsx", "react18.tsx", "tmp/docs-react.d.ts"]
+}

@@ -383,3 +383,76 @@ Public-surface deltas downstream consumers (mapparty first) see:
 - Every construct in the format has a registered eject class and appears in the doctrine documentation page (R4 exhaustiveness test green).
 - No dead schema surface: any gated-out feature has no advertising schema fields (AE4).
 - Cleanup: spike scaffolds either graduated into U13 packages or deleted; no abandoned experimental code in the tree; beads updated (gap beads closed as their units land; ml-rzm carries the spike verdict).
+
+---
+
+## Amendment A1 (2026-10-04): post-spike scope, ratified by Mario
+
+**Why:** U12 ran (ml-rzm, draft PR #114, branch `spike/07-u12-deck-hatch`) and reshaped the effects track. The maintainer then widened the gallery close-out. Every change below is a maintainer decision from the 2026-10-04 session. This amendment **supersedes** the clauses it names. Everything else in the plan stands.
+
+### Evidence from U12, summarised
+- **Session 1's target was wrong.** It proved a flat 2D hatch fill. The Mapzen crosshatch is tonal hatching on extruded buildings, where stroke density follows light per face. The spike was retargeted to a port of Tangram's own style: tangram-sandbox `styles/crosshatch.yaml` plus the tangrams/blocks hatch filter, both MIT.
+- **Three backends were built and measured.**
+  - **Route 1: deck.gl.** Optimised, it converged on route 2's geometry with deck wrapped around it.
+  - **Route 2: MapLibre custom layer, no deck.** It reads MapLibre's already-loaded tile bytes, builds tile-clipped meshes in a worker, and draws cached ancestors while tiles build.
+  - **Route 3: screen-space post-process.**
+- **Real hardware:** on the maintainer's M2 Air, route 2 is the fastest once mesh building moved to the worker; deck was smooth, and route 3 is rejected for this look.
+- **Software GL (CI):** route 2 is 0.62× the static preset; on a GPU at normal size it's about 0.9×.
+- **Blueprint:** a second effect built on route 2's backend proved the extension story; it is a metre-scaled grid per face.
+
+### Decisions (Mario, 2026-10-04)
+- **D-A1. Backend = route 2.** The MapLibre custom-layer backend replaces deck.gl. *Supersedes KTD2.* deck.gl leaves the 0.7 dependency set, and R16's "lazy-loaded deck as a package-scoped peer" is void. R17 stands: effect YAML never names a backend.
+- **D-A2. Re-baselined performance gate.** The ≥ 0.8× budget is measured on real GPUs: the maintainer's M2, plus one recorded reference machine. CI's SwiftShader run becomes a **regression tripwire**: it fails if an effect's ratio drops more than 10% below its last recorded value. *Supersedes KTD7's "measured on the CI harness" and the Success Criteria line "meet the KTD7 budget on the CI harness".* The "no `triggerRepaint` when static" clause stands.
+- **D-A3. Experimental public effects API.** `@maplibre-yaml/effects` ships `registerEffect()` publicly, marked **experimental** (it may change in minors). Built-ins are written against the same public API.
+  - *This relaxes the Product Contract's standing law "Arbitrary user GLSL (curated catalog only)".* Page JavaScript may register shader effects. **Documents still never carry GLSL**: they reference registered effects by name.
+  - Shader blocks inside YAML (Tangram-style) remain out of scope, as a separate future trust decision.
+- **D-A4. 0.7's effects are `tonal-hatch` (the crosshatch) and `blueprint`.** Both are written as public-API effects. *Supersedes R16's catalog* (hatch-fill, flow-lines, tron-buildings, day/night); those move to 0.8+.
+- **D-A5. Classics = crosshatch and blueprint, with the launch page.**
+  - *Supersedes R13's four-classic list and the Success Criteria's "≥ 4 classics".* Tron, flow-rhythm and Walkabout move to 0.8.
+  - U10 is rebuilt from the spike's real crosshatch static preset; draft #112's flat polygon hatch is discarded.
+  - The launch page (R14/U11) shows both classics, each live beside its ejected fallback, enhanced by the effect when U13 is present.
+- **D-A6. Gallery close-out is in 0.7.** *Supersedes Scope Boundaries' "terrain / globe / sky deferred".* It has four tracks:
+  - (a) the cheap gaps
+  - (b) the terrain / sky / globe trio as map-level authoring
+  - (c) pages for the escape-hatch examples that only have a badge
+  - (d) a rescore of the out-of-scope examples against the new effects backend
+
+### Units, revised and added
+| Unit | Status / change | Depends on |
+|---|---|---|
+| U9 | PR #113, awaiting merge | — |
+| **U10′** | Rebuild classics as static presets: `crosshatch` (Tangram textures baked: earth/landuse/water, building fallback) and `blueprint` (drafting-grid ground). Includes: ml-gjf (`*-pattern` expressions); a `light:` root key (static building shading is otherwise un-tunable); self-hosted serif italic glyphs for crosshatch labels; and the bake scripts as a reproducible tool (`mlym bake` is a candidate, at minimum a documented script). Gallery "classics" group with hermetic twins. | U4, U6 |
+| **U11** | Launch page: crosshatch and blueprint, live beside ejected (build-time emit), camera sync. It progressively upgrades to the effect when `@maplibre-yaml/effects` is loaded. | U10′ (static); U13′ (effects) |
+| U12 | **Done.** Verdict recorded in ml-rzm. The spike branch stays unmerged; code graduates into U13′. | — |
+| **U13′** | `@maplibre-yaml/effects`, experimental. Contents: the effect contract and registry; `registerEffect`; `backends.extrusions` (route 2: worker meshes, ancestor fallback, context-loss recovery, heights from the layer's own `fill-extrusion-height`/`base` expressions rather than OpenMapTiles field names, the tile-seam fix by unclipped-wall texture coordinates, and world-metre `EffectInput`); the built-ins `tonal-hatch` and `blueprint`; the core schema `effect:` key (v1 + v2, validated against registered `params` when the package is loaded, otherwise passthrough with the eject lossy warning); emit lowering; `<ml-map>` auto-attach; and docs. Mercator only: under globe projection, effects declare absence and the static layer renders. Isolate the MapLibre-internals dependency (tile manager + raw tile bytes) behind one adapter, pin the matrix, and file an upstream request for a public hook. | U12 |
+| **U14** | Cheap gallery gaps: fit-to-data initial camera (ml-chh.9), the `color-relief` layer type (ml-chh.8), display-a-popup (popup at a coordinate without a layer). Badges flip. | — |
+| **U15** | 3D trio as map-level authoring: `terrain:` (ml-chh.5; reverses the declared non-goal), `sky:` (ml-chh.7), `projection:`/globe (ml-chh.6). All three eject to their style.json equivalents. Gallery pages for the 6 examples. | — |
+| **U16** | Escape-hatch pages for the badge-only examples (about 30), using U9 slots for page chrome where it teaches better (absorbs ml-7fb). | U9 |
+| **U17** | Rescore the out-of-scope examples (about 35) against the custom-layer effects backend; update the census and file beads for anything newly reachable. Analysis only. | U13′ (design) |
+| **U18** | Census refresh and ml-chh close-out: final counts, ml-chh.11 (curated-key refresh) and ml-chh.14 (final 3 pure-YAML pages), with the triage doc updated. | U14–U17 |
+
+### Definition of Done, amended
+U1–U11, U13′ and U14–U18 shipped and green. KTD7 is met per D-A2 (real GPU, with the CI tripwire armed). The launch page is live with both classics. The census is refreshed. The spike branch is closed unmerged, with its code graduated. All other DoD clauses stand.
+
+## Amendment A2 (2026-10-04): maplibre-gl v6 and the attribution XSS advisory, ratified by Mario
+
+- **D-A7. maplibre-gl v6 support moves into 0.7** as unit **U19** (ml-vw4.9). *Supersedes the Deferred-to-Follow-Up "v6 environment migration" and KTD1's "core's peer range stays ^3 || ^4 || ^5" for 0.7.*
+  - **Why:** v6 is npm `latest`, and it's the only line patched for GHSA-jrc7-96c5-q579 (critical XSS sanitizer bypass in `DOM.sanitize`, fixed in ≥ 6.4.1).
+  - The peer range widens to include `^6.4.1` in the same PR as the v6 call-site fixes and a v6 CI matrix leg, so the advertised range never exceeds the tested range.
+  - Docs install pins move to v6.
+  - The U13′ effects backend's MapLibre-internals adapter must pass on v6.
+- **D-A8. Library-side attribution sanitizing, shipped as a 0.6.x maintenance patch and in 0.7** (ml-rfk, under ml-2l7).
+  - The exposure: maplibre's AttributionControl is the only caller of the vulnerable sanitizer, and documents forward `attribution:` text to it. Untrusted documents therefore reach it on every currently supported version.
+  - The fix: maplibre-yaml sanitizes document attribution itself (plain text + safe `<a href>`), at runtime and in emit.
+
+## Amendment A3 (2026-10-04): integrations are first-class release surface, ratified by Mario
+
+**Why:** the integration audits (#119 vanilla JS, #124 frameworks, #125 Astro) found many published paths that didn't work. Examples include the JS-API snippet, `<Map src>`, Scrollytelling, `astro dev` for npm installs, and React 18 config objects. The docs' examples were never run.
+
+- **D-A9.** Astro 6 and 7 are supported in 0.7 (**U20**, ml-vw4.13). The peer range widens only alongside a CI leg per supported Astro major.
+- **D-A10.** React typings ship from core in 0.7 (**U21**, ml-vw4.14; ml-f84).
+- **D-A11. Real example apps are release surface.**
+  - `examples/astro` and `examples/react` are real apps using the documented patterns.
+  - CI builds them and drives them in a browser on every supported major: Astro 4–7, React 18 + 19.
+  - A broken integration path fails CI, the same way the gallery twins guard the format.
+  - Docs snippets for these integrations are extracted from, or checked against, the example apps wherever practical.

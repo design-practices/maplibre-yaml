@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "build": "pnpm --filter @maplibre-yaml/core build && astro build",
+    "build": "node scripts/ensure-core-built.mjs && astro build",
     "preview": "astro preview",
     "astro": "astro",
     "reference:yaml": "tsx scripts/generate-yaml-reference.ts"

@@ -49,7 +49,86 @@ import {
   denormalizeSources,
   denormalizeOptions,
 } from "../model/index.js";
+import type { MapModel } from "../model/types.js";
 import { escapeHtml } from "../utils/html.js";
+import {
+  getEffectsHost,
+  onEffectsHost,
+  type EffectBlock,
+  type EffectLayerRef,
+  type EffectsAttachment,
+} from "../effects-host.js";
+import type { ChromeMount, MapRendererEvents } from "../renderer/map-renderer.js";
+import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
+
+/**
+ * Named slots v1 (KTD9): the four chrome corners plus `legend`, which
+ * replaces the built-in legend. Light-DOM named containers, not shadow slots
+ * — `<ml-map>` has no shadow root; a direct child carrying one of these
+ * `slot` values is adopted into the renderer's corner system on load.
+ */
+export const ML_MAP_SLOTS: readonly string[] = [...CHROME_CORNERS, "legend"];
+
+/**
+ * `detail` of `ml-map:error`. Two shapes: a document that failed to load
+ * (parse, validation, fetch, or a missing config) carries the structured
+ * `errors`; a MapLibre error at runtime carries the `error` and whether it was
+ * `fatal` (load-aborting) or not (a 404'd tile, for example).
+ */
+export type MLMapErrorDetail =
+  | { errors: ParseError[]; error?: undefined; fatal?: undefined }
+  | { error: Error; fatal: boolean; errors?: undefined };
+
+/**
+ * Every event `<ml-map>` dispatches, by name, typed with its `detail`. All of
+ * them bubble.
+ *
+ * @remarks
+ * Drives the typed `addEventListener` overloads on {@link MLMap} and the
+ * React 19 `onml-map:*` props in `@maplibre-yaml/core/react`. A test pins its
+ * keys to the `new CustomEvent("ml-map:…")` calls in this file, so the map
+ * cannot drift from what the element actually fires.
+ */
+export interface MLMapEventMap {
+  "ml-map:load": CustomEvent<Record<string, never>>;
+  "ml-map:error": CustomEvent<MLMapErrorDetail>;
+  "ml-map:loading": CustomEvent<{ url: string }>;
+  "ml-map:layer-added": CustomEvent<MapRendererEvents["layer:added"]>;
+  "ml-map:layer-removed": CustomEvent<MapRendererEvents["layer:removed"]>;
+  "ml-map:layer-data-loading": CustomEvent<MapRendererEvents["layer:data-loading"]>;
+  "ml-map:layer-data-loaded": CustomEvent<MapRendererEvents["layer:data-loaded"]>;
+  "ml-map:layer-data-error": CustomEvent<MapRendererEvents["layer:data-error"]>;
+  "ml-map:layer-click": CustomEvent<MapRendererEvents["layer:click"]>;
+  "ml-map:layer-hover": CustomEvent<MapRendererEvents["layer:hover"]>;
+  "ml-map:markers-added": CustomEvent<MapRendererEvents["markers:added"]>;
+  "ml-map:marker-click": CustomEvent<MapRendererEvents["marker:click"]>;
+  "ml-map:marker-icon-error": CustomEvent<MapRendererEvents["marker:icon-error"]>;
+  "ml-map:image-error": CustomEvent<MapRendererEvents["image:error"]>;
+  "ml-map:parameter-change": CustomEvent<MapRendererEvents["parameter:change"]>;
+  "ml-map:layer-visibility": CustomEvent<MapRendererEvents["layer:visibility"]>;
+  "ml-map:camera-fit": CustomEvent<MapRendererEvents["camera:fit"]>;
+}
+
+/**
+ * A serialisation of a config candidate, used to skip re-renders when an
+ * equal config is assigned again (ml-i10). `JSON.stringify` is the structural
+ * compare: linear in the document's size, which is noise next to rebuilding a
+ * WebGL map, and it is exactly the equality the documents themselves have
+ * (they are JSON/YAML data). Key order counts, so `{a, b}` and `{b, a}` are
+ * "different" and re-render, the safe direction. `null` when the value cannot
+ * be serialised (a cycle, a BigInt): such a value never compares equal, so it
+ * always renders, as before.
+ */
+function configKey(value: unknown): string | null {
+  try {
+    return JSON.stringify(value) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Class on the element's own map container — the only child it owns while a map renders. */
+const MAP_CONTAINER_CLASS = "ml-map-container";
 
 /**
  * MLMap custom element for rendering MapLibre maps from YAML/JSON configuration.
@@ -70,6 +149,7 @@ import { escapeHtml } from "../utils/html.js";
  * @fires ml-map:image-error - A declared `images:` entry failed (unsafe scheme, load or register error)
  * @fires ml-map:parameter-change - A params-panel control wrote a state key
  * @fires ml-map:layer-visibility - A params-panel checkbox toggled a layer
+ * @fires ml-map:camera-fit - The `fitTo` camera framed its source's data (detail: source, bounds)
  */
 export class MLMap extends HTMLElement {
   /** Internal MapRenderer instance */
@@ -101,6 +181,30 @@ export class MLMap extends HTMLElement {
   private _config: MapBlock | null = null;
 
   /**
+   * JSON serialisation of the last config handed to the element through the
+   * `config` property or attribute and rendered (or rejected). An assignment
+   * that serialises identically is a no-op (ml-i10): frameworks reassign the
+   * property whenever the bound object's identity changes, and tearing the
+   * map down for an equal document would reset the camera on every parent
+   * re-render. Cleared whenever the map is rendered from another source.
+   */
+  private appliedConfigKey: string | null = null;
+
+  /**
+   * Cancels the pending "No configuration provided" check (ml-mpm), or
+   * `null` when none is pending. See {@link scheduleEmptyConfigCheck}.
+   */
+  private cancelPendingEmptyCheck: (() => void) | null = null;
+
+  /**
+   * The effects attached to the current map (experimental, 0.7), and the
+   * subscription waiting for an effects host that registers late. Both are
+   * torn down with the renderer, so a reload never leaks a custom layer.
+   */
+  private effectsAttachment: EffectsAttachment | null = null;
+  private effectsWait: (() => void) | null = null;
+
+  /**
    * Whether the one-time dev diagnostics have already run for this element.
    * Repeated `config`/`src` updates and `reload()` re-render the map but must
    * not re-spam the same console warnings.
@@ -122,20 +226,31 @@ export class MLMap extends HTMLElement {
   }
 
   /**
-   * Set the map configuration programmatically
+   * Set the map configuration programmatically.
+   *
+   * @remarks
+   * Accepts a `MapBlock` object or its JSON string; both are validated like
+   * every other config path, whether assigned before or after the element
+   * connects. Assigning a value that is JSON-equal to the config currently
+   * applied is a no-op, so a framework re-binding an equal object does not
+   * rebuild the map. Assigning `null` clears the stored config without
+   * touching a rendered map.
    */
   set config(value: MapBlock | string | null) {
     if (value === null) {
       this._config = null;
+      this.appliedConfigKey = null;
       return;
     }
 
-    let parsed: MapBlock;
+    let parsed: unknown;
 
     if (typeof value === "string") {
       try {
         parsed = JSON.parse(value);
       } catch (e) {
+        this.cancelEmptyConfigCheck();
+        this.appliedConfigKey = null;
         this.handleError([
           { path: "", message: "Invalid JSON in config property" },
         ]);
@@ -145,12 +260,18 @@ export class MLMap extends HTMLElement {
       parsed = value;
     }
 
-    this._config = parsed;
-
-    // If already initialized, render with new config
-    if (this.initialized) {
-      this.applyValidatedConfig(parsed);
+    // Before connect: store the candidate; initialize() validates it.
+    if (!this.initialized) {
+      this._config = parsed as MapBlock;
+      return;
     }
+
+    this.cancelEmptyConfigCheck();
+    const key = configKey(parsed);
+    if (key !== null && key === this.appliedConfigKey) return;
+
+    this._config = parsed as MapBlock;
+    this.applyValidatedConfig(parsed, key);
   }
 
   /**
@@ -161,7 +282,11 @@ export class MLMap extends HTMLElement {
    * programmatic assignment get the same errors, unknown-key suggestions and
    * deprecation warnings the YAML paths have always produced.
    */
-  private applyValidatedConfig(candidate: unknown): void {
+  private applyValidatedConfig(
+    candidate: unknown,
+    key: string | null = configKey(candidate)
+  ): void {
+    this.appliedConfigKey = key;
     const result = YAMLParser.safeParseMapBlockValue(candidate);
 
     // Advisory, never in the error card (decision D11) — same as YAML.
@@ -179,9 +304,14 @@ export class MLMap extends HTMLElement {
    * Called when the element is added to the DOM
    */
   connectedCallback(): void {
+    // A `config` assigned while the tag was still undefined (before the
+    // element class was registered) is an own data property that shadows the
+    // accessor and would be silently ignored. Re-route it through the setter
+    // (the standard custom-element `_upgradeProperty` pattern).
+    this.upgradeProperty("config");
+
     // Create internal map container
-    this.mapContainer = document.createElement("div");
-    this.mapContainer.style.cssText = "width: 100%; height: 100%;";
+    this.mapContainer = this.createMapContainer();
 
     // Ensure the component has display: block (custom elements default to inline)
     if (!this.style.display || this.style.display === "inline") {
@@ -190,6 +320,19 @@ export class MLMap extends HTMLElement {
 
     // Initialize configuration loading
     this.initialize();
+  }
+
+  /**
+   * Re-apply an own property set on the element before it was upgraded, so
+   * it reaches the class accessor instead of shadowing it.
+   */
+  private upgradeProperty(name: "config"): void {
+    if (Object.prototype.hasOwnProperty.call(this, name)) {
+      const self = this as unknown as Record<string, unknown>;
+      const value = self[name];
+      delete self[name];
+      self[name] = value;
+    }
   }
 
   /**
@@ -226,9 +369,12 @@ export class MLMap extends HTMLElement {
   private async initialize(): Promise<void> {
     this.initialized = true;
 
-    // Priority 1: Programmatically set config property
+    // Priority 1: Programmatically set config property. Frameworks that set
+    // properties at creation (React 19, Vue, Svelte) land here, so it is
+    // validated and defaulted exactly like the attribute and YAML paths
+    // (ml-jh6), never handed to the renderer raw.
     if (this._config) {
-      this.renderMap(this._config);
+      this.applyValidatedConfig(this._config);
       return;
     }
 
@@ -253,22 +399,72 @@ export class MLMap extends HTMLElement {
       return;
     }
 
-    // No configuration provided - show helpful error
-    this.handleError(
-      [
-        {
-          path: "",
-          message: "No configuration provided.",
-        },
-      ],
-      true
-    );
+    // No configuration yet. A `config` property may still be on its way
+    // (ml-mpm); the setter cancels the check. A mapReady() called meanwhile
+    // simply waits.
+    this.scheduleEmptyConfigCheck();
+  }
+
+  /**
+   * Report "No configuration provided" only if no config arrived by the end
+   * of the next frame.
+   *
+   * @remarks
+   * An element can connect empty and receive `.config` moments later: a
+   * module script assigns it right after importing `register` (which upgrades
+   * the element synchronously), and React 18 can only assign it from an
+   * effect, which runs after the browser paints. A plain `setTimeout(0)`
+   * loses that race in practice (measured: the effect landed after it), so
+   * the check waits for the next animation frame and then one more task. A
+   * background tab runs no frames, so a 500 ms timer bounds the wait there.
+   */
+  private scheduleEmptyConfigCheck(): void {
+    this.cancelEmptyConfigCheck();
+
+    const run = () => {
+      this.cancelEmptyConfigCheck();
+      if (!this.initialized || this._config || this.renderer) return;
+      this.handleError(
+        [
+          {
+            path: "",
+            message: "No configuration provided.",
+          },
+        ],
+        true
+      );
+    };
+
+    let frame: number | undefined;
+    let afterFrame: ReturnType<typeof setTimeout> | undefined;
+    let fallback: ReturnType<typeof setTimeout> | undefined;
+    if (typeof requestAnimationFrame === "function") {
+      frame = requestAnimationFrame(() => {
+        afterFrame = setTimeout(run, 0);
+      });
+      fallback = setTimeout(run, 500);
+    } else {
+      afterFrame = setTimeout(run, 0);
+    }
+
+    this.cancelPendingEmptyCheck = () => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      clearTimeout(afterFrame);
+      clearTimeout(fallback);
+      this.cancelPendingEmptyCheck = null;
+    };
+  }
+
+  private cancelEmptyConfigCheck(): void {
+    this.cancelPendingEmptyCheck?.();
   }
 
   /**
    * Load and parse YAML from a script tag's text content
    */
   private loadFromScriptTag(yamlContent: string): void {
+    this.cancelEmptyConfigCheck();
+    this.appliedConfigKey = null;
     const result = YAMLParser.safeParseMapBlock(yamlContent);
 
     // Warnings are advisory (unknown keys, deprecations, expression hints):
@@ -287,6 +483,9 @@ export class MLMap extends HTMLElement {
    * Load and parse YAML from an external URL
    */
   private async loadFromURL(url: string): Promise<void> {
+    this.cancelEmptyConfigCheck();
+    this.appliedConfigKey = null;
+
     // Emit loading event
     this.dispatchEvent(
       new CustomEvent("ml-map:loading", {
@@ -329,6 +528,7 @@ export class MLMap extends HTMLElement {
    * Parse and validate JSON from the config attribute
    */
   private loadFromJSONAttribute(jsonString: string): void {
+    this.cancelEmptyConfigCheck();
     try {
       const parsed = JSON.parse(jsonString);
       // Validated like the YAML paths. Well-formed JSON that fails the schema
@@ -378,26 +578,26 @@ export class MLMap extends HTMLElement {
       return;
     }
 
-    // Destroy existing renderer
-    if (this.renderer) {
-      this.renderer.destroy();
-      this.renderer = null;
-    }
+    // Destroy existing renderer (slot children parked first — the renderer
+    // only borrows them, and its teardown removes their corner containers).
+    this.teardownRenderer();
 
     // A fresh render resets the readiness state a pending or future
     // mapReady() reads.
     this.documentLoaded = false;
     this.lastError = null;
 
-    // Clear content and set up container
-    this.innerHTML = "";
+    // Targeted teardown (KTD9): remove only what this element owns — a
+    // previous error card — never author children (the inline YAML script a
+    // later reload() re-reads, slot children, anything else).
+    this.removeErrorCards();
 
     if (!this.mapContainer) {
-      this.mapContainer = document.createElement("div");
-      this.mapContainer.style.cssText = "width: 100%; height: 100%;";
+      this.mapContainer = this.createMapContainer();
     }
 
     this.appendChild(this.mapContainer);
+    const slots = this.collectSlots();
 
     try {
       // Normalize the v1 document into the v2 internal model, then render from
@@ -413,6 +613,8 @@ export class MLMap extends HTMLElement {
         denormalizeLayers(model),
         {
           ...denormalizeOptions(model),
+          chrome: slots.chrome,
+          legendElement: slots.legendElement,
         onLoad: () => {
           // Load event is also emitted via the event system
         },
@@ -438,6 +640,9 @@ export class MLMap extends HTMLElement {
 
       // Set up event forwarding
       this.setupEventForwarding();
+
+      // Experimental effects (`effect:` layers) attach once the map loads.
+      this.setupEffects(model);
 
       // Surface the classic silent-blank-map failure modes on the console.
       this.checkEnvironment();
@@ -514,20 +719,28 @@ export class MLMap extends HTMLElement {
   }
 
   /**
-   * Probe whether MapLibre's CSS is loaded using the same `.maplibregl-canary`
-   * technique MapLibre GL JS uses internally: the stylesheet paints the canary
-   * salmon (`rgb(250, 128, 114)`); if the computed color differs, the CSS is
-   * absent.
+   * Probe whether MapLibre's CSS is loaded.
+   *
+   * @remarks
+   * Two signatures, either one counts. maplibre-gl up to 4.x paints a
+   * `.maplibregl-canary` salmon (`rgb(250, 128, 114)`), the check MapLibre
+   * itself used. 5.x dropped the canary rule, so the probe also carries the
+   * `.maplibregl-map` class, which every version's stylesheet makes
+   * `position: relative; overflow: hidden`. Checking only the canary warned
+   * "CSS not loaded" on every maplibre-gl 5 page, CSS or not.
    */
   private static isMapLibreCssLoaded(): boolean {
     try {
-      const canary = document.createElement("div");
-      canary.className = "maplibregl-canary";
-      canary.style.display = "none";
-      document.body.appendChild(canary);
-      const color = window.getComputedStyle(canary).backgroundColor;
-      document.body.removeChild(canary);
-      return color === "rgb(250, 128, 114)";
+      const probe = document.createElement("div");
+      probe.className = "maplibregl-canary maplibregl-map";
+      probe.style.display = "none";
+      document.body.appendChild(probe);
+      const style = window.getComputedStyle(probe);
+      const loaded =
+        style.backgroundColor === "rgb(250, 128, 114)" ||
+        (style.position === "relative" && style.overflow === "hidden");
+      document.body.removeChild(probe);
+      return loaded;
     } catch {
       // If we cannot probe (unusual DOM), do not nag.
       return true;
@@ -649,6 +862,16 @@ export class MLMap extends HTMLElement {
       );
     });
 
+    // fitTo (U14): the initial camera framed its source's data
+    this.renderer.on("camera:fit", ({ source, bounds }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:camera-fit", {
+          bubbles: true,
+          detail: { source, bounds },
+        })
+      );
+    });
+
     // Declared images (U6): a failed entry — the document keeps rendering
     this.renderer.on("image:error", ({ name, url }) => {
       this.dispatchEvent(
@@ -681,6 +904,83 @@ export class MLMap extends HTMLElement {
   /**
    * Handle and display errors
    */
+  private createMapContainer(): HTMLDivElement {
+    const el = document.createElement("div");
+    el.className = MAP_CONTAINER_CLASS;
+    el.style.cssText = "width: 100%; height: 100%;";
+    return el;
+  }
+
+  /**
+   * The direct children carrying a v1 slot name, split into corner mounts
+   * and the legend override. Parked slot children are direct children again,
+   * so every render (including `reload()`) re-collects them — and picks up
+   * slot children added since the last render.
+   */
+  private collectSlots(): { chrome: ChromeMount[]; legendElement?: HTMLElement } {
+    const chrome: ChromeMount[] = [];
+    let legendElement: HTMLElement | undefined;
+    for (const child of Array.from(this.children)) {
+      if (!(child instanceof HTMLElement)) continue;
+      const name = child.getAttribute("slot");
+      if (name === null) continue;
+      if (name === "legend") {
+        if (legendElement) {
+          console.warn(
+            '[ml-map] more than one slot="legend" child; only the first replaces the legend.'
+          );
+          continue;
+        }
+        legendElement = child;
+      } else if ((CHROME_CORNERS as readonly string[]).includes(name)) {
+        chrome.push({ position: name as ChromeCorner, element: child });
+      } else {
+        console.warn(
+          `[ml-map] unknown slot "${name}" — expected one of: ${ML_MAP_SLOTS.join(", ")}. ` +
+            "The child is left where it is."
+        );
+      }
+    }
+    return { chrome, legendElement };
+  }
+
+  /**
+   * Move slot children the renderer borrowed back onto this element (where
+   * the stylesheet hides them until the next mount), so tearing the map down
+   * — re-render, error card, disconnect — never destroys author markup.
+   */
+  private parkSlots(): void {
+    for (const el of Array.from(
+      this.querySelectorAll<HTMLElement>(`.${MAP_CONTAINER_CLASS} [slot]`)
+    )) {
+      if (ML_MAP_SLOTS.includes(el.getAttribute("slot") ?? "")) {
+        this.appendChild(el);
+      }
+    }
+  }
+
+  /** Park slot children, then destroy the renderer (if any). */
+  /**
+   * Every path that drops the map — re-render, error card, disconnect —
+   * comes through here: effects detach first (they live on the renderer's
+   * map), then slot children are parked (the renderer only borrows them),
+   * then the renderer is destroyed.
+   */
+  private teardownRenderer(): void {
+    this.teardownEffects();
+    this.parkSlots();
+    if (this.renderer) {
+      this.renderer.destroy();
+      this.renderer = null;
+    }
+  }
+
+  private removeErrorCards(): void {
+    for (const el of Array.from(this.children)) {
+      if (el.classList.contains("ml-map-error")) el.remove();
+    }
+  }
+
   private handleError(errors: ParseError[], showHelp = false): void {
     // Persist the failure so a mapReady() call arriving after this event
     // rejects with the structured errors instead of waiting forever.
@@ -747,7 +1047,15 @@ export class MLMap extends HTMLElement {
       )
       .join("");
 
-    this.innerHTML = `
+    // Targeted replacement (KTD9): the error card takes the map container's
+    // place; author children (inline YAML, parked slot children) survive so
+    // a fixed document can reload() into the same element.
+    this.teardownRenderer();
+    this.removeErrorCards();
+    this.mapContainer?.remove();
+
+    const template = document.createElement("template");
+    template.innerHTML = `
       <div class="ml-map-error" style="
         padding: 20px;
         background: #fef2f2;
@@ -771,17 +1079,89 @@ export class MLMap extends HTMLElement {
         ${helpSection}
       </div>
     `;
+    const card = template.content.firstElementChild;
+    if (card) this.appendChild(card);
   }
 
+
+  /**
+   * Attach the document's experimental effects once the map has loaded.
+   *
+   * @remarks
+   * Core never imports `@maplibre-yaml/effects`: the package registers an
+   * effects host (see `effects-host.ts`) and this reads it. A document
+   * without `effect:` layers returns immediately — no host lookup, no
+   * listener. When the host registers after the map loads (a dynamic
+   * import), the effects attach then; without a host at all the layers
+   * stay static and say so once.
+   */
+  private setupEffects(model: MapModel): void {
+    const refs: EffectLayerRef[] = [];
+    for (const layer of model.style.layers) {
+      const effect = layer.runtime["effect"];
+      const id = layer.spec["id"];
+      if (effect && typeof effect === "object" && typeof id === "string") {
+        refs.push({ layerId: id, effect: effect as EffectBlock });
+      }
+    }
+    if (refs.length === 0 || !this.renderer) return;
+
+    const renderer = this.renderer;
+    const attach = () => {
+      if (this.renderer !== renderer || this.effectsAttachment) return;
+      const map = renderer.getMap();
+      const host = getEffectsHost();
+      if (!map || !host) return;
+      try {
+        this.effectsAttachment = host.attach(map, refs);
+      } catch (error) {
+        // A host must declare absence rather than throw; if one throws
+        // anyway, the static layers are still on the map — say so, don't
+        // kill the document.
+        console.error("[maplibre-yaml] effects failed to attach:", error);
+      }
+    };
+
+    renderer.on("load", () => {
+      if (getEffectsHost()) {
+        attach();
+        return;
+      }
+      console.warn(
+        `[maplibre-yaml] ${refs.length} layer(s) declare an effect ` +
+          `(${[...new Set(refs.map((r) => r.effect.type))].join(", ")}) but ` +
+          "@maplibre-yaml/effects is not loaded — they render as their static " +
+          'fallback. Import "@maplibre-yaml/effects/register" to enable them.'
+      );
+      this.effectsWait = onEffectsHost(() => {
+        this.effectsWait = null;
+        attach();
+      });
+    });
+  }
+
+  /** Detach effects and drop any pending host subscription. */
+  private teardownEffects(): void {
+    this.effectsWait?.();
+    this.effectsWait = null;
+    const attachment = this.effectsAttachment;
+    this.effectsAttachment = null;
+    if (attachment) {
+      try {
+        attachment.detach();
+      } catch (error) {
+        console.warn("[maplibre-yaml] effects failed to detach cleanly:", error);
+      }
+    }
+  }
 
   /**
    * Clean up resources when component is removed
    */
   private destroy(): void {
-    if (this.renderer) {
-      this.renderer.destroy();
-      this.renderer = null;
-    }
+    this.cancelEmptyConfigCheck();
+    this.teardownRenderer();
+    this.appliedConfigKey = null;
     this._config = null;
     this.initialized = false;
   }
@@ -968,6 +1348,55 @@ export class MLMap extends HTMLElement {
         this.loadFromScriptTag(yamlScript.textContent);
       }
     }
+  }
+}
+
+/**
+ * Typed listener overloads: `el.addEventListener("ml-map:layer-click", (e) =>
+ * e.detail.layerId)` type-checks without a cast. Declaration merging adds
+ * overloads only; there is no runtime code.
+ */
+export interface MLMap {
+  addEventListener<K extends keyof MLMapEventMap>(
+    type: K,
+    listener: (this: MLMap, event: MLMapEventMap[K]) => unknown,
+    options?: boolean | AddEventListenerOptions
+  ): void;
+  addEventListener<K extends keyof HTMLElementEventMap>(
+    type: K,
+    listener: (this: MLMap, event: HTMLElementEventMap[K]) => unknown,
+    options?: boolean | AddEventListenerOptions
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions
+  ): void;
+  removeEventListener<K extends keyof MLMapEventMap>(
+    type: K,
+    listener: (this: MLMap, event: MLMapEventMap[K]) => unknown,
+    options?: boolean | EventListenerOptions
+  ): void;
+  removeEventListener<K extends keyof HTMLElementEventMap>(
+    type: K,
+    listener: (this: MLMap, event: HTMLElementEventMap[K]) => unknown,
+    options?: boolean | EventListenerOptions
+  ): void;
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | EventListenerOptions
+  ): void;
+}
+
+declare global {
+  /**
+   * Types `document.querySelector("ml-map")` and
+   * `document.createElement("ml-map")` as {@link MLMap}, so `mapReady()` /
+   * `getMap()` type-check without a cast.
+   */
+  interface HTMLElementTagNameMap {
+    "ml-map": MLMap;
   }
 }
 

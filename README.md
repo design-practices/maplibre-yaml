@@ -25,7 +25,7 @@ maplibre-yaml lets you create interactive web maps using simple YAML configurati
 ### Web Component
 
 ```html
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 <style>
   ml-map { display: block; height: 400px; }
 </style>

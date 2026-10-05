@@ -1,0 +1,51 @@
+# Effects evaluate the static layer's OWN height expressions — any schema.
+#
+# These blocks carry `levels` and `podium` properties (not OpenMapTiles'
+# render_height): the layer's expressions turn them into metres, and the
+# `flat-ink` effect (registered by the demo page through the public
+# registerEffect() API) must stand every block at exactly the static
+# layer's height. The browser suite compares the two silhouettes.
+type: map
+id: heights
+config:
+  center: [-74.0105, 40.7075]
+  zoom: 16.2
+  pitch: 55
+  bearing: 20
+  mapStyle: "{{origin}}/examples/verification/configs/local-style.json"
+sources:
+  blocks:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          properties: { levels: 4, podium: 0 }
+          geometry:
+            type: Polygon
+            coordinates: [[[-74.0125, 40.7068], [-74.0115, 40.7068], [-74.0115, 40.7074], [-74.0125, 40.7074], [-74.0125, 40.7068]]]
+        - type: Feature
+          properties: { levels: 22, podium: 0 }
+          geometry:
+            type: Polygon
+            coordinates: [[[-74.0108, 40.7068], [-74.0099, 40.7068], [-74.0099, 40.7075], [-74.0108, 40.7075], [-74.0108, 40.7068]]]
+        - type: Feature
+          properties: { levels: 12, podium: 5 }
+          geometry:
+            type: Polygon
+            coordinates: [[[-74.0118, 40.7080], [-74.0108, 40.7080], [-74.0108, 40.7086], [-74.0118, 40.7086], [-74.0118, 40.7080]]]
+layers:
+  - id: paper
+    type: background
+    paint:
+      background-color: "#ffffff"
+  - id: blocks
+    type: fill-extrusion
+    source: blocks
+    paint:
+      fill-extrusion-color: "#c0392b"
+      fill-extrusion-height: ["*", ["get", "levels"], 3.5]
+      fill-extrusion-base: ["*", ["get", "podium"], 3.5]
+    effect:
+      type: flat-ink
+      color: "#c0392b"

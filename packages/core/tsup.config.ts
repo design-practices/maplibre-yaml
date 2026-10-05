@@ -9,6 +9,10 @@ export default defineConfig([
       "src/components/index.ts",
       "src/register.ts",
       "src/maplibre.ts",
+      // Types-only entry (React JSX typings). Its JS output is an empty
+      // module; it exists so `import "@maplibre-yaml/core/react"` resolves
+      // in bundlers as well as in tsc.
+      "src/react.ts",
     ],
     format: ["esm"],
     dts: true,
@@ -16,7 +20,9 @@ export default defineConfig([
     sourcemap: true,
     splitting: false,
     treeshake: true,
-    external: ["maplibre-gl"],
+    // `react` is only ever imported for types (src/react.ts); keep the
+    // declaration bundler from inlining @types/react into dist/react.d.ts.
+    external: ["maplibre-gl", "react"],
     esbuildOptions(options) {
       options.banner = {
         js: "// @maplibre-yaml/core - Declarative web maps with YAML",

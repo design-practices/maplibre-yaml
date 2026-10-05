@@ -8,21 +8,29 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 ## Supported maplibre-gl versions
 
 maplibre-yaml works with maplibre-gl **v4 and v5** (v5 recommended for new
-projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0`. The CDN examples
-below pin `maplibre-gl@^5` because it is the current latest — pin whichever
-major your project already uses.
+projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0`. maplibre-gl **v6 is
+not supported yet**, and it is now what an unpinned install or CDN URL
+resolves to — so every example below pins major 5 (`maplibre-gl@^5` for npm
+and the import map, `maplibre-gl@5` for the CSS). Pin whichever supported
+major your project uses, and keep the CSS on the same major as the JS.
 
 ## Package installation
 
 <Tabs>
   <TabItem label="npm">
-    ```bash npm install @maplibre-yaml/core maplibre-gl ```
+    ```bash
+    npm install @maplibre-yaml/core maplibre-gl@^5
+    ```
   </TabItem>
   <TabItem label="pnpm">
-    ```bash pnpm add @maplibre-yaml/core maplibre-gl ```
+    ```bash
+    pnpm add @maplibre-yaml/core maplibre-gl@^5
+    ```
   </TabItem>
   <TabItem label="yarn">
-    ```bash yarn add @maplibre-yaml/core maplibre-gl ```
+    ```bash
+    yarn add @maplibre-yaml/core maplibre-gl@^5
+    ```
   </TabItem>
 </Tabs>
 
@@ -34,13 +42,15 @@ MapLibre GL JS requires its CSS for proper rendering. Add it to your HTML or imp
   <TabItem label="HTML">
     ```html
     <link
-      href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+      href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
       rel="stylesheet"
     />
     ```
   </TabItem>
   <TabItem label="JavaScript">
-    ```javascript import 'maplibre-gl/dist/maplibre-gl.css'; ```
+    ```javascript
+    import 'maplibre-gl/dist/maplibre-gl.css';
+    ```
   </TabItem>
 </Tabs>
 
@@ -53,7 +63,7 @@ For quick prototypes or simple pages, you can use maplibre-yaml directly from a 
 <html>
   <head>
     <link
-      href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+      href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
       rel="stylesheet"
     />
     <style>
@@ -78,11 +88,17 @@ For quick prototypes or simple pages, you can use maplibre-yaml directly from a 
 </html>
 ```
 
-To use the JavaScript API (`YAMLParser`, `MapRenderer`) from a CDN instead of the web component, import the package from esm.sh, which resolves its dependencies automatically:
+To use the JavaScript API (`YAMLParser`, `MapRenderer`) from a CDN instead of the web component, import the package from esm.sh, which resolves `yaml` and `zod` for you. Keep the same import map and add `?external=maplibre-gl` so the library uses the maplibre-gl you pinned, not a second copy chosen by esm.sh:
 
 ```html
+<script type="importmap">
+  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+</script>
 <script type="module">
-  import { YAMLParser, MapRenderer } from "https://esm.sh/@maplibre-yaml/core";
+  import {
+    YAMLParser,
+    MapRenderer,
+  } from "https://esm.sh/@maplibre-yaml/core?external=maplibre-gl";
 
   // Your map code here
 </script>
@@ -101,7 +117,7 @@ Then use it in your HTML:
 ```html
 <ml-map
   style="width: 100%; height: 400px;"
-  config='{"type":"map","config":{"center":[-74,40],"zoom":10,"mapStyle":"https://demotiles.maplibre.org/style.json"},"layers":[]}'
+  config='{"type":"map","id":"my-map","config":{"center":[-74,40],"zoom":10,"mapStyle":"https://demotiles.maplibre.org/style.json"},"layers":[]}'
 >
 </ml-map>
 ```

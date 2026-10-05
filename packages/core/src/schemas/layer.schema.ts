@@ -20,6 +20,8 @@ import {
   ZoomLevelSchema,
 } from "./base.schema";
 import { LayerSourceSchema } from "./source.schema";
+import { markOpenSchema } from "../parser/validation-utils";
+import { getEffectsHost, type EffectBlock } from "../effects-host";
 
 /**
  * Reference to a root-level named source.
@@ -443,6 +445,62 @@ export const LegendItemSchema = z
 export type LegendItem = z.infer<typeof LegendItemSchema>;
 
 /**
+ * A layer's `effect:` block — **experimental** (0.7, `@maplibre-yaml/effects`).
+ *
+ * @remarks
+ * Names a registered effect by `type`; every other key is a param (flat,
+ * KTD6). The layer it sits on is the effect's static fallback: without the
+ * effects package the layer renders as authored, and `mlym emit` ejects it
+ * with one `lossy` warning per effect.
+ *
+ * When `@maplibre-yaml/effects` is loaded, the params validate against the
+ * registered effect's zod schema here, so a bad param is a positioned parse
+ * error like any other. Without it the block is an open object and the
+ * validator reports one `unimplemented` warning instead.
+ *
+ * @example
+ * ```yaml
+ * - id: buildings
+ *   type: fill-extrusion
+ *   source: omt
+ *   source-layer: building
+ *   paint: { fill-extrusion-color: "#ccc", fill-extrusion-height: ["get", "render_height"] }
+ *   effect:
+ *     type: tonal-hatch
+ *     gain: 0.72
+ * ```
+ */
+export const EffectConfigSchema = z
+  .object({
+    type: z
+      .string()
+      .min(1)
+      .describe("A registered effect type, e.g. tonal-hatch or blueprint"),
+  })
+  .passthrough()
+  .superRefine((value, ctx) => {
+    const host = getEffectsHost();
+    if (!host) return;
+    for (const issue of host.validate(value as EffectBlock)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: issue.path,
+        message: issue.message,
+      });
+    }
+  })
+  .describe(
+    "Experimental: a registered shader effect (`type` + flat params) that " +
+      "enhances this layer; the layer itself is the static fallback"
+  );
+// Params are the effect's own vocabulary, validated by its registered zod
+// schema — never "unknown keys" to the generic walker.
+markOpenSchema(EffectConfigSchema);
+
+/** Inferred type for an `effect:` block. */
+export type EffectConfig = z.infer<typeof EffectConfigSchema>;
+
+/**
  * Base properties shared by all layer types.
  *
  * @remarks
@@ -480,6 +538,7 @@ export const BaseLayerPropertiesSchema = z.object({
     "Interactive event configuration"
   ),
   legend: LegendItemSchema.optional().describe("Legend configuration"),
+  effect: EffectConfigSchema.optional(),
   metadata: z.record(z.any()).optional().describe("Custom metadata"),
 });
 
@@ -593,7 +652,7 @@ export const LineLayerSchema = BaseLayerPropertiesSchema.extend({
       "line-offset": NumberOrExpressionSchema.optional(),
       "line-blur": NumberOrExpressionSchema.optional(),
       "line-dasharray": z.array(z.number()).optional(),
-      "line-pattern": z.string().optional(),
+      "line-pattern": z.union([z.string(), ExpressionSchema]).optional(),
       "line-gradient": ColorOrExpressionSchema.optional(),
       "line-translate": z.tuple([z.number(), z.number()]).optional(),
       "line-translate-anchor": z.enum(["map", "viewport"]).optional(),
@@ -648,7 +707,7 @@ export const FillLayerSchema = BaseLayerPropertiesSchema.extend({
       "fill-outline-color": ColorOrExpressionSchema.optional(),
       "fill-translate": z.tuple([z.number(), z.number()]).optional(),
       "fill-translate-anchor": z.enum(["map", "viewport"]).optional(),
-      "fill-pattern": z.string().optional(),
+      "fill-pattern": z.union([z.string(), ExpressionSchema]).optional(),
     })
     .passthrough()
     .optional()
@@ -887,7 +946,7 @@ export const FillExtrusionLayerSchema = BaseLayerPropertiesSchema.extend({
       "fill-extrusion-color": ColorOrExpressionSchema.optional(),
       "fill-extrusion-translate": z.tuple([z.number(), z.number()]).optional(),
       "fill-extrusion-translate-anchor": z.enum(["map", "viewport"]).optional(),
-      "fill-extrusion-pattern": z.string().optional(),
+      "fill-extrusion-pattern": z.union([z.string(), ExpressionSchema]).optional(),
       "fill-extrusion-height": NumberOrExpressionSchema.optional(),
       "fill-extrusion-base": NumberOrExpressionSchema.optional(),
       "fill-extrusion-vertical-gradient": z.boolean().optional(),
@@ -1003,6 +1062,65 @@ export const HillshadeLayerSchema = BaseLayerPropertiesSchema.extend({
 export type HillshadeLayer = z.infer<typeof HillshadeLayerSchema>;
 
 /**
+ * Color-relief layer: hypsometric tinting of a raster DEM (maplibre-gl ≥ 5.6).
+ *
+ * @remarks
+ * Colors each DEM pixel by its elevation. `color-relief-color` is a color
+ * ramp over the `["elevation"]` expression, exactly like `heatmap-color` is
+ * a ramp over `["heatmap-density"]`. The source must be `raster-dem` — the
+ * same sources hillshade layers draw from.
+ *
+ * **Runtime floor:** the layer type exists from maplibre-gl 5.6.0. On an
+ * older runtime the renderer skips the layer with one warning (a declared
+ * absence) instead of letting MapLibre reject the document; emit with a
+ * `--target` below 5.6 reports the layer as `lossy`.
+ *
+ * @example
+ * ```yaml
+ * - id: relief
+ *   type: color-relief
+ *   source:
+ *     type: raster-dem
+ *     url: "https://demotiles.maplibre.org/terrain-tiles/tiles.json"
+ *     tileSize: 256
+ *   paint:
+ *     color-relief-color:
+ *       - interpolate
+ *       - ["linear"]
+ *       - ["elevation"]
+ *       - 400
+ *       - "rgb(4, 0, 108)"
+ *       - 3500
+ *       - "rgb(215, 5, 13)"
+ * ```
+ *
+ * @see {@link https://maplibre.org/maplibre-style-spec/layers/#color-relief | MapLibre Color Relief Layer}
+ */
+export const ColorReliefLayerSchema = BaseLayerPropertiesSchema.extend({
+  type: z.literal("color-relief").describe("Layer type (maplibre-gl >= 5.6)"),
+  paint: z
+    .object({
+      "color-relief-color": ColorOrExpressionSchema.optional().describe(
+        'Color ramp over ["elevation"] — an interpolate/step expression'
+      ),
+      "color-relief-opacity": NumberOrExpressionSchema.optional().describe(
+        "Layer opacity (0-1)"
+      ),
+    })
+    .passthrough()
+    .optional()
+    .describe("Color-relief paint properties"),
+  layout: z
+    .object({})
+    .passthrough()
+    .optional()
+    .describe("Color-relief layout properties"),
+}).passthrough();
+
+/** Inferred type for color-relief layer. */
+export type ColorReliefLayer = z.infer<typeof ColorReliefLayerSchema>;
+
+/**
  * Background layer for solid color backgrounds.
  *
  * @remarks
@@ -1026,7 +1144,7 @@ export const BackgroundLayerSchema = z
     paint: z
       .object({
         "background-color": ColorOrExpressionSchema.optional(),
-        "background-pattern": z.string().optional(),
+        "background-pattern": z.union([z.string(), ExpressionSchema]).optional(),
         "background-opacity": NumberOrExpressionSchema.optional(),
       })
       .passthrough()
@@ -1060,17 +1178,35 @@ export type BackgroundLayer = z.infer<typeof BackgroundLayerSchema>;
  * };
  * ```
  */
-export const LayerSchema = z.discriminatedUnion("type", [
-  CircleLayerSchema,
-  LineLayerSchema,
-  FillLayerSchema,
-  SymbolLayerSchema,
-  RasterLayerSchema,
-  FillExtrusionLayerSchema,
-  HeatmapLayerSchema,
-  HillshadeLayerSchema,
-  BackgroundLayerSchema,
-]);
+// Annotated (TS7056): the tenth member (color-relief, U14) tipped the
+// union's inferred type past the compiler's serialization limit. The
+// annotation names each member by `typeof`, which serializes as a reference
+// rather than an expansion — `Layer` stays exactly the inferred union.
+type LayerUnionMembers = [
+  typeof CircleLayerSchema,
+  typeof LineLayerSchema,
+  typeof FillLayerSchema,
+  typeof SymbolLayerSchema,
+  typeof RasterLayerSchema,
+  typeof FillExtrusionLayerSchema,
+  typeof HeatmapLayerSchema,
+  typeof HillshadeLayerSchema,
+  typeof ColorReliefLayerSchema,
+  typeof BackgroundLayerSchema,
+];
+export const LayerSchema: z.ZodDiscriminatedUnion<"type", LayerUnionMembers> =
+  z.discriminatedUnion("type", [
+    CircleLayerSchema,
+    LineLayerSchema,
+    FillLayerSchema,
+    SymbolLayerSchema,
+    RasterLayerSchema,
+    FillExtrusionLayerSchema,
+    HeatmapLayerSchema,
+    HillshadeLayerSchema,
+    ColorReliefLayerSchema,
+    BackgroundLayerSchema,
+  ]);
 
 /** Inferred type for any layer. */
 export type Layer = z.infer<typeof LayerSchema>;
@@ -1115,10 +1251,9 @@ export type LayerReference = z.infer<typeof LayerReferenceSchema>;
  * @remarks
  * Layers can be defined inline or referenced from global definitions.
  */
-export const LayerOrReferenceSchema = z.union([
-  LayerSchema,
-  LayerReferenceSchema,
-]);
+export const LayerOrReferenceSchema: z.ZodUnion<
+  [typeof LayerSchema, typeof LayerReferenceSchema]
+> = z.union([LayerSchema, LayerReferenceSchema]);
 
 /** Inferred type for layer or reference. */
 export type LayerOrReference = z.infer<typeof LayerOrReferenceSchema>;

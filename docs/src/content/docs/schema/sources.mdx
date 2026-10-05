@@ -16,7 +16,7 @@ Data sources provide the data for map layers. maplibre-yaml supports all MapLibr
 | `geojson` | GeoJSON point, line, and polygon data | Primary data source, supports real-time updates |
 | `vector` | Vector tiles (Mapbox Vector Tiles) | Efficient large datasets, base maps |
 | `raster` | Raster tile imagery | Satellite imagery, basemaps |
-| `raster-dem` | Elevation (DEM) tiles | Hillshade layers |
+| `raster-dem` | Elevation (DEM) tiles | Hillshade and color-relief layers, 3D `terrain:` |
 | `image` | Single image overlay | Map overlays, floor plans |
 | `video` | Video overlay | Animated overlays |
 
@@ -435,7 +435,7 @@ MapLibre GL JS GeoJSON options are supported:
 | `lineMetrics` | boolean | Enable line distance metrics |
 | `generateId` | boolean | Auto-generate feature IDs |
 | `promoteId` | string \| object | Promote property to feature ID |
-| `attribution` | string | Attribution text |
+| `attribution` | string | Attribution text ([sanitized](#attribution-is-sanitized)) |
 
 ### Example
 
@@ -448,6 +448,20 @@ source:
   buffer: 128
   attribution: "© Data Provider"
 ```
+
+## Attribution is sanitized
+
+Every source type's `attribution` is shown in MapLibre's attribution
+control, which renders it as HTML. maplibre-yaml sanitizes it first, under
+every trust policy: plain text, character references such as `&copy;`, and
+`<a href="…">` links with an `http:`, `https:` or `mailto:` URL (keeping only
+`href`, `target` and `rel`) pass through; any other markup is escaped and
+shows as literal text. The same rule applies to attribution that arrives from
+a TileJSON `url:` or a basemap style, and to the `style.json` that
+`mlym emit` writes (which reports a `contract` warning when it changes one).
+See [Trust and attribution](/integrations/web-components/#trust-and-attribution)
+for why: MapLibre's own attribution sanitizer can be bypassed on every
+supported maplibre-gl.
 
 ## Vector Source
 
@@ -482,7 +496,7 @@ source:
 | `maxzoom` | number | No | Maximum zoom level |
 | `bounds` | number[] | No | Bounds [west, south, east, north] |
 | `scheme` | `"xyz"` \| `"tms"` | No | Tile coordinate scheme |
-| `attribution` | string | No | Attribution text |
+| `attribution` | string | No | Attribution text ([sanitized](#attribution-is-sanitized)) |
 
 ### Example
 
@@ -524,7 +538,7 @@ source:
 | `maxzoom` | number | - | Maximum zoom level |
 | `bounds` | number[] | - | Bounds [west, south, east, north] |
 | `scheme` | `"xyz"` \| `"tms"` | - | Tile coordinate scheme |
-| `attribution` | string | - | Attribution text |
+| `attribution` | string | - | Attribution text ([sanitized](#attribution-is-sanitized)) |
 
 ### Example
 
@@ -540,7 +554,7 @@ source:
 
 ## Raster DEM Source
 
-Elevation tiles for `hillshade` layers. Shaped like a raster source, plus an
+Elevation tiles for `hillshade` and `color-relief` layers. Shaped like a raster source, plus an
 `encoding` describing how elevation is packed into the tile's RGB channels.
 
 ### Structure
@@ -565,7 +579,7 @@ source:
 | `minzoom` | number | - | Minimum zoom level |
 | `maxzoom` | number | - | Maximum zoom level |
 | `bounds` | number[] | - | Bounds [west, south, east, north] |
-| `attribution` | string | - | Attribution text |
+| `attribution` | string | - | Attribution text ([sanitized](#attribution-is-sanitized)) |
 
 Either `url` or `tiles` is required. A `custom` encoding also accepts MapLibre's
 `redFactor`, `greenFactor`, `blueFactor`, and `baseShift`.
@@ -594,9 +608,35 @@ layers:
       hillshade-exaggeration: 0.6
 ```
 
+### 3D terrain
+
+The same source type drives map-level 3D terrain. Declare the DEM as a
+**named** source and point the document-root `terrain:` at it — see
+[Terrain, sky & projection](/schema/map-config/#terrain-sky--projection):
+
+```yaml
+type: map
+id: alps
+config:
+  center: [11.39, 47.27]
+  zoom: 12
+  pitch: 70
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  terrainSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+terrain:
+  source: terrainSource
+  exaggeration: 1
+```
+
 :::note
-This covers hillshade sourcing. Map-level 3D `terrain:` configuration is not
-part of the format.
+`encoding` defaults to `mapbox` even when `url:` points at a TileJSON that
+declares a different one, so set it explicitly for terrarium tiles. MapLibre
+recommends a separate `raster-dem` source for a `hillshade` layer rather than
+sharing the terrain's — one source serving both renders at reduced quality.
 :::
 
 ## Image Source

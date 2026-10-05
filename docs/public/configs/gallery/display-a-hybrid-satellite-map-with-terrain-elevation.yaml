@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/display-a-hybrid-satellite-map-with-terrain-elevation/
+# Upstream mutates the basemap in a transformStyle callback. In YAML the same
+# four edits are declarations: globe projection, terrain, an atmosphere sky,
+# and satellite imagery slotted under the basemap's roads with `before:`.
+type: map
+id: display-a-hybrid-satellite-map-with-terrain-elevation
+config:
+  center: [11.39085, 47.27574]
+  zoom: 12
+  pitch: 70
+  maxPitch: 85
+  mapStyle: "https://tiles.openfreemap.org/styles/bright"
+sources:
+  satelliteSource:
+    type: raster
+    tiles:
+      - "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"
+    tileSize: 256
+    attribution: "Sentinel-2 cloudless by EOX IT Services GmbH"
+  terrainSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+  hillshadeSource:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+layers:
+  # Under the first road layer of the bright basemap, so roads and labels
+  # draw over the imagery — the hybrid look.
+  - id: satellite
+    type: raster
+    source: satelliteSource
+    before: tunnel-service-track-casing
+  - id: hills
+    type: hillshade
+    source: hillshadeSource
+    paint:
+      hillshade-shadow-color: "#473B24"
+projection:
+  type: globe
+terrain:
+  source: terrainSource
+  exaggeration: 1
+sky:
+  atmosphere-blend: ["interpolate", ["linear"], ["zoom"], 0, 1, 2, 0]
+controls:
+  navigation: true
+  globe: true
+  terrain: true

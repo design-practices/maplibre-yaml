@@ -46,6 +46,12 @@ import {
   ParametersSchema,
   MarkersSchema,
   ImagesSchema,
+  TerrainSchema,
+  SkySchema,
+  ProjectionSchema,
+  FitToSchema,
+  PopupsSchema,
+  LightSchema,
 } from "./map.schema";
 import {
   GeoJSONSourceSchema,
@@ -68,9 +74,11 @@ import {
   FillExtrusionLayerSchema,
   HeatmapLayerSchema,
   HillshadeLayerSchema,
+  ColorReliefLayerSchema,
   BackgroundLayerSchema,
   InteractiveConfigSchema,
   LegendItemSchema,
+  EffectConfigSchema,
 } from "./layer.schema";
 import { GeoJSONSchema } from "./geojson.schema";
 import { SOURCE_RUNTIME_KEYS } from "../model/normalize";
@@ -290,6 +298,9 @@ export const LayerRuntimeSchema = z
       .boolean()
       .optional()
       .describe("Allow users to toggle visibility"),
+    // Experimental (0.7): runtime half, because an effect never compiles —
+    // it ejects to the layer's own static style (class `fallback`).
+    effect: EffectConfigSchema.optional(),
   })
   .passthrough()
   .describe("Per-layer experience configuration (v2 `layer.runtime`)");
@@ -351,6 +362,7 @@ export const LayerV2Schema: z.ZodTypeAny = z.discriminatedUnion("type", [
   FillExtrusionLayerSchema.extend(layerV2Extension),
   HeatmapLayerSchema.extend(layerV2Extension),
   HillshadeLayerSchema.extend(layerV2Extension),
+  ColorReliefLayerSchema.extend(layerV2Extension),
   BackgroundLayerSchema.extend(layerV2Extension),
 ]);
 
@@ -383,6 +395,18 @@ export const StyleV2Schema: z.ZodTypeAny = z
     ),
     images: ImagesSchema.optional().describe(
       "Named images for symbol layers and patterns — style half, merged into the sprite on eject"
+    ),
+    terrain: TerrainSchema.optional().describe(
+      "3D terrain from a raster-dem source — style half, compiles to style.json `terrain`"
+    ),
+    sky: SkySchema.optional().describe(
+      "Sky, fog, and globe atmosphere — style half, compiles to style.json `sky`"
+    ),
+    projection: ProjectionSchema.optional().describe(
+      "Map projection (`globe` needs maplibre-gl >= 5) — style half, compiles to style.json `projection`"
+    ),
+    light: LightSchema.optional().describe(
+      "The style-spec light shading fill-extrusion faces — style half, compiles to style.json `light`"
     ),
     sources: z
       .record(z.string(), SourceV2Schema)
@@ -438,6 +462,12 @@ export const RuntimeV2Schema: z.ZodTypeAny = z
     markers: MarkersSchema.optional().describe(
       "Standalone markers — DOM pins live, symbol layers + sprite on eject"
     ),
+    fitTo: FitToSchema.optional().describe(
+      "Fit the initial camera to a GeoJSON source's data (v1: `config.fitTo`)"
+    ),
+    popups: PopupsSchema.optional().describe(
+      "Standalone popups open at a coordinate — no layer, no marker"
+    ),
     container: z
       .object({
         style: z
@@ -466,7 +496,7 @@ export const RuntimeV2Schema: z.ZodTypeAny = z
  * retained and never produce unknown-key warnings, exactly as v1.
  *
  * The type is annotated `z.ZodObject<any>` deliberately: the fully-inferred type
- * of the composed schema (a discriminated union of nine extended layer bodies
+ * of the composed schema (a discriminated union of ten extended layer bodies
  * inside a record inside the envelope) overflows TypeScript's serialization
  * buffer (TS7056), the same reason {@link MapBlockSchema} carries the same
  * annotation.

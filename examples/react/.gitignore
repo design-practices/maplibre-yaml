@@ -1,0 +1,5 @@
+node_modules
+dist
+dist-react18
+dist-dev
+dist-react18-dev

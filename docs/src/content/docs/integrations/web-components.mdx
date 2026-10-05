@@ -19,7 +19,7 @@ Get a map on your page in 3 steps.
    <head>
      <!-- MapLibre GL CSS -->
      <link
-       href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+       href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
        rel="stylesheet"
      />
 
@@ -101,14 +101,16 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 
 <Aside type="note" title="maplibre-gl version">
   maplibre-yaml works with maplibre-gl **v4 and v5** (v5 recommended for new
-  projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0`. Pin whichever
-  major your project uses in the import map.
+  projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0`. maplibre-gl v6 is
+  not supported yet, and it is what unpinned installs and CDN URLs now resolve
+  to — so pin the major your project uses in the import map, the CSS URL, and
+  `npm install`, and keep all three on the same major.
 </Aside>
 
 ### npm (With Build Tools)
 
 ```bash
-npm install @maplibre-yaml/core maplibre-gl
+npm install @maplibre-yaml/core maplibre-gl@^5
 ```
 
 ```javascript
@@ -209,6 +211,8 @@ layers:
             geometry:
               type: Point
               coordinates: [-74.006, 40.7128]
+            properties:
+              name: "New York"
     paint:
       circle-radius: 10
       circle-color: "#3b82f6"
@@ -220,7 +224,11 @@ layers:
 
 - Browser doesn't process `<script type="text/yaml">` content
 - Whitespace and indentation are preserved exactly
-- Works in React, Vue, Astro, MDX - everywhere!
+- Works in plain HTML, Astro, MDX and Svelte templates; in React, pass the
+  YAML as a string child (`<script type="text/yaml">{yaml}</script>`)
+- **Not in Vue templates:** Vue's compiler rejects `<script>` tags in a
+  template — use `src` or `config` there (see
+  [Framework Compatibility](#framework-compatibility))
 - Good for examples that need to be self-contained
 
 ### Method 3: JSON Attribute (Programmatic)
@@ -265,6 +273,16 @@ For dynamic or generated configurations:
 - Building configs programmatically
 - Framework-based dynamic rendering
 
+<Aside type="note" title="When the config arrives after the element">
+  The element upgrades as soon as `register.js` loads, before the line that
+  assigns `config`. Since 0.7 an element with no configuration waits until
+  the end of the next frame before it reports "No configuration provided.",
+  so a `config` assigned right after the import (or from a framework effect)
+  renders without a transient error, and a `mapReady()` called in between
+  waits for it. A `config` assigned *before* `register.js` loads is picked up
+  when the element upgrades. On 0.6, the error card flashed in both cases.
+</Aside>
+
 ## Component Lifecycle
 
 ### Initialization Flow
@@ -289,9 +307,10 @@ mapEl.addEventListener("ml-map:load", (event) => {
   console.log("Map ready!");
 });
 
-// Error during initialization or runtime
+// Error during initialization or runtime. Configuration/validation failures
+// carry `errors` (an array of { path, message }); runtime failures carry `error`.
 mapEl.addEventListener("ml-map:error", (event) => {
-  console.error("Map error:", event.detail.error);
+  console.error("Map error:", event.detail.error ?? event.detail.errors);
 });
 
 // Layer data loaded
@@ -317,9 +336,9 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 
 | Event | Detail | Fires when |
 |-------|--------|------------|
-| `ml-map:loading` | `{}` | A `src` document fetch begins |
+| `ml-map:loading` | `{ url }` | A `src` document fetch begins |
 | `ml-map:load` | `{}` | The document is fully loaded — basemap and every layer |
-| `ml-map:error` | `{ error, fatal }` | Initialization or runtime failure (`fatal: true` aborts the document) |
+| `ml-map:error` | `{ error, fatal }` or `{ errors }` | Initialization or runtime failure (`fatal: true` aborts the document); a document that fails to parse or validate carries `errors` — the structured `{ path, message }[]` the error card shows — instead |
 | `ml-map:layer-added` | `{ layerId }` | A layer was added to the map |
 | `ml-map:layer-removed` | `{ layerId }` | A layer was removed |
 | `ml-map:layer-data-loading` | `{ layerId }` | A layer's data fetch begins |
@@ -333,6 +352,79 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 | `ml-map:image-error` | `{ name, url }` | An `images:` entry failed (unsafe scheme, CORS, load or register error) |
 | `ml-map:parameter-change` | `{ key, value }` | A params-panel control wrote a state key |
 | `ml-map:layer-visibility` | `{ layerId, visible }` | A params-panel checkbox toggled a layer |
+| `ml-map:camera-fit` | `{ source, bounds }` | The `fitTo` camera framed its source's data (once, on the first data load for fetched sources) |
+
+## Slots: your own chrome over the map
+
+Author markup placed inside `<ml-map>` with a `slot` attribute rides the
+element's corner system — the same one the legend and the params panel use —
+so page chrome (buttons, captions, a custom legend) sits over the map without
+hand-rolled absolute positioning:
+
+```html
+<ml-map src="/configs/map.yaml">
+  <div slot="top-right" class="my-controls">
+    <button data-action="zoom-in">+</button>
+    <button data-action="reset">⟲</button>
+  </div>
+  <div slot="bottom-left">Data: city open data portal</div>
+</ml-map>
+
+<script type="module">
+  const el = document.querySelector("ml-map");
+  const home = await el.mapReady().then((map) => ({
+    center: map.getCenter(),
+    zoom: map.getZoom(),
+  }));
+  document.querySelector(".my-controls").addEventListener("click", (e) => {
+    const map = el.getMap(); // read at click time — reload() makes a new map
+    const action = e.target.closest("[data-action]")?.dataset.action;
+    if (action === "zoom-in") map.zoomIn();
+    if (action === "reset") map.jumpTo(home);
+  });
+</script>
+```
+
+| Slot | Placement |
+|------|-----------|
+| `top-left`, `top-right`, `bottom-left`, `bottom-right` | Mounted into that corner of the map |
+| `legend` | **Replaces** the built-in legend, at the document's `legend.position` (default `top-left`) |
+
+How it behaves:
+
+- **Stacking, not overlap.** Pieces sharing a corner stack in registration
+  order: the built-in legend first, then the params panel, then slot
+  children in document order. Bottom corners grow upward. A corner also
+  steps past a MapLibre control (e.g. `navigation`) already in it.
+- **Mounted on load.** Slot children are hidden until the map's `load`, then
+  moved into their corner. They stay the same elements, so event listeners
+  you attached keep working.
+- **They survive the map.** `reload()`, a new `config`/`src`, and an error
+  card all tear the map down but park slot children back on the element;
+  the next successful render mounts them again. Slot children added after
+  load are picked up on the next render (`reload()`).
+- **Pointer events.** Empty corner areas pass gestures through to the map;
+  your slot content receives clicks normally.
+- An unknown slot name logs a warning and the child is left where it is.
+
+Only children with a recognized `slot` are moved. Other children you place
+inside `<ml-map>` (including the inline `<script type="text/yaml">`) are left
+alone: the element removes only what it created itself — its map container
+and its error card.
+
+<Aside type="note">
+Slots are page markup, not part of the map document: they never appear in
+`mlym emit` output, and there is nothing to eject. See the
+[eject classes guide](/guides/eject-classes/).
+</Aside>
+
+<Aside type="caution" title="Astro: spread the slot attribute inside expressions">
+Inside a `{condition && (...)}` expression, Astro's compiler reads a literal
+`slot="top-right"` as its own named-slot directive and strips it (wrapped in
+a `Fragment`, the child disappears entirely). Write
+`{...{ slot: "top-right" }}` there instead; a literal `slot` outside an
+expression is passed through unchanged.
+</Aside>
 
 The element's methods, properties, and this event list (from its `@fires`
 JSDoc) are also in the generated [`MLMap` API reference](/reference/api/maplibre-yaml/core/components/classes/mlmap/).
@@ -345,6 +437,8 @@ document has loaded (immediately if it already has) and rejects if the
 document fails, so there is no load-listener or null-guard boilerplate:
 
 ```javascript
+import maplibregl from "maplibre-gl"; // resolved by the import map (or your bundler)
+
 const mapEl = document.querySelector("ml-map");
 const map = await mapEl.mapReady();
 
@@ -358,11 +452,15 @@ map.flyTo({
 // Add custom controls
 map.addControl(new maplibregl.NavigationControl());
 
-// Add custom layers
+// Add custom sources and layers
+map.addSource("custom-source", {
+  type: "geojson",
+  data: { type: "FeatureCollection", features: [] },
+});
 map.addLayer({
   id: "custom-layer",
   type: "fill",
-  source: "some-source",
+  source: "custom-source",
   paint: { "fill-color": "#ff0000" },
 });
 ```
@@ -377,24 +475,25 @@ suits code that must re-run on every reload.
 
 ## Controlling Live Data
 
-For maps with polling or streaming data:
+Polling runs on the `refreshInterval` declared in YAML, and every refresh
+fires `ml-map:layer-data-loading` / `ml-map:layer-data-loaded`, so you can
+follow it from the element:
 
 ```javascript
 const mapEl = document.querySelector("ml-map");
 
-mapEl.addEventListener("ml-map:load", () => {
-  // Pause auto-refresh
-  mapEl.pauseRefresh("earthquakes");
-
-  // Resume auto-refresh
-  mapEl.resumeRefresh("earthquakes");
-
-  // Trigger immediate refresh
-  mapEl.refreshNow("earthquakes").then(() => {
-    console.log("Data refreshed");
-  });
+mapEl.addEventListener("ml-map:layer-data-loaded", (event) => {
+  const { layerId, featureCount } = event.detail;
+  console.log(`${layerId} refreshed: ${featureCount} features`);
 });
 ```
+
+<Aside type="caution" title="No programmatic refresh control yet">
+  Earlier versions of this page showed `mapEl.pauseRefresh()`,
+  `resumeRefresh()` and `refreshNow()`. Those methods are **not** exposed on
+  `<ml-map>` (or `MapRenderer`) today — calling them throws. Exposing
+  pause/resume/refresh is tracked as bead `ml-few`.
+</Aside>
 
 ## Complete Example: Earthquake Monitor
 
@@ -408,7 +507,7 @@ This example demonstrates a complete implementation using the `src` attribute wi
   <head>
     <title>Earthquake Monitor</title>
     <link
-      href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
+      href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
       rel="stylesheet"
     />
     <script type="importmap">
@@ -489,7 +588,9 @@ This example demonstrates a complete implementation using the `src` attribute wi
         statusEl.className = "status loading";
       });
 
-      mapEl.addEventListener("ml-map:load", () => {
+      // Fires on the first load and again on every refresh. The first one
+      // arrives before ml-map:load, which only fires once every layer is in.
+      mapEl.addEventListener("ml-map:layer-data-loading", () => {
         statusEl.textContent = "Loading earthquake data...";
         statusEl.className = "status loading";
       });
@@ -608,54 +709,348 @@ Each `<ml-map>` is independent:
 
 ## Framework Compatibility
 
-The `<ml-map>` web component works in any framework:
+`<ml-map>` is a standard custom element, so any framework can render it. Import
+`@maplibre-yaml/core/register` once (it defines the element) and import
+`maplibre-gl/dist/maplibre-gl.css` in your entry point. Three things differ
+from framework to framework: how `config` reaches the element, how you listen
+for `ml-map:*` events, and TypeScript.
+
+| Framework | `config` object | `ml-map:*` events | TypeScript |
+|-----------|-----------------|-------------------|------------|
+| React 19 | Set as a **property**: pass the object or a JSON string | `onml-map:load={…}` prop, or a ref + `addEventListener` | [`@maplibre-yaml/core/react`](#typescript-with-react) |
+| React 18 | Set as an **attribute**: you must `JSON.stringify` it (an object becomes `"[object Object]"`) | Ref + `addEventListener` only | [`@maplibre-yaml/core/react`](#typescript-with-react) |
+| Vue 3 | Set as a property: pass the object | `@ml-map:load="…"` | Works (add `isCustomElement`, below) |
+| Svelte 5 | Set as a property: pass the object | `bind:this` + `addEventListener` | Works out of the box |
+
+`src="/map.yaml"` works the same everywhere. The React snippets below are
+files from [`examples/react`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/react),
+a Vite + TypeScript app that CI builds against React 18 and React 19 and
+drives in a browser; a test fails if a snippet here and its file differ. The
+Vue and Svelte snippets were verified with Vue 3.5 and Svelte 5 on Vite 8
+(dev server and production build), and the Next.js one with Next.js 16.
+`mapReady()` needs 0.7 or later. On 0.6, listen for `ml-map:load` and then
+call `getMap()`.
+
+<Aside type="note" title="Re-renders and the config value">
+  A *changed* `config` tears down the map and builds a fresh one, which also
+  resets the camera. An *equal* one is a no-op: since 0.7 the element
+  compares the new value with the one it is showing (by its JSON), so a
+  framework that hands it a fresh but identical object on every render (an
+  inline `config={{ ... }}`, say) no longer rebuilds the map each time. The
+  comparison serializes the document, so for very large inline GeoJSON a
+  stable (module-level or memoized) value is still cheaper. On 0.6 every
+  assignment rebuilt the map.
+</Aside>
+
+Since 0.7, a `config` property set before the element is attached (what React
+19, Vue and Svelte do) is validated and given its schema defaults like every
+other path: an invalid document shows the "Configuration Error" card. On 0.6
+that path skipped validation.
 
 ### React
 
-```jsx
+The complete, runnable version of everything below is
+[`examples/react`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/react),
+with YAML and object configs, events, `mapReady()`, slot children, the params
+panel, mount/unmount under StrictMode, and the React 19 props. See also the
+short [React guide](/integrations/react/).
+
+Rendering a map from a config object, for React 18 and 19:
+
+{/* snippet: examples/react/src/snippets/ConfigMap.tsx */}
+```tsx
 import "@maplibre-yaml/core/register";
+import type { MapBlock } from "@maplibre-yaml/core";
 
-function Map({ config }) {
-  const configJson = JSON.stringify(config);
-
+export function ConfigMap({ config }: { config: MapBlock }) {
+  // A JSON string works on React 18 (set as the attribute) and React 19
+  // (set as the property). An equal string never re-renders the map.
   return (
     <ml-map
-      style={{ width: "100%", height: "400px", display: "block" }}
-      config={configJson}
+      config={JSON.stringify(config)}
+      style={{ display: "block", width: "100%", height: "400px" }}
     />
   );
 }
 ```
 
+A JSON string works on both majors. React 18 sets it as the attribute before
+the element connects. React 19 sets the `config` property, which parses the
+string. On React 19 alone you can pass the object directly
+(`config={config}`), shown further down.
+
+**Events and the map instance.** React 18 cannot attach listeners for custom
+events through props, so use a ref. The same code works on React 19, and the
+listeners are typed from `MLMapEventMap`:
+
+{/* snippet: examples/react/src/snippets/YamlMap.tsx */}
+```tsx
+import "@maplibre-yaml/core/register";
+import type { MLMap, MLMapEventMap } from "@maplibre-yaml/core/register";
+import { useEffect, useRef, useState } from "react";
+
+export function YamlMap({ src }: { src: string }) {
+  const ref = useRef<MLMap>(null);
+  const [clicked, setClicked] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = ref.current!;
+    const onClick = (event: MLMapEventMap["ml-map:layer-click"]) =>
+      setClicked(String(event.detail.feature?.properties?.name));
+    const onError = (event: MLMapEventMap["ml-map:error"]) =>
+      console.error(event.detail.error ?? event.detail.errors);
+    el.addEventListener("ml-map:layer-click", onClick);
+    el.addEventListener("ml-map:error", onError);
+
+    // mapReady() resolves with the MapLibre map once the document loaded.
+    let cancelled = false;
+    el.mapReady().then(
+      (map) => {
+        if (cancelled) return;
+        setZoom(map.getZoom());
+        map.on("zoomend", () => setZoom(map.getZoom()));
+      },
+      () => {} // a failed document also fires ml-map:error
+    );
+
+    return () => {
+      cancelled = true;
+      el.removeEventListener("ml-map:layer-click", onClick);
+      el.removeEventListener("ml-map:error", onError);
+    };
+  }, []);
+
+  return (
+    <>
+      <ml-map ref={ref} src={src} style={{ display: "block", height: "400px" }} />
+      <p>
+        Zoom {zoom?.toFixed(1) ?? "…"} · clicked: {clicked ?? "nothing yet"}
+      </p>
+    </>
+  );
+}
+```
+
+**React 19: object `config` and event props.** React 19 sets custom-element
+props as properties and attaches `on*` props as listeners, using the rest of
+the name as the event type: `onml-map:load={handler}` listens for
+`ml-map:load`. With the typings, each handler gets its event's `detail` type.
+React 18 ignores these props, and the typings reject an object `config` there:
+
+{/* snippet: examples/react/src/react19/EventPropsMap.tsx */}
+```tsx
+import "@maplibre-yaml/core/register";
+import type { MapBlock } from "@maplibre-yaml/core";
+
+// React 19 only: `config` takes the object itself (React 19 sets it as a
+// property), and `onml-map:*` props attach listeners, typed per event.
+export function EventPropsMap({
+  config,
+  onLoad,
+  onLayerClick,
+}: {
+  config: MapBlock;
+  onLoad: () => void;
+  onLayerClick: (layerId: string) => void;
+}) {
+  return (
+    <ml-map
+      config={config}
+      onml-map:load={() => onLoad()}
+      onml-map:layer-click={(event) => onLayerClick(event.detail.layerId)}
+      onml-map:error={(event) =>
+        console.error(event.detail.error ?? event.detail.errors)
+      }
+      style={{ display: "block", height: "400px" }}
+    />
+  );
+}
+```
+
+The colon makes these namespaced JSX attributes. Vite and TypeScript compile
+them; if your JSX compiler rejects namespaced attributes, spread them in:
+`{...{ "onml-map:load": handler }}`.
+
+**Slot children.** React can render your own controls into the map's corners
+(see [Slots](#slots-your-own-chrome-over-the-map)). The element moves slot children into the map, so render
+them unconditionally: React may update what is inside them, but must not add
+or remove the slotted elements themselves. Toggle one with `hidden` or CSS
+instead.
+
+{/* snippet: examples/react/src/snippets/SlotControls.tsx */}
+```tsx
+import "@maplibre-yaml/core/register";
+import type { MLMap } from "@maplibre-yaml/core/register";
+import { useRef } from "react";
+
+export function MapWithControls({ src }: { src: string }) {
+  const ref = useRef<MLMap>(null);
+  const zoomBy = (delta: number) => {
+    const map = ref.current?.getMap();
+    map?.easeTo({ zoom: map.getZoom() + delta, duration: 300 });
+  };
+
+  // Children with slot="top-left" (and the other corners, or "legend") are
+  // placed in the map's corner, stacked with the built-in chrome. Render
+  // slot children unconditionally: the element moves them into the map, so
+  // React may update their contents but must not add or remove them.
+  return (
+    <ml-map ref={ref} src={src} style={{ display: "block", height: "400px" }}>
+      <div slot="top-left" className="map-buttons">
+        <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1)}>
+          +
+        </button>
+        <button type="button" aria-label="Zoom out" onClick={() => zoomBy(-1)}>
+          −
+        </button>
+      </div>
+    </ml-map>
+  );
+}
+```
+
+**Lifecycle.** Unmounting removes the element, and its `disconnectedCallback`
+destroys the MapLibre map: no leaked canvas, and a remount creates exactly one
+new map. StrictMode's double-run effects do not re-create the element, so
+keep listener setup in an effect that has a cleanup, as shown above. In React
+18 a ref or effect only runs after the element has connected, so a `config`
+assigned there arrives late; since 0.7 the element waits for it (see the note
+under [Method 3](#method-3-json-attribute-programmatic)), but the JSON-string
+attribute, present at connect, remains the simplest React 18 path.
+
+#### TypeScript with React
+
+React's JSX types do not know `<ml-map>`, so without help `tsc` reports
+*Property 'ml-map' does not exist on type 'JSX.IntrinsicElements'*. Core ships
+the typings as a types-only entry. Reference it once, for example in Vite's
+`src/vite-env.d.ts`:
+
+```ts
+/// <reference types="@maplibre-yaml/core/react" />
+```
+
+(`import "@maplibre-yaml/core/react";` in any module works too; the module
+is empty at runtime.) It works with `@types/react` 18 and 19 and adapts to
+the one you have installed:
+
+| | `@types/react` 19 | `@types/react` 18 |
+|---|---|---|
+| `src` | `string` | `string` |
+| `config` | `MapBlock` object or JSON `string` | JSON `string` only (an object would arrive as `"[object Object]"`) |
+| `ref` | `useRef<MLMap>(null)`: `mapReady()`, `getMap()` typed | same |
+| `onml-map:*` props | typed per event, for example `event.detail.layerId` on `onml-map:layer-click` | not typed (React 18 ignores them) |
+| `children` | slot children, inline `<script type="text/yaml">` | same |
+
+`MLMap` and `MLMapEventMap` are exported from `@maplibre-yaml/core/register`,
+and `el.addEventListener("ml-map:layer-click", …)` is typed on any `MLMap`
+without React. Core also declares `HTMLElementTagNameMap["ml-map"]`, so
+`document.querySelector("ml-map")` and `document.createElement("ml-map")` are
+typed as `MLMap` without a cast.
+
+#### Next.js (App Router)
+
+Client components still render on the server, and the element class extends
+`HTMLElement`, which does not exist there. A top-level
+`import "@maplibre-yaml/core/register"` in a `"use client"` file therefore
+fails the build with `ReferenceError: HTMLElement is not defined`. Register the
+element from an effect instead:
+
+```jsx
+"use client";
+import { useEffect } from "react";
+
+export default function YamlMap({ src }) {
+  useEffect(() => {
+    import("@maplibre-yaml/core/register");
+  }, []);
+
+  return <ml-map src={src} style={{ display: "block", height: "400px" }} />;
+}
+```
+
+The server sends a plain `<ml-map>` tag, and it upgrades once the import
+resolves. Import the MapLibre CSS in `app/layout`.
+
 ### Vue
+
+Vue sets `config` as a DOM property, so pass the object as it is:
 
 ```vue
 <template>
   <ml-map
-    :config="configJson"
+    ref="mapEl"
+    :config="config"
     style="width: 100%; height: 400px; display: block;"
+    @ml-map:error="(e) => console.error(e.detail.error ?? e.detail.errors)"
   />
 </template>
 
 <script setup>
 import "@maplibre-yaml/core/register";
-import { computed } from "vue";
+import { onMounted, ref } from "vue";
 
-const props = defineProps(["config"]);
-const configJson = computed(() => JSON.stringify(props.config));
+defineProps(["config"]);
+const mapEl = ref(null);
+
+onMounted(async () => {
+  const map = await mapEl.value.mapReady();
+  map.flyTo({ zoom: 3 });
+});
 </script>
 ```
+
+Tell Vue's compiler that `ml-*` tags are custom elements. Without this, every
+render logs *Failed to resolve component: ml-map* in development:
+
+```js
+// vite.config.js
+import { defineConfig } from "vite";
+import vue from "@vitejs/plugin-vue";
+
+export default defineConfig({
+  plugins: [
+    vue({
+      template: {
+        compilerOptions: { isCustomElement: (tag) => tag.startsWith("ml-") },
+      },
+    }),
+  ],
+});
+```
+
+`vue-tsc` accepts `<ml-map>` by default. Under `strictTemplates` it reports
+the element as unknown.
 
 ### Svelte
 
+Svelte 5 sets `config` as a property, so pass the object as it is:
+
 ```svelte
 <script>
-  import '@maplibre-yaml/core/register';
-  export let config;
+  import "@maplibre-yaml/core/register";
+  import { onMount } from "svelte";
+
+  let { config } = $props();
+  let mapEl;
+
+  onMount(() => {
+    const onError = (e) => console.error(e.detail.error ?? e.detail.errors);
+    mapEl.addEventListener("ml-map:error", onError);
+    mapEl.mapReady().then((map) => map.flyTo({ zoom: 3 }), () => {});
+    return () => mapEl.removeEventListener("ml-map:error", onError);
+  });
 </script>
 
-<ml-map config={JSON.stringify(config)} style="width: 100%; height: 400px; display: block;" />
+<ml-map bind:this={mapEl} {config} style="width: 100%; height: 400px; display: block;"></ml-map>
 ```
+
+Close the tag explicitly: Svelte 5 warns about self-closing non-void elements
+such as `<ml-map />`. `onml-map:load={…}` attaches a listener, but Svelte warns
+that attribute names should not contain `:`, so use `bind:this` as shown.
+`svelte-check` accepts `<ml-map>` and its attributes out of the box. With
+`lang="ts"`, type the binding as `let mapEl: MLMap` (imported from
+`@maplibre-yaml/core/register`).
 
 ## Troubleshooting
 
@@ -691,18 +1086,20 @@ const configJson = computed(() => JSON.stringify(props.config));
    }
    ```
 
-### "Invalid map config in attribute" Error
+### "Configuration Error" Card
 
-**Symptoms:** Console shows Zod validation errors.
+**Symptoms:** The element shows a red "Configuration Error" card listing
+field paths and messages (for example `id: Expected string, got undefined`).
 
-**Cause:** Configuration doesn't match schema.
+**Cause:** The configuration failed to fetch, parse, or validate against the
+schema.
 
 **Debug:**
 
 ```javascript
 mapEl.addEventListener("ml-map:error", (event) => {
-  console.error("Config error:", event.detail.error);
-  // Check which fields are invalid
+  // Each entry is { path, message } — the path names the invalid field
+  console.error("Config errors:", event.detail.errors);
 });
 ```
 
@@ -781,20 +1178,63 @@ mapEl.addEventListener("ml-map:error", (event) => {
 
 ### Methods
 
-| Method                   | Returns                 | Description                          |
-| ------------------------ | ----------------------- | ------------------------------------ |
-| `mapReady()`             | `Promise<maplibregl.Map>` | Resolves with the live map once the document loads (immediately if loaded); rejects on `ml-map:error` |
-| `getMap()`               | `maplibregl.Map`        | Returns the MapLibre GL map instance (`null` before load) |
-| `getRenderer()`          | `MapRenderer`           | Returns the MapRenderer instance     |
-| `pauseRefresh(layerId)`  | `void`           | Pause polling for a layer            |
-| `resumeRefresh(layerId)` | `void`           | Resume polling for a layer           |
-| `refreshNow(layerId)`    | `Promise<void>`  | Trigger immediate data refresh       |
+| Method                          | Returns                   | Description |
+| ------------------------------- | ------------------------- | ----------- |
+| `mapReady()`                    | `Promise<maplibregl.Map>` | Resolves with the live map once the document loads (immediately if loaded); rejects on `ml-map:error` |
+| `getMap()`                      | `maplibregl.Map \| null`  | The MapLibre GL map instance (`null` before a render) |
+| `getRenderer()`                 | `MapRenderer \| null`     | The underlying renderer |
+| `isLoaded()`                    | `boolean`                 | Whether the map finished loading |
+| `reload()`                      | `Promise<void>`           | Re-render from `src` or the inline YAML script; slot children are kept |
+| `addLayer(layer)`               | `Promise<void>`           | Add a layer (same shape as a document layer) |
+| `removeLayer(layerId)`          | `void`                    | Remove a layer |
+| `setLayerVisibility(id, on)`    | `void`                    | Show or hide a layer |
+| `updateLayerData(id, geojson)`  | `void`                    | Replace a GeoJSON layer's data |
+
+Refresh control (`pauseRefresh` / `resumeRefresh` / `refreshNow`) is not
+exposed yet — see bead `ml-few`.
 
 ### Events
 
 See the [event reference](#event-reference) above for the complete list —
-sixteen events covering lifecycle, layer data, interactions, markers,
+seventeen events covering lifecycle, layer data, interactions, markers,
 images, and the params panel.
+
+## Trust and attribution
+
+Attribution is the one place a document's text reaches an HTML sink that
+maplibre-yaml does not own: MapLibre renders the attribution control with
+`innerHTML`, behind its own sanitizer. That sanitizer can be bypassed in
+every maplibre-gl release up to 6.4.0 — which covers the whole supported
+peer range (`^3 || ^4 || ^5`) — so it is not a safe boundary for a document
+someone else wrote
+([GHSA-jrc7-96c5-q579](https://github.com/advisories/GHSA-jrc7-96c5-q579)).
+
+maplibre-yaml therefore sanitizes attribution itself before MapLibre sees it.
+What survives is plain text, character references (`&copy;`), and `<a>` links
+whose `href` uses `http:`, `https:` or `mailto:`, keeping only the `href`,
+`target` and `rel` attributes. Any other markup is escaped and shown as
+literal text rather than dropped, so the credit stays readable. This covers
+every route attribution takes into the control:
+
+- a source's `attribution:` (named, inline, and v1/v2 alike),
+- `customAttribution` under `controls.attribution` or a
+  `attributionControl: { … }` options object in `config` / `runtime.map`,
+- attribution carried by resources the document points at: a basemap style
+  URL (`mapStyle` / `basemap`), an inline style object, and a TileJSON behind
+  a source `url:`.
+
+**This applies under every capability policy, trusted included.** `!html`
+popups render raw markup for a trusted document because maplibre-yaml's own
+popup sink is sound; the attribution sink is MapLibre's, and trusting the
+author does not make it safe. The only cost to a trusted document is that
+non-link markup such as `<b>` in attribution shows as text.
+
+`mlym emit` applies the same rule to the `style.json` it writes, because that
+file may be rendered by an older maplibre-gl, and reports a `contract`
+warning naming each source whose attribution was changed. Releases before
+this fix (0.6.0 and earlier) forward attribution unsanitized: upgrade
+(0.6.1, 0.7.0, or later), or do not render documents you did not author
+with them.
 
 ## Upgrading to 0.6
 

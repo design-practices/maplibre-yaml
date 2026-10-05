@@ -1,0 +1,58 @@
+# The world's large cities (Natural Earth 1:110m populated places).
+# Loaded by <ml-map src="maps/cities.yaml">. Carries a params panel: a
+# population slider (a `state:` key read by the layer filter through
+# `global-state`) and visibility checkboxes for the labeled layers.
+type: map
+id: world-cities
+config:
+  center: [12, 22]
+  zoom: 0.9
+  mapStyle: "./styles/basemap.json"
+state:
+  minPop:
+    default: 2
+parameters:
+  minPop:
+    label: Population at least (millions)
+    type: range
+    min: 0
+    max: 20
+    step: 1
+sources:
+  cities:
+    type: geojson
+    url: "./data/cities.geojson"
+layers:
+  - id: cities
+    label: Cities
+    type: circle
+    source: cities
+    filter: [">=", ["get", "pop"], ["*", ["global-state", "minPop"], 1000000]]
+    paint:
+      circle-radius:
+        ["interpolate", ["linear"], ["get", "pop"], 1000000, 3, 10000000, 7, 35000000, 13]
+      circle-color:
+        ["interpolate", ["linear"], ["get", "pop"], 1000000, "#4cc9f0", 10000000, "#4361ee", 25000000, "#7209b7"]
+      circle-opacity: 0.85
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - property: country
+  - id: megacities
+    label: "Megacities (10M+)"
+    type: circle
+    source: cities
+    filter: [">=", ["get", "pop"], 10000000]
+    paint:
+      circle-radius:
+        ["interpolate", ["linear"], ["get", "pop"], 10000000, 11, 35000000, 18]
+      circle-color: "rgba(0, 0, 0, 0)"
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#f72585"

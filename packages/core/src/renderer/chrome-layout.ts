@@ -32,6 +32,37 @@ export const CHROME_CORNERS: readonly ChromeCorner[] = [
   "bottom-right",
 ];
 
+/**
+ * Stacking above the map (ml-3d0). Chrome corners sit at z-index 1 and
+ * MapLibre's own control corners at 2; popups carry no z-index of their own,
+ * so a panel used to cover any popup opened near it. Popups are transient
+ * and user-invoked, so they go on top of both. Markers stay map content,
+ * below the chrome.
+ */
+export const POPUP_Z_INDEX = "3";
+
+/** Anything with MapLibre Popup's element accessor and `open` event. */
+interface LiftablePopup {
+  getElement?(): HTMLElement | undefined;
+  on?(type: "open", listener: () => void): unknown;
+}
+
+/**
+ * Raise a popup above the chrome corners and map controls. Applied on every
+ * `open`, since MapLibre creates the popup element only when it opens (and a
+ * marker's popup re-opens on each click), and once immediately for a popup
+ * that is already open.
+ */
+export function liftPopup<P extends LiftablePopup>(popup: P): P {
+  const apply = () => {
+    const el = popup.getElement?.();
+    if (el) el.style.zIndex = POPUP_Z_INDEX;
+  };
+  popup.on?.("open", apply);
+  apply();
+  return popup;
+}
+
 export class ChromeLayout {
   private readonly corners = new Map<ChromeCorner, HTMLElement>();
 

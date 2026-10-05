@@ -26,6 +26,7 @@
 
 import type { Map as MapLibreMap, LngLat } from "maplibre-gl";
 import { Popup } from "../renderer/maplibre-interop";
+import { liftPopup } from "../renderer/chrome-layout";
 import type { PopupBuilder } from "../renderer/popup-builder";
 import type { PopupContent } from "./types";
 import type { ShowPopupOptions } from "./types";
@@ -57,10 +58,12 @@ export class PopupSlot {
 
     this.active?.remove();
     const html = this.popupBuilder.build(content, feature?.properties ?? {});
-    const popup = new Popup({
-      ...(options?.closeButton !== undefined ? { closeButton: options.closeButton } : {}),
-      ...(options?.closeOnClick !== undefined ? { closeOnClick: options.closeOnClick } : {}),
-    })
+    const popup = liftPopup(
+      new Popup({
+        ...(options?.closeButton !== undefined ? { closeButton: options.closeButton } : {}),
+        ...(options?.closeOnClick !== undefined ? { closeOnClick: options.closeOnClick } : {}),
+      })
+    )
       .setLngLat(lngLat)
       .setHTML(html)
       .addTo(this.map);

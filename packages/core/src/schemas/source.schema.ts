@@ -616,14 +616,18 @@ export type RasterSource = z.infer<typeof RasterSourceSchema>;
  * Raster DEM (digital elevation model) source configuration.
  *
  * @remarks
- * Elevation tiles consumed by `hillshade` layers. Shaped like
+ * Elevation tiles consumed by `hillshade` layers and by map-level 3D
+ * `terrain:` (`TerrainSchema` in map.schema). Shaped like
  * {@link RasterSourceSchema} — the same url-or-tiles requirement and
  * `tileSize` — plus the `encoding` that says how elevation is packed into
  * RGB. Custom encodings carry `redFactor`/`greenFactor`/`blueFactor`/
  * `baseShift` through passthrough, matching MapLibre.
  *
- * Map-level `terrain:` configuration (3D terrain) is deliberately out of
- * scope; this covers hillshade sourcing only.
+ * Map-level 3D terrain was once a declared non-goal here; 0.7 (U15, ml-chh.5)
+ * reversed that. Declare the DEM as a named source and point the document-root
+ * `terrain: { source, exaggeration }` at it. `encoding` defaults to `mapbox`
+ * even when `url:` points at a TileJSON that declares otherwise, so set it
+ * explicitly for terrarium tiles.
  *
  * @example
  * ```yaml

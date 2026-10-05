@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>maplibre-yaml effects (experimental) — tonal-hatch and blueprint</title>
+  <!--
+    Demo AND browser fixture (e2e/effects.spec.ts, demos-as-regression-tests).
+    Build first:  pnpm --filter @maplibre-yaml/core build && pnpm --filter @maplibre-yaml/effects build
+    Serve:        pnpm verify:serve
+    Open:         /examples/verification/effects/index.html
+    Query params:
+      doc   = crosshatch | blueprint | heights
+      fx    = 1 (default) | 0          0 = no effects package: the static fallback
+      tiles = fixture (default) | live  live = OpenFreeMap vector tiles + glyphs
+      z, b, p, lng, lat                 camera overrides
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #4d4d4e; }
+    ml-map { display: block; height: 100%; }
+    #hud {
+      position: fixed; z-index: 10; left: 12px; bottom: 28px; padding: 8px 10px;
+      background: rgba(249, 243, 227, 0.94); color: #222; border-radius: 6px;
+      font: 13px/1.5 system-ui, sans-serif; box-shadow: 0 1px 6px rgba(0, 0, 0, .35);
+    }
+    #hud a { color: #222; margin-right: 8px; }
+    #hud a.on { font-weight: 700; text-decoration: none; }
+    #hud .fps { font-variant-numeric: tabular-nums; font-weight: 600; }
+    #errors { position: fixed; top: 8px; left: 8px; right: 8px; color: #fff; background: #a00; padding: 8px; font: 12px monospace; white-space: pre-wrap; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <script type="module">
+    import "/packages/core/register.js";
+
+    const q = new URLSearchParams(location.search);
+    const DOCS = ["crosshatch", "blueprint", "heights"];
+    const docName = DOCS.includes(q.get("doc")) ? q.get("doc") : "crosshatch";
+    const fxOn = q.get("fx") !== "0";
+    const tiles = q.get("tiles") === "live" ? "live" : "fixture";
+
+    // The effects package: built-ins + the core hook, then one custom effect
+    // registered through the public API (the heights document uses it).
+    let fx = null;
+    if (fxOn) {
+      await import("/packages/effects/dist/register.browser.js");
+      fx = await import("/packages/effects/dist/index.browser.js");
+      fx.registerEffect({
+        type: "flat-ink",
+        backend: fx.backends.extrusions,
+        params: fx.z.object({ color: fx.z.string().default("#c0392b") }).strict(),
+        uniforms: (p) => ({ u_color: p.color }),
+        fragment: `vec4 effect_color(EffectInput i) { return vec4(u_color * (0.55 + 0.45 * i.diffuse), 1.0); }`,
+        fallback: (_p, layer) => layer,
+      });
+    }
+
+    const { YAMLParser } = await import("/packages/core/dist/index.browser.js");
+    const text = (await (await fetch(`./${docName}.yaml`)).text()).replaceAll("{{origin}}", location.origin);
+    const parsed = YAMLParser.safeParseMapBlock(text);
+    if (!parsed.success) {
+      const box = document.createElement("div");
+      box.id = "errors";
+      box.textContent = parsed.errors.map((e) => `line ${e.line}: ${e.path}: ${e.message}`).join("\n");
+      document.body.appendChild(box);
+      throw new Error(box.textContent);
+    }
+    const doc = parsed.data;
+    if (tiles === "live" && doc.sources?.omt) {
+      doc.sources.omt = {
+        type: "vector",
+        url: "https://tiles.openfreemap.org/planet",
+        attribution: doc.sources.omt.attribution,
+      };
+      doc.config.mapStyle = new URL("./base-style.json", location.href).href;
+    }
+    for (const [k, key] of [["z", "zoom"], ["b", "bearing"], ["p", "pitch"]]) {
+      if (q.has(k)) doc.config[key] = Number(q.get(k));
+    }
+    if (q.has("lng")) doc.config.center = [Number(q.get("lng")), Number(q.get("lat"))];
+
+    const el = document.createElement("ml-map");
+    el.id = "map";
+    el.config = doc;
+    document.body.appendChild(el);
+    const map = await el.mapReady();
+
+    // Diagnostic A/B for the tile-seam fix: seams=0 re-attaches the effects
+    // without stitching generator-cut walls (the U12 spike's behaviour).
+    if (fx && q.get("seams") === "0") {
+      const refs = fx.getAttachedEffects(map).map((e) => ({ layerId: e.layerId, effect: doc.layers.find((l) => l.id === e.layerId).effect }));
+      for (const e of fx.getAttachedEffects(map)) e.detach();
+      fx.attachEffects(map, refs, { seams: false });
+    }
+
+    // --- counters: KTD7's static clause (no repaint, no rAF while idle) ----
+    const counters = { triggerRepaint: 0, raf: 0, reset() { this.triggerRepaint = 0; this.raf = 0; } };
+    const origRepaint = map.triggerRepaint.bind(map);
+    map.triggerRepaint = () => { counters.triggerRepaint++; origRepaint(); };
+    const origRaf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) => { counters.raf++; return origRaf(cb); };
+    let contextLosses = 0;
+    map.on("webglcontextlost", () => contextLosses++);
+
+    /** Continuous rotation, one jumpTo per rAF; counts frames the map RENDERED. */
+    function sampleFps(ms = 5000) {
+      return new Promise((resolve) => {
+        let renders = 0;
+        const onRender = () => renders++;
+        map.on("render", onRender);
+        const start = performance.now();
+        const bearing0 = map.getBearing();
+        const tick = (now) => {
+          const elapsed = now - start;
+          if (elapsed >= ms) {
+            map.off("render", onRender);
+            map.jumpTo({ bearing: bearing0 });
+            resolve({ ms: elapsed, renders, fps: (renders * 1000) / elapsed });
+            return;
+          }
+          map.jumpTo({ bearing: bearing0 + (elapsed / 1000) * 12 });
+          origRaf(tick);
+        };
+        origRaf(tick);
+      });
+    }
+    const idle = () => new Promise((r) => { map.once("idle", () => r()); origRepaint(); });
+
+    // --- HUD ---------------------------------------------------------------
+    const hud = document.createElement("div");
+    hud.id = "hud";
+    const link = (key, value, label = value) => {
+      const u = new URLSearchParams(location.search);
+      u.set(key, value);
+      const on = (q.get(key) ?? (key === "fx" ? "1" : key === "doc" ? "crosshatch" : "")) === value;
+      return `<a href="?${u}" class="${on ? "on" : ""}">${label}</a>`;
+    };
+    hud.innerHTML =
+      `doc: ${DOCS.map((d) => link("doc", d)).join("")}<br>` +
+      `effect: ${link("fx", "1", "on")}${link("fx", "0", "off (static fallback)")}<br>` +
+      `<span class="fps">– fps</span> · <label><input type="checkbox" id="orbit"> orbit</label>` +
+      ` · <button id="tour" type="button">tour</button> · <span id="gpu"></span>`;
+    document.body.appendChild(hud);
+    const gl = map.getCanvas().getContext("webgl2");
+    const dbg = gl?.getExtension("WEBGL_debug_renderer_info");
+    hud.querySelector("#gpu").textContent = dbg
+      ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL).replace(/\(0x[0-9A-F]+\)/gi, "").slice(0, 60)
+      : "";
+    let frames = 0;
+    map.on("render", () => frames++);
+    setInterval(() => { hud.querySelector(".fps").textContent = `${frames} fps`; frames = 0; }, 1000);
+    let orbiting = false;
+    const spin = () => { if (!orbiting) return; map.setBearing(map.getBearing() + 0.2); origRaf(spin); };
+    hud.querySelector("#orbit").addEventListener("change", (e) => { orbiting = e.target.checked; spin(); });
+
+    // Scripted view-change tour: rotate 360°, zoom out to z14, in to z17.5.
+    const home = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
+    const leg = (opts) => new Promise((r) => {
+      const t = setTimeout(r, opts.duration + 5000); // a context loss can swallow moveend
+      map.once("moveend", () => { clearTimeout(t); r(); });
+      map.easeTo({ easing: (t) => t, ...opts });
+    });
+    const TOUR = [
+      { name: "rotate +120", bearing: home.bearing + 120, duration: 4000 },
+      { name: "rotate +240", bearing: home.bearing + 240, duration: 4000 },
+      { name: "rotate +360", bearing: home.bearing + 360, duration: 4000 },
+      { name: "zoom out z14", zoom: 14, duration: 3000 },
+      { name: "zoom in z17.5", zoom: 17.5, duration: 4000 },
+      { name: "back home", zoom: home.zoom, duration: 3000 },
+    ];
+    async function tour(onLeg) {
+      map.jumpTo(home);
+      const legs = [];
+      for (const l of TOUR) {
+        let n = 0;
+        const count = () => n++;
+        map.on("render", count);
+        const t0 = performance.now();
+        await leg(l);
+        map.off("render", count);
+        const r = { leg: l.name, fps: +((n * 1000) / (performance.now() - t0)).toFixed(1), zoom: +map.getZoom().toFixed(2) };
+        legs.push(r);
+        await onLeg?.(r);
+      }
+      map.jumpTo(home);
+      return legs;
+    }
+    hud.querySelector("#tour").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      const legs = await tour();
+      console.table(legs);
+      e.target.textContent = `tour (${Math.round(legs.reduce((a, l) => a + l.fps, 0) / legs.length)} fps avg)`;
+      e.target.disabled = false;
+    });
+
+    window.__fx = {
+      map, el, doc, docName, fxOn, tiles, counters, sampleFps, idle, tour,
+      // the CURRENT map: a re-render (new config) replaces it
+      effects: () => (fx && el.getMap() ? fx.getAttachedEffects(el.getMap()) : []),
+      async whenEffectsReady() {
+        const m = el.getMap();
+        await Promise.all((fx && m ? fx.getAttachedEffects(m) : []).map((e) => e.handle?.ready()));
+      },
+      get contextLosses() { return contextLosses; },
+      ready: true,
+    };
+  </script>
+</body>
+</html>

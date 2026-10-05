@@ -69,6 +69,26 @@ describe("closed-world exhaustiveness (R4)", () => {
     }
   });
 
+  it("layer.effect is a fallback-class construct (experimental effects, U13′)", () => {
+    expect(LAYER_RUNTIME_KEYS).toContain("effect");
+    const definition = ejectClasses.get("layer.effect");
+    expect(definition?.class).toBe("fallback");
+    // The fallback is the static layer itself: eject() hands it back with
+    // one lossy warning.
+    const lowered = definition!.eject!({
+      path: "layers.buildings",
+      value: {
+        layer: { id: "buildings", type: "fill-extrusion", source: "omt" },
+        effect: { type: "tonal-hatch", gain: 0.7 },
+      },
+    });
+    expect(lowered.layers).toEqual([
+      { id: "buildings", type: "fill-extrusion", source: "omt" },
+    ]);
+    expect(lowered.warnings).toHaveLength(1);
+    expect(lowered.warnings![0]!.kind).toBe("lossy");
+  });
+
   it("every root runtime construct has a registered eject class", () => {
     // The RuntimeHalf fields (model/types.ts) plus the two document-level
     // constructs the emitter handles specially. If RuntimeHalf grows a field,
@@ -81,8 +101,15 @@ describe("closed-world exhaustiveness (R4)", () => {
       "container",
       "parameters",
       "markers",
+      "fitTo",
+      "popups",
       "state",
       "images",
+      "terrain",
+      "sky",
+      "projection",
+      "color-relief",
+      "light",
       "x-*",
     ]) {
       expect(

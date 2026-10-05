@@ -1,0 +1,23 @@
+---
+title: Display a globe with an atmosphere
+description: The MapLibre atmosphere example — globe projection plus the sky's atmosphere-blend
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-globe-with-an-atmosphere.yaml?raw';
+
+Replicates the MapLibre example [Display a globe with an atmosphere](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-an-atmosphere/).
+
+<LiveMap src="/configs/gallery/display-a-globe-with-an-atmosphere.yaml" height="500px" caption="Zoom in past 5 and the atmosphere fades out" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-globe-with-an-atmosphere.yaml" />
+
+## What to notice
+
+- The atmosphere is a property of `sky:`. `atmosphere-blend` takes a zoom expression, which here keeps the halo at full strength to zoom 5 and fades it out by zoom 7.
+- Upstream paints its page black, so space around the globe is black. That backdrop belongs to the host page, not the map document, so here the globe sits on this page's own background.
+- Upstream also anchors the style's `light` to the map. A document-level `light:` key is separate work, so the default light applies here; the globe and atmosphere are identical.
+- The atmosphere draws only under globe projection, which needs **maplibre-gl 5.0.0** or later.

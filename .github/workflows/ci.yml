@@ -2,9 +2,9 @@ name: CI
 
 on:
     push:
-        branches: [main]
+        branches: [main, "release/**"]
     pull_request:
-        branches: [main]
+        branches: [main, "release/**"]
 
 jobs:
     test:
@@ -215,7 +215,12 @@ jobs:
             - name: Run core unit tests against the matrix version
               run: pnpm --filter @maplibre-yaml/core test
 
+            # examples/react has its own job below, one leg per React major,
+            # on the maplibre-gl it declares (its demo reads `global-state`,
+            # a >=5.6 expression the v4 leg cannot run).
             - name: Run browser verification
+              env:
+                  REACT_MAJORS: none
               run: pnpm verify:browser
 
             - name: Upload report on failure
@@ -223,6 +228,86 @@ jobs:
               if: failure()
               with:
                   name: browser-verification-report-${{ strategy.job-index }}
+                  path: |
+                      e2e/report
+                      e2e/results
+                  retention-days: 7
+
+    # examples/react (U21, Amendment A3 / D-A11): the documented React
+    # integration as a real Vite + TypeScript app, on every supported React
+    # major. One lockfile carries both majors (npm aliases `react-18` /
+    # `react-dom-18` / `react-types-18`), so each leg is a frozen install plus
+    # a mode switch rather than a rewritten package.json: `--mode react18`
+    # aliases React 18 into the bundle, tsconfig.react18.json points the
+    # type-check at @types/react 18. Each leg builds the production AND the
+    # development bundle (StrictMode is only live in development) and drives
+    # both in Chromium via e2e/react-example.spec.ts: maps render, events
+    # reach React, mapReady() resolves, an equal config does not rebuild the
+    # map, unmount leaves no canvas. The page asserts React.version, so a leg
+    # that silently bundled the other major fails.
+    react-example:
+        name: React example (React ${{ matrix.react }})
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                react: ["18", "19"]
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v3
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Resolve Playwright version
+              id: pw
+              run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+            - name: Cache Playwright browsers
+              uses: actions/cache@v4
+              id: pw-cache
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+            - name: Install Chromium
+              run: pnpm exec playwright install --with-deps chromium
+              if: steps.pw-cache.outputs.cache-hit != 'true'
+
+            - name: Install Chromium system deps
+              run: pnpm exec playwright install-deps chromium
+              if: steps.pw-cache.outputs.cache-hit == 'true'
+
+            - name: Build core
+              run: pnpm --filter @maplibre-yaml/core build
+
+            - name: Type-check the example against @types/react ${{ matrix.react }}
+              run: pnpm --filter @maplibre-yaml/example-react typecheck:react${{ matrix.react }}
+
+            - name: Docs React snippets match the example
+              run: pnpm --filter @maplibre-yaml/example-react test
+
+            - name: Build the example for React ${{ matrix.react }} (production + development)
+              run: pnpm --filter @maplibre-yaml/example-react build:react${{ matrix.react }}
+
+            - name: Drive it in Chromium
+              env:
+                  REACT_MAJORS: ${{ matrix.react }}
+              run: pnpm exec playwright test e2e/react-example.spec.ts
+
+            - name: Upload report on failure
+              uses: actions/upload-artifact@v4
+              if: failure()
+              with:
+                  name: react-example-report-react${{ matrix.react }}
                   path: |
                       e2e/report
                       e2e/results

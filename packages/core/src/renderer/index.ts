@@ -4,7 +4,7 @@
  */
 
 export { MapRenderer } from "./map-renderer";
-export type { MapRendererOptions, MapRendererEvents } from "./map-renderer";
+export type { MapRendererOptions, MapRendererEvents, ChromeMount } from "./map-renderer";
 
 export { LayerManager } from "./layer-manager";
 export type { LayerManagerCallbacks } from "./layer-manager";

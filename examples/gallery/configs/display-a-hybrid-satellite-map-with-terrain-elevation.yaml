@@ -1,0 +1,55 @@
+# Hermetic twin of
+# docs/public/configs/gallery/display-a-hybrid-satellite-map-with-terrain-elevation.yaml
+# (U15). Local basemap, synthetic /landcover imagery and /relief DEM. The docs
+# page slots the imagery under the bright basemap's roads with `before:`; the
+# local basemap has no road layers, so the twin omits that one key — every
+# 3D declaration (globe, terrain, atmosphere sky) is identical.
+type: map
+id: display-a-hybrid-satellite-map-with-terrain-elevation
+config:
+  center: [11.39085, 47.27574]
+  zoom: 12
+  pitch: 70
+  maxPitch: 85
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  satelliteSource:
+    type: raster
+    tiles:
+      - "/landcover/{z}/{x}/{y}.png"
+    tileSize: 256
+    attribution: "synthetic local tiles"
+  terrainSource:
+    type: raster-dem
+    tiles:
+      - "/relief/{z}/{x}/{y}.png"
+    encoding: terrarium
+    tileSize: 256
+    maxzoom: 14
+  hillshadeSource:
+    type: raster-dem
+    tiles:
+      - "/relief/{z}/{x}/{y}.png"
+    encoding: terrarium
+    tileSize: 256
+    maxzoom: 14
+layers:
+  - id: satellite
+    type: raster
+    source: satelliteSource
+  - id: hills
+    type: hillshade
+    source: hillshadeSource
+    paint:
+      hillshade-shadow-color: "#473B24"
+projection:
+  type: globe
+terrain:
+  source: terrainSource
+  exaggeration: 1
+sky:
+  atmosphere-blend: ["interpolate", ["linear"], ["zoom"], 0, 1, 2, 0]
+controls:
+  navigation: true
+  globe: true
+  terrain: true
