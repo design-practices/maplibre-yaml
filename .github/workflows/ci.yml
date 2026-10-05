@@ -131,12 +131,19 @@ jobs:
     # shipped undetected in 0.2.1/0.2.2. A pnpm override forces every
     # workspace package (and the e2e vendor resolution) onto the matrix
     # version, so the advertised range is the tested range.
+    #
+    # The v6 leg (U19, ml-vw4.9) landed with the peer-range widening to
+    # ^6.4.1 — never one without the other. v6 is ESM-only: e2e/server.mjs
+    # detects the missing UMD file and vendors dist/*.mjs instead, keeping the
+    # /vendor/maplibre-gl.esm.js import-map contract on every leg. The repo's
+    # default (devDependencies, docs pins) is v6, so this leg is a no-op
+    # override that still runs the assert below.
     browser-verification:
         runs-on: ubuntu-latest
         strategy:
             fail-fast: false
             matrix:
-                maplibre-version: ["^4.7.1", "^5.24.0"]
+                maplibre-version: ["^4.7.1", "^5.24.0", "^6.12.0"]
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -179,7 +186,7 @@ jobs:
                   node -e "
                     const path = require('path');
                     const want = process.env.MAPLIBRE_VERSION.match(/\d+/)[0];
-                    for (const p of ['.', 'packages/core', 'packages/astro']) {
+                    for (const p of ['.', 'packages/core', 'packages/astro', 'packages/effects']) {
                       const v = require(path.resolve(p, 'node_modules/maplibre-gl/package.json')).version;
                       console.log(p, 'maplibre-gl', v);
                       if (v.split('.')[0] !== want) {

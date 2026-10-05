@@ -114,6 +114,41 @@ describe("SeamRegistry", () => {
     expect(seams.patchedWalls).toBe(0);
   });
 
+  it("maplibre-gl 6 slices: tiles whose copies of a wall drift still stitch, exactly at the seam", () => {
+    // Captured from maplibre-gl 6.12 at z17 over a z14 source (U19): the same
+    // 9.5 m wall, wholly inside both tiles' buffers, decoded from each tile's
+    // re-encoded slice. The upper tile's copy sits 4 units off (MapLibre's
+    // encoder truncates fractional deltas after a clip point).
+    const below = makeTile("b", [
+      { id: 1, properties: { h: 30 }, rings: [[[3776, -112], [3688, 32], [3600, -20], [3688, -164], [3776, -112]]] },
+    ]);
+    const above = makeTile("b", [
+      { id: 1, properties: { h: 30 }, rings: [[[3776, 3980], [3688, 4124], [3600, 4072], [3688, 3928], [3776, 3980]]] },
+    ]);
+    const b17 = (raw: Uint8Array, y: number) =>
+      buildTileMesh({ raw, sourceLayer: "b", z: 17, x: 38592, y, zoom: 17, height: ["get", "h"] })!;
+    const lo = b17(below, 49281), hi = b17(above, 49280);
+    const run = (drift: number) => {
+      const patched = new Map<string, Uint8Array>();
+      const seams = new SeamRegistry((mesh, vi, verts) => patched.set(`${mesh}:${vi}`, verts.slice()));
+      seams.add("lo", { z: 17, x: 38592, y: 49281 }, E, readCuts(lo.cuts), lo.vertices, drift);
+      seams.add("hi", { z: 17, x: 38592, y: 49280 }, E, readCuts(hi.cuts), hi.vertices, drift);
+      const wall = (mesh: "lo" | "hi") => {
+        const w = readCuts(mesh === "lo" ? lo.cuts : hi.cuts).find((c) => c.oax === 3776 && c.obx === 3688)!;
+        const v = patched.get(`${mesh}:${w.vi}`);
+        return v && { u0: readVertex(v, 0, 16).u, u1: readVertex(v, 1, 16).u };
+      };
+      return { lo: wall("lo"), hi: wall("hi") };
+    };
+    const { lo: l, hi: h } = run(8);
+    expect(h && l).toBeTruthy();
+    // the upper tile holds the wall's start, the lower its end; they meet
+    // at the shared edge at the same u
+    expect(h!.u0).toBeCloseTo(0, 1);
+    expect(l!.u1).toBeCloseTo(1, 1);
+    expect(Math.abs(h!.u1 - l!.u0)).toBeLessThan(1e-3);
+  });
+
   it("the neighbour holding the whole wall in its buffer supplies the far end", () => {
     // 256 units long, crossing the seam: tile A sees it end in its buffer;
     // tile B gets it generator-cut at its own buffer

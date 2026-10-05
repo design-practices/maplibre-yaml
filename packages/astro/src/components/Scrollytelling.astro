@@ -178,6 +178,8 @@ const mapDocument = config ? JSON.stringify(storyMapDocument(config)) : undefine
 </div>
 
 <script>
+  // first: maplibre-gl 6 needs its worker URL before any map is built
+  import "../client/maplibre-worker";
   import "@maplibre-yaml/core/register";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { initAllScrollytelling } from "../client/scrollytelling";

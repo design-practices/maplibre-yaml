@@ -114,7 +114,7 @@ From a CDN with an import map:
 
 ```html
 <script type="importmap">
-  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js" } }
+  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script type="module">
   import "https://unpkg.com/@maplibre-yaml/core/register.js";
@@ -289,7 +289,7 @@ divides 1 km stays put.
 - **Mercator only.** Under globe projection (or with 3D terrain on) the
   effect declares absence and the static layer renders; it comes back when
   the map returns to mercator.
-- **maplibre-gl 5, WebGL2.** On maplibre-gl 4 every effect declares absence.
+- **maplibre-gl 5 or 6, WebGL2.** On maplibre-gl 4 every effect declares absence.
 - **Vector tiles (MVT) or GeoJSON sources.** The backend draws from the tile
   bytes MapLibre already loaded — no second fetch, exactly MapLibre's tile
   selection — through two MapLibre internals (`style.tileManagers`,

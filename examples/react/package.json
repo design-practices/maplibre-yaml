@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@maplibre-yaml/core": "workspace:*",
-    "maplibre-gl": "^5.24.0",
+    "maplibre-gl": "^6.12.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-18": "npm:react@^18.3.1",

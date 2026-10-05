@@ -68,7 +68,7 @@ https://docs.maplibre-yaml.org/guides/effects/
 
 ## Notes
 
-- maplibre-gl 5 + WebGL2, mercator only, MVT or GeoJSON sources.
+- maplibre-gl 5 or 6 (`>= 6.4.1`) + WebGL2, mercator only, MVT or GeoJSON sources.
 - Heights come from the static layer's own `fill-extrusion-height` /
   `-base` expressions (any schema), evaluated in a module worker
   (`dist/extrusions-worker.js`).

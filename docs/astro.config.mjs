@@ -250,16 +250,11 @@ export default defineConfig({
         },
       ],
 
-      head: [
-        // MapLibre GL CSS
-        {
-          tag: "link",
-          attrs: {
-            rel: "stylesheet",
-            href: "https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css",
-          },
-        },
-      ],
+      // No global MapLibre CSS <link>: it pinned maplibre-gl@4.1.0 from unpkg
+      // on every page while the site ran a different major. LiveMap.astro
+      // imports `maplibre-gl/dist/maplibre-gl.css` from the installed
+      // package, so the CSS is bundled only where a map renders and always
+      // matches the maplibre-gl the site runs.
 
       customCss: ["./src/styles/custom.css"],
 

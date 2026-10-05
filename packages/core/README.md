@@ -8,7 +8,7 @@ Declarative web maps with YAML configuration. Build interactive MapLibre maps us
 ## Installation
 
 ```bash
-npm install @maplibre-yaml/core maplibre-gl@^5
+npm install @maplibre-yaml/core maplibre-gl@^6
 ```
 
 ## Quick Start
@@ -21,13 +21,13 @@ The simplest way to use maplibre-yaml is with the `<ml-map>` web component:
 <!DOCTYPE html>
 <html>
 <head>
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css">
   <style>
     ml-map { display: block; height: 400px; }
   </style>
   <!-- Tell the browser where to find maplibre-gl (kept external, not bundled) -->
   <script type="importmap">
-    { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^4" } }
+    { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
   </script>
   <!-- Register the <ml-map> web component -->
   <script

@@ -15,8 +15,14 @@ npm install @maplibre-yaml/core maplibre-gl
 
 ```tsx
 // src/main.tsx
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@maplibre-yaml/core/register";
+
+// maplibre-gl 6 is ESM-only and cannot find its worker inside a bundle;
+// point it there before the first map renders (v4/v5: drop these lines).
+setWorkerUrl(workerUrl);
 ```
 
 ```ts
