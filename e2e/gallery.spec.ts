@@ -858,6 +858,13 @@ test.describe("U16: escape-hatch rows that 0.7 made pure YAML", () => {
   test("set-center-point-above-ground: elevation + centerClampedToGround ride config passthrough", async ({
     page,
   }) => {
+    // `elevation` / `centerClampedToGround` and getCenterElevation() arrived
+    // in maplibre-gl 5.0.0 (absent from the 4.7.1 bundle). On 4.x the
+    // options are ignored, so there is nothing to assert.
+    test.skip(
+      !meetsVersion(VENDOR_MAPLIBRE_VERSION, "5.0.0"),
+      `center elevation needs maplibre-gl >= 5.0.0 (vendor is ${VENDOR_MAPLIBRE_VERSION})`
+    );
     const errors = await guard(page);
     await openExample(page, "set-center-point-above-ground", ["3d-buildings"]);
     const camera = await page.evaluate(() => {

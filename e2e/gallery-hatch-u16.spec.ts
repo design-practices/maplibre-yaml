@@ -12,6 +12,26 @@
  * exists, the protocol rewrote the data — not merely that a map appeared.
  */
 import { test, expect, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { meetsVersion, STATE_RUNTIME_FLOOR } from "../packages/core/src/capabilities";
+
+/**
+ * The maplibre-gl version the e2e vendor serves (root devDependency — the
+ * CI matrix overrides it per leg, e.g. ^4.7.1). A few pages exercise
+ * runtime features newer than the oldest supported peer; those tests skip
+ * below the version that introduced the feature (the docs site runs 5.x).
+ */
+const VENDOR_MAPLIBRE_VERSION: string = JSON.parse(
+  readFileSync(join(process.cwd(), "node_modules/maplibre-gl/package.json"), "utf8")
+).version;
+
+/**
+ * Labels without a `glyphs` URL: before 5.11.0 the GlyphManager threw
+ * "glyphsUrl is not set"; from 5.11.0 it rasterizes every glyph locally
+ * (checked against the published 5.10.0 / 5.11.0 bundles).
+ */
+const LOCAL_GLYPHS_FLOOR = "5.11.0";
 
 /** Fail the test on any page error or off-origin request (hermeticity). */
 async function guard(page: Page): Promise<string[]> {
@@ -528,6 +548,10 @@ test.describe("U16 label, language & filter hatches", () => {
   test("style-labels-with-local-fonts: no glyphs URL, labels still place from local fonts", async ({
     page,
   }) => {
+    test.skip(
+      !meetsVersion(VENDOR_MAPLIBRE_VERSION, LOCAL_GLYPHS_FLOOR),
+      `labels with no glyphs URL need maplibre-gl >= ${LOCAL_GLYPHS_FLOOR} (vendor is ${VENDOR_MAPLIBRE_VERSION})`
+    );
     const errors = await guard(page);
     await openHatch(page, "style-labels-with-local-fonts", ["places"]);
     expect(await evalMap(page, (map) => map.getStyle().glyphs ?? null)).toBeNull();
@@ -545,6 +569,10 @@ test.describe("U16 label, language & filter hatches", () => {
   test("filter-symbols-by-text-input: typing writes global state and the filter follows", async ({
     page,
   }) => {
+    test.skip(
+      !meetsVersion(VENDOR_MAPLIBRE_VERSION, STATE_RUNTIME_FLOOR),
+      `global-state filters need maplibre-gl >= ${STATE_RUNTIME_FLOOR} (vendor is ${VENDOR_MAPLIBRE_VERSION})`
+    );
     const errors = await guard(page);
     await openHatch(page, "filter-symbols-by-text-input", ["poi"]);
     await chromeMounted(page, "[data-filter-input]");

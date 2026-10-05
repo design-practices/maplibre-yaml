@@ -19,3 +19,4 @@ Replicates the MapLibre example [Set center point above ground](https://maplibre
 
 - Upstream opens at an 85° pitch and lifts `maxPitch` to 105° to look up from below the horizon. The schema caps pitch at 85° (tracked as ml-rww), and on maplibre-gl 5.x an 85° view loads only low-detail building tiles, so this page opens at 70° — drag to tilt further.
 - Map data © OpenStreetMap contributors, via OpenFreeMap.
+- `elevation` and `centerClampedToGround` need maplibre-gl ≥ 5.0; on 4.x they are ignored and the camera centres on the ground.
