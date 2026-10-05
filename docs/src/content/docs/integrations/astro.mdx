@@ -27,8 +27,11 @@ Get a map in your Astro site in 5 minutes.
 1. **Install dependencies**
 
    ```bash
-   pnpm add @maplibre-yaml/core maplibre-gl
+   pnpm add @maplibre-yaml/core maplibre-gl@^5
    ```
+
+   Pin maplibre-gl to major 5: npm's `latest` is now v6, which is outside
+   `@maplibre-yaml/core`'s peer range.
 
 2. **Create a map configuration file**
 
@@ -132,7 +135,123 @@ For Astro projects, we recommend using the dedicated `@maplibre-yaml/astro` pack
 ### Installation
 
 ```bash
-pnpm add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl
+pnpm add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^5
+```
+
+### Supported versions
+
+| Astro | Supported | Notes |
+|-------|-----------|-------|
+| **7** | Yes, tested in CI | Needs Node 22.12 or newer (Astro's own requirement). |
+| **6** | Yes, tested in CI | Build collection schemas with `z` from `astro/zod` (see below). |
+| **5** | Yes, tested in CI | |
+| **4** | Yes, tested in CI | Content-layer collections need three changes, listed below. |
+
+This needs `@maplibre-yaml/astro` 0.5 or later. Earlier versions declare
+`astro: ^4 || ^5`, so `npm install` refuses them on Astro 6 and 7. Every major
+is tested the same way. CI builds the [example site](#runnable-example) against
+the published tarballs with `astro check`, `astro build` and `astro preview`, then
+drives it in a browser. It also runs a smoke test under `astro dev`. The
+`maplibre-gl` peer range is still `^4 || ^5`, so pin it: `maplibre-gl@^5`.
+
+**Collections and zod.** Astro 4 and 5 ship zod 3. Astro 6 and 7 ship zod 4.
+The two cannot nest inside each other. Import `z` from `astro/zod`, which
+works on all four majors. The `/utils` schema helpers are built from the same
+module, so `LocationPointSchema` and the others nest in your `z.object()` on
+every major. (`z` from `astro:content` is the same object, but Astro 6
+deprecated that export.)
+
+**Astro 4 only.** The `glob()` collection loaders on this page need three
+changes:
+
+- Turn on `experimental: { contentLayer: true }` in `astro.config.mjs`.
+- Keep the config in `src/content/config.ts`. Astro 4 does not read
+  `src/content.config.ts`. A one-line `export { collections } from
+  "../content.config";` there serves both: Astro 5+ prefer `src/content.config.ts`.
+- Point `base` outside `src/content/`. Astro 4's `glob()` skips files there,
+  and the folder becomes a legacy collection whose ids keep the extension
+  (`park.md`).
+
+The example site does all three.
+
+<Aside type="caution" title="astro dev with @maplibre-yaml/core 0.6.0 or earlier">
+  With core 0.6.0 or earlier, every `@maplibre-yaml/astro` component fails under
+  `astro dev` with *Failed to create map: Map is not a constructor*, while
+  `astro build` works. Vite never pre-bundles maplibre-gl when only a
+  dependency's `.astro` file imports it. Later core versions handle this. On
+  0.6.0, tell Vite to pre-bundle it:
+
+  ```js
+  // astro.config.mjs
+  import { defineConfig } from "astro/config";
+
+  export default defineConfig({
+    vite: { optimizeDeps: { include: ["maplibre-gl"] } },
+  });
+  ```
+</Aside>
+
+### Runnable example
+
+[`examples/astro/site`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/astro/site)
+is a small site, *Ring of Fire*, that uses every pattern on this page. CI
+builds it and drives it in a browser on Astro 4, 5, 6 and 7. The snippets
+below marked with a file name are copied from it, and a test fails if they
+drift.
+
+| Page | Shows |
+|------|-------|
+| `/` | `<Map config>` from `loadMapConfig`, `<Map src>`, corner slots |
+| `/explore` | `<FullPageMap>` with zoom/reset controls, `showLegend`, markers, a parameters panel, hover popups |
+| `/story` | `<Scrollytelling config>`: chapters move the camera, toggle layers, run every action type |
+| `/story-runtime` | `<Scrollytelling src>`, loaded in the browser |
+| `/volcanoes` | A Markdown collection (`glob()` + `LocationPointSchema`), one page per entry via `buildMapConfigFromEntry` |
+| `/gallery` | A YAML collection of whole map documents (`extendSchema(getMapSchema(), …)`) |
+
+Run it from a clone with `pnpm install && pnpm build`, then
+`pnpm --filter @maplibre-yaml/example-astro-site dev`. To run the CI check for
+one major, use `node scripts/astro-matrix.mjs --majors 7`.
+
+Its content config works unchanged on all four majors:
+
+```ts title="examples/astro/site/src/content.config.ts"
+import { defineCollection } from "astro:content";
+import { glob } from "astro/loaders";
+// `astro/zod` is the zod your Astro version ships: zod 3 on Astro 4/5,
+// zod 4 on Astro 6/7. The /utils helpers are built from the same module,
+// so they nest inside these objects on every major.
+import { z } from "astro/zod";
+import {
+  LocationPointSchema,
+  getMapSchema,
+  extendSchema,
+} from "@maplibre-yaml/astro/utils";
+
+/** `fuji.md` -> `fuji` on every Astro major (Astro 4 keeps the extension). */
+const stripExtension = ({ entry }: { entry: string }) => entry.replace(/\.[^.]+$/, "");
+
+/** Markdown entries with a point location in their frontmatter. */
+const volcanoes = defineCollection({
+  loader: glob({ pattern: "*.md", base: "./src/collections/volcanoes", generateId: stripExtension }),
+  schema: z.object({
+    title: z.string(),
+    country: z.string(),
+    elevation: z.number(),
+    lastEruption: z.number(),
+    location: LocationPointSchema,
+  }),
+});
+
+/** Whole map documents as YAML data entries, plus two fields of our own. */
+const maps = defineCollection({
+  loader: glob({ pattern: "*.yaml", base: "./src/collections/maps", generateId: stripExtension }),
+  schema: extendSchema(getMapSchema(), {
+    title: z.string(),
+    blurb: z.string(),
+  }),
+});
+
+export const collections = { volcanoes, maps };
 ```
 
 ### Basic Usage with Map Component
@@ -163,19 +282,30 @@ Place your YAML file in `/public/configs/map.yaml`:
 type: map
 id: my-map
 config:
-  center: [-74.006, 40.7128]
-  zoom: 12
+  center: [-120, 37]
+  zoom: 4
   mapStyle: "https://demotiles.maplibre.org/style.json"
 layers:
   - id: points
     type: circle
     source:
       type: geojson
-      url: "https://example.com/data.geojson"
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     paint:
       circle-radius: 6
       circle-color: "#007cbf"
 ```
+
+`<Map src>` hands the URL to `<ml-map src>`, which fetches, parses and
+validates the file in the browser and shows its own error card if any of that
+fails.
+
+<Aside type="caution" title="src needs @maplibre-yaml/astro newer than 0.4.1">
+  In 0.4.1 and earlier, `src` on `Map` and `FullPageMap` never loads in the
+  browser. The console shows *Failed to resolve module specifier
+  '@maplibre-yaml/core'* and the map shows *No configuration provided*. On
+  those versions, use build-time loading (`config`).
+</Aside>
 
 </TabItem>
 <TabItem label="Build-Time Loading">
@@ -222,7 +352,30 @@ interface MapProps {
 }
 ```
 
-**Examples:**
+If you pass both, `config` wins and the component warns at build time.
+
+### Corner slots
+
+Children with `slot="top-left"`, `"top-right"`, `"bottom-left"`,
+`"bottom-right"` or `"legend"` are forwarded to `<ml-map>`'s corner system,
+which places them in that corner of the map and stacks them with the built-in
+legend and parameters panel. A `legend` slot replaces the built-in legend.
+`Map`, `FullPageMap` and `Scrollytelling` all forward them:
+
+```astro title="examples/astro/site/src/pages/index.astro"
+<Map config={ringOfFire} height="480px">
+  <p slot="top-left" class="caption" data-testid="hero-caption">
+    <strong>16 volcanoes, one plate boundary</strong>
+    Hover a dot for its name and height.
+  </p>
+  <a slot="bottom-right" class="caption" href="/explore">Explore full screen &rarr;</a>
+</Map>
+```
+
+Corners with no content render nothing. `FullPageMap`'s zoom and reset buttons
+already sit in `top-right`, and your `top-right` content stacks below them.
+
+**Examples** (each line is a separate usage, in a page that imports `Map`):
 
 ```astro
 <!-- Minimal -->
@@ -238,8 +391,11 @@ interface MapProps {
   class="shadow-lg rounded-lg"
   style="border: 1px solid #ccc;"
 />
+```
 
-<!-- Build-time loaded -->
+Build-time loaded:
+
+```astro
 ---
 import { Map, loadMapConfig } from '@maplibre-yaml/astro';
 const earthquakes = await loadMapConfig('./src/maps/earthquakes.yaml');
@@ -259,16 +415,16 @@ Load and validate a map configuration from a file:
 ---
 import { loadMapConfig, Map } from '@maplibre-yaml/astro';
 
-try {
-  const config = await loadMapConfig('./src/configs/my-map.yaml');
-  // config is fully typed as MapBlock
-} catch (error) {
-  console.error('Failed to load map config:', error);
-}
+// Paths resolve from the project root (where `astro build` runs).
+// A missing or invalid file throws YAMLLoadError, which fails the build.
+const config = await loadMapConfig('./src/configs/my-map.yaml');
+// config is fully typed as MapBlock
 ---
 
 <Map config={config} />
 ```
+
+To report errors before failing, see [Error Handling](#error-handling) below.
 
 #### loadFromGlob()
 
@@ -279,7 +435,12 @@ Load multiple configurations at once:
 import { loadFromGlob, Map } from '@maplibre-yaml/astro';
 import { YAMLParser } from '@maplibre-yaml/core';
 
-const configFiles = import.meta.glob('./src/configs/*.yaml', { as: 'raw' });
+// A leading "/" is the project root. A "./" pattern resolves against THIS
+// page file, so './src/configs/*.yaml' from src/pages/ matches nothing.
+const configFiles = import.meta.glob<string>('/src/configs/*.yaml', {
+  query: '?raw',
+  import: 'default',
+});
 const maps = await loadFromGlob(
   configFiles,
   (yaml) => YAMLParser.safeParseMapBlock(yaml)
@@ -289,12 +450,16 @@ const maps = await loadFromGlob(
 <div class="map-gallery">
   {maps.map(({ path, config }) => (
     <div>
-      <h2>{config.id}</h2>
+      <h2>{config.id} <small>{path}</small></h2>
       <Map config={config} height="400px" />
     </div>
   ))}
 </div>
 ```
+
+If any file fails validation, `loadFromGlob` throws a single `YAMLLoadError`
+listing every failing file, which fails the build. A pattern that matches
+nothing returns an empty array without an error.
 
 ### Content Collections Integration
 
@@ -303,17 +468,18 @@ Use Astro Content Collections for managing map configurations:
 **1. Define collection schema:**
 
 <Aside type="caution" title="Use the /utils subpath in content config">
-  When importing schemas in `src/content/config.ts`, use `@maplibre-yaml/astro/utils` rather than `@maplibre-yaml/astro`. The main entry re-exports Astro components (`Map`, `FullPageMap`, `Scrollytelling`) which can't be loaded outside the Astro component pipeline. Importing them in a content-config file produces errors like `Content config not loaded` or `Cannot read properties of undefined (reading 'get')`. The `/utils` subpath contains only the schemas and builders -- safe everywhere.
+  When importing schemas in `src/content.config.ts`, use `@maplibre-yaml/astro/utils` rather than `@maplibre-yaml/astro`. The main entry re-exports Astro components (`Map`, `FullPageMap`, `Scrollytelling`) which can't be loaded outside the Astro component pipeline. Importing them in a content-config file produces errors like `Content config not loaded` or `Cannot read properties of undefined (reading 'get')`. The `/utils` subpath contains only the schemas and builders -- safe everywhere.
 </Aside>
 
 ```typescript
-// src/content/config.ts
+// src/content.config.ts
 import { defineCollection } from 'astro:content';
+import { glob } from 'astro/loaders';
 import { getMapSchema } from '@maplibre-yaml/astro/utils';
 
 export const collections = {
   maps: defineCollection({
-    type: 'data',
+    loader: glob({ pattern: '**/*.yaml', base: './src/collections/maps' }),
     schema: getMapSchema()
   })
 };
@@ -322,7 +488,7 @@ export const collections = {
 **2. Add YAML files:**
 
 ```yaml
-# src/content/maps/earthquake-map.yaml
+# src/collections/maps/earthquake-map.yaml
 type: map
 id: earthquake-map
 config:
@@ -344,11 +510,11 @@ layers:
 
 ```astro
 ---
-import { getCollection } from 'astro:content';
+import { getEntry } from 'astro:content';
 import { Map } from '@maplibre-yaml/astro';
 
-const maps = await getCollection('maps');
-const earthquakeMap = maps.find(m => m.id === 'earthquake-map');
+const earthquakeMap = await getEntry('maps', 'earthquake-map');
+if (!earthquakeMap) throw new Error('maps/earthquake-map.yaml not found');
 ---
 
 <Map config={earthquakeMap.data} height="600px" />
@@ -356,7 +522,8 @@ const earthquakeMap = maps.find(m => m.id === 'earthquake-map');
 
 ### Error Handling
 
-The Map component displays user-friendly errors when configurations fail to load or validate:
+With `src`, problems surface in the browser: `<ml-map>` replaces the map with
+an error card and dispatches `ml-map:error`:
 
 ```astro
 <!-- Invalid YAML or network error will show error message -->
@@ -365,22 +532,25 @@ The Map component displays user-friendly errors when configurations fail to load
 
 Error display includes:
 - **YAML Syntax Errors**: Shows parsing error with details
-- **Validation Errors**: Lists all validation failures with paths
-- **Network Errors**: Shows fetch failure messages
+- **Validation Errors**: Lists all validation failures with paths (for example `config.zoom: Expected number, got string`)
+- **Network Errors**: Shows fetch failure messages (for example `Failed to fetch /configs/missing.yaml: 404 Not Found`)
 
-You can also handle errors programmatically with build-time loading:
+With `config`, the same problems surface at build time instead. Handle them
+programmatically like this:
 
 ```astro
 ---
-import { loadMapConfig, YAMLLoadError } from '@maplibre-yaml/astro';
+import { Map, loadMapConfig, YAMLLoadError } from '@maplibre-yaml/astro';
 
 let config;
 try {
   config = await loadMapConfig('./src/configs/map.yaml');
 } catch (error) {
   if (error instanceof YAMLLoadError) {
-    console.error('Validation errors:');
-    error.errors.forEach(e => {
+    // `errors` is set for validation failures; a missing file or a YAML
+    // syntax error carries only `message` (and the original as `cause`).
+    console.error(`${error.filePath}: ${error.message}`);
+    error.errors?.forEach(e => {
       console.error(`  ${e.path}: ${e.message}`);
     });
   }
@@ -396,14 +566,15 @@ try {
 Add custom metadata to your map configurations:
 
 ```typescript
-// src/content/config.ts
+// src/content.config.ts
 import { defineCollection } from 'astro:content';
+import { glob } from 'astro/loaders';
+import { z } from 'astro/zod';
 import { extendSchema, getMapSchema } from '@maplibre-yaml/astro/utils';
-import { z } from 'zod';
 
 export const collections = {
   maps: defineCollection({
-    type: 'data',
+    loader: glob({ pattern: '**/*.yaml', base: './src/collections/maps' }),
     schema: extendSchema(getMapSchema(), {
       author: z.string(),
       publishDate: z.date(),
@@ -415,7 +586,7 @@ export const collections = {
 ```
 
 ```yaml
-# src/content/maps/featured-map.yaml
+# src/collections/maps/featured-map.yaml
 author: "Jane Doe"
 publishDate: 2024-01-15
 tags: ["earthquakes", "geoscience"]
@@ -432,17 +603,23 @@ config:
 ```astro
 ---
 import { getCollection } from 'astro:content';
+import { Map } from '@maplibre-yaml/astro';
 
 const featuredMaps = await getCollection('maps', ({ data }) => data.featured);
 ---
 
-{featuredMaps.map(entry => (
-  <div>
-    <h2>{entry.data.id}</h2>
-    <p>By {entry.data.author} on {entry.data.publishDate}</p>
-    <Map config={entry.data} />
-  </div>
-))}
+{featuredMaps.map(entry => {
+  // Hand <Map> only the map document. The metadata fields would otherwise
+  // reach <ml-map> as unknown keys and log a warning each.
+  const { author, publishDate, tags, featured, ...mapConfig } = entry.data;
+  return (
+    <div>
+      <h2>{mapConfig.id}</h2>
+      <p>By {author} on {publishDate.toLocaleDateString()}</p>
+      <Map config={mapConfig} />
+    </div>
+  );
+})}
 ```
 
 ## Named Sources
@@ -557,6 +734,15 @@ hand to `<Map>` is identical either way.
 - [Interactions & Eject](/guides/interactions/) — declarative interactions, the
   eject guarantee, and how `attachInteractions` reattaches behavior (including
   the trust-gated `emit` interaction).
+
+### Map-level features pass straight through
+
+`Map` and `FullPageMap` hand the whole document to `<ml-map>`, through the
+`config` attribute or the `src` URL. Map-level features therefore work with no
+Astro-specific setup: `markers:`, `images:`, `parameters:` (the params panel),
+`legend:`, and hover popups. One exception: a `Scrollytelling` story's map is
+built from its `config:` and `layers:` only. It has no `sources:`, `markers:`,
+`parameters:` or legend, so give its layers inline sources.
 
 ## Upgrading to 0.6
 
@@ -764,9 +950,13 @@ interface ChapterProps {
 
 #### Basic chapter
 
+`Chapter` is exported from the `@maplibre-yaml/astro/components` subpath only.
+The package root exports `Map`, `FullPageMap` and `Scrollytelling`, and the
+`ChapterProps` type.
+
 ```astro
 ---
-import { Chapter } from '@maplibre-yaml/astro';
+import { Chapter } from '@maplibre-yaml/astro/components';
 ---
 <Chapter
   id="intro"
@@ -870,7 +1060,7 @@ The `Scrollytelling` component creates immersive narrative experiences where the
 - **Layer Control**: Show/hide map layers per chapter for progressive disclosure
 - **Chapter Actions**: Execute custom MapLibre actions on chapter enter/exit
 - **Optional Markers**: Visual navigation dots for quick chapter access
-- **Dual Loading**: Build-time or runtime YAML loading
+- **Build-time Loading**: Load and validate the story with `loadScrollytellingConfig`
 - **Debug Mode**: Visual indicators to help during development
 - **Accessible**: Full keyboard navigation and screen reader support
 
@@ -887,16 +1077,8 @@ interface ScrollytellingProps {
 
 ### Basic Usage
 
-<Tabs>
-  <TabItem label="Runtime Loading">
-```astro
----
-import { Scrollytelling } from '@maplibre-yaml/astro';
----
-<Scrollytelling src="/stories/earthquake-history.yaml" />
-```
-  </TabItem>
-  <TabItem label="Build-time Loading">
+Load the story at build time and pass it as `config`:
+
 ```astro
 ---
 import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
@@ -904,15 +1086,27 @@ const story = await loadScrollytellingConfig('./src/stories/climate-change.yaml'
 ---
 <Scrollytelling config={story} />
 ```
-  </TabItem>
-</Tabs>
+
+Or load it in the browser from `public/`. The component fetches, validates
+and renders the story there, and a validation failure shows the errors in
+place of the chapters:
+
+```astro title="examples/astro/site/src/pages/story-runtime.astro"
+<Scrollytelling src="/stories/cascadia.yaml" />
+```
+
+<Aside type="caution" title="src needs @maplibre-yaml/astro 0.5 or later">
+  In 0.4.x, `<Scrollytelling src>` never loads. The chapters stay on *Loading
+  story…* and the console shows *Failed to resolve module specifier
+  '@maplibre-yaml/core'*. On those versions, use `config`.
+</Aside>
 
 ### YAML Configuration
 
-A complete scrollytelling story includes base map configuration, data sources, layers, and chapters:
+A complete scrollytelling story includes base map configuration, layers, and chapters:
 
 ```yaml
-version: "1.0"
+type: scrollytelling
 id: earthquake-story
 theme: dark                    # 'light' or 'dark'
 showMarkers: true             # Show chapter navigation dots
@@ -920,23 +1114,19 @@ markerColor: "#3FB1CE"        # Custom marker color
 
 # Base map configuration
 config:
-  style: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://demotiles.maplibre.org/style.json"
   center: [-118.2437, 34.0522]
   zoom: 9
   pitch: 0
   bearing: 0
 
-# Data sources
-sources:
-  earthquakes:
-    type: geojson
-    url: "/data/earthquakes.geojson"
-
-# Map layers
+# Map layers (sources are inline: a story has no `sources:` block)
 layers:
   - id: earthquake-circles
     type: circle
-    source: earthquakes
+    source:
+      type: geojson
+      url: "/data/earthquakes.geojson"
     paint:
       circle-radius: 8
       circle-color: "#ff0000"
@@ -953,7 +1143,9 @@ chapters:
   - id: detail
     title: "Major Fault Lines"
     description: "<p>The San Andreas Fault runs through this region.</p>"
-    image: "/images/fault-lines.jpg"
+    # Must be an absolute URL: a relative path such as /images/x.jpg fails
+    # validation ("Invalid URL format").
+    image: "https://example.com/images/fault-lines.jpg"
     center: [-118.0, 34.0]
     zoom: 11
     pitch: 45
@@ -977,15 +1169,6 @@ footer: "<p>Data source: USGS</p><p>&copy; 2024</p>"
 
 ### Examples
 
-#### Simple story with runtime loading
-
-```astro
----
-import { Scrollytelling } from '@maplibre-yaml/astro';
----
-<Scrollytelling src="/stories/city-tour.yaml" />
-```
-
 #### Build-time loading with debug mode
 
 ```astro
@@ -999,8 +1182,12 @@ const story = await loadScrollytellingConfig('./src/stories/development.yaml');
 #### Custom styling
 
 ```astro
+---
+import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
+const story = await loadScrollytellingConfig('./src/stories/brand-story.yaml');
+---
 <Scrollytelling
-  src="/stories/brand-story.yaml"
+  config={story}
   class="branded-scrollytelling"
 />
 
@@ -1016,21 +1203,24 @@ const story = await loadScrollytellingConfig('./src/stories/development.yaml');
 Each chapter supports extensive configuration options:
 
 **Position & Camera:**
-- `center`: [longitude, latitude] coordinates
-- `zoom`: Zoom level (0-22)
-- `pitch`: Camera tilt (0-60 degrees)
-- `bearing`: Camera rotation (0-360 degrees)
+- `id`: Unique chapter identifier (required)
+- `center`: [longitude, latitude] coordinates (required)
+- `zoom`: Zoom level (required)
+- `pitch`: Camera tilt (0-85 degrees, default 0)
+- `bearing`: Camera rotation (-180 to 180 degrees, default 0)
 
 **Animation:**
-- `animation`: "flyTo" (smooth arc), "easeTo" (direct), or "jumpTo" (instant)
-- `speed`: Animation speed (0.1-2.0, default 0.6)
-- `curve`: Fly curve intensity (0.1-2.0, default 1.0)
+- `animation`: "flyTo" (smooth arc), "easeTo" (direct), or "jumpTo" (instant); default "flyTo"
+- `speed`: Animation speed (0-2, default 0.6)
+- `curve`: Fly curve intensity (0-2, default 1)
+- `rotateAnimation`: Keep rotating the camera while the chapter is active
+- `spinGlobe`: Keep panning westward while the chapter is active
 
 **Content:**
 - `title`: Chapter heading (required)
-- `description`: HTML content
-- `image`: Image URL for visual context
-- `video`: Video URL with inline player
+- `description`: HTML content (rendered as-is, not escaped)
+- `image`: Image URL for visual context (absolute URL)
+- `video`: Video URL with inline player (absolute URL)
 - `alignment`: "left", "right", "center", or "full"
 - `hidden`: Hide content for map-only transitions
 
@@ -1039,6 +1229,7 @@ Each chapter supports extensive configuration options:
 - `layers.hide`: Array of layer IDs to hide
 - `onChapterEnter`: Actions to execute when entering chapter
 - `onChapterExit`: Actions to execute when leaving chapter
+- `callback`: A name passed in the `ml-scrollytelling:chapter` event, for your page script to dispatch on
 
 ### Chapter Actions
 
@@ -1053,7 +1244,7 @@ chapters:
     onChapterEnter:
       - action: setFilter
         layer: earthquake-circles
-        filter: [">=", "magnitude", 5.0]
+        filter: [">=", ["get", "magnitude"], 5.0]
       - action: setPaintProperty
         layer: earthquake-circles
         property: circle-color
@@ -1065,9 +1256,37 @@ chapters:
 ```
 
 **Available Actions:**
-- `setFilter`: Filter features in a layer
-- `setPaintProperty`: Change layer paint properties
-- `setLayoutProperty`: Change layer layout properties
+
+| Action | Fields | Effect |
+|--------|--------|--------|
+| `setFilter` | `layer`, `filter` (`null` clears) | Filter features in a layer |
+| `setPaintProperty` | `layer`, `property`, `value` | Change a paint property |
+| `setLayoutProperty` | `layer`, `property`, `value` | Change a layout property |
+| `flyTo` / `easeTo` | `options` (`center`, `zoom`, `bearing`, `pitch`, `duration`, …) | Move the camera, overriding the chapter's own camera |
+| `fitBounds` | `bounds: [west, south, east, north]`, `options` (`padding`, `duration`, …) | Frame an area |
+| `custom` | anything in `options` | Runs nothing itself. Dispatches `ml-scrollytelling:action` for your page |
+
+A layer action naming a layer the map does not have logs a warning and is
+skipped. Enter actions run after the chapter's camera move and layer toggles.
+
+**Events.** The story container dispatches two bubbling events. On every
+chapter change it dispatches `ml-scrollytelling:chapter`, with
+`detail: { chapterId, previousChapterId, index, callback, map }`. `callback`
+is the chapter's `callback:` name. On each `custom` action it dispatches
+`ml-scrollytelling:action`, with `detail: { action, chapterId, phase, map }`.
+The container also carries `data-active-chapter`. The example's Tonga chapter
+uses a `custom` action to show a banner:
+
+```ts title="examples/astro/site/src/pages/story.astro"
+const banner = document.getElementById("story-banner")!;
+document.addEventListener("ml-scrollytelling:action", (event) => {
+  const { action } = (event as CustomEvent).detail;
+  banner.textContent = String(action.options?.banner ?? "");
+```
+
+`rotateAnimation: true` slowly rotates the camera while a chapter is active,
+and `spinGlobe: true` pans it westward. Both stop on the next chapter and are
+skipped when the reader prefers reduced motion.
 
 ### Chapter Markers
 
@@ -1099,7 +1318,7 @@ Enable `debug` prop to see:
 - Helpful for fine-tuning scroll trigger points
 
 ```astro
-<Scrollytelling src="/stories/test.yaml" debug />
+<Scrollytelling config={story} debug />
 ```
 
 ### Scroll Behavior
@@ -1110,12 +1329,19 @@ The component uses IntersectionObserver with these settings:
 - Smooth map transitions between chapters
 - Progressive chapter content fade in/out
 
+The chapters scroll over a sticky full-viewport map, so the mouse wheel
+scrolls the story rather than zooming the map. The map opens on the story's
+`config` camera with the first chapter marked active. That chapter's `layers`
+and `onChapterEnter` actions run only when a reader scrolls back to it, so
+set its starting state in `config` and the layers themselves (for example
+`layout: { visibility: none }` on a layer a later chapter reveals).
+
 ### Accessibility
 
 - Semantic HTML with proper ARIA labels
 - Keyboard navigation for chapter markers
 - Screen reader friendly chapter titles
-- Respects reduced motion preferences
+- Chapter cards respect reduced-motion preferences (the map's camera moves do not; use `animation: jumpTo` where that matters)
 - High contrast mode support
 
 ### Performance Tips
@@ -1200,7 +1426,7 @@ For sites with multiple maps, define site-wide defaults (basemap style, center, 
          name: "Project Site",
        },
      },
-     globalMapConfig, // mapStyle, center, zoom inherited as fallbacks
+     globalMapConfig, // mapStyle and zoom inherited as fallbacks
    );
    ---
    <Map config={mapConfig} height="400px" />
@@ -1208,7 +1434,7 @@ For sites with multiple maps, define site-wide defaults (basemap style, center, 
 
 </Steps>
 
-All map builders (`buildPointMapConfig`, `buildPolygonMapConfig`, `buildRouteMapConfig`, `buildMultiPointMapConfig`) accept `globalConfig` as their second argument. Values explicitly set in the builder options take priority; global defaults fill in anything omitted.
+All map builders (`buildPointMapConfig`, `buildMultiPointMapConfig`, `buildPolygonMapConfig`, `buildMultiPolygonMapConfig`, `buildRouteMapConfig`, `buildMultiLineStringMapConfig`) accept `globalConfig` as their second argument. Values explicitly set in the builder options take priority; global defaults fill in anything omitted. The center always comes from the geometry, so `defaultCenter` matters only when you build a map without one (as the `fallback` below does).
 
 ### GlobalConfig Schema
 
@@ -1223,13 +1449,14 @@ All map builders (`buildPointMapConfig`, `buildPolygonMapConfig`, `buildRouteMap
 
 ## Adding Geographic Data to Content Collections
 
-You can add map support to any existing Astro content collection by importing the geographic schemas. This works for points, polygons, and lines — all optional, so items without geographic data still work.
+You can add map support to any existing Astro content collection by importing the geographic schemas. This works for points, polygons, and lines — all optional, so items without geographic data still work. For a blog-style walkthrough with ready-made `getCollectionItemWith*Schema` helpers, see the [Collection Integration guide](/guides/collections-integration/).
 
 ### Schema setup
 
 ```typescript
-// src/content/config.ts
-import { defineCollection, z } from "astro:content";
+// src/content.config.ts
+import { defineCollection } from "astro:content";
+import { z } from "astro/zod";
 import { glob } from "astro/loaders";
 import {
   LocationPointSchema,
@@ -1238,10 +1465,11 @@ import {
 } from "@maplibre-yaml/astro/utils";  // /utils subpath -- see "Use the /utils subpath" note above
 
 const projects = defineCollection({
-  loader: glob({ pattern: "**/*.md", base: "./src/content/projects" }),
+  loader: glob({ pattern: "**/*.md", base: "./src/collections/projects" }),
   schema: z.object({
     title: z.string(),
     status: z.string(),
+    summary: z.string().optional(),
     // Geographic data — all optional
     location: LocationPointSchema.optional(),  // point
     region: RegionPolygonSchema.optional(),     // polygon
@@ -1320,8 +1548,15 @@ Use `buildMapConfigFromEntry` in your dynamic route page (`[slug].astro`). The h
 
 ```astro
 ---
+// src/pages/projects/[slug].astro
+import { getCollection } from "astro:content";
 import { Map, buildMapConfigFromEntry } from "@maplibre-yaml/astro";
-import { globalMapConfig } from "../lib/map-config";
+import { globalMapConfig } from "../../lib/map-config";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("projects");
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
 
 const { entry } = Astro.props;
 const mapConfig = await buildMapConfigFromEntry(entry.data, globalMapConfig, {
@@ -1364,7 +1599,9 @@ import {
   buildRouteMapConfig,
 } from "@maplibre-yaml/astro";
 import type { MapBlock } from "@maplibre-yaml/core";
-import { globalMapConfig } from "../lib/map-config";
+import { globalMapConfig } from "../../lib/map-config";
+
+// ...same getStaticPaths as above...
 
 const { entry } = Astro.props;
 const data = entry.data;
@@ -1402,8 +1639,9 @@ When multiple collection items share geometry from a single source-of-truth GeoJ
 1. **Add `feature_ref` to your collection schema**
 
    ```typescript
-   // src/content/config.ts
-   import { defineCollection, z } from "astro:content";
+   // src/content.config.ts
+   import { defineCollection } from "astro:content";
+   import { z } from "astro/zod";
    import { glob } from "astro/loaders";
    import {
      FeatureRefSchema,
@@ -1414,7 +1652,7 @@ When multiple collection items share geometry from a single source-of-truth GeoJ
 
    export const collections = {
      poas: defineCollection({
-       loader: glob({ pattern: "**/*.md", base: "./src/content/poas" }),
+       loader: glob({ pattern: "**/*.md", base: "./src/collections/poas" }),
        schema: z.object({
          title: z.string(),
          gotf_id: z.number(),
@@ -1429,7 +1667,7 @@ When multiple collection items share geometry from a single source-of-truth GeoJ
    ```
 
    <Aside type="tip">
-     Always use `@maplibre-yaml/astro/utils` (not `@maplibre-yaml/astro`) inside `src/content/config.ts`. The main package entry re-exports Astro components which can't be loaded outside the component pipeline.
+     Always use `@maplibre-yaml/astro/utils` (not `@maplibre-yaml/astro`) inside `src/content.config.ts`. The main package entry re-exports Astro components which can't be loaded outside the component pipeline.
    </Aside>
 
    For automatic mutual-exclusivity validation, use `getCollectionItemWithFeatureRefSchema()` instead. It rejects items declaring both `feature_ref` and inline geometry at content-collection-parse time.
@@ -1475,8 +1713,15 @@ When multiple collection items share geometry from a single source-of-truth GeoJ
 
    ```astro
    ---
+   // src/pages/poas/[slug].astro
+   import { getCollection } from "astro:content";
    import { Map, buildMapConfigFromEntry } from "@maplibre-yaml/astro";
-   import { globalMapConfig } from "../lib/map-config";
+   import { globalMapConfig } from "../../lib/map-config";
+
+   export async function getStaticPaths() {
+     const entries = await getCollection("poas");
+     return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+   }
 
    const { entry } = Astro.props;
    const mapConfig = await buildMapConfigFromEntry(entry.data, globalMapConfig, {
@@ -1629,6 +1874,15 @@ const feature = findFeature(fc, { source: "...", featureId: "poa-1.1" });
 
 ## Component Patterns
 
+These patterns wrap `<ml-map>` yourself and need only `@maplibre-yaml/core`.
+
+<Aside type="caution" title="Astro 4: render pages through a layout with a head">
+  Take a page with no `<head>`, such as one that is just `<Map ... />` with no
+  layout. On Astro 4, if its component has a `<script>` but no `<style>`,
+  Astro silently drops the script. The register import never runs and
+  `<ml-map>` stays an unknown element. Astro 5 is not affected.
+</Aside>
+
 ### Pattern 1: External YAML with src Attribute (Recommended)
 
 The simplest pattern - let the web component handle everything. Place YAML files in the `/public` directory and reference them with the `src` attribute.
@@ -1716,8 +1970,9 @@ interface Props {
 const { configPath, height = '400px' } = Astro.props;
 
 // Import all YAML files at build time
-const yamlFiles = import.meta.glob('/src/configs/**/*.yaml', {
-  as: 'raw',
+const yamlFiles = import.meta.glob<string>('/src/configs/**/*.yaml', {
+  query: '?raw',
+  import: 'default',
   eager: true
 });
 
@@ -1846,7 +2101,7 @@ layers: []`;
 
 ### Pattern 4: Using src Attribute in MDX
 
-In MDX files (like documentation), use the `src` attribute pattern for the cleanest approach:
+In MDX files (like documentation), use the `src` attribute pattern for the cleanest approach. MDX pages need the `@astrojs/mdx` integration (`npx astro add mdx`); Starlight already includes it.
 
 **guide.mdx:**
 
@@ -1863,7 +2118,7 @@ Here's a map showing recent earthquakes:
 
 <Map src="/configs/earthquake-map.yaml" height="400px" />
 
-The data refreshes from the USGS API.
+The data loads from the USGS feed when the page opens.
 ```
 
 **public/configs/earthquake-map.yaml:**
@@ -1892,7 +2147,10 @@ layers:
 
 ## Advanced: Interactive Map Component
 
-A full-featured component with events and controls using the `src` pattern:
+A full-featured component with events and controls using the `src` pattern.
+See [Web Components](/integrations/web-components/) for the full event and
+method list. `mapReady()` is new in `@maplibre-yaml/core` 0.7. On 0.6, wait
+for `ml-map:load` and call `getMap()`.
 
 **InteractiveMap.astro:**
 
@@ -1936,47 +2194,57 @@ const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
 <script>
   import '@maplibre-yaml/core/register';
   import 'maplibre-gl/dist/maplibre-gl.css';
+  import type { MLMap } from '@maplibre-yaml/core/components';
 
   // Initialize all interactive maps
-  document.querySelectorAll('.interactive-map').forEach(container => {
-    const mapEl = container.querySelector('ml-map');
-    const statusEl = container.querySelector('.map-status');
-    const controls = container.querySelector('.map-controls');
+  document.querySelectorAll<HTMLElement>('.interactive-map').forEach(container => {
+    const mapEl = container.querySelector<MLMap>('ml-map');
+    const statusEl = container.querySelector<HTMLElement>('.map-status');
+    const controls = container.querySelector<HTMLElement>('.map-controls');
 
-    if (!mapEl) return;
+    if (!mapEl || !statusEl) return;
 
     let initialCenter: [number, number] | null = null;
     let initialZoom: number | null = null;
 
-    // Status updates
+    // Status updates. A layer's first `layer-data-loaded` can fire before
+    // `ml-map:load`, so `load` must not overwrite a feature count.
     mapEl.addEventListener('ml-map:load', () => {
       const map = mapEl.getMap();
+      if (!map) return;
       initialCenter = map.getCenter().toArray() as [number, number];
       initialZoom = map.getZoom();
-      statusEl.textContent = 'Map ready';
+      if (!statusEl.textContent) statusEl.textContent = 'Map ready';
       statusEl.className = 'map-status ready';
     });
 
-    mapEl.addEventListener('ml-map:layer-loading', (e: CustomEvent) => {
-      statusEl.textContent = `Loading ${e.detail.layerId}...`;
+    mapEl.addEventListener('ml-map:layer-data-loading', (e) => {
+      const { layerId } = (e as CustomEvent<{ layerId: string }>).detail;
+      statusEl.textContent = `Loading ${layerId}...`;
       statusEl.className = 'map-status loading';
     });
 
-    mapEl.addEventListener('ml-map:layer-loaded', (e: CustomEvent) => {
-      statusEl.textContent = `${e.detail.featureCount} features loaded`;
+    mapEl.addEventListener('ml-map:layer-data-loaded', (e) => {
+      const { featureCount } = (e as CustomEvent<{ featureCount: number }>).detail;
+      statusEl.textContent = `${featureCount} features loaded`;
       statusEl.className = 'map-status ready';
     });
 
-    mapEl.addEventListener('ml-map:error', (e: CustomEvent) => {
-      statusEl.textContent = `Error: ${e.detail.error.message}`;
+    mapEl.addEventListener('ml-map:error', (e) => {
+      // `{ error }` for a load/runtime failure, `{ errors }` for a document
+      // that failed to parse or validate.
+      const detail = (e as CustomEvent<{ error?: Error; errors?: { message: string }[] }>).detail;
+      const message = detail.error?.message ?? detail.errors?.map((err) => err.message).join('; ');
+      statusEl.textContent = `Error: ${message}`;
       statusEl.className = 'map-status error';
     });
 
     // Custom click handler
     const clickHandler = mapEl.dataset.clickHandler;
-    if (clickHandler && typeof window[clickHandler] === 'function') {
-      mapEl.addEventListener('ml-map:layer-click', (e: CustomEvent) => {
-        window[clickHandler](e.detail);
+    const handler = clickHandler ? (window as any)[clickHandler] : undefined;
+    if (typeof handler === 'function') {
+      mapEl.addEventListener('ml-map:layer-click', (e) => {
+        handler((e as CustomEvent).detail);
       });
     }
 
@@ -1984,7 +2252,7 @@ const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
     // once loaded), so an early click waits instead of silently no-oping.
     if (controls) {
       controls.addEventListener('click', async (e) => {
-        const btn = (e.target as HTMLElement).closest('[data-action]');
+        const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
         if (!btn) return;
 
         const map = await mapEl.mapReady();
@@ -2066,13 +2334,15 @@ const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
 
 For sites with many maps that need build-time validation, you can use Astro Content Collections. Note that this is more complex than the recommended `src` attribute pattern:
 
-**src/content/config.ts:**
+**src/content.config.ts:**
 
 ```typescript
-import { defineCollection, z } from "astro:content";
+import { defineCollection } from "astro:content";
+import { glob } from "astro/loaders";
+import { z } from "astro/zod";
 
 const maps = defineCollection({
-  type: "data",
+  loader: glob({ pattern: "**/*.yaml", base: "./src/collections/maps" }),
   schema: z.object({
     type: z.literal("map"),
     id: z.string(),
@@ -2090,7 +2360,7 @@ const maps = defineCollection({
 export const collections = { maps };
 ```
 
-**src/content/maps/headquarters.yaml:**
+**src/collections/maps/headquarters.yaml:**
 
 ```yaml
 type: map
@@ -2187,7 +2457,9 @@ Astro processes non-`is:inline` `<script>` tags as client-side bundles — they 
 
 ### Using `client:only` or `client:load` on Astro Components
 
-**Symptoms:** Error like `Unknown component type` or component doesn't render.
+**Symptoms:** `astro build` fails while bundling the package for the browser,
+for example `"readFile" is not exported by "__vite-browser-external"` (from
+`@maplibre-yaml/astro/src/utils/loader.ts`), or the component doesn't render.
 
 **Cause:** Using client directives (`client:only="react"`, `client:load`, etc.) on components from `@maplibre-yaml/astro`. These are **Astro components**, not framework components (React/Vue/Svelte), so client directives are invalid.
 
@@ -2261,7 +2533,7 @@ Both `height` and `display: block` are required.
 
 ### Map Not Loading from Public Directory
 
-**Symptoms:** `Error: Config not found` or network 404 error
+**Symptoms:** The map shows *Failed to fetch /configs/map.yaml: 404 Not Found*, or a network 404 appears in the console
 
 **Cause:** Incorrect path or file not in public directory.
 
@@ -2286,16 +2558,17 @@ Both `height` and `display: block` are required.
 
 ### TypeScript Errors with `import.meta.glob`
 
-**Solution:** Add to `src/env.d.ts`:
+**Solution:** Astro's generated types already declare `import.meta.glob`. Tell
+it what a raw import yields with the type argument:
 
 ```typescript
-/// <reference types="astro/client" />
-
-declare module "*.yaml" {
-  const content: string;
-  export default content;
-}
+const files = import.meta.glob<string>('/src/configs/*.yaml', {
+  query: '?raw',
+  import: 'default',
+});
 ```
+
+`as: 'raw'` still works but is deprecated: Vite warns on every build.
 
 ### Web Component Not Defined
 
@@ -2312,7 +2585,9 @@ declare module "*.yaml" {
 </script>
 ```
 
-The script must be inside the component, not in the frontmatter.
+The script must be inside the component, not in the frontmatter. On Astro 4,
+also check that the page has a `<head>` (see the Astro 4 caution under
+[Component Patterns](#component-patterns)).
 
 ## Best Practices Summary
 
@@ -2338,5 +2613,6 @@ The script must be inside the component, not in the frontmatter.
 
 - [Vanilla JavaScript Integration](/integrations/vanilla-js/) - For non-Astro projects
 - [Web Components Reference](/integrations/web-components/) - Deep dive into `<ml-map>`
+- [Collection Integration](/guides/collections-integration/) - Maps in content-collection posts
 - [Live Data Guide](/guides/live-data/) - Polling and streaming
-- [API Reference](/api/) - Complete API documentation
+- [`@maplibre-yaml/astro` README](https://github.com/design-practices/maplibre-yaml/tree/main/packages/astro#readme) - Every export of the package and its `/utils` subpath

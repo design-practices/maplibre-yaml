@@ -84,6 +84,10 @@ export default defineConfig({
           items: [
             { label: "Vanilla JavaScript", link: "/integrations/vanilla-js/" },
             { label: "Astro", link: "/integrations/astro/" },
+            {
+              label: "Astro Content Collections",
+              link: "/guides/collections-integration/",
+            },
             { label: "Web Components", link: "/integrations/web-components/" },
             { label: "React", link: "/integrations/react/" },
           ],

@@ -1,0 +1,6 @@
+# Site-wide defaults for the collection builders (loadGlobalMapConfig).
+title: "Ring of Fire — @maplibre-yaml/astro example"
+defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
+defaultCenter: [-170, 10]
+defaultZoom: 2
+theme: light

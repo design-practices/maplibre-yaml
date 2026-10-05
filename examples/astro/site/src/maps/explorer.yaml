@@ -1,0 +1,126 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# The /explore page: <FullPageMap config={...} showLegend> over this document.
+# Exercises the 0.7 surface: named sources, markers, a parameters panel
+# driving global-state, a hover popup, and layer legends.
+type: map
+id: explorer
+config:
+  center: [-160, 15]
+  zoom: 1.6
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+
+sources:
+  volcanoes:
+    type: geojson
+    url: "/data/volcanoes.geojson"
+  ring:
+    type: geojson
+    url: "/data/ring-of-fire.geojson"
+
+state:
+  showRing:
+    default: true
+  minElevation:
+    default: 0
+
+parameters:
+  showRing:
+    label: Plate boundaries
+    type: toggle
+  minElevation:
+    label: Minimum elevation (m)
+    type: range
+    min: 0
+    max: 5000
+    step: 500
+
+markers:
+  - at: [120.35, 15.13]
+    color: "#6a4c93"
+    popup:
+      - h3:
+          - str: "Pinatubo, 1991"
+      - p:
+          - str: "The second-largest eruption of the 20th century cooled the planet by about 0.5 °C."
+  - at: [-122.1944, 46.1912]
+    color: "#6a4c93"
+    popup:
+      - h3:
+          - str: "Mount St. Helens, 1980"
+      - p:
+          - str: "A lateral blast removed 400 m from the summit."
+  - at: [-175.39, -20.545]
+    color: "#6a4c93"
+    popup:
+      - h3:
+          - str: "Hunga Tonga, 2022"
+      - p:
+          - str: "Its plume reached 57 km, the highest ever recorded."
+
+layers:
+  - id: ring
+    type: line
+    source: ring
+    filter: ["global-state", "showRing"]
+    paint:
+      line-color: "#e4572e"
+      line-width: 3
+      line-opacity: 0.75
+    legend:
+      label: Plate boundary (approx.)
+      color: "#e4572e"
+      shape: line
+  - id: volcanoes-active
+    type: circle
+    source: volcanoes
+    filter:
+      - all
+      - ["==", ["get", "status"], "active"]
+      - [">=", ["get", "elevation"], ["global-state", "minElevation"]]
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "elevation"], 0, 5, 6000, 13]
+      circle-color: "#d62828"
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"
+    legend:
+      label: Active volcano
+      color: "#d62828"
+      shape: circle
+    interactive:
+      hover:
+        cursor: pointer
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - property: country
+              - str: " · "
+              - property: elevation
+              - str: " m · last erupted "
+              - property: lastEruption
+  - id: volcanoes-dormant
+    type: circle
+    source: volcanoes
+    filter:
+      - all
+      - ["!=", ["get", "status"], "active"]
+      - [">=", ["get", "elevation"], ["global-state", "minElevation"]]
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "elevation"], 0, 5, 6000, 13]
+      circle-color: "#f77f00"
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"
+    legend:
+      label: Dormant volcano
+      color: "#f77f00"
+      shape: circle
+    interactive:
+      hover:
+        cursor: pointer
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - property: country
+              - str: " · last erupted "
+              - property: lastEruption

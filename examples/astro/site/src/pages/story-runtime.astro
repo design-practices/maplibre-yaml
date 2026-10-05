@@ -1,0 +1,9 @@
+---
+import Base from "../layouts/Base.astro";
+import { Scrollytelling } from "@maplibre-yaml/astro";
+---
+
+<Base title="Runtime story" bleed>
+  <!-- Fetched, validated and rendered in the browser from public/stories/. -->
+  <Scrollytelling src="/stories/cascadia.yaml" />
+</Base>

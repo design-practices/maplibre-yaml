@@ -42,7 +42,7 @@
  * ```
  */
 
-import { z } from "zod";
+import { z } from "astro/zod";
 import {
   LineStyleFields,
   LocationPointSchema,
@@ -297,7 +297,7 @@ function applyMutualExclusivityRefinement<T extends z.ZodTypeAny>(schema: T) {
 
     if (conflicts.length > 0) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         path: ["feature_ref"],
         message:
           `Cannot use 'feature_ref' alongside inline geometry field(s): ` +

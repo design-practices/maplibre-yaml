@@ -1,5 +1,9 @@
 # @maplibre-yaml/astro — minimal example
 
+> For the full tour (every component, content collections, the 0.7 map surface)
+> on every supported Astro major, see [`../site`](../site). This app stays as
+> the smallest possible setup and the feature-reference showcase.
+
 A bare Astro app demonstrating `@maplibre-yaml/astro` with the smallest possible surface area: no React, no UI kit, no styling framework, no extra Astro integrations. Just the API.
 
 ## What it covers

@@ -12,6 +12,8 @@
  */
 
 import { describe, it, expect, beforeAll, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import Map from "../../src/components/Map.astro";
 import FullPageMap from "../../src/components/FullPageMap.astro";
@@ -59,14 +61,25 @@ describe("Map", () => {
     expect(html).toContain("height: 512px");
   });
 
-  it("renders the runtime-src variant with data-src and the loader script", async () => {
+  it("hands a runtime src straight to <ml-map src>", async () => {
     const html = await container.renderToString(Map as any, {
       props: { src: "/configs/demo.yaml" },
     });
 
-    expect(html).toContain('data-src="/configs/demo.yaml"');
-    // The inline loader script is the runtime path's engine.
-    expect(html).toContain("<script");
+    expect(html).toMatch(/<ml-map[^>]*\ssrc="\/configs\/demo.yaml"/);
+    // The old engine was an is:inline script doing import("@maplibre-yaml/core"):
+    // a bare specifier no browser resolves, so every <Map src> failed.
+    expect(html).not.toContain('import("@maplibre-yaml/core")');
+    expect(html).not.toContain("data-src");
+  });
+
+  it("prefers config when given both, and does not also set src", async () => {
+    const html = await container.renderToString(Map as any, {
+      props: { src: "/configs/demo.yaml", config: MAP_CONFIG },
+    });
+
+    expect(html).toMatch(/<ml-map[^>]*\sconfig="/);
+    expect(html).not.toMatch(/<ml-map[^>]*\ssrc=/);
   });
 
   it("throws without either src or config", async () => {
@@ -194,6 +207,106 @@ describe("Scrollytelling", () => {
     expect(html).toContain("chapter-markers");
     // footer is injected via set:html — the markup must arrive unescaped.
     expect(html).toContain("<p>The end</p>");
+  });
+
+  it("styles Chapter.astro's sections through :global selectors", () => {
+    // The sections carry Chapter.astro's scope attribute, never this
+    // component's, so a scoped selector cannot reach them. Scoped, the
+    // overlay's `pointer-events: auto` never applied: the wheel zoomed the
+    // map instead of scrolling the story, and debug outlines never showed.
+    // Container rendering doesn't emit component CSS, so read the source.
+    const source = readFileSync(
+      fileURLToPath(
+        new URL("../../src/components/Scrollytelling.astro", import.meta.url)
+      ),
+      "utf8"
+    );
+    expect(source).toContain(".scrolly-chapters > :global(*)");
+    expect(source).toContain(".scrollytelling-container.debug :global(.scrolly-chapter)");
+    expect(source).not.toMatch(/\.scrolly-chapters > \*\s*\{/);
+  });
+});
+
+describe("Scrollytelling src (ml-euv)", () => {
+  it("renders a loading shell the bundled loader fills -- no inline bare import", async () => {
+    const html = await container.renderToString(Scrollytelling as any, {
+      props: { src: "/stories/tour.yaml" },
+    });
+    expect(html).toMatch(/class="scrollytelling-container[^"]*"[^>]*data-src="\/stories\/tour.yaml"/);
+    expect(html).toContain("Loading story...");
+    // The old loader: an is:inline script doing import("@maplibre-yaml/core"),
+    // a bare specifier no browser resolves.
+    expect(html).not.toContain('import("@maplibre-yaml/core")');
+    expect(html).not.toMatch(/<script[^>]*is:inline/);
+  });
+
+  it("a config story carries the block's className and style", async () => {
+    const html = await container.renderToString(Scrollytelling as any, {
+      props: {
+        config: {
+          type: "scrollytelling",
+          id: "s",
+          className: "my-story",
+          style: "--accent: red",
+          config: { center: [0, 0], zoom: 1, mapStyle: "https://x/style.json" },
+          chapters: [{ id: "c", title: "C", center: [0, 0], zoom: 2 }],
+        },
+      },
+    });
+    expect(html).toMatch(/class="[^"]*\bmy-story\b/);
+    expect(html).toContain("--accent: red");
+  });
+});
+
+describe("corner slots reach <ml-map> (ml-l4y.3)", () => {
+  /** The markup between <ml-map ...> and </ml-map>. */
+  const inner = (html: string) => html.slice(html.indexOf("<ml-map"), html.indexOf("</ml-map>"));
+  // (The Container API escapes string slot content; markup is not the point.)
+  const SLOTS = {
+    "top-left": "Caption text",
+    "bottom-right": "About this map",
+    legend: "Custom legend",
+  };
+
+  it.each([
+    ["Map", Map, { config: MAP_CONFIG }],
+    ["FullPageMap", FullPageMap, { config: MAP_CONFIG }],
+    [
+      "Scrollytelling",
+      Scrollytelling,
+      {
+        config: {
+          type: "scrollytelling",
+          id: "s",
+          config: MAP_CONFIG.config,
+          chapters: [{ id: "c", title: "C", center: [0, 0], zoom: 2 }],
+        },
+      },
+    ],
+  ])("%s forwards named slots as <ml-map> slot children", async (_name, component, props) => {
+    const html = await container.renderToString(component as any, { props, slots: SLOTS });
+    const body = inner(html);
+    for (const [name, markup] of Object.entries(SLOTS)) {
+      expect(body).toMatch(new RegExp(`<div\\sslot="${name}"[^>]*>\\s*${markup}\\s*</div>`));
+    }
+    // Unused corners emit nothing (no empty corner boxes).
+    expect(body).not.toContain('data-ml-slot="top-right"');
+    expect(body).not.toContain('data-ml-slot="bottom-left"');
+  });
+
+  it("Map without slot children renders no slot wrappers", async () => {
+    const html = await container.renderToString(Map as any, { props: { config: MAP_CONFIG } });
+    expect(html).not.toContain("ml-astro-slot");
+  });
+
+  it("FullPageMap stacks author top-right content with its own controls", async () => {
+    const html = await container.renderToString(FullPageMap as any, {
+      props: { config: MAP_CONFIG },
+      slots: { "top-right": "Mine" },
+    });
+    const body = inner(html);
+    expect(body.match(/\sslot="top-right"/g)).toHaveLength(2);
+    expect(body.indexOf("ml-map-controls")).toBeLessThan(body.indexOf("Mine"));
   });
 });
 
