@@ -23,13 +23,14 @@ eject: `mlym emit --strict` compiles it with zero warnings, and the emitted
 `style.json` renders the same map in vanilla MapLibre. The only baked asset
 is the grid, which `mlym bake blueprint --out <dir>` regenerates.
 
-## What the effect will add
+## What the effect adds
 
-The runtime effect for this classic draws a metre-scaled grid on every
-building face, so the lines never stretch with building height, and gives
-the edges a glow. It is **not shipped yet**. When it lands, it will upgrade
-the `buildings` layer in place. Until then, and in every ejected style, the
-flat-shaded buildings shown here are the fallback.
+The experimental `blueprint` [effect](/guides/effects/) draws a
+metre-scaled grid on every building face, so the lines never stretch with
+building height, and gives the edges a glow. It upgrades the `buildings`
+layer in place. Where the effect isn't loaded, and in every ejected style,
+the flat-shaded buildings shown here are the fallback. The
+[Mapzen classics](/classics/) page shows both side by side.
 
 ## The complete document
 

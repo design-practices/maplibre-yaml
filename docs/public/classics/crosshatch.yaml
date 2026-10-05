@@ -1,0 +1,144 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Mapzen classic: crosshatch — the launch-page document (docs /classics/).
+# After Tangram's crosshatch style (tangrams/tangram-sandbox
+# styles/crosshatch.yaml, @patriciogv 2015, MIT).
+#
+# This is the gallery's static preset (configs/gallery/crosshatch.yaml) plus
+# one statement of intent: `effect: tonal-hatch` on the buildings, and the
+# tonal atlas that effect samples. Everything else is plain style spec.
+#
+#  - With @maplibre-yaml/effects loaded, <ml-map> upgrades the buildings to
+#    Tangram's tonal hatching: stroke DENSITY follows the light on each face.
+#  - Without it — or where the effect cannot run (globe, terrain, no WebGL2)
+#    — the buildings render exactly as authored below: the static fallback.
+#  - `mlym emit` (--with-fallbacks, the default) ships that same static
+#    layer with one lossy warning; `--strict` refuses, because the ejected
+#    map is not the map the effect draws. That is fallback-where-honest.
+#
+# Download it, change a colour or the `gain`, and open it in any page that
+# loads <ml-map>. The docs build compiles this file with `mlym emit` for the
+# launch page's ejected pane, and a test pins the two together.
+type: map
+id: crosshatch
+config:
+  center: [-74.0118, 40.7075]
+  zoom: 15.9
+  pitch: 60
+  bearing: 29
+  # An inline base style that carries only the self-hosted serif italic
+  # glyphs (Libre Baskerville Italic, OFL — Tangram labelled in Baskerville
+  # italic). The document owns every layer.
+  mapStyle:
+    version: 8
+    glyphs: "https://docs.maplibre-yaml.org/fonts/{fontstack}/{range}.pbf"
+    sources: {}
+    layers: []
+# Building shading. Tangram's lights are fixed to the world, so this one is
+# anchored to the map: from the south-west (239°), 30° from overhead — the
+# same light MapLibre's default gives at this camera's bearing, now staying
+# put as the map turns. Tune `position`/`intensity` to change face contrast.
+light:
+  anchor: map
+  position: [1.15, 239, 30]
+  intensity: 0.5
+images:
+  earth: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/earth.png", pixelRatio: 2 }
+  landuse: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/landuse.png", pixelRatio: 2 }
+  water: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/water.png", pixelRatio: 1 }
+  building-hatch: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/building-fallback.png", pixelRatio: 4 }
+  # The 3x3 tonal atlas tonal-hatch samples: Tangram's hatch.png
+  # (tangrams/blocks filter/imgs, MIT), verbatim. No static layer uses it.
+  hatch-atlas: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/hatch-atlas.png" }
+sources:
+  omt:
+    type: vector
+    url: "https://tiles.openfreemap.org/planet"
+    attribution: '<a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+layers:
+  # Tangram `earth`: paper, hatched with hatch_0 repeated per tile.
+  - id: earth
+    type: background
+    paint:
+      background-pattern: earth
+  # Tangram `landuse`: the denser hatch_2.
+  - id: parks
+    type: fill
+    source: omt
+    source-layer: park
+    paint:
+      fill-pattern: landuse
+  # A data-driven pattern: open sand reads as bare ground (the light earth
+  # hatch); vegetation and farmland take the dense landuse hatch.
+  - id: landcover
+    type: fill
+    source: omt
+    source-layer: landcover
+    filter: ["match", ["get", "class"], ["grass", "wood", "farmland", "sand"], true, false]
+    paint:
+      fill-pattern: ["match", ["get", "class"], "sand", "earth", "landuse"]
+  # Tangram `water`: #343434 lit through a crumpled-paper normal map.
+  - id: water
+    type: fill
+    source: omt
+    source-layer: water
+    paint:
+      fill-pattern: water
+  - id: roads
+    type: line
+    source: omt
+    source-layer: transportation
+    filter: ["match", ["get", "class"], ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"], true, false]
+    layout:
+      line-join: round
+      line-cap: round
+    paint:
+      line-color: "#343434"
+      line-width:
+        - interpolate
+        - ["exponential", 1.6]
+        - ["zoom"]
+        - 13
+        - ["match", ["get", "class"], ["motorway", "trunk"], 2, 0.6]
+        - 18
+        - ["match", ["get", "class"], ["motorway", "trunk"], 16, ["primary", "secondary"], 10, 6]
+  - id: buildings
+    type: fill-extrusion
+    source: omt
+    source-layer: building
+    minzoom: 13
+    paint:
+      # The static fallback: one light pen hatch on every face.
+      fill-extrusion-pattern: building-hatch
+      # Tangram exaggerates height by max(1, 0.5 + (1 - zoom/20) * 5) — linear
+      # in zoom (2.25x at z13 → 1x at z18), so one interpolate reproduces it.
+      fill-extrusion-height:
+        - interpolate
+        - ["linear"]
+        - ["zoom"]
+        - 13
+        - ["*", ["coalesce", ["get", "render_height"], 10], 2.25]
+        - 18
+        - ["coalesce", ["get", "render_height"], 10]
+      fill-extrusion-base: ["coalesce", ["get", "render_min_height"], 0]
+      fill-extrusion-vertical-gradient: true
+    # The runtime upgrade. The paint above is its fallback, and the effect
+    # stands at the same heights: it evaluates this layer's own expressions.
+    effect:
+      type: tonal-hatch
+      # Tangram's brightness exposure; ~0.72 matches the reference tone.
+      gain: 0.72
+  - id: place-labels
+    type: symbol
+    source: omt
+    source-layer: place
+    filter: ["match", ["get", "class"], ["neighbourhood", "suburb", "quarter"], true, false]
+    layout:
+      text-field: ["coalesce", ["get", "name:en"], ["get", "name"]]
+      text-font: ["Libre Baskerville Italic"]
+      text-size: 22
+      text-max-width: 7
+      text-pitch-alignment: viewport
+    paint:
+      text-color: "#000000"
+      text-halo-color: "#f9f3e3"
+      text-halo-width: 3.5

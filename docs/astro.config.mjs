@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import starlightTypeDoc from "starlight-typedoc";
 import { OptionDefaults } from "typedoc";
 import { generateAgentAssets } from "./scripts/generate-agent-assets.mjs";
+import { generateClassicsEject } from "./scripts/classics-eject.mjs";
 import rehypeHeadingAnchors from "./scripts/rehype-heading-anchors.mjs";
 
 const require = createRequire(import.meta.url);
@@ -21,6 +22,23 @@ const agentAssets = {
   hooks: {
     "astro:config:setup": () => {
       generateAgentAssets();
+    },
+  },
+};
+
+/**
+ * Compile the launch page's classics (/classics/) with `mlym emit
+ * --with-fallbacks` on every dev start and build, into
+ * public/classics/<name>/ejected/ (git-ignored). The page's ejected panes
+ * run exactly that output in vanilla maplibre-gl, so they can never be a
+ * hand-copy; docs/test/classics-eject.test.mjs pins them byte-for-byte to
+ * a fresh emit. Same precedent as the agent assets above.
+ */
+const classicsEject = {
+  name: "maplibre-yaml-classics-eject",
+  hooks: {
+    "astro:config:setup": () => {
+      generateClassicsEject();
     },
   },
 };
@@ -71,6 +89,7 @@ export default defineConfig({
   },
   integrations: [
     agentAssets,
+    classicsEject,
     yamlReference,
     starlight({
       title: "maplibre-yaml",
@@ -123,6 +142,7 @@ export default defineConfig({
       },
 
       sidebar: [
+        { label: "Mapzen classics", link: "/classics/" },
         {
           label: "Getting Started",
           items: [

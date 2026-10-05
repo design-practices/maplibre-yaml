@@ -1,0 +1,100 @@
+---
+title: Mapzen classics
+description: "Crosshatch and blueprint, each running live with its shader effect beside the honest static fallback that `mlym emit` ejects — from one YAML document."
+template: splash
+---
+
+import ClassicViewer from '../../../components/ClassicViewer.astro';
+import { Code } from '@astrojs/starlight/components';
+import crosshatch from '../../../../public/classics/crosshatch.yaml?raw';
+import blueprint from '../../../../public/classics/blueprint.yaml?raw';
+
+Mapzen's Tangram showed what a web map could look like when a style was
+allowed to be expressive: pen-and-ink cities, drafting sheets, maps you
+looked at for their own sake. These are two classics in that tradition,
+written as maplibre-yaml documents.
+
+Each classic below appears twice, from **one** YAML document:
+
+- **Live**: `<ml-map>` runs the document, and the experimental
+  [effects package](/guides/effects/) upgrades its buildings with a shader
+  effect.
+- **Ejected**: plain `maplibre-gl` runs the `style.json` that
+  `mlym emit --with-fallbacks` produced from that same document when this
+  site was built. That pane loads no maplibre-yaml code at all.
+
+The two cameras are linked, so drag, zoom or rotate either map and the
+other one follows.
+
+## Crosshatch
+
+Lower Manhattan as a pen drawing, after the
+[crosshatch style](https://github.com/tangrams/tangram-sandbox/blob/gh-pages/styles/crosshatch.yaml)
+Patricio Gonzalez Vivo wrote for Tangram in 2015. Live, the `tonal-hatch`
+effect makes the stroke **density** follow the light on each face: lit
+walls go to paper, shaded walls to dense ink. Ejected, every face gets the
+same light pen hatch, shaded by the document's `light:`.
+
+<ClassicViewer name="crosshatch" effect="tonal-hatch" />
+
+## Blueprint
+
+A drafting sheet in the Mapzen spirit. Live, the `blueprint` effect lays a
+grid on every roof and wall, with lines a fixed **4 metres** apart that
+never stretch, and edges that glow. Ejected, the buildings are flat-shaded
+blue blocks on the same drafting-grid ground.
+
+<ClassicViewer name="blueprint" effect="blueprint" />
+
+## Fallback where honest
+
+Every construct in a maplibre-yaml document declares what happens to it on
+eject ([eject classes](/guides/eject-classes/)). An effect is a runtime
+shader, and `style.json` has no way to express one. So the document
+always carries a complete static layer, and the effect *enhances* that
+layer rather than replacing it:
+
+- Without the effects package, `<ml-map>` renders the static layer as
+  written.
+- Where the effect can't run (globe projection, 3D terrain, no WebGL2), it
+  reports that it's unavailable and the static layer renders. The live
+  pane's badge shows which of the two you're looking at.
+- `mlym emit` ships the static layer and prints one `lossy` warning, which
+  is the ejected pane above. `mlym emit --strict` refuses the document,
+  because the ejected map isn't the map the effect draws.
+
+The fallback is a real map, not a placeholder. That is what
+*fallback-where-honest* means: the expressive version where it can run,
+and an honest static version wherever it can't, including on machines that
+have never heard of this library.
+
+## Make it yours
+
+YAML is the source. Download a document, change the hatch `gain`, the
+blueprint `grid` spacing, a colour or the light, and open it in any page
+that loads `<ml-map>` and `@maplibre-yaml/effects`. See
+[Effects](/guides/effects/) for loading the package and the full list of
+params. Run `mlym emit` on your copy to get your own ejected style.
+
+<details>
+<summary><code>crosshatch.yaml</code></summary>
+
+<Code code={crosshatch} lang="yaml" title="crosshatch.yaml" />
+
+</details>
+
+<details>
+<summary><code>blueprint.yaml</code></summary>
+
+<Code code={blueprint} lang="yaml" title="blueprint.yaml" />
+
+</details>
+
+The static presets on their own, without effects, are in the gallery:
+[Crosshatch](/examples/gallery/crosshatch/) and
+[Blueprint](/examples/gallery/blueprint/).
+
+<small>Map data © OpenStreetMap contributors (ODbL), © OpenMapTiles, via
+OpenFreeMap. The crosshatch look and textures follow Tangram's crosshatch
+style and the tangrams/blocks hatch atlas (© Mapzen, MIT). Font: Libre
+Baskerville (OFL).</small>
