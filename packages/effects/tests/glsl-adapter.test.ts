@@ -81,6 +81,20 @@ describe("MapLibre internals adapter (feature check)", () => {
     expect(probeTiles({} as never, "omt").ok).toBe(false);
   });
 
+  it("flags maplibre-gl 6's re-encoded overzoom slices (canonical z past the source maxzoom)", () => {
+    let maxzoom: number | undefined = undefined; // a TileJSON source learns it late
+    const map = { style: { tileManagers: { omt: manager } }, getSource: () => ({ maxzoom }) };
+    const probe = probeTiles(map as never, "omt");
+    if (!probe.ok) throw new Error("probe failed");
+    const slice = { ...coord, overscaledZ: 17, canonical: { z: 17, x: 8, y: 16 } };
+    const overscaled = { ...coord, overscaledZ: 17 }; // v5: canonical stays at maxzoom
+    expect(probe.value.reencoded(slice)).toBe(false);
+    maxzoom = 14;
+    expect(probe.value.reencoded(slice)).toBe(true);
+    expect(probe.value.reencoded(overscaled)).toBe(false);
+    expect(probe.value.reencoded(coord)).toBe(false);
+  });
+
   it("raw bytes may be absent while a tile loads", () => {
     const probe = probeTiles(
       { style: { tileManagers: { omt: { ...manager, getTileByID: () => ({ state: "loading" }) } } } } as never,

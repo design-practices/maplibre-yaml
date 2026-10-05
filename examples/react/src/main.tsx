@@ -1,3 +1,4 @@
+import "./maplibre-worker"; // maplibre-gl 6: before any map is built
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@maplibre-yaml/core/register";
 import "./styles.css";

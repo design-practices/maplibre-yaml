@@ -10,10 +10,20 @@
  * reds without reading them.
  *
  * So everything is served locally:
- *  - `/vendor/maplibre-gl.js`      resolved from node_modules (UMD)
- *  - `/vendor/maplibre-gl.esm.js`  a generated ES-module wrapper, since
- *                                  maplibre-gl@4 ships no ESM build (the very
- *                                  reason the fixtures used esm.sh)
+ *  - `/vendor/maplibre-gl.esm.js`  the ES-module entry every import map
+ *                                  points at. v4/v5: a generated wrapper over
+ *                                  the UMD bundle (they ship no ESM build, the
+ *                                  very reason the fixtures used esm.sh). v6
+ *                                  (ESM-only): a re-export of `maplibre-gl.mjs`
+ *  - `/vendor/maplibre-gl.js`      v4/v5: the UMD bundle from node_modules.
+ *                                  v6 has none; a module that sets
+ *                                  `globalThis.maplibregl` stands in, so
+ *                                  `import "/vendor/maplibre-gl.js"` fixtures
+ *                                  keep working on every major
+ *  - `/vendor/<name>.mjs`          v6 only: the dist's ES modules as-is
+ *                                  (`maplibre-gl.mjs`, its shared chunk, and
+ *                                  the worker, which v6 locates relative to
+ *                                  its own `import.meta.url`)
  *  - `/vendor/maplibre-gl.css`     resolved from node_modules
  *  - `/dem/{z}/{x}/{y}.png`        a synthesised elevation tile, so the
  *                                  hillshade fixture loads without S3
@@ -29,6 +39,7 @@
  *  - everything else               static from the repo root
  */
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { extname, join, normalize, dirname } from "node:path";
@@ -62,7 +73,31 @@ const TYPES = {
 };
 
 /**
- * ES-module wrapper over the UMD bundle.
+ * maplibre-gl v6 dropped the UMD/CJS bundle and ships ES modules only
+ * (`dist/maplibre-gl.mjs`). Detected from the installed dist, so a pnpm
+ * override (the CI matrix) switches the vendor path with it.
+ */
+const MAPLIBRE_ESM_ONLY = !existsSync(join(MAPLIBRE_DIR, "dist/maplibre-gl.js"));
+
+/**
+ * The v6 entry: the real ESM build, re-exported whole. A `default` export is
+ * added (v6 has none) so fixtures and the docs-snippet tracker that
+ * `import gl from` the vendor URL keep one contract across majors, and the
+ * global is set for the `import "/vendor/maplibre-gl.js"` fixtures.
+ */
+const V6_ESM_SHIM = `import * as gl from "./maplibre-gl.mjs";
+export * from "./maplibre-gl.mjs";
+globalThis.maplibregl ??= gl;
+export default gl;
+`;
+
+/** `/vendor/maplibre-gl.js` on v6: no UMD bundle exists, so set the global. */
+const V6_GLOBAL_SHIM = `import * as gl from "./maplibre-gl.mjs";
+globalThis.maplibregl ??= gl;
+`;
+
+/**
+ * ES-module wrapper over the UMD bundle (v4/v5).
  *
  * @remarks
  * Loaded as a module, the UMD factory finds neither `module` nor `define` and
@@ -70,7 +105,7 @@ const TYPES = {
  * and can be re-exported. The named exports mirror what `maplibre-interop`
  * and the fixtures actually reach for.
  */
-const ESM_SHIM = `import "./maplibre-gl.js";
+const UMD_ESM_SHIM = `import "./maplibre-gl.js";
 const gl = globalThis.maplibregl;
 export default gl;
 export const Map = gl.Map;
@@ -83,7 +118,12 @@ export const GeolocateControl = gl.GeolocateControl;
 export const ScaleControl = gl.ScaleControl;
 export const FullscreenControl = gl.FullscreenControl;
 export const AttributionControl = gl.AttributionControl;
+export const addProtocol = gl.addProtocol;
+export const removeProtocol = gl.removeProtocol;
+export const getVersion = gl.getVersion;
 `;
+
+const ESM_SHIM = MAPLIBRE_ESM_ONLY ? V6_ESM_SHIM : UMD_ESM_SHIM;
 
 /**
  * A 256x256 terrarium-encoded PNG at a constant elevation.
@@ -265,7 +305,15 @@ const server = createServer(async (req, res) => {
       return send(200, ESM_SHIM, TYPES[".js"]);
     }
     if (path === "/vendor/maplibre-gl.js") {
+      if (MAPLIBRE_ESM_ONLY) return send(200, V6_GLOBAL_SHIM, TYPES[".js"]);
       return send(200, await readFile(join(MAPLIBRE_DIR, "dist/maplibre-gl.js")), TYPES[".js"]);
+    }
+    // v6's ES modules (entry, shared chunk, worker) and their source maps,
+    // straight from the dist; the name is confined to one path segment.
+    const esm = /^\/vendor\/(maplibre-gl[\w-]*\.mjs(?:\.map)?)$/.exec(path);
+    if (esm && MAPLIBRE_ESM_ONLY) {
+      const type = esm[1].endsWith(".map") ? TYPES[".json"] : TYPES[".mjs"];
+      return send(200, await readFile(join(MAPLIBRE_DIR, "dist", esm[1])), type);
     }
     if (path === "/vendor/maplibre-gl.css") {
       return send(200, await readFile(join(MAPLIBRE_DIR, "dist/maplibre-gl.css")), TYPES[".css"]);

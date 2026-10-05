@@ -48,6 +48,12 @@ import { SeamRegistry } from "./seams";
 
 const EARTH_CIRCUMFERENCE = 40075016.68557849;
 
+/**
+ * Seam-matching allowance, in tile units, for maplibre-gl 6's re-encoded
+ * overzoom slices (adapter.ts): ≤ 4 units of vertex drift measured, doubled.
+ */
+const REENCODED_DRIFT_UNITS = 8;
+
 interface GpuMesh {
   key: string;
   /** Tile units per packed position unit. */
@@ -587,7 +593,14 @@ class ExtrusionEffect {
       if (r.data && r.data.cuts.length && this.stitch) {
         const cuts = readCuts(r.data.cuts);
         this.stats.cutWalls += cuts.length;
-        this.seams.add(key, { z, x, y }, r.data.extent, cuts, r.data.vertices);
+        this.seams.add(
+          key,
+          { z, x, y },
+          r.data.extent,
+          cuts,
+          r.data.vertices,
+          this.tiles.reencoded(r.coord) ? REENCODED_DRIFT_UNITS : 0
+        );
       }
       this.ready.delete(key);
       this.stats.builds++;

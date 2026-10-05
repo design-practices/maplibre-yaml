@@ -111,7 +111,7 @@ const effectState = (page: Page) =>
     };
   });
 
-test.describe("effects (maplibre-gl 5)", () => {
+test.describe("effects (maplibre-gl 5+)", () => {
   test.skip(!V5, `the extrusions backend needs maplibre-gl 5 (vendor is ${VENDOR_MAJOR}); test 8 covers the v4 posture`);
 
   test("1. tonal-hatch draws in the static layer's slot, below the labels, and is not the fallback", async ({ page }) => {
