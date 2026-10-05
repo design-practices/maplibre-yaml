@@ -177,9 +177,20 @@ for (const slug of slugs) {
         .waitForFunction(
           (layerId) => {
             const map = document.getElementById("map")?.getMap?.();
-            return (
-              (map?.queryRenderedFeatures?.(undefined, { layers: [layerId] }) ?? []).length > 0
-            );
+            if (!map?.queryRenderedFeatures) return false;
+            if (map.queryRenderedFeatures(undefined, { layers: [layerId] }).length > 0) return true;
+            // Under globe projection a whole-viewport query returns nothing
+            // (seen in U15; the hermetic twins check at a point for the same
+            // reason), so probe a grid of points across the canvas instead.
+            if (map.getProjection?.()?.type !== "globe") return false;
+            const { width, height } = map.getCanvas().getBoundingClientRect();
+            for (let gx = 1; gx < 8; gx++) {
+              for (let gy = 1; gy < 8; gy++) {
+                const point = [(width * gx) / 8, (height * gy) / 8];
+                if (map.queryRenderedFeatures(point, { layers: [layerId] }).length > 0) return true;
+              }
+            }
+            return false;
           },
           id,
           { timeout: 30000 }
