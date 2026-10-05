@@ -10,11 +10,13 @@
     "build": "node scripts/ensure-core-built.mjs && astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "reference:yaml": "tsx scripts/generate-yaml-reference.ts"
+    "reference:yaml": "tsx scripts/generate-yaml-reference.ts",
+    "test": "node --test test/classics-eject.test.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.37.1",
     "@maplibre-yaml/core": "workspace:^",
+    "@maplibre-yaml/effects": "workspace:^",
     "astro": "^5.6.1",
     "maplibre-contour": "0.1.1",
     "maplibre-gl": "^5.24.0",
@@ -22,6 +24,7 @@
     "sharp": "^0.34.2"
   },
   "devDependencies": {
+    "@maplibre-yaml/cli": "workspace:^",
     "sharp": "^0.33.0",
     "starlight-typedoc": "~0.21.5",
     "tsx": "^4.19.2",

@@ -36,13 +36,14 @@ What it reproduces exactly, and what it approximates:
   faces. Tangram's height exaggeration (×2.25 at z13 down to ×1 at z18) is
   kept, as one `interpolate`.
 
-## What the effect will add
+## What the effect adds
 
-The tonal hatching on building faces is the job of a runtime effect: a
-MapLibre custom layer that keeps this document as its fallback. That effect
-is **not shipped yet**. When it lands, it will upgrade the `buildings`
-layer in place. Where the effect isn't loaded, and in every ejected style,
-this page's look is what renders.
+The tonal hatching on building faces is the job of the experimental
+`tonal-hatch` [effect](/guides/effects/): a MapLibre custom layer that
+keeps this document as its fallback and upgrades the `buildings` layer in
+place. Where the effect isn't loaded, and in every ejected style, this
+page's look is what renders. The [Mapzen classics](/examples/classics/) page shows
+both side by side.
 
 ## The complete document
 

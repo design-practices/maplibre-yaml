@@ -23,6 +23,9 @@
  *                                  standing in for satellite imagery
  *  - `/dem-hills/{z}/{x}/{y}.png`  synthesised rolling terrain (0-3500 m),
  *                                  so the color-relief twin shows its ramp
+ *  - `/_astro/*`, `/classics/*`, `/examples/classics/`, `/fonts/*`  the built docs site (docs/dist): the
+ *                                  classics launch page, mounted where the
+ *                                  site serves it
  *  - everything else               static from the repo root
  */
 import { createServer } from "node:http";
@@ -54,6 +57,8 @@ const TYPES = {
   ".ttf": "font/ttf",
   ".geojson": "application/geo+json",
   ".md": "text/markdown; charset=utf-8",
+  ".webp": "image/webp",
+  ".woff2": "font/woff2",
 };
 
 /**
@@ -294,6 +299,24 @@ const server = createServer(async (req, res) => {
       // error. No visible glyphs render — the gallery label twins assert
       // layer presence and error-freeness, not typography.
       return send(200, Buffer.alloc(0), "application/x-protobuf");
+    }
+
+    // The BUILT docs site's classics launch page (U11), at the paths the
+    // site serves it from: Astro emits root-absolute URLs (/_astro/…), so
+    // the page only works mounted at its own paths. Requires the docs build
+    // (`pnpm build`); e2e/classics.spec.ts says so when it is missing.
+    if (
+      path.startsWith("/_astro/") ||
+      path === "/classics" ||
+      path.startsWith("/classics/") ||
+      path.startsWith("/examples/classics/") ||
+      path.startsWith("/fonts/")
+    ) {
+      const DIST = join(ROOT, "docs", "dist");
+      const rel = normalize(path.endsWith("/") ? `${path}index.html` : path).replace(/^(\.\.[/\\])+/, "");
+      const file = join(DIST, rel);
+      if (!file.startsWith(DIST)) return send(403, "forbidden", "text/plain");
+      return send(200, await readFile(file), TYPES[extname(file)] ?? "application/octet-stream");
     }
 
     // Docs-site root paths (U16): gallery pages reference their assets the
