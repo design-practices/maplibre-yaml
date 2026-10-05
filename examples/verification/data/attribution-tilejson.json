@@ -1,0 +1,9 @@
+{
+  "tilejson": "2.2.0",
+  "name": "attribution-untrusted-tilejson",
+  "_comment": "minzoom sits above the fixture's zoom, so no tile is ever requested: only this metadata (and its attribution) loads. Used by e2e/attribution-sanitize.spec.ts.",
+  "tiles": ["/__no_tiles__/{z}/{x}/{y}.pbf"],
+  "minzoom": 20,
+  "maxzoom": 22,
+  "attribution": "<img src=\"/__attribution_probe.png\"><span data-probe=\"tilejson\">TILEJSON ATTRIB</span> <a href=\"javascript:void(0)\">tilejson link</a>"
+}

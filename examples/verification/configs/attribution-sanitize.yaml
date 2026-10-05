@@ -1,0 +1,36 @@
+# Assertion: attribution an untrusted document controls renders as text plus
+# plain http(s)/mailto links in the live attribution control — never as other
+# elements or attributes. Three routes in: the document's own source
+# `attribution:`, a TileJSON the document points a source `url:` at, and a
+# basemap style the document points `mapStyle:` at. MapLibre's own attribution
+# sanitizer is bypassable on every supported maplibre-gl (GHSA-jrc7-96c5-q579).
+type: map
+id: attribution-sanitize
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "/examples/verification/configs/attribution-style.json"
+sources:
+  tj:
+    type: vector
+    url: "/examples/verification/data/attribution-tilejson.json"
+  doc:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          properties: {}
+          geometry: { type: Point, coordinates: [0, 0] }
+    attribution: '<img src="/__attribution_probe.png"><span data-probe="doc">DOC ATTRIB</span> <a href="https://doc.test/" target="_blank" data-probe="doc-link">doc link</a>'
+layers:
+  - id: doc-points
+    type: circle
+    source: doc
+    paint:
+      circle-radius: 8
+      circle-color: "#e63946"
+  - id: tj-lines
+    type: line
+    source: tj
+    source-layer: roads

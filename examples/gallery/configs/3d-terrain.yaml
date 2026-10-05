@@ -1,0 +1,50 @@
+# Hermetic twin of docs/public/configs/gallery/3d-terrain.yaml (U15).
+# Local basemap; the e2e server's synthetic relief (/relief, terrarium) stands
+# in for the mapterhorn DEM and its /landcover raster for OSM — the pipeline
+# under test (named raster-dem sources -> terrain: + hillshade) is identical.
+type: map
+id: 3d-terrain
+config:
+  center: [11.39085, 47.27574]
+  zoom: 12
+  pitch: 70
+  maxZoom: 18
+  maxPitch: 85
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  osm:
+    type: raster
+    tiles:
+      - "/landcover/{z}/{x}/{y}.png"
+    tileSize: 256
+    attribution: "synthetic local tiles"
+  terrainSource:
+    type: raster-dem
+    tiles:
+      - "/relief/{z}/{x}/{y}.png"
+    encoding: terrarium
+    tileSize: 256
+    maxzoom: 14
+  hillshadeSource:
+    type: raster-dem
+    tiles:
+      - "/relief/{z}/{x}/{y}.png"
+    encoding: terrarium
+    tileSize: 256
+    maxzoom: 14
+layers:
+  - id: osm
+    type: raster
+    source: osm
+  - id: hills
+    type: hillshade
+    source: hillshadeSource
+    paint:
+      hillshade-shadow-color: "#473B24"
+terrain:
+  source: terrainSource
+  exaggeration: 1
+sky: {}
+controls:
+  navigation: true
+  terrain: true

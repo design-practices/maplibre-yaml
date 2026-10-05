@@ -44,6 +44,17 @@ export const addProtocol: typeof maplibre.addProtocol = gl.addProtocol;
 /** Remove a handler registered with {@link addProtocol}. */
 export const removeProtocol: typeof maplibre.removeProtocol = gl.removeProtocol;
 
+/**
+ * The running maplibre-gl version, or undefined when the module does not
+ * report one. Used to declare absence for version-gated layer types
+ * (`color-relief`, U14) instead of letting MapLibre reject the document.
+ */
+export function runtimeVersion(): string | undefined {
+  const getVersion = (gl as unknown as { getVersion?: () => string }).getVersion;
+  if (typeof getVersion === "function") return getVersion();
+  return undefined;
+}
+
 export const Map: typeof maplibre.Map = gl.Map;
 export const Popup: typeof maplibre.Popup = gl.Popup;
 export const Marker: typeof maplibre.Marker = gl.Marker;
@@ -56,6 +67,20 @@ export const FullscreenControl: typeof maplibre.FullscreenControl =
   gl.FullscreenControl;
 export const AttributionControl: typeof maplibre.AttributionControl =
   gl.AttributionControl;
+
+/**
+ * 3D toggle controls (U15). Possibly undefined: `GlobeControl` arrived in
+ * maplibre-gl 5.0.0, so on a 4.x runtime the binding is absent and the
+ * controls manager declares that absence instead of constructing `undefined`.
+ */
+// Typed structurally, not as `typeof maplibre.GlobeControl`: the CI matrix
+// type-checks against the 4.x declarations too, which have no such export.
+export const GlobeControl: (new () => maplibre.IControl) | undefined = (
+  gl as unknown as { GlobeControl?: new () => maplibre.IControl }
+).GlobeControl;
+export const TerrainControl: typeof maplibre.TerrainControl | undefined = (
+  gl as { TerrainControl?: typeof maplibre.TerrainControl }
+).TerrainControl;
 
 // Instance types under the same names, so `import { Map }` from this module
 // works in both value and type position (mirroring maplibre-gl's own names).

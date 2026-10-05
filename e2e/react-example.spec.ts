@@ -105,6 +105,10 @@ for (const { major, dir: build, dev } of BUILDS) {
       await yamlMap.locator("canvas").click({ position: point });
       await expect(page.locator("#yaml")).toContainText("clicked: Cairo");
       await expect(page.getByTestId("event-log")).toContainText("layer-click · cities · Cairo");
+      // Popups open above the corner chrome (ml-3d0, #128), so close Cairo's
+      // before reaching for the params panel it overlaps — as a user would.
+      await page.locator("#yaml .maplibregl-popup-close-button").click();
+      await expect(page.locator("#yaml .maplibregl-popup")).toHaveCount(0);
 
       // The document's params panel writes state; the event bubbles to React.
       const slider = page.locator("#yaml .ml-map-params input[type=range]");

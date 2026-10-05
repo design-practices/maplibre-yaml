@@ -238,3 +238,48 @@ layers:
 Renders lines and line strings. Perfect for routes, boundaries, and networks.
 
 {/* Similar structure for line, fill, symbol, etc. */}
+
+---
+
+## Color Relief Layer
+
+Hypsometric tinting: each pixel of a `raster-dem` source is colored by its
+elevation. `color-relief-color` is a color ramp over the `["elevation"]`
+expression, the way `heatmap-color` ramps over `["heatmap-density"]`.
+**Requires maplibre-gl 5.6 or later.**
+
+| Paint property | Type | Description |
+|----------------|------|-------------|
+| `color-relief-color` | color expression | Ramp over `["elevation"]` (`interpolate` or `step`) |
+| `color-relief-opacity` | number | Layer opacity (0-1) |
+
+```yaml
+type: map
+id: relief
+config:
+  center: [11.45, 47.2]
+  zoom: 10
+layers:
+  - id: relief
+    type: color-relief
+    source:
+      type: raster-dem
+      url: https://demotiles.maplibre.org/terrain-tiles/tiles.json
+      tileSize: 256
+    paint:
+      color-relief-color:
+        - interpolate
+        - ["linear"]
+        - ["elevation"]
+        - 400
+        - "rgb(4, 0, 108)"
+        - 1500
+        - "rgb(39, 144, 116)"
+        - 3500
+        - "rgb(215, 5, 13)"
+```
+
+On a runtime below 5.6, `<ml-map>` skips color-relief layers with one console
+warning (a declared absence), and the rest of the document renders normally.
+On eject the layer compiles through verbatim. `mlym emit --target` below 5.6
+reports it as lossy. See the [gallery example](/examples/gallery/add-a-color-relief-layer/).

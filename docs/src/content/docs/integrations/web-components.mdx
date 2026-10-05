@@ -352,6 +352,7 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 | `ml-map:image-error` | `{ name, url }` | An `images:` entry failed (unsafe scheme, CORS, load or register error) |
 | `ml-map:parameter-change` | `{ key, value }` | A params-panel control wrote a state key |
 | `ml-map:layer-visibility` | `{ layerId, visible }` | A params-panel checkbox toggled a layer |
+| `ml-map:camera-fit` | `{ source, bounds }` | The `fitTo` camera framed its source's data (once, on the first data load for fetched sources) |
 
 ## Slots: your own chrome over the map
 
@@ -1192,8 +1193,45 @@ exposed yet — see bead `ml-few`.
 ### Events
 
 See the [event reference](#event-reference) above for the complete list —
-sixteen events covering lifecycle, layer data, interactions, markers,
+seventeen events covering lifecycle, layer data, interactions, markers,
 images, and the params panel.
+
+## Trust and attribution
+
+Attribution is the one place a document's text reaches an HTML sink that
+maplibre-yaml does not own: MapLibre renders the attribution control with
+`innerHTML`, behind its own sanitizer. That sanitizer can be bypassed in
+every maplibre-gl release up to 6.4.0 — which covers the whole supported
+peer range (`^3 || ^4 || ^5`) — so it is not a safe boundary for a document
+someone else wrote
+([GHSA-jrc7-96c5-q579](https://github.com/advisories/GHSA-jrc7-96c5-q579)).
+
+maplibre-yaml therefore sanitizes attribution itself before MapLibre sees it.
+What survives is plain text, character references (`&copy;`), and `<a>` links
+whose `href` uses `http:`, `https:` or `mailto:`, keeping only the `href`,
+`target` and `rel` attributes. Any other markup is escaped and shown as
+literal text rather than dropped, so the credit stays readable. This covers
+every route attribution takes into the control:
+
+- a source's `attribution:` (named, inline, and v1/v2 alike),
+- `customAttribution` under `controls.attribution` or a
+  `attributionControl: { … }` options object in `config` / `runtime.map`,
+- attribution carried by resources the document points at: a basemap style
+  URL (`mapStyle` / `basemap`), an inline style object, and a TileJSON behind
+  a source `url:`.
+
+**This applies under every capability policy, trusted included.** `!html`
+popups render raw markup for a trusted document because maplibre-yaml's own
+popup sink is sound; the attribution sink is MapLibre's, and trusting the
+author does not make it safe. The only cost to a trusted document is that
+non-link markup such as `<b>` in attribution shows as text.
+
+`mlym emit` applies the same rule to the `style.json` it writes, because that
+file may be rendered by an older maplibre-gl, and reports a `contract`
+warning naming each source whose attribution was changed. Releases before
+this fix (0.6.0 and earlier) forward attribution unsanitized: upgrade
+(0.6.1, 0.7.0, or later), or do not render documents you did not author
+with them.
 
 ## Upgrading to 0.6
 

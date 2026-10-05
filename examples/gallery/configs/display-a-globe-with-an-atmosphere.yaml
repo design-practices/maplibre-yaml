@@ -1,0 +1,24 @@
+# Hermetic twin of docs/public/configs/gallery/display-a-globe-with-an-atmosphere.yaml
+# (U15). The e2e server's synthetic /landcover raster stands in for the
+# Sentinel-2 imagery; projection and the atmosphere sky are identical.
+type: map
+id: display-a-globe-with-an-atmosphere
+config:
+  center: [137.9150899566626, 36.25956997955441]
+  zoom: 0
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  satellite:
+    type: raster
+    tiles:
+      - "/landcover/{z}/{x}/{y}.png"
+    tileSize: 256
+    attribution: "synthetic local tiles"
+layers:
+  - id: Satellite
+    type: raster
+    source: satellite
+projection:
+  type: globe
+sky:
+  atmosphere-blend: ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0]

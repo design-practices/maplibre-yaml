@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-an-atmosphere/
+# The atmosphere is the sky's `atmosphere-blend`, faded out as you zoom in.
+# Upstream also anchors the light to the map; a `light:` key is separate
+# work, so the default light applies here.
+type: map
+id: display-a-globe-with-an-atmosphere
+config:
+  center: [137.9150899566626, 36.25956997955441]
+  zoom: 0
+  mapStyle: { version: 8, sources: {}, layers: [] }
+sources:
+  satellite:
+    type: raster
+    tiles:
+      - "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"
+    tileSize: 256
+    attribution: "Sentinel-2 cloudless by EOX IT Services GmbH"
+layers:
+  - id: Satellite
+    type: raster
+    source: satellite
+projection:
+  type: globe
+sky:
+  atmosphere-blend: ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0]

@@ -186,7 +186,8 @@ export function normalizeLayer(layer: Layer): LayerModel {
  * **The document root is enumerated, not partitioned**, so the never-drop
  * invariant is scoped to the objects above, not the root. A root key outside
  * the recognized set (`id`, `config`, `layers`, `sources`, `controls`,
- * `legend`, `className`, `style`, `state`, `parameters`, `markers`) does not reach the
+ * `legend`, `className`, `style`, `state`, `parameters`, `markers`, `popups`,
+ * `images`, `terrain`, `sky`, `projection`) does not reach the
  * model — including `type` (structural) and `x-*` extensions, which the
  * extension registry reads from the raw parsed document, not from the model.
  * The emitter strips `x-*` regardless, so nothing is lost that should survive.
@@ -209,6 +210,10 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
       camera[key] = config[key];
     } else if (key === "mapStyle") {
       // Handled below — hoisted out of `config:` and renamed.
+    } else if (key === "fitTo") {
+      // Handled below — not a MapLibre constructor option, so it must not
+      // ride `runtime.map` (which reports as "map options" on emit and is
+      // spread into the Map constructor). v2 authors it at `runtime.fitTo`.
     } else {
       runtimeMap[key] = config[key];
     }
@@ -242,10 +247,22 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   // an emit lossy, and zero markers lose nothing.
   if (input.markers !== undefined && input.markers.length > 0)
     model.runtime.markers = input.markers;
+  if (config["fitTo"] !== undefined)
+    model.runtime.fitTo = config["fitTo"] as MapModel["runtime"]["fitTo"];
+  // Same presence rule as markers: zero popups lose nothing on emit.
+  if (input.popups !== undefined && input.popups.length > 0)
+    model.runtime.popups = input.popups;
   // Style half: images fully compile (sprite merge on eject). An empty
   // record normalizes away like an empty markers list.
   if (input.images !== undefined && Object.keys(input.images).length > 0)
     model.style.images = input.images;
+  // Style half (U15): the three style-spec root 3D properties compile
+  // verbatim, so they ride the model exactly as authored.
+  if (input.terrain !== undefined) model.style.terrain = input.terrain;
+  if (input.sky !== undefined) model.style.sky = input.sky;
+  if (input.projection !== undefined) model.style.projection = input.projection;
+  // Style half: `light` is a style-spec root property, compiled through as-is.
+  if (input.light !== undefined) model.style.light = input.light;
   if (input.className !== undefined || input.style !== undefined) {
     model.runtime.container = {};
     if (input.className !== undefined) model.runtime.container.className = input.className;
@@ -278,6 +295,10 @@ export function denormalizeConfig(model: MapModel): MapConfig {
   // was true, so a `mapStyle: undefined` the author wrote must round-trip as
   // present. `"basemap" in model.style` is set only when the key was present.
   if ("basemap" in model.style) config["mapStyle"] = model.style.basemap;
+  // `fitTo` was authored inside `config:` (v1), so the reassembled config
+  // carries it back — the renderer reads `config.fitTo` (its public v1
+  // constructor surface) and strips it before constructing the Map.
+  if (model.runtime.fitTo !== undefined) config["fitTo"] = model.runtime.fitTo;
   // `state` and `parameters` are deliberately absent. They are authored at the
   // document root, not inside `config:`, and nothing in v0.5.0's renderer
   // consumes them — they are carried in the model for the emitter. Reinjecting
@@ -324,7 +345,12 @@ export function denormalizeOptions(model: MapModel): {
   state?: Record<string, unknown>;
   parameters?: Record<string, unknown>;
   markers?: MapModel["runtime"]["markers"];
+  popups?: MapModel["runtime"]["popups"];
   images?: MapModel["style"]["images"];
+  terrain?: MapModel["style"]["terrain"];
+  sky?: MapModel["style"]["sky"];
+  projection?: MapModel["style"]["projection"];
+  light?: MapModel["style"]["light"];
 } {
   const options: {
     controls?: ControlsConfig;
@@ -332,11 +358,17 @@ export function denormalizeOptions(model: MapModel): {
     state?: Record<string, unknown>;
     parameters?: Record<string, unknown>;
     markers?: MapModel["runtime"]["markers"];
+    popups?: MapModel["runtime"]["popups"];
     images?: MapModel["style"]["images"];
+    terrain?: MapModel["style"]["terrain"];
+    sky?: MapModel["style"]["sky"];
+    projection?: MapModel["style"]["projection"];
+    light?: MapModel["style"]["light"];
   } = {};
   if (model.runtime.controls !== undefined) options.controls = model.runtime.controls;
   if (model.runtime.legend !== undefined) options.legend = model.runtime.legend;
   if (model.runtime.markers !== undefined) options.markers = model.runtime.markers;
+  if (model.runtime.popups !== undefined) options.popups = model.runtime.popups;
   // The params panel (U8) is the first reader of `parameters:` — control
   // metadata joined with `state:` defaults at render time.
   if (model.runtime.parameters !== undefined)
@@ -352,5 +384,13 @@ export function denormalizeOptions(model: MapModel): {
   // from `mapStyle` + addLayer, so images must be registered imperatively
   // (`map.addImage`) — they cannot ride in on the style object.
   if (model.style.images !== undefined) options.images = model.style.images;
+  // U15's 3D trio, for the same reason again: style-spec root properties
+  // that the live style (basemap + addLayer) never carries, so the renderer
+  // applies them imperatively (setTerrain / setSky / setProjection).
+  if (model.style.terrain !== undefined) options.terrain = model.style.terrain;
+  if (model.style.sky !== undefined) options.sky = model.style.sky;
+  if (model.style.projection !== undefined) options.projection = model.style.projection;
+  // Same again for `light`: applied with `map.setLight` once the style loads.
+  if (model.style.light !== undefined) options.light = model.style.light;
   return options;
 }
