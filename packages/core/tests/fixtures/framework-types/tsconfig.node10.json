@@ -1,0 +1,10 @@
+{
+  // Legacy resolution ignores package.json `exports`, so this proves the
+  // `typesVersions` fallback for the `react` subpath.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "ignoreDeprecations": "5.0"
+  },
+  "files": ["react-node10.tsx", "tmp/docs-react.d.ts"]
+}

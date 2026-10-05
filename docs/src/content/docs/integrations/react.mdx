@@ -1,0 +1,68 @@
+---
+title: React
+description: Use <ml-map> in React 18 and 19, with TypeScript, Vite and Next.js
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+`<ml-map>` is a custom element, so React renders it like any other tag. There
+is no wrapper component to install: register the element, import MapLibre's
+CSS, and reference the typings once.
+
+```bash
+npm install @maplibre-yaml/core maplibre-gl
+```
+
+```tsx
+// src/main.tsx
+import "maplibre-gl/dist/maplibre-gl.css";
+import "@maplibre-yaml/core/register";
+```
+
+```ts
+// src/vite-env.d.ts
+/// <reference types="@maplibre-yaml/core/react" />
+```
+
+The typings entry is types only (an empty module at runtime). It teaches
+React's JSX about `<ml-map>`: `src`, `config`, a `ref` typed as `MLMap`
+(`mapReady()`, `getMap()`), slot children, and on React 19 the
+`onml-map:*` event props, each typed with its event's `detail`.
+
+## A working app to copy from
+
+[`examples/react`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/react)
+is a Vite + React + TypeScript app that does everything on this page: a map
+from a YAML file with its params panel, one from a config object, events
+reaching React state, `mapReady()` through a ref, React-rendered controls in a
+map corner, mount and unmount under StrictMode, and the React 19 props. CI
+builds it against React 18 and React 19, type-checks it against both
+`@types/react` majors, and drives every build in a browser. The snippets in
+[Web Components → React](/integrations/web-components/#react) are files from
+that app, checked by a test, so they cannot drift from what CI runs.
+
+## React 18 or 19
+
+| | React 19 | React 18 |
+|---|---|---|
+| `config` | the object (keep it stable) or a JSON string | a JSON string only: `config={JSON.stringify(doc)}` |
+| `ml-map:*` events | `onml-map:load={…}` props, or a ref + `addEventListener` | a ref + `addEventListener` |
+| typings | object `config` and typed event props allowed | an object `config` is a type error |
+
+A JSON string plus a ref-based listener works on both majors, which is what
+most of the example uses. An *equal* config never rebuilds the map, so
+re-rendering a parent is free; a *changed* one rebuilds it.
+
+<Aside type="tip" title="Slot children">
+  Controls you render into a map corner (`<div slot="top-left">`) are moved
+  into the map by the element. Render them unconditionally and change what is
+  inside them freely; hide one with `hidden` rather than removing it.
+</Aside>
+
+## Next.js
+
+The element class extends `HTMLElement`, which does not exist during server
+rendering, so register it from an effect in a `"use client"` component rather
+than with a top-level import. The server sends a plain `<ml-map>` tag, which
+upgrades once the import resolves. The snippet is in
+[Web Components → Next.js](/integrations/web-components/#nextjs-app-router).

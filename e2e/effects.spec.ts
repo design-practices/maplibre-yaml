@@ -230,11 +230,23 @@ test.describe("effects (maplibre-gl 5)", () => {
   test("6. teardown: re-render and removal restore the static layer and leak no frames", async ({ page }) => {
     const errors = await guard(page);
     await open(page, "doc=crosshatch");
-    // Re-render (a new config): the old map's effect detaches, the new map's attaches.
+    // An IDENTICAL config is a no-op (ml-i10, #126): same map, effect still on.
+    const equal = await page.evaluate(async () => {
+      const s = (window as any).__fx;
+      const old = await s.el.mapReady();
+      s.el.config = JSON.parse(JSON.stringify(s.doc));
+      await new Promise((r) => setTimeout(r, 300));
+      const map = await s.el.mapReady();
+      return { sameMap: map === old, effects: s.effects().length };
+    });
+    expect(equal).toEqual({ sameMap: true, effects: 1 });
+
+    // Re-render (a genuinely new config): the old map's effect detaches, the
+    // new map's attaches.
     const rerender = await page.evaluate(async () => {
       const s = (window as any).__fx;
       const old = s.map;
-      s.el.config = s.doc;
+      s.el.config = { ...s.doc, id: `${s.doc.id}-rerender` };
       const map = await s.el.mapReady();
       await s.whenEffectsReady();
       return {

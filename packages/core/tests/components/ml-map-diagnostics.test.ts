@@ -158,6 +158,23 @@ describe("MLMap diagnostics", () => {
     ).toBe(false);
   });
 
+  it("does not warn about CSS with maplibre-gl 5's stylesheet (no canary rule)", async () => {
+    // 5.x ships no .maplibregl-canary rule; its .maplibregl-map rule is the
+    // signature. The canary-only probe warned on every v5 page.
+    const style = document.createElement("style");
+    style.textContent =
+      ".maplibregl-map { overflow: hidden; position: relative; }";
+    document.head.appendChild(style);
+
+    const el = makeElement();
+    document.body.appendChild(el);
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(
+      warnings().some((m) => m.includes("MapLibre GL CSS"))
+    ).toBe(false);
+  });
+
   it("logs parser warnings to console.warn, not the error card", async () => {
     const el = document.createElement("ml-map") as MLMap;
     const script = document.createElement("script");
