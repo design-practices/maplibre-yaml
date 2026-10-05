@@ -8,7 +8,7 @@ Astro components for creating interactive maps and scrollytelling experiences us
 ## Installation
 
 ```bash
-npm install @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^5
+npm install @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
 ```
 
 Supports **Astro 4, 5, 6 and 7**, each tested in CI by building and driving the
@@ -16,7 +16,8 @@ example site [`examples/astro/site`](https://github.com/design-practices/maplibr
 On Astro 6 and 7, import `z` from `astro/zod` in your content config (the
 schema helpers here are built from it). Astro 4 needs a few content-layer
 settings; see the [supported versions](https://docs.maplibre-yaml.org/integrations/astro/#supported-versions)
-table. maplibre-gl must be 4 or 5: pin it, because npm's `latest` is now v6.
+table. maplibre-gl 4, 5 and 6 (`>= 6.4.1`) are supported; the components set
+maplibre-gl 6's worker URL for you.
 
 `Map`, `FullPageMap` and `Scrollytelling` forward corner slots to `<ml-map>`:
 `<Map config={c}><p slot="top-left">Caption</p></Map>` puts the caption in the

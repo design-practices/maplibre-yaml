@@ -4,7 +4,7 @@
  */
 
 import type { LngLat } from 'maplibre-gl';
-import { Map as MapLibreMap, AttributionControl, runtimeVersion } from './maplibre-interop';
+import { Map as MapLibreMap, AttributionControl, runtimeVersion, withWorkerUrlHint } from './maplibre-interop';
 import { installAttributionGuard, type AttributionGuard } from './attribution-guard';
 import { sanitizeCustomAttribution, sanitizeSourcesAttribution } from '../utils/attribution';
 import type { z } from 'zod';
@@ -667,8 +667,24 @@ export class MapRenderer {
 
     // Handle errors. Runtime maplibre error events are non-fatal: the map
     // still reaches `load` after a failed tile/sprite/glyph request.
+    // maplibre-gl v6 types `e.error` as `{ message }` (ErrorLike), not
+    // Error; normalise so onError's contract holds on every major.
     this.map.on('error', (e) => {
-      options.onError?.(e.error, false);
+      const raw = e.error as unknown;
+      let error =
+        raw instanceof Error
+          ? raw
+          : Object.assign(
+              new Error(
+                (raw as { message?: unknown } | undefined)?.message != null
+                  ? String((raw as { message: unknown }).message)
+                  : String(raw)
+              ),
+              { cause: raw }
+            );
+      const hinted = withWorkerUrlHint(error.message, runtimeVersion());
+      if (hinted !== error.message) error = Object.assign(new Error(hinted), { cause: raw });
+      options.onError?.(error, false);
     });
   }
 

@@ -16,7 +16,7 @@
  *
  * Hermetic like the rest of the suite: every external URL a snippet names must
  * appear in the CDN table below, which maps it onto the local build (unpkg core
- * → `packages/core`, esm.sh maplibre-gl → the vendored shim, the demotiles
+ * → `packages/core`, unpkg maplibre-gl → the vendored shim, the demotiles
  * style → the local fixture style, the USGS feed → an inline fixture). An
  * unlisted URL fails the test, which is also what pins the snippets' versions:
  * an unpinned or mismatched maplibre-gl URL (the JS on one major, the CSS on
@@ -98,8 +98,8 @@ export const AttributionControl = gl.AttributionControl;
  */
 function cdnTable(baseURL: string): Record<string, string | { js: string } | object> {
   return {
-    "https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css": `${baseURL}/vendor/maplibre-gl.css`,
-    "https://esm.sh/maplibre-gl@^5": { js: trackingMaplibre(baseURL) },
+    "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css": `${baseURL}/vendor/maplibre-gl.css`,
+    "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs": { js: trackingMaplibre(baseURL) },
     "https://unpkg.com/@maplibre-yaml/core/register.js": `${baseURL}/packages/core/register.js`,
     "https://unpkg.com/@maplibre-yaml/core/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
     "https://esm.sh/@maplibre-yaml/core?external=maplibre-gl": `${baseURL}/packages/core/dist/index.browser.js`,

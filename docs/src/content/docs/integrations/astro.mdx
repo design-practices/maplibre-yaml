@@ -27,11 +27,12 @@ Get a map in your Astro site in 5 minutes.
 1. **Install dependencies**
 
    ```bash
-   pnpm add @maplibre-yaml/core maplibre-gl@^5
+   pnpm add @maplibre-yaml/core maplibre-gl@^6
    ```
 
-   Pin maplibre-gl to major 5: npm's `latest` is now v6, which is outside
-   `@maplibre-yaml/core`'s peer range.
+   maplibre-gl 4, 5 and 6 (`>= 6.4.1`) are supported; v6 is recommended.
+   The components set maplibre-gl 6's worker URL themselves, so no
+   `setWorkerUrl()` call is needed in an Astro project.
 
 2. **Create a map configuration file**
 
@@ -135,7 +136,7 @@ For Astro projects, we recommend using the dedicated `@maplibre-yaml/astro` pack
 ### Installation
 
 ```bash
-pnpm add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^5
+pnpm add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
 ```
 
 ### Supported versions
@@ -152,7 +153,7 @@ This needs `@maplibre-yaml/astro` 0.5 or later. Earlier versions declare
 is tested the same way. CI builds the [example site](#runnable-example) against
 the published tarballs with `astro check`, `astro build` and `astro preview`, then
 drives it in a browser. It also runs a smoke test under `astro dev`. The
-`maplibre-gl` peer range is still `^4 || ^5`, so pin it: `maplibre-gl@^5`.
+`maplibre-gl` peer range is `^4 || ^5 || ^6.4.1`; the example site runs on v6.
 
 **Collections and zod.** Astro 4 and 5 ship zod 3. Astro 6 and 7 ship zod 4.
 The two cannot nest inside each other. Import `z` from `astro/zod`, which

@@ -42,6 +42,15 @@ interface Member {
   /** World positions of the clipped endpoints. */
   A: Vec;
   B: Vec;
+  /**
+   * When a clipped endpoint lies on the tile square's edge, that edge as an
+   * axis-aligned world line (axis 0: x = value, axis 1: y = value). Tiles that
+   * share the edge share the value exactly, so `u` there is taken where the
+   * stitched wall crosses it — identical on both sides even when the tiles'
+   * copies of the wall disagree by a few units (maplibre-gl 6 slices).
+   */
+  edgeA?: [0 | 1, number];
+  edgeB?: [0 | 1, number];
   /** A private copy of the wall's four packed vertices (4 × VERTEX_BYTES). */
   verts: Uint8Array;
   /** Whether the stitched parametrisation was applied. */
@@ -93,20 +102,32 @@ export class SeamRegistry {
    * Register one mesh's boundary walls.
    *
    * @param vertices - the mesh's packed vertices (read for the copies; never retained)
+   * @param driftUnits - extra matching tolerance, in tile units, for tiles
+   *   whose bytes carry known vertex drift (maplibre-gl 6's re-encoded
+   *   overzoom slices; see adapter.ts)
    */
   add(
     meshKey: string,
     tile: { z: number; x: number; y: number },
     extent: number,
     cuts: CutWall[],
-    vertices: Uint8Array
+    vertices: Uint8Array,
+    driftUnits = 0
   ): void {
     if (cuts.length === 0) return;
     const n = 2 ** tile.z;
     const world = (px: number, py: number): Vec => [(tile.x + px / extent) / n, (tile.y + py / extent) / n];
     // the generator rounds cut points to integer tile units: allow a few
-    // units of drift at this tile's zoom
-    const tol = 3 / (extent * n);
+    // units of drift at this tile's zoom (more where the bytes are known to drift)
+    const tol = (3 + driftUnits) / (extent * n);
+    const eps = 1e-6;
+    const snap = (p: number) => (Math.abs(p) < eps ? 0 : Math.abs(p - extent) < eps ? extent : undefined);
+    const edge = (px: number, py: number): [0 | 1, number] | undefined => {
+      const sx = snap(px);
+      if (sx !== undefined) return [0, (tile.x + sx / extent) / n];
+      const sy = snap(py);
+      return sy !== undefined ? [1, (tile.y + sy / extent) / n] : undefined;
+    };
     const members: Member[] = [];
     for (const wall of cuts) {
       const a = world(wall.oax, wall.oay);
@@ -123,6 +144,8 @@ export class SeamRegistry {
         b,
         A: world(wall.ax, wall.ay),
         B: world(wall.bx, wall.by),
+        edgeA: edge(wall.ax, wall.ay),
+        edgeB: edge(wall.bx, wall.by),
         verts: vertices.slice(wall.vi * VERTEX_BYTES, (wall.vi + 4) * VERTEX_BYTES),
         patched: false,
         group,
@@ -247,11 +270,25 @@ export class SeamRegistry {
     const d = sub(g.end!, g.start!);
     const L = Math.hypot(d[0], d[1]);
     const dir: Vec = [d[0] / L, d[1] / L];
-    const uA = dot(sub(m.A, g.start!), dir) / L;
-    const uB = dot(sub(m.B, g.start!), dir) / L;
+    // u where the stitched wall crosses a shared tile edge (exact on both
+    // sides of the seam), else the endpoint's projection onto the wall
+    // The slack is relative (2 %) or the group's matching tolerance,
+    // whichever is larger — a short wall in drifting (re-encoded) tiles can
+    // miss its true ends by more than 2 % of its length.
+    const slack = Math.max(0.02, (2 * g.tol) / L);
+    const at = (P: Vec, e: [0 | 1, number] | undefined): number => {
+      const projected = dot(sub(P, g.start!), dir) / L;
+      if (!e || Math.abs(d[e[0]]) < 1e-12) return projected;
+      const crossing = (e[1] - g.start![e[0]]) / d[e[0]];
+      // near-parallel to the edge, drift moves the crossing a long way: trust it
+      // only when it agrees with the projection
+      return Math.abs(crossing - projected) <= slack ? crossing : projected;
+    };
+    const uA = at(m.A, m.edgeA);
+    const uB = at(m.B, m.edgeB);
     // a member that doesn't sit on the stitched wall is a grouping mistake:
-    // leave its local parametrisation rather than draw it wrong
-    if (uA < -0.02 || uB > 1.02 || uB < uA) return;
+    // leave its local parametrisation rather than draw it wrong.
+    if (uA < -slack || uB > 1 + slack || uB < uA) return;
     const midLat = Math.atan(Math.sinh(Math.PI * (1 - (g.start![1] + g.end![1]))));
     const metres = L * EARTH_CIRCUMFERENCE * Math.cos(midLat);
     // vertex order per wall: A bottom, B bottom, B top, A top

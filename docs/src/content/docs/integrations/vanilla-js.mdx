@@ -25,12 +25,12 @@ The fastest way to get started - no JavaScript code needed!
      <head>
        <title>My Map</title>
        <link
-         href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
+         href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
          rel="stylesheet"
        />
        <!-- Tell the browser where to find maplibre-gl -->
        <script type="importmap">
-         { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+         { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
        </script>
        <!-- Register the <ml-map> web component -->
        <script
@@ -113,12 +113,12 @@ For cases where you need programmatic control or want to use the lower-level API
      <head>
        <title>My Map</title>
        <link
-         href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
+         href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
          rel="stylesheet"
        />
        <!-- Tell the browser where to find maplibre-gl -->
        <script type="importmap">
-         { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+         { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
        </script>
        <style>
          body {
@@ -217,7 +217,7 @@ For quick prototypes or simple projects. To use the web component, provide `mapl
 
 ```html
 <script type="importmap">
-  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script
   type="module"
@@ -229,7 +229,7 @@ To use the JavaScript API, import the package from esm.sh, which resolves `yaml`
 
 ```html
 <script type="importmap">
-  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script type="module">
   import {
@@ -242,10 +242,11 @@ To use the JavaScript API, import the package from esm.sh, which resolves `yaml`
 ```
 
 <Aside type="note" title="maplibre-gl version">
-  maplibre-yaml supports maplibre-gl **v4 and v5** (peer range
-  `^3.0.0 || ^4.0.0 || ^5.0.0`). maplibre-gl v6 is not supported yet, and it is
-  what unpinned installs and CDN URLs now resolve to, so pin major 5 everywhere:
-  the import map, the CSS URL, and `npm install`.
+  maplibre-yaml supports maplibre-gl **v4, v5 and v6** (peer range
+  `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`). The examples pin major 6 everywhere:
+  the import map, the CSS URL, and `npm install`. v6 is ESM-only, so its import
+  map entry is `dist/maplibre-gl.mjs`; under a bundler it also needs
+  `setWorkerUrl()` — see [Installation](/getting-started/installation/#supported-maplibre-gl-versions).
 </Aside>
 
 ### npm (With Build Tools)
@@ -256,21 +257,21 @@ For production projects with bundlers:
 <TabItem label="npm">
 
 ```bash
-npm install @maplibre-yaml/core maplibre-gl@^5
+npm install @maplibre-yaml/core maplibre-gl@^6
 ```
 
 </TabItem>
 <TabItem label="pnpm">
 
 ```bash
-pnpm add @maplibre-yaml/core maplibre-gl@^5
+pnpm add @maplibre-yaml/core maplibre-gl@^6
 ```
 
 </TabItem>
 <TabItem label="yarn">
 
 ```bash
-yarn add @maplibre-yaml/core maplibre-gl@^5
+yarn add @maplibre-yaml/core maplibre-gl@^6
 ```
 
 </TabItem>
@@ -474,7 +475,7 @@ renderer.on("layer:data-error", ({ layerId, error }) => {
 For advanced use cases, access the underlying MapLibre GL map:
 
 ```javascript
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 
 const renderer = MapRenderer.fromModel(container, toModel(block));
 
@@ -513,12 +514,12 @@ Here's a complete example showing a map with live data and UI controls:
   <head>
     <title>Earthquake Dashboard</title>
     <link
-      href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
+      href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
       rel="stylesheet"
     />
     <!-- Tell the browser where to find maplibre-gl -->
     <script type="importmap">
-      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+      { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
     </script>
     <style>
       body {

@@ -27,6 +27,7 @@ const { src, height = '400px', caption, chrome } = Astro.props;
 </figure>
 
 <script>
+  import './maplibre-worker'; // first: maplibre-gl 6's worker URL
   import '@maplibre-yaml/core/register';
   import 'maplibre-gl/dist/maplibre-gl.css';
 </script>

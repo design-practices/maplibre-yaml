@@ -517,7 +517,7 @@ test.describe("U16 image & icon hatches", () => {
     expect(errors).toEqual([]);
   });
 
-  test("generate-and-add-a-missing-icon-to-the-map: styleimagemissing paints icons on demand, with no warning", async ({
+  test("generate-and-add-a-missing-icon-to-the-map: the page paints missing icons on demand (resolver on v6, event on 4/5), with no warning", async ({
     page,
   }) => {
     const errors = await guard(page);
