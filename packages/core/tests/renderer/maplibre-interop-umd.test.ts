@@ -26,6 +26,10 @@ const namespace = (bindings: Record<string, unknown> = {}) => ({
   AttributionControl: undefined,
   addProtocol: undefined,
   removeProtocol: undefined,
+  // U15 3D toggles (possibly absent on older runtimes) and U14's version probe.
+  GlobeControl: undefined,
+  TerrainControl: undefined,
+  getVersion: undefined,
   ...bindings,
 });
 

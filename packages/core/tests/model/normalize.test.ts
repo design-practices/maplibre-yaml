@@ -289,6 +289,25 @@ describe("round trip — the fidelity proof", () => {
     expect(denormalizeOptions(model).images).toEqual(images);
   });
 
+  it("carries terrain/sky/projection through the style half into renderer options (U15)", () => {
+    const terrain = { source: "dem", exaggeration: 2 };
+    const sky = { "sky-color": "#00f" };
+    const projection = { type: "globe" as const };
+    const model = normalizeMapBlock(minimalInput({ terrain, sky, projection } as never));
+    expect(model.style.terrain).toEqual(terrain);
+    expect(model.style.sky).toEqual(sky);
+    expect(model.style.projection).toEqual(projection);
+    // The live style never carries them — the renderer applies them imperatively.
+    const options = denormalizeOptions(model);
+    expect(options.terrain).toEqual(terrain);
+    expect(options.sky).toEqual(sky);
+    expect(options.projection).toEqual(projection);
+    // ...and they must never leak into MapLibre's constructor options.
+    const config = denormalizeConfig(model) as unknown as Record<string, unknown>;
+    expect(config["terrain"]).toBeUndefined();
+    expect(config["projection"]).toBeUndefined();
+  });
+
   it("an empty images record normalizes away (U6)", () => {
     const model = normalizeMapBlock(minimalInput({ images: {} } as never));
     expect(model.style.images).toBeUndefined();

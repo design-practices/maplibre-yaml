@@ -110,3 +110,42 @@ export function geometryBounds(geometry: unknown): Bounds | null {
     [extent.maxLng, extent.maxLat],
   ];
 }
+
+/**
+ * The bounding box of any GeoJSON object — a FeatureCollection, a Feature,
+ * or a bare geometry — or `null` when it holds no coordinates.
+ *
+ * @remarks
+ * The whole-source sibling of {@link geometryBounds}, sharing its walk: the
+ * `fitTo` initial camera (U14) frames a source's entire data the way
+ * `zoomToFeature` frames one clicked feature. Loosely typed for the same
+ * reason — inline `data:` is validated loosely under v1.
+ */
+export function geojsonBounds(data: unknown): Bounds | null {
+  const extent: Extent = {
+    minLng: 0,
+    minLat: 0,
+    maxLng: 0,
+    maxLat: 0,
+    seen: false,
+  };
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    const obj = node as { type?: unknown; features?: unknown; geometry?: unknown };
+    if (obj.type === "FeatureCollection") {
+      if (Array.isArray(obj.features)) for (const f of obj.features) walk(f);
+      return;
+    }
+    if (obj.type === "Feature") {
+      walkGeometry(extent, obj.geometry);
+      return;
+    }
+    walkGeometry(extent, node);
+  };
+  walk(data);
+  if (!extent.seen) return null;
+  return [
+    [extent.minLng, extent.minLat],
+    [extent.maxLng, extent.maxLat],
+  ];
+}

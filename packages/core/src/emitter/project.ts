@@ -30,6 +30,39 @@ import { DOCUMENT_SPRITE_ID, declareDocumentSprite } from "./assets";
 import { ejectClasses } from "../eject";
 import type { EjectClassDefinition } from "../eject";
 import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
+import { sanitizeSourcesAttribution } from "../utils/attribution";
+import { lowerEffectLayer } from "./lower-effects";
+
+/**
+ * Sanitize every `sources.*.attribution` in an emitted style, in place on the
+ * given sources map, warning (`contract`) for each one whose content was
+ * stripped.
+ *
+ * @remarks
+ * An emitted style.json is rendered by whatever maplibre-gl the consumer
+ * runs, and every release up to 6.4.0 renders attribution through a
+ * bypassable sanitizer (GHSA-jrc7-96c5-q579). So the artifact carries only
+ * what the live renderer would show: text and http(s)/mailto links (see
+ * utils/attribution.ts). A `contract` warning, not `lossy` — the attribution
+ * is still there, minus markup no consumer could safely render.
+ */
+export function sanitizeEmittedAttribution(
+  sources: Record<string, unknown>,
+  warnings: EmitWarning[],
+  origin: "document" | "basemap" = "document"
+): Record<string, unknown> {
+  const cleaned = sanitizeSourcesAttribution(sources, (id) => {
+    warnings.push({
+      path: `sources.${id}.attribution`,
+      kind: "contract",
+      message:
+        `${origin === "basemap" ? "Basemap source" : "Source"} "${id}" attribution ` +
+        "contained markup other than text and http(s)/mailto links; it was " +
+        "escaped or removed, because maplibre-gl renders attribution as HTML.",
+    });
+  }) as Record<string, unknown>;
+  return cleaned;
+}
 
 /** How unrepresentable content is handled. */
 export type EmitMode = "strict" | "with-fallbacks";
@@ -227,11 +260,24 @@ function rewriteImageRefs(value: unknown, names: ReadonlySet<string>): unknown {
  * (bare `addImage` names) but misses the namespaced document sprite on eject.
  */
 function hasDynamicImageRef(value: unknown): boolean {
-  if (!Array.isArray(value)) return false;
+  if (!Array.isArray(value) || value.length === 0) return false;
   const op = value[0];
   if (op === "get" || op === "concat" || op === "var" || op === "feature-state")
     return true;
-  return value.some((v) => hasDynamicImageRef(v));
+  if (op === "literal") return false;
+  // Position-aware, mirroring rewriteImageRefs: only OUTPUT positions name
+  // images. A `match`/`case`/`step` input or condition reading feature data
+  // (`["get", "class"]`) selects among literal names — every output is
+  // rewritable, so the reference is not dynamic (ml-gjf).
+  const dyn = (v: unknown) => hasDynamicImageRef(v);
+  if (op === "match")
+    return value.some((v, i) => i >= 3 && (i === value.length - 1 || i % 2 === 1) && dyn(v));
+  if (op === "case")
+    return value.some((v, i) => i >= 2 && (i === value.length - 1 || i % 2 === 0) && dyn(v));
+  if (op === "step") return value.some((v, i) => i >= 2 && i % 2 === 0 && dyn(v));
+  if (op === "coalesce" || op === "image") return value.slice(1).some(dyn);
+  // Unknown operator: no known output shape — conservatively any argument.
+  return value.slice(1).some(dyn);
 }
 
 /**
@@ -444,7 +490,8 @@ export function projectStyle(
   const imageNames = new Set(Object.keys(model.style.images ?? {}));
 
   const positioned = model.style.layers.map((layer) => {
-    const spec = transformLayer(layer);
+    let spec = transformLayer(layer);
+    let dropped = false;
     const id = String(spec["id"] ?? "");
 
     // Declared document images: rewrite the image-valued properties to the
@@ -502,6 +549,18 @@ export function projectStyle(
       // crashes emit.
       for (const key of Object.keys(layer.runtime)) {
         if (key === "before") continue;
+        if (key === "effect") {
+          // Experimental (0.7): the layer itself is the effect's static
+          // fallback. One lossy warning per effect — --strict refuses,
+          // --with-fallbacks ships the static layer (or drops it when the
+          // registered effect declares absence).
+          requireEjectClass("layer.effect");
+          const lowered = lowerEffectLayer(spec, layer.runtime["effect"]);
+          warnings.push(lowered.warning);
+          if (lowered.layer === null) dropped = true;
+          else spec = lowered.layer;
+          continue;
+        }
         if (key === "source") {
           const sourceRuntime = layer.runtime["source"];
           if (isPlainObject(sourceRuntime)) {
@@ -538,14 +597,15 @@ export function projectStyle(
     return {
       id,
       spec,
+      dropped,
       ...(typeof before === "string" ? { before } : {}),
     };
-  });
+  }).filter((l) => !l.dropped);
 
   const style: Record<string, unknown> = {
     version: 8,
     ...model.style.camera,
-    sources,
+    sources: sanitizeEmittedAttribution(sources, warnings),
     layers: orderLayers(positioned),
   };
   const placements: LayerPlacement[] = positioned.map((l) => ({
@@ -554,6 +614,8 @@ export function projectStyle(
   }));
 
   if (model.style.state !== undefined) style["state"] = model.style.state;
+  // `light` is a style-spec root property: it compiles through unchanged.
+  if (model.style.light !== undefined) style["light"] = model.style.light;
   // `images:` compiles fully (class `ejects`): the refs ride the result for
   // the fetch stage, and the document sprite is declared so the rewritten
   // `mlym:` references resolve. The CLI enforces that sprite files actually
@@ -594,6 +656,45 @@ export function projectStyle(
   if (imageRefs.length > 0) {
     style["sprite"] = declareDocumentSprite({})["sprite"];
   }
+  // U15's 3D trio: style-spec root properties, compiled verbatim (class
+  // `ejects`). Terrain carries a cross-reference the spec validates — its
+  // `source` must name a raster-dem source in the style — so a reference
+  // that cannot resolve is dropped with a lossy warning rather than shipped
+  // as a style MapLibre rejects. With a basemap the source may be the
+  // basemap's own, so resolution waits for the merge (mergeBasemap re-checks).
+  if (model.style.terrain !== undefined) {
+    const terrain = model.style.terrain;
+    const target = sources[terrain.source];
+    const targetType = isPlainObject(target) ? target["type"] : undefined;
+    if (target === undefined && model.style.basemap === undefined) {
+      warnings.push({
+        path: "terrain.source",
+        kind: "lossy",
+        construct: "terrain",
+        ejectClass: "ejects",
+        message:
+          `\`terrain.source\` names "${terrain.source}", which the document does not ` +
+          "declare and no basemap can supply; the emitted style omits `terrain` and " +
+          "renders flat.",
+      });
+    } else if (target !== undefined && targetType !== "raster-dem") {
+      warnings.push({
+        path: "terrain.source",
+        kind: "lossy",
+        construct: "terrain",
+        ejectClass: "ejects",
+        message:
+          `\`terrain.source\` names "${terrain.source}", a ${String(targetType)} source; ` +
+          "terrain needs raster-dem, so the emitted style omits `terrain` and renders flat.",
+      });
+    } else {
+      style["terrain"] = { ...terrain };
+    }
+  }
+  if (model.style.sky !== undefined) style["sky"] = { ...model.style.sky };
+  if (model.style.projection !== undefined)
+    style["projection"] = { ...model.style.projection };
+
   // `style.metadata` (v2 style-root slot, ml-tay) compiles through to the
   // style.json root `metadata` — the spec carries it, so it is not dropped.
   if (model.style.metadata !== undefined)

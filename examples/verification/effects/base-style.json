@@ -1,0 +1,10 @@
+{
+  "version": 8,
+  "name": "effects-live-base",
+  "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+  "sources": {},
+  "layers": [],
+  "metadata": {
+    "comment": "Empty base for the demo's tiles=live mode: the documents own every layer; this only supplies glyphs."
+  }
+}

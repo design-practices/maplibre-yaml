@@ -16,6 +16,18 @@ Every construct these examples use also carries a declared **eject class** — w
 
 Unlinked titles point at the upstream original.
 
+## Mapzen classics
+
+Not upstream examples: looks from Mapzen's Tangram era, rebuilt as plain
+style spec. Each is its own eject — `mlym emit --strict` compiles it with
+nothing lost. These are the *static tier*; animated effects that refine
+them are separate work and not shipped yet.
+
+| Classic | Status |
+|---|---|
+| [Crosshatch](/examples/gallery/crosshatch/) · after Tangram's [crosshatch](https://github.com/tangrams/tangram-sandbox/blob/gh-pages/styles/crosshatch.yaml) | <Badge text="Pure YAML" variant="success" /> |
+| [Blueprint](/examples/gallery/blueprint/) · classic-style example | <Badge text="Pure YAML" variant="success" /> |
+
 ## Map basics
 
 | Example | Status |
@@ -43,7 +55,7 @@ Unlinked titles point at the upstream original.
 | [Customize the map transform constrain](https://maplibre.org/maplibre-gl-js/docs/examples/customize-the-map-transform-constrain/) | <Badge text="JS territory" variant="default" /> |
 | [Enter a 360° photosphere](https://maplibre.org/maplibre-gl-js/docs/examples/enter-a-360-photosphere/) | <Badge text="JS territory" variant="default" /> |
 | [Fit a map to a bounding box](/examples/gallery/fit-a-map-to-a-bounding-box/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/fit-a-map-to-a-bounding-box/) | <Badge text="Pure YAML" variant="success" /> |
-| [Fit to the bounds of a LineString](https://maplibre.org/maplibre-gl-js/docs/examples/fit-to-the-bounds-of-a-linestring/) | <Badge text="Gap" variant="danger" /> |
+| [Fit to the bounds of a LineString](/examples/gallery/fit-to-the-bounds-of-a-linestring/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/fit-to-the-bounds-of-a-linestring/) | <Badge text="Pure YAML" variant="success" /> |
 | [Fly to a location based on scroll position](https://maplibre.org/maplibre-gl-js/docs/examples/fly-to-a-location-based-on-scroll-position/) | <Badge text="Pure YAML" variant="success" /> |
 | [Hash routing](/examples/gallery/hash-routing/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/hash-routing/) | <Badge text="Pure YAML" variant="success" /> |
 | [Level of detail control](https://maplibre.org/maplibre-gl-js/docs/examples/level-of-detail-control/) | <Badge text="JS territory" variant="default" /> |
@@ -137,14 +149,14 @@ Unlinked titles point at the upstream original.
 
 | Example | Status |
 |---|---|
-| [3D terrain](https://maplibre.org/maplibre-gl-js/docs/examples/3d-terrain/) | <Badge text="Gap" variant="danger" /> |
+| [3D terrain](/examples/gallery/3d-terrain/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/3d-terrain/) | <Badge text="Pure YAML" variant="success" /> |
 | [Add a hillshade layer](/examples/gallery/add-a-hillshade-layer/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-hillshade-layer/) | <Badge text="Pure YAML" variant="success" /> |
 | [Add 3D terrain from quantized mesh tiles](https://maplibre.org/maplibre-gl-js/docs/examples/add-3d-terrain-from-quantized-mesh-tiles/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Add a color relief layer](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-color-relief-layer/) | <Badge text="Gap" variant="danger" /> |
+| [Add a color relief layer](/examples/gallery/add-a-color-relief-layer/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-color-relief-layer/) | <Badge text="Pure YAML" variant="success" /> |
 | [Add a multidirectional hillshade layer](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-multidirectional-hillshade-layer/) | <Badge text="Pure YAML" variant="success" /> |
 | [Add contour lines](https://maplibre.org/maplibre-gl-js/docs/examples/add-contour-lines/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Display a hybrid satellite map with terrain elevation](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-hybrid-satellite-map-with-terrain-elevation/) | <Badge text="Gap" variant="danger" /> |
-| [Sky, fog and terrain](https://maplibre.org/maplibre-gl-js/docs/examples/sky-fog-terrain/) | <Badge text="Gap" variant="danger" /> |
+| [Display a hybrid satellite map with terrain elevation](/examples/gallery/display-a-hybrid-satellite-map-with-terrain-elevation/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-hybrid-satellite-map-with-terrain-elevation/) | <Badge text="Pure YAML" variant="success" /> |
+| [Sky, fog and terrain](/examples/gallery/sky-fog-terrain/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/sky-fog-terrain/) | <Badge text="Pure YAML" variant="success" /> |
 | [Display buildings in 3D](/examples/gallery/display-buildings-in-3d/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-buildings-in-3d/) | <Badge text="Pure YAML" variant="success" /> |
 | [Add a 3D model using three.js](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-3d-model-using-threejs/) | <Badge text="JS territory" variant="default" /> |
 | [Add 3D tiles using three.js](https://maplibre.org/maplibre-gl-js/docs/examples/add-3d-tiles-using-threejs/) | <Badge text="JS territory" variant="default" /> |
@@ -154,12 +166,12 @@ Unlinked titles point at the upstream original.
 | [Adding 3D models using three.js on terrain](https://maplibre.org/maplibre-gl-js/docs/examples/adding-3d-models-using-threejs-on-terrain/) | <Badge text="JS territory" variant="default" /> |
 | [Extrude polygons for 3D indoor mapping](/examples/gallery/extrude-polygons-for-3d-indoor-mapping/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/extrude-polygons-for-3d-indoor-mapping/) | <Badge text="Pure YAML" variant="success" /> |
 | [Fill-extrusion rounded corners](https://maplibre.org/maplibre-gl-js/docs/examples/fill-extrusion-rounded-corners/) | <Badge text="Pure YAML" variant="success" /> |
-| [Display a globe with a vector map](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-a-vector-map/) | <Badge text="Gap" variant="danger" /> |
-| [Display a globe with an atmosphere](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-an-atmosphere/) | <Badge text="Gap" variant="danger" /> |
+| [Display a globe with a vector map](/examples/gallery/display-a-globe-with-a-vector-map/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-a-vector-map/) | <Badge text="Pure YAML" variant="success" /> |
+| [Display a globe with an atmosphere](/examples/gallery/display-a-globe-with-an-atmosphere/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-an-atmosphere/) | <Badge text="Pure YAML" variant="success" /> |
 | [Add a custom layer with tiles to a globe](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-custom-layer-with-tiles-to-a-globe/) | <Badge text="JS territory" variant="default" /> |
 | [Add a simple custom layer on a globe](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-simple-custom-layer-on-a-globe/) | <Badge text="JS territory" variant="default" /> |
-| [Create a heatmap layer on a globe with terrain elevation](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-heatmap-layer-on-a-globe-with-terrain-elevation/) | <Badge text="Gap" variant="danger" /> |
-| [Display a globe with a fill extrusion layer](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-a-fill-extrusion-layer/) | <Badge text="Gap" variant="danger" /> |
+| [Create a heatmap layer on a globe with terrain elevation](/examples/gallery/create-a-heatmap-layer-on-a-globe-with-terrain-elevation/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-heatmap-layer-on-a-globe-with-terrain-elevation/) | <Badge text="Pure YAML" variant="success" /> |
+| [Display a globe with a fill extrusion layer](/examples/gallery/display-a-globe-with-a-fill-extrusion-layer/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-a-fill-extrusion-layer/) | <Badge text="Pure YAML" variant="success" /> |
 | [Zoom and planet size relation on globe](https://maplibre.org/maplibre-gl-js/docs/examples/zoom-and-planet-size-relation-on-globe/) | <Badge text="JS territory" variant="default" /> |
 
 ## Markers & popups
@@ -171,7 +183,7 @@ Unlinked titles point at the upstream original.
 | [Create a draggable marker](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-marker/) | <Badge text="JS territory" variant="default" /> |
 | [Animate a marker](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-marker/) | <Badge text="JS territory" variant="default" /> |
 | [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/) | <Badge text="JS territory" variant="default" /> |
-| [Display a popup](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup/) | <Badge text="Gap" variant="danger" /> |
+| [Display a popup](/examples/gallery/display-a-popup/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup/) | <Badge text="Pure YAML" variant="success" /> |
 | [Display a popup on click](/examples/gallery/display-a-popup-on-click/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-click/) | <Badge text="Pure YAML" variant="success" /> |
 | [Display a popup on hover](/examples/gallery/display-a-popup-on-hover/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-hover/) | <Badge text="Pure YAML" variant="success" /> |
 | [Attach a popup to a marker instance](/examples/gallery/attach-a-popup-to-a-marker-instance/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/attach-a-popup-to-a-marker-instance/) | <Badge text="Pure YAML" variant="success" /> |
@@ -212,4 +224,4 @@ Unlinked titles point at the upstream original.
 
 ---
 
-*Census as of 2026-09-27 against maplibre-yaml `core@0.6.0` + the 0.7 chrome tier in progress: 60 pure YAML · 37 escape hatch · 11 gaps (tracked) · 35 JS territory. The triage reasoning lives in the repo at `plans/feat-maplibre-examples-gallery.md`.*
+*Census as of 2026-10-04 against maplibre-yaml `core@0.6.0` + the 0.7 chrome tier, the gap units, and map-level 3D (`terrain:`, `sky:`, `projection:`): 69 pure YAML · 36 escape hatch · 0 gaps · 34 JS territory (139 upstream examples — table rows only; the two Mapzen classics are counted separately). The triage reasoning lives in the repo at `plans/feat-maplibre-examples-gallery.md`.*

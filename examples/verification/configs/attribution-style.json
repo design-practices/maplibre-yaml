@@ -1,0 +1,17 @@
+{
+  "version": 8,
+  "name": "attribution-untrusted-basemap",
+  "_comment": "Hermetic basemap whose source attribution carries markup other than a plain link (an element with a src, an element with a data attribute, a link with an extra attribute). A document that points mapStyle at a URL inherits this text, so it must render as text plus a bare link. Used by e2e/attribution-sanitize.spec.ts.",
+  "sources": {
+    "basemap-src": {
+      "type": "geojson",
+      "data": { "type": "FeatureCollection", "features": [] },
+      "attribution": "<img src=\"/__attribution_probe.png\"><span data-probe=\"basemap\">BASEMAP ATTRIB</span> <a href=\"https://basemap.test/\" data-probe=\"basemap-link\">basemap link</a>"
+    }
+  },
+  "layers": [
+    { "id": "background", "type": "background", "paint": { "background-color": "#cfe8c9" } },
+    { "id": "basemap-points", "type": "circle", "source": "basemap-src" }
+  ],
+  "glyphs": "/glyphs/{fontstack}/{range}.pbf"
+}

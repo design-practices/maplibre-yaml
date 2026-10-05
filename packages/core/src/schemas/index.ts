@@ -132,6 +132,7 @@ export {
   FillExtrusionLayerSchema,
   HeatmapLayerSchema,
   HillshadeLayerSchema,
+  ColorReliefLayerSchema,
   BackgroundLayerSchema,
   LayerSchema,
   LayerReferenceSchema,
@@ -158,8 +159,15 @@ export {
   StateSchema,
   MarkerSchema,
   MarkersSchema,
+  StandalonePopupSchema,
+  PopupsSchema,
+  FitToSchema,
   ImageConfigSchema,
   ImagesSchema,
+  TerrainSchema,
+  SkySchema,
+  ProjectionSchema,
+  LightSchema,
   ParametersSchema,
 } from "./map.schema";
 export type {
@@ -173,8 +181,14 @@ export type {
   State,
   Parameters,
   MarkerConfig,
+  StandalonePopupConfig,
+  FitToConfig,
   ImageConfig,
   ImagesConfig,
+  TerrainConfig,
+  SkyConfig,
+  ProjectionConfig,
+  LightConfig,
 } from "./map.schema";
 
 // Format-v2 map schema (U2 — validation only)

@@ -195,3 +195,37 @@ describe("projectStyle — author data is not document structure", () => {
     expect(validateStyleMin(style as never)).toEqual([]);
   });
 });
+
+describe("projectStyle — attribution is sanitized on emit (GHSA-jrc7-96c5-q579)", () => {
+  it("strips non-link markup from named and inline source attribution, with contract warnings", () => {
+    const { style, warnings } = emit({
+      ...base,
+      sources: { s: { ...emptyGeojson, attribution: '<b>S</b> <a href="https://ok.test/">ok</a>' } },
+      layers: [
+        { id: "a", type: "circle", source: "s" },
+        { id: "b", type: "circle", source: { ...emptyGeojson, attribution: "<i>B</i>" } },
+      ],
+    });
+    const sources = style["sources"] as Record<string, Record<string, unknown>>;
+    expect(sources["s"]?.["attribution"]).toBe('&lt;b&gt;S&lt;/b&gt; <a href="https://ok.test/">ok</a>');
+    expect(sources["b-source"]?.["attribution"]).toBe("&lt;i&gt;B&lt;/i&gt;");
+    expect(validateStyleMin(style as never)).toEqual([]);
+    const paths = warnings.filter((w) => w.kind === "contract").map((w) => w.path);
+    expect(paths).toEqual(
+      expect.arrayContaining(["sources.s.attribution", "sources.b-source.attribution"])
+    );
+  });
+
+  it("is silent for ordinary attribution", () => {
+    const attribution =
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+    const { style, warnings } = emit({
+      ...base,
+      sources: { s: { ...emptyGeojson, attribution } },
+      layers: [{ id: "a", type: "circle", source: "s" }],
+    });
+    const sources = style["sources"] as Record<string, Record<string, unknown>>;
+    expect(sources["s"]?.["attribution"]).toBe(attribution);
+    expect(warnings.filter((w) => w.path.endsWith(".attribution"))).toEqual([]);
+  });
+});

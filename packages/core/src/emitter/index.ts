@@ -29,6 +29,13 @@ export {
   MARKERS_LAYER_ID,
 } from "./lower-markers";
 export type { LoweredMarkers, MarkersLowering } from "./lower-markers";
+export {
+  lowerFitTo,
+  buildFitToLowering,
+  cameraForBounds,
+  FIT_TO_REFERENCE_VIEWPORT,
+} from "./lower-fit-to";
+export type { LoweredFitTo, FitToLowering } from "./lower-fit-to";
 export type { PinOptions } from "./assets";
 export type { BasemapFetcher } from "./basemap";
 export type { EmitMode, EmitWarning, EmitWarningKind, EmitResult, LayerPlacement } from "./project";

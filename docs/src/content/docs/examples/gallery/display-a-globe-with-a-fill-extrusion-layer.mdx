@@ -1,0 +1,22 @@
+---
+title: Display a globe with a fill extrusion layer
+description: The MapLibre globe fill-extrusion example — extrusions standing on a globe, in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-globe-with-a-fill-extrusion-layer.yaml?raw';
+
+Replicates the MapLibre example [Display a globe with a fill extrusion layer](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-globe-with-a-fill-extrusion-layer/).
+
+<LiveMap src="/configs/gallery/display-a-globe-with-a-fill-extrusion-layer.yaml" height="500px" caption="The globe button switches between globe and mercator" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-globe-with-a-fill-extrusion-layer.yaml" />
+
+## What to notice
+
+- An ordinary `fill-extrusion` layer, unchanged, stands on the globe: `projection:` changes how the whole map is drawn, not how layers are written.
+- `controls.globe` adds MapLibre's globe/mercator toggle (maplibre-gl 5.0.0 or later; older runtimes warn and omit it).
+- Upstream's polygon rings are left open; GeoJSON requires closed rings, so each ring here repeats its first point.

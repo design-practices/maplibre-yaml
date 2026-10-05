@@ -39,6 +39,10 @@ vi.mock("maplibre-gl", () => {
       }
     }
 
+    off(event: string, callback: Function) {
+      this.events.get(event)?.delete(callback);
+    }
+
     remove() {}
   }
 
@@ -46,6 +50,7 @@ vi.mock("maplibre-gl", () => {
   const GeolocateControl = vi.fn(() => ({ type: "geolocate" }));
   const ScaleControl = vi.fn(() => ({ type: "scale" }));
   const FullscreenControl = vi.fn(() => ({ type: "fullscreen" }));
+  const AttributionControl = vi.fn(() => ({ type: "attribution" }));
   const Popup = vi.fn(() => ({
     setLngLat: vi.fn().mockReturnThis(),
     setHTML: vi.fn().mockReturnThis(),
@@ -61,6 +66,7 @@ vi.mock("maplibre-gl", () => {
       GeolocateControl,
       ScaleControl,
       FullscreenControl,
+      AttributionControl,
       Popup,
     },
     Map: MockMap,
@@ -68,6 +74,7 @@ vi.mock("maplibre-gl", () => {
     GeolocateControl,
     ScaleControl,
     FullscreenControl,
+    AttributionControl,
     Popup,
   };
 });
@@ -425,6 +432,43 @@ describe("MapRenderer", () => {
     });
   });
 
+  describe("light (`light:` → map.setLight, U10′)", () => {
+    const config = {
+      center: [0, 0] as [number, number],
+      zoom: 2,
+      mapStyle: "https://example.com/style.json",
+    };
+
+    it("applies the document light on load", () => {
+      const light = { anchor: "map" as const, position: [1.5, 210, 30] as [number, number, number] };
+      renderer = new MapRenderer(container, config, [], { light });
+      const map = renderer.getMap() as any;
+      map.setLight = vi.fn();
+      map.emit("load");
+      expect(map.setLight).toHaveBeenCalledWith(light);
+    });
+
+    it("a rejected light warns and the document keeps loading", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      renderer = new MapRenderer(container, config, [], { light: { intensity: 0.4 } });
+      const map = renderer.getMap() as any;
+      map.setLight = vi.fn(() => {
+        throw new Error("bad light");
+      });
+      expect(() => map.emit("load")).not.toThrow();
+      expect(warn.mock.calls.some((c) => String(c[0]).includes("light"))).toBe(true);
+      warn.mockRestore();
+    });
+
+    it("touches nothing when no light was declared", () => {
+      renderer = new MapRenderer(container, config, [], {});
+      const map = renderer.getMap() as any;
+      map.setLight = vi.fn();
+      map.emit("load");
+      expect(map.setLight).not.toHaveBeenCalled();
+    });
+  });
+
   describe("isMapLoaded", () => {
     it("returns false before map loads", () => {
       const config = {
@@ -757,6 +801,81 @@ describe("MapRenderer", () => {
       renderer.buildLegend(legendContainer, layers as any);
 
       expect(legendContainer.innerHTML).toContain("Test");
+    });
+  });
+
+  describe("map-level 3D (U15)", () => {
+    const config = {
+      center: [0, 0] as [number, number],
+      zoom: 2,
+      mapStyle: "https://example.com/style.json",
+    };
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    it("applies projection, sky, and terrain on load (a v5-shaped runtime)", () => {
+      renderer = new MapRenderer(container, config, [], {
+        projection: { type: "globe" },
+        sky: { "sky-color": "#199EF3", "atmosphere-blend": 0.5 },
+        terrain: { source: "dem", exaggeration: 1.5 },
+      });
+      const map = renderer.getMap() as any;
+      map.setProjection = vi.fn();
+      map.setSky = vi.fn();
+      map.setTerrain = vi.fn();
+      map.getSource = vi.fn(() => ({ type: "raster-dem" }));
+      map.emit("load");
+
+      expect(map.setProjection).toHaveBeenCalledWith({ type: "globe" });
+      expect(map.setSky).toHaveBeenCalledWith({
+        "sky-color": "#199EF3",
+        "atmosphere-blend": 0.5,
+      });
+      expect(map.setTerrain).toHaveBeenCalledWith({ source: "dem", exaggeration: 1.5 });
+    });
+
+    it("a 4.x runtime (no setProjection) declares globe's absence with exactly one warning", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      renderer = new MapRenderer(container, config, [], { projection: { type: "globe" } });
+      // MockMap has no setProjection — that IS the 4.x runtime.
+      renderer.getMap().emit("load");
+      const globeWarns = warn.mock.calls.filter((c) => String(c[0]).includes("projection"));
+      expect(globeWarns).toHaveLength(1);
+      expect(String(globeWarns[0]![0])).toContain("5.0.0");
+      warn.mockRestore();
+    });
+
+    it("terrain whose source arrives with an inline layer source retries after layers", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      renderer = new MapRenderer(container, config, [], { terrain: { source: "late" } });
+      const map = renderer.getMap() as any;
+      map.setTerrain = vi.fn();
+      let exists = false;
+      map.getSource = vi.fn(() => (exists ? { type: "raster-dem" } : undefined));
+      map.emit("load");
+      expect(map.setTerrain).not.toHaveBeenCalled();
+      exists = true;
+      await flush();
+      expect(map.setTerrain).toHaveBeenCalledWith({ source: "late" });
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes("terrain"))).toEqual([]);
+      warn.mockRestore();
+    });
+
+    it("terrain naming no source warns once after layers settle and never throws", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const onError = vi.fn();
+      renderer = new MapRenderer(container, config, [], {
+        terrain: { source: "nope" },
+        onError,
+      });
+      const map = renderer.getMap() as any;
+      map.setTerrain = vi.fn();
+      map.getSource = vi.fn(() => undefined);
+      map.emit("load");
+      await flush();
+      expect(map.setTerrain).not.toHaveBeenCalled();
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes('"nope"'))).toHaveLength(1);
+      expect(onError).not.toHaveBeenCalled();
+      warn.mockRestore();
     });
   });
 

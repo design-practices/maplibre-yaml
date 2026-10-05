@@ -15,7 +15,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { meetsVersion, STATE_RUNTIME_FLOOR } from "../packages/core/src/capabilities";
+import {
+  meetsVersion,
+  STATE_RUNTIME_FLOOR,
+  GLOBE_RUNTIME_FLOOR,
+} from "../packages/core/src/capabilities";
 
 /**
  * The maplibre-gl version the e2e vendor serves (root devDependency — the
@@ -145,7 +149,36 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
   { slug: "add-an-icon-to-the-map", layers: ["logo"], rendered: "logo" },
   { slug: "use-a-fallback-image", layers: ["fallback"], rendered: "fallback" },
   { slug: "add-a-pattern-to-a-polygon", layers: ["patterned"], rendered: "patterned" },
+  // U15 map-level 3D — terrain/sky/projection twins over the server's
+  // synthetic /relief DEM and /landcover raster. The bespoke test below
+  // proves each 3D key reached the live map (or declared its absence on 4.x).
+  { slug: "3d-terrain", layers: ["osm", "hills"] },
+  { slug: "display-a-hybrid-satellite-map-with-terrain-elevation", layers: ["satellite", "hills"] },
+  { slug: "sky-fog-terrain", layers: ["osm", "hills"] },
+  { slug: "display-a-globe-with-a-vector-map", layers: ["land", "graticule"] },
+  { slug: "display-a-globe-with-an-atmosphere", layers: ["Satellite"] },
+  {
+    slug: "display-a-globe-with-a-fill-extrusion-layer",
+    layers: ["extrude-polygon-layer"],
+  },
+  {
+    slug: "create-a-heatmap-layer-on-a-globe-with-terrain-elevation",
+    layers: ["hills", "earthquakes-heat", "earthquakes-point"],
+  },
+  // U10′ Mapzen classics — static presets over the vendored lower-Manhattan
+  // tile fixture. Pixel-level hatch assertions live in the classics block.
+  {
+    slug: "crosshatch",
+    layers: ["earth", "landcover", "water", "buildings"],
+    rendered: "buildings",
+  },
+  { slug: "blueprint", layers: ["ground", "water", "buildings"], rendered: "buildings" },
 ];
+
+/** True when the vendor has globe projection (maplibre-gl >= 5.0.0). */
+function vendorHasGlobe(): boolean {
+  return meetsVersion(VENDOR_MAPLIBRE_VERSION, GLOBE_RUNTIME_FLOOR);
+}
 
 async function openExample(page: Page, slug: string, layers: string[]): Promise<void> {
   await page.goto(`/examples/gallery/viewer.html?example=${slug}`, {
@@ -246,6 +279,93 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
     await expect(
       page.locator(".maplibregl-ctrl-top-left .maplibregl-ctrl-attrib")
     ).toBeVisible();
+  });
+
+  test("U15 3D trio: terrain raises the surface, sky lands, globe projects (or declares absence on 4.x)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const warnings: string[] = [];
+    page.on("console", (m) => {
+      if (m.type() === "warning") warnings.push(m.text());
+    });
+
+    // terrain: — applied from the named DEM source, the control toggles it,
+    // and the synthetic relief is actually under the camera (an elevation
+    // query only answers once terrain is live and its tiles decoded).
+    await openExample(page, "3d-terrain", ["osm", "hills"]);
+    expect(
+      await page.evaluate(() =>
+        (document.getElementById("map") as any).getMap().getTerrain()
+      )
+    ).toEqual({ source: "terrainSource", exaggeration: 1 });
+    await expect(page.locator(".maplibregl-ctrl-terrain-enabled")).toBeVisible();
+    await page.waitForFunction(
+      () => {
+        // Relief, not an absolute height: 4.x reports elevation relative to
+        // the camera target, 5.x above sea level — the spread is the same.
+        const map = (document.getElementById("map") as any).getMap();
+        const c = map.getCenter();
+        const samples = [-0.06, -0.03, 0, 0.03, 0.06].map((d) =>
+          map.queryTerrainElevation?.([c.lng + d, c.lat + d / 2])
+        );
+        if (!samples.every((e: unknown) => typeof e === "number")) return false;
+        return Math.max(...samples) - Math.min(...samples) > 100;
+      },
+      undefined,
+      { timeout: 30_000 }
+    );
+
+    // sky: — the authored block reached the style (setSky, maplibre-gl >= 4.5).
+    await openExample(page, "sky-fog-terrain", ["osm", "hills"]);
+    const sky = await page.evaluate(() =>
+      (document.getElementById("map") as any).getMap().getSky?.()
+    );
+    expect(sky?.["sky-color"]).toBe("#0000ff");
+    expect(sky?.["fog-ground-blend"]).toBe(0.1);
+
+    // projection: — globe on 5.x; on the 4.x leg, exactly one declared
+    // absence naming the floor, and the map still renders (mercator).
+    // Waiting on a document layer means the load handler (which applies the
+    // projection before adding layers) has run.
+    // A whole-viewport queryRenderedFeatures() comes back empty under globe
+    // (the viewport corners are off the planet), so features are proven at
+    // a point: where a known feature projects on screen.
+    for (const [slug, layer, at] of [
+      ["display-a-globe-with-a-vector-map", "land", [-40, 0]],
+      ["display-a-globe-with-an-atmosphere", "Satellite", null],
+      ["display-a-globe-with-a-fill-extrusion-layer", "extrude-polygon-layer", [0, 0]],
+    ] as const) {
+      warnings.length = 0;
+      await openExample(page, slug, [layer]);
+      if (at) {
+        await page.waitForFunction(
+          ({ layerId, lngLat }) => {
+            const map = (document.getElementById("map") as any).getMap();
+            const p = map.project(lngLat);
+            return map.queryRenderedFeatures([p.x, p.y], { layers: [layerId] }).length > 0;
+          },
+          { layerId: layer, lngLat: at as unknown as [number, number] },
+          { timeout: 30_000 }
+        );
+      }
+      const projection = await page.evaluate(
+        () => (document.getElementById("map") as any).getMap().getProjection?.()?.type ?? null
+      );
+      const absences = warnings.filter((w) => w.includes("projection") && w.includes("5.0.0"));
+      if (vendorHasGlobe()) {
+        expect(projection, `${slug} projection`).toBe("globe");
+        expect(absences, `${slug} must not warn on 5.x`).toEqual([]);
+      } else {
+        expect(projection, `${slug} has no projection API on 4.x`).toBeNull();
+        expect(absences, `${slug} declares globe's absence once`).toHaveLength(1);
+      }
+    }
+    if (vendorHasGlobe()) {
+      await expect(page.locator(".maplibregl-ctrl-globe-enabled")).toBeVisible();
+    }
+
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 
   test("camera-config pages: bounds frames the box, maxBounds constrains, interactive:false disables handlers", async ({
@@ -768,6 +888,122 @@ test.describe("touch posture: hover popups don't exist on touch; tap uses click.
     await expect(popup.locator(".maplibregl-popup-close-button")).toHaveCount(1);
     await expect(popup.locator("h3")).toHaveText("Washington DC");
 
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
+/**
+ * Mapzen classics (U10′): the static presets ARE their own eject (the CLI
+ * suite pins `mlym emit --strict` → zero warnings). Here the browser proves
+ * the look actually reaches the screen: buildings are drawn, the pattern
+ * images are registered and bound, and the canvas is made of the preset's
+ * ink and paper (or drafting blue) — not a blank or default-coloured map.
+ */
+test.describe("Mapzen classics: the static presets render their look (U10′)", () => {
+  /** Count screenshot pixels within `tol` of each target colour. */
+  async function colourCounts(
+    page: Page,
+    targets: Record<string, [number, number, number]>,
+    tol = 24
+  ) {
+    const { PNG } = await import("pngjs");
+    const shot = PNG.sync.read(await page.locator("#map").screenshot());
+    const counts: Record<string, number> = Object.fromEntries(
+      Object.keys(targets).map((k) => [k, 0])
+    );
+    for (let i = 0; i < shot.data.length; i += 4) {
+      for (const [name, [r, g, b]] of Object.entries(targets)) {
+        if (
+          Math.abs(shot.data[i]! - r) <= tol &&
+          Math.abs(shot.data[i + 1]! - g) <= tol &&
+          Math.abs(shot.data[i + 2]! - b) <= tol
+        )
+          counts[name]! += 1;
+      }
+    }
+    return { counts, total: shot.width * shot.height };
+  }
+
+  const settled = (page: Page) =>
+    page.waitForFunction(
+      () => {
+        const map = (document.getElementById("map") as any)?.getMap?.();
+        return Boolean(map && map.loaded() && map.areTilesLoaded());
+      },
+      undefined,
+      { timeout: 60_000 }
+    );
+
+  test("crosshatch: hatched buildings, pre-lit water, serif labels, the document's light", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openExample(page, "crosshatch", ["buildings", "place-labels"]);
+    await settled(page);
+
+    const state = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      const q = (id: string) => map.queryRenderedFeatures(undefined, { layers: [id] }).length;
+      return {
+        images: ["earth", "landuse", "water", "building-hatch"].map((n) => map.hasImage(n)),
+        pattern: map.getPaintProperty("buildings", "fill-extrusion-pattern"),
+        landcover: map.getPaintProperty("landcover", "fill-pattern"),
+        light: map.getLight(),
+        buildings: q("buildings"),
+        water: q("water"),
+        labels: q("place-labels"),
+      };
+    });
+    expect(state.images, "a pattern image never reached map.addImage").toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+    expect(state.pattern).toBe("building-hatch");
+    // ml-gjf: a data-driven pattern survives validation and reaches MapLibre.
+    expect(state.landcover).toEqual(["match", ["get", "class"], "sand", "earth", "landuse"]);
+    expect(state.light).toMatchObject({ anchor: "map", position: [1.15, 239, 30] });
+    expect(state.buildings, "no buildings drawn").toBeGreaterThan(100);
+    expect(state.water).toBeGreaterThan(0);
+    // Self-hosted Libre Baskerville Italic ranges load from the docs tree.
+    expect(state.labels).toBeGreaterThan(0);
+
+    // The hatch is on screen: Tangram's paper and its ink strokes both
+    // cover real area.
+    const { counts, total } = await colourCounts(page, {
+      paper: [249, 243, 227],
+      ink: [77, 77, 78],
+    });
+    expect(counts.paper! / total, "too little paper — hatch missing?").toBeGreaterThan(0.1);
+    expect(counts.ink! / total, "no ink strokes — hatch missing?").toBeGreaterThan(0.01);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("blueprint: drafting-grid ground under flat-shaded blue buildings", async ({ page }) => {
+    const errors = await guard(page);
+    await openExample(page, "blueprint", ["ground", "buildings"]);
+    await settled(page);
+
+    const state = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return {
+        grid: map.hasImage("grid"),
+        ground: map.getPaintProperty("ground", "background-pattern"),
+        buildings: map.queryRenderedFeatures(undefined, { layers: ["buildings"] }).length,
+      };
+    });
+    expect(state.grid).toBe(true);
+    expect(state.ground).toBe("grid");
+    expect(state.buildings).toBeGreaterThan(100);
+
+    const { counts, total } = await colourCounts(
+      page,
+      { building: [0x1a, 0x56, 0xb0], sheet: [0x0b, 0x3d, 0x91] },
+      40
+    );
+    expect(counts.building! / total, "no blue buildings on screen").toBeGreaterThan(0.1);
+    expect(counts.sheet! / total, "no drafting sheet on screen").toBeGreaterThan(0.005);
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 });

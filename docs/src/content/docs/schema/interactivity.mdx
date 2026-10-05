@@ -60,6 +60,11 @@ Configuring it suppresses MapLibre's built-in attribution so only one control
 renders. Leave it unset and the built-in one still appears — attribution is a
 licensing obligation for most tile providers, so it is never removed silently.
 
+`customAttribution`, like every source `attribution`, is sanitized before
+MapLibre renders it: text and `http:`/`https:`/`mailto:` links survive, other
+markup shows as literal text. See
+[Trust and attribution](/integrations/web-components/#trust-and-attribution).
+
 ## Interactive Legends
 
 Legends display layer information and can be positioned anywhere on the map.

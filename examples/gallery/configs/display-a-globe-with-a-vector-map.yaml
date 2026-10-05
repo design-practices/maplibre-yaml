@@ -1,0 +1,61 @@
+# Hermetic twin of docs/public/configs/gallery/display-a-globe-with-a-vector-map.yaml
+# (U15). The docs page projects the demotiles vector basemap; no local vector
+# tileset exists, so the twin projects the source-less local style plus an
+# inline GeoJSON graticule-and-land layer. `projection:` is the construct
+# under test and is identical.
+type: map
+id: display-a-globe-with-a-vector-map
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "/examples/verification/configs/local-style.json"
+projection:
+  type: globe
+layers:
+  - id: land
+    type: fill
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: { name: "west" }
+            geometry:
+              type: Polygon
+              coordinates:
+                - [[-60, -30], [-20, -30], [-20, 30], [-60, 30], [-60, -30]]
+          - type: Feature
+            properties: { name: "east" }
+            geometry:
+              type: Polygon
+              coordinates:
+                - [[10, -35], [45, -35], [45, 35], [10, 35], [10, -35]]
+    paint:
+      fill-color: "#d9c9a3"
+      fill-outline-color: "#7a6a4a"
+  - id: graticule
+    type: line
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            properties: {}
+            geometry:
+              type: MultiLineString
+              coordinates:
+                - [[-90, -60], [-90, 60]]
+                - [[-60, -60], [-60, 60]]
+                - [[-30, -60], [-30, 60]]
+                - [[0, -60], [0, 60]]
+                - [[30, -60], [30, 60]]
+                - [[60, -60], [60, 60]]
+                - [[90, -60], [90, 60]]
+                - [[-90, -30], [-60, -30], [-30, -30], [0, -30], [30, -30], [60, -30], [90, -30]]
+                - [[-90, 0], [-60, 0], [-30, 0], [0, 0], [30, 0], [60, 0], [90, 0]]
+                - [[-90, 30], [-60, 30], [-30, 30], [0, 30], [30, 30], [60, 30], [90, 30]]
+    paint:
+      line-color: "#3a6ea5"
+      line-width: 1

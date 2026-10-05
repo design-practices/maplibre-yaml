@@ -277,7 +277,9 @@ export const ChapterSchema = z
     spinGlobe: z
       .boolean()
       .optional()
-      .describe("Spin globe animation (for low zoom levels)"),
+      .describe(
+        "Not implemented (warns, no effect). Globe projection itself is the map-level `projection: { type: globe }`"
+      ),
 
     // Layout
     alignment: z

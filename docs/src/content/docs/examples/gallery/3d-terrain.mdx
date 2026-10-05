@@ -1,0 +1,24 @@
+---
+title: 3D terrain
+description: The MapLibre 3D terrain example — map-level terrain from a raster-dem source, in YAML
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/3d-terrain.yaml?raw';
+
+Replicates the MapLibre example [3D terrain](https://maplibre.org/maplibre-gl-js/docs/examples/3d-terrain/): the Alps above Innsbruck, draped over real elevation.
+
+<LiveMap src="/configs/gallery/3d-terrain.yaml" height="500px" caption="Right-drag (or Ctrl-drag) to orbit; the mountain button toggles terrain" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="3d-terrain.yaml" />
+
+## What to notice
+
+- `terrain:` is a document-root key, a sibling of `config:`, in the style spec's own shape: `source` names a `raster-dem` source and `exaggeration` scales it. On eject it compiles to the style.json root `terrain` unchanged.
+- Terrain and hillshade read **separate** DEM sources, as upstream does — one source serving both renders at reduced quality.
+- `sky: {}` turns on MapLibre's default sky, so the horizon above the pitched camera is drawn rather than left blank.
+- `controls.terrain` adds MapLibre's terrain toggle, wired to the document's own `terrain:`.
+- The basemap is an inline empty style (`{ version: 8, sources: {}, layers: [] }`), so the OSM raster is the only imagery, exactly like upstream.

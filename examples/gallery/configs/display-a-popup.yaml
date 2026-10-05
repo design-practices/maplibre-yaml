@@ -1,0 +1,13 @@
+# Hermetic twin of docs/public/configs/gallery/display-a-popup.yaml (local basemap).
+type: map
+id: display-a-popup
+config:
+  center: [-96, 37.8]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+popups:
+  - at: [-96, 37.8]
+    closeOnClick: false
+    content:
+      - h1:
+          - str: "Hello World!"
