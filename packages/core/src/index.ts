@@ -135,6 +135,23 @@ export type {
   BasemapFetcher,
 } from "./emitter";
 
+// Effects host hook (experimental, 0.7) — how @maplibre-yaml/effects plugs in
+// without core importing it. Also the `effect:` lowering the emitter uses.
+export {
+  registerEffectsHost,
+  getEffectsHost,
+  onEffectsHost,
+} from "./effects-host";
+export type {
+  EffectsHost,
+  EffectBlock,
+  EffectIssue,
+  EffectLayerRef,
+  EffectsAttachment,
+} from "./effects-host";
+export { lowerEffectLayer, EFFECT_ON_EMIT } from "./emitter/lower-effects";
+export type { EffectLowering } from "./emitter/lower-effects";
+
 // Capability policy — what a document may do, given where it is compiled
 export {
   STATE_RUNTIME_FLOOR,

@@ -20,6 +20,7 @@ import {
 } from "../emitter/lower-markers";
 import { buildFitToLowering } from "../emitter/lower-fit-to";
 import type { MarkerConfig, FitToConfig } from "../schemas/map.schema";
+import { lowerEffectLayer, EFFECT_ON_EMIT } from "../emitter/lower-effects";
 
 /**
  * The default registry every emit path consults.
@@ -73,6 +74,25 @@ ejectClasses.register("layer.before", {
   onEmit:
     "Placement compiles honestly: the emitted layers array is ordered so the layer sits " +
     "where `before:` put it (and EmitResult.placements carries the intent).",
+});
+
+// Experimental (0.7, @maplibre-yaml/effects). The fallback is the layer the
+// effect sits on; the eject() and the projection share lowerEffectLayer
+// (imported directly, never via the emitter barrel — see `markers` below).
+ejectClasses.register("layer.effect", {
+  class: "fallback",
+  onEmit: EFFECT_ON_EMIT,
+  eject: (ctx) => {
+    const { layer, effect } = ctx.value as {
+      layer: Record<string, unknown>;
+      effect: unknown;
+    };
+    const lowered = lowerEffectLayer(layer, effect);
+    return {
+      ...(lowered.layer ? { layers: [lowered.layer] } : {}),
+      warnings: [lowered.warning],
+    };
+  },
 });
 
 // ---------------------------------------------------------------------------

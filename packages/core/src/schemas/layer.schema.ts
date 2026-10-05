@@ -20,6 +20,8 @@ import {
   ZoomLevelSchema,
 } from "./base.schema";
 import { LayerSourceSchema } from "./source.schema";
+import { markOpenSchema } from "../parser/validation-utils";
+import { getEffectsHost, type EffectBlock } from "../effects-host";
 
 /**
  * Reference to a root-level named source.
@@ -423,6 +425,62 @@ export const LegendItemSchema = z
 export type LegendItem = z.infer<typeof LegendItemSchema>;
 
 /**
+ * A layer's `effect:` block — **experimental** (0.7, `@maplibre-yaml/effects`).
+ *
+ * @remarks
+ * Names a registered effect by `type`; every other key is a param (flat,
+ * KTD6). The layer it sits on is the effect's static fallback: without the
+ * effects package the layer renders as authored, and `mlym emit` ejects it
+ * with one `lossy` warning per effect.
+ *
+ * When `@maplibre-yaml/effects` is loaded, the params validate against the
+ * registered effect's zod schema here, so a bad param is a positioned parse
+ * error like any other. Without it the block is an open object and the
+ * validator reports one `unimplemented` warning instead.
+ *
+ * @example
+ * ```yaml
+ * - id: buildings
+ *   type: fill-extrusion
+ *   source: omt
+ *   source-layer: building
+ *   paint: { fill-extrusion-color: "#ccc", fill-extrusion-height: ["get", "render_height"] }
+ *   effect:
+ *     type: tonal-hatch
+ *     gain: 0.72
+ * ```
+ */
+export const EffectConfigSchema = z
+  .object({
+    type: z
+      .string()
+      .min(1)
+      .describe("A registered effect type, e.g. tonal-hatch or blueprint"),
+  })
+  .passthrough()
+  .superRefine((value, ctx) => {
+    const host = getEffectsHost();
+    if (!host) return;
+    for (const issue of host.validate(value as EffectBlock)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: issue.path,
+        message: issue.message,
+      });
+    }
+  })
+  .describe(
+    "Experimental: a registered shader effect (`type` + flat params) that " +
+      "enhances this layer; the layer itself is the static fallback"
+  );
+// Params are the effect's own vocabulary, validated by its registered zod
+// schema — never "unknown keys" to the generic walker.
+markOpenSchema(EffectConfigSchema);
+
+/** Inferred type for an `effect:` block. */
+export type EffectConfig = z.infer<typeof EffectConfigSchema>;
+
+/**
  * Base properties shared by all layer types.
  *
  * @remarks
@@ -460,6 +518,7 @@ export const BaseLayerPropertiesSchema = z.object({
     "Interactive event configuration"
   ),
   legend: LegendItemSchema.optional().describe("Legend configuration"),
+  effect: EffectConfigSchema.optional(),
   metadata: z.record(z.any()).optional().describe("Custom metadata"),
 });
 

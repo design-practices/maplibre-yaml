@@ -36,6 +36,7 @@ disagree.
 | `fitTo` | ejects via fallback | The fit-to-data camera lowers to a concrete `center`/`zoom` when the named source's GeoJSON is inline (computed for a 1024×768 reference viewport — lossy, since a live map fits its own container); for fetched or tiled sources the authored `center`/`zoom` stand in, reported as lossy. |
 | `light` | ejects | The style-spec root light; compiles through verbatim to the emitted style's `light`, replacing any basemap light. |
 | `markers` | ejects via fallback | Markers lower to a symbol layer with generated pin sprites — the pins render in the emitted style; DOM-marker behavior (dragging, built-in popups) does not compile, reported as lossy. |
+| `layer.effect` | ejects via fallback | *Experimental.* A shader effect has no style.json form; the emitted style carries the layer's own static style — the effect's fallback — with one `lossy` warning per effect, so `--strict` refuses. A registered effect may adjust that layer or declare absence (`null`) through its `fallback()`. See [Effects](/guides/effects/). |
 | `layer.interactive` | declared absence | Popups, hover, and highlight are runtime behavior; `attachInteractions()` restores them over an ejected style. |
 | `layer.legend` | declared absence | Legend entries are chrome, not cartography. |
 | `layer.label` | declared absence | Display labels are chrome metadata. |
@@ -52,8 +53,9 @@ disagree.
 `markers` was the first **ejects-via-fallback** construct (marker `icon:`
 URLs are fetched into the sprite at emit time, like `images:` entries).
 `fitTo` is the second, and its lowering rewrites the root camera rather than
-adding layers. The effects catalog obeys the same law — every effect
-registers a mandatory fallback.
+adding layers. The experimental effects obey the same law — every effect
+registers a mandatory `fallback()`, and the layer an effect sits on *is* that
+fallback, so an ejected effect is never a silent hole in the map.
 
 `<ml-map>` [slots](/integrations/web-components/#slots-your-own-chrome-over-the-map)
 are not in the table because they are not in the document: slot children

@@ -24,6 +24,7 @@ import { isMap } from "yaml";
 import { ExpressionSchema } from "../schemas/base.schema";
 import { GeoJSONSchema } from "../schemas/geojson.schema";
 import { SPEC_PAINT_KEYS, SPEC_LAYOUT_KEYS } from "./spec-keys.generated";
+import { getEffectsHost } from "../effects-host";
 
 /**
  * A non-fatal validation finding surfaced alongside errors.
@@ -619,7 +620,8 @@ interface DeprecationRule {
     value: Record<string, unknown>,
     path: (string | number)[]
   ) => boolean;
-  message: string;
+  /** Static text, or computed from the matched object. */
+  message: string | ((value: Record<string, unknown>) => string);
   suggestion?: string;
 }
 
@@ -669,7 +671,7 @@ function checkDeprecations(
     const pos = positionForKey(ctx.doc, ctx.lineCounter, path, rule.field);
     ctx.warnings.push({
       path: [...path, rule.field].join("."),
-      message: rule.message,
+      message: typeof rule.message === "function" ? rule.message(value) : rule.message,
       ...(pos ? { line: pos.line, column: pos.column } : {}),
       ...(rule.suggestion ? { suggestion: rule.suggestion } : {}),
       kind: "deprecation",
@@ -713,6 +715,28 @@ const UNIMPLEMENTED: DeprecationRule[] = [
       `"setPaintProperty", and "setLayoutProperty" run. This action ` +
       `currently has no effect.`,
   },
+  {
+    // `effect:` (0.7, experimental) is validated and rendered by the
+    // optional @maplibre-yaml/effects package. Without it the document is
+    // not wrong — the layer renders as its own static fallback — so this is
+    // an unimplemented-class note, never promoted to an error.
+    field: "effect",
+    applies: (value: Record<string, unknown>, path: (string | number)[]) =>
+      getEffectsHost() === undefined &&
+      typeof value.effect === "object" &&
+      value.effect !== null &&
+      // a v1 layer (…layers[i]) or a v2 layer's nested `runtime:` block
+      (path[path.length - 2] === "layers" || path[path.length - 1] === "runtime"),
+    message: (value: Record<string, unknown>) => {
+      const type = (value.effect as { type?: unknown }).type;
+      return (
+        `Effect ${typeof type === "string" ? `"${type}" ` : ""}is not loaded: ` +
+        "the layer renders as its static self (the effect's fallback). Import " +
+        '"@maplibre-yaml/effects/register" to enable effects and validate ' +
+        "their params."
+      );
+    },
+  },
 ];
 
 /**
@@ -731,7 +755,7 @@ function checkUnimplemented(
     const pos = positionForKey(ctx.doc, ctx.lineCounter, path, rule.field);
     ctx.warnings.push({
       path: [...path, rule.field].join("."),
-      message: rule.message,
+      message: typeof rule.message === "function" ? rule.message(value) : rule.message,
       ...(pos ? { line: pos.line, column: pos.column } : {}),
       kind: "unimplemented",
     });
