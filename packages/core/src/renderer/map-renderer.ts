@@ -637,9 +637,9 @@ export class MapRenderer {
     // feature-data-sized — past the cap, one final note and silence.
     const MISSING_WARN_CAP = 100;
     const missingWarned = new Set<string>();
-    this.map.on('styleimagemissing', (e: { id: string }) => {
-      if (missingWarned.has(e.id) || missingWarned.size > MISSING_WARN_CAP) return;
-      missingWarned.add(e.id);
+    const warnMissing = (id: string) => {
+      if (missingWarned.has(id) || missingWarned.size > MISSING_WARN_CAP) return;
+      missingWarned.add(id);
       if (missingWarned.size > MISSING_WARN_CAP) {
         console.warn(
           `[maplibre-yaml] over ${MISSING_WARN_CAP} distinct missing image names; ` +
@@ -648,9 +648,21 @@ export class MapRenderer {
         return;
       }
       console.warn(
-        `[maplibre-yaml] layer references image "${e.id}" but no images: entry, ` +
+        `[maplibre-yaml] layer references image "${id}" but no images: entry, ` +
           'sprite, or addImage call supplies it.'
       );
+    };
+    this.map.on('styleimagemissing', (e: { id: string }) => {
+      if (missingWarned.has(e.id) || missingWarned.size > MISSING_WARN_CAP) return;
+      // A page's own styleimagemissing handler may supply the image (the
+      // generate-a-missing-icon pattern, U16). Listeners run synchronously
+      // in registration order and this one registered first, so defer the
+      // verdict until every listener has had its turn.
+      const map = this.map;
+      queueMicrotask(() => {
+        if (this.destroyed || map?.hasImage(e.id)) return;
+        warnMissing(e.id);
+      });
     });
 
     // Handle errors. Runtime maplibre error events are non-fatal: the map
