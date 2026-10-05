@@ -19,13 +19,13 @@ Get a map on your page in 3 steps.
    <head>
      <!-- MapLibre GL CSS -->
      <link
-       href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
+       href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
        rel="stylesheet"
      />
 
      <!-- Tell the browser where to find maplibre-gl -->
      <script type="importmap">
-       { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+       { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
      </script>
      <!-- Register the web component -->
      <script
@@ -91,7 +91,7 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 
 ```html
 <script type="importmap">
-  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script
   type="module"
@@ -100,17 +100,18 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 ```
 
 <Aside type="note" title="maplibre-gl version">
-  maplibre-yaml works with maplibre-gl **v4 and v5** (v5 recommended for new
-  projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0`. maplibre-gl v6 is
-  not supported yet, and it is what unpinned installs and CDN URLs now resolve
-  to — so pin the major your project uses in the import map, the CSS URL, and
-  `npm install`, and keep all three on the same major.
+  maplibre-yaml works with maplibre-gl **v4, v5 and v6** (v6 recommended for
+  new projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`. Pin
+  the major your project uses in the import map, the CSS URL, and
+  `npm install`, and keep all three on the same major. v6 is ESM-only (import
+  map entry `dist/maplibre-gl.mjs`) and, under a bundler, needs
+  `setWorkerUrl()` — see [Installation](/getting-started/installation/#supported-maplibre-gl-versions).
 </Aside>
 
 ### npm (With Build Tools)
 
 ```bash
-npm install @maplibre-yaml/core maplibre-gl@^5
+npm install @maplibre-yaml/core maplibre-gl@^6
 ```
 
 ```javascript
@@ -242,7 +243,7 @@ For dynamic or generated configurations:
 ></ml-map>
 
 <script type="importmap">
-  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script type="module">
   import "https://unpkg.com/@maplibre-yaml/core/register.js";
@@ -434,7 +435,7 @@ document has loaded (immediately if it already has) and rejects if the
 document fails, so there is no load-listener or null-guard boilerplate:
 
 ```javascript
-import maplibregl from "maplibre-gl"; // resolved by the import map (or your bundler)
+import * as maplibregl from "maplibre-gl"; // resolved by the import map (or your bundler)
 
 const mapEl = document.querySelector("ml-map");
 const map = await mapEl.mapReady();
@@ -504,11 +505,11 @@ This example demonstrates a complete implementation using the `src` attribute wi
   <head>
     <title>Earthquake Monitor</title>
     <link
-      href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
+      href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
       rel="stylesheet"
     />
     <script type="importmap">
-      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+      { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
     </script>
     <script
       type="module"
@@ -689,7 +690,7 @@ Each `<ml-map>` is independent:
 </div>
 
 <script type="importmap">
-  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script type="module">
   import "https://unpkg.com/@maplibre-yaml/core/register.js";
@@ -967,7 +968,9 @@ export default function YamlMap({ src }) {
 ```
 
 The server sends a plain `<ml-map>` tag, and it upgrades once the import
-resolves. Import the MapLibre CSS in `app/layout`.
+resolves. Import the MapLibre CSS in `app/layout`. On maplibre-gl 6, call
+`setWorkerUrl()` with your bundler's URL for the worker before that import —
+see [Installation](/getting-started/installation/#supported-maplibre-gl-versions).
 
 ### Vue
 
@@ -1201,10 +1204,12 @@ images, and the params panel.
 Attribution is the one place a document's text reaches an HTML sink that
 maplibre-yaml does not own: MapLibre renders the attribution control with
 `innerHTML`, behind its own sanitizer. That sanitizer can be bypassed in
-every maplibre-gl release up to 6.4.0 — which covers the whole supported
-peer range (`^3 || ^4 || ^5`) — so it is not a safe boundary for a document
-someone else wrote
+every maplibre-gl release up to 6.4.0
 ([GHSA-jrc7-96c5-q579](https://github.com/advisories/GHSA-jrc7-96c5-q579)).
+It is patched upstream in maplibre-gl **6.4.1**, which is why the v6 part of
+the peer range starts there (`^6.4.1`) — prefer v6 for new projects. The v4 and
+v5 lines get no fix, and a host may run any version, so MapLibre's sanitizer is
+still not treated as a safe boundary for a document someone else wrote.
 
 maplibre-yaml therefore sanitizes attribution itself before MapLibre sees it.
 What survives is plain text, character references (`&copy;`), and `<a>` links

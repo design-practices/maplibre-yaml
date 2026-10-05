@@ -7,29 +7,47 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## Supported maplibre-gl versions
 
-maplibre-yaml works with maplibre-gl **v4 and v5** (v5 recommended for new
-projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0`. maplibre-gl **v6 is
-not supported yet**, and it is now what an unpinned install or CDN URL
-resolves to — so every example below pins major 5 (`maplibre-gl@^5` for npm
-and the import map, `maplibre-gl@5` for the CSS). Pin whichever supported
-major your project uses, and keep the CSS on the same major as the JS.
+maplibre-yaml works with maplibre-gl **v4, v5 and v6** (v6 recommended for new
+projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`. Every
+example below pins major 6 (`maplibre-gl@^6` for npm, `maplibre-gl@6` for the
+CSS and the import map). Pin whichever supported major your project uses, and
+keep the CSS on the same major as the JS.
+
+maplibre-gl v6 is ESM-only: the browser entry is `dist/maplibre-gl.mjs` (there
+is no `maplibre-gl.js` UMD file any more), so an import map points at that file
+directly. It loads its worker (`maplibre-gl-worker.mjs`) from next to its own
+module, which works as-is from a CDN or any static server.
+
+**Bundlers (Vite, webpack, …) on v6:** inside a bundle MapLibre cannot find its
+worker, and every map fails with *"Worker failed to load"* (maplibre-yaml's
+`ml-map:error` then spells out this fix). Tell MapLibre where the worker is
+before the first map renders — with Vite:
+
+```ts
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+
+setWorkerUrl(workerUrl);
+```
+
+The `@maplibre-yaml/astro` components do this for you. v4 and v5 need nothing.
 
 ## Package installation
 
 <Tabs>
   <TabItem label="npm">
     ```bash
-    npm install @maplibre-yaml/core maplibre-gl@^5
+    npm install @maplibre-yaml/core maplibre-gl@^6
     ```
   </TabItem>
   <TabItem label="pnpm">
     ```bash
-    pnpm add @maplibre-yaml/core maplibre-gl@^5
+    pnpm add @maplibre-yaml/core maplibre-gl@^6
     ```
   </TabItem>
   <TabItem label="yarn">
     ```bash
-    yarn add @maplibre-yaml/core maplibre-gl@^5
+    yarn add @maplibre-yaml/core maplibre-gl@^6
     ```
   </TabItem>
 </Tabs>
@@ -42,7 +60,7 @@ MapLibre GL JS requires its CSS for proper rendering. Add it to your HTML or imp
   <TabItem label="HTML">
     ```html
     <link
-      href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
+      href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
       rel="stylesheet"
     />
     ```
@@ -63,7 +81,7 @@ For quick prototypes or simple pages, you can use maplibre-yaml directly from a 
 <html>
   <head>
     <link
-      href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css"
+      href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
       rel="stylesheet"
     />
     <style>
@@ -74,7 +92,7 @@ For quick prototypes or simple pages, you can use maplibre-yaml directly from a 
     </style>
     <!-- Tell the browser where to find maplibre-gl -->
     <script type="importmap">
-      { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+      { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
     </script>
     <!-- Register the <ml-map> web component -->
     <script
@@ -92,7 +110,7 @@ To use the JavaScript API (`YAMLParser`, `MapRenderer`) from a CDN instead of th
 
 ```html
 <script type="importmap">
-  { "imports": { "maplibre-gl": "https://esm.sh/maplibre-gl@^5" } }
+  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script type="module">
   import {

@@ -14,6 +14,17 @@
  *
  * Plus the v5 custom-layer render argument `defaultProjectionData.mainMatrix`.
  *
+ * maplibre-gl 6 (verified on 6.12): both internals are unchanged, but by
+ * default (`zoomLevelsToOverscale: 4`) a vector tile past the source's
+ * maxzoom is no longer the maxzoom tile overscaled — it is a SLICE, cut from
+ * the maxzoom tile on the worker and re-encoded, with its own canonical
+ * z/x/y. Those re-encoded bytes are not exact: the encoder truncates the
+ * fractional deltas the clipper introduces, so vertices after a clip point
+ * drift by a few tile units (≤ 4 measured at z17 over a z14 source; the
+ * drift is in MapLibre's `latestRawTileData`, not in what it renders).
+ * {@link TileView.reencoded} reports such tiles so geometry matching across
+ * tiles (the seam fix) can widen its tolerance for them.
+ *
  * Every access is feature-checked here and nowhere else. When a check
  * fails the backend declares absence — warns once, keeps the static layer
  * visible — instead of drawing something wrong. An upstream request for a
@@ -39,6 +50,12 @@ export interface TileView {
   raw(coord: TileCoord): ArrayBuffer | null;
   /** True when MapLibre reports the tile loaded (bytes or not). */
   loaded(coord: TileCoord): boolean;
+  /**
+   * True when the tile's bytes are MapLibre's re-encoded slice of a deeper
+   * zoom than the source serves (maplibre-gl 6 overzoom slicing), whose
+   * vertices may drift a few units; false for bytes as the server sent them.
+   */
+  reencoded(coord: TileCoord): boolean;
 }
 
 export type Probe<T> = { ok: true; value: T } | { ok: false; reason: string };
@@ -73,12 +90,22 @@ export function probeTiles(map: MapLibreMap, sourceId: string): Probe<TileView> 
       reason: `source "${sourceId}" has no tile manager with getVisibleCoordinates/getTileByID`,
     };
   }
+  // v5 overscales: past maxzoom the canonical z stays AT maxzoom, so this is
+  // false there by construction; only v6 slicing yields canonical z > maxzoom.
+  // Read per call: a TileJSON source learns its maxzoom when the JSON loads.
+  const getSource = (map as unknown as { getSource?: (id: string) => { maxzoom?: unknown } | undefined })
+    .getSource;
+  const maxzoom = () => (typeof getSource === "function" ? getSource.call(map, sourceId)?.maxzoom : undefined);
   return {
     ok: true,
     value: {
       coords: () => tm.getVisibleCoordinates(),
       raw: (coord) => tm.getTileByID(coord.key)?.latestRawTileData ?? null,
       loaded: (coord) => tm.getTileByID(coord.key)?.state === "loaded",
+      reencoded: (coord) => {
+        const mz = maxzoom();
+        return typeof mz === "number" && coord.canonical.z > mz;
+      },
     },
   };
 }
