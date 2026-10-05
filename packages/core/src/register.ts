@@ -47,6 +47,7 @@ import { MLMap, registerMLMap } from "./components/ml-map.js";
 
 // Export for manual use if needed
 export { MLMap, registerMLMap };
+export type { MLMapEventMap, MLMapErrorDetail } from "./components/ml-map.js";
 
 // Auto-register when imported in browser context
 if (typeof window !== "undefined") {

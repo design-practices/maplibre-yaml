@@ -1,0 +1,29 @@
+{
+  "version": 8,
+  "name": "example-react-basemap",
+  "metadata": {
+    "comment": "Self-contained basemap: Natural Earth 1:110m land (public domain) as GeoJSON next to the app, no tiles, no glyphs, no network. Keeps the example deterministic in CI and lets it run offline."
+  },
+  "sources": {
+    "land": { "type": "geojson", "data": "data/land.geojson" }
+  },
+  "layers": [
+    {
+      "id": "ocean",
+      "type": "background",
+      "paint": { "background-color": "#dce9f2" }
+    },
+    {
+      "id": "land",
+      "type": "fill",
+      "source": "land",
+      "paint": { "fill-color": "#f6f3ec" }
+    },
+    {
+      "id": "coastline",
+      "type": "line",
+      "source": "land",
+      "paint": { "line-color": "#b9c7d2", "line-width": 0.8 }
+    }
+  ]
+}

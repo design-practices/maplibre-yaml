@@ -89,6 +89,7 @@ export default defineConfig({
               link: "/guides/collections-integration/",
             },
             { label: "Web Components", link: "/integrations/web-components/" },
+            { label: "React", link: "/integrations/react/" },
           ],
         },
         {
