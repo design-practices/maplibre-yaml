@@ -152,6 +152,24 @@ describe("LegendBuilder", () => {
       expect(container.innerHTML).toContain("background:#ff0000");
     });
 
+    it("gives every swatch a size and the legend a box (core ships no stylesheet)", () => {
+      builder.build(container, [], {
+        items: [
+          { shape: "circle" as const, color: "#f00", label: "C" },
+          { shape: "square" as const, color: "#0f0", label: "S" },
+          { shape: "line" as const, color: "#00f", label: "L" },
+        ],
+      });
+      for (const span of container.querySelectorAll<HTMLElement>(".legend-symbol")) {
+        expect(span.style.width).not.toBe("");
+        expect(span.style.height).not.toBe("");
+        expect(span.style.display).toBe("inline-block");
+      }
+      const box = container.querySelector<HTMLElement>("details.maplibre-legend")!;
+      expect(box.style.background).not.toBe("");
+      expect(box.style.padding).not.toBe("");
+    });
+
     it("renders line symbols", () => {
       const layers: any[] = [];
       const config = {

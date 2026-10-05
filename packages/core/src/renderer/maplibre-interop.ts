@@ -20,6 +20,14 @@
  *   future ESM-only maplibre-gl): named exports exist; `default` may not.
  *   maplibre-gl v5's type declarations already dropped the default export.
  *
+ * - **Unbundled browser ESM serving the UMD file as-is** (Vite *dev* when
+ *   maplibre-gl was never pre-bundled — e.g. it is imported only from a
+ *   dependency's `.astro` component, which Vite's dep scanner does not
+ *   crawl): the namespace is empty, but evaluating the UMD has already set
+ *   `globalThis.maplibregl`. Without this fallback every
+ *   `@maplibre-yaml/astro` component failed under `astro dev` with
+ *   "Map is not a constructor" while `astro build` worked.
+ *
  * Importing the namespace and preferring `default` when present yields
  * working constructors in every environment, while the exported types stay
  * the named ones that v5 declares. Do not import maplibre-gl runtime values
@@ -29,7 +37,11 @@
 
 import * as maplibre from "maplibre-gl";
 
+const umdGlobal = (globalThis as unknown as { maplibregl?: typeof maplibre })
+  .maplibregl;
+
 const gl = ((maplibre as unknown as { default?: typeof maplibre }).default ??
+  (typeof maplibre.Map === "function" ? maplibre : umdGlobal) ??
   maplibre) as typeof maplibre;
 
 /**

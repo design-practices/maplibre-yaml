@@ -1,0 +1,39 @@
+---
+import Base from "../../layouts/Base.astro";
+import { Map, buildMapConfigFromEntry } from "@maplibre-yaml/astro";
+import { getCollection, render } from "astro:content";
+import { globalMapConfig } from "../../lib/map-config";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("volcanoes");
+  return entries.map((entry) => ({ params: { id: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+
+// Dispatches on the entry's geometry field (here `location`) and builds a
+// complete map document around it from the site-wide defaults.
+const mapConfig = await buildMapConfigFromEntry(entry.data, globalMapConfig, {
+  label: entry.data.title,
+  description: `${entry.data.country} · ${entry.data.elevation} m`,
+});
+---
+
+<Base title={entry.data.title}>
+  <main>
+    <p class="back"><a href="/volcanoes/">&larr; All volcanoes</a></p>
+    <h1>{entry.data.title}</h1>
+    <ul class="facts">
+      <li><strong>{entry.data.country}</strong></li>
+      <li><strong>{entry.data.elevation.toLocaleString("en")} m</strong> elevation</li>
+      <li>last eruption <strong>{entry.data.lastEruption}</strong></li>
+    </ul>
+    <div class="map-frame" data-testid="entry-map">
+      <Map config={mapConfig} height="360px" />
+    </div>
+    <article class="section" data-testid="entry-body">
+      <Content />
+    </article>
+  </main>
+</Base>

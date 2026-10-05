@@ -1,0 +1,27 @@
+title: The western Pacific
+blurb: From Kamchatka to Indonesia, with the plate boundary drawn in.
+type: map
+id: western-pacific
+config:
+  center: [135, 20]
+  zoom: 2.3
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+layers:
+  - id: ring
+    type: line
+    source:
+      type: geojson
+      url: "/data/ring-of-fire.geojson"
+    paint:
+      line-color: "#e4572e"
+      line-width: 3
+  - id: volcanoes
+    type: circle
+    source:
+      type: geojson
+      url: "/data/volcanoes.geojson"
+    paint:
+      circle-radius: 7
+      circle-color: "#b5231b"
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"

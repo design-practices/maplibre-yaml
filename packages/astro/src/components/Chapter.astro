@@ -129,7 +129,12 @@ const videoId = video ? `vid-${id}` : undefined;
   }
 </section>
 
-<style>
+<style is:global>
+  /*
+   * Global, every selector anchored on .scrolly-chapter: a `src` story
+   * renders its chapters in the browser, and those sections carry no
+   * Astro scope attribute -- scoped, they rendered unstyled (ml-euv).
+   */
   /* Chapter container */
   .scrolly-chapter {
     min-height: 100vh;
@@ -169,7 +174,7 @@ const videoId = video ? `vid-${id}` : undefined;
   }
 
   /* Content box */
-  .chapter-content {
+  .scrolly-chapter .chapter-content {
     background: var(--chapter-bg, rgba(255, 255, 255, 0.95));
     color: var(--chapter-text, #1f2937);
     padding: 32px;
@@ -182,12 +187,12 @@ const videoId = video ? `vid-${id}` : undefined;
   }
 
   /* Theme variants */
-  .theme-dark .chapter-content {
+  .scrolly-chapter.theme-dark .chapter-content {
     --chapter-bg: rgba(31, 41, 55, 0.95);
     --chapter-text: #f9fafb;
   }
 
-  .theme-light .chapter-content {
+  .scrolly-chapter.theme-light .chapter-content {
     --chapter-bg: rgba(255, 255, 255, 0.95);
     --chapter-text: #1f2937;
   }
@@ -204,7 +209,7 @@ const videoId = video ? `vid-${id}` : undefined;
   }
 
   /* Title */
-  .chapter-title {
+  .scrolly-chapter .chapter-title {
     font-size: 1.75rem;
     font-weight: 700;
     margin: 0 0 16px 0;
@@ -213,48 +218,48 @@ const videoId = video ? `vid-${id}` : undefined;
   }
 
   /* Description */
-  .chapter-description {
+  .scrolly-chapter .chapter-description {
     font-size: 1rem;
     line-height: 1.6;
     color: inherit;
   }
 
-  .chapter-description :global(p) {
+  .scrolly-chapter .chapter-description p {
     margin: 0 0 12px 0;
   }
 
-  .chapter-description :global(p:last-child) {
+  .scrolly-chapter .chapter-description p:last-child {
     margin-bottom: 0;
   }
 
-  .chapter-description :global(a) {
+  .scrolly-chapter .chapter-description a {
     color: var(--chapter-link, #3b82f6);
     text-decoration: underline;
   }
 
-  .chapter-description :global(a:hover) {
+  .scrolly-chapter .chapter-description a:hover {
     color: var(--chapter-link-hover, #2563eb);
   }
 
-  .theme-dark .chapter-description :global(a) {
+  .scrolly-chapter.theme-dark .chapter-description a {
     --chapter-link: #60a5fa;
     --chapter-link-hover: #93c5fd;
   }
 
   /* Media elements */
-  .chapter-media {
+  .scrolly-chapter .chapter-media {
     margin-bottom: 20px;
     border-radius: 8px;
     overflow: hidden;
   }
 
-  .chapter-media img {
+  .scrolly-chapter .chapter-media img {
     width: 100%;
     height: auto;
     display: block;
   }
 
-  .chapter-media video {
+  .scrolly-chapter .chapter-media video {
     width: 100%;
     height: auto;
     display: block;
@@ -272,16 +277,16 @@ const videoId = video ? `vid-${id}` : undefined;
       padding: 8vh 0;
     }
 
-    .chapter-content {
+    .scrolly-chapter .chapter-content {
       padding: 24px;
       max-width: 100%;
     }
 
-    .chapter-title {
+    .scrolly-chapter .chapter-title {
       font-size: 1.5rem;
     }
 
-    .chapter-description {
+    .scrolly-chapter .chapter-description {
       font-size: 0.9375rem;
     }
   }
@@ -291,30 +296,30 @@ const videoId = video ? `vid-${id}` : undefined;
       padding: 12vh 3vw;
     }
 
-    .chapter-content {
+    .scrolly-chapter .chapter-content {
       padding: 20px;
       border-radius: 8px;
       box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
     }
 
-    .chapter-title {
+    .scrolly-chapter .chapter-title {
       font-size: 1.375rem;
       margin-bottom: 12px;
     }
 
-    .chapter-description {
+    .scrolly-chapter .chapter-description {
       font-size: 0.875rem;
       line-height: 1.5;
     }
 
-    .chapter-media {
+    .scrolly-chapter .chapter-media {
       margin-bottom: 16px;
     }
   }
 
   /* Reduced motion support */
   @media (prefers-reduced-motion: reduce) {
-    .chapter-content {
+    .scrolly-chapter .chapter-content {
       transition: opacity 0.5s ease;
       transform: none !important;
     }
@@ -326,15 +331,15 @@ const videoId = video ? `vid-${id}` : undefined;
 
   /* High contrast mode support */
   @media (prefers-contrast: high) {
-    .chapter-content {
+    .scrolly-chapter .chapter-content {
       border: 2px solid currentColor;
     }
 
-    .theme-dark .chapter-content {
+    .scrolly-chapter.theme-dark .chapter-content {
       --chapter-bg: rgba(0, 0, 0, 0.95);
     }
 
-    .theme-light .chapter-content {
+    .scrolly-chapter.theme-light .chapter-content {
       --chapter-bg: rgba(255, 255, 255, 1);
     }
   }

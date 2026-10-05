@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "id": 1, "geometry": { "type": "Point", "coordinates": [138.7274, 35.3606] }, "properties": { "name": "Mount Fuji", "country": "Japan", "elevation": 3776, "status": "dormant", "lastEruption": 1707 } },
+    { "type": "Feature", "id": 2, "geometry": { "type": "Point", "coordinates": [-122.1944, 46.1912] }, "properties": { "name": "Mount St. Helens", "country": "United States", "elevation": 2549, "status": "active", "lastEruption": 2008 } },
+    { "type": "Feature", "id": 3, "geometry": { "type": "Point", "coordinates": [-121.7603, 46.8523] }, "properties": { "name": "Mount Rainier", "country": "United States", "elevation": 4392, "status": "dormant", "lastEruption": 1450 } },
+    { "type": "Feature", "id": 4, "geometry": { "type": "Point", "coordinates": [105.423, -6.102] }, "properties": { "name": "Anak Krakatau", "country": "Indonesia", "elevation": 157, "status": "active", "lastEruption": 2023 } },
+    { "type": "Feature", "id": 5, "geometry": { "type": "Point", "coordinates": [-98.6278, 19.0225] }, "properties": { "name": "Popocatépetl", "country": "Mexico", "elevation": 5426, "status": "active", "lastEruption": 2024 } },
+    { "type": "Feature", "id": 6, "geometry": { "type": "Point", "coordinates": [120.35, 15.13] }, "properties": { "name": "Mount Pinatubo", "country": "Philippines", "elevation": 1486, "status": "dormant", "lastEruption": 1991 } },
+    { "type": "Feature", "id": 7, "geometry": { "type": "Point", "coordinates": [123.685, 13.2548] }, "properties": { "name": "Mayon", "country": "Philippines", "elevation": 2462, "status": "active", "lastEruption": 2023 } },
+    { "type": "Feature", "id": 8, "geometry": { "type": "Point", "coordinates": [-71.9406, -39.4206] }, "properties": { "name": "Villarrica", "country": "Chile", "elevation": 2847, "status": "active", "lastEruption": 2024 } },
+    { "type": "Feature", "id": 9, "geometry": { "type": "Point", "coordinates": [-78.4358, -0.6773] }, "properties": { "name": "Cotopaxi", "country": "Ecuador", "elevation": 5897, "status": "active", "lastEruption": 2023 } },
+    { "type": "Feature", "id": 10, "geometry": { "type": "Point", "coordinates": [175.5631, -39.2817] }, "properties": { "name": "Mount Ruapehu", "country": "New Zealand", "elevation": 2797, "status": "active", "lastEruption": 2007 } },
+    { "type": "Feature", "id": 11, "geometry": { "type": "Point", "coordinates": [160.6383, 56.0556] }, "properties": { "name": "Klyuchevskaya Sopka", "country": "Russia", "elevation": 4754, "status": "active", "lastEruption": 2024 } },
+    { "type": "Feature", "id": 12, "geometry": { "type": "Point", "coordinates": [-163.9711, 54.7554] }, "properties": { "name": "Shishaldin", "country": "United States", "elevation": 2857, "status": "active", "lastEruption": 2023 } },
+    { "type": "Feature", "id": 13, "geometry": { "type": "Point", "coordinates": [-90.88, 14.473] }, "properties": { "name": "Volcán de Fuego", "country": "Guatemala", "elevation": 3763, "status": "active", "lastEruption": 2024 } },
+    { "type": "Feature", "id": 14, "geometry": { "type": "Point", "coordinates": [-175.39, -20.545] }, "properties": { "name": "Hunga Tonga", "country": "Tonga", "elevation": 114, "status": "active", "lastEruption": 2022 } },
+    { "type": "Feature", "id": 15, "geometry": { "type": "Point", "coordinates": [130.657, 31.593] }, "properties": { "name": "Sakurajima", "country": "Japan", "elevation": 1117, "status": "active", "lastEruption": 2024 } },
+    { "type": "Feature", "id": 16, "geometry": { "type": "Point", "coordinates": [-71.857, -15.787] }, "properties": { "name": "Sabancaya", "country": "Peru", "elevation": 5976, "status": "active", "lastEruption": 2024 } }
+  ]
+}

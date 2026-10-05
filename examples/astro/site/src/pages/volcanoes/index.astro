@@ -1,0 +1,60 @@
+---
+import Base from "../../layouts/Base.astro";
+import { Map } from "@maplibre-yaml/astro";
+import type { MapBlock } from "@maplibre-yaml/core";
+import { getCollection } from "astro:content";
+import { globalMapConfig } from "../../lib/map-config";
+
+const volcanoes = (await getCollection("volcanoes")).sort(
+  (a, b) => b.data.elevation - a.data.elevation
+);
+
+// One overview map built from the collection: a marker per entry.
+const overview = {
+  type: "map",
+  id: "volcano-overview",
+  config: {
+    center: globalMapConfig.defaultCenter ?? [-170, 10],
+    zoom: 1.2,
+    mapStyle: globalMapConfig.defaultMapStyle!,
+  },
+  markers: volcanoes.map((v) => ({
+    at: v.data.location.coordinates,
+    color: v.data.location.markerColor ?? "#d62828",
+    popup: [
+      { h3: [{ str: v.data.title }] },
+      { p: [{ str: `${v.data.country} · ${v.data.elevation} m` }] },
+    ],
+  })),
+} as unknown as MapBlock;
+---
+
+<Base title="Volcanoes">
+  <main>
+    <h1>Volcanoes</h1>
+    <p class="lede">
+      A Markdown content collection (<code>glob()</code> loader) whose frontmatter carries a
+      <code>location</code> validated by <code>LocationPointSchema</code>. The map below is
+      built from the collection; each entry gets its own page via
+      <code>buildMapConfigFromEntry</code>.
+    </p>
+
+    <div class="map-frame" data-testid="collection-map">
+      <Map config={overview} height="360px" />
+    </div>
+
+    <div class="cards" data-testid="volcano-list">
+      {
+        volcanoes.map((v) => (
+          <a class="card" href={`/volcanoes/${v.id}/`} data-volcano={v.id}>
+            <h3>{v.data.title}</h3>
+            <p>
+              {v.data.country} · {v.data.elevation.toLocaleString("en")} m
+            </p>
+            <span class="tag">last eruption {v.data.lastEruption}</span>
+          </a>
+        ))
+      }
+    </div>
+  </main>
+</Base>

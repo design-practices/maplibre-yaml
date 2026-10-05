@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json
+# Runtime story: <Scrollytelling src="/stories/cascadia.yaml" /> fetches,
+# validates and renders this in the browser (src/pages/story-runtime.astro).
+type: scrollytelling
+id: cascadia
+theme: light
+config:
+  center: [-122.5, 46.5]
+  zoom: 5
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  interactive: false
+layers:
+  - id: volcanoes
+    type: circle
+    source:
+      type: geojson
+      url: "/data/volcanoes.geojson"
+    paint:
+      circle-radius: 10
+      circle-color: "#d62828"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+chapters:
+  - id: range
+    title: The Cascade Range
+    description: <p>Loaded at runtime from <code>/stories/cascadia.yaml</code>.</p>
+    center: [-122.5, 46.5]
+    zoom: 5
+    alignment: left
+  - id: st-helens
+    title: Mount St. Helens
+    description: <p>18 May 1980. The north flank collapsed in the largest landslide ever recorded.</p>
+    center: [-122.1944, 46.1912]
+    zoom: 10.5
+    pitch: 55
+    bearing: 20
+    alignment: right
+  - id: rainier
+    title: Mount Rainier
+    description: <p>The most glaciated peak in the contiguous United States, and its most dangerous volcano.</p>
+    center: [-121.7603, 46.8523]
+    zoom: 10
+    pitch: 50
+    bearing: -30
+    animation: easeTo
+    alignment: left
