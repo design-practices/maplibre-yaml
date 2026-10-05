@@ -27,14 +27,16 @@ const style = `/classics/${name}/ejected/style.json`;
 ---
 
 <section class="classic" data-classic={name} style={`--classic-pane-height: ${height}`}>
-  <div class="classic-panes">
+  <!-- not-content: opt out of Starlight's markdown flow margins, which
+       would push each map (and the map inside <ml-map>) down 1rem. -->
+  <div class="classic-panes not-content">
     <figure class="classic-pane">
       <figcaption>
         <span class="classic-pane-title">Live</span>
         <span class="classic-pane-what"><code>&lt;ml-map&gt;</code> + <code>@maplibre-yaml/effects</code></span>
         <span class="classic-fx" data-fx-status data-state="loading">effect loading…</span>
       </figcaption>
-      <ml-map class="classic-map" data-pane="live" src={doc}></ml-map>
+      <div class="classic-map" data-pane-slot="live" data-doc={doc}></div>
     </figure>
     <figure class="classic-pane">
       <figcaption>
@@ -60,6 +62,8 @@ const style = `/classics/${name}/ejected/style.json`;
   import "@maplibre-yaml/core/register";
 
   type MLMap = maplibregl.Map;
+  /** Where the emitted sprite URLs point (the deployed docs site). */
+  const PRODUCTION_ORIGIN = "https://docs.maplibre-yaml.org";
   type MLMapElement = HTMLElement & { mapReady(): Promise<MLMap> };
 
   /**
@@ -123,14 +127,53 @@ const style = `/classics/${name}/ejected/style.json`;
     set("static", "static fallback (effect did not attach)");
   }
 
+  /** Serve a production-origin URL from this page's origin (PR previews, astro dev). */
+  const sameOrigin = (url: string): string =>
+    url.startsWith(PRODUCTION_ORIGIN) ? location.origin + url.slice(PRODUCTION_ORIGIN.length) : url;
+
+  /**
+   * Build the live `<ml-map>` from the published document. The document's
+   * image and glyph URLs are absolute production URLs (so a downloaded copy
+   * works anywhere); off production they would 404 until a deploy — a new
+   * asset such as the hatch atlas is missing there — so the YAML handed to
+   * the element points them at this page's origin. The download link still
+   * serves the file untouched.
+   */
+  async function mountLive(slot: HTMLElement): Promise<MLMapElement> {
+    const res = await fetch(slot.dataset.doc!);
+    let yaml = await res.text();
+    if (location.origin !== PRODUCTION_ORIGIN) yaml = yaml.split(`${PRODUCTION_ORIGIN}/`).join(`${location.origin}/`);
+    const el = document.createElement("ml-map") as MLMapElement;
+    // Carry the slot's attributes over — including Astro's scoped-style
+    // marker (data-astro-cid-*), without which `.classic-map` has no height.
+    for (const { name, value } of slot.attributes) {
+      if (name !== "data-pane-slot" && name !== "data-doc") el.setAttribute(name, value);
+    }
+    el.dataset.pane = "live";
+    const script = document.createElement("script");
+    script.type = "text/yaml";
+    script.textContent = yaml;
+    el.append(script);
+    slot.replaceWith(el);
+    return el;
+  }
+
   async function mount(section: HTMLElement): Promise<void> {
     const ejectedEl = section.querySelector<HTMLElement>('[data-pane="ejected"]')!;
-    const liveEl = section.querySelector<MLMapElement>('[data-pane="live"]')!;
+    const liveEl = await mountLive(section.querySelector<HTMLElement>('[data-pane-slot="live"]')!);
 
     // The honesty claim: this map is plain maplibre-gl fed the emitted file.
+    // The emitted style.json carries an ABSOLUTE production sprite URL (what
+    // a downloader needs, and what `mlym emit --sprite-base` wrote). On any
+    // other origin — a PR preview, astro dev — that URL 404s until the files
+    // are deployed, and every pattern layer (buildings, ground, water)
+    // silently disappears. MapLibre's standard `transformRequest` hook serves
+    // those requests from this page's own origin instead; the file itself is
+    // untouched (still byte-identical to `mlym emit`).
     const ejected = new maplibregl.Map({
       container: ejectedEl,
       style: ejectedEl.dataset.style!,
+      transformRequest: (url) => ({ url: sameOrigin(url) }),
     });
 
     const live = await liveEl.mapReady();
@@ -168,8 +211,14 @@ const style = `/classics/${name}/ejected/style.json`;
     border-radius: 8px;
     overflow: hidden;
     background: var(--sl-color-gray-6);
+    /* Captions wrap to different heights; the caption takes the slack so
+       both maps sit level. */
+    display: flex;
+    flex-direction: column;
   }
   .classic-pane figcaption {
+    flex: 1 0 auto;
+    align-content: flex-start;
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;

@@ -4,7 +4,7 @@
  *
  * @remarks
  * e2e/server.mjs mounts docs/dist at the paths the site serves the page
- * from (/classics/, /_astro/), so this is the page as deployed: its live
+ * from (/examples/classics/, /classics/, /_astro/), so this is the page as deployed: its live
  * panes (`<ml-map>` + `@maplibre-yaml/effects`, bundled by the docs build)
  * and its ejected panes (vanilla maplibre-gl over the `mlym emit` output the
  * docs build wrote). Build the docs first: `pnpm build`.
@@ -67,6 +67,14 @@ async function guard(page: Page): Promise<string[]> {
       return route.continue();
     }
     if (url.origin === SITE) {
+      // Off production, neither pane may fetch from the production origin:
+      // on a PR preview (or before a deploy) those URLs 404 for anything new
+      // — the maintainer saw crosshatch's ejected pane with roads and labels
+      // only (sprite), and the live pane's hatch atlas is not deployed yet.
+      // Mapping the production origin to the local build here is what hid
+      // that, so any such request is an error (served anyway, so one miss
+      // doesn't cascade).
+      errors.push(`fetched from the production origin (404s on previews): ${url.href}`);
       const file = join(DIST, decodeURIComponent(url.pathname));
       if (!file.startsWith(DIST) || !existsSync(file)) {
         errors.push(`not in the docs build: ${url.href}`);
@@ -95,10 +103,10 @@ async function guard(page: Page): Promise<string[]> {
 /** Open the page and wait until every classic's two maps exist and are synced. */
 async function openPage(page: Page): Promise<void> {
   expect(
-    existsSync(join(DIST, "classics", "index.html")),
-    "docs/dist/classics/index.html is missing — build the docs first (pnpm build)"
+    existsSync(join(DIST, "examples", "classics", "index.html")),
+    "docs/dist/examples/classics/index.html is missing — build the docs first (pnpm build)"
   ).toBe(true);
-  await page.goto("/classics/", { waitUntil: "domcontentloaded" });
+  await page.goto("/examples/classics/", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     (n) => document.querySelectorAll('section.classic[data-ready="true"]').length === n,
     CLASSICS.length,
@@ -203,6 +211,20 @@ test.describe("Mapzen classics launch page (U11)", () => {
         { timeout: 60_000 }
       );
       const p = await probe(page, name);
+      // Both panes are full-size maps (the live one once collapsed to a sliver
+      // when the element lost the component's scoped styles).
+      const sec = `section.classic[data-classic="${name}"]`;
+      const liveBox = (await page.locator(`${sec} [data-pane="live"]`).boundingBox())!;
+      const ejectedBox = (await page.locator(`${sec} [data-pane="ejected"]`).boundingBox())!;
+      expect(liveBox.height).toBeGreaterThan(300);
+      expect(Math.abs(liveBox.height - ejectedBox.height)).toBeLessThan(2);
+      // …that sit level and whose canvas fills them (Starlight's flow margins
+      // once pushed the live map down inside its element).
+      expect(Math.abs(liveBox.y - ejectedBox.y)).toBeLessThan(2);
+      for (const box of [liveBox, ejectedBox]) {
+        const canvas = (await page.locator(`${sec} canvas.maplibregl-canvas`).nth(box === liveBox ? 0 : 1).boundingBox())!;
+        expect(Math.abs(canvas.y - box.y), "map canvas offset inside its pane").toBeLessThan(2);
+      }
       // Same document, same layers, same order: the eject drops nothing.
       expect(p.ejected.layers).toEqual(p.live.layers.filter((id) => p.ejected.layers.includes(id)));
       expect(p.ejected.layers).toContain("buildings");

@@ -27,7 +27,7 @@ const agentAssets = {
 };
 
 /**
- * Compile the launch page's classics (/classics/) with `mlym emit
+ * Compile the launch page's classics (/examples/classics/) with `mlym emit
  * --with-fallbacks` on every dev start and build, into
  * public/classics/<name>/ejected/ (git-ignored). The page's ejected panes
  * run exactly that output in vanilla maplibre-gl, so they can never be a
@@ -142,7 +142,6 @@ export default defineConfig({
       },
 
       sidebar: [
-        { label: "Mapzen classics", link: "/classics/" },
         {
           label: "Getting Started",
           items: [
@@ -232,6 +231,7 @@ export default defineConfig({
           items: [
             { label: "Overview", link: "/examples/" },
             { label: "MapLibre Gallery", link: "/examples/gallery/" },
+            { label: "Mapzen Classics", link: "/examples/classics/" },
             { label: "Basic Map", link: "/examples/basic-map/" },
             {
               label: "Earthquake Tracker",

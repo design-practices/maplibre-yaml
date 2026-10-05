@@ -14,7 +14,7 @@
  *   node e2e/server.mjs &        # serves the repo, incl. docs configs
  *   node scripts/verify-docs-gallery.mjs
  *
- * It also drives the built classics launch page (/classics/, U11) over live
+ * It also drives the built classics launch page (/examples/classics/, U11) over live
  * tiles: both panes of each classic render, and the live pane's effect is
  * on. That needs the docs build (`pnpm build`).
  *
@@ -205,7 +205,7 @@ let classicsChecked = 0;
     });
   }
   try {
-    await page.goto(`${BASE}/classics/`, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto(`${BASE}/examples/classics/`, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForFunction(
       (n) => document.querySelectorAll('section.classic[data-ready="true"]').length === n,
       CLASSICS.length,
