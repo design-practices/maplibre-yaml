@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-an-animated-icon-to-the-map/
+# The YAML half: the point and its symbol layer, hidden until the page has
+# registered the animated "pulsing-dot" image (a StyleImageInterface that
+# redraws itself every frame) — see add-an-animated-icon-to-the-map.js.
+type: map
+id: add-an-animated-icon-to-the-map
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: points
+    type: symbol
+    visible: false
+    source:
+      type: geojson
+      location:
+        coordinates: [0, 0]
+    layout:
+      icon-image: pulsing-dot

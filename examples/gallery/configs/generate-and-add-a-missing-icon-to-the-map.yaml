@@ -1,0 +1,27 @@
+# Hermetic twin of docs/public/configs/gallery/generate-and-add-a-missing-icon-to-the-map.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/generate-and-add-a-missing-icon-to-the-map/
+# The YAML half: three points whose icon NAME is computed from data
+# (`square-rgb-<r,g,b>`). No image by those names exists anywhere; the
+# page answers MapLibre's styleimagemissing event by painting one on
+# demand — see generate-and-add-a-missing-icon-to-the-map.js. The layer
+# starts hidden so the handler is listening before the first request.
+type: map
+id: generate-and-add-a-missing-icon-to-the-map
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: points
+    type: symbol
+    visible: false
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, geometry: { type: Point, coordinates: [0, 0] }, properties: { color: "255,0,0" } }
+          - { type: Feature, geometry: { type: Point, coordinates: [50, 0] }, properties: { color: "255,209,28" } }
+          - { type: Feature, geometry: { type: Point, coordinates: [-50, 0] }, properties: { color: "242,127,32" } }
+    layout:
+      icon-image: ["concat", "square-rgb-", ["get", "color"]]

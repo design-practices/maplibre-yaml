@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>hatch twin</title>
+  <!--
+    Parametrized harness for the escape-hatch gallery twins (U16):
+      /examples/gallery/hatch/twin.html?slug=<slug>         hermetic twin
+      /examples/gallery/hatch/twin.html?slug=<slug>&live    the REAL docs config
+    It injects THE SAME page-chrome file (docs/public/gallery-js/<slug>.html)
+    into <ml-map> and runs THE SAME hatch JS the docs page ships, so the
+    markup and code a reader sees are what e2e/gallery-hatch*.spec.ts and
+    scripts/verify-docs-gallery.mjs drive. Serve from the repo root:
+    pnpm verify:serve
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <link rel="stylesheet" href="./twin.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "maplibre-gl": "/vendor/maplibre-gl.esm.js",
+        "@maplibre-yaml/core/maplibre": "/packages/core/dist/maplibre.js",
+        "maplibre-contour": "/node_modules/maplibre-contour/dist/index.mjs"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header id="title">hatch twin</header>
+  <ml-map id="map"></ml-map>
+  <script type="module" src="./twin.js"></script>
+</body>
+</html>

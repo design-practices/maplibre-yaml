@@ -1,0 +1,29 @@
+---
+title: Add a stretchable image to the map
+description: "addImage stretch zones let a label background grow to fit its text"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-stretchable-image-to-the-map.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/add-a-stretchable-image-to-the-map.js?raw';
+
+Replicates the MapLibre example [Add a stretchable image to the map](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-stretchable-image-to-the-map/). The labels and `icon-text-fit: both` are YAML. Which pixels of the background image may stretch — `stretchX`, `stretchY` — and the box the text must fit inside (`content`) are `addImage` options the `images:` block doesn't carry yet, so the page loads the two images and registers them with those zones. The layers wait hidden until then.
+
+<LiveMap src="/configs/gallery/add-a-stretchable-image-to-the-map.yaml" height="440px" caption="Bubbles stretch around one, two or three lines; the plain image sits below" />
+
+<script src="/gallery-js/add-a-stretchable-image-to-the-map.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="add-a-stretchable-image-to-the-map.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="add-a-stretchable-image-to-the-map.js" />
+
+## What to notice
+
+- In the debug image, blue columns are the horizontal stretch zones and the red row is the vertical one; everything else keeps its shape.
+- The plain `original` layer shows the unstretched image for comparison.
+- Images: the upstream example's assets, served locally.

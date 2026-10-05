@@ -1,0 +1,35 @@
+---
+title: Animate a line
+description: "A sine-wave line grows frame by frame through updateLayerData()"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/animate-a-line.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/animate-a-line.js?raw';
+import chrome from '../../../../../public/gallery-js/animate-a-line.html?raw';
+
+Replicates the MapLibre example [Animate a line](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-line/). The line layer and its styling are YAML. The animation appends a vertex every frame and hands the whole line to `<ml-map>`'s `updateLayerData()` — the element finds the layer's source itself, so there is no `getSource(...).setData()` bookkeeping. The Pause button rides a corner slot.
+
+<LiveMap src="/configs/gallery/animate-a-line.yaml" height="440px" chrome={chrome} caption="The line draws itself around the world; Pause freezes it" />
+
+<script src="/gallery-js/animate-a-line.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="animate-a-line.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="animate-a-line.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="animate-a-line.js" />
+
+## What to notice
+
+- `updateLayerData(layerId, geojson)` targets a *layer*; YAML authors never name the internal source the layer was given.
+- For data that arrives from a server rather than a loop, prefer the declarative `refresh:` or `stream:` source options — see [Add live realtime data](/examples/gallery/add-live-realtime-data/).

@@ -1,0 +1,15 @@
+<style>
+  /* A sidebar is a slot child whose width animates with the padding. */
+  [data-sidebar] { width: 2.4rem; transition: width 1s; overflow: hidden; }
+  [data-sidebar].open { width: 300px; max-width: none; box-sizing: border-box; min-height: 12rem; }
+  [data-sidebar] p { display: none; color: #6c757d; font-size: 1.1rem; padding-top: 0.5rem; }
+  [data-sidebar].open p { display: block; }
+</style>
+<aside slot="top-left" class="gallery-panel" data-sidebar="left">
+  <button type="button" data-sidebar-toggle="left" aria-label="Toggle left sidebar">&harr;</button>
+  <p>Left sidebar</p>
+</aside>
+<aside slot="top-right" class="gallery-panel" data-sidebar="right">
+  <button type="button" data-sidebar-toggle="right" aria-label="Toggle right sidebar">&harr;</button>
+  <p>Right sidebar</p>
+</aside>

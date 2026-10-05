@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/draw-a-circle/
+# The YAML half: an OpenStreetMap raster basemap and the two layers that
+# style the circle. The circle polygon is computed at runtime from a centre
+# and a radius (what turf.circle does upstream) and handed to the layer —
+# see draw-a-circle.js. A precomputed polygon would make this pure YAML.
+type: map
+id: draw-a-circle
+config:
+  center: [2.3454, 48.8452]
+  zoom: 13
+  maxZoom: 18
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  osm:
+    type: raster
+    tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"]
+    tileSize: 256
+    maxzoom: 19
+    attribution: "&copy; OpenStreetMap Contributors"
+  location-radius:
+    type: geojson
+    data: { type: FeatureCollection, features: [] }
+layers:
+  - id: osm
+    type: raster
+    source: osm
+  - id: location-radius
+    type: fill
+    source: location-radius
+    paint:
+      fill-color: "#8CCFFF"
+      fill-opacity: 0.5
+  - id: location-radius-outline
+    type: line
+    source: location-radius
+    paint:
+      line-color: "#0094ff"
+      line-width: 3

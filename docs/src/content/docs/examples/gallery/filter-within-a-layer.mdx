@@ -7,23 +7,23 @@ import LiveMap from '../../../../components/LiveMap.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/filter-within-a-layer.yaml?raw';
 import hatchJs from '../../../../../public/gallery-js/filter-within-a-layer.js?raw';
-
+import chrome from '../../../../../public/gallery-js/filter-within-a-layer.html?raw';
 
 Replicates the MapLibre example [Filter within a layer](https://maplibre.org/maplibre-gl-js/docs/examples/filter-within-a-layer/). The layer and its *initial* filter are YAML; the slider re-filters at runtime through `getMap().setFilter`.
 
-<div style="display:flex; align-items:center; gap:0.75rem; margin:1rem 0;">
-  <label>Minimum magnitude</label>
-  <input type="range" data-filter-mag min="2" max="5" step="0.1" value="2" style="flex:1; max-width:280px;" />
-  <strong data-filter-readout>2.0</strong>
-</div>
-
-<LiveMap src="/configs/gallery/filter-within-a-layer.yaml" height="440px" caption="Drag the slider — smaller quakes drop out" />
+<LiveMap src="/configs/gallery/filter-within-a-layer.yaml" height="440px" chrome={chrome} caption="Drag the slider — smaller quakes drop out" />
 
 <script src="/gallery-js/filter-within-a-layer.js" defer></script>
 
 ## The YAML half
 
 <Code code={config} lang="yaml" title="filter-within-a-layer.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="filter-within-a-layer.html" />
 
 ## The escape hatch
 
@@ -33,3 +33,4 @@ Replicates the MapLibre example [Filter within a layer](https://maplibre.org/map
 
 - The YAML `filter:` is the authored default; `setFilter` takes the same expression syntax at runtime.
 - The declarative alternative — a `global-state` expression driven by `setGlobalStateProperty` — exists in the format but needs maplibre-gl ≥ 5.6 at runtime (tracked; see the gallery index).
+- The slider is an `<ml-map>` slot child, so it sits on the map in the corner the params panel would use. (For a no-JS version of this control, see [Create a time slider](/examples/gallery/create-a-time-slider/): a `range` parameter driving a `global-state` filter.)

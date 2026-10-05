@@ -1,0 +1,40 @@
+# Hermetic twin of docs/public/configs/gallery/use-addprotocol-to-transform-feature-properties.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/use-addprotocol-to-transform-feature-properties/
+# The YAML half: a GeoJSON source whose URL goes through a `reverse://`
+# protocol, and the layers that label it. The protocol — fetch the real
+# URL, rewrite every NAME and ABBREV backwards, hand the data back — is
+# page JS registered on <ml-map>'s maplibre module; see
+# use-addprotocol-to-transform-feature-properties.js. The YAML never knows.
+#
+# NOTE for the live sweep: renders only with the page's protocol
+# registration; scripts/verify-docs-gallery.mjs drives it through the
+# hatch harness, which runs that JS.
+type: map
+id: use-addprotocol-to-transform-feature-properties
+config:
+  center: [8, 47]
+  zoom: 5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  countries:
+    type: geojson
+    data: "reverse:///gallery-assets/alpine-countries.geojson"
+layers:
+  - id: country-points
+    type: circle
+    source: countries
+    paint:
+      circle-radius: 5
+      circle-color: "#e63946"
+  - id: country-names
+    type: symbol
+    source: countries
+    layout:
+      text-field: ["format", ["get", "NAME"], {}, "\n", {}, ["get", "ABBREV"], { font-scale: 0.75 }]
+      text-font: ["Noto Sans Regular"]
+      text-offset: [0, 0.4]
+      text-anchor: top
+    paint:
+      text-color: "#1d3557"
+      text-halo-color: "#ffffff"
+      text-halo-width: 1.5

@@ -1,0 +1,38 @@
+# Hermetic twin of docs/public/configs/gallery/animate-a-point-along-a-route.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-point-along-a-route/
+# The YAML half: the route, the plane icon (an images: entry) and a layer
+# that rotates it by a `bearing` property. The page's JS bends the route
+# into a great-circle arc and moves the plane along it frame by frame —
+# see animate-a-point-along-a-route.js.
+type: map
+id: animate-a-point-along-a-route
+config:
+  center: [-96, 37.8]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+images:
+  plane: "/gallery-assets/plane.svg"
+layers:
+  - id: route
+    type: line
+    source:
+      type: geojson
+      route:
+        coordinates: [[-122.414, 37.776], [-77.032, 38.913]]
+    paint:
+      line-width: 2
+      line-color: "#007cbf"
+  - id: plane
+    type: symbol
+    source:
+      type: geojson
+      data:
+        type: Feature
+        properties: { bearing: 70 }
+        geometry: { type: Point, coordinates: [-122.414, 37.776] }
+    layout:
+      icon-image: plane
+      icon-rotate: ["get", "bearing"]
+      icon-rotation-alignment: map
+      icon-overlap: always
+      icon-ignore-placement: true

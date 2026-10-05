@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/jump-to-a-series-of-locations/
+# The YAML half: the map and the cities as a layer. The tour itself — a
+# timer calling jumpTo — is an event sequence, so it lives in
+# jump-to-a-series-of-locations.js.
+type: map
+id: jump-to-a-series-of-locations
+config:
+  center: [100.507, 13.745]
+  zoom: 9
+  mapStyle: "https://tiles.openfreemap.org/styles/bright"
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      locations:
+        - { coordinates: [100.507, 13.745], name: Bangkok }
+        - { coordinates: [98.993, 18.793], name: Chiang Mai }
+        - { coordinates: [99.838, 19.924], name: Chiang Rai }
+        - { coordinates: [102.812, 17.408], name: Udon Thani }
+        - { coordinates: [100.458, 7.001], name: Hat Yai }
+        - { coordinates: [100.905, 12.935], name: Pattaya }
+    paint:
+      circle-radius: 8
+      circle-color: "#e76f51"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

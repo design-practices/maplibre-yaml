@@ -1,0 +1,29 @@
+---
+title: Add contour lines
+description: "maplibre-contour serves contour tiles from the YAML's own DEM through a protocol"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import ContourProtocol from '../../../../components/gallery/ContourProtocol.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-contour-lines.yaml?raw';
+import hatchJs from '../../../../gallery-js/add-contour-lines.js?raw';
+
+Replicates the MapLibre example [Add contour lines](https://maplibre.org/maplibre-gl-js/docs/examples/add-contour-lines/). The YAML declares the DEM, a hillshade over it, and contour line and label layers reading a vector source at `contours://{z}/{x}/{y}`. That protocol is the [maplibre-contour](https://github.com/onthegomap/maplibre-contour) plugin, registered by page JS on the maplibre module `<ml-map>` renders with. The plugin is built on the first contour tile request from the document's own `dem` source, so the DEM is declared once.
+
+<ContourProtocol />
+<LiveMap src="/configs/gallery/add-contour-lines.yaml" height="440px" caption="Contours in feet over the Inn valley, labelled on the major lines" />
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="add-contour-lines.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="add-contour-lines.js" />
+
+## What to notice
+
+- Contour intervals per zoom live in the JS (`thresholds`); the line styling — major lines thicker — stays in YAML, reading the `level` property the plugin writes.
+- `worker: true` computes contours off the main thread.
+- Terrain: MapLibre demo tiles.

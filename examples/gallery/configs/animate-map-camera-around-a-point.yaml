@@ -1,0 +1,12 @@
+# Hermetic twin of docs/public/configs/gallery/animate-map-camera-around-a-point.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/animate-map-camera-around-a-point/
+# The YAML half: the pitched camera over Chicago. The orbit is a
+# requestAnimationFrame loop calling rotateTo — see
+# animate-map-camera-around-a-point.js.
+type: map
+id: animate-map-camera-around-a-point
+config:
+  center: [-87.62712, 41.89033]
+  zoom: 15.5
+  pitch: 45
+  mapStyle: "/examples/verification/configs/local-style.json"

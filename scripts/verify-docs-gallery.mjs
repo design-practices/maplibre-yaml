@@ -12,7 +12,7 @@
  * before a release or after gallery changes:
  *
  *   node e2e/server.mjs &        # serves the repo, incl. docs configs
- *   node scripts/verify-docs-gallery.mjs
+ *   node scripts/verify-docs-gallery.mjs [slug ...]   # no slugs = every page
  *
  * It also drives the built classics launch page (/examples/classics/, U11) over live
  * tiles: both panes of each classic render, and the live pane's effect is
@@ -25,6 +25,11 @@
  *  - declared controls exist in the DOM — and the attribution control has
  *    visible text (an empty attribution control collapses: the exact bug
  *    this sweep was built after)
+ *
+ * Escape-hatch pages (U16) are driven through the hatch harness in live
+ * mode — examples/gallery/hatch/twin.html?slug=<slug>&live — which injects
+ * the page's slot chrome and runs the page's own JS against the real docs
+ * config, so layers the JS shows or feeds are checked as a reader sees them.
  */
 import { chromium } from "@playwright/test";
 import { readdirSync, readFileSync } from "node:fs";
@@ -55,9 +60,28 @@ const PROTOCOL_PAGES = new Map([
   ],
 ]);
 
+// Pages whose layers draw, but where queryRenderedFeatures can't see them.
+// Each names the test that asserts something else instead.
+const QRF_BLIND = new Map([
+  [
+    "set-center-point-above-ground",
+    "qRF finds nothing under a steep pitch around a raised centre; e2e/gallery.spec.ts asserts querySourceFeatures",
+  ],
+]);
+
+// The hatch harness's own manifest: every slug it knows runs with its JS.
+const HATCH_SLUGS = new Set(
+  [...readFileSync("examples/gallery/hatch/twin.js", "utf8").matchAll(/^\s+"([a-z0-9-]+)": \{/gm)].map(
+    (m) => m[1]
+  )
+);
+
+// Optional slug arguments narrow the run: node scripts/verify-docs-gallery.mjs a b
+const only = new Set(process.argv.slice(2));
 const slugs = readdirSync(CONFIG_DIR)
   .filter((f) => f.endsWith(".yaml"))
   .map((f) => f.replace(/\.yaml$/, ""))
+  .filter((slug) => only.size === 0 || only.has(slug))
   .sort();
 
 const browser = await chromium.launch();
@@ -65,10 +89,19 @@ const failures = [];
 
 // A skip entry must point at a real replacement test — a dangling pointer
 // would quietly reduce "explicitly covered elsewhere" to "covered nowhere".
-const hatchSpec = readFileSync("e2e/gallery-hatch.spec.ts", "utf8");
+const hatchSpec =
+  readFileSync("e2e/gallery-hatch.spec.ts", "utf8") +
+  readFileSync("e2e/gallery-hatch-u16.spec.ts", "utf8") +
+  readFileSync("e2e/gallery.spec.ts", "utf8");
 for (const [slug] of PROTOCOL_PAGES) {
   if (!hatchSpec.includes(slug)) {
-    console.error(`PROTOCOL_PAGES names "${slug}" but e2e/gallery-hatch.spec.ts has no test mentioning it`);
+    console.error(`PROTOCOL_PAGES names "${slug}" but no gallery spec has a test mentioning it`);
+    process.exit(1);
+  }
+}
+for (const [slug] of QRF_BLIND) {
+  if (!hatchSpec.includes(slug)) {
+    console.error(`QRF_BLIND names "${slug}" but no gallery spec has a test mentioning it`);
     process.exit(1);
   }
 }
@@ -89,6 +122,7 @@ for (const slug of slugs) {
     // A layer whose minzoom is above the initial camera is invisible BY
     // DESIGN at page load (e.g. the heatmap page's zoom-gated circles).
     .filter((l) => (l.minzoom ?? 0) <= initialZoom)
+    .filter(() => !QRF_BLIND.has(slug))
     .map((l) => l.id);
   const controls = doc.controls ?? {};
 
@@ -100,26 +134,44 @@ for (const slug of slugs) {
   });
 
   try {
-    await page.goto(`${BASE}/examples/gallery/viewer.html`, {
-      waitUntil: "domcontentloaded",
-      timeout: 30000,
-    });
-    await page.evaluate((s) => {
-      const el = document.getElementById("map");
-      el.addEventListener("ml-map:error", (e) => {
-        (window.__mlErrors ??= []).push(String(e.detail?.error?.message ?? e.detail?.error));
+    if (HATCH_SLUGS.has(slug)) {
+      // Capture-phase listener: catches the element's error event however
+      // the harness wires the element up.
+      await page.addInitScript(() => {
+        document.addEventListener(
+          "ml-map:error",
+          (e) => (window.__mlErrors ??= []).push(String(e.detail?.error?.message ?? e.detail?.error)),
+          true
+        );
       });
-      el.setAttribute("src", `/docs/public/configs/gallery/${s}.yaml`);
-    }, slug);
+      await page.goto(`${BASE}/examples/gallery/hatch/twin.html?slug=${slug}&live`, {
+        waitUntil: "domcontentloaded",
+        timeout: 30000,
+      });
+    } else {
+      await page.goto(`${BASE}/examples/gallery/viewer.html`, {
+        waitUntil: "domcontentloaded",
+        timeout: 30000,
+      });
+      await page.evaluate((s) => {
+        const el = document.getElementById("map");
+        el.addEventListener("ml-map:error", (e) => {
+          (window.__mlErrors ??= []).push(String(e.detail?.error?.message ?? e.detail?.error));
+        });
+        el.setAttribute("src", `/docs/public/configs/gallery/${s}.yaml`);
+      }, slug);
+    }
 
-    // Style + all document layers present.
+    // Style + all document layers present. A hatch page's JS may keep a
+    // source permanently busy (a setData every frame), so isStyleLoaded()
+    // can stay false there; layers being present is the signal instead.
     await page.waitForFunction(
-      (ids) => {
+      ({ ids, hatch }) => {
         const map = document.getElementById("map")?.getMap?.();
-        if (!map || !map.isStyleLoaded?.()) return false;
+        if (!map || (!hatch && !map.isStyleLoaded?.())) return false;
         return ids.every((id) => Boolean(map.getLayer?.(id)));
       },
-      layerIds,
+      { ids: layerIds, hatch: HATCH_SLUGS.has(slug) },
       { timeout: 45000 }
     );
 

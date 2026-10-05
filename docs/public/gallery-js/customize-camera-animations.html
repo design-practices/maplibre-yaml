@@ -1,0 +1,20 @@
+<div slot="top-left" class="gallery-panel" data-camera-panel>
+  <fieldset>
+    <label>Easing
+      <select name="easing">
+        <option value="easeInCubic">Ease In Cubic</option>
+        <option value="easeOutQuint">Ease Out Quint</option>
+        <option value="easeInOutCirc">Ease In/Out Circ</option>
+        <option value="easeOutBounce">Ease Out Bounce</option>
+      </select>
+    </label>
+    <label>Duration
+      <input type="range" name="duration" min="0" max="10000" step="500" value="1000" />
+      <span data-duration-value></span>
+    </label>
+    <label><input type="checkbox" name="animate" checked /> Animate camera motion</label>
+    <label>Offset X <input type="number" name="offset-x" min="-200" max="200" step="50" value="0" /></label>
+    <label>Offset Y <input type="number" name="offset-y" min="-200" max="200" step="50" value="0" /></label>
+    <button type="button" data-animate>Test animation</button>
+  </fieldset>
+</div>

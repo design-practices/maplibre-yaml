@@ -1,0 +1,29 @@
+---
+title: Animate a series of images
+description: "An image source declared in YAML, stepped through radar frames with updateImage()"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/animate-a-series-of-images.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/animate-a-series-of-images.js?raw';
+
+Replicates the MapLibre example [Animate a series of images](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-series-of-images/). The `image` source — URL plus four corner coordinates — is YAML, declared inline on its raster layer. Stepping through the radar frames is a timer calling the source's `updateImage()`. Because the YAML never named the source, the page asks the layer which source it draws from.
+
+<LiveMap src="/configs/gallery/animate-a-series-of-images.yaml" height="440px" caption="Five radar frames loop over the north-eastern United States" />
+
+<script src="/gallery-js/animate-a-series-of-images.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="animate-a-series-of-images.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="animate-a-series-of-images.js" />
+
+## What to notice
+
+- `map.getLayer(id).source` is the bridge from a YAML layer id to the source MapLibre created for it.
+- `raster-fade-duration: 0` stops each frame cross-fading into the next.
+- Radar frames: the upstream example's assets, served locally.

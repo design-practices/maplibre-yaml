@@ -1,0 +1,33 @@
+/* Shared look for the hatch twins. The .gallery-panel rules mirror the
+   docs site's LiveMap.astro so a twin's slot chrome looks like the page. */
+body { margin: 0; font-family: system-ui, sans-serif; }
+header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+ml-map { display: block; height: 440px; }
+.gallery-panel {
+  border: none;
+  min-width: 0;
+  background: #fff;
+  color: #1d3557;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  padding: 0.5rem 0.65rem;
+  font: 13px/1.4 system-ui, sans-serif;
+  max-width: 260px;
+}
+.gallery-panel * { margin: 0; }
+.gallery-panel button {
+  font: inherit;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid #1d3557;
+  background: #1d3557;
+  color: #fff;
+  cursor: pointer;
+}
+.gallery-panel button + button { margin-left: 0.3rem; }
+.gallery-panel label { display: flex; align-items: center; gap: 0.4rem; }
+.gallery-panel fieldset { border: none; padding: 0; display: grid; gap: 0.35rem; }
+.gallery-panel input[type="range"],
+.gallery-panel select,
+.gallery-panel input[type="search"] { width: 100%; }
+.gallery-panel pre { font-size: 12px; }

@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/filter-symbols-by-text-input/
+# The YAML half: the places and ONE symbol layer whose filter reads a
+# `query` state key — a place shows while its icon name contains the
+# query. The params panel has no free-text control, so the search box is
+# page chrome in a corner slot and its JS writes the state key — see
+# filter-symbols-by-text-input.js. (maplibre-gl >= 5.6 for global-state.)
+type: map
+id: filter-symbols-by-text-input
+config:
+  center: [-77.04, 38.907]
+  zoom: 11.15
+  mapStyle: "https://tiles.openfreemap.org/styles/bright"
+state:
+  query:
+    default: ""
+layers:
+  - id: poi
+    type: symbol
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: { icon: theatre }, geometry: { type: Point, coordinates: [-77.038659, 38.931567] } }
+          - { type: Feature, properties: { icon: theatre }, geometry: { type: Point, coordinates: [-77.003168, 38.894651] } }
+          - { type: Feature, properties: { icon: bar }, geometry: { type: Point, coordinates: [-77.090372, 38.881189] } }
+          - { type: Feature, properties: { icon: bicycle }, geometry: { type: Point, coordinates: [-77.052477, 38.943951] } }
+          - { type: Feature, properties: { icon: music }, geometry: { type: Point, coordinates: [-77.031706, 38.914581] } }
+          - { type: Feature, properties: { icon: music }, geometry: { type: Point, coordinates: [-77.020945, 38.878241] } }
+          - { type: Feature, properties: { icon: music }, geometry: { type: Point, coordinates: [-77.007481, 38.876516] } }
+    filter: ["in", ["global-state", "query"], ["get", "icon"]]
+    layout:
+      icon-image: ["concat", ["get", "icon"], "_11"]
+      icon-overlap: always
+      text-field: ["get", "icon"]
+      text-font: ["Noto Sans Regular"]
+      text-size: 11
+      text-transform: uppercase
+      text-letter-spacing: 0.05
+      text-offset: [0, 1.5]
+    paint:
+      text-color: "#202"
+      text-halo-color: "#fff"
+      text-halo-width: 2

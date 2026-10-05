@@ -1,0 +1,21 @@
+---
+title: Display a remote SVG symbol
+description: "An images: entry loads a remote SVG for a symbol layer — no resolver code"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/display-a-remote-svg-symbol.yaml?raw';
+
+Replicates the MapLibre example [Display a remote SVG symbol](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-remote-svg-symbol/). Upstream fetches the SVG inside a missing-image resolver and adds it by hand. An `images:` entry does the same declaratively: the URL loads through an `<img>`, which rasterizes SVG at its intrinsic size, and the image is registered before any layer asks for it.
+
+<LiveMap src="/configs/gallery/display-a-remote-svg-symbol.yaml" height="440px" caption="The MapLibre logo, loaded from an SVG on maplibre.org" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="display-a-remote-svg-symbol.yaml" />
+
+## What to notice
+
+- The SVG needs an intrinsic size (`width`/`height` on the root element) and must be served with CORS headers.
+- On `mlym emit` the image is fetched at compile time and merged into the document's sprite.

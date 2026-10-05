@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/offset-the-vanishing-point-using-padding/
+# The YAML half: the pitched camera and the marker on the centre point.
+# The sidebars are page chrome in <ml-map>'s corner slots; opening one
+# eases the camera's padding so the vanishing point moves out from under
+# it — see offset-the-vanishing-point-using-padding.js.
+type: map
+id: offset-the-vanishing-point-using-padding
+config:
+  center: [-77.01866, 38.888]
+  zoom: 4
+  pitch: 60
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+markers:
+  - at: [-77.01866, 38.888]

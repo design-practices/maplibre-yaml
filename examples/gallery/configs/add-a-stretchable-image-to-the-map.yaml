@@ -1,0 +1,46 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-stretchable-image-to-the-map.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/add-a-stretchable-image-to-the-map/
+# The YAML half: four labels whose background image stretches to fit
+# (`icon-text-fit: both`), plus the original image for comparison. The
+# stretch zones (stretchX/stretchY/content) are addImage options with no
+# `images:` field yet, so the page registers the two images — see
+# add-a-stretchable-image-to-the-map.js — and the layers wait hidden.
+type: map
+id: add-a-stretchable-image-to-the-map
+config:
+  center: [0, 0]
+  zoom: 0.1
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: points
+    type: symbol
+    visible: false
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, geometry: { type: Point, coordinates: [40, -30] }, properties: { image-name: popup-debug, name: "Line 1\nLine 2\nLine 3" } }
+          - { type: Feature, geometry: { type: Point, coordinates: [40, 30] }, properties: { image-name: popup, name: "Line 1\nLine 2\nLine 3" } }
+          - { type: Feature, geometry: { type: Point, coordinates: [-40, -30] }, properties: { image-name: popup-debug, name: One longer line } }
+          - { type: Feature, geometry: { type: Point, coordinates: [-40, 30] }, properties: { image-name: popup, name: One longer line } }
+    layout:
+      text-field: ["get", "name"]
+      text-font: ["Noto Sans Regular"]
+      icon-text-fit: both
+      icon-image: ["get", "image-name"]
+      icon-overlap: always
+      text-overlap: always
+  - id: original
+    type: symbol
+    visible: false
+    source:
+      type: geojson
+      location:
+        coordinates: [0, -70]
+    layout:
+      text-field: non-stretched image
+      text-font: ["Noto Sans Regular"]
+      icon-image: popup-debug
+      icon-overlap: always
+      text-overlap: always

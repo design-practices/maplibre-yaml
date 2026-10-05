@@ -8,7 +8,7 @@ import { Badge } from '@astrojs/starlight/components';
 The [MapLibre GL JS examples gallery](https://maplibre.org/maplibre-gl-js/docs/examples/) is the shared vocabulary of web mapping. This page tracks all **139** of its examples against maplibre-yaml — which ones the format expresses today, which need a documented escape hatch, and which point at gaps we're tracking. It doubles as an honest capability matrix: badges flip as features land.
 
 - <Badge text="Pure YAML" variant="success" /> — replicated as a single YAML document; the title links to our version.
-- <Badge text="Escape hatch" variant="caution" /> — reachable with YAML plus a documented hatch (`getMap()`, an inline style object, raw expressions, or a protocol plugin). Pages arrive with the "Beyond YAML" guide work.
+- <Badge text="Escape hatch" variant="caution" /> — reachable with YAML plus a documented hatch (`mapReady()`, an inline style object, raw expressions, or a protocol plugin). Each page shows the YAML, the page markup (controls ride `<ml-map>`'s corner slots) and the JS side by side; the JS shown is the JS the browser suite runs.
 - <Badge text="Gap" variant="danger" /> — a missing YAML surface, tracked in the issue ledger.
 - <Badge text="JS territory" variant="default" /> — deep imperative or plugin work (three.js layers, draw tools, geocoder UI) that a declarative format shouldn't chase; follow the upstream link.
 
@@ -37,21 +37,21 @@ them are separate work and not shipped yet.
 | [Display a non-interactive map](/examples/gallery/display-a-non-interactive-map/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-non-interactive-map/) | <Badge text="Pure YAML" variant="success" /> |
 | [Change the default position for attribution](/examples/gallery/change-the-default-position-for-attribution/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/change-the-default-position-for-attribution/) | <Badge text="Pure YAML" variant="success" /> |
 | [Check if WebGL is supported](https://maplibre.org/maplibre-gl-js/docs/examples/check-if-webgl-is-supported/) | <Badge text="JS territory" variant="default" /> |
-| [Display a map with MLT](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-map-with-mlt/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Display a map with MLT](/examples/gallery/display-a-map-with-mlt/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-map-with-mlt/) | <Badge text="Pure YAML" variant="success" /> |
 
 ## Camera & animation
 
 | Example | Status |
 |---|---|
 | [Fly to a location](/examples/gallery/fly-to-a-location/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/fly-to-a-location/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Jump to a series of locations](https://maplibre.org/maplibre-gl-js/docs/examples/jump-to-a-series-of-locations/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Jump to a series of locations](/examples/gallery/jump-to-a-series-of-locations/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/jump-to-a-series-of-locations/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Set pitch and bearing](/examples/gallery/set-pitch-and-bearing/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/set-pitch-and-bearing/) | <Badge text="Pure YAML" variant="success" /> |
-| [Slowly fly to a location](https://maplibre.org/maplibre-gl-js/docs/examples/slowly-fly-to-a-location/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Animate a line](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-line/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Slowly fly to a location](/examples/gallery/slowly-fly-to-a-location/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/slowly-fly-to-a-location/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Animate a line](/examples/gallery/animate-a-line/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-line/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Animate a point](/examples/gallery/animate-a-point/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-point/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Animate a point along a route](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-point-along-a-route/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Animate map camera around a point](https://maplibre.org/maplibre-gl-js/docs/examples/animate-map-camera-around-a-point/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Customize camera animations](https://maplibre.org/maplibre-gl-js/docs/examples/customize-camera-animations/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Animate a point along a route](/examples/gallery/animate-a-point-along-a-route/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-point-along-a-route/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Animate map camera around a point](/examples/gallery/animate-map-camera-around-a-point/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/animate-map-camera-around-a-point/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Customize camera animations](/examples/gallery/customize-camera-animations/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/customize-camera-animations/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Customize the map transform constrain](https://maplibre.org/maplibre-gl-js/docs/examples/customize-the-map-transform-constrain/) | <Badge text="JS territory" variant="default" /> |
 | [Enter a 360° photosphere](https://maplibre.org/maplibre-gl-js/docs/examples/enter-a-360-photosphere/) | <Badge text="JS territory" variant="default" /> |
 | [Fit a map to a bounding box](/examples/gallery/fit-a-map-to-a-bounding-box/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/fit-a-map-to-a-bounding-box/) | <Badge text="Pure YAML" variant="success" /> |
@@ -59,10 +59,10 @@ them are separate work and not shipped yet.
 | [Fly to a location based on scroll position](https://maplibre.org/maplibre-gl-js/docs/examples/fly-to-a-location-based-on-scroll-position/) | <Badge text="Pure YAML" variant="success" /> |
 | [Hash routing](/examples/gallery/hash-routing/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/hash-routing/) | <Badge text="Pure YAML" variant="success" /> |
 | [Level of detail control](https://maplibre.org/maplibre-gl-js/docs/examples/level-of-detail-control/) | <Badge text="JS territory" variant="default" /> |
-| [Offset the vanishing point using padding](https://maplibre.org/maplibre-gl-js/docs/examples/offset-the-vanishing-point-using-padding/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Offset the vanishing point using padding](/examples/gallery/offset-the-vanishing-point-using-padding/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/offset-the-vanishing-point-using-padding/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Render world copies](/examples/gallery/render-world-copies/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/render-world-copies/) | <Badge text="Pure YAML" variant="success" /> |
 | [Restrict map panning to an area](/examples/gallery/restrict-map-panning-to-an-area/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/restrict-map-panning-to-an-area/) | <Badge text="Pure YAML" variant="success" /> |
-| [Set center point above ground](https://maplibre.org/maplibre-gl-js/docs/examples/set-center-point-above-ground/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Set center point above ground](/examples/gallery/set-center-point-above-ground/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/set-center-point-above-ground/) | <Badge text="Pure YAML" variant="success" /> |
 | [Walk around a map in first person](https://maplibre.org/maplibre-gl-js/docs/examples/walk-around-a-map-in-first-person/) | <Badge text="JS territory" variant="default" /> |
 
 ## Controls & gestures
@@ -75,7 +75,7 @@ them are separate work and not shipped yet.
 | [Disable map rotation](/examples/gallery/disable-map-rotation/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/disable-map-rotation/) | <Badge text="Pure YAML" variant="success" /> |
 | [Disable scroll zoom](/examples/gallery/disable-scroll-zoom/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/disable-scroll-zoom/) | <Badge text="Pure YAML" variant="success" /> |
 | [Navigate the map with game-like controls](https://maplibre.org/maplibre-gl-js/docs/examples/navigate-the-map-with-game-like-controls/) | <Badge text="JS territory" variant="default" /> |
-| [Toggle interactions](https://maplibre.org/maplibre-gl-js/docs/examples/toggle-interactions/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Toggle interactions](/examples/gallery/toggle-interactions/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/toggle-interactions/) | <Badge text="Escape hatch" variant="caution" /> |
 | [View a fullscreen map](/examples/gallery/view-a-fullscreen-map/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/view-a-fullscreen-map/) | <Badge text="Pure YAML" variant="success" /> |
 
 ## Sources & data
@@ -92,26 +92,26 @@ them are separate work and not shipped yet.
 | [View local GeoJSON (experimental)](https://maplibre.org/maplibre-gl-js/docs/examples/view-local-geojson-experimental/) | <Badge text="JS territory" variant="default" /> |
 | [Add a raster tile source](/examples/gallery/add-a-raster-tile-source/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-raster-tile-source/) | <Badge text="Pure YAML" variant="success" /> |
 | [Add a WMS source](/examples/gallery/add-a-wms-source/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-wms-source/) | <Badge text="Pure YAML" variant="success" /> |
-| [Add a canvas source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-canvas-source/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Add a COG raster source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-cog-raster-source/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Add a canvas source](/examples/gallery/add-a-canvas-source/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-canvas-source/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Add a COG raster source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-cog-raster-source/) · page pending: needs a hermetic COG fixture | <Badge text="Escape hatch" variant="caution" /> |
 | [Add a video](/examples/gallery/add-a-video/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-video/) | <Badge text="Pure YAML" variant="success" /> |
-| [Animate a series of images](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-series-of-images/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Animate a series of images](/examples/gallery/animate-a-series-of-images/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-series-of-images/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Add live realtime data](/examples/gallery/add-live-realtime-data/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-live-realtime-data/) | <Badge text="Pure YAML" variant="success" /> |
 | [Update a feature in realtime](/examples/gallery/update-a-feature-in-realtime/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/update-a-feature-in-realtime/) | <Badge text="Pure YAML" variant="success" /> |
-| [Update GeoJSON polygons](https://maplibre.org/maplibre-gl-js/docs/examples/update-geojson-polygons/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Update GeoJSON polygons](/examples/gallery/update-geojson-polygons/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/update-geojson-polygons/) | <Badge text="Escape hatch" variant="caution" /> |
 
 ## Layers, icons & styling
 
 | Example | Status |
 |---|---|
 | [Add an icon to the map](/examples/gallery/add-an-icon-to-the-map/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-an-icon-to-the-map/) | <Badge text="Pure YAML" variant="success" /> |
-| [Add a generated icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-generated-icon-to-the-map/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Add a stretchable image to the map](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-stretchable-image-to-the-map/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Add an animated icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/add-an-animated-icon-to-the-map/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Add a generated icon to the map](/examples/gallery/add-a-generated-icon-to-the-map/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-generated-icon-to-the-map/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Add a stretchable image to the map](/examples/gallery/add-a-stretchable-image-to-the-map/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-stretchable-image-to-the-map/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Add an animated icon to the map](/examples/gallery/add-an-animated-icon-to-the-map/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-an-animated-icon-to-the-map/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Animate an icon on the GPU](https://maplibre.org/maplibre-gl-js/docs/examples/animate-an-icon-on-the-gpu/) | <Badge text="JS territory" variant="default" /> |
-| [Display a remote SVG symbol](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-remote-svg-symbol/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Elevate symbols above the terrain](https://maplibre.org/maplibre-gl-js/docs/examples/elevate-symbols-above-the-terrain/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Generate and add a missing icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/generate-and-add-a-missing-icon-to-the-map/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Display a remote SVG symbol](/examples/gallery/display-a-remote-svg-symbol/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-remote-svg-symbol/) | <Badge text="Pure YAML" variant="success" /> |
+| [Elevate symbols above the terrain](https://maplibre.org/maplibre-gl-js/docs/examples/elevate-symbols-above-the-terrain/) · needs maplibre-gl 6 (`symbol-height-offset`); pure YAML once 0.7 runs v6 | <Badge text="Escape hatch" variant="caution" /> |
+| [Generate and add a missing icon to the map](/examples/gallery/generate-and-add-a-missing-icon-to-the-map/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/generate-and-add-a-missing-icon-to-the-map/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Use a fallback image](/examples/gallery/use-a-fallback-image/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/use-a-fallback-image/) | <Badge text="Pure YAML" variant="success" /> |
 | [Change a layer's color with buttons](/examples/gallery/change-a-layers-color-with-buttons/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/change-a-layers-color-with-buttons/) | <Badge text="Pure YAML" variant="success" /> |
 | [Add a new layer below labels](/examples/gallery/add-a-new-layer-below-labels/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-new-layer-below-labels/) | <Badge text="Pure YAML" variant="success" /> |
@@ -122,9 +122,9 @@ them are separate work and not shipped yet.
 | [Display HTML clusters with custom properties](https://maplibre.org/maplibre-gl-js/docs/examples/display-html-clusters-with-custom-properties/) | <Badge text="JS territory" variant="default" /> |
 | [Display and style rich text labels](/examples/gallery/display-and-style-rich-text-labels/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-and-style-rich-text-labels/) | <Badge text="Pure YAML" variant="success" /> |
 | [Style labels with web fonts](/examples/gallery/style-labels-with-web-fonts/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-web-fonts/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Style labels with font faces](https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-font-faces/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Style labels with font faces](https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-font-faces/) · needs maplibre-gl 6 (`font-faces` at runtime) | <Badge text="Escape hatch" variant="caution" /> |
 | [Change the case of labels](/examples/gallery/change-the-case-of-labels/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/change-the-case-of-labels/) | <Badge text="Pure YAML" variant="success" /> |
-| [Style labels with local fonts](https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-local-fonts/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Style labels with local fonts](/examples/gallery/style-labels-with-local-fonts/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-local-fonts/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Variable label placement](/examples/gallery/variable-label-placement/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/variable-label-placement/) | <Badge text="Pure YAML" variant="success" /> |
 | [Variable label placement with offset](/examples/gallery/variable-label-placement-with-offset/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/variable-label-placement-with-offset/) | <Badge text="Pure YAML" variant="success" /> |
 
@@ -137,13 +137,13 @@ them are separate work and not shipped yet.
 | [Create a gradient dashed line using an expression](/examples/gallery/create-a-gradient-dashed-line-using-an-expression/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-gradient-dashed-line-using-an-expression/) | <Badge text="Pure YAML" variant="success" /> |
 | [Create a gradient line using an expression](/examples/gallery/create-a-gradient-line-using-an-expression/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-gradient-line-using-an-expression/) | <Badge text="Pure YAML" variant="success" /> |
 | [Filter within a layer](/examples/gallery/filter-within-a-layer/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/filter-within-a-layer/) | <Badge text="Escape hatch" variant="caution" /> |
-| [Filter symbols by text input](https://maplibre.org/maplibre-gl-js/docs/examples/filter-symbols-by-text-input/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Filter symbols by text input](/examples/gallery/filter-symbols-by-text-input/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/filter-symbols-by-text-input/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Filter layer symbols using global state](/examples/gallery/filter-layer-symbols-using-global-state/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/filter-layer-symbols-using-global-state/) | <Badge text="Pure YAML" variant="success" /> |
-| [Filter symbols by toggling a list](https://maplibre.org/maplibre-gl-js/docs/examples/filter-symbols-by-toggling-a-list/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Filter symbols by toggling a list](/examples/gallery/filter-symbols-by-toggling-a-list/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/filter-symbols-by-toggling-a-list/) | <Badge text="Pure YAML" variant="success" /> |
 | [Visualize population density](/examples/gallery/visualize-population-density/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/visualize-population-density/) | <Badge text="Pure YAML" variant="success" /> |
 | [Create a time slider](/examples/gallery/create-a-time-slider/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-time-slider/) | <Badge text="Pure YAML" variant="success" /> |
 | [Measure distances](https://maplibre.org/maplibre-gl-js/docs/examples/measure-distances/) | <Badge text="JS territory" variant="default" /> |
-| [Draw a circle](https://maplibre.org/maplibre-gl-js/docs/examples/draw-a-circle/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Draw a circle](/examples/gallery/draw-a-circle/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/draw-a-circle/) | <Badge text="Escape hatch" variant="caution" /> |
 
 ## Terrain, 3D & globe
 
@@ -151,10 +151,10 @@ them are separate work and not shipped yet.
 |---|---|
 | [3D terrain](/examples/gallery/3d-terrain/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/3d-terrain/) | <Badge text="Pure YAML" variant="success" /> |
 | [Add a hillshade layer](/examples/gallery/add-a-hillshade-layer/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-hillshade-layer/) | <Badge text="Pure YAML" variant="success" /> |
-| [Add 3D terrain from quantized mesh tiles](https://maplibre.org/maplibre-gl-js/docs/examples/add-3d-terrain-from-quantized-mesh-tiles/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Add 3D terrain from quantized mesh tiles](https://maplibre.org/maplibre-gl-js/docs/examples/add-3d-terrain-from-quantized-mesh-tiles/) · page pending: pre-release plugin, no hermetic fixture | <Badge text="Escape hatch" variant="caution" /> |
 | [Add a color relief layer](/examples/gallery/add-a-color-relief-layer/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-color-relief-layer/) | <Badge text="Pure YAML" variant="success" /> |
 | [Add a multidirectional hillshade layer](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-multidirectional-hillshade-layer/) | <Badge text="Pure YAML" variant="success" /> |
-| [Add contour lines](https://maplibre.org/maplibre-gl-js/docs/examples/add-contour-lines/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Add contour lines](/examples/gallery/add-contour-lines/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-contour-lines/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Display a hybrid satellite map with terrain elevation](/examples/gallery/display-a-hybrid-satellite-map-with-terrain-elevation/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-hybrid-satellite-map-with-terrain-elevation/) | <Badge text="Pure YAML" variant="success" /> |
 | [Sky, fog and terrain](/examples/gallery/sky-fog-terrain/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/sky-fog-terrain/) | <Badge text="Pure YAML" variant="success" /> |
 | [Display buildings in 3D](/examples/gallery/display-buildings-in-3d/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/display-buildings-in-3d/) | <Badge text="Pure YAML" variant="success" /> |
@@ -192,7 +192,7 @@ them are separate work and not shipped yet.
 
 | Example | Status |
 |---|---|
-| [Change a map's language](https://maplibre.org/maplibre-gl-js/docs/examples/change-a-maps-language/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Change a map's language](/examples/gallery/change-a-maps-language/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/change-a-maps-language/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Locale switching](https://maplibre.org/maplibre-gl-js/docs/examples/locale-switching/) | <Badge text="JS territory" variant="default" /> |
 | [Use locally generated ideographs](/examples/gallery/use-locally-generated-ideographs/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/use-locally-generated-ideographs/) | <Badge text="Pure YAML" variant="success" /> |
 
@@ -205,7 +205,7 @@ them are separate work and not shipped yet.
 | [Animate symbol to follow the mouse](https://maplibre.org/maplibre-gl-js/docs/examples/animate-symbol-to-follow-the-mouse/) | <Badge text="JS territory" variant="default" /> |
 | [Center the map on a clicked symbol](/examples/gallery/center-the-map-on-a-clicked-symbol/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/center-the-map-on-a-clicked-symbol/) | <Badge text="Pure YAML" variant="success" /> |
 | [Display performance metrics](https://maplibre.org/maplibre-gl-js/docs/examples/display-performance-metrics/) | <Badge text="JS territory" variant="default" /> |
-| [Get coordinates of the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Get coordinates of the mouse pointer](/examples/gallery/get-coordinates-of-the-mouse-pointer/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/) | <Badge text="Escape hatch" variant="caution" /> |
 | [Select features with boxzoomend callback](https://maplibre.org/maplibre-gl-js/docs/examples/select-features-with-boxzoomend-callback/) | <Badge text="JS territory" variant="default" /> |
 | [Show polygon information on click](/examples/gallery/show-polygon-information-on-click/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/show-polygon-information-on-click/) | <Badge text="Pure YAML" variant="success" /> |
 
@@ -220,8 +220,8 @@ them are separate work and not shipped yet.
 | [Draw polygon with mapbox-gl-draw](https://maplibre.org/maplibre-gl-js/docs/examples/draw-polygon-with-mapbox-gl-draw/) | <Badge text="JS territory" variant="default" /> |
 | [Sync movement of multiple maps](https://maplibre.org/maplibre-gl-js/docs/examples/sync-movement-of-multiple-maps/) | <Badge text="JS territory" variant="default" /> |
 | [Toggle deck.gl layer](https://maplibre.org/maplibre-gl-js/docs/examples/toggle-deckgl-layer/) | <Badge text="JS territory" variant="default" /> |
-| [Use addProtocol to transform feature properties](https://maplibre.org/maplibre-gl-js/docs/examples/use-addprotocol-to-transform-feature-properties/) | <Badge text="Escape hatch" variant="caution" /> |
+| [Use addProtocol to transform feature properties](/examples/gallery/use-addprotocol-to-transform-feature-properties/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/use-addprotocol-to-transform-feature-properties/) | <Badge text="Escape hatch" variant="caution" /> |
 
 ---
 
-*Census as of 2026-10-04 against maplibre-yaml `core@0.6.0` + the 0.7 chrome tier, the gap units, and map-level 3D (`terrain:`, `sky:`, `projection:`): 69 pure YAML · 36 escape hatch · 0 gaps · 34 JS territory (139 upstream examples — table rows only; the two Mapzen classics are counted separately). The triage reasoning lives in the repo at `plans/feat-maplibre-examples-gallery.md`.*
+*Census as of 2026-10-05 against maplibre-yaml `core@0.6.0` + the 0.7 chrome tier, the gap units, and map-level 3D (`terrain:`, `sky:`, `projection:`): **73 pure YAML** (70 with pages, 3 badge only) · **32 escape hatch** (28 with pages, 4 badge only) · 0 gaps · 34 JS territory (139 upstream examples — table rows only; the two Mapzen classics are counted separately). The triage reasoning lives in the repo at `plans/feat-maplibre-examples-gallery.md`.*

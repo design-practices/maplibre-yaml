@@ -1,0 +1,56 @@
+# Hermetic twin of docs/public/configs/gallery/add-contour-lines.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/add-contour-lines/
+# The YAML half: the DEM, a hillshade over it, and contour line + label
+# layers reading a vector source served by the `contours://` protocol.
+# That protocol is the maplibre-contour plugin, registered by page JS on
+# the maplibre module <ml-map> renders with — see add-contour-lines.js.
+# The DEM is declared once, here: the plugin reads its URL and encoding
+# from this document's `dem` source.
+#
+# NOTE for the live sweep: renders only with the page's protocol
+# registration; scripts/verify-docs-gallery.mjs drives it through the
+# hatch harness, which runs that JS.
+type: map
+id: add-contour-lines
+config:
+  center: [11.3229, 47.2738]
+  zoom: 13
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  dem:
+    type: raster-dem
+    tiles: ["/relief/{z}/{x}/{y}.png"]
+    encoding: terrarium
+    tileSize: 256
+    maxzoom: 12
+  contours:
+    type: vector
+    tiles: ["contours://{z}/{x}/{y}"]
+    maxzoom: 15
+layers:
+  - id: hills
+    type: hillshade
+    source: dem
+    paint:
+      hillshade-exaggeration: 0.25
+  - id: contours
+    type: line
+    source: contours
+    source-layer: contours
+    paint:
+      line-opacity: 0.5
+      # "major" contours have level 1, "minor" level 0
+      line-width: ["match", ["get", "level"], 1, 1, 0.5]
+  - id: contour-text
+    type: symbol
+    source: contours
+    source-layer: contours
+    filter: [">", ["get", "level"], 0]
+    layout:
+      symbol-placement: line
+      text-size: 10
+      text-field: ["concat", ["number-format", ["get", "ele"], {}], "'"]
+      text-font: ["Noto Sans Bold"]
+    paint:
+      text-halo-color: white
+      text-halo-width: 1

@@ -5,7 +5,10 @@
  * Wave 3 pages pair a YAML document with a few lines of page JS through a
  * documented hatch (getMap(), DOM events, updateLayerData, an inline style
  * object). Each twin here loads the SAME JS file the docs page ships
- * (docs/public/gallery-js/<slug>.js) against a hermetic config, and the
+ * (docs/public/gallery-js/<slug>.js) — and, since U16 / ml-7fb, the SAME
+ * page-chrome fragment (<slug>.html), whose controls ride <ml-map>'s
+ * corner slots — through examples/gallery/hatch/twin.html, against a
+ * hermetic config, and the
  * tests assert the hatch's BEHAVIOR — the camera flies, the filter filters,
  * the paint repaints — not just that a map appeared. The protocol hatch
  * (pmtiles-source-and-protocol) exercises U2's `@maplibre-yaml/core/maplibre`
@@ -33,11 +36,18 @@ async function guard(page: Page): Promise<string[]> {
 }
 
 async function openHatch(page: Page, slug: string, layers: string[]): Promise<void> {
-  await page.goto(`/examples/gallery/hatch/${slug}.html`, { waitUntil: "domcontentloaded" });
+  // pmtiles keeps its bespoke twin: it registers a stub protocol inline.
+  const url =
+    slug === "pmtiles-source-and-protocol"
+      ? `/examples/gallery/hatch/${slug}.html`
+      : `/examples/gallery/hatch/twin.html?slug=${slug}`;
+  await page.goto(url, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
     (ids) => {
       const map = (document.getElementById("map") as any)?.getMap?.();
-      if (!map || !map.isStyleLoaded?.()) return false;
+      // `_loaded` (the map's load fired), not isStyleLoaded(): a hatch that
+      // writes a source every frame keeps the latter false indefinitely.
+      if (!map || !map._loaded) return false;
       return ids.every((id: string) => Boolean(map.getLayer?.(id)));
     },
     layers,
@@ -66,6 +76,10 @@ test.describe("escape-hatch pages: the shipped JS drives the shipped YAML", () =
           map.on("moveend", () => resolve(map.getCenter()));
         })
     );
+    // ml-7fb: the buttons ride <ml-map>'s top-left corner slot.
+    await expect(
+      page.locator('.ml-map-chrome-top-left [data-fly="[-0.1276,51.5072]"]')
+    ).toBeVisible();
     await page.click('[data-fly="[-0.1276,51.5072]"]');
     const center = await settled;
     expect(Math.abs(center.lng - -0.1276)).toBeLessThan(0.01);
@@ -84,6 +98,7 @@ test.describe("escape-hatch pages: the shipped JS drives the shipped YAML", () =
           .queryRenderedFeatures(undefined, { layers: ["quakes"] }).length === 8
     );
 
+    await expect(page.locator(".ml-map-chrome-top-left [data-filter-mag]")).toBeVisible();
     // Drive the slider to 4.0 and let the input handler run setFilter.
     await page.locator("[data-filter-mag]").fill("4");
     await page.waitForFunction(
@@ -121,7 +136,9 @@ test.describe("escape-hatch pages: the shipped JS drives the shipped YAML", () =
       { timeout: 30_000 }
     );
     await page.mouse.move(pt.x, pt.y);
-    await expect(page.locator("[data-feature-info]")).toContainText("Empire State Building");
+    await expect(page.locator(".ml-map-chrome-top-left [data-feature-info]")).toContainText(
+      "Empire State Building"
+    );
     expect(errors).toEqual([]);
   });
 
@@ -162,10 +179,17 @@ test.describe("escape-hatch pages: the shipped JS drives the shipped YAML", () =
   }) => {
     const errors = await guard(page);
     // No openHatch wait — click as soon as the button exists, racing the map.
-    await page.goto(`/examples/gallery/hatch/fly-to-a-location.html`, {
+    // Slot children stay hidden until the map's load (U9), so a user can no
+    // longer reach the button early; a programmatic click still can, and
+    // must still land.
+    await page.goto(`/examples/gallery/hatch/twin.html?slug=fly-to-a-location`, {
       waitUntil: "domcontentloaded",
     });
-    await page.click('[data-fly="[-0.1276,51.5072]"]');
+    // Click the moment the page's own JS has attached its listener.
+    await page.waitForFunction(() => document.documentElement.dataset.hatchReady);
+    await page
+      .locator('[data-fly="[-0.1276,51.5072]"]')
+      .evaluate((b: HTMLButtonElement) => b.click());
 
     // mapReady() inside the handler defers the flight until the map exists;
     // the old getMap() null-guard dropped this click on the floor.

@@ -1,0 +1,35 @@
+---
+title: Toggle interactions
+description: "Checkboxes in a corner slot switch the map's interaction handlers at runtime"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/toggle-interactions.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/toggle-interactions.js?raw';
+import chrome from '../../../../../public/gallery-js/toggle-interactions.html?raw';
+
+Replicates the MapLibre example [Toggle interactions](https://maplibre.org/maplibre-gl-js/docs/examples/toggle-interactions/). YAML sets each interaction handler's *initial* state (`config.scrollZoom: false` and friends — see [Disable scroll zoom](/examples/gallery/disable-scroll-zoom/)). Switching one while the map runs is the hatch: each checkbox is named after a handler, and one delegated listener calls its `enable()` or `disable()`.
+
+<LiveMap src="/configs/gallery/toggle-interactions.yaml" height="440px" chrome={chrome} caption="Untick a handler and that gesture stops working" />
+
+<script src="/gallery-js/toggle-interactions.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="toggle-interactions.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="toggle-interactions.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="toggle-interactions.js" />
+
+## What to notice
+
+- The checkbox `name` *is* the handler's property on the map (`map.scrollZoom`, `map.dragPan`, …), which keeps the JS to one listener.
+- The panel is `<fieldset slot="top-right">` — any element can be a slot child.

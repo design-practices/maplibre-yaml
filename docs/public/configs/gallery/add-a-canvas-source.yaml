@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-a-canvas-source/
+# The YAML half: the map and its camera limits. A `canvas` source has no
+# YAML form — its content is drawn by page JS every frame anyway — so the
+# source and its raster layer are added in add-a-canvas-source.js.
+type: map
+id: add-a-canvas-source
+config:
+  center: [95.899147, 18.088694]
+  zoom: 5
+  minZoom: 4
+  mapStyle: "https://demotiles.maplibre.org/style.json"

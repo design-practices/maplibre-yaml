@@ -1,0 +1,35 @@
+---
+title: Change a map's language
+description: "Slotted language buttons re-point the basemap's label layers at name:<lang>"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/change-a-maps-language.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/change-a-maps-language.js?raw';
+import chrome from '../../../../../public/gallery-js/change-a-maps-language.html?raw';
+
+Replicates the MapLibre example [Change a map's language](https://maplibre.org/maplibre-gl-js/docs/examples/change-a-maps-language/). The labels being translated belong to the *basemap* style, which the document references but does not author. Rewriting their `text-field` is therefore runtime work: the buttons in a corner slot point every symbol layer that reads a name at `name:<lang>`, falling back to the local name.
+
+<LiveMap src="/configs/gallery/change-a-maps-language.yaml" height="440px" chrome={chrome} caption="Pick a language — country and place labels switch" />
+
+<script src="/gallery-js/change-a-maps-language.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="change-a-maps-language.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="change-a-maps-language.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="change-a-maps-language.js" />
+
+## What to notice
+
+- Upstream patches three country-label layers by id; checking each symbol layer's `text-field` for a name works on any OpenMapTiles-schema basemap.
+- Labels the document authors itself need no JS: a `text-field` reading `["get", ["concat", "name:", ["global-state", "lang"]]]` plus an enum parameter does it declaratively.

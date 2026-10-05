@@ -1,0 +1,22 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-generated-icon-to-the-map.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/add-a-generated-icon-to-the-map/
+# The YAML half: the point and the symbol layer that draws it. Its icon is
+# not a file — the page computes its pixels — so the layer starts hidden
+# (`visible: false`) until add-a-generated-icon-to-the-map.js has added
+# the image, rather than asking MapLibre for an image that doesn't exist yet.
+type: map
+id: add-a-generated-icon-to-the-map
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: points
+    type: symbol
+    visible: false
+    source:
+      type: geojson
+      location:
+        coordinates: [0, 0]
+    layout:
+      icon-image: gradient

@@ -41,6 +41,7 @@
     "@changesets/cli": "^2.27.0",
     "@playwright/test": "^1.62.0",
     "@types/pngjs": "^6.0.5",
+    "maplibre-contour": "0.1.1",
     "pngjs": "^7.0.0",
     "typescript": "^5.4.0",
     "maplibre-gl": "^6.12.0"

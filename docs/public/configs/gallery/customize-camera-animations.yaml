@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/customize-camera-animations/
+# The YAML half: the map and the "target" marker (one named source, two
+# layers; the label reads a `label` property). The page's JS turns the
+# panel's choices into flyTo AnimationOptions and moves the target —
+# see customize-camera-animations.js.
+type: map
+id: customize-camera-animations
+config:
+  center: [-95, 40]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  target:
+    type: geojson
+    data:
+      type: Feature
+      properties: { label: "Center: [-94, 40]" }
+      geometry: { type: Point, coordinates: [-94, 40] }
+layers:
+  - id: target-circle
+    type: circle
+    source: target
+    paint:
+      circle-radius: 6
+      circle-color: "#007cbf"
+  - id: target-label
+    type: symbol
+    source: target
+    layout:
+      text-field: ["get", "label"]
+      text-font: ["Noto Sans Regular"]
+      text-offset: [0, 0.6]
+      text-anchor: top

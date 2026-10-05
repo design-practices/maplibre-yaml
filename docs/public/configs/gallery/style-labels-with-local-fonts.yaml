@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-local-fonts/
+# The escape hatch is INSIDE the YAML: an inline mapStyle object with NO
+# `glyphs` URL. With no glyph server to ask, MapLibre draws every label
+# itself from the fonts installed on the reader's machine, trying the
+# `text-font` stack as CSS font families in order.
+type: map
+id: style-labels-with-local-fonts
+config:
+  center: [137.9150899566626, 36.25956997955441]
+  zoom: 9
+  mapStyle:
+    version: 8
+    sources:
+      satellite:
+        type: raster
+        tiles: ["https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"]
+        tileSize: 256
+        attribution: "Sentinel-2 cloudless by EOX IT Services GmbH (CC BY 4.0)"
+    layers:
+      - { id: satellite, type: raster, source: satellite }
+layers:
+  - id: places
+    type: symbol
+    source:
+      type: geojson
+      locations:
+        - { coordinates: [137.9054972, 36.3044083], name: 安曇野市 }
+        - { coordinates: [137.9687141, 36.2382047], name: 松本市 }
+    layout:
+      text-font: ["Hiragino Mincho ProN", "Noto Serif CJK JP", "MS Mincho"]
+      text-size: 24
+      text-field: ["get", "name"]
+    paint:
+      text-color: white

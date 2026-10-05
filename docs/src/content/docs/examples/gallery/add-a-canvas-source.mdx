@@ -1,0 +1,36 @@
+---
+title: Add a canvas source
+description: "Page JS animates a <canvas> and adds it as a canvas source over the YAML map"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-canvas-source.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/add-a-canvas-source.js?raw';
+import chrome from '../../../../../public/gallery-js/add-a-canvas-source.html?raw';
+
+Replicates the MapLibre example [Add a canvas source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-canvas-source/). A `canvas` source has no YAML form — its content is drawn by page JS every frame, so a declarative description would describe nothing. The YAML holds the map; the page animates bouncing circles on a hidden `<canvas>` and, once `mapReady()` resolves, adds a canvas source pinned to four corners plus a raster layer to draw it.
+
+<LiveMap src="/configs/gallery/add-a-canvas-source.yaml" height="440px" chrome={chrome} caption="Circles bounce inside a canvas draped over Myanmar" />
+
+<script src="/gallery-js/add-a-canvas-source.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="add-a-canvas-source.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="add-a-canvas-source.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="add-a-canvas-source.js" />
+
+## What to notice
+
+- `animate: true` makes MapLibre re-read the canvas every frame; set it to `false` for a static canvas to save the upload.
+- The `<canvas>` sits inside `<ml-map>` *without* a `slot`, so the element leaves it where it is — hidden — while the map reads it.
+- Sources added by page JS live outside the document, so `mlym emit` won't see them.

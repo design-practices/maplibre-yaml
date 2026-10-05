@@ -1,0 +1,28 @@
+---
+title: Update GeoJSON polygons
+description: "Incremental GeoJSONSource.updateData() moves features by id, every frame"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/update-geojson-polygons.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/update-geojson-polygons.js?raw';
+
+Replicates the MapLibre example [Update GeoJSON polygons](https://maplibre.org/maplibre-gl-js/docs/examples/update-geojson-polygons/). The YAML declares one named GeoJSON source and the two layers that split it by geometry type. The page seeds five rectangles with feature ids, then animates them with the source's incremental `updateData()`, which patches only the features it names instead of re-tiling the whole collection as `setData()` (and `updateLayerData()`) does.
+
+<LiveMap src="/configs/gallery/update-geojson-polygons.yaml" height="440px" caption="Rectangles drift and spin; tile boundaries show which tiles each update touches" />
+
+<script src="/gallery-js/update-geojson-polygons.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="update-geojson-polygons.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="update-geojson-polygons.js" />
+
+## What to notice
+
+- `updateData` addresses features by their top-level `id` — the seed data must carry ids.
+- Named sources keep their YAML name as the MapLibre source id, so `map.getSource("rectangles")` finds it directly.

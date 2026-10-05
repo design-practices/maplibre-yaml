@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/toggle-interactions/
+# The YAML half: the map, every interaction handler at its default. YAML
+# sets a handler's INITIAL state (`config.scrollZoom: false`, …);
+# switching one at runtime is the hatch — see toggle-interactions.js.
+type: map
+id: toggle-interactions
+config:
+  center: [-77.04, 38.907]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"

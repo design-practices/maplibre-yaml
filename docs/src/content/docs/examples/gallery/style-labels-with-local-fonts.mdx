@@ -1,0 +1,23 @@
+---
+title: Style labels with local fonts
+description: "No glyphs URL: MapLibre draws labels from the reader's installed fonts"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/style-labels-with-local-fonts.yaml?raw';
+
+Replicates the MapLibre example [Style labels with local fonts](https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-local-fonts/). The hatch is *inside* the YAML: an inline `mapStyle` object with no `glyphs` URL. With no glyph server to ask, MapLibre renders every label itself from fonts installed on the reader's machine, trying the `text-font` stack as CSS font families in order — here, Japanese serif faces.
+
+<LiveMap src="/configs/gallery/style-labels-with-local-fonts.yaml" height="440px" caption="Azumino and Matsumoto in the reader's own Mincho font" />
+
+## The complete document (the hatch is the inline `mapStyle`)
+
+<Code code={config} lang="yaml" title="style-labels-with-local-fonts.yaml" />
+
+## What to notice
+
+- What renders depends on the reader's machine: a stack of several platform fonts (macOS, Linux, Windows) keeps it predictable.
+- To keep a glyph server for Latin text and draw only CJK locally, use `config.localIdeographFontFamily` instead — see [Use locally generated ideographs](/examples/gallery/use-locally-generated-ideographs/).
+- Imagery: Sentinel-2 cloudless by EOX IT Services GmbH (CC BY 4.0).
+- Needs maplibre-gl ≥ 5.11; earlier versions require a `glyphs` URL for any text.

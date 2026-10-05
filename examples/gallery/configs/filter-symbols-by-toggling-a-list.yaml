@@ -1,0 +1,55 @@
+# Hermetic twin of docs/public/configs/gallery/filter-symbols-by-toggling-a-list.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/filter-symbols-by-toggling-a-list/
+# Upstream builds one layer per icon type and a checkbox per layer in JS.
+# Here each layer is declared once with a `label:` — and a labeled layer
+# gets its own visibility checkbox on the params panel (`toggleable:`).
+type: map
+id: filter-symbols-by-toggling-a-list
+config:
+  center: [-77.04, 38.907]
+  zoom: 11.15
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  places:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - { type: Feature, properties: { icon: theatre }, geometry: { type: Point, coordinates: [-77.038659, 38.931567] } }
+        - { type: Feature, properties: { icon: theatre }, geometry: { type: Point, coordinates: [-77.003168, 38.894651] } }
+        - { type: Feature, properties: { icon: bar }, geometry: { type: Point, coordinates: [-77.090372, 38.881189] } }
+        - { type: Feature, properties: { icon: bicycle }, geometry: { type: Point, coordinates: [-77.052477, 38.943951] } }
+        - { type: Feature, properties: { icon: music }, geometry: { type: Point, coordinates: [-77.031706, 38.914581] } }
+        - { type: Feature, properties: { icon: music }, geometry: { type: Point, coordinates: [-77.020945, 38.878241] } }
+        - { type: Feature, properties: { icon: music }, geometry: { type: Point, coordinates: [-77.007481, 38.876516] } }
+# Hermetic stand-ins for the remote basemap's sprite icons.
+images:
+  theatre_11: "/examples/gallery/assets/icon-a.png"
+  bar_11: "/examples/gallery/assets/icon-b.png"
+  bicycle_11: "/examples/gallery/assets/icon-a.png"
+  music_11: "/examples/gallery/assets/icon-b.png"
+layers:
+  - id: poi-theatre
+    label: Theatre
+    type: symbol
+    source: places
+    filter: ["==", ["get", "icon"], "theatre"]
+    layout: { icon-image: theatre_11, icon-overlap: always }
+  - id: poi-bar
+    label: Bar
+    type: symbol
+    source: places
+    filter: ["==", ["get", "icon"], "bar"]
+    layout: { icon-image: bar_11, icon-overlap: always }
+  - id: poi-bicycle
+    label: Bicycle
+    type: symbol
+    source: places
+    filter: ["==", ["get", "icon"], "bicycle"]
+    layout: { icon-image: bicycle_11, icon-overlap: always }
+  - id: poi-music
+    label: Music
+    type: symbol
+    source: places
+    filter: ["==", ["get", "icon"], "music"]
+    layout: { icon-image: music_11, icon-overlap: always }

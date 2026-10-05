@@ -1,0 +1,35 @@
+---
+title: Get coordinates of the mouse pointer
+description: "The map's mousemove event writes pixel and geographic coordinates to a slotted readout"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/get-coordinates-of-the-mouse-pointer.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/get-coordinates-of-the-mouse-pointer.js?raw';
+import chrome from '../../../../../public/gallery-js/get-coordinates-of-the-mouse-pointer.html?raw';
+
+Replicates the MapLibre example [Get coordinates of the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/). The map is YAML; the readout is a `<pre slot="top-left">` inside `<ml-map>`. The hatch is the map's own `mousemove` event, which carries the pointer's pixel position (`e.point`) and its longitude/latitude (`e.lngLat`).
+
+<LiveMap src="/configs/gallery/get-coordinates-of-the-mouse-pointer.yaml" height="440px" chrome={chrome} caption="Move the pointer over the map" />
+
+<script src="/gallery-js/get-coordinates-of-the-mouse-pointer.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="get-coordinates-of-the-mouse-pointer.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="get-coordinates-of-the-mouse-pointer.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="get-coordinates-of-the-mouse-pointer.js" />
+
+## What to notice
+
+- `e.lngLat.wrap()` folds longitudes back into −180…180 when the map shows world copies.
+- For pointer events *on a layer's features*, the element's own `ml-map:layer-hover` DOM event needs no map API at all — see [Get features under the mouse pointer](/examples/gallery/get-features-under-the-mouse-pointer/).

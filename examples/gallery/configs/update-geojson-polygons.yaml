@@ -1,0 +1,36 @@
+# Hermetic twin of docs/public/configs/gallery/update-geojson-polygons.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/update-geojson-polygons/
+# The YAML half: one named GeoJSON source and the two layers that split
+# it by geometry type. The page seeds five rectangles with feature ids,
+# then moves them with the source's incremental updateData() — only the
+# changed features are re-tiled — see update-geojson-polygons.js.
+type: map
+id: update-geojson-polygons
+config:
+  center: [-68.13734351262877, 45.137451890638886]
+  zoom: 5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  rectangles:
+    type: geojson
+    data: { type: FeatureCollection, features: [] }
+layers:
+  - id: rectangles
+    type: fill
+    source: rectangles
+    filter: ["==", ["geometry-type"], "Polygon"]
+    paint:
+      fill-color: ["get", "color"]
+      fill-opacity: 0.8
+  - id: rectangles-label
+    type: symbol
+    source: rectangles
+    filter: ["==", ["geometry-type"], "Point"]
+    layout:
+      text-field: ["get", "label"]
+      text-font: ["Noto Sans Regular"]
+      text-size: 14
+      text-allow-overlap: true
+      text-ignore-placement: true
+    paint:
+      text-color: "#ffffff"

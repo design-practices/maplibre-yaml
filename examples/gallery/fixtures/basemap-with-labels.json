@@ -1,0 +1,29 @@
+{
+  "version": 8,
+  "name": "hermetic-basemap-with-labels",
+  "_comment": "Stand-in for a remote basemap that owns its own label layers (change-a-maps-language twin): an OpenMapTiles-style label layer reading `name`, over features that carry `name:<lang>` translations. Glyphs come from the e2e server's empty-pbf endpoint, so labels load but draw no visible text.",
+  "glyphs": "/glyphs/{fontstack}/{range}.pbf",
+  "sources": {
+    "places": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          { "type": "Feature", "properties": { "name": "Deutschland", "name:fr": "Allemagne", "name:de": "Deutschland", "name:es": "Alemania", "name:ru": "Германия" }, "geometry": { "type": "Point", "coordinates": [10.4, 51.1] } },
+          { "type": "Feature", "properties": { "name": "Österreich", "name:fr": "Autriche", "name:de": "Österreich", "name:es": "Austria", "name:ru": "Австрия" }, "geometry": { "type": "Point", "coordinates": [14.5, 47.5] } },
+          { "type": "Feature", "properties": { "name": "Polska", "name:fr": "Pologne", "name:de": "Polen", "name:es": "Polonia" }, "geometry": { "type": "Point", "coordinates": [19.1, 52.2] } }
+        ]
+      }
+    }
+  },
+  "layers": [
+    { "id": "background", "type": "background", "paint": { "background-color": "#cfe8c9" } },
+    { "id": "country-dots", "type": "circle", "source": "places", "paint": { "circle-radius": 5, "circle-color": "#1d3557" } },
+    {
+      "id": "label_country_1",
+      "type": "symbol",
+      "source": "places",
+      "layout": { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 14 }
+    }
+  ]
+}
