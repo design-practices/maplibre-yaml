@@ -1,0 +1,21 @@
+---
+title: Filter symbols by toggling a list
+description: "One labeled layer per icon type — each gets its own params-panel checkbox"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/filter-symbols-by-toggling-a-list.yaml?raw';
+
+Replicates the MapLibre example [Filter symbols by toggling a list](https://maplibre.org/maplibre-gl-js/docs/examples/filter-symbols-by-toggling-a-list/). Upstream builds a layer per icon type in JS and wires a checkbox to each. Here each layer is declared once with a `label:`, and a labeled layer gets a visibility checkbox on the params panel automatically (`toggleable:`) — the list *is* the YAML.
+
+<LiveMap src="/configs/gallery/filter-symbols-by-toggling-a-list.yaml" height="440px" caption="Untick a type in the panel and its symbols disappear" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="filter-symbols-by-toggling-a-list.yaml" />
+
+## What to notice
+
+- Set `toggleable: false` on a labeled layer to keep it off the panel.
+- Icons come from the basemap's sprite (`theatre_11`, …); the four layers share one named source.

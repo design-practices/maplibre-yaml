@@ -1,0 +1,11 @@
+# Hermetic twin of docs/public/configs/gallery/slowly-fly-to-a-location.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/slowly-fly-to-a-location/
+# The YAML half: the map. The flight's curve, speed and easing are flyTo
+# options — runtime camera choreography — so they live in
+# slowly-fly-to-a-location.js, and the button rides a corner slot.
+type: map
+id: slowly-fly-to-a-location
+config:
+  center: [-74.5, 40]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"

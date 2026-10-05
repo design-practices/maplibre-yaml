@@ -1,0 +1,28 @@
+---
+title: Animate map camera around a point
+description: "A requestAnimationFrame loop orbits the camera with rotateTo"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/animate-map-camera-around-a-point.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/animate-map-camera-around-a-point.js?raw';
+
+Replicates the MapLibre example [Animate map camera around a point](https://maplibre.org/maplibre-gl-js/docs/examples/animate-map-camera-around-a-point/). The pitched camera over Chicago is YAML. The orbit is a `requestAnimationFrame` loop calling `rotateTo` with `duration: 0`, so the bearing tracks the clock. Upstream also strips the basemap's text labels for a cleaner orbit; the basemap belongs to the style, not the document, so that step is page JS too.
+
+<LiveMap src="/configs/gallery/animate-map-camera-around-a-point.yaml" height="440px" caption="The camera circles the point at about ten degrees a second" />
+
+<script src="/gallery-js/animate-map-camera-around-a-point.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="animate-map-camera-around-a-point.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="animate-map-camera-around-a-point.js" />
+
+## What to notice
+
+- `rotateTo(bearing, { duration: 0 })` sets the bearing without starting an animation of its own, so the loop stays in control.
+- Removing basemap layers is a runtime edit to a style the document only references. To hide labels in layers the document authors, set `visible: false` in YAML instead.

@@ -74,7 +74,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · X = out of 
 | display-a-non-interactive-map | E | `config.interactive: false` |
 | change-the-default-position-for-attribution | E | `controls.attribution: {position: top-left}` |
 | check-if-webgl-is-supported | X | capability probe, not a map document |
-| display-a-map-with-mlt | H | MLT needs its protocol plugin registered in JS before `<ml-map>` init |
+| display-a-map-with-mlt | E | maplibre-gl decodes MLT natively now (TileJSON `encoding: mlt`); just a style URL — re-badged in 0.7 U16; was H (protocol plugin) |
 
 ### Camera & animation
 
@@ -99,7 +99,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · X = out of 
 | offset-the-vanishing-point-using-padding | H | camera padding via `getMap().easeTo({padding})` |
 | render-world-copies | E | `config.renderWorldCopies` |
 | restrict-map-panning-to-an-area | E | `config.maxBounds` |
-| set-center-point-above-ground | H | v5 `elevation`/`centerClampedToGround`; may ride config passthrough, unverified |
+| set-center-point-above-ground | E | `config.elevation` + `centerClampedToGround` ride passthrough (verified, U16); upstream's `maxPitch: 105` is blocked by the schema's 85° cap (ml-rww) |
 | walk-around-a-map-in-first-person | X | game-loop camera |
 
 ### Controls & gestures
@@ -146,8 +146,8 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · X = out of 
 | add-a-stretchable-image-to-the-map | H | `addImage` with stretch options (images theme) |
 | add-an-animated-icon-to-the-map | H | animated canvas `addImage` |
 | animate-an-icon-on-the-gpu | X | WebGL atlas writes |
-| display-a-remote-svg-symbol | H | missing-image resolver callback |
-| elevate-symbols-above-the-terrain | H | needs terrain (gap theme) + v5 symbol prop |
+| display-a-remote-svg-symbol | E | `images:` loads the SVG through an `<img>` (U6) — re-badged in U16; was H (resolver callback) |
+| elevate-symbols-above-the-terrain | H | `terrain:` landed (U15); `symbol-height-offset` only exists in maplibre-gl 6 — becomes E once 0.7 runs v6 (U19) |
 | generate-and-add-a-missing-icon-to-the-map | H | `styleimagemissing` handler |
 | use-a-fallback-image | H | `coalesce` image expression works, but icons must exist (images theme) |
 | change-a-layers-color-with-buttons | H | `setPaintProperty` via `getMap()`; `state:` + `global-state` color is the declarative alternative (params-UI theme) |
@@ -173,7 +173,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · X = out of 
 | filter-within-a-layer | H | runtime `setFilter` from UI (params-UI theme; `global-state` alternative) |
 | filter-symbols-by-text-input | H | same |
 | filter-layer-symbols-using-global-state | H | map config fully YAML (`state:` + `global-state` filter); the text input + `setGlobalStateProperty` is host JS. Closest H to E. |
-| filter-symbols-by-toggling-a-list | H | same; also the natural `toggleable:` consumer (params-UI theme) |
+| filter-symbols-by-toggling-a-list | E | one labeled layer per type → params-panel checkbox each (`toggleable:`, U8) — re-badged in U16 |
 
 ### Terrain, 3D & globe
 
@@ -224,7 +224,7 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · X = out of 
 |---|---|---|
 | display-and-style-rich-text-labels | E | `format` expression in `text-field` |
 | style-labels-with-web-fonts | H | `glyphs`/fonts via inline basemap object |
-| style-labels-with-font-faces | H | v5 font-faces via inline basemap |
+| style-labels-with-font-faces | H | inline basemap `font-faces` — validated by 5.x but only applied at runtime by maplibre-gl 6 (U19); no page yet |
 | change-the-case-of-labels | E | `upcase`/`downcase` expressions |
 | style-labels-with-local-fonts | H | font-stack override via inline basemap |
 | variable-label-placement | E | `text-variable-anchor` (curated) |
@@ -316,3 +316,16 @@ shipping its JS as a shown-and-tested artifact next to its YAML.
 - **F6** — the inline `mapStyle` object cleanly covered the style-root
   hatch (glyphs); deliberately unvalidated, now documented as such on the
   web-fonts page.
+
+## U16 escape-hatch pages (2026-10-05)
+
+0.7 U16 (ml-vw4.6) built pages for the badge-only H rows: 22 new hatch
+pages (YAML + page JS + slot chrome, each with a hermetic twin driven by
+`examples/gallery/hatch/twin.html` and a behaviour test in
+`e2e/gallery-hatch-u16.spec.ts`), and re-badged 4 rows to E (above). The
+Wave 3 pages' controls moved into `<ml-map>` corner slots (ml-7fb).
+Still badge-only: add-a-cog-raster-source (needs a hermetic COG fixture
+plus the cog-protocol plugin), add-3d-terrain-from-quantized-mesh-tiles
+(pre-release plugin from a CDN `src/`, no hermetic quantized-mesh
+fixture), elevate-symbols-above-the-terrain and style-labels-with-font-faces
+(both need the maplibre-gl 6 runtime, U19).

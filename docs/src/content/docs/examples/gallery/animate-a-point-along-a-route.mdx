@@ -1,0 +1,36 @@
+---
+title: Animate a point along a route
+description: "A plane flies a great-circle arc — geometry maths in page JS, styling in YAML"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/animate-a-point-along-a-route.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/animate-a-point-along-a-route.js?raw';
+import chrome from '../../../../../public/gallery-js/animate-a-point-along-a-route.html?raw';
+
+Replicates the MapLibre example [Animate a point along a route](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-point-along-a-route/). Everything that is *style* is YAML: the route line, the plane icon (an `images:` entry), and a symbol layer that turns the icon by a `bearing` property. The page JS does the maths upstream borrows from Turf — bend the straight route into a great-circle arc, then walk the plane along it, writing position and heading each frame.
+
+<LiveMap src="/configs/gallery/animate-a-point-along-a-route.yaml" height="440px" chrome={chrome} caption="San Francisco to Washington along the great circle; Replay restarts the flight" />
+
+<script src="/gallery-js/animate-a-point-along-a-route.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="animate-a-point-along-a-route.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="animate-a-point-along-a-route.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="animate-a-point-along-a-route.js" />
+
+## What to notice
+
+- `icon-rotate: ["get", "bearing"]` with `icon-rotation-alignment: map` is all the YAML needs for a heading-aware icon; the JS only writes the property.
+- The two helpers replace `turf.along` and `turf.bearing` in a dozen lines; pulling in Turf works just as well if a page already uses it.
+- The plane is a local SVG declared under `images:` — it loads before the layers, so the symbol never asks for a missing image.

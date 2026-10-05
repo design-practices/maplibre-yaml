@@ -71,12 +71,30 @@
     <li><a href="viewer.html?example=fit-to-the-bounds-of-a-linestring">fit-to-the-bounds-of-a-linestring</a></li>
     <li><a href="viewer.html?example=add-a-color-relief-layer">add-a-color-relief-layer</a> (maplibre-gl &ge; 5.6)</li>
     <li><a href="viewer.html?example=display-a-popup">display-a-popup</a></li>
+    <li><a href="viewer.html?example=set-center-point-above-ground">set-center-point-above-ground</a></li>
+    <li><a href="viewer.html?example=display-a-remote-svg-symbol">display-a-remote-svg-symbol</a></li>
+    <li><a href="viewer.html?example=filter-symbols-by-toggling-a-list">filter-symbols-by-toggling-a-list</a> (maplibre-gl &ge; 5.6)</li>
   </ul>
+  <h2>Escape-hatch twins (YAML + the page's own JS and slot chrome)</h2>
+  <p>
+    Each opens <code>hatch/twin.html?slug=&lt;slug&gt;</code>; add <code>&amp;live</code>
+    to run the same JS against the real docs config (network). Asserted by
+    <code>e2e/gallery-hatch.spec.ts</code> and <code>e2e/gallery-hatch-u16.spec.ts</code>.
+  </p>
+  <ul id="hatches"></ul>
+  <script type="module">
+    // One list, one source of truth: the harness's own manifest.
+    const src = await (await fetch("hatch/twin.js")).text();
+    const slugs = [...src.matchAll(/^\s+"([a-z0-9-]+)": \{/gm)].map((m) => m[1]);
+    document.getElementById("hatches").innerHTML = slugs
+      .map((s) => `<li><a href="hatch/twin.html?slug=${s}">${s}</a> · <a href="hatch/twin.html?slug=${s}&live">live</a></li>`)
+      .join("") + `<li><a href="hatch/pmtiles-source-and-protocol.html">pmtiles-source-and-protocol</a> (stub protocol)</li>`;
+  </script>
   <h2>Mapzen classics (static presets)</h2>
   <ul>
     <li><a href="viewer.html?example=crosshatch">crosshatch</a></li>
     <li><a href="viewer.html?example=blueprint">blueprint</a></li>
   </ul>
-  <p>Docs-only (no hermetic twin): add-a-vector-tile-source, add-a-video, display-buildings-in-3d, change-building-color-based-on-zoom-level — see the docs gallery.</p>
+  <p>Docs-only (no hermetic twin): add-a-vector-tile-source, add-a-video, display-buildings-in-3d, change-building-color-based-on-zoom-level, display-a-map-with-mlt — see the docs gallery.</p>
 </body>
 </html>

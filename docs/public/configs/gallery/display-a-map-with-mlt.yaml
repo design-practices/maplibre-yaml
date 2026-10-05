@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/display-a-map-with-mlt/
+# MapLibre Tiles (MLT) need no plugin any more: maplibre-gl decodes them
+# natively, and a tileset says it is MLT in its own TileJSON
+# (`"encoding": "mlt"`). So an MLT basemap is just a style URL.
+type: map
+id: display-a-map-with-mlt
+config:
+  center: [0, 0]
+  zoom: 1
+  maplibreLogo: true
+  mapStyle: "https://demotiles.maplibre.org/tiles-mlt/plain.json"

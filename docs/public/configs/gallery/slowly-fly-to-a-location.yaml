@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/slowly-fly-to-a-location/
+# The YAML half: the map. The flight's curve, speed and easing are flyTo
+# options — runtime camera choreography — so they live in
+# slowly-fly-to-a-location.js, and the button rides a corner slot.
+type: map
+id: slowly-fly-to-a-location
+config:
+  center: [-74.5, 40]
+  zoom: 9
+  mapStyle: "https://tiles.openfreemap.org/styles/bright"

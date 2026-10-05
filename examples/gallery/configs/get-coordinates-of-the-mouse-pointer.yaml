@@ -1,0 +1,11 @@
+# Hermetic twin of docs/public/configs/gallery/get-coordinates-of-the-mouse-pointer.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/
+# The YAML half: just the map. Pointer coordinates come from the map's
+# mousemove event — see get-coordinates-of-the-mouse-pointer.js; the
+# readout rides a corner slot.
+type: map
+id: get-coordinates-of-the-mouse-pointer
+config:
+  center: [-74.5, 40]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"

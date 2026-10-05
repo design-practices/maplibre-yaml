@@ -1,0 +1,11 @@
+# Hermetic twin of docs/public/configs/gallery/toggle-interactions.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/toggle-interactions/
+# The YAML half: the map, every interaction handler at its default. YAML
+# sets a handler's INITIAL state (`config.scrollZoom: false`, …);
+# switching one at runtime is the hatch — see toggle-interactions.js.
+type: map
+id: toggle-interactions
+config:
+  center: [-77.04, 38.907]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"

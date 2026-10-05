@@ -47,6 +47,12 @@ const TYPES = {
   ".yaml": "text/yaml; charset=utf-8",
   ".yml": "text/yaml; charset=utf-8",
   ".png": "image/png",
+  // U16 hatch twins: an <img> only decodes SVG served as image/svg+xml;
+  // GIF radar frames, TTF font faces and GeoJSON round out the assets.
+  ".svg": "image/svg+xml",
+  ".gif": "image/gif",
+  ".ttf": "font/ttf",
+  ".geojson": "application/geo+json",
   ".md": "text/markdown; charset=utf-8",
 };
 
@@ -290,8 +296,14 @@ const server = createServer(async (req, res) => {
       return send(200, Buffer.alloc(0), "application/x-protobuf");
     }
 
+    // Docs-site root paths (U16): gallery pages reference their assets the
+    // way the docs site serves them (`/gallery-assets/…`, `/gallery-js/…`).
+    // Mapping those two prefixes onto docs/public lets the hermetic twins
+    // and the live-config sweep load the very same URLs.
+    const docsPublic = /^\/(gallery-assets|gallery-js)\//.test(path) ? "/docs/public" : "";
+
     // Static, confined to the repo root.
-    const rel = normalize(path).replace(/^(\.\.[/\\])+/, "");
+    const rel = normalize(docsPublic + path).replace(/^(\.\.[/\\])+/, "");
     const file = join(ROOT, rel);
     if (!file.startsWith(ROOT)) return send(403, "forbidden", "text/plain");
 

@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/set-center-point-above-ground/
+# The camera orbits a point 541 m up — the roof of One World Trade Center —
+# instead of the ground beneath it. `elevation` and `centerClampedToGround`
+# are ordinary MapLibre map options, so they ride `config:` straight
+# through. Upstream opens at pitch 85 and lifts maxPitch to 105° to look
+# up from below the horizon; the schema caps pitch at 85° (ml-rww), and on
+# maplibre-gl 5.x an 85° view loads only low-detail building tiles near the
+# horizon, so this page opens at 70° — drag to tilt further.
+type: map
+id: set-center-point-above-ground
+config:
+  center: [-74.01318, 40.713]
+  zoom: 15.5
+  minZoom: 13
+  pitch: 70
+  maxPitch: 85
+  bearing: -17.6
+  elevation: 541
+  centerClampedToGround: false
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  openfreemap:
+    type: vector
+    url: "https://tiles.openfreemap.org/planet"
+layers:
+  - id: 3d-buildings
+    type: fill-extrusion
+    source: openfreemap
+    source-layer: building
+    minzoom: 13
+    filter: ["!=", ["get", "hide_3d"], true]
+    # coalesce: low-zoom building tiles carry no heights; draw those flat
+    # instead of failing the expression (which paints them black).
+    paint:
+      fill-extrusion-color:
+        - interpolate
+        - ["linear"]
+        - ["coalesce", ["get", "render_height"], 0]
+        - 0
+        - lightgray
+        - 200
+        - royalblue
+        - 400
+        - lightblue
+      fill-extrusion-height: ["interpolate", ["linear"], ["zoom"], 13, 0, 14, ["coalesce", ["get", "render_height"], 0]]
+      fill-extrusion-base: ["interpolate", ["linear"], ["zoom"], 13, 0, 14, ["coalesce", ["get", "render_min_height"], 0]]

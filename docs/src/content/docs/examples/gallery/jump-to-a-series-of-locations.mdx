@@ -1,0 +1,36 @@
+---
+title: Jump to a series of locations
+description: "The MapLibre jumpTo tour — cities in YAML, a timer in page JS"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/jump-to-a-series-of-locations.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/jump-to-a-series-of-locations.js?raw';
+import chrome from '../../../../../public/gallery-js/jump-to-a-series-of-locations.html?raw';
+
+Replicates the MapLibre example [Jump to a series of locations](https://maplibre.org/maplibre-gl-js/docs/examples/jump-to-a-series-of-locations/). The cities are a layer, so they are YAML. The tour is a sequence of events over time, so it is a few lines of page JS: a timer per stop calling `jumpTo` on the map `mapReady()` hands over. The progress readout rides a corner slot of `<ml-map>`.
+
+<LiveMap src="/configs/gallery/jump-to-a-series-of-locations.yaml" height="440px" chrome={chrome} caption="Every two seconds the camera jumps to the next city" />
+
+<script src="/gallery-js/jump-to-a-series-of-locations.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="jump-to-a-series-of-locations.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="jump-to-a-series-of-locations.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="jump-to-a-series-of-locations.js" />
+
+## What to notice
+
+- `jumpTo` changes the camera instantly; swap in `easeTo` or `flyTo` (see [Fly to a location](/examples/gallery/fly-to-a-location/)) for animated moves with the same arguments.
+- The readout is ordinary HTML with `slot="bottom-left"`: `<ml-map>` moves it into that corner on load and stacks it with any built-in chrome.
+- A tour that only needs to *frame* data on load is declarative: `config.fitTo` or `config.bounds`.

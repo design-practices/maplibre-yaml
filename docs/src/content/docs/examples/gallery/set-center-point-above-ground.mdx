@@ -1,0 +1,21 @@
+---
+title: Set center point above ground
+description: "elevation and centerClampedToGround ride config: — the camera orbits a rooftop"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/set-center-point-above-ground.yaml?raw';
+
+Replicates the MapLibre example [Set center point above ground](https://maplibre.org/maplibre-gl-js/docs/examples/set-center-point-above-ground/). The camera centres on a point 541 m up — the top of One World Trade Center — rather than on the ground beneath it. `elevation` and `centerClampedToGround` are ordinary MapLibre map options, so they pass straight through `config:`; the extruded buildings are a document layer.
+
+<LiveMap src="/configs/gallery/set-center-point-above-ground.yaml" height="440px" caption="Drag to rotate: the camera pivots around a point in the air" />
+
+## The complete document
+
+<Code code={config} lang="yaml" title="set-center-point-above-ground.yaml" />
+
+## What to notice
+
+- Upstream opens at an 85° pitch and lifts `maxPitch` to 105° to look up from below the horizon. The schema caps pitch at 85° (tracked as ml-rww), and on maplibre-gl 5.x an 85° view loads only low-detail building tiles, so this page opens at 70° — drag to tilt further.
+- Map data © OpenStreetMap contributors, via OpenFreeMap.

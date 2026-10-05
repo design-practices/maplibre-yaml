@@ -6,5 +6,5 @@ const panel = document.querySelector("[data-feature-info]");
 
 mapEl.addEventListener("ml-map:layer-hover", (e) => {
   const { name, kind } = e.detail.feature?.properties ?? {};
-  panel.textContent = name ? `${name} — ${kind}` : "";
+  panel.textContent = name ? `${name} — ${kind}` : "Hover a landmark";
 });

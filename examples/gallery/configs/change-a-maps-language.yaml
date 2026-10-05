@@ -1,0 +1,13 @@
+# Hermetic twin of docs/public/configs/gallery/change-a-maps-language.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/change-a-maps-language/
+# The YAML half: just the map. The labels being translated belong to the
+# BASEMAP style, which the document references but does not author, so
+# rewriting their text-field is runtime work — see change-a-maps-language.js.
+# (Labels a document authors itself could read a `global-state` language
+# key instead, driven by an enum parameter with no JS at all.)
+type: map
+id: change-a-maps-language
+config:
+  center: [16.05, 48]
+  zoom: 2.9
+  mapStyle: "/examples/gallery/fixtures/basemap-with-labels.json"

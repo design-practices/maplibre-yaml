@@ -1,0 +1,28 @@
+---
+title: Add an animated icon to the map
+description: "A StyleImageInterface redraws a pulsing dot every frame"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-an-animated-icon-to-the-map.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/add-an-animated-icon-to-the-map.js?raw';
+
+Replicates the MapLibre example [Add an animated icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/add-an-animated-icon-to-the-map/). The point and its symbol layer are YAML, hidden until the icon exists. The icon is a `StyleImageInterface`: instead of fixed pixels, `addImage` receives an object whose `render()` MapLibre calls before every frame that uses it. It redraws a canvas, copies the pixels, asks for another frame, and reports that it changed.
+
+<LiveMap src="/configs/gallery/add-an-animated-icon-to-the-map.yaml" height="440px" caption="A pulsing dot drawn fresh every frame" />
+
+<script src="/gallery-js/add-an-animated-icon-to-the-map.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="add-an-animated-icon-to-the-map.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="add-an-animated-icon-to-the-map.js" />
+
+## What to notice
+
+- `map.triggerRepaint()` inside `render()` keeps frames coming; return `false` from `render()` on frames where nothing changed.
+- `pixelRatio: 2` treats the 200 px canvas as a 100 px icon, crisp on high-density screens.

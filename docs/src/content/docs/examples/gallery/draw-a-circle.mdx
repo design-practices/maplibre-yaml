@@ -1,0 +1,35 @@
+---
+title: Draw a circle
+description: "A radius circle computed in page JS fills two YAML layers; a slider resizes it"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/draw-a-circle.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/draw-a-circle.js?raw';
+import chrome from '../../../../../public/gallery-js/draw-a-circle.html?raw';
+
+Replicates the MapLibre example [Draw a circle](https://maplibre.org/maplibre-gl-js/docs/examples/draw-a-circle/). The fill and outline layers and their shared source are YAML; the source starts empty. The polygon is computed at runtime from a centre and a radius — what `turf.circle` does upstream, in a few lines — and handed to the layers with `updateLayerData()`. A slider in a corner slot recomputes it.
+
+<LiveMap src="/configs/gallery/draw-a-circle.yaml" height="440px" chrome={chrome} caption="Drag the slider to change the radius" />
+
+<script src="/gallery-js/draw-a-circle.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="draw-a-circle.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="draw-a-circle.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="draw-a-circle.js" />
+
+## What to notice
+
+- A circle that never changes needs no JS: precompute the polygon and paste it into `data:` — the page is then pure YAML.
+- The two layers share one named source, so one `updateLayerData` call redraws both.

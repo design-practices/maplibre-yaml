@@ -1,0 +1,35 @@
+---
+title: Offset the vanishing point using padding
+description: "Sidebars in corner slots ease the camera's padding so the vanishing point moves"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/offset-the-vanishing-point-using-padding.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/offset-the-vanishing-point-using-padding.js?raw';
+import chrome from '../../../../../public/gallery-js/offset-the-vanishing-point-using-padding.html?raw';
+
+Replicates the MapLibre example [Offset the vanishing point using padding](https://maplibre.org/maplibre-gl-js/docs/examples/offset-the-vanishing-point-using-padding/). The pitched camera and the marker on the centre point are YAML (`markers:`). The two sidebars are page chrome in `<ml-map>`'s corner slots; opening one eases the camera's `padding` on that side to the sidebar's width, so the centre point and the horizon's vanishing point shift out from under it.
+
+<LiveMap src="/configs/gallery/offset-the-vanishing-point-using-padding.yaml" height="440px" chrome={chrome} caption="Open and close the sidebars — the marker and the vanishing point slide aside" />
+
+<script src="/gallery-js/offset-the-vanishing-point-using-padding.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="offset-the-vanishing-point-using-padding.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="offset-the-vanishing-point-using-padding.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="offset-the-vanishing-point-using-padding.js" />
+
+## What to notice
+
+- Padding shrinks the part of the canvas the camera treats as the view; it also applies to later `flyTo`/`fitBounds` calls until changed.
+- The sidebars are slot children, so `<ml-map>` places them and keeps the map's own gestures working around them — no absolute positioning in the page.

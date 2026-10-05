@@ -1,0 +1,36 @@
+---
+title: Filter symbols by text input
+description: "A slotted search box writes a global-state key that the layer's filter reads"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/filter-symbols-by-text-input.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/filter-symbols-by-text-input.js?raw';
+import chrome from '../../../../../public/gallery-js/filter-symbols-by-text-input.html?raw';
+
+Replicates the MapLibre example [Filter symbols by text input](https://maplibre.org/maplibre-gl-js/docs/examples/filter-symbols-by-text-input/). The places and one symbol layer are YAML; the layer's `filter` keeps a place while its icon name contains a `query` state key. The params panel has no free-text control, so the search box is page chrome in a corner slot, and its JS does one thing: write the key with `setGlobalStateProperty`.
+
+<LiveMap src="/configs/gallery/filter-symbols-by-text-input.yaml" height="440px" chrome={chrome} caption="Type &quot;mus&quot; or &quot;th&quot; — places whose type doesn't match disappear" />
+
+<script src="/gallery-js/filter-symbols-by-text-input.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="filter-symbols-by-text-input.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="filter-symbols-by-text-input.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="filter-symbols-by-text-input.js" />
+
+## What to notice
+
+- Upstream hides whole layers by id; reading `global-state` in one filter replaces that bookkeeping with a single state write.
+- `["in", needle, haystack]` on strings is a substring test, and an empty query matches everything.
+- Needs maplibre-gl ≥ 5.6 for `global-state`. For toggles, sliders and selects, the declarative params panel needs no JS — see [Filter symbols by toggling a list](/examples/gallery/filter-symbols-by-toggling-a-list/).

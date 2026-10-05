@@ -3,14 +3,25 @@ interface Props {
   src: string;
   height?: string;
   caption?: string;
+  /**
+   * Raw HTML placed INSIDE `<ml-map>` — the page chrome of an escape-hatch
+   * example (`<div slot="top-left">…</div>` and friends). Gallery pages
+   * import it from `public/gallery-js/<slug>.html?raw`, show it as "the
+   * page half", and the hermetic twin injects the same file, so the markup
+   * readers see is the markup the browser suite drives. It is author-owned
+   * static HTML from this repo, never user input.
+   */
+  chrome?: string;
 }
 
-const { src, height = '400px', caption } = Astro.props;
+const { src, height = '400px', caption, chrome } = Astro.props;
 ---
 
 <figure class="livemap-container">
   <div class="livemap-wrapper">
-    <ml-map src={src} style={`height: ${height}; display: block;`}></ml-map>
+    <ml-map src={src} style={`height: ${height}; display: block;`}>
+      {chrome && <Fragment set:html={chrome} />}
+    </ml-map>
   </div>
   {caption && <figcaption>{caption}</figcaption>}
 </figure>
@@ -35,5 +46,58 @@ const { src, height = '400px', caption } = Astro.props;
     color: var(--sl-color-gray-3);
     text-align: center;
     font-style: italic;
+  }
+</style>
+
+<style is:global>
+  /* Gallery chrome rides <ml-map>'s corner slots. Mirrors
+     examples/gallery/hatch/twin.css so the twin looks like the page. */
+  .livemap-wrapper .gallery-panel {
+    border: none;
+    min-width: 0;
+    background: #fff;
+    color: #1d3557;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    padding: 0.5rem 0.65rem;
+    font: 13px/1.4 system-ui, sans-serif;
+    max-width: 260px;
+  }
+  .livemap-wrapper .gallery-panel * {
+    margin: 0;
+  }
+  .livemap-wrapper .gallery-panel button {
+    font: inherit;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    border: 1px solid #1d3557;
+    background: #1d3557;
+    color: #fff;
+    cursor: pointer;
+  }
+  .livemap-wrapper .gallery-panel button + button {
+    margin-left: 0.3rem;
+  }
+  .livemap-wrapper .gallery-panel label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .livemap-wrapper .gallery-panel fieldset {
+    border: none;
+    padding: 0;
+    display: grid;
+    gap: 0.35rem;
+  }
+  .livemap-wrapper .gallery-panel input[type='range'],
+  .livemap-wrapper .gallery-panel select,
+  .livemap-wrapper .gallery-panel input[type='search'] {
+    width: 100%;
+  }
+  .livemap-wrapper .gallery-panel pre {
+    font-size: 12px;
+    background: none;
+    border: none;
+    padding: 0;
   }
 </style>

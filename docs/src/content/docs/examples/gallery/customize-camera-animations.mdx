@@ -1,0 +1,36 @@
+---
+title: Customize camera animations
+description: "flyTo AnimationOptions — easing, duration, offset, animate — from a slotted control panel"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/customize-camera-animations.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/customize-camera-animations.js?raw';
+import chrome from '../../../../../public/gallery-js/customize-camera-animations.html?raw';
+
+Replicates the MapLibre example [Customize camera animations](https://maplibre.org/maplibre-gl-js/docs/examples/customize-camera-animations/). The target marker is YAML: one named source drawn by a circle layer and a label layer. The control panel is page chrome in `<ml-map>`'s top-left slot, and its JS turns the choices into `flyTo` AnimationOptions, then moves the target through `updateLayerData()`.
+
+<LiveMap src="/configs/gallery/customize-camera-animations.yaml" height="440px" chrome={chrome} caption="Pick an easing and duration, set an offset, and press Test animation" />
+
+<script src="/gallery-js/customize-camera-animations.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="customize-camera-animations.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="customize-camera-animations.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="customize-camera-animations.js" />
+
+## What to notice
+
+- With an offset, the camera centres the target that many pixels away from the viewport centre — compare where the marker lands with the middle of the map.
+- Both layers read one named source, so updating it through either layer id moves the circle and its label together.
+- Unchecking *Animate camera motion* sets `animate: false`: the same call becomes an instant jump.

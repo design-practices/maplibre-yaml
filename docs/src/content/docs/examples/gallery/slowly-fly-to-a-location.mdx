@@ -1,0 +1,35 @@
+---
+title: Slowly fly to a location
+description: "flyTo with tuned speed, curve and easing — a corner-slot button drives it"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/slowly-fly-to-a-location.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/slowly-fly-to-a-location.js?raw';
+import chrome from '../../../../../public/gallery-js/slowly-fly-to-a-location.html?raw';
+
+Replicates the MapLibre example [Slowly fly to a location](https://maplibre.org/maplibre-gl-js/docs/examples/slowly-fly-to-a-location/). A flight's shape — how slowly it moves, how far it zooms out before panning, its easing curve — is a set of `flyTo` options. Those are runtime choreography, not map state, so the YAML holds the map and the page JS holds the flight. The button sits in `<ml-map>`'s top-left slot.
+
+<LiveMap src="/configs/gallery/slowly-fly-to-a-location.yaml" height="440px" chrome={chrome} caption="Press Fly — the camera zooms right out, crosses the globe, and lands" />
+
+<script src="/gallery-js/slowly-fly-to-a-location.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="slowly-fly-to-a-location.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="slowly-fly-to-a-location.html" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="slowly-fly-to-a-location.js" />
+
+## What to notice
+
+- `speed: 0.2` slows the whole flight; `curve: 1` controls how far it zooms out on the way. `easing` takes any function of `t` in 0…1.
+- `essential: true` keeps the animation for readers with `prefers-reduced-motion` — use it only when motion carries meaning.

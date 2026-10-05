@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-line/
+# The YAML half: the line layer and its styling, starting as a stub. The
+# animation loop grows it through <ml-map>'s updateLayerData() — see
+# animate-a-line.js.
+type: map
+id: animate-a-line
+config:
+  center: [0, 0]
+  zoom: 0.5
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: line-animation
+    type: line
+    source:
+      type: geojson
+      route:
+        coordinates: [[0, 0], [0.5, 0.2]]
+    layout:
+      line-cap: round
+      line-join: round
+    paint:
+      line-color: "#ed6498"
+      line-width: 5
+      line-opacity: 0.8

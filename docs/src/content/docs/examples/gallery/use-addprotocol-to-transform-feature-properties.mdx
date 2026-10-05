@@ -1,0 +1,28 @@
+---
+title: Use addProtocol to transform feature properties
+description: "A reverse:// protocol rewrites feature properties in flight, registered on core's maplibre module"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import AddProtocolTransform from '../../../../components/gallery/AddProtocolTransform.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/use-addprotocol-to-transform-feature-properties.yaml?raw';
+import hatchJs from '../../../../gallery-js/use-addprotocol-to-transform-feature-properties.js?raw';
+
+Replicates the MapLibre example [Use addProtocol to transform feature properties](https://maplibre.org/maplibre-gl-js/docs/examples/use-addprotocol-to-transform-feature-properties/). The YAML declares a GeoJSON source whose URL starts `reverse://`, and the layers that label it. The protocol is page JS: registered with `addProtocol` from `@maplibre-yaml/core/maplibre`, it fetches the real URL, writes every `NAME` and `ABBREV` backwards, and hands the result back as the response. The document never knows.
+
+<AddProtocolTransform />
+<LiveMap src="/configs/gallery/use-addprotocol-to-transform-feature-properties.yaml" height="440px" caption="Country names, reversed between the server and the map" />
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="use-addprotocol-to-transform-feature-properties.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="use-addprotocol-to-transform-feature-properties.js" />
+
+## What to notice
+
+- The import path matters: `@maplibre-yaml/core/maplibre` is the exact module `<ml-map>` renders with, so the protocol lands where the document's requests go. See [PMTiles source and protocol](/examples/gallery/pmtiles-source-and-protocol/).
+- Upstream transforms *vector tiles*, decoding them with `@mapbox/vector-tile` and re-encoding with `vt-pbf`; the protocol hatch is identical, only the payload differs.

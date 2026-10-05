@@ -854,6 +854,76 @@ test.describe("images: declared images register before layers (U6)", () => {
   });
 });
 
+test.describe("U16: escape-hatch rows that 0.7 made pure YAML", () => {
+  test("set-center-point-above-ground: elevation + centerClampedToGround ride config passthrough", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openExample(page, "set-center-point-above-ground", ["3d-buildings"]);
+    const camera = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      const src = map.getLayer("3d-buildings").source;
+      return {
+        elevation: map.getCenterElevation(),
+        clamped: map.getCenterClampedToGround(),
+        pitch: map.getPitch(),
+        // qRF under a steep pitch with a raised centre is unreliable; the
+        // fixture's building features reaching the source is the signal.
+        buildings: map.querySourceFeatures(src, { sourceLayer: "building" }).length,
+      };
+    });
+    expect(camera.elevation).toBe(541);
+    expect(camera.clamped).toBe(false);
+    expect(camera.pitch).toBe(70);
+    expect(camera.buildings).toBeGreaterThan(0);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("display-a-remote-svg-symbol: an images: entry rasterizes an SVG for a symbol", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await openExample(page, "display-a-remote-svg-symbol", ["svg-symbol"]);
+    await page.waitForFunction(
+      () =>
+        (document.getElementById("map") as any)
+          .getMap()
+          .queryRenderedFeatures(undefined, { layers: ["svg-symbol"] }).length === 1
+    );
+    const size = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      const img = map.style.getImage("maplibre-logo"); // internal: size check only
+      return { has: map.hasImage("maplibre-logo"), w: img?.data?.width ?? 0 };
+    });
+    expect(size.has).toBe(true);
+    expect(size.w).toBeGreaterThan(100); // the SVG's intrinsic size, not a 0×0 failure
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("filter-symbols-by-toggling-a-list: each labeled layer gets a panel checkbox that hides it", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const layers = ["poi-theatre", "poi-bar", "poi-bicycle", "poi-music"];
+    await openExample(page, "filter-symbols-by-toggling-a-list", layers);
+    const count = (layer: string) =>
+      page.evaluate(
+        (l) =>
+          (document.getElementById("map") as any)
+            .getMap()
+            .queryRenderedFeatures(undefined, { layers: [l] }).length,
+        layer
+      );
+    await expect.poll(() => count("poi-music"), { timeout: 15_000 }).toBe(3);
+
+    await expect(page.locator(".ml-map-params-layer")).toHaveCount(4);
+    await page.locator(".ml-map-params-layer", { hasText: "Music" }).locator("input").setChecked(false);
+    await expect.poll(() => count("poi-music")).toBe(0);
+    expect(await count("poi-theatre")).toBe(2); // the other layers are untouched
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
 test.describe("touch posture: hover popups don't exist on touch; tap uses click.popup (U7)", () => {
   test.use({ hasTouch: true });
 

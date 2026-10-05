@@ -1,0 +1,12 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-canvas-source.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/add-a-canvas-source/
+# The YAML half: the map and its camera limits. A `canvas` source has no
+# YAML form — its content is drawn by page JS every frame anyway — so the
+# source and its raster layer are added in add-a-canvas-source.js.
+type: map
+id: add-a-canvas-source
+config:
+  center: [95.899147, 18.088694]
+  zoom: 5
+  minZoom: 4
+  mapStyle: "/examples/verification/configs/local-style.json"

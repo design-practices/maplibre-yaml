@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/
+# The YAML half: just the map. Pointer coordinates come from the map's
+# mousemove event — see get-coordinates-of-the-mouse-pointer.js; the
+# readout rides a corner slot.
+type: map
+id: get-coordinates-of-the-mouse-pointer
+config:
+  center: [-74.5, 40]
+  zoom: 3
+  mapStyle: "https://demotiles.maplibre.org/style.json"

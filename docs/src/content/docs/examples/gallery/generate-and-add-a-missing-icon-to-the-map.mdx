@@ -1,0 +1,28 @@
+---
+title: Generate and add a missing icon to the map
+description: "A styleimagemissing handler paints icons on demand from their names"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/generate-and-add-a-missing-icon-to-the-map.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/generate-and-add-a-missing-icon-to-the-map.js?raw';
+
+Replicates the MapLibre example [Generate and add a missing icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/generate-and-add-a-missing-icon-to-the-map/). The points and their data-driven icon *name* (`square-rgb-<r,g,b>`) are YAML. No image by those names exists anywhere: the page answers MapLibre's `styleimagemissing` event by painting a square in the colour the name spells out. The layer starts hidden so the handler is listening before the first icon request.
+
+<LiveMap src="/configs/gallery/generate-and-add-a-missing-icon-to-the-map.yaml" height="440px" caption="Three squares, each painted the moment MapLibre asked for it" />
+
+<script src="/gallery-js/generate-and-add-a-missing-icon-to-the-map.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="generate-and-add-a-missing-icon-to-the-map.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="generate-and-add-a-missing-icon-to-the-map.js" />
+
+## What to notice
+
+- The handler must call `addImage` synchronously; MapLibre re-checks for the image as soon as the event returns.
+- maplibre-yaml's own missing-image warning defers to page handlers: an image supplied this way is never reported as missing.

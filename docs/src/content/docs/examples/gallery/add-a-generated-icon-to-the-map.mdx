@@ -1,0 +1,28 @@
+---
+title: Add a generated icon to the map
+description: "Raw RGBA pixels become an icon with addImage; the YAML layer waits hidden"
+---
+
+import LiveMap from '../../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import config from '../../../../../public/configs/gallery/add-a-generated-icon-to-the-map.yaml?raw';
+import hatchJs from '../../../../../public/gallery-js/add-a-generated-icon-to-the-map.js?raw';
+
+Replicates the MapLibre example [Add a generated icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-generated-icon-to-the-map/). The symbol layer is YAML. Its icon is not a file but pixels the page computes, so it can't be an `images:` entry. The layer starts hidden (`visible: false`); the page builds a 64×64 RGBA gradient, registers it with `map.addImage`, and shows the layer with `<ml-map>`'s `setLayerVisibility`.
+
+<LiveMap src="/configs/gallery/add-a-generated-icon-to-the-map.yaml" height="440px" caption="A gradient square generated pixel by pixel" />
+
+<script src="/gallery-js/add-a-generated-icon-to-the-map.js" defer></script>
+
+## The YAML half
+
+<Code code={config} lang="yaml" title="add-a-generated-icon-to-the-map.yaml" />
+
+## The escape hatch
+
+<Code code={hatchJs} lang="js" title="add-a-generated-icon-to-the-map.js" />
+
+## What to notice
+
+- Starting the layer hidden means MapLibre never asks for an image that doesn't exist yet — no missing-image warning, no flash.
+- For an icon that *is* a file (PNG or SVG), use `images:` — see [Display a remote SVG symbol](/examples/gallery/display-a-remote-svg-symbol/).

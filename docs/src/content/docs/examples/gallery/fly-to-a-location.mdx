@@ -7,22 +7,23 @@ import LiveMap from '../../../../components/LiveMap.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/fly-to-a-location.yaml?raw';
 import hatchJs from '../../../../../public/gallery-js/fly-to-a-location.js?raw';
+import chrome from '../../../../../public/gallery-js/fly-to-a-location.html?raw';
 
 Replicates the MapLibre example [Fly to a location](https://maplibre.org/maplibre-gl-js/docs/examples/fly-to-a-location/). Runtime camera moves have no declarative surface (by design — they're events, not state), so this page pairs a pure-YAML map with a few lines of JS through the documented `getMap()` hatch.
 
-<div style="display:flex; gap:0.5rem; margin:1rem 0;">
-  <button data-fly="[-0.1276,51.5072]" style="padding:0.4rem 0.8rem; cursor:pointer;">Fly to London</button>
-  <button data-fly="[2.3522,48.8566]" style="padding:0.4rem 0.8rem; cursor:pointer;">Fly to Paris</button>
-  <button data-fly="[-6.2603,53.3498]" style="padding:0.4rem 0.8rem; cursor:pointer;">Fly to Dublin</button>
-</div>
-
-<LiveMap src="/configs/gallery/fly-to-a-location.yaml" height="440px" />
+<LiveMap src="/configs/gallery/fly-to-a-location.yaml" height="440px" chrome={chrome} />
 
 <script src="/gallery-js/fly-to-a-location.js" defer></script>
 
 ## The YAML half
 
 <Code code={config} lang="yaml" title="fly-to-a-location.yaml" />
+
+## The page half
+
+This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner system.
+
+<Code code={chrome} lang="html" title="fly-to-a-location.html" />
 
 ## The escape hatch
 
@@ -33,3 +34,4 @@ Replicates the MapLibre example [Fly to a location](https://maplibre.org/maplibr
 - `await mapEl.mapReady()` resolves with the live `maplibregl.Map` — the whole imperative API is available without ejecting from YAML, and the promise replaces the old load-listener + `getMap()` null-guard boilerplate.
 - The division of labor is deliberate: the *map* is declarative state (YAML); a camera *flight* is an event, so it lives in event-handling code.
 - The same page pattern covers `easeTo`, `jumpTo`, and `fitBounds`.
+- The buttons are `<ml-map>` slot children (`slot="top-left"`): the element moves them into the map corner on load, so the controls sit on the map without any absolute positioning in the page.

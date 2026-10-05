@@ -1,0 +1,14 @@
+---
+/**
+ * Registers the maplibre-contour `contours://` protocol for the
+ * add-contour-lines gallery page. The hatch itself lives in
+ * src/gallery-js/ (shown on the page, and run verbatim by the hermetic
+ * twin); this component only gets it bundled, so its
+ * `@maplibre-yaml/core/maplibre` import resolves to the same module
+ * instance `<ml-map>` renders with.
+ */
+---
+
+<script>
+  import "../../gallery-js/add-contour-lines.js";
+</script>

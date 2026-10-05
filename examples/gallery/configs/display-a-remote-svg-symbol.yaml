@@ -1,0 +1,25 @@
+# Hermetic twin of docs/public/configs/gallery/display-a-remote-svg-symbol.yaml (local basemap;
+# driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/display-a-remote-svg-symbol/
+# Upstream fetches the SVG in a missing-image resolver and adds it by hand.
+# An `images:` entry does the same declaratively: the URL loads through an
+# <img>, which rasterizes SVG at its intrinsic size, before layers are added.
+type: map
+id: display-a-remote-svg-symbol
+config:
+  center: [0, 0]
+  zoom: 1
+  maplibreLogo: true
+  mapStyle: "/examples/verification/configs/local-style.json"
+images:
+  maplibre-logo: "/gallery-assets/logo.svg"
+layers:
+  - id: svg-symbol
+    type: symbol
+    source:
+      type: geojson
+      location:
+        coordinates: [0, 0]
+    layout:
+      icon-image: maplibre-logo
+      icon-overlap: always
+      text-overlap: always
