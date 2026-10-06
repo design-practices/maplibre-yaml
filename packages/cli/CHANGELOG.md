@@ -1,5 +1,131 @@
 # @maplibre-yaml/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- 83016bc: New `mlym bake <preset> --out <dir>` command. It reproducibly regenerates the pattern images for the Mapzen-classic static presets: `crosshatch` derives its ink-on-paper ground, landuse, pre-lit water and building hatch from Tangram's MIT-licensed source textures, which now ship in the package with their provenance; `blueprint` generates a drafting grid. Run `mlym bake` with no preset to list the available presets.
+- ac9c677: The sprite/asset pipeline (R7) — shared infrastructure for every construct
+  that exports via generated raster assets (marker pins, pattern presets, effect
+  fallbacks). Core describes: deterministic SVG asset descriptors with
+  content-hashed names (`fx-hatch-45-8-a1b2c3d4`), a name-sorted sprite-index
+  layout (duplicate names dedupe when identical, throw when they'd alias
+  different images), seamless hatch tiles (requested angle/spacing snap to the
+  nearest periodic lattice so strokes never jog at tile boundaries), and
+  `attachSpriteAssets()`/`finalizeSpriteBaseUrl()` declaring the document
+  sprite under the fixed `mlym` id in the spec's array form. `EmitResult`
+  gains an optional `assets` field; `ExportLowering.assets` now shares the same
+  `EmitAsset` vocabulary (the earlier placeholder asset-descriptor type is gone
+  before anything consumed it).
+
+  The CLI rasterizes: `mlym emit --out` writes the standard four-file sprite
+  set (`mlym.png`/`mlym.json` + `@2x`) beside the style (sharp, pinned exact,
+  loaded lazily). MapLibre rejects relative sprite URLs, so asset-bearing
+  documents require `--sprite-base <url-prefix>` (the deployed location) and
+  `--out` — emitting a style whose sprite could never resolve now fails loudly
+  instead of shipping broken. Rasterization runs before anything is written,
+  so a sharp failure never leaves a style referencing missing files. Basemap
+  sprite merging is fixed in the process: basemap icons survive under
+  `default` while document assets ride `mlym` (id collisions warn as lossy) —
+  previously a document sprite silently clobbered the basemap's entire icon
+  set. cli's `engines.node` floor rises to match sharp's
+  (`^18.17.0 || ^20.3.0 || >=21`).
+
+- e05add1: `markers:` — standalone map pins as first-class YAML (R8), and the format's
+  first construct that _exports with a fallback_ (R5). Live, each entry is a real
+  `maplibregl.Marker` DOM pin: `at:` position, `color:`/`size:` on the default
+  pin, `icon:` swapping in any image URL (a failed load or unsafe URL scheme
+  falls back to the pin with one console note), and `popup:` carrying the same
+  trust-gated structured content as layer popups. Authored at the v1 document
+  root or v2 `runtime.markers` — the two normalize identically. `<ml-map>`
+  surfaces marker lifecycle as `ml-map:markers-added`, `ml-map:marker-click`,
+  and `ml-map:marker-icon-error` events (mirroring the layer events), and
+  `MarkerSchema`/`MarkersSchema`/`MarkerConfig` are exported from the schemas
+  barrel. `color:` validates as a real color, not any string.
+
+  On export, `mlym emit --with-fallbacks` lowers markers to a symbol layer
+  ("mlym-markers") with generated pin sprites through the sprite pipeline,
+  reported as a `lossy` warning; `--strict` refuses marker documents, because a
+  DOM marker and a symbol layer are close but not identical. Icon URLs are not
+  embedded yet (that arrives with `images:`) — the emitted style substitutes
+  the default pin and says so. The export-class registry carries the lowering as
+  its `export()` hook, so the doctrine's fallback contract is mechanical, not
+  prose. Three gallery pages flip Gap → YAML (default marker, custom
+  icons, marker popup).
+
+- 42189d3: `images:` — named images for symbol layers and patterns (R9), the format's
+  first style-half construct that exports through the sprite pipeline. Each
+  entry (`name: url` or `{url, sdf?, pixelRatio?}`, at the v1 document root or
+  under the v2 style half) loads via `map.addImage` BEFORE layers are added,
+  so `icon-image`/`*-pattern` references resolve on first render; failures
+  warn once per name (with an `ml-map:image-error` event) and never kill the
+  document, and an unknown referenced name gets a warn-once
+  `styleimagemissing` note instead of MapLibre's per-render spam.
+
+  On export the construct fully compiles — class `exports`, so `--strict`
+  accepts it: `mlym emit` fetches every image at compile time (the pipeline's
+  second networked step, beside basemap resolution), merges it into the
+  document sprite next to generated assets (SDF flags carried into the sprite
+  index), and rewrites literal image references to `mlym:<name>`. Marker
+  `icon:` URLs ride the same pipeline, lifting U5's icon limitation: exported
+  icon markers now render their images instead of substituting default pins.
+  `EmitResult` widens with `images?` (fetch-at-emit refs) for programmatic
+  consumers. Reference rewriting is expression-position-aware (match labels,
+  `["get"]` arguments, and operators survive name collisions); dynamic
+  references and relative URLs are reported instead of silently diverging
+  (relative URLs are lossy — `--strict` refuses them). Emit fetches are
+  bounded (30s timeout, 20MB/1024px ceilings, batched concurrency), live
+  image loads time out after 10s instead of stalling `mapReady()`, and
+  `--strict` now also refuses lossy warnings added by the basemap merge.
+  Three more gallery pages flip to YAML (add an icon, fallback image,
+  polygon pattern).
+
+### Patch Changes
+
+- 4558008: Plain-language terminology: turning a document into a plain MapLibre `style.json` is now called **exporting** (it was "ejecting"), everywhere you see it — API names, warning text, CLI help and docs. The export-class API that is new in 0.7 is renamed before release: `EjectClassRegistry` → `ExportClassRegistry`, `ejectClasses` → `exportClasses`, `EjectClass` → `ExportClass`, `EjectClassDefinition` → `ExportClassDefinition`, `EjectContext` → `ExportContext`, `EjectLowering` → `ExportLowering`; a definition's `eject()` hook is now `export()`, and the `EmitWarning.ejectClass` field is now `exportClass`. The three class values are now `exports`, `exports-with-fallback` (was `fallback`) and `no-export` (was `declared-absence`). None of these names shipped in 0.6, so no released API changes. `mlym emit` keeps its name and its `--strict` / `--with-fallbacks` flags; its help text and the strict-mode failure ("Export failed in strict mode: … could not be exported to style.json …") use the new wording, as does the `lossy` warning for effects. In `@maplibre-yaml/effects` only documentation and error wording changed (a `fallback()` returning `null` means the layer doesn't export); no fields were renamed. The docs page "Eject Classes" moved to `/guides/export-classes/` (the old URL redirects), and the examples gallery badges now name what you write: YAML, YAML + JavaScript, YAML + plugin, and JavaScript.
+- a780274: Three gaps from the MapLibre examples gallery can now be expressed in YAML.
+
+  - `config.fitTo: { source, padding?, maxZoom? }` fits the initial camera to a GeoJSON source's data. In format v2 it lives at `runtime.fitTo`. Inline `data:` is framed when the map is constructed, so the camera never jumps. A `url:` source is framed once its first fetch lands; refreshes don't re-fit. Tiled sources keep the authored `center`/`zoom` and log one warning. The new `ml-map:camera-fit` event fires when the fit applies. On export `fitTo` falls back: `mlym emit --with-fallbacks` computes `center`/`zoom` from inline data for a 1024×768 reference viewport and reports it as lossy, so `--strict` refuses `fitTo` documents.
+  - Root `popups:` (v2: `runtime.popups`) opens popups at coordinates, with no layer and no marker. Content goes through the same `PopupBuilder` trust gate as other popups. Each entry accepts `closeButton`, `closeOnClick` and `maxWidth`. Popups don't export (class `no-export`).
+  - The `color-relief` layer type (maplibre-gl 5.6 or later) joins the layer union with `color-relief-color` and `color-relief-opacity`. On older runtimes `<ml-map>` skips these layers with one warning instead of letting MapLibre reject the document. `mlym emit --target` below 5.6 reports the layer as lossy.
+
+  Export classes are registered for `fitTo`, `popups` and `color-relief`. `ExportContext` gains an optional `model`, and `ExportLowering` gains an optional `camera`.
+
+- 4d1177a: `mlym emit --strict` now fails when the runtime gate degrades lossily —
+  previously a state-using document emitted with `--strict --target 4.0.0`
+  inlined its `state:` defaults (a lossy transformation) and still exited 0,
+  because strictness was only enforced over the projection stage. Strict now
+  means strict over the whole pipeline.
+- Updated dependencies [87e80b6]
+- Updated dependencies [dabadd0]
+- Updated dependencies [674351b]
+- Updated dependencies [b096d61]
+- Updated dependencies [83016bc]
+- Updated dependencies [536742f]
+- Updated dependencies [74961c9]
+- Updated dependencies [d90d219]
+- Updated dependencies [acfeaf7]
+- Updated dependencies [83016bc]
+- Updated dependencies [ec6c965]
+- Updated dependencies [83016bc]
+- Updated dependencies [0cb1474]
+- Updated dependencies [4476d6d]
+- Updated dependencies [4558008]
+- Updated dependencies [e28d149]
+- Updated dependencies [0582994]
+- Updated dependencies [a780274]
+- Updated dependencies [7a71f7c]
+- Updated dependencies [d3fc9b7]
+- Updated dependencies [9054069]
+- Updated dependencies [9054069]
+- Updated dependencies [4558008]
+- Updated dependencies [ac9c677]
+- Updated dependencies [e05add1]
+- Updated dependencies [42189d3]
+- Updated dependencies [a1b280c]
+- Updated dependencies [81fc5a0]
+  - @maplibre-yaml/core@0.7.0
+
 ## 0.3.0
 
 ### Minor Changes

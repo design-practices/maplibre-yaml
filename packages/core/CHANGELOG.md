@@ -1,5 +1,202 @@
 # @maplibre-yaml/core
 
+## 0.7.0
+
+### Minor Changes
+
+- 83016bc: New `light:` document key: the style-spec root light that shades `fill-extrusion` faces (`anchor`, `position`, `color`, `intensity`, each also accepting a zoom expression). It sits at the document root in v1 and in the `style:` half in v2. Live, it is applied with `map.setLight`. On export it compiles verbatim to the emitted style's `light`, replacing any basemap light, under the export class `exports`. The object is closed, so a misspelled key is a validation error rather than a silently ignored setting.
+- 536742f: maplibre-gl 6 is now supported: the `maplibre-gl` peer range is `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1` (core), `^4.0.0 || ^5.0.0 || ^6.4.1` (astro) and `^5.0.0 || ^6.4.1` (effects), so `npm install @maplibre-yaml/core maplibre-gl` no longer hits a peer conflict now that v6 is npm's `latest`. The v6 range starts at 6.4.1 because that is the first release patched for GHSA-jrc7-96c5-q579 (MapLibre's attribution sanitizer), and v6 is the recommended line for new projects; v4 and v5 keep working unchanged and stay in CI next to v6. v6 is ESM-only, so the documented import maps now point at `https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs` (with the CSS on `@6`), and under a bundler MapLibre needs to be told where its worker is: the `@maplibre-yaml/astro` components do that themselves, core exports `setWorkerModuleUrl()` from `@maplibre-yaml/core/maplibre` (a no-op before v6, and it never overrides a URL you set), and a map whose worker fails to load now says how to fix it in its `ml-map:error`. Map `error` events reach `onError` as real `Error` objects on every major (v6 reports plain `{ message }` objects), core no longer triggers a `"default" is not exported` warning in v6 builds, and the effects backend keeps its wall texturing seamless on v6, whose re-encoded overzoom tiles move vertices by a few units.
+- d90d219: `<ml-map>` gains named slots: a child with `slot="top-left" | "top-right" | "bottom-left" | "bottom-right"` is mounted into that corner of the map on load, stacking with the built-in legend and params panel instead of overlapping them, and `slot="legend"` replaces the built-in legend. The element also stops wiping its children when it renders or shows an error card; it now removes only its own map container and error card. Slot children, the inline `<script type="text/yaml">` and any other author markup survive `reload()`, a config change, and an error-then-fix cycle. As a result, `reload()` now works for inline-YAML documents, where the script used to be destroyed on first render. If you placed non-slot content inside `<ml-map>` expecting it to be cleared, it now stays. `FullPageMap`'s zoom/reset buttons and legend now work. They previously read a `.map` property the element never had. The buttons ride the `top-right` slot, and `showLegend` now adds core's legend (a default `legend:` at `legendPosition` when a `config` document has none). With `src`, the document is loaded by `<ml-map>` itself, and `showLegend` has no effect, so declare `legend:` in the YAML.
+- 4558008: Plain-language terminology: turning a document into a plain MapLibre `style.json` is now called **exporting** (it was "ejecting"), everywhere you see it — API names, warning text, CLI help and docs. The export-class API that is new in 0.7 is renamed before release: `EjectClassRegistry` → `ExportClassRegistry`, `ejectClasses` → `exportClasses`, `EjectClass` → `ExportClass`, `EjectClassDefinition` → `ExportClassDefinition`, `EjectContext` → `ExportContext`, `EjectLowering` → `ExportLowering`; a definition's `eject()` hook is now `export()`, and the `EmitWarning.ejectClass` field is now `exportClass`. The three class values are now `exports`, `exports-with-fallback` (was `fallback`) and `no-export` (was `declared-absence`). None of these names shipped in 0.6, so no released API changes. `mlym emit` keeps its name and its `--strict` / `--with-fallbacks` flags; its help text and the strict-mode failure ("Export failed in strict mode: … could not be exported to style.json …") use the new wording, as does the `lossy` warning for effects. In `@maplibre-yaml/effects` only documentation and error wording changed (a `fallback()` returning `null` means the layer doesn't export); no fields were renamed. The docs page "Eject Classes" moved to `/guides/export-classes/` (the old URL redirects), and the examples gallery badges now name what you write: YAML, YAML + JavaScript, YAML + plugin, and JavaScript.
+- e28d149: maplibre-gl v5 foundations. `maplibre-gl` is no longer a runtime `dependency`
+  of core — it was pinned `^4.1.0` alongside the peer declaration, so package
+  managers could install a second, private v4 copy next to your v5; it is now
+  peer (+ dev) only, matching the documented architecture. A document's `state:`
+  block now actually reaches the live map: defaults are applied via
+  `setGlobalStateProperty` on load (maplibre-gl ≥ 5.6), so `global-state`
+  expressions in filters and paint read the declared values instead of null; on
+  older runtimes a declared `state:` warns once instead of silently doing
+  nothing. The flat WebGL context keys (`antialias`, `preserveDrawingBuffer`,
+  `failIfMajorPerformanceCaveat`) are handed to MapLibre in both the v4 shape
+  and v5's `canvasContextAttributes`, so they keep working across the peer
+  range. Validation allowlists regenerate from style-spec 26.4.4, adding six
+  newer spec keys (`fill-layer-opacity`, `line-layer-opacity`, `resampling`,
+  `fill-extrusion-rounded-corner-distance`, `symbol-height-anchor`,
+  `symbol-height-offset`) that no longer trip unknown-key warnings.
+- 0582994: New, **experimental**: shader effects. A layer can now carry `effect: { type, ...params }` (v1 on the layer, v2 under its `runtime:`) naming a registered effect that enhances it at runtime, while the layer itself stays the effect's static fallback. The new `@maplibre-yaml/effects` package ships `registerEffect()` (a public, experimental contract: zod params, inferred uniforms, document-image textures, a GLSL `effect_color(EffectInput)` fragment, and a mandatory `fallback()`), the `extrusions` backend for `fill-extrusion` layers — tile meshes built in a worker from MapLibre's own tile bytes, heights evaluated from the layer's own `fill-extrusion-height`/`-base` expressions (any schema), seamless wall texturing across tile edges, no repaint while idle, mercator only — and two built-ins, `tonal-hatch` (the Mapzen/Tangram crosshatch) and `blueprint`. `import "@maplibre-yaml/effects/register"` validates effect params at parse time (positioned errors) and makes `<ml-map>` attach effects after load and detach them on reload/removal; core never imports the package, so documents without effects pay nothing. Without it, `effect:` validates with one `unimplemented` warning and renders statically. `layer.effect` exports with a fallback (class `exports-with-fallback` in the export-class registry): `mlym emit` reports one `lossy` warning per effect, `--strict` refuses, `--with-fallbacks` ships the static layer. Everything about effects may change in a minor release while experimental.
+- a780274: Three gaps from the MapLibre examples gallery can now be expressed in YAML.
+
+  - `config.fitTo: { source, padding?, maxZoom? }` fits the initial camera to a GeoJSON source's data. In format v2 it lives at `runtime.fitTo`. Inline `data:` is framed when the map is constructed, so the camera never jumps. A `url:` source is framed once its first fetch lands; refreshes don't re-fit. Tiled sources keep the authored `center`/`zoom` and log one warning. The new `ml-map:camera-fit` event fires when the fit applies. On export `fitTo` falls back: `mlym emit --with-fallbacks` computes `center`/`zoom` from inline data for a 1024×768 reference viewport and reports it as lossy, so `--strict` refuses `fitTo` documents.
+  - Root `popups:` (v2: `runtime.popups`) opens popups at coordinates, with no layer and no marker. Content goes through the same `PopupBuilder` trust gate as other popups. Each entry accepts `closeButton`, `closeOnClick` and `maxWidth`. Popups don't export (class `no-export`).
+  - The `color-relief` layer type (maplibre-gl 5.6 or later) joins the layer union with `color-relief-color` and `color-relief-opacity`. On older runtimes `<ml-map>` skips these layers with one warning instead of letting MapLibre reject the document. `mlym emit --target` below 5.6 reports the layer as lossy.
+
+  Export classes are registered for `fitTo`, `popups` and `color-relief`. `ExportContext` gains an optional `model`, and `ExportLowering` gains an optional `camera`.
+
+- 7a71f7c: Map-level 3D authoring: documents can now declare `terrain:` (`{ source, exaggeration }` over a `raster-dem` source), `sky:` (sky, horizon, fog, and globe `atmosphere-blend`), and `projection:` (`mercator` | `globe`) at the document root (v2: under `style:`), each in the style spec's own shape. Live, `<ml-map>` applies them with `setTerrain` / `setSky` / `setProjection`. Every setter is feature-detected: a runtime that lacks one (globe needs maplibre-gl 5.0.0, sky 4.5.0) logs one warning and keeps rendering, so on 4.x a globe document renders in mercator rather than failing. On export all three compile verbatim to the style.json root (class `exports`), and the document's value wins over the basemap's. A terrain source that resolves to no `raster-dem` source is dropped with a lossy warning rather than shipped invalid, and a declared `--target` below a key's floor reports the difference as lossy. New `controls.globe` and `controls.terrain` add MapLibre's globe and terrain toggles. This reverses the earlier declared non-goal on map-level terrain; the new `TERRAIN_RUNTIME_FLOOR`, `SKY_RUNTIME_FLOOR`, and `GLOBE_RUNTIME_FLOOR` constants are exported beside `STATE_RUNTIME_FLOOR`.
+- d3fc9b7: Two new routes for page JavaScript close the census's F2 gap. `@maplibre-yaml/core/maplibre`
+  re-exports the maplibre-gl module core renders with — `addProtocol` (pmtiles,
+  COG, custom schemes) finally registers on the module instance the document's
+  requests actually go through, instead of a copy the map never consults. The
+  subpath re-exports named runtime values off the interop-resolved namespace, so
+  it works under real Node ESM where `export * from "maplibre-gl"` silently
+  loses every named export. And `<ml-map>` gains `mapReady(): Promise<Map>` —
+  resolves with the live map once loaded (immediately if already loaded),
+  rejects on `ml-map:error` — replacing the load-listener + `getMap()`
+  null-guard boilerplate in every page-code snippet.
+- 9054069: React typings for `<ml-map>` ship from core: add `/// <reference types="@maplibre-yaml/core/react" />` (or `import "@maplibre-yaml/core/react"`) once and `tsc` accepts `<ml-map>` in JSX, replacing the hand-written declaration the docs used to ask for. The entry is types only (an empty module at runtime) and works with `@types/react` 18 and 19, adapting to the one installed: `src`, `config`, a `ref` typed as `MLMap`, slot children and an inline YAML `<script>` on both; on React 19 an object `config` and `onml-map:*` event props typed with each event's `detail`; on React 18 an object `config` is a type error, since React 18 would stringify it to `"[object Object]"`. The new `MLMapEventMap` type (exported from `@maplibre-yaml/core/register`) names every `ml-map:*` event with its `detail`, and `MLMap#addEventListener` is now typed by it, so `el.addEventListener("ml-map:layer-click", (e) => e.detail.layerId)` needs no cast in any framework.
+- 4558008: Every construct in the format now declares its export class — what happens to it when you
+  export to style.json: `exports`, `exports-with-fallback`, or `no-export` — in
+  a closed-world registry (`exportClasses`, exported). `mlym emit` reports
+  constructs that don't export instead of
+  silently dropping them: chrome that previously vanished from emitted styles
+  with no trace (`controls:`, `legend:`, layer `interactive:`/`toggleable:`,
+  `parameters:`, stripped `x-*` extension blocks) now arrives as `contract`
+  warnings naming the construct and what emit did with it.
+
+  Consumer-visible changes to `EmitResult.warnings`: warnings are now emitted
+  **per construct** (path `layers.<id>.<key>`, `sources.<name>.<key>`) instead
+  of one grouped warning per layer/source, and registry-driven warnings carry
+  two new machine-readable fields — `construct` (e.g. `"layer.interactive"`)
+  and `exportClass` — so programmatic consumers no longer parse message prose.
+  Schema-default keys the author never wrote (`toggleable: true`,
+  `fetchStrategy: "runtime"`, `interactive: true`) no longer generate warning
+  noise. An inline live source with no compile-time data is now `lossy` (fails
+  `--strict`), matching its named-source twin. Unknown runtime keys in
+  passthrough positions warn and never throw; the one new throw
+  (`EmitError`) fires only when a key from core's own closed runtime lists is
+  missing its registration — a code bug, not a document condition. Documented
+  at `/guides/export-classes/`, with drift tests binding the docs table (names
+  AND classes) and the model's runtime-key boundaries to the registry.
+
+- ac9c677: The sprite/asset pipeline (R7) — shared infrastructure for every construct
+  that exports via generated raster assets (marker pins, pattern presets, effect
+  fallbacks). Core describes: deterministic SVG asset descriptors with
+  content-hashed names (`fx-hatch-45-8-a1b2c3d4`), a name-sorted sprite-index
+  layout (duplicate names dedupe when identical, throw when they'd alias
+  different images), seamless hatch tiles (requested angle/spacing snap to the
+  nearest periodic lattice so strokes never jog at tile boundaries), and
+  `attachSpriteAssets()`/`finalizeSpriteBaseUrl()` declaring the document
+  sprite under the fixed `mlym` id in the spec's array form. `EmitResult`
+  gains an optional `assets` field; `ExportLowering.assets` now shares the same
+  `EmitAsset` vocabulary (the earlier placeholder asset-descriptor type is gone
+  before anything consumed it).
+
+  The CLI rasterizes: `mlym emit --out` writes the standard four-file sprite
+  set (`mlym.png`/`mlym.json` + `@2x`) beside the style (sharp, pinned exact,
+  loaded lazily). MapLibre rejects relative sprite URLs, so asset-bearing
+  documents require `--sprite-base <url-prefix>` (the deployed location) and
+  `--out` — emitting a style whose sprite could never resolve now fails loudly
+  instead of shipping broken. Rasterization runs before anything is written,
+  so a sharp failure never leaves a style referencing missing files. Basemap
+  sprite merging is fixed in the process: basemap icons survive under
+  `default` while document assets ride `mlym` (id collisions warn as lossy) —
+  previously a document sprite silently clobbered the basemap's entire icon
+  set. cli's `engines.node` floor rises to match sharp's
+  (`^18.17.0 || ^20.3.0 || >=21`).
+
+- e05add1: `markers:` — standalone map pins as first-class YAML (R8), and the format's
+  first construct that _exports with a fallback_ (R5). Live, each entry is a real
+  `maplibregl.Marker` DOM pin: `at:` position, `color:`/`size:` on the default
+  pin, `icon:` swapping in any image URL (a failed load or unsafe URL scheme
+  falls back to the pin with one console note), and `popup:` carrying the same
+  trust-gated structured content as layer popups. Authored at the v1 document
+  root or v2 `runtime.markers` — the two normalize identically. `<ml-map>`
+  surfaces marker lifecycle as `ml-map:markers-added`, `ml-map:marker-click`,
+  and `ml-map:marker-icon-error` events (mirroring the layer events), and
+  `MarkerSchema`/`MarkersSchema`/`MarkerConfig` are exported from the schemas
+  barrel. `color:` validates as a real color, not any string.
+
+  On export, `mlym emit --with-fallbacks` lowers markers to a symbol layer
+  ("mlym-markers") with generated pin sprites through the sprite pipeline,
+  reported as a `lossy` warning; `--strict` refuses marker documents, because a
+  DOM marker and a symbol layer are close but not identical. Icon URLs are not
+  embedded yet (that arrives with `images:`) — the emitted style substitutes
+  the default pin and says so. The export-class registry carries the lowering as
+  its `export()` hook, so the doctrine's fallback contract is mechanical, not
+  prose. Three gallery pages flip Gap → YAML (default marker, custom
+  icons, marker popup).
+
+- 42189d3: `images:` — named images for symbol layers and patterns (R9), the format's
+  first style-half construct that exports through the sprite pipeline. Each
+  entry (`name: url` or `{url, sdf?, pixelRatio?}`, at the v1 document root or
+  under the v2 style half) loads via `map.addImage` BEFORE layers are added,
+  so `icon-image`/`*-pattern` references resolve on first render; failures
+  warn once per name (with an `ml-map:image-error` event) and never kill the
+  document, and an unknown referenced name gets a warn-once
+  `styleimagemissing` note instead of MapLibre's per-render spam.
+
+  On export the construct fully compiles — class `exports`, so `--strict`
+  accepts it: `mlym emit` fetches every image at compile time (the pipeline's
+  second networked step, beside basemap resolution), merges it into the
+  document sprite next to generated assets (SDF flags carried into the sprite
+  index), and rewrites literal image references to `mlym:<name>`. Marker
+  `icon:` URLs ride the same pipeline, lifting U5's icon limitation: exported
+  icon markers now render their images instead of substituting default pins.
+  `EmitResult` widens with `images?` (fetch-at-emit refs) for programmatic
+  consumers. Reference rewriting is expression-position-aware (match labels,
+  `["get"]` arguments, and operators survive name collisions); dynamic
+  references and relative URLs are reported instead of silently diverging
+  (relative URLs are lossy — `--strict` refuses them). Emit fetches are
+  bounded (30s timeout, 20MB/1024px ceilings, batched concurrency), live
+  image loads time out after 10s instead of stalling `mapReady()`, and
+  `--strict` now also refuses lossy warnings added by the basemap merge.
+  Three more gallery pages flip to YAML (add an icon, fallback image,
+  polygon pattern).
+
+- a1b280c: Hover popups join click popups as a built-in (R10): `hover.popup` shows a
+  chromeless preview while hovering a feature — deduped per feature entered,
+  not per mousemove — and dismisses when the pointer leaves. Coexistence is
+  part of the contract: with both `hover.popup` and `click.popup` on one
+  layer, a click pins the popup (close button included) and hover previews are
+  suppressed until it's dismissed. Touch devices never see hover popups (no
+  layer mousemove on touch); a tap opens the `click.popup`. Sources without
+  feature ids still work, keyed by geometry with a one-time console hint
+  (`generateId: true` gives exact tracking). For interaction hosts and
+  `attachInteractions` consumers, `InteractionDeps` gains `hidePopup` and
+  `showPopup` accepts `ShowPopupOptions` (`closeButton`/`closeOnClick`/`kind`)
+  — the pinned-vs-hover popup slot both built-in hosts now implement.
+- 81fc5a0: The params/toggle panel — the first reader of `parameters:` (R11). Declaring
+  `parameters:` renders a control panel (default top-right): `range`, `select`
+  (alias `enum`), and `toggle` controls, each seeded from its `state:` default
+  and writing live via `setGlobalStateProperty`; unrecognized types degrade to
+  a labeled read-only row. Layers with an authored `label:` get a visibility
+  checkbox (consuming `toggleable:` — set it false to opt out); layer toggles
+  are plain visibility and work on every supported runtime, while parameter
+  controls need maplibre-gl ≥ 5.6 and degrade to one declared-absence notice
+  below it. The legend, the panel, and (soon) author slots share one
+  overlay-chrome corner system: four corners, same-corner occupants stack,
+  `pointer-events` pass through empty chrome. **Legend DOM shape change:**
+  the auto-built `.ml-map-legend` no longer positions itself as a direct
+  child of the host — it now sits inside a positioned
+  `.ml-map-chrome-<corner>` container; CSS that overrode the legend's own
+  `top`/`left` should target the corner container instead. Panel writes are
+  observable: `parameter:change` and `layer:visibility` renderer events,
+  forwarded as `ml-map:parameter-change` / `ml-map:layer-visibility`.
+  Toggles made before the layer chain settles are deferred and applied when
+  layers land. On export nothing changes —
+  parameters remain declared-absent and state defaults inline below the
+  runtime floor. Three more gallery pages flip to YAML (time slider,
+  global-state symbol filter, color buttons — census 59).
+
+### Patch Changes
+
+- 87e80b6: Maps now render under `astro dev` when installed from npm. Every `@maplibre-yaml/astro` component used to fail in the dev server with "Failed to create map: Map is not a constructor", while `astro build` worked. The cause: Vite never pre-bundles maplibre-gl when only a dependency's `.astro` file imports it, so the browser got the raw UMD file, which exposes no ES exports. Core now falls back to the `maplibregl` global that the UMD file sets. On earlier versions, add `vite: { optimizeDeps: { include: ["maplibre-gl"] } }` to `astro.config.mjs`.
+- dabadd0: Hillshade layers now validate MapLibre's multidirectional lighting (maplibre-gl ≥ 5.5). Set `hillshade-method` to `standard`, `basic`, `combined`, `igor` or `multidirectional`. `hillshade-illumination-direction`, `hillshade-illumination-altitude`, `hillshade-highlight-color` and `hillshade-shadow-color` each accept one value per light as a list, for example `hillshade-illumination-direction: [270, 315, 0, 45]`. Before this release a direction list failed validation, so a multidirectional hillshade document could not be authored.
+- 674351b: The built-in legend now looks like a legend. Core ships no stylesheet, so the legend used to render as bare text on the map, and every colour swatch was an empty 0×0 element. Swatches now have a size and a shape (circle, square or line), and the legend sits in the same white panel as the parameters panel. The styles are inline, like the parameters panel's, so there is nothing extra to load. To replace the legend's look entirely, use `<ml-map>`'s `slot="legend"`.
+- b096d61: A legend with no entries no longer renders an empty "Legend" box. Entries come from layers' `legend:` fields or the legend block's own `items:`; when neither exists, no box is shown and `<ml-map>` logs one warning naming what to add. `FullPageMap`'s `showLegend` also warns at build time when the document has no legend entries.
+- 74961c9: The "layer references image … but no images: entry, sprite, or addImage call supplies it" warning no longer fires when the page's own `styleimagemissing` handler supplies the image. Generating icons on demand — MapLibre's documented pattern for data-driven icon names — now runs warning-free: the renderer checks `hasImage` after every listener has had its turn, and warns only for images that are still missing.
+- acfeaf7: `<ml-map>` is now known to TypeScript's DOM typings: importing
+  `@maplibre-yaml/core/register` declares `HTMLElementTagNameMap["ml-map"]` as
+  `MLMap`, so `document.querySelector("ml-map")` and
+  `document.createElement("ml-map")` come back typed, and `mapReady()` / `getMap()` type-check without an `as MLMap` cast.
+  Type-only; no runtime change.
+- 83016bc: `fill-pattern`, `line-pattern`, `fill-extrusion-pattern` and `background-pattern` now accept expressions, as the style spec allows. A data-driven pattern such as `fill-pattern: [match, [get, class], sand, earth, landuse]` used to fail validation; it now validates, renders, and exports cleanly. Every literal output is rewritten into the document sprite. Emit also no longer warns that such a pattern "computes image names from data" just because its `match` input reads a feature property. Only a name computed at an output position still warns.
+- ec6c965: Popups now open above the map's corner chrome (the legend, the params panel, slot content) and above MapLibre's own control corners. Previously a click, hover, marker or standalone popup opened near a corner panel rendered underneath it and could be half hidden. Markers stay below the chrome as map content.
+- 83016bc: Fix: vector sources with same-origin tile paths (`tiles: ["/tiles/{z}/{x}/{y}.pbf"]`) now render. The schema has accepted such paths, but MapLibre fetches vector tiles inside its web worker, where a relative URL cannot resolve, so the map silently drew nothing. Core now resolves the template against the page before handing it to MapLibre and keeps the `{z}/{x}/{y}` placeholders intact.
+- 0cb1474: Security fix: attribution text is now sanitized before it reaches MapLibre's attribution control. MapLibre renders attribution as HTML behind a sanitizer that can be bypassed in every maplibre-gl release up to 6.4.0 (GHSA-jrc7-96c5-q579), which covers the whole supported peer range, so a document from an untrusted author could inject markup into the page through a source's `attribution:`, `customAttribution`, or the attribution of a basemap style or TileJSON it points at. All of those routes now pass through an allowlist: plain text, character references such as `&copy;`, and `<a>` links with `http:`, `https:` or `mailto:` URLs (keeping only `href`, `target` and `rel`) survive, and any other markup shows as literal text. This applies under every capability policy, trusted included, because the unsafe sink is MapLibre's rather than ours. Ordinary attribution renders exactly as before. The renderer now adds the default attribution control itself, right after constructing the map, instead of letting MapLibre add it; the result is the same control with the same defaults, and `attributionControl: false` still turns it off. `mlym emit` applies the same rule to the `style.json` it writes, including attribution merged in from a basemap, and reports a `contract` warning for each source whose attribution it changed.
+- 4476d6d: Every user-facing schema key now carries a description, so editor hover docs (via the published JSON Schema) and the new generated YAML reference on the docs site are never blank. Newly described: the GeoJSON source's `tolerance`, `buffer`, `lineMetrics`, `generateId`, and `promoteId`; `promoteId` on vector sources and `volatile` on vector/raster/raster-dem sources; `interactive.click.flyTo.center`/`zoom`/`duration` (whose `zoom` previously inherited the unrelated "Minimum zoom level" text); and the legacy `interactive.mouseenter`/`mouseleave` triggers. `parameters.<key>.type` now lists the control kinds the params panel understands (`enum`/`select`, `range`, `toggle`) and how it infers one when omitted. Validation behavior is unchanged.
+- 9054069: `<ml-map>` handles a `config` set from a framework correctly. A `config` property assigned before the element connects (what React 19, Vue and Svelte do) is now validated and given its schema defaults like every other path, so an invalid document shows the "Configuration Error" card instead of failing inside the renderer. An element that connects with no configuration waits until the end of the next frame before reporting "No configuration provided.", so a `config` assigned right after `import "@maplibre-yaml/core/register"` or from a React 18 effect no longer fires a spurious `ml-map:error` or flashes the error card, and a `mapReady()` called in between waits instead of rejecting; a `config` set before the element was defined is no longer silently ignored. Assigning a config equal to the current one (compared by its JSON) no longer tears down and rebuilds the map, so a fresh-but-identical object on every render keeps the camera and the map instance. Also fixed: the "MapLibre GL CSS does not appear to be loaded" console warning fired on every maplibre-gl 5 page, CSS or not, because 5.x dropped the canary rule it probed for.
+
 ## 0.6.0
 
 ### Minor Changes

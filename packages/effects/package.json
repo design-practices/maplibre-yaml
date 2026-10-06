@@ -1,6 +1,6 @@
 {
   "name": "@maplibre-yaml/effects",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "EXPERIMENTAL shader effects for maplibre-yaml documents: registerEffect(), the extrusions backend, and the tonal-hatch and blueprint built-ins",
   "type": "module",
   "main": "./dist/index.js",

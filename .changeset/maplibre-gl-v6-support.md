@@ -1,7 +1,0 @@
----
-"@maplibre-yaml/core": minor
-"@maplibre-yaml/astro": minor
-"@maplibre-yaml/effects": patch
----
-
-maplibre-gl 6 is now supported: the `maplibre-gl` peer range is `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1` (core), `^4.0.0 || ^5.0.0 || ^6.4.1` (astro) and `^5.0.0 || ^6.4.1` (effects), so `npm install @maplibre-yaml/core maplibre-gl` no longer hits a peer conflict now that v6 is npm's `latest`. The v6 range starts at 6.4.1 because that is the first release patched for GHSA-jrc7-96c5-q579 (MapLibre's attribution sanitizer), and v6 is the recommended line for new projects; v4 and v5 keep working unchanged and stay in CI next to v6. v6 is ESM-only, so the documented import maps now point at `https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs` (with the CSS on `@6`), and under a bundler MapLibre needs to be told where its worker is: the `@maplibre-yaml/astro` components do that themselves, core exports `setWorkerModuleUrl()` from `@maplibre-yaml/core/maplibre` (a no-op before v6, and it never overrides a URL you set), and a map whose worker fails to load now says how to fix it in its `ml-map:error`. Map `error` events reach `onError` as real `Error` objects on every major (v6 reports plain `{ message }` objects), core no longer triggers a `"default" is not exported` warning in v6 builds, and the effects backend keeps its wall texturing seamless on v6, whose re-encoded overzoom tiles move vertices by a few units.
