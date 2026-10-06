@@ -53,7 +53,7 @@ jobs:
       # shipped in 0.2.0). See scripts/check-publish.sh (issue #28).
       - name: "Check publish manifests (workspace: guard)"
         run: |
-          for pkg in packages/core packages/cli packages/astro; do
+          for pkg in packages/core packages/cli packages/astro packages/effects; do
             ./scripts/check-publish.sh "$pkg"
           done
 
