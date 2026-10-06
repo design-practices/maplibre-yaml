@@ -3,7 +3,7 @@
 # (tangrams/tangram-sandbox styles/crosshatch.yaml, @patriciogv 2015, MIT).
 #
 # The static tier: every layer is plain style spec, so this document is its
-# own eject — `mlym emit --strict` compiles it with nothing lost. Ground,
+# own export — `mlym emit --strict` compiles it with nothing lost. Ground,
 # landuse and water reproduce Tangram exactly (Tangram draws them unlit:
 # tile-repeated hatch textures and a pre-lit crumpled-paper water, baked by
 # `mlym bake crosshatch`). Buildings are the one lit layer: here every face
@@ -12,7 +12,7 @@
 # effect's job, not this document's.
 #
 # Image and glyph URLs are absolute so emit can fetch them into the sprite
-# and the ejected style can find its fonts.
+# and the exported style can find its fonts.
 type: map
 id: crosshatch
 config:

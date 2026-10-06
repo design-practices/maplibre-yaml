@@ -6,7 +6,7 @@
  * e2e/server.mjs mounts docs/dist at the paths the site serves the page
  * from (/examples/classics/, /classics/, /_astro/), so this is the page as deployed: its live
  * panes (`<ml-map>` + `@maplibre-yaml/effects`, bundled by the docs build)
- * and its ejected panes (vanilla maplibre-gl over the `mlym emit` output the
+ * and its exported panes (vanilla maplibre-gl over the `mlym emit` output the
  * docs build wrote). Build the docs first: `pnpm build`.
  *
  * Hermetic. The page's documents name their real hosts, so every off-origin
@@ -19,10 +19,10 @@
  *  - the site-wide unpkg maplibre-gl stylesheet → an empty sheet.
  *
  * Asserted per classic: both panes render the city; the live pane's effect
- * is attached and drawing while the ejected pane runs plain maplibre-gl with
+ * is attached and drawing while the exported pane runs plain maplibre-gl with
  * no effect anywhere in its style; dragging either pane moves the other; a
  * phone-width viewport stacks the panes and keeps them synced; the download
- * links serve the document and the ejected style.
+ * links serve the document and the exported style.
  */
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
@@ -72,7 +72,7 @@ async function guard(page: Page): Promise<string[]> {
     if (url.origin === SITE) {
       // Off production, neither pane may fetch from the production origin:
       // on a PR preview (or before a deploy) those URLs 404 for anything new
-      // — the maintainer saw crosshatch's ejected pane with roads and labels
+      // — the maintainer saw crosshatch's exported pane with roads and labels
       // only (sprite), and the live pane's hatch atlas is not deployed yet.
       // Mapping the production origin to the local build here is what hid
       // that, so any such request is an error (served anyway, so one miss
@@ -119,14 +119,14 @@ async function openPage(page: Page): Promise<void> {
 
 type Probe = {
   live: { layers: string[]; roads: number; loaded: boolean };
-  ejected: { layers: string[]; roads: number; buildings: number; loaded: boolean; styleText: string; insideMlMap: boolean };
+  exported: { layers: string[]; roads: number; buildings: number; loaded: boolean; styleText: string; insideMlMap: boolean };
 };
 
 /** Both maps of one classic: layers, features on screen, style contents. */
 const probe = (page: Page, name: string) =>
   page.evaluate((n): Probe => {
     const section = document.querySelector(`section.classic[data-classic="${n}"]`) as any;
-    const { live, ejected } = section.__maps;
+    const { live, exported } = section.__maps;
     const count = (m: any, id: string) => m.queryRenderedFeatures(undefined, { layers: [id] }).length;
     return {
       live: {
@@ -134,18 +134,18 @@ const probe = (page: Page, name: string) =>
         roads: count(live, "roads"),
         loaded: live.loaded(),
       },
-      ejected: {
-        layers: ejected.getStyle().layers.map((l: any) => l.id),
-        roads: count(ejected, "roads"),
-        buildings: count(ejected, "buildings"),
-        loaded: ejected.loaded(),
-        styleText: JSON.stringify(ejected.getStyle()),
-        insideMlMap: Boolean(ejected.getContainer().closest("ml-map")),
+      exported: {
+        layers: exported.getStyle().layers.map((l: any) => l.id),
+        roads: count(exported, "roads"),
+        buildings: count(exported, "buildings"),
+        loaded: exported.loaded(),
+        styleText: JSON.stringify(exported.getStyle()),
+        insideMlMap: Boolean(exported.getContainer().closest("ml-map")),
       },
     };
   }, name);
 
-const camera = (page: Page, name: string, pane: "live" | "ejected") =>
+const camera = (page: Page, name: string, pane: "live" | "exported") =>
   page.evaluate(
     ([n, p]) => {
       const m = (document.querySelector(`section.classic[data-classic="${n}"]`) as any).__maps[p];
@@ -156,7 +156,7 @@ const camera = (page: Page, name: string, pane: "live" | "ejected") =>
   );
 
 /** Drag the middle of one pane's canvas by (dx, dy) CSS pixels. */
-async function drag(page: Page, name: string, pane: "live" | "ejected", dx: number, dy: number) {
+async function drag(page: Page, name: string, pane: "live" | "exported", dx: number, dy: number) {
   const canvas = page.locator(`section.classic[data-classic="${name}"] [data-pane="${pane}"] canvas.maplibregl-canvas`);
   await canvas.scrollIntoViewIfNeeded();
   const box = (await canvas.boundingBox())!;
@@ -172,7 +172,7 @@ async function drag(page: Page, name: string, pane: "live" | "ejected", dx: numb
 async function expectSynced(page: Page, name: string) {
   await expect
     .poll(async () => {
-      const [a, b] = [await camera(page, name, "live"), await camera(page, name, "ejected")];
+      const [a, b] = [await camera(page, name, "live"), await camera(page, name, "exported")];
       return (
         Math.abs(a.lng - b.lng) < 1e-7 &&
         Math.abs(a.lat - b.lat) < 1e-7 &&
@@ -185,7 +185,7 @@ async function expectSynced(page: Page, name: string) {
 }
 
 /** Drag one pane, assert it moved and the other pane followed exactly. */
-async function expectDragSyncs(page: Page, name: string, pane: "live" | "ejected") {
+async function expectDragSyncs(page: Page, name: string, pane: "live" | "exported") {
   const before = await camera(page, name, pane);
   await drag(page, name, pane, -140, 60);
   const after = await camera(page, name, pane);
@@ -198,17 +198,17 @@ test.describe("Mapzen classics launch page (U11)", () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
   for (const { name, effect } of CLASSICS) {
-    test(`${name}: live pane runs ${effect}; ejected pane runs the emitted style in plain maplibre-gl`, async ({ page }) => {
+    test(`${name}: live pane runs ${effect}; exported pane runs the emitted style in plain maplibre-gl`, async ({ page }) => {
       const errors = await guard(page);
       await openPage(page);
 
       // Both panes put the city on screen.
       await page.waitForFunction(
         (n) => {
-          const { live, ejected } = (document.querySelector(`section.classic[data-classic="${n}"]`) as any).__maps;
+          const { live, exported } = (document.querySelector(`section.classic[data-classic="${n}"]`) as any).__maps;
           const roads = (m: any) => m.queryRenderedFeatures(undefined, { layers: ["roads"] }).length;
-          return roads(live) > 0 && roads(ejected) > 0 &&
-            ejected.queryRenderedFeatures(undefined, { layers: ["buildings"] }).length > 0;
+          return roads(live) > 0 && roads(exported) > 0 &&
+            exported.queryRenderedFeatures(undefined, { layers: ["buildings"] }).length > 0;
         },
         name,
         { timeout: 60_000 }
@@ -218,26 +218,26 @@ test.describe("Mapzen classics launch page (U11)", () => {
       // when the element lost the component's scoped styles).
       const sec = `section.classic[data-classic="${name}"]`;
       const liveBox = (await page.locator(`${sec} [data-pane="live"]`).boundingBox())!;
-      const ejectedBox = (await page.locator(`${sec} [data-pane="ejected"]`).boundingBox())!;
+      const exportedBox = (await page.locator(`${sec} [data-pane="exported"]`).boundingBox())!;
       expect(liveBox.height).toBeGreaterThan(300);
-      expect(Math.abs(liveBox.height - ejectedBox.height)).toBeLessThan(2);
+      expect(Math.abs(liveBox.height - exportedBox.height)).toBeLessThan(2);
       // …that sit level and whose canvas fills them (Starlight's flow margins
       // once pushed the live map down inside its element).
-      expect(Math.abs(liveBox.y - ejectedBox.y)).toBeLessThan(2);
-      for (const box of [liveBox, ejectedBox]) {
+      expect(Math.abs(liveBox.y - exportedBox.y)).toBeLessThan(2);
+      for (const box of [liveBox, exportedBox]) {
         const canvas = (await page.locator(`${sec} canvas.maplibregl-canvas`).nth(box === liveBox ? 0 : 1).boundingBox())!;
         expect(Math.abs(canvas.y - box.y), "map canvas offset inside its pane").toBeLessThan(2);
       }
-      // Same document, same layers, same order: the eject drops nothing.
-      expect(p.ejected.layers).toEqual(p.live.layers.filter((id) => p.ejected.layers.includes(id)));
-      expect(p.ejected.layers).toContain("buildings");
-      // The ejected pane is vanilla maplibre-gl over the emitted file:
+      // Same document, same layers, same order: the export drops nothing.
+      expect(p.exported.layers).toEqual(p.live.layers.filter((id) => p.exported.layers.includes(id)));
+      expect(p.exported.layers).toContain("buildings");
+      // The exported pane is vanilla maplibre-gl over the emitted file:
       // outside any <ml-map>, with no effect anywhere in its style, and the
       // exact style.json the docs build wrote.
-      expect(p.ejected.insideMlMap).toBe(false);
-      expect(p.ejected.styleText).not.toContain('"effect"');
-      const emitted = JSON.parse(readFileSync(join(DIST, "classics", name, "ejected", "style.json"), "utf8"));
-      expect(emitted.layers.map((l: any) => l.id)).toEqual(p.ejected.layers);
+      expect(p.exported.insideMlMap).toBe(false);
+      expect(p.exported.styleText).not.toContain('"effect"');
+      const emitted = JSON.parse(readFileSync(join(DIST, "classics", name, "exported", "style.json"), "utf8"));
+      expect(emitted.layers.map((l: any) => l.id)).toEqual(p.exported.layers);
 
       const status = page.locator(`section.classic[data-classic="${name}"] [data-fx-status]`);
       const fx = async () =>
@@ -281,20 +281,20 @@ test.describe("Mapzen classics launch page (U11)", () => {
     for (const { name } of CLASSICS) {
       await expectSynced(page, name);
       await expectDragSyncs(page, name, "live");
-      await expectDragSyncs(page, name, "ejected");
+      await expectDragSyncs(page, name, "exported");
     }
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("download links serve the document and its ejected style", async ({ page }) => {
+  test("download links serve the document and its exported style", async ({ page }) => {
     const errors = await guard(page);
     await openPage(page);
     for (const { name } of CLASSICS) {
       const section = page.locator(`section.classic[data-classic="${name}"]`);
       const doc = await section.locator('a[data-download="document"]').getAttribute("href");
-      const style = await section.locator('a[data-download="ejected"]').getAttribute("href");
+      const style = await section.locator('a[data-download="exported"]').getAttribute("href");
       expect(doc).toBe(`/classics/${name}.yaml`);
-      expect(style).toBe(`/classics/${name}/ejected/style.json`);
+      expect(style).toBe(`/classics/${name}/exported/style.json`);
 
       const docRes = await page.request.get(doc!);
       expect(docRes.status()).toBe(200);
@@ -315,12 +315,12 @@ test.describe("Mapzen classics launch page (U11), phone width", () => {
     await openPage(page);
     for (const { name } of CLASSICS) {
       const live = (await page.locator(`section.classic[data-classic="${name}"] [data-pane="live"]`).boundingBox())!;
-      const ejected = (await page.locator(`section.classic[data-classic="${name}"] [data-pane="ejected"]`).boundingBox())!;
-      // Stacked: ejected below live, same column, each (nearly) full width.
-      expect(ejected.y).toBeGreaterThanOrEqual(live.y + live.height);
-      expect(Math.abs(ejected.x - live.x)).toBeLessThan(2);
+      const exported = (await page.locator(`section.classic[data-classic="${name}"] [data-pane="exported"]`).boundingBox())!;
+      // Stacked: exported below live, same column, each (nearly) full width.
+      expect(exported.y).toBeGreaterThanOrEqual(live.y + live.height);
+      expect(Math.abs(exported.x - live.x)).toBeLessThan(2);
       expect(live.width).toBeGreaterThan(300);
-      await expectDragSyncs(page, name, "ejected");
+      await expectDragSyncs(page, name, "exported");
       await expectDragSyncs(page, name, "live");
     }
     expect(errors, errors.join("\n")).toEqual([]);

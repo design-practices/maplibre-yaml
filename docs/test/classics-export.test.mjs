@@ -1,9 +1,9 @@
 /**
- * The classics launch page's ejected panes are fresh `mlym emit` output
+ * The classics launch page's exported panes are fresh `mlym emit` output
  * (U11 build-time freshness).
  *
- * The docs build writes public/classics/<name>/ejected/ with
- * `mlym emit --with-fallbacks` (scripts/classics-eject.mjs, an Astro
+ * The docs build writes public/classics/<name>/exported/ with
+ * `mlym emit --with-fallbacks` (scripts/classics-export.mjs, an Astro
  * config hook). This suite compiles each launch document again, from
  * scratch, with the CLI invoked independently of the hook, and requires
  * the shipped files — style.json and every sprite file — to be
@@ -11,9 +11,9 @@
  * rebuilt, or when the hook stops being a plain emit (a hand-edit, a
  * post-process, a different flag).
  *
- * It also pins what the ejected pane claims to be:
+ * It also pins what the exported pane claims to be:
  *  - the honest fallback: the emitted layers are exactly the strict emit
- *    of the gallery's static preset — the effect ejects to its static
+ *    of the gallery's static preset — the effect exports to its static
  *    layer and nothing else changes;
  *  - lossy, and said so: exactly one warning, on the effect, and `--strict`
  *    refuses the document;
@@ -55,9 +55,9 @@ function files(dir) {
 
 for (const { name, effect, effectOnlyImages } of CLASSICS) {
   const doc = join(PUBLIC, "classics", `${name}.yaml`);
-  const shipped = join(PUBLIC, "classics", name, "ejected");
+  const shipped = join(PUBLIC, "classics", name, "exported");
 
-  test(`${name}: the shipped ejected pane is byte-identical to a fresh mlym emit`, (t) => {
+  test(`${name}: the shipped exported pane is byte-identical to a fresh mlym emit`, (t) => {
     assert.ok(
       existsSync(join(shipped, "style.json")),
       `${shipped}/style.json is missing — run the docs build (pnpm --filter @maplibre-yaml/docs build)`
@@ -68,12 +68,12 @@ for (const { name, effect, effectOnlyImages } of CLASSICS) {
     const run = mlym([
       "emit", doc, "--with-fallbacks",
       "--out", join(fresh, "style.json"),
-      "--sprite-base", `${SITE}/classics/${name}/ejected`,
+      "--sprite-base", `${SITE}/classics/${name}/exported`,
     ]);
     assert.equal(run.status, 0, run.output);
 
     const targets = [shipped];
-    if (existsSync(join(DIST, "classics", name, "ejected"))) targets.push(join(DIST, "classics", name, "ejected"));
+    if (existsSync(join(DIST, "classics", name, "exported"))) targets.push(join(DIST, "classics", name, "exported"));
     for (const target of targets) {
       assert.deepEqual(files(target), files(fresh), `${target}: different files than a fresh emit`);
       for (const file of files(fresh)) {
@@ -91,7 +91,7 @@ for (const { name, effect, effectOnlyImages } of CLASSICS) {
     const run = mlym([
       "emit", doc, "--with-fallbacks",
       "--out", join(fresh, "style.json"),
-      "--sprite-base", `${SITE}/classics/${name}/ejected`,
+      "--sprite-base", `${SITE}/classics/${name}/exported`,
     ]);
     assert.equal(run.status, 0, run.output);
     // The CLI prints `WARN` on a terminal and `[warn]` in CI (its CI logger).
@@ -102,10 +102,10 @@ for (const { name, effect, effectOnlyImages } of CLASSICS) {
     assert.ok(!readFileSync(join(fresh, "style.json"), "utf8").includes('"effect"'));
 
     const strict = mlym(["emit", doc, "--strict"]);
-    assert.notEqual(strict.status, 0, "--strict must refuse a document whose effect cannot eject");
+    assert.notEqual(strict.status, 0, "--strict must refuse a document whose effect cannot export");
   });
 
-  test(`${name}: the ejected layers are the gallery static preset's own eject`, (t) => {
+  test(`${name}: the exported layers are the gallery static preset's own export`, (t) => {
     const fresh = mkdtempSync(join(tmpdir(), `classics-${name}-`));
     t.after(() => rmSync(fresh, { recursive: true, force: true }));
     const out = (n) => join(fresh, n, "style.json");

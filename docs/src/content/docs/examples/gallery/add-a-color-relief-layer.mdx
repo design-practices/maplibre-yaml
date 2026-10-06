@@ -20,4 +20,4 @@ Replicates the MapLibre example [Add a color relief layer](https://maplibre.org/
 - `color-relief` is a layer type like `hillshade`. It draws from a `raster-dem` source, and its `color-relief-color` is a ramp over the `["elevation"]` expression, the way `heatmap-color` ramps over `["heatmap-density"]`.
 - The basemap is an inline empty style, exactly as upstream, so the relief is the whole map.
 - **Needs maplibre-gl 5.6 or later.** On an older runtime the renderer skips the layer with one console warning (a declared absence) and the rest of the document renders. It does not let MapLibre reject the style.
-- **Eject class: ejects.** The layer compiles through to `style.json` verbatim. `mlym emit --target` below 5.6 reports it as lossy, because that runtime cannot draw it.
+- **Export class: `exports`.** The layer compiles through to `style.json` verbatim. `mlym emit --target` below 5.6 reports it as lossy, because that runtime cannot draw it.

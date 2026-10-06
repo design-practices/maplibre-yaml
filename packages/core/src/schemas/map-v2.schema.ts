@@ -299,7 +299,7 @@ export const LayerRuntimeSchema = z
       .optional()
       .describe("Allow users to toggle visibility"),
     // Experimental (0.7): runtime half, because an effect never compiles —
-    // it ejects to the layer's own static style (class `fallback`).
+    // it exports to the layer's own static style (class `exports-with-fallback`).
     effect: EffectConfigSchema.optional(),
   })
   .passthrough()
@@ -394,7 +394,7 @@ export const StyleV2Schema: z.ZodTypeAny = z
       "Spec-native runtime-tunable values, read via `global-state`"
     ),
     images: ImagesSchema.optional().describe(
-      "Named images for symbol layers and patterns — style half, merged into the sprite on eject"
+      "Named images for symbol layers and patterns — style half, merged into the sprite on export"
     ),
     terrain: TerrainSchema.optional().describe(
       "3D terrain from a raster-dem source — style half, compiles to style.json `terrain`"
@@ -460,7 +460,7 @@ export const RuntimeV2Schema: z.ZodTypeAny = z
       "Presentation metadata for `state` keys — label, type, range"
     ),
     markers: MarkersSchema.optional().describe(
-      "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+      "Standalone markers — DOM pins live, symbol layers + sprite on export"
     ),
     fitTo: FitToSchema.optional().describe(
       "Fit the initial camera to a GeoJSON source's data (v1: `config.fitTo`)"
@@ -492,7 +492,7 @@ export const RuntimeV2Schema: z.ZodTypeAny = z
  * @remarks
  * The top-level envelope: `version: 2`, `type: map`, `id`, the `style:` and
  * `runtime:` halves, and the document-root `state`/`parameters` positions.
- * `.passthrough()` keeps the `x-*` extension escape hatch — `x-*` keys are
+ * `.passthrough()` keeps `x-*` extension keys legal — they are
  * retained and never produce unknown-key warnings, exactly as v1.
  *
  * The type is annotated `z.ZodObject<any>` deliberately: the fully-inferred type

@@ -1,4 +1,4 @@
-// The escape hatch: setFilter through mapReady(). The YAML declares the
+// The JavaScript half: setFilter through mapReady(). The YAML declares the
 // layer's initial filter; user input re-filters at runtime — awaiting
 // mapReady() means an early interaction waits for the map instead of
 // silently doing nothing. (A declarative alternative — global-state

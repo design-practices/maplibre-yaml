@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
 # Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-an-icon-to-the-map/
 # images: declares named images the document's layers reference; they load
-# before layers live, and merge into the emitted sprite on eject.
+# before layers live, and merge into the emitted sprite on export.
 type: map
 id: add-an-icon-to-the-map
 config:

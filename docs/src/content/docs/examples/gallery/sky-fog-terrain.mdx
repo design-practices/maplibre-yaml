@@ -19,5 +19,5 @@ Replicates the MapLibre example [Sky, fog and terrain](https://maplibre.org/mapl
 
 - `sky:` takes the style spec's own properties, spelled the spec's way: three colors (`sky-color`, `horizon-color`, `fog-color`) and three 0–1 blends. Each also accepts a zoom expression.
 - The values are upstream's initial picker settings: deliberately loud, so you can see where each color applies. Fog only shows over 3D terrain.
-- Upstream's live color pickers call `setSky` from page script. That interactivity is JS territory; the look is pure YAML, and it ejects to the style.json `sky` unchanged.
+- Upstream's live color pickers call `setSky` from page script. That interactivity is page JavaScript; the look is YAML, and it exports to the style.json `sky` unchanged.
 - `sky:` needs **maplibre-gl 4.5.0** or later; an older runtime warns once and renders without it.

@@ -3,21 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Eject to a plain map, then reattach interactions</title>
+    <title>Export to a plain map, then reattach interactions</title>
     <!--
-    The eject → attachInteractions story, in one small page you can copy.
+    The export → attachInteractions story, in one small page you can copy.
 
     A maplibre-yaml document carries two kinds of thing: the parts that become a
     MapLibre `style.json`, and the parts that only exist while the map is
     running (popups, camera moves, hover). No `style.json` can hold behavior, so
-    when you "eject" — compile the document to a self-contained style and render
+    when you "export" — compile the document to a self-contained style and render
     it in a PLAIN `new maplibregl.Map({ style })` — the map draws your layers but
     a click does nothing. The style is a *picture* of the map, not its behavior.
 
     `attachInteractions` gives the behavior back. It takes the declarative
     interactions your document produced (`projectInteractions`) and binds them
-    onto ANY maplibregl.Map — including one rendering an ejected style, with no
-    <ml-map> anywhere. Below: we eject a document to a style, render it plain,
+    onto ANY maplibregl.Map — including one rendering an exported style, with no
+    <ml-map> anywhere. Below: we export a document to a style, render it plain,
     then reattach so clicking the polygon opens a popup built from its data.
 
     This page is hermetic (offline): maplibre-gl, its CSS, the core bundle, and
@@ -39,7 +39,7 @@
     </script>
   </head>
   <body>
-    <header id="status">ejecting…</header>
+    <header id="status">exporting…</header>
     <div id="map"></div>
 
     <script type="module">
@@ -56,15 +56,15 @@
 
       // A readiness hook the test can await, and a place to hand it the live map.
       const demo = { ready: false, error: null, map: null };
-      window.__ejectAttach = demo;
+      window.__exportAttach = demo;
 
       // One authored document. A grey basemap (inline, so nothing loads), a
       // named `parcels` source with INLINE GeoJSON, and a `fill` layer whose
       // `interactive.click.popup` builds a popup from the clicked feature's
-      // properties. The popup is the behavior that must survive eject.
+      // properties. The popup is the behavior that must survive export.
       const DOC = `
 type: map
-id: eject-and-attach
+id: export-and-attach
 config:
   mapStyle:
     version: 8
@@ -115,7 +115,7 @@ layers:
         if (!parsed.success) throw new Error(JSON.stringify(parsed.errors, null, 2));
         const model = normalizeMapBlock(parsed.data);
 
-        // 2. EJECT: compile the STYLE half of the document to a self-contained
+        // 2. EXPORT: compile the STYLE half of the document to a self-contained
         //    style.json. `projectStyle` emits the layers/sources; `mergeBasemap`
         //    folds the inline basemap under them. This style has NO interactions
         //    in it — behavior cannot live in a MapLibre style.
@@ -123,7 +123,7 @@ layers:
         const base = model.style.basemap;
         const { style } = base ? mergeBasemap(base, projected) : projected;
 
-        // 3. Render the ejected style in a PLAIN maplibre-gl map. No <ml-map>,
+        // 3. Render the exported style in a PLAIN maplibre-gl map. No <ml-map>,
         //    nothing from this library participates in rendering. At this point
         //    the polygon draws, but clicking it does nothing — the style is inert.
         const map = new maplibregl.Map({ container: "map", style });
@@ -134,7 +134,7 @@ layers:
 
         // 4. REATTACH: extract the declarative interactions from the same model
         //    (`projectInteractions` — pure data, no behavior yet) and bind them
-        //    onto the ejected map. The default policy is fine here: a popup is
+        //    onto the exported map. The default policy is fine here: a popup is
         //    not trust-gated the way `emit` is. Now a click opens the popup.
         const projection = projectInteractions(model);
         attachInteractions(map, projection, {
@@ -143,7 +143,7 @@ layers:
 
         demo.ready = true;
         status.innerHTML =
-          "<b>ready</b> — style ejected to a plain maplibregl.Map, interactions " +
+          "<b>ready</b> — style exported to a plain maplibregl.Map, interactions " +
           "reattached. Click the blue polygon: a popup opens.";
       } catch (err) {
         demo.error = err?.message ?? String(err);

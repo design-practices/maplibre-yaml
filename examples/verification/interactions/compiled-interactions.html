@@ -102,7 +102,7 @@
         origWarn(...args);
       };
 
-      // A hermetic grey basemap — no network, exactly like the eject fixture.
+      // A hermetic grey basemap — no network, exactly like the export fixture.
       const BASEMAP_LAYERS = [
         { id: "bg", type: "background", paint: { "background-color": "#e5e7eb" } },
       ];
@@ -249,7 +249,7 @@ layers:
         }
         const model = toModel(parsed.data);
 
-        // Compile the style half exactly as eject.html does. The runtime half
+        // Compile the style half exactly as export.html does. The runtime half
         // (interactions) is NOT in this style — it travels as the projection.
         const projected = projectStyle(model, "with-fallbacks");
         const base = model.style.basemap;

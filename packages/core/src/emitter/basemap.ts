@@ -179,7 +179,7 @@ export function mergeBasemap(base: unknown, projected: EmitResult): EmitResult {
         path: key,
         kind: "contract",
         construct: key,
-        ejectClass: "ejects",
+        exportClass: "exports",
         message:
           `The document's \`${key}:\` replaces the basemap's \`${key}\` in the ` +
           "emitted style (the document wins, as it does live).",
@@ -202,7 +202,7 @@ export function mergeBasemap(base: unknown, projected: EmitResult): EmitResult {
         path: "terrain.source",
         kind: "lossy",
         construct: "terrain",
-        ejectClass: "ejects",
+        exportClass: "exports",
         message:
           target === undefined
             ? `\`terrain.source\` names "${terrain["source"]}", which neither the ` +

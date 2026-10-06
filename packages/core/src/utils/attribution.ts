@@ -27,7 +27,7 @@
  * text.
  *
  * Works without a DOM, so the emitter can apply the same rule in Node when it
- * writes attribution into an ejected `style.json`.
+ * writes attribution into an exported `style.json`.
  */
 
 import { LINK_TARGETS } from "./html";

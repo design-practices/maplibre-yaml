@@ -17,7 +17,7 @@ Replicates the MapLibre example [PMTiles source and protocol](https://maplibre.o
 
 <Code code={config} lang="yaml" title="pmtiles-source-and-protocol.yaml" />
 
-## The escape hatch
+## The JavaScript half
 
 ```js
 import { addProtocol } from "@maplibre-yaml/core/maplibre";
@@ -29,7 +29,7 @@ addProtocol("pmtiles", protocol.tile);
 
 ## What to notice
 
-- The YAML stays purely declarative — `pmtiles://` in the source URL is the only trace of the plugin. Validation and eject treat it as an ordinary vector source.
+- The YAML stays purely declarative — `pmtiles://` in the source URL is the only trace of the plugin. Validation and export treat it as an ordinary vector source.
 - The import path matters: registering `addProtocol` from a *separately loaded* maplibre-gl (a CDN copy, a second bundle) registers on a module the map never consults, and the source fails with no obvious cause. The `@maplibre-yaml/core/maplibre` subpath guarantees module identity with the renderer.
-- The same hatch covers COG, custom tile transforms, and any other `addProtocol` plugin.
+- The same page code covers COG, custom tile transforms, and any other `addProtocol` plugin.
 - Data: [Protomaps](https://protomaps.com/) Florence sample extract (ODbL).

@@ -3,7 +3,7 @@
  * @module @maplibre-yaml/core/emitter
  *
  * @description
- * Shared infrastructure for every construct that ejects via generated raster
+ * Shared infrastructure for every construct that exports via generated raster
  * assets: marker pins (U5), static pattern presets (U10), effect fallbacks
  * (U13). Core stays dependency-free (KTD3): this module produces
  * *descriptors* — deterministic SVG plus layout — and `@maplibre-yaml/cli`
@@ -179,7 +179,7 @@ export interface PinOptions {
   size?: number;
 }
 
-/** MapLibre's default-marker blue, so an unstyled pin ejects looking native. */
+/** MapLibre's default-marker blue, so an unstyled pin exports looking native. */
 export const DEFAULT_PIN_COLOR = "#3FB1CE";
 /** The default pin's CSS-pixel footprint (matches MapLibre's own marker). */
 export const DEFAULT_PIN_WIDTH = 27;
@@ -189,7 +189,7 @@ export const DEFAULT_PIN_HEIGHT = 41;
  * The default marker pin as a deterministic SVG asset (U5) — the raster half
  * of the markers fallback: a live `maplibregl.Marker` lowers to a symbol
  * layer whose icon is this teardrop, shaped and colored like MapLibre's own
- * default marker so the ejected map reads the same.
+ * default marker so the exported map reads the same.
  */
 export function pinSvg(options: PinOptions = {}): EmitAsset {
   // Schema-validated colors can't carry markup, but this is the last line of

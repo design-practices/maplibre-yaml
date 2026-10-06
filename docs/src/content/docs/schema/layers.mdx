@@ -110,7 +110,7 @@ params and the effects API may change in a minor release.
 An `effect:` block names a registered effect and carries its params flat
 beside `type`. The layer it sits on stays a complete, ordinary layer — it is
 what renders without the effects package, under an unsupported projection,
-and in the ejected style.
+and in the exported style.
 
 | Key | Type | Description |
 | --- | --- | --- |
@@ -153,7 +153,7 @@ Without the package, validation reports one `unimplemented` warning per
 effect (never an error) and the layer renders statically. With it, a bad
 param is a positioned parse error. On `mlym emit`, each effect is one
 `lossy` warning: `--strict` refuses, `--with-fallbacks` ships the static
-layer ([eject classes](/guides/eject-classes/)). Full guide:
+layer ([export classes](/guides/export-classes/)). Full guide:
 [Effects](/guides/effects/).
 
 ---
@@ -347,5 +347,5 @@ layers:
 
 On a runtime below 5.6, `<ml-map>` skips color-relief layers with one console
 warning (a declared absence), and the rest of the document renders normally.
-On eject the layer compiles through verbatim. `mlym emit --target` below 5.6
+On export the layer compiles through verbatim. `mlym emit --target` below 5.6
 reports it as lossy. See the [gallery example](/examples/gallery/add-a-color-relief-layer/).

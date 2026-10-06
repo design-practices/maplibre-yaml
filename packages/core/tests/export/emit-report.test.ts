@@ -1,5 +1,5 @@
 /**
- * @file Emit reports declared absences via the registry (U3, R6)
+ * @file Emit reports no-export constructs via the registry (U3, R6)
  */
 
 import { describe, it, expect } from "vitest";
@@ -36,7 +36,7 @@ const kitchenSink = {
   ],
 } as unknown as V1MapInput;
 
-describe("declared-absence reporting", () => {
+describe("no-export reporting", () => {
   it("reports every chrome construct with its registered wording, class, and path", () => {
     const { warnings } = projectStyle(normalizeMapBlock(kitchenSink));
     const byPath = new Map(warnings.map((w) => [w.path, w]));
@@ -56,10 +56,10 @@ describe("declared-absence reporting", () => {
     // Constructor-only map options.
     expect(byPath.get("runtime.map")?.message).toMatch(/scrollZoom/);
 
-    // Machine-readable fields (R6): consumers key on construct/ejectClass,
+    // Machine-readable fields (R6): consumers key on construct/exportClass,
     // never on message prose.
     expect(byPath.get("layers.pts.interactive")?.construct).toBe("layer.interactive");
-    expect(byPath.get("layers.pts.interactive")?.ejectClass).toBe("declared-absence");
+    expect(byPath.get("layers.pts.interactive")?.exportClass).toBe("no-export");
     expect(byPath.get("controls")?.construct).toBe("controls");
     expect(byPath.get("runtime.map")?.construct).toBe("map.options");
 
@@ -78,12 +78,12 @@ describe("declared-absence reporting", () => {
     }
   });
 
-  it("kitchen-sink declared-absence report is stable (snapshot)", () => {
+  it("kitchen-sink no-export report is stable (snapshot)", () => {
     const { warnings } = projectStyle(normalizeMapBlock(kitchenSink));
     expect(warnings).toMatchSnapshot();
   });
 
-  it("strict mode still passes on declared absences (contract, not lossy)", () => {
+  it("strict mode still passes on no-export constructs (contract, not lossy)", () => {
     expect(() => projectStyle(normalizeMapBlock(kitchenSink), "strict")).not.toThrow();
   });
 
@@ -159,7 +159,7 @@ describe("declared-absence reporting", () => {
   it("a plain document through the REAL parse pipeline emits zero warnings", () => {
     // Schema defaults (toggleable: true, fetchStrategy: "runtime") are
     // materialized by zod onto every parsed document — they are not authored
-    // and must not generate declared-absence noise.
+    // and must not generate no-export noise.
     const parsed = MapBlockSchema.parse({
       type: "map",
       id: "plain",

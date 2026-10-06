@@ -147,7 +147,7 @@ There are three ways to configure `<ml-map>`, each suited for different use case
   the `attachInteractions` path, and wiring it into the renderer is tracked
   follow-up work (bead `ml-1lz`). The map-acting interactions (`popup`,
   `flyTo`, `zoomToFeature`, `hover.highlight`) work under `<ml-map>` as usual.
-  See [Interactions & Eject](/guides/interactions/) for the full `emit` story.
+  See [Interactions & Export to style.json](/guides/interactions/) for the full `emit` story.
 </Aside>
 
 ### Method 1: External YAML File (Recommended)
@@ -415,8 +415,8 @@ and its error card.
 
 <Aside type="note">
 Slots are page markup, not part of the map document: they never appear in
-`mlym emit` output, and there is nothing to eject. See the
-[eject classes guide](/guides/eject-classes/).
+`mlym emit` output, and there is nothing to export. See the
+[export classes guide](/guides/export-classes/).
 </Aside>
 
 <Aside type="caution" title="Astro: spread the slot attribute inside expressions">
@@ -1258,7 +1258,7 @@ Three behavior changes are worth knowing when you move to 0.6:
 ## Next Steps
 
 - [Format v2](/guides/format-v2/) - The `style:` / `runtime:` split (renders identically here)
-- [Interactions & Eject](/guides/interactions/) - Declarative interactions and the `emit` gate
+- [Interactions & Export to style.json](/guides/interactions/) - Declarative interactions and the `emit` gate
 - [Vanilla JavaScript Integration](/integrations/vanilla-js/) - More control with direct API usage
 - [Astro Integration](/integrations/astro/) - For Astro-based sites
 - [Live Data Guide](/guides/live-data/) - Polling and streaming configuration

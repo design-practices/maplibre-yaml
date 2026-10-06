@@ -1,5 +1,5 @@
 /**
- * @file Generate the U5 marker-eject browser fixture (e2e/marker-eject.spec.ts)
+ * @file Generate the U5 marker-export browser fixture (e2e/marker-export.spec.ts)
  *
  * @description
  * AE1's marker half, driven through the REAL pipeline: a YAML `markers:`
@@ -19,7 +19,7 @@ import { rasterizeSpriteFiles } from "../src/lib/rasterize.js";
 const outDir = process.argv[2];
 const baseUrl = process.argv[3];
 if (!outDir || !baseUrl) {
-  console.error("usage: generate-marker-eject-fixture.ts <outDir> <baseUrl>");
+  console.error("usage: generate-marker-export-fixture.ts <outDir> <baseUrl>");
   process.exit(1);
 }
 
@@ -69,11 +69,11 @@ const html = `<!DOCTYPE html>
     preserveDrawingBuffer: true,
     canvasContextAttributes: { preserveDrawingBuffer: true },
   });
-  window.__eject = { map, layerId: ${JSON.stringify(MARKERS_LAYER_ID)} };
+  window.__export = { map, layerId: ${JSON.stringify(MARKERS_LAYER_ID)} };
 </script></body></html>`;
 
 mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, "style.json"), JSON.stringify(finalized, null, 2));
 writeFileSync(join(outDir, "index.html"), html);
 for (const file of files) writeFileSync(join(outDir, file.filename), file.data);
-console.log(`wrote marker-eject fixture (${assets.length} pin assets) to ${outDir}`);
+console.log(`wrote marker-export fixture (${assets.length} pin assets) to ${outDir}`);

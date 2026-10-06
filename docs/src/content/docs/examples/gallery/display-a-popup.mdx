@@ -20,4 +20,4 @@ Replicates the MapLibre example [Display a popup](https://maplibre.org/maplibre-
 - `content` uses the same structured vocabulary as layer and marker popups, through the same trust gate. Tags are allowlisted and `str:` values are escaped, so an untrusted document can't inject markup the way upstream's `setHTML` string could.
 - `closeOnClick` and `closeButton` are MapLibre's own popup options. Unset, MapLibre's defaults apply.
 - Why not a marker without a pin? A marker's popup opens when the pin is clicked. Hide the pin and nothing can open it. A standalone popup is open from the start, so it's a construct of its own.
-- **Eject class: declared absence.** A popup is DOM, not cartography. `mlym emit` reports it as a contract warning and the emitted style renders the map without it.
+- **Export class: `no-export`.** A popup is DOM, not cartography. `mlym emit` reports it as a contract warning and the emitted style renders the map without it.

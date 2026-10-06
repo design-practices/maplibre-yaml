@@ -1,4 +1,4 @@
-// The escape hatch: GeoJSONSource.updateData(), the incremental API.
+// The JavaScript half: GeoJSONSource.updateData(), the incremental API.
 // setData() (and <ml-map>'s updateLayerData()) re-tiles the whole
 // collection; updateData() patches features by id, which is what makes a
 // per-frame animation of many features cheap.

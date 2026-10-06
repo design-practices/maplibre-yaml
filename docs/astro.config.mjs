@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import starlightTypeDoc from "starlight-typedoc";
 import { OptionDefaults } from "typedoc";
 import { generateAgentAssets } from "./scripts/generate-agent-assets.mjs";
-import { generateClassicsEject } from "./scripts/classics-eject.mjs";
+import { generateClassicsExport } from "./scripts/classics-export.mjs";
 import rehypeHeadingAnchors from "./scripts/rehype-heading-anchors.mjs";
 
 const require = createRequire(import.meta.url);
@@ -29,16 +29,16 @@ const agentAssets = {
 /**
  * Compile the launch page's classics (/examples/classics/) with `mlym emit
  * --with-fallbacks` on every dev start and build, into
- * public/classics/<name>/ejected/ (git-ignored). The page's ejected panes
+ * public/classics/<name>/exported/ (git-ignored). The page's exported panes
  * run exactly that output in vanilla maplibre-gl, so they can never be a
- * hand-copy; docs/test/classics-eject.test.mjs pins them byte-for-byte to
+ * hand-copy; docs/test/classics-export.test.mjs pins them byte-for-byte to
  * a fresh emit. Same precedent as the agent assets above.
  */
-const classicsEject = {
-  name: "maplibre-yaml-classics-eject",
+const classicsExport = {
+  name: "maplibre-yaml-classics-export",
   hooks: {
     "astro:config:setup": () => {
-      generateClassicsEject();
+      generateClassicsExport();
     },
   },
 };
@@ -82,6 +82,10 @@ const API_MODULES = [
 export default defineConfig({
   site: "https://docs.maplibre-yaml.org",
   base: "/",
+  // 0.7 renamed "eject" to "export" (to style.json); keep old links working.
+  redirects: {
+    "/guides/eject-classes/": "/guides/export-classes/",
+  },
   markdown: {
     // `### heading {#id}` -> explicit, stable anchors (used by the generated
     // YAML reference; a no-op for headings without the marker).
@@ -89,7 +93,7 @@ export default defineConfig({
   },
   integrations: [
     agentAssets,
-    classicsEject,
+    classicsExport,
     yamlReference,
     starlight({
       title: "maplibre-yaml",
@@ -155,8 +159,8 @@ export default defineConfig({
           label: "Guides",
           items: [
             { label: "Format v2", link: "/guides/format-v2/" },
-            { label: "Interactions & Eject", link: "/guides/interactions/" },
-            { label: "Eject Classes", link: "/guides/eject-classes/" },
+            { label: "Interactions & Export to style.json", link: "/guides/interactions/" },
+            { label: "Export classes", link: "/guides/export-classes/" },
             { label: "Effects (experimental)", link: "/guides/effects/" },
             { label: "Working with Layers", link: "/guides/layers/" },
             { label: "Data Sources", link: "/guides/data-sources/" },

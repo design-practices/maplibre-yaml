@@ -85,9 +85,9 @@ describe("emitted JSON Schema artifacts", () => {
     }
   });
 
-  it("keeps the x-* extension escape hatch on strict block objects", () => {
+  it("keeps x-* extension keys legal on strict block objects", () => {
     // The map block object itself is strict (additionalProperties: false) with
-    // an x-* pattern escape hatch (D8).
+    // an x-* patternProperties allowance (D8).
     const mapDef = (schemas.map.$defs as Record<string, any>).map;
     expect(mapDef.additionalProperties).toBe(false);
     expect(mapDef.patternProperties).toHaveProperty("^x-");

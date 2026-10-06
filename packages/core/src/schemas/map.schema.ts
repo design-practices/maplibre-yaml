@@ -486,7 +486,7 @@ export const StateSchema = z
  * @remarks
  * Markers are the runtime half's answer to "put a pin here": DOM markers
  * live (`maplibregl.Marker`), lowered to a symbol layer + generated pin
- * sprite on eject (the format's first fallback-class construct). `size` is
+ * sprite on export (the format's first exports-with-fallback construct). `size` is
  * a scale multiplier over MapLibre's default pin size, not pixels.
  */
 export const MarkerSchema = z.object({
@@ -523,7 +523,7 @@ export const MarkersSchema = z.array(MarkerSchema);
  * `content` is the same structured popup vocabulary layer and marker popups
  * use, rendered through the same `PopupBuilder(policy)` trust gate — there
  * is no feature, so `property:` lookups resolve empty and `str:` carries the
- * text. Eject class: declared absence (a popup is DOM, not cartography).
+ * text. Export class: `no-export` (a popup is DOM, not cartography).
  */
 export const StandalonePopupSchema = z.object({
   at: LngLatSchema.describe("Popup anchor position [lng, lat]"),
@@ -555,9 +555,9 @@ export type StandalonePopupConfig = z.infer<typeof StandalonePopupSchema>;
  *
  * @remarks
  * A bare string is the URL shorthand. Images live in the STYLE half: live,
- * the renderer loads and `addImage`s them before layers; on eject they are
+ * the renderer loads and `addImage`s them before layers; on export they are
  * fetched at compile time and merged into the document sprite, with layer
- * references rewritten to `mlym:<name>` — a full compile, class `ejects`.
+ * references rewritten to `mlym:<name>` — a full compile, class `exports`.
  */
 export const ImageConfigSchema = z.union([
   z.string().describe("Image URL (shorthand for `{ url }`)"),
@@ -603,8 +603,8 @@ export type ImagesConfig = z.infer<typeof ImagesSchema>;
  * The authored shape IS the spec's shape: `source` names a `raster-dem`
  * source (one declared in `sources:`, or one the basemap supplies) and
  * `exaggeration` scales its heights. Style half: live, the renderer calls
- * `map.setTerrain` once the source exists; on eject it compiles verbatim to
- * the style.json root (class `ejects`), and the document's `terrain` wins
+ * `map.setTerrain` once the source exists; on export it compiles verbatim to
+ * the style.json root (class `exports`), and the document's `terrain` wins
  * over one inherited from the basemap. maplibre-gl has carried terrain since
  * 2.2.0, so the whole supported peer range renders it.
  *
@@ -647,8 +647,8 @@ const SkyBlendSchema = z.union([z.number().min(0).max(1), ExpressionSchema]);
  *
  * @remarks
  * Every property is the spec's own, spelled the spec's way, and each takes a
- * value or a zoom expression. Style half: live, `map.setSky`; on eject it
- * compiles verbatim to the style.json root (class `ejects`).
+ * value or a zoom expression. Style half: live, `map.setSky`; on export it
+ * compiles verbatim to the style.json root (class `exports`).
  *
  * Runtime minimums: `sky` needs maplibre-gl **4.5.0** (`Map#setSky`); on an
  * older runtime it warns once and the map renders without it.
@@ -703,7 +703,7 @@ export type SkyConfig = z.infer<typeof SkySchema>;
  *
  * @remarks
  * `mercator` (the default) or `globe`. Style half: live, `map.setProjection`;
- * on eject it compiles verbatim to the style.json root (class `ejects`).
+ * on export it compiles verbatim to the style.json root (class `exports`).
  *
  * Globe needs maplibre-gl **5.0.0**. On a 4.x runtime there is no
  * `setProjection`: the document warns once and renders in mercator — a
@@ -734,7 +734,7 @@ export type ProjectionConfig = z.infer<typeof ProjectionSchema>;
  *
  * @remarks
  * Spec-native, so it compiles straight through to the emitted style.json
- * root (class `ejects`); live, the renderer applies it with `map.setLight`
+ * root (class `exports`); live, the renderer applies it with `map.setLight`
  * once the style has loaded. Every property accepts a zoom expression, as
  * the spec allows. Closed object: an unknown key is a typo, never a
  * silently ignored setting.
@@ -893,25 +893,25 @@ export const MapBlockSchema: z.ZodObject<any> = z
       "Presentation metadata for `state` keys — label, type, range"
     ),
     markers: MarkersSchema.optional().describe(
-      "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+      "Standalone markers — DOM pins live, symbol layers + sprite on export"
     ),
     popups: PopupsSchema.optional().describe(
       "Standalone popups open at a coordinate — no layer, no marker"
     ),
     images: ImagesSchema.optional().describe(
-      "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+      "Named images for symbol layers and patterns — loaded live, merged into the sprite on export"
     ),
     terrain: TerrainSchema.optional().describe(
-      "3D terrain from a raster-dem source — setTerrain live, style.json `terrain` on eject"
+      "3D terrain from a raster-dem source — setTerrain live, style.json `terrain` on export"
     ),
     sky: SkySchema.optional().describe(
-      "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json `sky` on eject"
+      "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json `sky` on export"
     ),
     projection: ProjectionSchema.optional().describe(
-      "Map projection (`globe` needs maplibre-gl >= 5) — style.json `projection` on eject"
+      "Map projection (`globe` needs maplibre-gl >= 5) — style.json `projection` on export"
     ),
     light: LightSchema.optional().describe(
-      "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on eject"
+      "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on export"
     ),
   })
   .describe("Standard map block");
@@ -971,25 +971,25 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
       "Presentation metadata for `state` keys — label, type, range"
     ),
     markers: MarkersSchema.optional().describe(
-      "Standalone markers — DOM pins live, symbol layers + sprite on eject"
+      "Standalone markers — DOM pins live, symbol layers + sprite on export"
     ),
     popups: PopupsSchema.optional().describe(
       "Standalone popups open at a coordinate — no layer, no marker"
     ),
     images: ImagesSchema.optional().describe(
-      "Named images for symbol layers and patterns — loaded live, merged into the sprite on eject"
+      "Named images for symbol layers and patterns — loaded live, merged into the sprite on export"
     ),
     terrain: TerrainSchema.optional().describe(
-      "3D terrain from a raster-dem source — setTerrain live, style.json `terrain` on eject"
+      "3D terrain from a raster-dem source — setTerrain live, style.json `terrain` on export"
     ),
     sky: SkySchema.optional().describe(
-      "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json `sky` on eject"
+      "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json `sky` on export"
     ),
     projection: ProjectionSchema.optional().describe(
-      "Map projection (`globe` needs maplibre-gl >= 5) — style.json `projection` on eject"
+      "Map projection (`globe` needs maplibre-gl >= 5) — style.json `projection` on export"
     ),
     light: LightSchema.optional().describe(
-      "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on eject"
+      "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on export"
     ),
   })
   .describe("Full-page map block");

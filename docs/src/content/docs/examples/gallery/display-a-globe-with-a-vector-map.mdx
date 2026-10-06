@@ -17,5 +17,5 @@ Replicates the MapLibre example [Display a globe with a vector map](https://mapl
 
 ## What to notice
 
-- Upstream calls `map.setProjection` in a `style.load` handler; here `projection: { type: globe }` is a document-root key in the style spec's own shape, and it ejects to the style.json root `projection`.
+- Upstream calls `map.setProjection` in a `style.load` handler; here `projection: { type: globe }` is a document-root key in the style spec's own shape, and it exports to the style.json root `projection`.
 - Globe needs **maplibre-gl 5.0.0** or later. On 4.x the document warns once and renders in mercator, so it never fails silently.

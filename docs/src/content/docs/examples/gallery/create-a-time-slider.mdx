@@ -19,4 +19,4 @@ Replicates the MapLibre example [Create a time slider](https://maplibre.org/mapl
 
 - `parameters.year` is presentation metadata only (label, type, bounds); the **value** lives in `state.year.default` — one fact, one place.
 - Every slider move writes `setGlobalStateProperty("year", …)`; the filter re-evaluates live, no `setFilter` plumbing.
-- Requires maplibre-gl ≥ 5.6. On an older runtime the panel shows a declared-absence notice and the map renders with the defaults; on eject the defaults are inlined into the filter.
+- Requires maplibre-gl ≥ 5.6. On an older runtime the panel shows a declared-absence notice and the map renders with the defaults; on export the defaults are inlined into the filter.

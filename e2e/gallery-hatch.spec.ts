@@ -1,5 +1,5 @@
 /**
- * Escape-hatch gallery pages — browser verification, which is also the demo.
+ * YAML + JavaScript gallery pages — browser verification, which is also the demo.
  *
  * @remarks
  * Wave 3 pages pair a YAML document with a few lines of page JS through a
@@ -64,7 +64,7 @@ const qrfCount = (page: Page, layerId: string) =>
     layerId
   );
 
-test.describe("escape-hatch pages: the shipped JS drives the shipped YAML", () => {
+test.describe("YAML + JavaScript pages: the shipped JS drives the shipped YAML", () => {
   test("fly-to-a-location: a button flight lands on its target", async ({ page }) => {
     const errors = await guard(page);
     await openHatch(page, "fly-to-a-location", []);

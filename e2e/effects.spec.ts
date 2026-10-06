@@ -12,7 +12,7 @@
  *  2. both built-ins render;
  *  3. heights come from the static layer's OWN expressions, on a property
  *     no OpenMapTiles schema has (silhouettes match the static layer);
- *  4. eject: `--strict` refuses, the static layer ships, and the emitted
+ *  4. export: `--strict` refuses, the static layer ships, and the emitted
  *     style renders in plain maplibre-gl;
  *  5. KTD7's static clause: an idle map with a static effect schedules no
  *     repaint and no frame;
@@ -185,10 +185,10 @@ test.describe("effects (maplibre-gl 5+)", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("4. eject: --strict refuses, the static layer ships, and it renders in plain maplibre-gl", async ({ page }) => {
+  test("4. export: --strict refuses, the static layer ships, and it renders in plain maplibre-gl", async ({ page }) => {
     const errors = await guard(page);
-    const out = join(process.cwd(), "e2e/generated/effects-eject");
-    execFileSync("node", ["--import", "tsx", "scripts/generate-effects-eject-fixture.ts", out, ORIGIN], {
+    const out = join(process.cwd(), "e2e/generated/effects-export");
+    execFileSync("node", ["--import", "tsx", "scripts/generate-effects-export-fixture.ts", out, ORIGIN], {
       cwd: join(process.cwd(), "packages/cli"),
       stdio: "pipe",
     });
@@ -199,15 +199,15 @@ test.describe("effects (maplibre-gl 5+)", () => {
     expect(result.effectStripped).toBe(true);
     expect(result.buildings).toEqual([{ type: "fill-extrusion", pattern: "mlym:building-hatch" }]);
 
-    await page.goto("/e2e/generated/effects-eject/index.html");
-    await page.waitForFunction(() => (window as any).__eject?.map?.loaded(), undefined, { timeout: 60_000 });
+    await page.goto("/e2e/generated/effects-export/index.html");
+    await page.waitForFunction(() => (window as any).__export?.map?.loaded(), undefined, { timeout: 60_000 });
     await page.evaluate(
-      () => new Promise((r) => { const m = (window as any).__eject.map; m.once("idle", r); m.triggerRepaint(); })
+      () => new Promise((r) => { const m = (window as any).__export.map; m.once("idle", r); m.triggerRepaint(); })
     );
     const rendered = await page.evaluate(
-      () => (window as any).__eject.map.queryRenderedFeatures(undefined, { layers: ["buildings"] }).length
+      () => (window as any).__export.map.queryRenderedFeatures(undefined, { layers: ["buildings"] }).length
     );
-    console.log(`[effects] ejected style renders ${rendered} buildings`);
+    console.log(`[effects] exported style renders ${rendered} buildings`);
     expect(rendered).toBeGreaterThan(500);
     expect(errors, errors.join("\n")).toEqual([]);
   });

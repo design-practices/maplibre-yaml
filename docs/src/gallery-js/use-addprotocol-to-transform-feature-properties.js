@@ -1,4 +1,4 @@
-// The escape hatch: addProtocol, imported from @maplibre-yaml/core/maplibre
+// The JavaScript half: addProtocol, imported from @maplibre-yaml/core/maplibre
 // so it registers on the very module <ml-map> renders with. Any source URL
 // that starts `reverse://` now comes through this function: fetch the real
 // URL, rewrite the properties, return the result as the response.

@@ -1,0 +1,7 @@
+---
+"@maplibre-yaml/core": minor
+"@maplibre-yaml/cli": patch
+"@maplibre-yaml/effects": patch
+---
+
+Plain-language terminology: turning a document into a plain MapLibre `style.json` is now called **exporting** (it was "ejecting"), everywhere you see it — API names, warning text, CLI help and docs. The export-class API that is new in 0.7 is renamed before release: `EjectClassRegistry` → `ExportClassRegistry`, `ejectClasses` → `exportClasses`, `EjectClass` → `ExportClass`, `EjectClassDefinition` → `ExportClassDefinition`, `EjectContext` → `ExportContext`, `EjectLowering` → `ExportLowering`; a definition's `eject()` hook is now `export()`, and the `EmitWarning.ejectClass` field is now `exportClass`. The three class values are now `exports`, `exports-with-fallback` (was `fallback`) and `no-export` (was `declared-absence`). None of these names shipped in 0.6, so no released API changes. `mlym emit` keeps its name and its `--strict` / `--with-fallbacks` flags; its help text and the strict-mode failure ("Export failed in strict mode: … could not be exported to style.json …") use the new wording, as does the `lossy` warning for effects. In `@maplibre-yaml/effects` only documentation and error wording changed (a `fallback()` returning `null` means the layer doesn't export); no fields were renamed. The docs page "Eject Classes" moved to `/guides/export-classes/` (the old URL redirects), and the examples gallery badges now name what you write: YAML, YAML + JavaScript, YAML + plugin, and JavaScript.

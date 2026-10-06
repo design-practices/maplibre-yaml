@@ -1,81 +1,81 @@
 /**
- * @file Eject-class registry: contract + closed-world exhaustiveness (U3)
+ * @file Export-class registry: contract + closed-world exhaustiveness (U3)
  *
  * @description
  * The exhaustiveness block is the load-bearing part: it recomputes the
  * construct list from the model's own key boundaries, so a new runtime key
- * added anywhere in the format fails here until it declares an eject class.
+ * added anywhere in the format fails here until it declares an export class.
  */
 
 import { describe, it, expect } from "vitest";
-import { EjectClassRegistry } from "../../src/eject/registry";
-import { ejectClasses } from "../../src/eject/registrations";
+import { ExportClassRegistry } from "../../src/export/registry";
+import { exportClasses } from "../../src/export/registrations";
 import {
   LAYER_RUNTIME_KEYS,
   SOURCE_RUNTIME_KEYS,
 } from "../../src/model/normalize";
 
-describe("EjectClassRegistry contract", () => {
+describe("ExportClassRegistry contract", () => {
   it("throws on duplicate registration", () => {
-    const registry = new EjectClassRegistry();
-    registry.register("thing", { class: "ejects", onEmit: "compiles." });
+    const registry = new ExportClassRegistry();
+    registry.register("thing", { class: "exports", onEmit: "compiles." });
     expect(() =>
-      registry.register("thing", { class: "ejects", onEmit: "again." })
+      registry.register("thing", { class: "exports", onEmit: "again." })
     ).toThrow(/already registered/);
   });
 
-  it("refuses a fallback class without an eject()", () => {
-    const registry = new EjectClassRegistry();
+  it("refuses an exports-with-fallback class without an export()", () => {
+    const registry = new ExportClassRegistry();
     expect(() =>
-      registry.register("fx", { class: "fallback", onEmit: "lowers." })
-    ).toThrow(/without an eject\(\)/);
+      registry.register("fx", { class: "exports-with-fallback", onEmit: "lowers." })
+    ).toThrow(/without an export\(\)/);
   });
 
-  it("refuses an eject() on a non-fallback class", () => {
-    const registry = new EjectClassRegistry();
+  it("refuses an export() on any other class", () => {
+    const registry = new ExportClassRegistry();
     expect(() =>
       registry.register("chrome", {
-        class: "declared-absence",
+        class: "no-export",
         onEmit: "absent.",
-        eject: () => ({}),
+        export: () => ({}),
       })
-    ).toThrow(/only "fallback" constructs lower/);
+    ).toThrow(/only "exports-with-fallback" constructs lower/);
   });
 
   it("require() throws loudly for an unregistered construct", () => {
-    const registry = new EjectClassRegistry();
+    const registry = new ExportClassRegistry();
     expect(() => registry.require("layer.mystery")).toThrow(
-      /no registered eject class/
+      /no registered export class/
     );
   });
 });
 
 describe("closed-world exhaustiveness (R4)", () => {
-  it("every layer runtime key has a registered eject class", () => {
+  it("every layer runtime key has a registered export class", () => {
     for (const key of LAYER_RUNTIME_KEYS) {
       expect(
-        ejectClasses.has(`layer.${key}`),
-        `layer.${key} has no eject-class registration`
+        exportClasses.has(`layer.${key}`),
+        `layer.${key} has no export-class registration`
       ).toBe(true);
     }
   });
 
-  it("every source runtime key has a registered eject class", () => {
+  it("every source runtime key has a registered export class", () => {
     for (const key of SOURCE_RUNTIME_KEYS) {
       expect(
-        ejectClasses.has(`source.${key}`),
-        `source.${key} has no eject-class registration`
+        exportClasses.has(`source.${key}`),
+        `source.${key} has no export-class registration`
       ).toBe(true);
     }
   });
 
-  it("layer.effect is a fallback-class construct (experimental effects, U13′)", () => {
+  it("layer.effect is an exports-with-fallback construct (experimental effects, U13′)", () => {
     expect(LAYER_RUNTIME_KEYS).toContain("effect");
-    const definition = ejectClasses.get("layer.effect");
-    expect(definition?.class).toBe("fallback");
-    // The fallback is the static layer itself: eject() hands it back with
+    const definition = exportClasses.get("layer.effect");
+    expect(definition?.class).toBe("exports-with-fallback");
+    // The fallback is the static layer itself: export() hands it back with
     // one lossy warning.
-    const lowered = definition!.eject!({
+    const lowered = definition!.export!({
       path: "layers.buildings",
       value: {
         layer: { id: "buildings", type: "fill-extrusion", source: "omt" },
@@ -89,7 +89,7 @@ describe("closed-world exhaustiveness (R4)", () => {
     expect(lowered.warnings![0]!.kind).toBe("lossy");
   });
 
-  it("every root runtime construct has a registered eject class", () => {
+  it("every root runtime construct has a registered export class", () => {
     // The RuntimeHalf fields (model/types.ts) plus the two document-level
     // constructs the emitter handles specially. If RuntimeHalf grows a field,
     // add it here AND register it — this list is deliberately literal so the
@@ -113,14 +113,14 @@ describe("closed-world exhaustiveness (R4)", () => {
       "x-*",
     ]) {
       expect(
-        ejectClasses.has(construct),
-        `${construct} has no eject-class registration`
+        exportClasses.has(construct),
+        `${construct} has no export-class registration`
       ).toBe(true);
     }
   });
 
   it("every registration carries a non-empty author-facing onEmit", () => {
-    for (const [construct, definition] of ejectClasses.entries()) {
+    for (const [construct, definition] of exportClasses.entries()) {
       expect(definition.onEmit.length, `${construct} has an empty onEmit`).toBeGreaterThan(
         20
       );

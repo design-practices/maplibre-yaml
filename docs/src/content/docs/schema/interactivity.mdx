@@ -318,7 +318,7 @@ The `projection` you pass in must carry `emit` in the first place: it fires only
 when `projectInteractions(model, policy)` *also* ran under a trusted policy. An
 untrusted (or omitted) projection policy drops the `emit` block at projection
 time — fail-closed — so `attachInteractions` never sees it, no matter how it is
-configured. The [Interactions & Eject guide](/guides/interactions/) shows the
+configured. The [Interactions & Export to style.json guide](/guides/interactions/) shows the
 end-to-end wiring (`projectInteractions(model, { trust: "trusted" })` →
 `attachInteractions`).
 

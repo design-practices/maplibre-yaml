@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>hatch: pmtiles-source-and-protocol</title>
-  <!-- Hatch twin: the addProtocol escape hatch (U2). The docs page registers
+  <!-- Hatch twin: the addProtocol page-JavaScript route (U2). The docs page registers
        the pmtiles protocol; this twin registers a hermetic stub scheme via
        the SAME subpath (@maplibre-yaml/core/maplibre → dist/maplibre.js) and
        renders a document whose source URL only that protocol can resolve.
@@ -23,7 +23,7 @@
   <header>hatch twin: pmtiles-source-and-protocol (stub protocol)</header>
   <ml-map id="map" src="../configs/pmtiles-source-and-protocol.yaml"></ml-map>
   <script type="module">
-    // The escape hatch under test: the maplibre module core runs on, reached
+    // The page-JavaScript route under test: the maplibre module core runs on, reached
     // through the package subpath. Because maplibre-gl is external in every
     // core build, this import and <ml-map>'s renderer share one module —
     // so the protocol registered here is the one the document's source

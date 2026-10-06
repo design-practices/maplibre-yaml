@@ -89,7 +89,7 @@ export function loadDocumentImages(
           if (map.hasImage(name)) {
             // A basemap sprite icon (or an earlier addImage) already owns
             // this name — live, the existing image wins the shared
-            // namespace, while the ejected style's mlym:-rewritten
+            // namespace, while the exported style's mlym:-rewritten
             // references select the document's. Never silent.
             console.warn(
               `[maplibre-yaml] image "${name}" is already registered on the map ` +

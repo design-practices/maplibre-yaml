@@ -7,7 +7,7 @@ import LiveMap from '../../../../components/LiveMap.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/display-a-map-with-mlt.yaml?raw';
 
-Replicates the MapLibre example [Display a map with MLT](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-map-with-mlt/). MapLibre Tiles (MLT) once needed a plugin registered before the map started. maplibre-gl now decodes them natively, and a tileset says it is MLT in its own TileJSON (`"encoding": "mlt"`). So an MLT basemap is just a style URL — no hatch left.
+Replicates the MapLibre example [Display a map with MLT](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-map-with-mlt/). MapLibre Tiles (MLT) once needed a plugin registered before the map started. maplibre-gl now decodes them natively, and a tileset says it is MLT in its own TileJSON (`"encoding": "mlt"`). So an MLT basemap is just a style URL — no JavaScript left.
 
 <LiveMap src="/configs/gallery/display-a-map-with-mlt.yaml" height="440px" caption="The MapLibre demo world, served as MLT" />
 

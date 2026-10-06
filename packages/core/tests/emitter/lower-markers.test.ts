@@ -1,5 +1,5 @@
 /**
- * @file Markers lowering — the format's first fallback-class eject (U5, R5/R8)
+ * @file Markers lowering — the format's first construct that exports with a fallback (U5, R5/R8)
  */
 
 import { describe, it, expect } from "vitest";
@@ -7,7 +7,7 @@ import { lowerMarkers, MARKERS_LAYER_ID, MARKERS_SOURCE_ID } from "../../src/emi
 import { projectStyle } from "../../src/emitter/project";
 import { attachSpriteAssets, DOCUMENT_SPRITE_ID } from "../../src/emitter/assets";
 import { normalizeMapBlock } from "../../src/model/normalize";
-import { ejectClasses } from "../../src/eject/registrations";
+import { exportClasses } from "../../src/export/registrations";
 import type { V1MapInput } from "../../src/model/types";
 
 const doc = (markers: unknown) =>
@@ -64,7 +64,7 @@ describe("lowerMarkers (KTD4 pre-pass)", () => {
     const { model, assets, warnings } = lowerMarkers(doc(MARKERS));
     const markerWarning = warnings.find((w) => w.construct === "markers");
     expect(markerWarning?.kind).toBe("lossy");
-    expect(markerWarning?.ejectClass).toBe("fallback");
+    expect(markerWarning?.exportClass).toBe("exports-with-fallback");
 
     const result = attachSpriteAssets(projectStyle(model), assets);
     expect(result.assets).toHaveLength(2); // identical pins collapsed
@@ -113,19 +113,19 @@ describe("lowerMarkers (KTD4 pre-pass)", () => {
 });
 
 describe("the fallback contract (R5)", () => {
-  it("markers is registered as fallback with a working eject()", () => {
-    const definition = ejectClasses.require("markers");
-    expect(definition.class).toBe("fallback");
-    const lowering = definition.eject!({ value: MARKERS, path: "markers" });
+  it("markers is registered as fallback with a working export()", () => {
+    const definition = exportClasses.require("markers");
+    expect(definition.class).toBe("exports-with-fallback");
+    const lowering = definition.export!({ value: MARKERS, path: "markers" });
     expect(lowering.layers?.[0]?.["id"]).toBe(MARKERS_LAYER_ID);
     expect(lowering.sources?.[MARKERS_SOURCE_ID]).toBeDefined();
     expect(lowering.assets?.length).toBeGreaterThan(0);
   });
 
-  it("the eject() hook and the lowerMarkers pre-pass cannot drift", () => {
+  it("the export() hook and the lowerMarkers pre-pass cannot drift", () => {
     // Both are backed by buildMarkersLowering; this pins the parity so a
     // future edit to one path cannot silently diverge from the other.
-    const hook = ejectClasses.require("markers").eject!({ value: MARKERS, path: "markers" });
+    const hook = exportClasses.require("markers").export!({ value: MARKERS, path: "markers" });
     const { model, assets } = lowerMarkers(doc(MARKERS));
     expect(hook.sources?.[MARKERS_SOURCE_ID]).toEqual(model.style.sources[MARKERS_SOURCE_ID]!.spec);
     expect(hook.layers?.[0]).toEqual(model.style.layers.at(-1)!.spec);

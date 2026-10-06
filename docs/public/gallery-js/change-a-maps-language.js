@@ -1,4 +1,4 @@
-// The escape hatch: setLayoutProperty on the basemap's own label layers.
+// The JavaScript half: setLayoutProperty on the basemap's own label layers.
 // Every symbol layer whose text-field reads a name is pointed at
 // `name:<lang>`, falling back to the local name where a feature has no
 // translation (upstream patches three country-label layers by id; this

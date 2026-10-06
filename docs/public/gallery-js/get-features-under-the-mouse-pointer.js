@@ -1,4 +1,4 @@
-// The escape hatch that isn't even getMap(): <ml-map> dispatches DOM
+// The JavaScript half, and it isn't even getMap(): <ml-map> dispatches DOM
 // CustomEvents (ml-map:layer-hover, ml-map:layer-click, ...) with the
 // feature in detail — plain addEventListener, no MapLibre API in sight.
 const mapEl = document.querySelector("ml-map");

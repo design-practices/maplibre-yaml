@@ -11,7 +11,7 @@
  * ({@link geojsonBounds}), and the zoom from MapLibre's own fit math over a
  * fixed reference viewport.
  *
- * It is a `fallback`, not an `ejects`: a live map fits ITS container, while
+ * It is a `exports-with-fallback`, not an `exports`: a live map fits ITS container, while
  * the emitted camera is fixed for {@link FIT_TO_REFERENCE_VIEWPORT}. So the
  * lowering is `lossy` (like markers): `--with-fallbacks` substitutes the
  * computed camera, `--strict` refuses. When the data is NOT inline (a `url:`
@@ -20,7 +20,7 @@
  *
  * Same KTD4 shape as {@link lowerMarkers}: a pre-pass over the model, and
  * ONE implementation ({@link buildFitToLowering}) behind both the pre-pass
- * and the eject registry's `eject()` hook.
+ * and the export registry's `export()` hook.
  */
 
 import type { MapModel } from "../model/types";
@@ -103,7 +103,7 @@ export interface FitToLowering {
 /**
  * Build the lowering for a `fitTo` against a model's sources. The single
  * implementation behind both {@link lowerFitTo} and the registry's
- * `eject()` hook.
+ * `export()` hook.
  */
 export function buildFitToLowering(fitTo: FitToConfig, model: MapModel): FitToLowering {
   const source = model.style.sources[fitTo.source];
@@ -113,7 +113,7 @@ export function buildFitToLowering(fitTo: FitToConfig, model: MapModel): FitToLo
         path: "fitTo",
         kind: "lossy",
         construct: "fitTo",
-        ejectClass: "fallback",
+        exportClass: "exports-with-fallback",
         message:
           `\`fitTo\` ${reason}, so the fit cannot be computed at compile time; ` +
           "the emitted style keeps the authored `center`/`zoom` instead of the " +
@@ -150,7 +150,7 @@ export function buildFitToLowering(fitTo: FitToConfig, model: MapModel): FitToLo
         path: "fitTo",
         kind: "lossy",
         construct: "fitTo",
-        ejectClass: "fallback",
+        exportClass: "exports-with-fallback",
         message:
           `\`fitTo\` lowered to center [${camera.center.join(", ")}] / zoom ` +
           `${camera.zoom} — the fit of "${fitTo.source}" for a ${width}×${height} ` +

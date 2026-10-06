@@ -1,4 +1,4 @@
-// The escape hatch: camera padding via easeTo. Padding shrinks the part
+// The JavaScript half: camera padding via easeTo. Padding shrinks the part
 // of the canvas the camera treats as "the view", so the centre point and
 // the vanishing point shift out from under an open sidebar. The sidebars
 // are <ml-map> slot children; each toggle eases padding on its side to

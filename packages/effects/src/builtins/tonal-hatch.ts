@@ -62,7 +62,7 @@ export const tonalHatch: EffectDefinition<TonalHatchParams> = {
   uniforms: (p) => ({ u_ink: p.ink, u_paper: p.paper, u_gain: p.gain, u_outline: p.outline }),
   heightScale: (zoom, p) => (p.exaggerate ? tangramExaggeration(zoom) : 1),
   // The static layer (a single-tone hatch pattern on every face) IS the
-  // fallback: eject ships it as authored.
+  // fallback: export ships it as authored.
   fallback: (_p, layer) => layer,
   animated: false,
   fragment: /* glsl */ `

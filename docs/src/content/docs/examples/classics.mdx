@@ -1,6 +1,6 @@
 ---
 title: Mapzen classics
-description: "Crosshatch and blueprint, each running live with its shader effect beside the honest static fallback that `mlym emit` ejects — from one YAML document."
+description: "Crosshatch and blueprint, each running live with its shader effect beside the honest static fallback that `mlym emit` exports — from one YAML document."
 tableOfContents: false
 ---
 
@@ -19,7 +19,7 @@ Each classic below appears twice, from **one** YAML document:
 - **Live**: `<ml-map>` runs the document, and the experimental
   [effects package](/guides/effects/) upgrades its buildings with a shader
   effect.
-- **Ejected**: plain `maplibre-gl` runs the `style.json` that
+- **Exported**: plain `maplibre-gl` runs the `style.json` that
   `mlym emit --with-fallbacks` produced from that same document when this
   site was built. That pane loads no maplibre-yaml code at all.
 
@@ -32,7 +32,7 @@ Lower Manhattan as a pen drawing, after the
 [crosshatch style](https://github.com/tangrams/tangram-sandbox/blob/gh-pages/styles/crosshatch.yaml)
 Patricio Gonzalez Vivo wrote for Tangram in 2015. Live, the `tonal-hatch`
 effect makes the stroke **density** follow the light on each face: lit
-walls go to paper, shaded walls to dense ink. Ejected, every face gets the
+walls go to paper, shaded walls to dense ink. Exported, every face gets the
 same light pen hatch, shaded by the document's `light:`.
 
 <ClassicViewer name="crosshatch" effect="tonal-hatch" />
@@ -41,7 +41,7 @@ same light pen hatch, shaded by the document's `light:`.
 
 A drafting sheet in the Mapzen spirit. Live, the `blueprint` effect lays a
 grid on every roof and wall, with lines a fixed **4 metres** apart that
-never stretch, and edges that glow. Ejected, the buildings are flat-shaded
+never stretch, and edges that glow. Exported, the buildings are flat-shaded
 blue blocks on the same drafting-grid ground.
 
 <ClassicViewer name="blueprint" effect="blueprint" />
@@ -49,7 +49,7 @@ blue blocks on the same drafting-grid ground.
 ## Fallback where honest
 
 Every construct in a maplibre-yaml document declares what happens to it on
-eject ([eject classes](/guides/eject-classes/)). An effect is a runtime
+export ([export classes](/guides/export-classes/)). An effect is a runtime
 shader, and `style.json` has no way to express one. So the document
 always carries a complete static layer, and the effect *enhances* that
 layer rather than replacing it:
@@ -60,8 +60,8 @@ layer rather than replacing it:
   reports that it's unavailable and the static layer renders. The live
   pane's badge shows which of the two you're looking at.
 - `mlym emit` ships the static layer and prints one `lossy` warning, which
-  is the ejected pane above. `mlym emit --strict` refuses the document,
-  because the ejected map isn't the map the effect draws.
+  is the exported pane above. `mlym emit --strict` refuses the document,
+  because the exported map isn't the map the effect draws.
 
 The fallback is a real map, not a placeholder. That is what
 *fallback-where-honest* means: the expressive version where it can run,
@@ -74,7 +74,7 @@ YAML is the source. Download a document, change the hatch `gain`, the
 blueprint `grid` spacing, a colour or the light, and open it in any page
 that loads `<ml-map>` and `@maplibre-yaml/effects`. See
 [Effects](/guides/effects/) for loading the package and the full list of
-params. Run `mlym emit` on your copy to get your own ejected style.
+params. Run `mlym emit` on your copy to get your own exported style.
 
 <details>
 <summary><code>crosshatch.yaml</code></summary>

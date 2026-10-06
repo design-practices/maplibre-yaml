@@ -1,4 +1,4 @@
-// The escape hatch: one call, setGlobalStateProperty. The layer's filter
+// The JavaScript half: one call, setGlobalStateProperty. The layer's filter
 // already reads the `query` state key (see the YAML), so typing only has
 // to write the key — no per-layer visibility bookkeeping as upstream does.
 const mapEl = document.querySelector("ml-map");

@@ -3,7 +3,7 @@
 # not a port of a Tangram original.
 #
 # The static tier: every layer is plain style spec, so this document is its
-# own eject — `mlym emit --strict` compiles it with nothing lost. A
+# own export — `mlym emit --strict` compiles it with nothing lost. A
 # drafting-grid ground (baked by `mlym bake blueprint`), dark water with a
 # pale shoreline, thin pale streets, dashed park outlines, and flat-shaded
 # blue buildings. A metre-scaled grid on every building face is the runtime

@@ -1197,7 +1197,7 @@ export class MLMap extends HTMLElement {
    *
    * @remarks
    * The readiness idiom (R3): replaces the `ml-map:load` listener +
-   * `getMap()` null-guard boilerplate every escape-hatch snippet needed.
+   * `getMap()` null-guard boilerplate every page-code snippet needed.
    * Resolves immediately when the map is already loaded; otherwise resolves
    * on the next `ml-map:load` and rejects on `ml-map:error` (config parse
    * failure, renderer construction failure, or a runtime map error).

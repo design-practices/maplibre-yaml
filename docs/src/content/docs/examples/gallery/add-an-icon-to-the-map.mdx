@@ -18,5 +18,5 @@ Replicates the MapLibre example [Add an icon to the map](https://maplibre.org/ma
 ## What to notice
 
 - `images:` names load **before** layers, so `icon-image: osgeo-logo` resolves on first render — no `styleimagemissing` race.
-- On eject (`mlym emit`), the image is fetched at compile time and merged into the document sprite; the layer's reference is rewritten to `mlym:osgeo-logo`. The `images:` construct fully compiles — class **ejects**, so `--strict` accepts it.
+- On export (`mlym emit`), the image is fetched at compile time and merged into the document sprite; the layer's reference is rewritten to `mlym:osgeo-logo`. The `images:` construct fully compiles — class `exports`, so `--strict` accepts it.
 - Options ride along per entry: `{ url, sdf, pixelRatio }` instead of the bare URL string.

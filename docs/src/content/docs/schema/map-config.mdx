@@ -144,12 +144,12 @@ markers:
           - str: Empire State Building
 ```
 
-Markers are a **fallback-class** construct on eject: `mlym emit
+Markers **export with a fallback** (class `exports-with-fallback`): `mlym emit
 --with-fallbacks` lowers them to a symbol layer with generated pin sprites
 (the pins render; dragging and popup content do not compile), and `--strict`
 refuses marker documents. `icon:` URLs are fetched into the document sprite
-at compile time, so ejected icon markers keep their images. See the [eject
-classes reference](/guides/eject-classes/).
+at compile time, so exported icon markers keep their images. See the [export
+classes reference](/guides/export-classes/).
 
 ## Popups
 
@@ -185,7 +185,7 @@ feature, so `property:` lookups resolve empty. A marker with its pin hidden
 can't stand in for this. A marker's popup opens on a click on the pin, so a
 pinless marker's popup could never open.
 
-On eject, popups are a **declared absence**. `mlym emit` reports them as a
+Popups don't export (class `no-export`). `mlym emit` reports them as a
 contract warning, and the emitted style has no popups.
 
 ## Images
@@ -224,7 +224,7 @@ on first render. Images load with `crossOrigin="anonymous"` (a WebGL
 texture must be untainted), so the host **must allow cross-origin access**
 on every response in the chain, redirects included — a host that serves
 plain `<img>` tags fine can still fail here. A failed image warns once and
-the document keeps rendering. On eject the construct fully compiles (class **ejects**):
+the document keeps rendering. On export the construct fully compiles (class `exports`):
 `mlym emit` fetches each URL into the document sprite and rewrites literal
 references (`icon-image`, `fill-pattern`, `line-pattern`,
 `background-pattern`, `fill-extrusion-pattern`) to `mlym:<name>` —
@@ -249,7 +249,7 @@ fetched bytes are embedded verbatim into the sprite files you publish.
 
 Three document-root keys, siblings of `config:`, author the map-level 3D
 scene. Each one is the style spec's own root property, in the spec's own
-shape, so what you write is exactly what an ejected `style.json` carries. In
+shape, so what you write is exactly what an exported `style.json` carries. In
 a format-v2 document they live under `style:` instead
 (`style.terrain`, `style.sky`, `style.projection`).
 
@@ -336,9 +336,9 @@ The minimums come from the maplibre-gl changelog: 3D terrain arrived in
 2.2.0, the spec `sky` in 4.5.0, and globe projection with its atmosphere in
 5.0.0.
 
-### On eject
+### On export
 
-All three keys are class **ejects**. `mlym emit` copies them verbatim to the
+All three keys are class `exports`. `mlym emit` copies them verbatim to the
 style.json root. When the basemap also defines one, the document's value
 replaces the basemap's wholesale, as it does live, and emit notes the
 override. A `terrain.source` that resolves to no `raster-dem` source, after
@@ -346,7 +346,7 @@ the basemap merge, is dropped with a lossy warning rather than shipped as a
 style MapLibre would reject. With `--target` below a key's floor, emit keeps
 the key (it still validates on 4.x) and reports the visual difference as
 lossy, so `--strict --target 4.7.1` refuses a globe document. See the
-[eject classes reference](/guides/eject-classes/).
+[export classes reference](/guides/export-classes/).
 ## Light
 
 `light:` is the style-spec root [light](https://maplibre.org/maplibre-style-spec/light/)
@@ -376,8 +376,8 @@ light:
 
 The object is closed: an unknown key is a validation error, not a silently
 ignored setting. Live, the renderer applies it with `map.setLight` once the
-style loads. On eject it compiles through verbatim to the style's `light`
-(class **ejects**), replacing any light the basemap carried. The
+style loads. On export it compiles through verbatim to the style's `light`
+(class `exports`), replacing any light the basemap carried. The
 [crosshatch classic](/examples/gallery/crosshatch/) uses it to shade its
 hatched buildings.
 
@@ -455,7 +455,7 @@ layers:
 - `fitTo` wins over `bounds` when both are set. In format v2 it lives at
   `runtime.fitTo`.
 
-On eject `fitTo` **ejects via fallback**. `mlym emit --with-fallbacks`
+On export `fitTo` **exports with a fallback** (class `exports-with-fallback`). `mlym emit --with-fallbacks`
 computes the fitted `center`/`zoom` from an inline source for a 1024×768
 reference viewport. That's lossy, because a live map fits its own container.
 For a fetched source the authored camera stands in, also reported as lossy.

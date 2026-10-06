@@ -1,4 +1,4 @@
-// The escape hatch: a protocol plugin on the maplibre module <ml-map>
+// The JavaScript half: a protocol plugin on the maplibre module <ml-map>
 // renders with. maplibre-contour turns DEM tiles into vector contour
 // tiles; registering `contours://` through @maplibre-yaml/core/maplibre
 // guarantees it lands on the same module the document's source requests

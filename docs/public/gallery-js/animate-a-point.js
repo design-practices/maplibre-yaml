@@ -1,4 +1,4 @@
-// The escape hatch: <ml-map>'s imperative data API. updateLayerData()
+// The JavaScript half: <ml-map>'s imperative data API. updateLayerData()
 // replaces a layer's GeoJSON — no getMap(), no source-id bookkeeping; the
 // element resolves the layer's source itself. The upstream version does
 // this dance with map.getSource(...).setData().

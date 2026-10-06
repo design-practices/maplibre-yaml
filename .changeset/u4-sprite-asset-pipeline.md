@@ -4,7 +4,7 @@
 ---
 
 The sprite/asset pipeline (R7) — shared infrastructure for every construct
-that ejects via generated raster assets (marker pins, pattern presets, effect
+that exports via generated raster assets (marker pins, pattern presets, effect
 fallbacks). Core describes: deterministic SVG asset descriptors with
 content-hashed names (`fx-hatch-45-8-a1b2c3d4`), a name-sorted sprite-index
 layout (duplicate names dedupe when identical, throw when they'd alias
@@ -12,8 +12,8 @@ different images), seamless hatch tiles (requested angle/spacing snap to the
 nearest periodic lattice so strokes never jog at tile boundaries), and
 `attachSpriteAssets()`/`finalizeSpriteBaseUrl()` declaring the document
 sprite under the fixed `mlym` id in the spec's array form. `EmitResult`
-gains an optional `assets` field; `EjectLowering.assets` now shares the same
-`EmitAsset` vocabulary (the placeholder `EjectAssetDescriptor` type is gone
+gains an optional `assets` field; `ExportLowering.assets` now shares the same
+`EmitAsset` vocabulary (the earlier placeholder asset-descriptor type is gone
 before anything consumed it).
 
 The CLI rasterizes: `mlym emit --out` writes the standard four-file sprite

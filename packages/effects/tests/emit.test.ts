@@ -1,7 +1,7 @@
 /**
  * Emit lowering with the package loaded: the core projection runs each
  * effect's registered `fallback()` (the built-ins ship the static layer as
- * authored; an effect may declare absence with null).
+ * authored; an effect may return null: the layer doesn't export).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { effectRegistry, registerBuiltins, installEffectsHost, registerEffect, backends, z } from "../src/index";
@@ -19,7 +19,7 @@ beforeAll(() => {
     backend: backends.extrusions,
     params: z.object({}),
     fragment: "vec4 effect_color(EffectInput i) { return vec4(1.0); }",
-    // no honest static form: declare absence
+    // no honest static form: the layer doesn't export
     fallback: () => null,
   });
 });
@@ -47,7 +47,7 @@ layers:
   );
 
 describe("emit with the effects package loaded", () => {
-  it("tonal-hatch ejects to its static layer, one lossy warning; strict refuses", () => {
+  it("tonal-hatch exports to its static layer, one lossy warning; strict refuses", () => {
     const model = doc("{ type: tonal-hatch, gain: 0.6 }");
     const result = projectStyle(model, "with-fallbacks");
     const layers = result.style["layers"] as Array<Record<string, unknown>>;
@@ -59,7 +59,7 @@ describe("emit with the effects package loaded", () => {
     expect(() => projectStyle(model, "strict")).toThrow(EmitError);
   });
 
-  it("an effect whose fallback is null declares absence: the layer is dropped", () => {
+  it("an effect whose fallback is null doesn't export: the layer is dropped", () => {
     const result = projectStyle(doc("{ type: decor-only }"), "with-fallbacks");
     expect((result.style["layers"] as Array<{ id: string }>).map((l) => l.id)).toEqual(["labels"]);
     expect(result.warnings.find((w) => w.construct === "layer.effect")?.message).toMatch(/declares no static form/);

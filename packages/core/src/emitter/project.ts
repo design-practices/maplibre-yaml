@@ -3,7 +3,7 @@
  * @module @maplibre-yaml/core/emitter
  *
  * @description
- * The eject guarantee, implemented: everything under the model's style half
+ * The export guarantee, implemented: everything under the model's style half
  * contributes to `style.json`, and nothing under its runtime half does.
  *
  * **This is a projection, not a strip.** The requirement reads from the
@@ -27,8 +27,8 @@
 import type { MapModel, LayerModel } from "../model/types";
 import type { EmitAsset, EmitImageRef } from "./assets";
 import { DOCUMENT_SPRITE_ID, declareDocumentSprite } from "./assets";
-import { ejectClasses } from "../eject";
-import type { EjectClassDefinition } from "../eject";
+import { exportClasses } from "../export";
+import type { ExportClassDefinition } from "../export";
 import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { sanitizeSourcesAttribution } from "../utils/attribution";
 import { lowerEffectLayer } from "./lower-effects";
@@ -90,8 +90,8 @@ export interface EmitWarning {
    * — consumers should key on this, not parse `message`.
    */
   construct?: string;
-  /** The construct's declared eject class, when registry-driven. */
-  ejectClass?: "ejects" | "fallback" | "declared-absence";
+  /** The construct's declared export class, when registry-driven. */
+  exportClass?: "exports" | "exports-with-fallback" | "no-export";
 }
 
 /** Where a document layer wants to sit, by id. */
@@ -257,7 +257,7 @@ function rewriteImageRefs(value: unknown, names: ReadonlySet<string>): unknown {
 /**
  * True when an image-valued expression contains a dynamic name producer —
  * a reference the rewrite above cannot reach, which therefore resolves live
- * (bare `addImage` names) but misses the namespaced document sprite on eject.
+ * (bare `addImage` names) but misses the namespaced document sprite on export.
  */
 function hasDynamicImageRef(value: unknown): boolean {
   if (!Array.isArray(value) || value.length === 0) return false;
@@ -401,20 +401,20 @@ function assertClean(node: unknown, path: string, opaque: Set<string>): void {
  * over every parseable document: author-side unknown runtime keys warn, never
  * throw. The two deliberate throw paths are invariants on the projection
  * itself — `--strict` with lossy degradation (EmitError, by design) and a
- * runtime construct from core's own closed key lists missing its eject-class
+ * runtime construct from core's own closed key lists missing its export-class
  * registration (EmitError, a code bug the closed world refuses to ship).
  */
 /**
  * The registry lookup for a construct core's own closed key boundary
- * produced. A miss here is a code bug (a runtime key added without an eject
+ * produced. A miss here is a code bug (a runtime key added without an export
  * class), surfaced as an EmitError like the projection's other invariants.
  * Never call this with an author-supplied key — passthrough unknowns get the
  * generic warning in the loops below, not a throw (a schema-valid document
  * must never crash emit).
  */
-function requireEjectClass(construct: string): EjectClassDefinition {
+function requireExportClass(construct: string): ExportClassDefinition {
   try {
-    return ejectClasses.require(construct);
+    return exportClasses.require(construct);
   } catch (error) {
     throw new EmitError((error as Error).message);
   }
@@ -422,7 +422,7 @@ function requireEjectClass(construct: string): EjectClassDefinition {
 
 /**
  * Keys zod materializes onto every document via schema defaults. The author
- * never wrote them, so a declared-absence warning would attribute noise to
+ * never wrote them, so a no-export warning would attribute noise to
  * them; suppressed exactly at the default value (an explicit non-default is
  * an authored choice and reports normally).
  */
@@ -457,12 +457,12 @@ function pushSourceRuntimeWarnings(
       });
       continue;
     }
-    const definition = requireEjectClass(`source.${key}`);
+    const definition = requireExportClass(`source.${key}`);
     warnings.push({
       path: `${basePath}.${key}`,
       kind: hasData ? "contract" : "lossy",
       construct: `source.${key}`,
-      ejectClass: definition.class,
+      exportClass: definition.class,
       message:
         `\`${key}\` — ${definition.onEmit}` +
         (hasData
@@ -513,7 +513,7 @@ export function projectStyle(
               path: `layers.${id}.${key}`,
               kind: "contract",
               construct: "images",
-              ejectClass: "ejects",
+              exportClass: "exports",
               message:
                 `\`${key}\` computes image names from data; compile-time rewriting ` +
                 `only reaches literal names. Runtime values that name declared ` +
@@ -539,9 +539,9 @@ export function projectStyle(
     }
 
     if (Object.keys(layer.runtime).length > 0) {
-      // Registry-driven declared absences (R6): one warning per construct,
+      // Registry-driven no-export reports (R6): one warning per construct,
       // wording and class from its registration, so the report and the
-      // construct list cannot drift. `before` ejects (honored via ordering
+      // construct list cannot drift. `before` exports (honored via ordering
       // below); `source` holds an inline source's own runtime half, reported
       // at source granularity with the same contract/lossy split as named
       // sources. A key outside the closed lists (v2 runtime blocks are
@@ -553,8 +553,8 @@ export function projectStyle(
           // Experimental (0.7): the layer itself is the effect's static
           // fallback. One lossy warning per effect — --strict refuses,
           // --with-fallbacks ships the static layer (or drops it when the
-          // registered effect declares absence).
-          requireEjectClass("layer.effect");
+          // registered effect's fallback returns null).
+          requireExportClass("layer.effect");
           const lowered = lowerEffectLayer(spec, layer.runtime["effect"]);
           warnings.push(lowered.warning);
           if (lowered.layer === null) dropped = true;
@@ -582,12 +582,12 @@ export function projectStyle(
           });
           continue;
         }
-        const definition = requireEjectClass(`layer.${key}`);
+        const definition = requireExportClass(`layer.${key}`);
         warnings.push({
           path: `layers.${id}.${key}`,
           kind: "contract",
           construct: `layer.${key}`,
-          ejectClass: definition.class,
+          exportClass: definition.class,
           message: `\`${key}\` — ${definition.onEmit}`,
         });
       }
@@ -616,7 +616,7 @@ export function projectStyle(
   if (model.style.state !== undefined) style["state"] = model.style.state;
   // `light` is a style-spec root property: it compiles through unchanged.
   if (model.style.light !== undefined) style["light"] = model.style.light;
-  // `images:` compiles fully (class `ejects`): the refs ride the result for
+  // `images:` compiles fully (class `exports`): the refs ride the result for
   // the fetch stage, and the document sprite is declared so the rewritten
   // `mlym:` references resolve. The CLI enforces that sprite files actually
   // get written (--out/--sprite-base); a direct caller holds the same
@@ -634,7 +634,7 @@ export function projectStyle(
         path: `images.${name}`,
         kind: "lossy",
         construct: "images",
-        ejectClass: "ejects",
+        exportClass: "exports",
         message:
           `\`images.${name}\` ("${url}") is not an absolute http(s) URL, so it ` +
           "cannot be fetched at compile time; the emitted style renders " +
@@ -657,7 +657,7 @@ export function projectStyle(
     style["sprite"] = declareDocumentSprite({})["sprite"];
   }
   // U15's 3D trio: style-spec root properties, compiled verbatim (class
-  // `ejects`). Terrain carries a cross-reference the spec validates — its
+  // `exports`). Terrain carries a cross-reference the spec validates — its
   // `source` must name a raster-dem source in the style — so a reference
   // that cannot resolve is dropped with a lossy warning rather than shipped
   // as a style MapLibre rejects. With a basemap the source may be the
@@ -671,7 +671,7 @@ export function projectStyle(
         path: "terrain.source",
         kind: "lossy",
         construct: "terrain",
-        ejectClass: "ejects",
+        exportClass: "exports",
         message:
           `\`terrain.source\` names "${terrain.source}", which the document does not ` +
           "declare and no basemap can supply; the emitted style omits `terrain` and " +
@@ -682,7 +682,7 @@ export function projectStyle(
         path: "terrain.source",
         kind: "lossy",
         construct: "terrain",
-        ejectClass: "ejects",
+        exportClass: "exports",
         message:
           `\`terrain.source\` names "${terrain.source}", a ${String(targetType)} source; ` +
           "terrain needs raster-dem, so the emitted style omits `terrain` and renders flat.",
@@ -704,12 +704,12 @@ export function projectStyle(
     (key) => !isSchemaDefault("map", key, model.runtime.map[key])
   );
   if (runtimeKeys.length > 0) {
-    const definition = requireEjectClass("map.options");
+    const definition = requireExportClass("map.options");
     warnings.push({
       path: "runtime.map",
       kind: "contract",
       construct: "map.options",
-      ejectClass: definition.class,
+      exportClass: definition.class,
       message: `Map options (${runtimeKeys.join(", ")}) — ${definition.onEmit}`,
     });
   }
@@ -721,18 +721,18 @@ export function projectStyle(
   // wording, and an unknown one still surfaces generically.
   for (const [construct, value] of Object.entries(model.runtime)) {
     if (construct === "map" || value === undefined) continue;
-    const definition = ejectClasses.get(construct);
+    const definition = exportClasses.get(construct);
     if (definition) {
-      // A fallback-class construct reaching the projection UN-lowered means
+      // A exports-with-fallback construct reaching the projection UN-lowered means
       // the emit pipeline's pre-pass didn't run (a direct projectStyle
       // caller) — the construct is being dropped where a lowering exists,
       // which is a visual change: lossy, so `--strict` refuses it.
-      const unloweredFallback = definition.class === "fallback";
+      const unloweredFallback = definition.class === "exports-with-fallback";
       warnings.push({
         path: construct,
         kind: unloweredFallback ? "lossy" : "contract",
         construct,
-        ejectClass: definition.class,
+        exportClass: definition.class,
         message: unloweredFallback
           ? `\`${construct}\` cannot compile without visual change. A documented ` +
             `fallback exists (${definition.onEmit}) — re-run with --with-fallbacks ` +
@@ -758,13 +758,13 @@ export function projectStyle(
     unknown
   >;
   if (strippedExtensions.length > 0) {
-    const definition = requireEjectClass("x-*");
+    const definition = requireExportClass("x-*");
     for (const strippedPath of strippedExtensions) {
       warnings.push({
         path: strippedPath,
         kind: "contract",
         construct: "x-*",
-        ejectClass: definition.class,
+        exportClass: definition.class,
         message: `\`${strippedPath.split(".").pop()}\` — ${definition.onEmit}`,
       });
     }
@@ -777,8 +777,8 @@ export function projectStyle(
   const lossy = warnings.filter((w) => w.kind === "lossy");
   if (mode === "strict" && lossy.length > 0) {
     throw new EmitError(
-      `Emit failed in strict mode: ${lossy.length} item(s) could not be represented ` +
-        "without changing what the map shows.",
+      `Export failed in strict mode: ${lossy.length} item(s) could not be exported ` +
+        "to style.json without changing what the map shows.",
       warnings
     );
   }

@@ -1,6 +1,6 @@
 # Hermetic twin of docs/public/configs/gallery/style-labels-with-local-fonts.yaml (local basemap;
 # driven by the SAME page JS and chrome) — see https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-local-fonts/
-# The escape hatch is INSIDE the YAML: an inline mapStyle object with NO
+# The trick is INSIDE the YAML: an inline mapStyle object with NO
 # `glyphs` URL. With no glyph server to ask, MapLibre draws every label
 # itself from the fonts installed on the reader's machine, trying the
 # `text-font` stack as CSS font families in order.

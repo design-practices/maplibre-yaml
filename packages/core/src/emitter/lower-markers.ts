@@ -3,7 +3,7 @@
  * @module @maplibre-yaml/core/emitter
  *
  * @description
- * The format's first fallback-class eject. `markers:` live as DOM markers
+ * The format's first construct that exports with a fallback. `markers:` live as DOM markers
  * (`maplibregl.Marker`) the style spec cannot express; the honest style.json
  * form is a synthesized GeoJSON source + symbol layer whose icons are
  * generated pin sprites (U4's pipeline). Per KTD4 this is a PRE-PASS over
@@ -42,7 +42,7 @@ export interface LoweredMarkers {
 export const MARKERS_SOURCE_ID = "mlym-markers";
 export const MARKERS_LAYER_ID = "mlym-markers";
 
-/** The lowering pieces, independent of any model — the registry's `eject()`. */
+/** The lowering pieces, independent of any model — the registry's `export()`. */
 export interface MarkersLowering {
   sourceSpec: Record<string, unknown>;
   layerSpec: Record<string, unknown>;
@@ -54,8 +54,8 @@ export interface MarkersLowering {
 
 /**
  * Build the lowering for a markers list. This is the single implementation
- * behind BOTH the eject registry's `eject()` hook (the doctrine's mechanical
- * contract for a fallback-class construct) and {@link lowerMarkers}' model
+ * behind BOTH the export registry's `export()` hook (the doctrine's mechanical
+ * contract for an exports-with-fallback construct) and {@link lowerMarkers}' model
  * rewrite.
  */
 export function buildMarkersLowering(markers: readonly MarkerConfig[]): MarkersLowering {
@@ -87,7 +87,7 @@ export function buildMarkersLowering(markers: readonly MarkerConfig[]): MarkersL
         path: `markers[${index}].icon`,
         kind: "lossy",
         construct: "markers",
-        ejectClass: "fallback",
+        exportClass: "exports-with-fallback",
         message:
           `\`icon\` URL scheme is not fetchable at compile time; the emitted ` +
           "marker uses the default pin instead.",
@@ -112,7 +112,7 @@ export function buildMarkersLowering(markers: readonly MarkerConfig[]): MarkersL
     path: "markers",
     kind: "lossy",
     construct: "markers",
-    ejectClass: "fallback",
+    exportClass: "exports-with-fallback",
     message:
       `${markers.length} marker(s) lowered to a symbol layer ("${MARKERS_LAYER_ID}") ` +
       "with generated pin sprites. The pins render; DOM-marker behavior and " +

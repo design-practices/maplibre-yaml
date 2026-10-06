@@ -1,5 +1,5 @@
 /**
- * @file Emit for the 3D trio (U15): terrain / sky / projection eject verbatim
+ * @file Emit for the 3D trio (U15): terrain / sky / projection export verbatim
  */
 
 import { describe, it, expect } from "vitest";
@@ -40,7 +40,7 @@ const SKY = {
 };
 
 describe("projectStyle — the 3D trio compiles to the style.json root", () => {
-  it("terrain, sky, and projection eject verbatim into a spec-valid style", () => {
+  it("terrain, sky, and projection export verbatim into a spec-valid style", () => {
     const { style, warnings } = projectStyle(
       doc({
         terrain: { source: "terrainSource", exaggeration: 1.5 },
@@ -55,7 +55,7 @@ describe("projectStyle — the 3D trio compiles to the style.json root", () => {
     expect(warnings).toEqual([]);
   });
 
-  it("strict mode accepts a resolvable 3D document (class ejects, nothing lossy)", () => {
+  it("strict mode accepts a resolvable 3D document (class exports, nothing lossy)", () => {
     expect(() =>
       projectStyle(doc({ terrain: { source: "terrainSource" } }), "strict")
     ).not.toThrow();

@@ -1,5 +1,5 @@
 /**
- * Markers eject — browser verification of AE1's marker half (U5).
+ * Markers export — browser verification of AE1's marker half (U5).
  *
  * @remarks
  * A `markers:` document is compiled by the REAL emit pipeline (lowering →
@@ -13,9 +13,9 @@ import { test, expect, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
-const OUT_DIR = join(process.cwd(), "e2e/generated/marker-eject");
+const OUT_DIR = join(process.cwd(), "e2e/generated/marker-export");
 // Same port the server and playwright.config use (VERIFY_PORT).
-const BASE_URL = `http://localhost:${process.env.VERIFY_PORT ?? 4174}/e2e/generated/marker-eject`;
+const BASE_URL = `http://localhost:${process.env.VERIFY_PORT ?? 4174}/e2e/generated/marker-export`;
 
 /** Fail the test on any page error or off-origin request (hermeticity). */
 async function guard(page: Page): Promise<string[]> {
@@ -38,19 +38,19 @@ async function guard(page: Page): Promise<string[]> {
 test.beforeAll(() => {
   execFileSync(
     "node",
-    ["--import", "tsx", "scripts/generate-marker-eject-fixture.ts", OUT_DIR, BASE_URL],
+    ["--import", "tsx", "scripts/generate-marker-export-fixture.ts", OUT_DIR, BASE_URL],
     { cwd: join(process.cwd(), "packages/cli"), stdio: "pipe" }
   );
 });
 
-test.describe("markers eject: the emitted style renders pins in vanilla maplibre (AE1)", () => {
+test.describe("markers export: the emitted style renders pins in vanilla maplibre (AE1)", () => {
   test("the lowered symbol layer draws its generated pin sprites", async ({ page }) => {
     const errors = await guard(page);
-    await page.goto("/e2e/generated/marker-eject/index.html", { waitUntil: "domcontentloaded" });
+    await page.goto("/e2e/generated/marker-export/index.html", { waitUntil: "domcontentloaded" });
 
     await page.waitForFunction(
       () => {
-        const s = (window as any).__eject;
+        const s = (window as any).__export;
         return s?.map?.isStyleLoaded?.() && s.map.getLayer(s.layerId);
       },
       undefined,
@@ -60,7 +60,7 @@ test.describe("markers eject: the emitted style renders pins in vanilla maplibre
     // The pins are real rendered features…
     await page.waitForFunction(
       () => {
-        const s = (window as any).__eject;
+        const s = (window as any).__export;
         return s.map.queryRenderedFeatures(undefined, { layers: [s.layerId] }).length > 0;
       },
       undefined,
@@ -69,7 +69,7 @@ test.describe("markers eject: the emitted style renders pins in vanilla maplibre
 
     // …their prefixed sprite icons resolved…
     const iconsResolved = await page.evaluate(() => {
-      const s = (window as any).__eject;
+      const s = (window as any).__export;
       const features = s.map.queryRenderedFeatures(undefined, { layers: [s.layerId] });
       return features.every((f: any) => s.map.hasImage(`mlym:${f.properties["mlym:icon"]}`));
     });

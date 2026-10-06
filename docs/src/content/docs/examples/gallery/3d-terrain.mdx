@@ -17,7 +17,7 @@ Replicates the MapLibre example [3D terrain](https://maplibre.org/maplibre-gl-js
 
 ## What to notice
 
-- `terrain:` is a document-root key, a sibling of `config:`, in the style spec's own shape: `source` names a `raster-dem` source and `exaggeration` scales it. On eject it compiles to the style.json root `terrain` unchanged.
+- `terrain:` is a document-root key, a sibling of `config:`, in the style spec's own shape: `source` names a `raster-dem` source and `exaggeration` scales it. On export it compiles to the style.json root `terrain` unchanged.
 - Terrain and hillshade read **separate** DEM sources, as upstream does — one source serving both renders at reduced quality.
 - `sky: {}` turns on MapLibre's default sky, so the horizon above the pitched camera is drawn rather than left blank.
 - `controls.terrain` adds MapLibre's terrain toggle, wired to the document's own `terrain:`.

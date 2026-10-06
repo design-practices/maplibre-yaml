@@ -3,8 +3,8 @@
  *
  * Schema (v1 root + v2 style half, closed object), model parity (AE2),
  * emit (compiles through verbatim, spec-valid, no warning), basemap merge
- * (the document's light wins over an inherited one), and the eject-class
- * registration (`ejects`).
+ * (the document's light wins over an inherited one), and the export-class
+ * registration (`exports`).
  */
 import { describe, it, expect } from "vitest";
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
@@ -13,7 +13,7 @@ import { toModel } from "../../src/model/to-model";
 import { denormalizeOptions } from "../../src/model";
 import { projectStyle, mergeBasemap } from "../../src/emitter";
 import { LightSchema } from "../../src/schemas/map.schema";
-import { ejectClasses } from "../../src/eject";
+import { exportClasses } from "../../src/export";
 
 const BASEMAP = "https://demotiles.maplibre.org/style.json";
 
@@ -144,7 +144,7 @@ config: { center: [0, 0], zoom: 2, mapStyle: ${BASEMAP} }
     expect(style["light"]).toEqual({ intensity: 0.1 });
   });
 
-  it("is registered as class `ejects`", () => {
-    expect(ejectClasses.require("light").class).toBe("ejects");
+  it("is registered as class `exports`", () => {
+    expect(exportClasses.require("light").class).toBe("exports");
   });
 });

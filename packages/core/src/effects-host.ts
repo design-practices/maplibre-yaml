@@ -4,7 +4,7 @@
  *
  * @description
  * **Experimental** (0.7). Core owns the `effect:` layer key — its schema, its
- * eject class, its emit lowering, and `<ml-map>`'s auto-attach — but it never
+ * export class, its emit lowering, and `<ml-map>`'s auto-attach — but it never
  * imports the effects package. The effects package registers a *host* here
  * instead, so a document without effects pays zero bytes and core keeps no
  * WebGL code.
@@ -67,8 +67,8 @@ export interface EffectsHost {
    */
   attach(map: MapLibreMap, layers: EffectLayerRef[]): EffectsAttachment;
   /**
-   * The eject lowering for one effect: the layer spec the emitted style
-   * should carry, or `null` when the effect declares absence (the layer is
+   * The export lowering for one effect: the layer spec the emitted style
+   * should carry, or `null` when the layer doesn't export (it is
    * dropped). `undefined` means "unknown type — ship the layer as authored".
    */
   lower(

@@ -1,5 +1,5 @@
 /**
- * @file `images:` eject — refs on the result, mlym: rewriting, sprite root (U6, R9)
+ * @file `images:` export — refs on the result, mlym: rewriting, sprite root (U6, R9)
  */
 
 import { describe, it, expect } from "vitest";
@@ -9,7 +9,7 @@ import { mergeBasemap } from "../../src/emitter/basemap";
 import { ImagesSchema } from "../../src/schemas/map.schema";
 import { lowerMarkers } from "../../src/emitter/lower-markers";
 import { normalizeMapBlock } from "../../src/model/normalize";
-import { ejectClasses } from "../../src/eject/registrations";
+import { exportClasses } from "../../src/export/registrations";
 import type { V1MapInput } from "../../src/model/types";
 
 const doc = (images: unknown, layers: unknown[] = []) =>
@@ -157,7 +157,7 @@ describe("projectStyle with images:", () => {
     ]);
   });
 
-  it("a dynamic image reference warns as contract — live/eject divergence is never silent", () => {
+  it("a dynamic image reference warns as contract — live/export divergence is never silent", () => {
     const result = projectStyle(
       doc(IMAGES, [
         {
@@ -191,8 +191,8 @@ describe("projectStyle with images:", () => {
     expect(result.style["sprite"]).toBeUndefined();
   });
 
-  it("images is registered as class ejects", () => {
-    expect(ejectClasses.require("images").class).toBe("ejects");
+  it("images is registered as class exports", () => {
+    expect(exportClasses.require("images").class).toBe("exports");
   });
 });
 

@@ -108,7 +108,7 @@ layers:
       "mlym:hatch-light",
     ]);
     // The `["get", "tone"]` INPUT selects among literal names — it is not a
-    // dynamic image name, so there is no live/eject divergence to report.
+    // dynamic image name, so there is no live/export divergence to report.
     expect(warnings).toEqual([]);
   });
 

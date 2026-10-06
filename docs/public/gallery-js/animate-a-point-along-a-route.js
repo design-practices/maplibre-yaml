@@ -1,4 +1,4 @@
-// The escape hatch: geometry maths plus a requestAnimationFrame loop.
+// The JavaScript half: geometry maths plus a requestAnimationFrame loop.
 // The route arrives from YAML as a straight two-point line; the page bends
 // it into a great-circle arc (what turf.along does upstream, in a dozen
 // lines) and walks the plane along it, writing each position and heading

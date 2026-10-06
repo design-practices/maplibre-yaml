@@ -59,11 +59,11 @@ registerEffect({
   params: z.object({ color: z.string().default("#223344") }),
   uniforms: (p) => ({ u_color: p.color }),
   fragment: `vec4 effect_color(EffectInput i) { return vec4(u_color * (0.5 + 0.5 * i.diffuse), 1.0); }`,
-  fallback: (_params, layer) => layer, // eject: ship the static layer (null = declared absence)
+  fallback: (_params, layer) => layer, // export: ship the static layer (null = doesn't export)
 });
 ```
 
-Full guide — `EffectInput`, helpers, eject, backend limits:
+Full guide — `EffectInput`, helpers, export, backend limits:
 https://docs.maplibre-yaml.org/guides/effects/
 
 ## Notes

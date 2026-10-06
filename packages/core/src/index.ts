@@ -29,7 +29,7 @@ export * from "./data";
 export * from "./ui";
 
 // The v2 internal model — public because it is the emitter's input type
-// (`projectStyle(model)`), so ejecting requires it. Named rather than
+// (`projectStyle(model)`), so exporting requires it. Named rather than
 // `export *`, so widening the surface is a deliberate edit, not a side effect
 // of adding a file under model/.
 export {
@@ -122,13 +122,13 @@ export type {
   SpriteSheetLayout,
 } from "./emitter";
 export {
-  EjectClassRegistry,
-  ejectClasses,
-  type EjectClass,
-  type EjectClassDefinition,
-  type EjectContext,
-  type EjectLowering,
-} from "./eject";
+  ExportClassRegistry,
+  exportClasses,
+  type ExportClass,
+  type ExportClassDefinition,
+  type ExportContext,
+  type ExportLowering,
+} from "./export";
 export type {
   EmitMode,
   EmitWarning,

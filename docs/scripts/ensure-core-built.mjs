@@ -5,7 +5,7 @@
  *
  * The docs site needs core's dist (and its emitted JSON schemas), the
  * effects package (the classics launch page's live panes), and the CLI
- * (`mlym emit` produces the launch page's ejected panes at build time). A
+ * (`mlym emit` produces the launch page's exported panes at build time). A
  * docs-only build (`pnpm --filter docs build`, the Cloudflare Pages deploy
  * from a fresh clone) must build them first. But under the workspace build
  * (`pnpm -r build`) they are already built, and rebuilding one here races

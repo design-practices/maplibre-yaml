@@ -1,4 +1,4 @@
-// The escape hatch: addImage() options the `images:` block doesn't carry.
+// The JavaScript half: addImage() options the `images:` block doesn't carry.
 // stretchX/stretchY name the pixel columns and rows that may stretch (the
 // blue and red bands of the debug image); `content` is the box the text
 // must fit inside. Then the two layers the YAML declared hidden appear.

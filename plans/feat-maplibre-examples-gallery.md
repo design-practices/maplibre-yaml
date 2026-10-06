@@ -11,28 +11,40 @@ Triage date: 2026-09-26, against the upstream index (139 examples, verified
 `core@0.6.0-alpha.0`. Open work items live in beads under **ml-chh**, not
 here; this doc records the verdicts and the reasoning.
 
+> **Badges renamed in 0.7** (terminology pass): Pure YAML → **YAML**, Escape
+> hatch → **YAML + JavaScript**, Extension → **YAML + plugin**, JS territory →
+> **JavaScript** — each badge names what the author writes. The verdict letters
+> (E / H / Ext / X) are unchanged. Dated sections below keep the wording of
+> their day; see "0.7 terminology pass" at the end for the current census.
+
 ## Verdicts
 
-- **E — expressible today.** Pure YAML renders it under `<ml-map>` (or the
+- **E — expressible today** (badge: YAML). YAML alone renders it under `<ml-map>` (or the
   Astro components where noted). Gallery page = YAML document. 49 examples.
-- **H — escape hatch.** Demonstrable, but needs one of the documented
-  hatches: `getMap()` + a few lines of JS, an inline basemap style object,
-  raw MapLibre expressions beyond the curated keys, or a protocol plugin.
+- **H — page JavaScript** (badge: YAML + JavaScript; "escape hatch" before
+  0.7). Demonstrable, but the author writes some page JavaScript alongside
+  the YAML: `mapReady()`/`getMap()` + a few lines of JS, the
+  `@maplibre-yaml/core/maplibre` module, or a protocol plugin. (At triage this
+  also counted an inline basemap style object and raw expressions; the 0.7
+  pass rescored rows that need no page JS to E.)
   Gallery pages here show YAML + minimal JS and are honest about the seam —
   they are the "Beyond YAML" story (ml-alp.9). 41 examples.
 - **G — gap.** A YAML surface that plausibly should exist and doesn't;
   each gap theme is filed as a bead under ml-chh. 15 examples.
-- **X — out of scope.** Deep imperative/plugin territory (three.js custom
+- **X — out of scope** (badge: JavaScript — a MapLibre job, not a
+  document's). Deep imperative/plugin territory (three.js custom
   layers, draw tools, geocoder UI, rAF game loops) that a declarative format
   should not chase. The gallery skips these or links out. 34 examples.
-- **Ext — extension** (added in the U17 rescore, 2026-10-05). In reach of
-  the experimental effects API (`registerEffect()`, `packages/effects`): a
-  document names a registered extension on an ordinary static layer, and
+- **Ext — plugin** (badge: YAML + plugin; added in the U17 rescore,
+  2026-10-05, as "Extension"). In reach of
+  the experimental effects API (`registerEffect()`, `packages/effects`): the
+  document stays pure YAML (an ordinary static layer names an effect, e.g.
+  `effect: tonal-hatch`) and the JavaScript ships in an installed package;
   that layer stays the fallback. These rows need a backend that 0.7 does not
-  ship, and each backend is a bead. The gallery badge is "Extension".
+  ship, and each backend is a bead.
 
 Summary at triage: **49 E / 41 H / 15 G / 34 X**. Current census: see
-"U17 rescore" below. Excluding X, ~62% of the
+"0.7 terminology pass" at the end. Excluding X, ~62% of the
 replicable gallery is pure YAML today and ~86% is reachable with documented
 hatches.
 
@@ -69,7 +81,7 @@ background layer throws under `<ml-map>`.
 
 ## Full triage table
 
-Verdict key: E = expressible today · H = escape hatch · G = gap · Ext = extension (effects API, backend pending) · X = out of scope.
+Verdict key: E = expressible today (YAML) · H = page JavaScript (YAML + JavaScript) · G = gap · Ext = plugin (YAML + plugin; effects API, backend pending) · X = out of scope (JavaScript).
 
 ### Map basics
 
@@ -229,10 +241,10 @@ Verdict key: E = expressible today · H = escape hatch · G = gap · Ext = exten
 | example | v | how / what's missing |
 |---|---|---|
 | display-and-style-rich-text-labels | E | `format` expression in `text-field` |
-| style-labels-with-web-fonts | H | `glyphs`/fonts via inline basemap object |
-| style-labels-with-font-faces | H | style-root `font-faces` in the inline `mapStyle` (no YAML field — the web-fonts hatch); rendered by maplibre-gl ≥ 6.7.0. Page: U18 |
+| style-labels-with-web-fonts | E | `glyphs`/fonts via inline basemap object (H until the 0.7 terminology pass: no page JS, so YAML) |
+| style-labels-with-font-faces | E | style-root `font-faces` in the inline `mapStyle` (no YAML field — the web-fonts route); rendered by maplibre-gl ≥ 6.7.0. Page: U18. H until the 0.7 terminology pass: no page JS, so YAML |
 | change-the-case-of-labels | E | `upcase`/`downcase` expressions |
-| style-labels-with-local-fonts | H | font-stack override via inline basemap |
+| style-labels-with-local-fonts | E | font-stack override via inline basemap (H until the 0.7 terminology pass: no page JS, so YAML) |
 | variable-label-placement | E | `text-variable-anchor` (curated) |
 | variable-label-placement-with-offset | E | `text-variable-anchor-offset` rides passthrough (curated-key theme) |
 | change-a-maps-language | H | runtime `setLayoutProperty`; `global-state` `text-field` is the declarative alternative |
@@ -489,3 +501,23 @@ Notes:
 | Ext — Extension | 4 | 4 |
 | X — JS territory | 6 | 6 |
 | Pages | 98 | **103** |
+
+## 0.7 terminology pass (2026-10-06)
+
+The gallery badges were renamed to name what the author writes: Pure YAML →
+YAML, Escape hatch → YAML + JavaScript, Extension → YAML + plugin, JS
+territory → JavaScript. Applying that rule moved the three font rows
+(style-labels-with-web-fonts, -font-faces, -local-fonts) from H to E: each is
+an inline `mapStyle` object inside the YAML, with no page JavaScript. In the
+same pass "eject" became "export" (to style.json) across the library and
+docs; the export classes are `exports` / `exports-with-fallback` /
+`no-export`.
+
+| Verdict | After U18 | After the 0.7 terminology pass |
+|---|---|---|
+| E — YAML | 75 (74 pages, 1 badge only) | **78** (77 pages, 1 badge only) |
+| H — YAML + JavaScript | 54 (29 pages, 25 badge only) | **51** (26 pages, 25 badge only) |
+| G — Gap | 0 | 0 |
+| Ext — YAML + plugin | 4 | 4 |
+| X — JavaScript | 6 | 6 |
+| Pages | 103 | 103 |

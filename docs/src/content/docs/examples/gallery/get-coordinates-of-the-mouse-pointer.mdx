@@ -9,7 +9,7 @@ import config from '../../../../../public/configs/gallery/get-coordinates-of-the
 import hatchJs from '../../../../../public/gallery-js/get-coordinates-of-the-mouse-pointer.js?raw';
 import chrome from '../../../../../public/gallery-js/get-coordinates-of-the-mouse-pointer.html?raw';
 
-Replicates the MapLibre example [Get coordinates of the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/). The map is YAML; the readout is a `<pre slot="top-left">` inside `<ml-map>`. The hatch is the map's own `mousemove` event, which carries the pointer's pixel position (`e.point`) and its longitude/latitude (`e.lngLat`).
+Replicates the MapLibre example [Get coordinates of the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/). The map is YAML; the readout is a `<pre slot="top-left">` inside `<ml-map>`. The JavaScript half is the map's own `mousemove` event, which carries the pointer's pixel position (`e.point`) and its longitude/latitude (`e.lngLat`).
 
 <LiveMap src="/configs/gallery/get-coordinates-of-the-mouse-pointer.yaml" height="440px" chrome={chrome} caption="Move the pointer over the map" />
 
@@ -25,7 +25,7 @@ This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner sys
 
 <Code code={chrome} lang="html" title="get-coordinates-of-the-mouse-pointer.html" />
 
-## The escape hatch
+## The JavaScript half
 
 <Code code={hatchJs} lang="js" title="get-coordinates-of-the-mouse-pointer.js" />
 

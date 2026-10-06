@@ -26,7 +26,7 @@
  *    visible text (an empty attribution control collapses: the exact bug
  *    this sweep was built after)
  *
- * Escape-hatch pages (U16) are driven through the hatch harness in live
+ * YAML + JavaScript pages (U16) are driven through the hatch harness in live
  * mode — examples/gallery/hatch/twin.html?slug=<slug>&live — which injects
  * the page's slot chrome and runs the page's own JS against the real docs
  * config, so layers the JS shows or feeds are checked as a reader sees them.
@@ -336,9 +336,9 @@ let classicsChecked = 0;
       const panes = page
         .waitForFunction(
           (n) => {
-            const { live, ejected } = document.querySelector(`section.classic[data-classic="${n}"]`).__maps;
+            const { live, exported } = document.querySelector(`section.classic[data-classic="${n}"]`).__maps;
             const qrf = (m, id) => m.queryRenderedFeatures(undefined, { layers: [id] }).length;
-            return qrf(live, "roads") > 0 && qrf(ejected, "roads") > 0 && qrf(ejected, "buildings") > 0;
+            return qrf(live, "roads") > 0 && qrf(exported, "roads") > 0 && qrf(exported, "buildings") > 0;
           },
           name,
           { timeout: 45000 }

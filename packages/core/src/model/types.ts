@@ -106,15 +106,15 @@ export interface StyleHalf {
    *
    * @remarks
    * Style half because it fully compiles: live, the renderer `addImage`s
-   * each before layers; on eject the images are fetched at compile time and
-   * merged into the document sprite (class `ejects`).
+   * each before layers; on export the images are fetched at compile time and
+   * merged into the document sprite (class `exports`).
    */
   images?: Record<string, import("../schemas/map.schema").ImageConfig>;
   /**
    * Map-level 3D terrain (U15) — the style-spec root `terrain`.
    *
    * @remarks
-   * Style half: it compiles verbatim (class `ejects`). Live, the renderer
+   * Style half: it compiles verbatim (class `exports`). Live, the renderer
    * applies it with `setTerrain` because the live style is built from the
    * basemap + addLayer, never from this model's style object.
    */
@@ -128,7 +128,7 @@ export interface StyleHalf {
    *
    * @remarks
    * Spec-native, so it compiles straight through to the emitted style.json
-   * root (class `ejects`). Live, the renderer applies it with `map.setLight`
+   * root (class `exports`). Live, the renderer applies it with `map.setLight`
    * — the live style is built from `mapStyle` + addLayer, so it cannot ride
    * in on the style object.
    */
@@ -154,7 +154,7 @@ export interface RuntimeHalf {
   container?: { className?: string; style?: string };
   /** Presentation metadata for `state` keys, keyed by state name. */
   parameters?: Record<string, unknown>;
-  /** Standalone markers (U5) — DOM pins live, lowered to a symbol layer on eject. */
+  /** Standalone markers (U5) — DOM pins live, lowered to a symbol layer on export. */
   markers?: import("../schemas/map.schema").MarkerConfig[];
   /**
    * Fit the initial camera to a source's data (U14). Authored as v1
@@ -163,7 +163,7 @@ export interface RuntimeHalf {
    * `bounds`/`fitBounds`, and emit lowers it to a computed camera.
    */
   fitTo?: import("../schemas/map.schema").FitToConfig;
-  /** Standalone popups open at a coordinate (U14) — declared absence on eject. */
+  /** Standalone popups open at a coordinate (U14) — not exported (class `no-export`). */
   popups?: import("../schemas/map.schema").StandalonePopupConfig[];
 }
 

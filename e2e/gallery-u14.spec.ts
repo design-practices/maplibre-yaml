@@ -2,7 +2,7 @@
  * U14 gallery gaps — browser verification, which is also the demo.
  *
  * @remarks
- * The three cheap gaps the 0.7 gallery close-out flips to Pure YAML, each
+ * The three cheap gaps the 0.7 gallery close-out flips to YAML, each
  * proven on its hermetic twin (examples/gallery/configs/, driven through
  * examples/gallery/viewer.html — the page a human opens is the page this
  * suite drives):

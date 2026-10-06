@@ -1,4 +1,4 @@
-// The escape hatch: a requestAnimationFrame loop feeding <ml-map>'s
+// The JavaScript half: a requestAnimationFrame loop feeding <ml-map>'s
 // updateLayerData(). Each frame appends a vertex of a sine wave and hands
 // the whole line to the layer — no getSource(...).setData bookkeeping.
 const mapEl = document.querySelector("ml-map");

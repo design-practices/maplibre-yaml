@@ -1,4 +1,4 @@
-// The escape hatch: an image source's updateImage(). The YAML declared
+// The JavaScript half: an image source's updateImage(). The YAML declared
 // the source inline on the layer, so the page asks the layer which source
 // it draws from, then swaps that source's frame every 200 ms.
 const mapEl = document.querySelector("ml-map");

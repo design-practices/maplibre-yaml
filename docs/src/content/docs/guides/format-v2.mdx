@@ -121,7 +121,7 @@ by transformation. It carries:
 ### `runtime:` — what degrades
 
 Everything under `runtime:` is the behavior layer. None of it reaches the
-compiled `style.json` — when you eject to a plain style, it is stripped. It
+compiled `style.json` — when you export to a plain style, it is stripped. It
 carries:
 
 - **`map`** — MapLibre `Map` constructor options (`minZoom`, `maxZoom`,
@@ -154,7 +154,7 @@ runtime:
     className: "map-embed"
 ```
 
-The split is what makes the eject guarantee legible: you can tell what will
+The split is what makes the export guarantee legible: you can tell what will
 survive a compile to `style.json` by looking at which half a key lives in, with
 no need to consult a table.
 
@@ -190,7 +190,7 @@ style:
 ```
 
 The spec half of the source (`type`, `url`, `data`, `cluster`, …) compiles into
-`style.json`; the nested `runtime:` block degrades away on eject.
+`style.json`; the nested `runtime:` block degrades away on export.
 
 ## Per-layer runtime: interactions, legend, label, toggle
 
