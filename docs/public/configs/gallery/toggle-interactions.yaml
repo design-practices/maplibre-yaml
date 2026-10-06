@@ -2,7 +2,7 @@
 # Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/toggle-interactions/
 # The YAML half: the map, every interaction handler at its default. YAML
 # sets a handler's INITIAL state (`config.scrollZoom: false`, …);
-# switching one at runtime is the hatch — see toggle-interactions.js.
+# switching one at runtime is page JavaScript — see toggle-interactions.js.
 type: map
 id: toggle-interactions
 config:

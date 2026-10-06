@@ -1,4 +1,4 @@
-// The escape hatch: a timer sequence calling jumpTo. A tour is a series
+// The JavaScript half: a timer sequence calling jumpTo. A tour is a series
 // of events, not map state, so YAML declares the cities and the page
 // steps through them. mapReady() hands over the live map once loaded.
 const mapEl = document.querySelector("ml-map");

@@ -4,10 +4,10 @@
  *
  *  - live:    `<ml-map>` runs public/classics/<name>.yaml, and the effects
  *             package upgrades its `effect:` layer when it loads;
- *  - ejected: vanilla maplibre-gl — no maplibre-yaml code — runs
- *             public/classics/<name>/ejected/style.json, which the docs
+ *  - exported: vanilla maplibre-gl — no maplibre-yaml code — runs
+ *             public/classics/<name>/exported/style.json, which the docs
  *             build produced with `mlym emit --with-fallbacks`
- *             (scripts/classics-eject.mjs).
+ *             (scripts/classics-export.mjs).
  *
  * The two cameras stay synced in both directions (the maplibre-gl-compare
  * pattern). Below 50rem the panes stack and stay synced.
@@ -23,7 +23,7 @@ interface Props {
 
 const { name, effect, height = "460px" } = Astro.props;
 const doc = `/classics/${name}.yaml`;
-const style = `/classics/${name}/ejected/style.json`;
+const style = `/classics/${name}/exported/style.json`;
 ---
 
 <section class="classic" data-classic={name} style={`--classic-pane-height: ${height}`}>
@@ -40,17 +40,17 @@ const style = `/classics/${name}/ejected/style.json`;
     </figure>
     <figure class="classic-pane">
       <figcaption>
-        <span class="classic-pane-title">Ejected</span>
+        <span class="classic-pane-title">Exported</span>
         <span class="classic-pane-what">vanilla <code>maplibre-gl</code>, no library code</span>
         <span class="classic-fx" data-state="static">static fallback</span>
       </figcaption>
-      <div class="classic-map" data-pane="ejected" data-style={style}></div>
+      <div class="classic-map" data-pane="exported" data-style={style}></div>
     </figure>
   </div>
   <p class="classic-links">
     <a href={doc} download={`${name}.yaml`} data-download="document">Download <code>{name}.yaml</code></a>
     <span aria-hidden="true">·</span>
-    <a href={style} download={`${name}.style.json`} data-download="ejected">Download the ejected <code>style.json</code></a>
+    <a href={style} download={`${name}.style.json`} data-download="exported">Download the exported <code>style.json</code></a>
     <span aria-hidden="true">·</span>
     <span>effect: <code>{effect}</code></span>
   </p>
@@ -160,7 +160,7 @@ const style = `/classics/${name}/ejected/style.json`;
   }
 
   async function mount(section: HTMLElement): Promise<void> {
-    const ejectedEl = section.querySelector<HTMLElement>('[data-pane="ejected"]')!;
+    const exportedEl = section.querySelector<HTMLElement>('[data-pane="exported"]')!;
     const liveEl = await mountLive(section.querySelector<HTMLElement>('[data-pane-slot="live"]')!);
 
     // The honesty claim: this map is plain maplibre-gl fed the emitted file.
@@ -171,22 +171,22 @@ const style = `/classics/${name}/ejected/style.json`;
     // silently disappears. MapLibre's standard `transformRequest` hook serves
     // those requests from this page's own origin instead; the file itself is
     // untouched (still byte-identical to `mlym emit`).
-    const ejected = new maplibregl.Map({
-      container: ejectedEl,
-      style: ejectedEl.dataset.style!,
+    const exported = new maplibregl.Map({
+      container: exportedEl,
+      style: exportedEl.dataset.style!,
       transformRequest: (url) => ({ url: sameOrigin(url) }),
     });
 
     const live = await liveEl.mapReady();
-    // Start the ejected pane on the live camera, then keep them together.
-    ejected.jumpTo({
+    // Start the exported pane on the live camera, then keep them together.
+    exported.jumpTo({
       center: live.getCenter(),
       zoom: live.getZoom(),
       bearing: live.getBearing(),
       pitch: live.getPitch(),
     });
-    syncCameras(live, ejected);
-    (section as HTMLElement & { __maps?: { live: MLMap; ejected: MLMap } }).__maps = { live, ejected };
+    syncCameras(live, exported);
+    (section as HTMLElement & { __maps?: { live: MLMap; exported: MLMap } }).__maps = { live, exported };
     section.dataset.ready = "true";
     void watchEffect(section, live);
   }

@@ -1,12 +1,12 @@
 /**
- * @file Build-time eject for the classics launch page (U11).
+ * @file Build-time export for the classics launch page (U11).
  *
  * The page at /classics/ shows each classic twice: live in `<ml-map>` with
- * the effects package, and ejected in vanilla maplibre-gl. The ejected pane
+ * the effects package, and exported in vanilla maplibre-gl. The exported pane
  * is only an honest claim if it runs the artifact `mlym emit` actually
  * produces for the document the page links — not a hand-copied style. So
  * this runs the real CLI, `mlym emit --with-fallbacks`, on every docs dev
- * start and build, into `docs/public/classics/<name>/ejected/` (git-ignored,
+ * start and build, into `docs/public/classics/<name>/exported/` (git-ignored,
  * generate-on-build like the agent assets):
  *
  *   style.json                        the emitted style
@@ -14,7 +14,7 @@
  *
  * The CLI runs through mlym-offline.mjs, which serves the site's own origin
  * from docs/public (the files this build deploys) so the build needs no
- * network. docs/test/classics-eject.test.mjs re-runs emit from scratch and
+ * network. docs/test/classics-export.test.mjs re-runs emit from scratch and
  * fails unless the shipped files are byte-identical.
  */
 import { spawnSync } from "node:child_process";
@@ -31,8 +31,8 @@ export const SITE = "https://docs.maplibre-yaml.org";
 /** The launch page's classics, in page order (Amendment A1, D-A5). */
 export const CLASSICS = ["crosshatch", "blueprint"];
 
-/** The exact `mlym` arguments that produce one classic's ejected pane. */
-export function emitArgs(name, outDir = join(CLASSICS_DIR, name, "ejected")) {
+/** The exact `mlym` arguments that produce one classic's exported pane. */
+export function emitArgs(name, outDir = join(CLASSICS_DIR, name, "exported")) {
   return [
     "emit",
     join(CLASSICS_DIR, `${name}.yaml`),
@@ -40,7 +40,7 @@ export function emitArgs(name, outDir = join(CLASSICS_DIR, name, "ejected")) {
     "--out",
     join(outDir, "style.json"),
     "--sprite-base",
-    `${SITE}/classics/${name}/ejected`,
+    `${SITE}/classics/${name}/exported`,
   ];
 }
 
@@ -59,10 +59,10 @@ export function emitClassic(name, outDir) {
   return output;
 }
 
-/** Regenerate every classic's ejected pane (the Astro build hook). */
-export function generateClassicsEject() {
+/** Regenerate every classic's exported pane (the Astro build hook). */
+export function generateClassicsExport() {
   for (const name of CLASSICS) {
-    const out = join(CLASSICS_DIR, name, "ejected");
+    const out = join(CLASSICS_DIR, name, "exported");
     // Start clean: a stale sprite file from an older emit must not ship.
     rmSync(out, { recursive: true, force: true });
     mkdirSync(out, { recursive: true });

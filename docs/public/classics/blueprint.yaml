@@ -13,12 +13,12 @@
 #  - Without it — or where the effect cannot run (globe, terrain, no WebGL2)
 #    — the buildings render exactly as authored below: the static fallback.
 #  - `mlym emit` (--with-fallbacks, the default) ships that same static
-#    layer with one lossy warning; `--strict` refuses, because the ejected
+#    layer with one lossy warning; `--strict` refuses, because the exported
 #    map is not the map the effect draws. That is fallback-where-honest.
 #
 # Download it, change the grid spacing or the colours, and open it in any
 # page that loads <ml-map>. The docs build compiles this file with
-# `mlym emit` for the launch page's ejected pane, and a test pins the two
+# `mlym emit` for the launch page's exported pane, and a test pins the two
 # together.
 type: map
 id: blueprint

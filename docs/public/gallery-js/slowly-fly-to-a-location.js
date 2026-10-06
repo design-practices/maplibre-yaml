@@ -1,4 +1,4 @@
-// The escape hatch: flyTo with tuned flight options. speed and curve
+// The JavaScript half: flyTo with tuned flight options. speed and curve
 // shape the arc (zoom far out, pan, zoom back in); easing is any
 // t -> t function. Each click aims at whichever end the camera isn't at.
 const mapEl = document.querySelector("ml-map");

@@ -1,15 +1,15 @@
 /**
- * @file Generate the effects eject browser fixture (e2e/effects.spec.ts, U13′)
+ * @file Generate the effects export browser fixture (e2e/effects.spec.ts, U13′)
  *
  * @description
  * The crosshatch classic — whose buildings carry `effect: tonal-hatch` —
  * through the REAL `mlym emit` pipeline (emitStyle → finalizeSpriteBaseUrl →
  * rasterize), exactly as `mlym emit --out --sprite-base` would. The CLI does
- * not load @maplibre-yaml/effects, which is the point: the effect must eject
+ * not load @maplibre-yaml/effects, which is the point: the effect must export
  * to its static layer with one `lossy` warning (so `--strict` refuses), and
  * the emitted style must render the hatched buildings in plain maplibre-gl.
  *
- *   node --import tsx scripts/generate-effects-eject-fixture.ts <outDir> <origin>
+ *   node --import tsx scripts/generate-effects-export-fixture.ts <outDir> <origin>
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -21,7 +21,7 @@ import { rasterizeSpriteFiles, resolveImageRefs } from "../src/lib/rasterize.js"
 
 const [outDir, origin] = process.argv.slice(2);
 if (!outDir || !origin) {
-  console.error("usage: generate-effects-eject-fixture.ts <outDir> <origin>");
+  console.error("usage: generate-effects-export-fixture.ts <outDir> <origin>");
   process.exit(1);
 }
 const here = dirname(fileURLToPath(import.meta.url));
@@ -47,7 +47,7 @@ try {
 }
 
 const { style, warnings, images } = await emitStyle(parsed.data, "with-fallbacks", { trust: "untrusted" });
-const finalized = finalizeSpriteBaseUrl(style, `${origin}/e2e/generated/effects-eject`);
+const finalized = finalizeSpriteBaseUrl(style, `${origin}/e2e/generated/effects-export`);
 const files = await rasterizeSpriteFiles([], await resolveImageRefs(images ?? []));
 const cam = (parsed.data as { config: { center: number[]; zoom: number; pitch: number; bearing: number } }).config;
 
@@ -60,7 +60,7 @@ const html = `<!DOCTYPE html>
   const map = new maplibregl.Map({ container: "map", style: "./style.json",
     center: ${JSON.stringify(cam.center)}, zoom: ${cam.zoom}, pitch: ${cam.pitch}, bearing: ${cam.bearing},
     canvasContextAttributes: { preserveDrawingBuffer: true } });
-  window.__eject = { map };
+  window.__export = { map };
 </script></body></html>`;
 
 mkdirSync(outDir, { recursive: true });

@@ -9,7 +9,7 @@ import config from '../../../../../public/configs/gallery/toggle-interactions.ya
 import hatchJs from '../../../../../public/gallery-js/toggle-interactions.js?raw';
 import chrome from '../../../../../public/gallery-js/toggle-interactions.html?raw';
 
-Replicates the MapLibre example [Toggle interactions](https://maplibre.org/maplibre-gl-js/docs/examples/toggle-interactions/). YAML sets each interaction handler's *initial* state (`config.scrollZoom: false` and friends — see [Disable scroll zoom](/examples/gallery/disable-scroll-zoom/)). Switching one while the map runs is the hatch: each checkbox is named after a handler, and one delegated listener calls its `enable()` or `disable()`.
+Replicates the MapLibre example [Toggle interactions](https://maplibre.org/maplibre-gl-js/docs/examples/toggle-interactions/). YAML sets each interaction handler's *initial* state (`config.scrollZoom: false` and friends — see [Disable scroll zoom](/examples/gallery/disable-scroll-zoom/)). Switching one while the map runs is page JavaScript: each checkbox is named after a handler, and one delegated listener calls its `enable()` or `disable()`.
 
 <LiveMap src="/configs/gallery/toggle-interactions.yaml" height="440px" chrome={chrome} caption="Untick a handler and that gesture stops working" />
 
@@ -25,7 +25,7 @@ This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner sys
 
 <Code code={chrome} lang="html" title="toggle-interactions.html" />
 
-## The escape hatch
+## The JavaScript half
 
 <Code code={hatchJs} lang="js" title="toggle-interactions.js" />
 

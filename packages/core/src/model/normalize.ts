@@ -89,7 +89,7 @@ export const LAYER_RUNTIME_KEYS = [
   // layer properties, so nothing downstream would catch it.
   "before",
   // Experimental (0.7): a shader effect enhancing this layer. It never
-  // compiles — the layer's own static style is its fallback (eject class
+  // compiles — the layer's own static style is its fallback (export class
   // `fallback`, lowered by emitter/lower-effects.ts).
   "effect",
 ] as const;
@@ -256,7 +256,7 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   // Same presence rule as markers: zero popups lose nothing on emit.
   if (input.popups !== undefined && input.popups.length > 0)
     model.runtime.popups = input.popups;
-  // Style half: images fully compile (sprite merge on eject). An empty
+  // Style half: images fully compile (sprite merge on export). An empty
   // record normalizes away like an empty markers list.
   if (input.images !== undefined && Object.keys(input.images).length > 0)
     model.style.images = input.images;

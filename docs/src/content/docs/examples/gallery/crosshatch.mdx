@@ -1,6 +1,6 @@
 ---
 title: Crosshatch
-description: "Mapzen classic — Tangram's crosshatch, rebuilt as a pure style-spec document that is its own eject"
+description: "Mapzen classic — Tangram's crosshatch, rebuilt as a pure style-spec document that is its own export"
 ---
 
 import LiveMap from '../../../../components/LiveMap.astro';
@@ -19,7 +19,7 @@ extrusions, and labels are set in a serif italic.
 
 This page is the **static tier** of the classic. It is one YAML document,
 plain style spec from top to bottom: no page JavaScript, no shader, no
-runtime beyond MapLibre itself. As a result the document is its own eject:
+runtime beyond MapLibre itself. As a result the document is its own export:
 `mlym emit --strict` compiles it with **zero warnings**. Nothing is
 declared absent, nothing is lossy, and the emitted `style.json` renders the
 same map in vanilla MapLibre.
@@ -41,7 +41,7 @@ What it reproduces exactly, and what it approximates:
 The tonal hatching on building faces is the job of the experimental
 `tonal-hatch` [effect](/guides/effects/): a MapLibre custom layer that
 keeps this document as its fallback and upgrades the `buildings` layer in
-place. Where the effect isn't loaded, and in every ejected style, this
+place. Where the effect isn't loaded, and in every exported style, this
 page's look is what renders. The [Mapzen classics](/examples/classics/) page shows
 both side by side.
 
@@ -51,13 +51,13 @@ both side by side.
 
 ## What to notice
 
-- **`images:` + `*-pattern`.** Every texture is a declared image. On eject
+- **`images:` + `*-pattern`.** Every texture is a declared image. On export
   the textures are fetched into the document sprite and the references are
   rewritten to `mlym:<name>`. Their URLs are absolute, because emit fetches
   at compile time and has no page to resolve a relative path against.
 - **A data-driven pattern.** `landcover` selects its texture with
   `["match", ["get", "class"], "sand", "earth", "landuse"]`. Both outputs
-  are rewritten on eject, with no warning.
+  are rewritten on export, with no warning.
 - **`light:`.** This is the style-spec light, anchored to the map so the
   shading stays put as the map turns, the way Tangram's world-fixed lights
   do. Change `position` or `intensity` to retune the contrast between faces.

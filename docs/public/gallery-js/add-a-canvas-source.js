@@ -1,4 +1,4 @@
-// The escape hatch: a `canvas` source, added through mapReady(). The page
+// The JavaScript half: a `canvas` source, added through mapReady(). The page
 // animates bouncing circles on a hidden <canvas>; MapLibre re-reads it
 // every frame (animate: true) and drapes it over four corner coordinates.
 const mapEl = document.querySelector("ml-map");

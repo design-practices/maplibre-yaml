@@ -707,9 +707,9 @@ Two guides cover capabilities that apply directly to the vanilla-JS path:
 - **[Format v2](/guides/format-v2/)** — the additive, opt-in `style:` / `runtime:`
   split. A v2 document parses to the same internal model as its v1 twin, so
   `YAMLParser` and `MapRenderer` consume it unchanged.
-- **[Interactions & Eject](/guides/interactions/)** — how declarative
+- **[Interactions & Export to style.json](/guides/interactions/)** — how declarative
   interactions are authored, why a compiled `style.json` is inert on its own
-  (the eject guarantee), and how `attachInteractions` wires behavior back onto
+  (the export guarantee), and how `attachInteractions` wires behavior back onto
   any `maplibregl.Map`. This is also where the `emit` interaction and its
   trusted-policy gate are documented in full.
 
@@ -903,8 +903,8 @@ const renderer = MapRenderer.fromModel(container, toModel(block), {
 ## Next Steps
 
 - [Format v2](/guides/format-v2/) - The `style:` / `runtime:` split
-- [Interactions & Eject](/guides/interactions/) - Interactions, the eject guarantee, and `attachInteractions`
-- [`examples/vanilla/eject-and-attach.html`](https://github.com/design-practices/maplibre-yaml/blob/main/examples/vanilla/eject-and-attach.html) - A runnable eject → `attachInteractions` demo: compile a document to a self-contained `style.json`, render it in a plain `new maplibregl.Map(...)`, then reattach the declarative interactions so a click opens a popup
+- [Interactions & Export to style.json](/guides/interactions/) - Interactions, the export guarantee, and `attachInteractions`
+- [`examples/vanilla/export-and-attach.html`](https://github.com/design-practices/maplibre-yaml/blob/main/examples/vanilla/export-and-attach.html) - A runnable export → `attachInteractions` demo: compile a document to a self-contained `style.json`, render it in a plain `new maplibregl.Map(...)`, then reattach the declarative interactions so a click opens a popup
 - [Web Components Integration](/integrations/web-components/) - Even simpler HTML-only approach
 - [Astro Integration](/integrations/astro/) - For Astro-based sites
 - [Live Data Guide](/guides/live-data/) - Deep dive into polling and streaming

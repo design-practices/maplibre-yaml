@@ -3,7 +3,7 @@
  *
  * @description
  * The web-components page's event table is hand-written prose; this test
- * makes it a contract, the same way the eject-classes page is pinned to its
+ * makes it a contract, the same way the export-classes page is pinned to its
  * registry. Three sources must agree on the event NAMES — the `@fires`
  * JSDoc tags, the `new CustomEvent("ml-map:…")` calls actually dispatched,
  * and the docs table rows — and the table's Detail column must name exactly

@@ -854,7 +854,7 @@ test.describe("images: declared images register before layers (U6)", () => {
   });
 });
 
-test.describe("U16: escape-hatch rows that 0.7 made pure YAML", () => {
+test.describe("U16: YAML + JavaScript rows that 0.7 made YAML-only", () => {
   test("set-center-point-above-ground: elevation + centerClampedToGround ride config passthrough", async ({
     page,
   }) => {
@@ -970,7 +970,7 @@ test.describe("touch posture: hover popups don't exist on touch; tap uses click.
 });
 
 /**
- * Mapzen classics (U10′): the static presets ARE their own eject (the CLI
+ * Mapzen classics (U10′): the static presets ARE their own export (the CLI
  * suite pins `mlym emit --strict` → zero warnings). Here the browser proves
  * the look actually reaches the screen: buildings are drawn, the pattern
  * images are registered and bound, and the canvas is made of the preset's

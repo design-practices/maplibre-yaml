@@ -36,7 +36,7 @@ export default defineConfig([
       // The full public API, browser-bundled. `index.js` bare-imports yaml/zod
       // which no browser resolves; this is what a page importing the emitter,
       // parser, or model directly (rather than the `<ml-map>` component) loads.
-      // The eject-proof browser demo is the motivating consumer: it compiles a
+      // The export-proof browser demo is the motivating consumer: it compiles a
       // document and renders the output in vanilla maplibre-gl.
       "index.browser": "src/index.ts",
     },

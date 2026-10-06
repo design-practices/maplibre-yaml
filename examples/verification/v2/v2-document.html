@@ -90,7 +90,7 @@
       } from "/packages/core/dist/index.browser.js";
 
       // A hermetic inline basemap — no network. A grey background layer under
-      // whatever the document adds, exactly like the eject fixture.
+      // whatever the document adds, exactly like the export fixture.
       const BASEMAP = `
     version: 8
     name: base
@@ -243,7 +243,7 @@ controls:
         window.__v2model = toModel(p2.data);
         window.__v1model = toModel(p1.data);
 
-        // Compile the v2 document with the emitter — the same path eject.html
+        // Compile the v2 document with the emitter — the same path export.html
         // uses. The runtime half must not survive.
         const projected = projectStyle(window.__v2model, "with-fallbacks");
         const base = window.__v2model.style.basemap;

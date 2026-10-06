@@ -6,7 +6,7 @@
  * The programmatic entry point (`attachEffects`) and what the core host
  * hook delegates to. Works on any MapLibre map whose style already holds the
  * static layers — an `<ml-map>` (which calls this automatically once the
- * package is registered) or a vanilla map over an ejected style.
+ * package is registered) or a vanilla map over an exported style.
  *
  * @experimental
  */

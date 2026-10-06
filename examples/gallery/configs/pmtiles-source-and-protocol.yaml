@@ -1,6 +1,6 @@
 # Hermetic twin of the pmtiles-source-and-protocol docs page (U2, R2).
 # The docs page registers the real pmtiles protocol; this twin registers a
-# stub `stub://` protocol through the SAME escape hatch — addProtocol
+# stub `stub://` protocol through the SAME route — addProtocol
 # imported from @maplibre-yaml/core/maplibre — and proves the registration
 # lands on the module instance <ml-map> actually requests through. The
 # hatch HTML performs the registration before the component upgrades.

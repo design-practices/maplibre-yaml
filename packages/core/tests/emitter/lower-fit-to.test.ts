@@ -1,5 +1,5 @@
 /**
- * @file fitTo eject lowering (U14, ml-chh.9) — the computed camera, the
+ * @file fitTo export lowering (U14, ml-chh.9) — the computed camera, the
  * honest fallbacks, and the one-implementation parity with the registry.
  */
 
@@ -10,7 +10,7 @@ import {
   FIT_TO_REFERENCE_VIEWPORT,
 } from "../../src/emitter/lower-fit-to";
 import { projectStyle, EmitError } from "../../src/emitter/project";
-import { ejectClasses } from "../../src/eject/registrations";
+import { exportClasses } from "../../src/export/registrations";
 import { normalizeMapBlock } from "../../src/model/normalize";
 import type { MapModel } from "../../src/model/types";
 
@@ -92,7 +92,7 @@ describe("lowerFitTo (pre-pass)", () => {
     expect(warnings[0]).toMatchObject({
       kind: "lossy",
       construct: "fitTo",
-      ejectClass: "fallback",
+      exportClass: "exports-with-fallback",
     });
     expect(warnings[0]!.message).toContain("1024×768");
     // The emitted style carries the computed camera and no runtime trace.
@@ -134,9 +134,9 @@ describe("lowerFitTo (pre-pass)", () => {
     expect(() => projectStyle(model, "strict")).toThrow(EmitError);
   });
 
-  it("the registry eject() hook and the pre-pass cannot drift", () => {
+  it("the registry export() hook and the pre-pass cannot drift", () => {
     const model = doc({ route: { type: "geojson", data: LINE } }, { source: "route" });
-    const hook = ejectClasses.require("fitTo").eject!({
+    const hook = exportClasses.require("fitTo").export!({
       value: model.runtime.fitTo,
       path: "fitTo",
       model,
@@ -150,7 +150,7 @@ describe("lowerFitTo (pre-pass)", () => {
   });
 
   it("without the document the hook declares it cannot compute (never throws)", () => {
-    const hook = ejectClasses.require("fitTo").eject!({
+    const hook = exportClasses.require("fitTo").export!({
       value: { source: "route" },
       path: "fitTo",
     });
@@ -160,7 +160,7 @@ describe("lowerFitTo (pre-pass)", () => {
 });
 
 describe("popups on emit (U14)", () => {
-  it("report as a declared-absence contract warning, never silently", () => {
+  it("report as a no-export contract warning, never silently", () => {
     const model = normalizeMapBlock({
       id: "p",
       config: { center: [0, 0], zoom: 2 } as never,
@@ -170,7 +170,7 @@ describe("popups on emit (U14)", () => {
     const { warnings } = projectStyle(model, "strict");
     expect(warnings.find((w) => w.construct === "popups")).toMatchObject({
       kind: "contract",
-      ejectClass: "declared-absence",
+      exportClass: "no-export",
     });
   });
 });

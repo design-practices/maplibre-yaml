@@ -9,7 +9,7 @@ import config from '../../../../../public/configs/gallery/fly-to-a-location.yaml
 import hatchJs from '../../../../../public/gallery-js/fly-to-a-location.js?raw';
 import chrome from '../../../../../public/gallery-js/fly-to-a-location.html?raw';
 
-Replicates the MapLibre example [Fly to a location](https://maplibre.org/maplibre-gl-js/docs/examples/fly-to-a-location/). Runtime camera moves have no declarative surface (by design — they're events, not state), so this page pairs a pure-YAML map with a few lines of JS through the documented `getMap()` hatch.
+Replicates the MapLibre example [Fly to a location](https://maplibre.org/maplibre-gl-js/docs/examples/fly-to-a-location/). Runtime camera moves have no declarative surface (by design — they're events, not state), so this page pairs a YAML map with a few lines of page JavaScript through the documented `getMap()` method.
 
 <LiveMap src="/configs/gallery/fly-to-a-location.yaml" height="440px" chrome={chrome} />
 
@@ -25,13 +25,13 @@ This markup goes *inside* `<ml-map>`; children with a `slot` ride its corner sys
 
 <Code code={chrome} lang="html" title="fly-to-a-location.html" />
 
-## The escape hatch
+## The JavaScript half
 
 <Code code={hatchJs} lang="js" title="fly-to-a-location.js" />
 
 ## What to notice
 
-- `await mapEl.mapReady()` resolves with the live `maplibregl.Map` — the whole imperative API is available without ejecting from YAML, and the promise replaces the old load-listener + `getMap()` null-guard boilerplate.
+- `await mapEl.mapReady()` resolves with the live `maplibregl.Map` — the whole imperative API is available without leaving YAML, and the promise replaces the old load-listener + `getMap()` null-guard boilerplate.
 - The division of labor is deliberate: the *map* is declarative state (YAML); a camera *flight* is an event, so it lives in event-handling code.
 - The same page pattern covers `easeTo`, `jumpTo`, and `fitBounds`.
 - The buttons are `<ml-map>` slot children (`slot="top-left"`): the element moves them into the map corner on load, so the controls sit on the map without any absolute positioning in the page.

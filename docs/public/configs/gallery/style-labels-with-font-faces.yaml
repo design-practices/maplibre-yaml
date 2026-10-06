@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
 # Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/style-labels-with-font-faces/
 # `font-faces` is a style-ROOT key with no dedicated YAML field, so — as on
-# the web-fonts page — it rides the inline `mapStyle` object (the escape
-# hatch inside the document). Each font file is registered under the name
+# the web-fonts page — it rides the inline `mapStyle` object (a style-root
+# route inside the document). Each font file is registered under the name
 # the layer's `text-font` asks for, narrowed to its script's unicode-range;
 # everything else still comes from the glyphs URL. maplibre-gl >= 6.7.0
 # renders font-faces (the docs site runs 6.x); older versions ignore it.

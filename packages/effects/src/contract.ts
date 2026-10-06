@@ -9,7 +9,7 @@
  * static layer. The document references it by name (`effect: { type, ...params }`)
  * and never carries GLSL; page JavaScript registers the shader. The static
  * layer the effect sits on is its fallback, by construction: without the
- * effects package, under an unsupported projection, or on eject, that layer
+ * effects package, under an unsupported projection, or on export, that layer
  * renders as authored.
  */
 
@@ -179,10 +179,10 @@ export interface EffectDefinition<P = unknown> {
    */
   fragment: string;
   /**
-   * The eject lowering: the layer the emitted style should carry instead of
+   * The export lowering: the layer the emitted style should carry instead of
    * the effect — usually the layer unchanged (`(p, layer) => layer`), or
-   * `null` to declare absence. Mandatory: an effect without a fallback is a
-   * silent hole in every ejected map.
+   * `null` when the layer doesn't export. Mandatory: an effect without a fallback is a
+   * silent hole in every exported map.
    */
   fallback: (params: P, layer: LayerSpec) => LayerSpec | null;
   /**

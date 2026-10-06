@@ -1,4 +1,4 @@
-// The escape hatch: flyTo's AnimationOptions — duration, easing, offset,
+// The JavaScript half: flyTo's AnimationOptions — duration, easing, offset,
 // animate — built from the panel's controls. The YAML's "target" layers
 // show where the camera was asked to centre; with an offset, compare that
 // point with where the camera actually ends up.

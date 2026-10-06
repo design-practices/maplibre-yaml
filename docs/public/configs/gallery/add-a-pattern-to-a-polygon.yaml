@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
 # Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/add-a-pattern-to-a-polygon/
-# fill-pattern references a declared images: entry, live and on eject.
+# fill-pattern references a declared images: entry, live and on export.
 # images: hosts must allow cross-origin access (CORS) — the live loader
 # fetches with crossOrigin=anonymous so the texture upload isn't tainted.
 type: map

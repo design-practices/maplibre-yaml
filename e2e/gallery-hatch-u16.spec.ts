@@ -1,5 +1,5 @@
 /**
- * U16 escape-hatch gallery pages — browser verification, which is also the demo.
+ * U16 YAML + JavaScript gallery pages — browser verification, which is also the demo.
  *
  * @remarks
  * Every page here pairs a YAML document with a few lines of page JS (and,

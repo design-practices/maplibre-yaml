@@ -20,7 +20,7 @@ child of the host — it now sits inside a positioned
 observable: `parameter:change` and `layer:visibility` renderer events,
 forwarded as `ml-map:parameter-change` / `ml-map:layer-visibility`.
 Toggles made before the layer chain settles are deferred and applied when
-layers land. On eject nothing changes —
+layers land. On export nothing changes —
 parameters remain declared-absent and state defaults inline below the
-runtime floor. Three more gallery pages flip to Pure YAML (time slider,
+runtime floor. Three more gallery pages flip to YAML (time slider,
 global-state symbol filter, color buttons — census 59).

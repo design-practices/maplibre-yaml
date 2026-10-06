@@ -1,5 +1,5 @@
 /**
- * @file The Mapzen-classic static presets (U10′): each is its own eject
+ * @file The Mapzen-classic static presets (U10′): each is its own export
  *
  * The gallery's crosshatch and blueprint documents are pure style spec, so
  * the static preset IS the fallback. This suite pins that claim from the

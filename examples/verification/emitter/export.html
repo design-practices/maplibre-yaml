@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Eject: a compiled style renders in vanilla MapLibre</title>
+    <title>Export: a compiled style renders in vanilla MapLibre</title>
     <!--
-    The eject guarantee, made visible. A v1 document is compiled to a
+    The export guarantee, made visible. A v1 document is compiled to a
     style.json by the emitter, and that style is handed to a PLAIN
     `new maplibregl.Map({ style })` — no <ml-map>, no runtime from this
     library. If the compiled artifact is self-contained and spec-valid, the map
@@ -108,7 +108,7 @@ layers:
           style: result.style,
         });
         // Expose for the test harness.
-        window.__ejectMap = map;
+        window.__exportMap = map;
         window.__emittedStyle = result.style;
       } catch (err) {
         out.textContent = "COMPILE FAILED:\n" + (err?.message ?? String(err));

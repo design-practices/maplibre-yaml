@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
 # Gallery twin of https://maplibre.org/maplibre-gl-js/docs/examples/sky-fog-terrain/
 # The sky values are upstream's initial picker settings, declared once. The
-# pickers that re-call setSky live are JS territory; the look is pure YAML.
+# pickers that re-call setSky live are page JavaScript; the look is YAML.
 type: map
 id: sky-fog-terrain
 config:

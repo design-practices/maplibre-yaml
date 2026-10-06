@@ -4,7 +4,7 @@
  *
  * @description
  * The house registry pattern (`ExtensionRegistry`, `InteractionRegistry`,
- * `EjectClassRegistry`): instance-based, `Map`-backed, register throws on a
+ * `ExportClassRegistry`): instance-based, `Map`-backed, register throws on a
  * duplicate. Registration is also where the effect contract is enforced —
  * a missing `fallback` or a malformed definition fails loudly at the call
  * site, not at the first frame on some user's map.
@@ -43,7 +43,7 @@ export class EffectRegistry {
     if (typeof definition.fallback !== "function") {
       throw new Error(
         `[effects] effect "${type}" has no fallback(): every effect must say what ` +
-          "it ejects to (return the layer to keep it, null to declare absence)."
+          "it exports to (return the layer to keep it, null if it doesn't export)."
       );
     }
     if (!definition.backend || typeof definition.backend.attach !== "function") {

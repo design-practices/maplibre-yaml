@@ -1,5 +1,5 @@
 /**
- * Loader for the escape-hatch twins (see twin.html).
+ * Loader for the YAML + JavaScript twins (see twin.html).
  *
  * Order matters and mirrors a real page:
  *  1. page chrome goes INSIDE <ml-map> before the element renders, so its

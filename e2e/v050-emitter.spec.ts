@@ -5,7 +5,7 @@
  * The unit suites prove the emitted style passes `validateStyleMin`. That is
  * necessary but not the claim: the claim is that a compiled document renders in
  * *vanilla* MapLibre with nothing from this library involved. Only a real map
- * proves that, and the same page a user opens to see the eject guarantee is the
+ * proves that, and the same page a user opens to see the export guarantee is the
  * page this test drives.
  *
  * The `!html` spec is the trust model made observable: one document, two
@@ -33,14 +33,14 @@ async function guard(page: Page): Promise<string[]> {
   return errors;
 }
 
-test.describe("eject: a compiled style renders in vanilla MapLibre", () => {
+test.describe("export: a compiled style renders in vanilla MapLibre", () => {
   test("the emitted style is self-contained and renders", async ({ page }) => {
     const errors = await guard(page);
-    await page.goto(`${PAGES}/eject.html`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${PAGES}/export.html`, { waitUntil: "domcontentloaded" });
 
     // A plain maplibregl.Map over the compiled style — no <ml-map> on the page.
     await expect(page.locator("ml-map")).toHaveCount(0);
-    await page.waitForFunction(() => (window as any).__ejectMap?.isStyleLoaded?.(), undefined, {
+    await page.waitForFunction(() => (window as any).__exportMap?.isStyleLoaded?.(), undefined, {
       timeout: 30_000,
     });
 

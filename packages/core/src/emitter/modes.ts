@@ -140,7 +140,7 @@ function gateScene(result: EmitResult, policy: CapabilityPolicy): EmitResult {
       path: "projection",
       kind: "lossy",
       construct: "projection",
-      ejectClass: "ejects",
+      exportClass: "exports",
       message:
         `\`projection: globe\` needs maplibre-gl ${GLOBE_RUNTIME_FLOOR} or later; the ` +
         `target is ${policy.target}, which renders the emitted style in mercator.`,
@@ -151,7 +151,7 @@ function gateScene(result: EmitResult, policy: CapabilityPolicy): EmitResult {
       path: "sky",
       kind: "lossy",
       construct: "sky",
-      ejectClass: "ejects",
+      exportClass: "exports",
       message:
         `\`sky:\` needs maplibre-gl ${SKY_RUNTIME_FLOOR} or later; the target is ` +
         `${policy.target}, which renders the emitted style without sky or fog.`,
@@ -181,7 +181,7 @@ function gateLayerTypes(result: EmitResult, policy: CapabilityPolicy): EmitResul
       path: `layers.${String(layer["id"])}`,
       kind: "lossy",
       construct: "color-relief",
-      ejectClass: "ejects",
+      exportClass: "exports",
       message:
         `\`color-relief\` layers need maplibre-gl ${COLOR_RELIEF_RUNTIME_FLOOR} or later; ` +
         `the target is ${policy.target}, which rejects the layer type — the map ` +

@@ -2,8 +2,8 @@
 /**
  * @file `mlym`, with the docs site's own origin served from `docs/public`.
  *
- * The launch page's ejected panes are `mlym emit --with-fallbacks` output,
- * produced at docs build time (see classics-eject.mjs). The classic
+ * The launch page's exported panes are `mlym emit --with-fallbacks` output,
+ * produced at docs build time (see classics-export.mjs). The classic
  * documents name their textures by their deployed URLs
  * (https://docs.maplibre-yaml.org/classics/...), because emit fetches
  * images at compile time and a downloaded document must work anywhere.

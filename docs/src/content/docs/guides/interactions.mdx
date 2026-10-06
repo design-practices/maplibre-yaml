@@ -1,6 +1,6 @@
 ---
-title: Interactions & Eject
-description: Declarative interactions, the eject guarantee, and reattaching behavior with attachInteractions
+title: Interactions & Export to style.json
+description: Declarative interactions, the export guarantee, and reattaching behavior with attachInteractions
 ---
 
 import { Aside } from "@astrojs/starlight/components";
@@ -13,8 +13,8 @@ MapLibre style can hold behavior.
 
 This guide is about what that means in practice: how the declarative
 interactions are authored (a recap), why a compiled style is inert on its own
-(the **eject guarantee**), and how `attachInteractions` wires the behavior back
-onto any map so your interactions survive eject.
+(the **export guarantee**), and how `attachInteractions` wires the behavior back
+onto any map so your interactions survive export.
 
 ## Declarative interactions, in one recap
 
@@ -67,12 +67,12 @@ This is only a recap. Every field, its defaults, and the `emit` interaction are
 documented in full in the [Interactivity schema
 reference](/schema/interactivity/).
 
-## The eject guarantee
+## The export guarantee
 
 `projectStyle(model)` compiles your document into a self-contained, spec-valid
 `style.json`. That artifact renders anywhere MapLibre runs — vanilla
 maplibre-gl, maplibre-native, a third-party tool that eats style JSON — with
-nothing from this library present at runtime. That is the eject guarantee: your
+nothing from this library present at runtime. That is the export guarantee: your
 map is not locked to `<ml-map>`.
 
 The other half of the guarantee is the honest half: **the compiled style is
@@ -105,7 +105,7 @@ new maplibregl.Map({ container: "map", style });
 
 <Aside type="tip">
   This is not a claim — it is a tested proof. The fixture
-  `examples/verification/emitter/eject.html` hands a compiled style to a plain
+  `examples/verification/emitter/export.html` hands a compiled style to a plain
   `new maplibregl.Map({ style })` and asserts it renders with no
   `runtime`/`interactive` keys left behind. It is driven end-to-end by
   `e2e/v050-emitter.spec.ts`.
@@ -113,10 +113,10 @@ new maplibregl.Map({ container: "map", style });
 
 ## Reattachment: `attachInteractions`
 
-If the compiled style is inert, how do interactions survive eject? You wire them
+If the compiled style is inert, how do interactions survive export? You wire them
 back on. `attachInteractions(map, projection, options)` takes the declarative
 projection your document produced and binds the built-in handlers onto **any**
-`maplibregl.Map` — a map rendering a compiled/ejected style, *or* a map a host
+`maplibregl.Map` — a map rendering a compiled/exported style, *or* a map a host
 built entirely itself with its own sources and layers. No `<ml-map>` is
 involved.
 
@@ -237,7 +237,7 @@ reference](/schema/interactivity/#emit).
 
 - [Interactivity reference](/schema/interactivity/) — every interaction field,
   the full `emit` payload vocabulary, and the deprecated `action` key
-- [Format v2](/guides/format-v2/) — the style/runtime split that makes the eject
+- [Format v2](/guides/format-v2/) — the style/runtime split that makes the export
   boundary legible
 - [Working with Layers](/guides/layers/) — the paint, layout, and filter that
   compile straight through to `style.json`

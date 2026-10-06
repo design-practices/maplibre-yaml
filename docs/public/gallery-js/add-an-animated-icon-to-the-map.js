@@ -1,4 +1,4 @@
-// The escape hatch: a StyleImageInterface. Instead of fixed pixels,
+// The JavaScript half: a StyleImageInterface. Instead of fixed pixels,
 // addImage() gets an object whose render() MapLibre calls before every
 // frame that uses the icon; it redraws a canvas, copies the pixels into
 // `data`, asks for another frame and returns true ("I changed").

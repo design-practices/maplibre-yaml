@@ -18,11 +18,11 @@ Replicates the MapLibre example [Use addProtocol to transform feature properties
 
 <Code code={config} lang="yaml" title="use-addprotocol-to-transform-feature-properties.yaml" />
 
-## The escape hatch
+## The JavaScript half
 
 <Code code={hatchJs} lang="js" title="use-addprotocol-to-transform-feature-properties.js" />
 
 ## What to notice
 
 - The import path matters: `@maplibre-yaml/core/maplibre` is the exact module `<ml-map>` renders with, so the protocol lands where the document's requests go. See [PMTiles source and protocol](/examples/gallery/pmtiles-source-and-protocol/).
-- Upstream transforms *vector tiles*, decoding them with `@mapbox/vector-tile` and re-encoding with `vt-pbf`; the protocol hatch is identical, only the payload differs.
+- Upstream transforms *vector tiles*, decoding them with `@mapbox/vector-tile` and re-encoding with `vt-pbf`; the protocol code is identical, only the payload differs.

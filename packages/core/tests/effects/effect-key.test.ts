@@ -2,7 +2,7 @@
  * @file The experimental `effect:` layer key in core (U13′, ml-vw4.2)
  *
  * @description
- * Core owns the key's schema, its eject class, and its emit lowering, but
+ * Core owns the key's schema, its export class, and its emit lowering, but
  * never the effects package: everything here runs against a fake host
  * registered through the same hook `@maplibre-yaml/effects/register` uses.
  */
@@ -185,7 +185,7 @@ describe("emit lowering (layer.effect, class fallback)", () => {
     expect(fx[0]).toMatchObject({
       path: "layers.buildings.effect",
       kind: "lossy",
-      ejectClass: "fallback",
+      exportClass: "exports-with-fallback",
     });
     expect(fx[0]!.message).toMatch(/tonal-hatch/);
     const layers = result.style["layers"] as Record<string, unknown>[];
@@ -212,7 +212,7 @@ describe("emit lowering (layer.effect, class fallback)", () => {
     expect(layers[0]!.paint["fill-extrusion-color"]).toBe("#000000");
   });
 
-  it("a fallback returning null declares absence: the layer is dropped, still lossy", () => {
+  it("a fallback returning null doesn't export: the layer is dropped, still lossy", () => {
     registerEffectsHost(fakeHost({ lower: () => null }));
     const result = projectStyle(model(), "with-fallbacks");
     expect(result.style["layers"]).toEqual([]);

@@ -1,4 +1,4 @@
-// The escape hatch: MapLibre asks the page for an image it doesn't have,
+// The JavaScript half: MapLibre asks the page for an image it doesn't have,
 // and the page paints it. The colour is parsed from the requested name
 // itself, so any `square-rgb-r,g,b` works.
 //

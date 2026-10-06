@@ -1,4 +1,4 @@
-// The escape hatch: a requestAnimationFrame loop calling rotateTo with
+// The JavaScript half: a requestAnimationFrame loop calling rotateTo with
 // duration 0, so the bearing tracks the clock (~10 degrees a second).
 // Upstream also strips the basemap's text labels for a cleaner orbit —
 // the basemap is the style's, not the document's, so that is JS too.

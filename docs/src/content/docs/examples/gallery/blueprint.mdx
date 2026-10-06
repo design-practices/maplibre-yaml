@@ -1,6 +1,6 @@
 ---
 title: Blueprint
-description: "Classic-style example — a drafting-sheet city as a pure style-spec document that is its own eject"
+description: "Classic-style example — a drafting-sheet city as a pure style-spec document that is its own export"
 ---
 
 import LiveMap from '../../../../components/LiveMap.astro';
@@ -19,7 +19,7 @@ extrusions.
 
 Like [Crosshatch](/examples/gallery/crosshatch/), this page is the
 **static tier**. It is one plain style-spec document, so it is its own
-eject: `mlym emit --strict` compiles it with zero warnings, and the emitted
+export: `mlym emit --strict` compiles it with zero warnings, and the emitted
 `style.json` renders the same map in vanilla MapLibre. The only baked asset
 is the grid, which `mlym bake blueprint --out <dir>` regenerates.
 
@@ -28,7 +28,7 @@ is the grid, which `mlym bake blueprint --out <dir>` regenerates.
 The experimental `blueprint` [effect](/guides/effects/) draws a
 metre-scaled grid on every building face, so the lines never stretch with
 building height, and gives the edges a glow. It upgrades the `buildings`
-layer in place. Where the effect isn't loaded, and in every ejected style,
+layer in place. Where the effect isn't loaded, and in every exported style,
 the flat-shaded buildings shown here are the fallback. The
 [Mapzen classics](/examples/classics/) page shows both side by side.
 
@@ -39,7 +39,7 @@ the flat-shaded buildings shown here are the fallback. The
 ## What to notice
 
 - **`background-pattern`.** The grid is a declared image repeated across
-  the whole sheet. On eject it becomes the `mlym:grid` sprite entry.
+  the whole sheet. On export it becomes the `mlym:grid` sprite entry.
 - **One source, five looks.** Water fill and shoreline line both read the
   `water` source-layer. Parks are drawn only as dashed outlines.
 - **No `light:` needed.** The buildings use the default light, which

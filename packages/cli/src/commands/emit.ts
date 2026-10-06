@@ -2,7 +2,7 @@
  * @file The `mlym emit` command — compile a document to a standalone style.json
  *
  * @description
- * The eject path, at the command line. A `map` document goes in; a self-contained
+ * The export path, at the command line. A `map` document goes in; a self-contained
  * MapLibre style comes out — one that opens in Maputnik and renders in vanilla
  * `maplibre-gl` on a machine that has never heard of this library.
  *
@@ -100,8 +100,8 @@ export async function emitStyle(
     const lossy = projected.warnings.filter((w) => w.kind === 'lossy');
     if (lossy.length > 0) {
       throw new EmitError(
-        `Emit failed in strict mode: ${lossy.length} item(s) could not be represented ` +
-          'without changing what the map shows.',
+        `Export failed in strict mode: ${lossy.length} item(s) could not be exported ` +
+          'to style.json without changing what the map shows.',
         projected.warnings,
       );
     }
@@ -126,8 +126,8 @@ export async function emitStyle(
     const lossy = merged.warnings.filter((w) => w.kind === 'lossy');
     if (lossy.length > 0) {
       throw new EmitError(
-        `Emit failed in strict mode: ${lossy.length} item(s) could not be represented ` +
-          'without changing what the map shows.',
+        `Export failed in strict mode: ${lossy.length} item(s) could not be exported ` +
+          'to style.json without changing what the map shows.',
         merged.warnings,
       );
     }
@@ -175,7 +175,7 @@ export const emitCommand = defineCommand({
   meta: {
     name: 'emit',
     description:
-      'Compile a map document to a standalone, spec-valid style.json',
+      'Export a map document to a standalone, spec-valid style.json',
   },
   args: {
     file: {
@@ -186,12 +186,12 @@ export const emitCommand = defineCommand({
     strict: {
       type: 'boolean',
       description:
-        'Fail if any content cannot be represented without changing the map',
+        'Fail if anything cannot export to style.json without changing the map',
     },
     'with-fallbacks': {
       type: 'boolean',
       description:
-        'Degrade unrepresentable content and warn (the default)',
+        'Export with a fallback where needed, and warn (the default)',
     },
     target: {
       type: 'string',
@@ -227,7 +227,7 @@ export const emitCommand = defineCommand({
     }
 
     // Only a `map` document compiles: scrollytelling and the pages format sit
-    // outside the eject claim by design, so reject them here rather than
+    // outside the export claim by design, so reject them here rather than
     // producing a partial style.
     const parsed = YAMLParser.safeParseMapBlock(contents);
     if (!parsed.success) {
@@ -283,7 +283,7 @@ export const emitCommand = defineCommand({
     // DIRECTORY (style + sprite files), and MapLibre rejects relative sprite
     // URLs — so both --out and --sprite-base are hard requirements here.
     // Emitting a style whose sprite can never resolve would violate the
-    // eject guarantee while looking like success.
+    // export guarantee while looking like success.
     const assetArgsError = spriteAssetArgsError(
       assets,
       args.out as string | undefined,

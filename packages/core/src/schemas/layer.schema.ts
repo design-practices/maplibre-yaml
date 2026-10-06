@@ -451,7 +451,7 @@ export type LegendItem = z.infer<typeof LegendItemSchema>;
  * @remarks
  * Names a registered effect by `type`; every other key is a param (flat,
  * KTD6). The layer it sits on is the effect's static fallback: without the
- * effects package the layer renders as authored, and `mlym emit` ejects it
+ * effects package the layer renders as authored, and `mlym emit` exports it
  * with one `lossy` warning per effect.
  *
  * When `@maplibre-yaml/effects` is loaded, the params validate against the

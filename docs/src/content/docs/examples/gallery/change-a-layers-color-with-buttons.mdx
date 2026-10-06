@@ -17,6 +17,6 @@ Replicates the MapLibre example [Change a layer's color with buttons](https://ma
 
 ## What to notice
 
-- This page used to be an escape hatch (`getMap().setPaintProperty` behind swatch buttons); the params panel made it pure YAML.
+- This page used to need page JavaScript (`getMap().setPaintProperty` behind swatch buttons); the params panel made it YAML only.
 - Any paint property can read `global-state` on maplibre-gl ≥ 5.6 — the select writes the state key, the expression does the rest.
 - The `region:` sugar still carries the polygon — sugar and parameters compose.

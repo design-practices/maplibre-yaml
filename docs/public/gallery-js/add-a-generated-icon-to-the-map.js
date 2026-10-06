@@ -1,4 +1,4 @@
-// The escape hatch: map.addImage() with raw pixels. A 64×64 RGBA buffer
+// The JavaScript half: map.addImage() with raw pixels. A 64×64 RGBA buffer
 // becomes the image "gradient" (red down, green across); then the layer
 // the YAML declared hidden is shown through <ml-map>'s setLayerVisibility.
 const mapEl = document.querySelector("ml-map");

@@ -5,7 +5,7 @@
  * @description
  * Every case ends at MapLibre's own validator where it can. Asserting on the
  * projected object proves what we think we built; asserting `validateStyleMin`
- * returns clean proves MapLibre agrees, and that is the claim the eject
+ * returns clean proves MapLibre agrees, and that is the claim the export
  * guarantee actually makes.
  */
 

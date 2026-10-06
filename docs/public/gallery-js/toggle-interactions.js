@@ -1,4 +1,4 @@
-// The escape hatch: the map's interaction handlers, switched at runtime.
+// The JavaScript half: the map's interaction handlers, switched at runtime.
 // Each checkbox is named after a handler (map.scrollZoom, map.dragPan, …)
 // and one delegated listener enables or disables it.
 const mapEl = document.querySelector("ml-map");

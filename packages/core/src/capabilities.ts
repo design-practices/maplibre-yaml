@@ -135,7 +135,7 @@ export function allowsHtml(policy: CapabilityPolicy): boolean {
  * exactly `trust: "trusted"`. An untrusted document that names an event finds
  * the gate shut and the interaction inert, so a projected-for-an-untrusted-room
  * artifact carries no live callback into the page. There is no `allowHostHook`
- * escape hatch on purpose: an author who could set it could also set
+ * override on purpose: an author who could set it could also set
  * `trust: "trusted"`, and collapsing the two keeps one dial instead of two that
  * can disagree.
  */

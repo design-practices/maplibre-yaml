@@ -27,7 +27,7 @@ describe("EffectRegistry (house registry pattern)", () => {
     expect(() => r.register(minimal())).toThrow(/already registered/);
   });
 
-  it("refuses an effect without a fallback (mandatory eject lowering)", () => {
+  it("refuses an effect without a fallback (mandatory export lowering)", () => {
     const r = new EffectRegistry();
     expect(() => r.register(minimal({ fallback: undefined as never }))).toThrow(/no fallback\(\)/);
   });
@@ -47,7 +47,7 @@ describe("EffectRegistry (house registry pattern)", () => {
     for (const def of [tonalHatch, blueprint]) {
       expect(def.backend).toBe(backends.extrusions);
       expect(def.animated).toBe(false);
-      // eject: the static layer ships as authored
+      // export: the static layer ships as authored
       const layer = { id: "b", type: "fill-extrusion" };
       expect(def.fallback(def.params.parse({}) as never, layer)).toBe(layer);
     }

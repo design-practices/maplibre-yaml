@@ -19,7 +19,7 @@
  * ## Strictness (Decision D8)
  * The emitted schemas describe the **strict** shape: enumerated object nodes
  * get `additionalProperties: false` plus a `patternProperties: {"^x-": {}}`
- * escape hatch for `x-*` extension keys, so editors flag typo'd block/layer
+ * allowance for `x-*` extension keys, so editors flag typo'd block/layer
  * keys while `x-*` extensions stay legal.
  *
  * The Zod `.passthrough()` objects — `MapConfigSchema` (arbitrary MapLibre GL

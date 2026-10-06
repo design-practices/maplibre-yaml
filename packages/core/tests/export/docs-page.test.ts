@@ -1,5 +1,5 @@
 /**
- * @file The eject-classes docs page cannot drift from the registry (U3, R6)
+ * @file The export-classes docs page cannot drift from the registry (U3, R6)
  *
  * @description
  * The docs table is hand-written prose; this test is what makes it a
@@ -14,19 +14,19 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ejectClasses } from "../../src/eject/registrations";
+import { exportClasses } from "../../src/export/registrations";
 
 const DOCS_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../../../docs");
-const PAGE = join(DOCS_ROOT, "src/content/docs/guides/eject-classes.mdx");
+const PAGE = join(DOCS_ROOT, "src/content/docs/guides/export-classes.mdx");
 
-/** The docs table's human wording for each class. */
+/** The docs table's Class-column wording for each class (backticked, so `exports` is not a substring match of `exports-with-fallback`). */
 const CLASS_LABEL: Record<string, string> = {
-  ejects: "ejects",
-  fallback: "ejects via fallback",
-  "declared-absence": "declared absence",
+  exports: "`exports`",
+  "exports-with-fallback": "`exports-with-fallback`",
+  "no-export": "`no-export`",
 };
 
-describe("docs/guides/eject-classes.mdx mirrors the registry", () => {
+describe("docs/guides/export-classes.mdx mirrors the registry", () => {
   it.skipIf(!existsSync(DOCS_ROOT))(
     "names every registered construct with its registered class",
     () => {
@@ -38,7 +38,7 @@ describe("docs/guides/eject-classes.mdx mirrors the registry", () => {
         .split("\n")
         .filter((line) => line.trim().startsWith("|"));
 
-      for (const [construct, definition] of ejectClasses.entries()) {
+      for (const [construct, definition] of exportClasses.entries()) {
         const row = rows.find((line) => line.includes(`\`${construct}\``));
         expect(row, `docs table has no row naming \`${construct}\``).toBeDefined();
         expect(

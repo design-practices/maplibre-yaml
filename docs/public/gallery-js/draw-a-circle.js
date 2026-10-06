@@ -1,4 +1,4 @@
-// The escape hatch: compute geometry in the page, hand it to the layer.
+// The JavaScript half: compute geometry in the page, hand it to the layer.
 // circle() is what turf.circle does — 64 points at a fixed great-circle
 // distance from the centre — and updateLayerData() fills the (initially
 // empty) source both YAML layers share. The slider recomputes it live.

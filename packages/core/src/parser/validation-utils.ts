@@ -518,7 +518,7 @@ function walk(
             : null;
 
       for (const key of Object.keys(value)) {
-        if (key.startsWith("x-")) continue; // extension escape hatch
+        if (key.startsWith("x-")) continue; // x-* extension keys are always allowed
         const fieldSchema = shape[key];
         if (fieldSchema) {
           walk(value[key], fieldSchema, [...path, key], ctx);

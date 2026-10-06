@@ -1,24 +1,24 @@
 /**
- * @file Eject lowering for `effect:` — an effect ejects to its static layer
+ * @file Export lowering for `effect:` — an effect exports to its static layer
  * @module @maplibre-yaml/core/emitter
  *
  * @description
- * **Experimental** (0.7). An effect is a fallback-class construct whose
+ * **Experimental** (0.7). An effect is an exports-with-fallback construct whose
  * fallback is, by construction, the layer it sits on: the author wrote a
  * complete static layer and the effect enhances it at runtime. So the
  * lowering is usually "ship the layer as authored", with one `lossy`
- * warning — the ejected map is not the map the effect draws, which is
+ * warning — the exported map is not the map the effect draws, which is
  * exactly what `--strict` exists to refuse.
  *
  * A registered effect may refine that through its `fallback(params, layer)`
  * (exposed to core as {@link EffectsHost.lower}): return an adjusted layer,
- * or `null` to declare absence (the layer is dropped from the emitted
+ * or `null` when the layer doesn't export (it is dropped from the emitted
  * style, still reported as lossy). The hook only runs where the effects
  * package is loaded — `mlym emit` does not load it, so the CLI always ships
  * the layer as authored; built-in effects' fallbacks are the identity, so
  * both paths agree for them.
  *
- * Both the projection and the `layer.effect` eject-class registration call
+ * Both the projection and the `layer.effect` export-class registration call
  * {@link lowerEffectLayer}, so the two cannot drift (the markers precedent).
  */
 
@@ -34,8 +34,8 @@ export interface EffectLowering {
 
 /** The registration's author-facing sentence (also used in the warning). */
 export const EFFECT_ON_EMIT =
-  "Effects are runtime shaders with no style.json form; the emitted style " +
-  "carries the layer's own static style (its fallback) instead — lossy, so " +
+  "Effects are runtime shaders with no style.json form, so the layer exports " +
+  "with a fallback: the emitted style carries its own static style instead — lossy, so " +
   "--strict refuses it.";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -62,7 +62,7 @@ export function lowerEffectLayer(
     path,
     kind: "lossy" as const,
     construct: "layer.effect",
-    ejectClass: "fallback" as const,
+    exportClass: "exports-with-fallback" as const,
   };
 
   const host = getEffectsHost();

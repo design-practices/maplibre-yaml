@@ -53,7 +53,7 @@ describe('emitStyle', () => {
     const sources = style['sources'] as Record<string, Record<string, unknown>>;
     expect(sources['parcels']).not.toHaveProperty('refresh');
     // The source had compile-time data, so its live-data loss is a contract
-    // warning — per construct since the eject-class registry (U3), with the
+    // warning — per construct since the export-class registry (U3), with the
     // machine-readable construct field.
     expect(
       warnings.some(
