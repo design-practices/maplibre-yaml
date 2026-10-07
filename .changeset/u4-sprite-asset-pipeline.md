@@ -3,7 +3,7 @@
 "@maplibre-yaml/cli": minor
 ---
 
-The sprite/asset pipeline (R7) — shared infrastructure for every construct
+The sprite/asset pipeline — shared infrastructure for every construct
 that exports via generated raster assets (marker pins, pattern presets, effect
 fallbacks). Core describes: deterministic SVG asset descriptors with
 content-hashed names (`fx-hatch-45-8-a1b2c3d4`), a name-sorted sprite-index

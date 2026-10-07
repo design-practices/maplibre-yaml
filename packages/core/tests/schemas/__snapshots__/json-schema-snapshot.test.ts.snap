@@ -3353,7 +3353,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   },
                   "spinGlobe": {
                     "type": "boolean",
-                    "description": "Not implemented (warns, no effect). Globe projection itself is the map-level \`projection: { type: globe }\`"
+                    "description": "Slowly pan the camera westward while this chapter is active (paused under prefers-reduced-motion). Globe projection itself is the map-level \`projection:\`"
                   },
                   "alignment": {
                     "type": "string",
@@ -10862,7 +10862,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "spinGlobe": {
                                 "type": "boolean",
-                                "description": "Not implemented (warns, no effect). Globe projection itself is the map-level \`projection: { type: globe }\`"
+                                "description": "Slowly pan the camera westward while this chapter is active (paused under prefers-reduced-motion). Globe projection itself is the map-level \`projection:\`"
                               },
                               "alignment": {
                                 "type": "string",
@@ -13892,7 +13892,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
               },
               "spinGlobe": {
                 "type": "boolean",
-                "description": "Not implemented (warns, no effect). Globe projection itself is the map-level \`projection: { type: globe }\`"
+                "description": "Slowly pan the camera westward while this chapter is active (paused under prefers-reduced-motion). Globe projection itself is the map-level \`projection:\`"
               },
               "alignment": {
                 "type": "string",

@@ -691,30 +691,6 @@ function checkDeprecations(
  * the schema told them exists. Delete the entry when the feature lands.
  */
 const UNIMPLEMENTED: DeprecationRule[] = [
-  ...["spinGlobe", "rotateAnimation", "callback"].map((field) => ({
-    field,
-    applies: (_value: Record<string, unknown>, path: (string | number)[]) =>
-      path[path.length - 2] === "chapters",
-    message:
-      `Chapter "${field}" is accepted by the schema but not implemented — ` +
-      `it currently has no effect.`,
-  })),
-  {
-    field: "action",
-    applies: (value: Record<string, unknown>, path: (string | number)[]) => {
-      const parent = path[path.length - 2];
-      return (
-        (parent === "onChapterEnter" || parent === "onChapterExit") &&
-        typeof value.action === "string" &&
-        ["fitBounds", "custom", "flyTo", "easeTo"].includes(value.action)
-      );
-    },
-    message:
-      `Chapter action values "fitBounds", "custom", "flyTo", and "easeTo" ` +
-      `are accepted by the schema but not implemented — only "setFilter", ` +
-      `"setPaintProperty", and "setLayoutProperty" run. This action ` +
-      `currently has no effect.`,
-  },
   {
     // `effect:` (0.7, experimental) is validated and rendered by the
     // optional @maplibre-yaml/effects package. Without it the document is
