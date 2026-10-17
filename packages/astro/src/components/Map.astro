@@ -53,8 +53,8 @@
 
 import type { MapProps } from "../types";
 import { withBase } from "../utils/base-url";
-// MapLibre's stylesheet as PAGE css, imported here rather than in the client
-// <script>: Astro then links it in the page <head> in dev and build alike.
+// MapLibre's stylesheet as PAGE css, imported here rather than in the
+// client script: Astro then links it in the page head in dev and build alike.
 // From the script, astro dev injected it with JS as a <style> the server
 // never rendered, and <ClientRouter />'s head swap dropped it after the first
 // soft navigation -- controls and attribution fell out of the map (ml-aot.22).
