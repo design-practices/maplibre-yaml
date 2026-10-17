@@ -45,7 +45,7 @@ Map configuration defines the initial view, interaction settings, controls, and 
 config:
   center: [-74.006, 40.7128]
   zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ## Runtime state and parameters
@@ -61,19 +61,32 @@ id: massing
 state:
   scenario:
     default: built
+parameters:
+  scenario:
+    label: Massing scenario
+    type: enum
+    values: [built, flat]
 config:
-  center: [-73.98, 40.75]
-  zoom: 12
+  center: [-73.985, 40.748]
+  zoom: 15.5
+  pitch: 55
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+sources:
+  omt:
+    type: vector
+    url: "https://tiles.openfreemap.org/planet"
 layers:
   - id: buildings
     type: fill-extrusion
-    source: parcels
+    source: omt
+    source-layer: building
     paint:
+      fill-extrusion-color: "#9ca3af"
       fill-extrusion-height:
         - case
         - ["==", ["global-state", "scenario"], "built"]
-        - ["get", "built_height"]
-        - ["get", "zoned_height"]
+        - ["coalesce", ["get", "render_height"], 10]
+        - 3
 ```
 
 `parameters:` carries the presentation metadata a control UI needs to render a
@@ -85,7 +98,7 @@ parameters:
   scenario:
     label: Massing scenario
     type: enum
-    values: [built, potential]
+    values: [built, flat]
 ```
 
 Declaring `parameters:` renders the built-in **params panel** (top-right, in
@@ -136,6 +149,7 @@ id: pins
 config:
   center: [-73.98, 40.75]
   zoom: 12
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 markers:
   - at: [-73.985, 40.748]
     color: "#e63946"
@@ -171,6 +185,7 @@ id: hello
 config:
   center: [-96, 37.8]
   zoom: 3
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 popups:
   - at: [-96, 37.8]
     closeOnClick: false
@@ -204,19 +219,44 @@ options object:
 type: map
 id: iconic
 config:
-  center: [0, 0]
-  zoom: 2
+  center: [-73.98, 40.75]
+  zoom: 12
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 images:
-  poi: https://example.com/poi.png
-  arrow:
-    url: https://example.com/arrow.png
+  logo: "https://maplibre.org/maplibre-gl-js/docs/assets/osgeo-logo.png"
+  pin:
+    url: "https://maplibre.org/maplibre-gl-js/docs/assets/custom_marker.png"
     sdf: true
+sources:
+  pts:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry: { type: Point, coordinates: [-74.0, 40.76] }
+          properties: { kind: logo }
+        - type: Feature
+          geometry: { type: Point, coordinates: [-73.96, 40.74] }
+          properties: { kind: pin }
 layers:
-  - id: spots
+  - id: logos
     type: symbol
     source: pts
+    filter: ["==", ["get", "kind"], "logo"]
     layout:
-      icon-image: poi
+      icon-image: logo
+      icon-size: 1.5
+      icon-allow-overlap: true
+  - id: pins
+    type: symbol
+    source: pts
+    filter: ["==", ["get", "kind"], "pin"]
+    layout:
+      icon-image: pin
+      icon-allow-overlap: true
+    paint:
+      icon-color: "#e63946"   # sdf: true makes the image tintable
 ```
 
 Live, every image loads **before** layers are added, so references resolve
@@ -261,7 +301,7 @@ config:
   zoom: 12
   pitch: 70
   maxPitch: 85
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 sources:
   terrainSource:
     type: raster-dem
@@ -368,10 +408,23 @@ config:
   center: [-74.0118, 40.7075]
   zoom: 15.9
   pitch: 60
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 light:
   anchor: map
   position: [1.15, 239, 30]
   intensity: 0.5
+sources:
+  omt:
+    type: vector
+    url: "https://tiles.openfreemap.org/planet"
+layers:
+  - id: buildings
+    type: fill-extrusion
+    source: omt
+    source-layer: building
+    paint:
+      fill-extrusion-color: "#e5e7eb"
+      fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
 ```
 
 The object is closed: an unknown key is a validation error, not a silently
@@ -402,7 +455,7 @@ config:
   zoom: 15
   pitch: 60
   bearing: 30
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 #### Fit to Bounds
@@ -412,7 +465,7 @@ config:
   center: [-74.006, 40.7128]  # Fallback center
   zoom: 12                     # Fallback zoom
   bounds: [-74.3, 40.5, -73.7, 40.9]  # [west, south, east, north]
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 #### Fit to a Source's Data
@@ -429,21 +482,25 @@ whatever that source holds.
 
 ```yaml
 type: map
-id: route
+id: alpine-countries
 config:
-  center: [-77.02, 38.89]   # Before the data arrives, and the fallback
-  zoom: 12
+  center: [0, 20]   # Before the data arrives, and the fallback
+  zoom: 2
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   fitTo:
-    source: route
+    source: countries
     padding: 20
 sources:
-  route:
+  countries:
     type: geojson
-    url: https://example.com/route.geojson
+    url: "https://docs.maplibre-yaml.org/gallery-assets/alpine-countries.geojson"
 layers:
-  - id: route
+  - id: borders
     type: line
-    source: route
+    source: countries
+    paint:
+      line-color: "#e63946"
+      line-width: 1.5
 ```
 
 - **Inline `data:`**: the map is constructed already framed, with no camera jump.
@@ -482,7 +539,7 @@ config:
   minZoom: 8
   maxZoom: 18
   maxBounds: [-74.3, 40.5, -73.7, 40.9]
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ## Interaction Settings
@@ -510,7 +567,7 @@ config:
   center: [-74.006, 40.7128]
   zoom: 12
   interactive: false
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ### Custom Interaction
@@ -524,7 +581,7 @@ config:
   dragRotate: false      # Disable rotation
   touchPitch: false      # Disable pitch on mobile
   doubleClickZoom: false # Disable double-click zoom
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ## Display Options
@@ -549,7 +606,7 @@ config:
   attributionControl: false       # Hide attribution
   logoPosition: bottom-right      # Move logo
   fadeDuration: 500               # Slower fade
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ## Rendering Options
@@ -574,7 +631,7 @@ config:
   antialias: true                 # Smoother rendering
   preserveDrawingBuffer: true     # Enable map.getCanvas().toDataURL()
   maxTileCacheSize: 100           # Cache more tiles
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ## Localization
@@ -593,7 +650,7 @@ config:
     "NavigationControl.ResetBearing": "Reset bearing"
     "NavigationControl.ZoomIn": "Zoom in"
     "NavigationControl.ZoomOut": "Zoom out"
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ## Map Controls
@@ -768,21 +825,26 @@ legend:
 
 ## Complete Examples
 
+These examples are written as entries in a [pages](/schema/pages/)
+document's `blocks:` list, so each starts with `- type: map` and is indented
+one level. To use one as a standalone file for `<ml-map src="…">`, delete the
+leading `- ` and remove two spaces from the start of every line.
+
 ### Basic Interactive Map
 
 ```yaml
 - type: map
   id: basic-map
   config:
-    center: [-74.006, 40.7128]
-    zoom: 12
-    mapStyle: "https://demotiles.maplibre.org/style.json"
+    center: [-120, 37]
+    zoom: 5
+    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   layers:
     - id: points
       type: circle
       source:
         type: geojson
-        url: "https://example.com/points.geojson"
+        url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
       paint:
         circle-radius: 8
         circle-color: "#3b82f6"
@@ -801,17 +863,17 @@ legend:
     zoom: 15
     pitch: 60
     bearing: -45
-    mapStyle: "https://demotiles.maplibre.org/style.json"
+    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   layers:
     - id: buildings
       type: fill-extrusion
       source:
         type: vector
-        url: "https://demotiles.maplibre.org/tiles/tiles.json"
+        url: "https://tiles.openfreemap.org/planet"
       source-layer: building
       paint:
         fill-extrusion-color: "#aaa"
-        fill-extrusion-height: ["get", "height"]
+        fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
         fill-extrusion-opacity: 0.8
   controls:
     navigation:
@@ -828,45 +890,45 @@ legend:
 - type: map
   id: constrained-map
   config:
-    center: [-74.006, 40.7128]
-    zoom: 12
-    minZoom: 8
-    maxZoom: 16
-    maxBounds: [-74.3, 40.5, -73.7, 40.9]
-    mapStyle: "https://demotiles.maplibre.org/style.json"
+    center: [-74.5, 41.5]
+    zoom: 6
+    minZoom: 5
+    maxZoom: 12
+    maxBounds: [-82, 37, -67, 46]
+    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   layers:
-    - id: zones
+    - id: states
       type: fill
       source:
         type: geojson
-        url: "https://example.com/zones.geojson"
+        url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
       paint:
         fill-color:
           - match
-          - ["get", "type"]
-          - "residential"
-          - "#fef3c7"
-          - "commercial"
-          - "#dbeafe"
-          - "industrial"
-          - "#f3e8ff"
+          - ["get", "STATE_NAME"]
+          - "New York"
+          - "#fde68a"
+          - "New Jersey"
+          - "#93c5fd"
+          - "Pennsylvania"
+          - "#d8b4fe"
           - "#e5e7eb"
         fill-opacity: 0.6
   controls:
     navigation: true
     scale: true
   legend:
-    title: "Zone Types"
+    title: "States"
     position: top-right
     items:
-      - color: "#fef3c7"
-        label: "Residential"
+      - color: "#fde68a"
+        label: "New York"
         shape: square
-      - color: "#dbeafe"
-        label: "Commercial"
+      - color: "#93c5fd"
+        label: "New Jersey"
         shape: square
-      - color: "#f3e8ff"
-        label: "Industrial"
+      - color: "#d8b4fe"
+        label: "Pennsylvania"
         shape: square
 ```
 
@@ -881,7 +943,7 @@ legend:
     zoom: 2
     interactive: false
     attributionControl: false
-    mapStyle: "https://demotiles.maplibre.org/style.json"
+    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   layers:
     - id: earthquakes
       type: circle
@@ -905,17 +967,17 @@ legend:
     pitch: 45
     bearing: 0
     hash: true
-    mapStyle: "https://demotiles.maplibre.org/style.json"
+    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   layers:
     - id: buildings
       type: fill-extrusion
       source:
         type: vector
-        url: "https://demotiles.maplibre.org/tiles/tiles.json"
+        url: "https://tiles.openfreemap.org/planet"
       source-layer: building
       paint:
         fill-extrusion-color: "#aaa"
-        fill-extrusion-height: ["get", "height"]
+        fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
   controls:
     navigation: true
     geolocate: true
@@ -929,7 +991,7 @@ Define a default map style once in global config:
 
 ```yaml
 config:
-  defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+  defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
 
 pages:
   - path: "/"
@@ -963,7 +1025,7 @@ import {
 const mapConfig: MapConfig = {
   center: [-74.006, 40.7128],
   zoom: 12,
-  mapStyle: "https://demotiles.maplibre.org/style.json",
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
   pitch: 45,
   bearing: 0
 };

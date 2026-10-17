@@ -27,27 +27,27 @@ renders them indistinguishably.
 ```yaml
 version: 2
 type: map
-id: parcels
+id: quakes
 style:
-  basemap: https://demotiles.maplibre.org/style.json
-  center: [-73.98, 40.75]
-  zoom: 11
+  basemap: https://tiles.openfreemap.org/styles/liberty
+  center: [-120, 37]
+  zoom: 4
   sources:
-    sites:
+    quakes:
       type: geojson
-      url: https://example.com/sites.geojson
+      url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson
       runtime:
         refresh:
           refreshInterval: 30000
   layers:
-    - id: sites
+    - id: quakes
       type: circle
-      source: sites
+      source: quakes
       paint:
-        circle-radius: 8
+        circle-radius: 6
         circle-color: "#dc2626"
       runtime:
-        label: "Sites"
+        label: "Earthquakes"
         toggleable: true
 runtime:
   controls:
@@ -59,25 +59,25 @@ runtime:
 
 ```yaml
 type: map
-id: parcels
+id: quakes
 config:
-  mapStyle: https://demotiles.maplibre.org/style.json
-  center: [-73.98, 40.75]
-  zoom: 11
+  mapStyle: https://tiles.openfreemap.org/styles/liberty
+  center: [-120, 37]
+  zoom: 4
 sources:
-  sites:
+  quakes:
     type: geojson
-    url: https://example.com/sites.geojson
+    url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson
     refresh:
       refreshInterval: 30000
 layers:
-  - id: sites
+  - id: quakes
     type: circle
-    source: sites
+    source: quakes
     paint:
-      circle-radius: 8
+      circle-radius: 6
       circle-color: "#dc2626"
-    label: "Sites"
+    label: "Earthquakes"
     toggleable: true
 controls:
   navigation: true
@@ -137,7 +137,9 @@ version: 2
 type: map
 id: chrome-demo
 style:
-  basemap: https://demotiles.maplibre.org/style.json
+  basemap: https://tiles.openfreemap.org/styles/liberty
+  center: [-73.98, 40.75]
+  zoom: 11
   layers: []
 runtime:
   map:
@@ -169,7 +171,9 @@ version: 2
 type: map
 id: live-quakes
 style:
-  basemap: https://demotiles.maplibre.org/style.json
+  basemap: https://tiles.openfreemap.org/styles/liberty
+  center: [-120, 37]
+  zoom: 4
   sources:
     quakes:
       type: geojson
@@ -202,32 +206,34 @@ compile straight through.
 ```yaml
 version: 2
 type: map
-id: interactive-sites
+id: interactive-quakes
 style:
-  basemap: https://demotiles.maplibre.org/style.json
+  basemap: https://tiles.openfreemap.org/styles/liberty
+  center: [-120, 37]
+  zoom: 4
   sources:
-    sites:
+    quakes:
       type: geojson
-      url: https://example.com/sites.geojson
+      url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson
   layers:
-    - id: sites
+    - id: quakes
       type: circle
-      source: sites
+      source: quakes
       paint:
-        circle-radius: 8
+        circle-radius: 6
         circle-color: "#dc2626"
       runtime:
-        label: "Sites"
+        label: "Earthquakes"
         toggleable: true
         legend:
           color: "#dc2626"
-          label: "Points of interest"
+          label: "Earthquake (past day)"
           shape: circle
         interactive:
           click:
             popup:
               - p:
-                  - str: "A point of interest"
+                  - property: title
 ```
 
 <Aside>
@@ -247,7 +253,9 @@ version: 2
 type: map
 id: parameterized
 style:
-  basemap: https://demotiles.maplibre.org/style.json
+  basemap: https://tiles.openfreemap.org/styles/liberty
+  center: [0, 20]
+  zoom: 1.5
   state:
     scenario:
       default: baseline

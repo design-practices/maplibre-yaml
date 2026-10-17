@@ -68,3 +68,6 @@ e2e/report/
 e2e/results/
 e2e/screenshots/
 e2e/generated/
+
+# Cloudflare Pages redirects for older schema versions (generated with the schemas)
+docs/public/_redirects

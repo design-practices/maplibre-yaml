@@ -17,11 +17,15 @@ Or use without installing:
 npx @maplibre-yaml/cli <command>
 ```
 
+An install provides two command names for the same program, `maplibre-yaml`
+and the shorter `mlym`. Without an install, use `npx @maplibre-yaml/cli`:
+`npx mlym` only works in a project that has `@maplibre-yaml/cli` installed.
+
 ## Quick Start
 
 ```bash
-# Scaffold a new project
-maplibre-yaml init my-project -t basic
+# Scaffold a new project (./my-project), then serve it: npx serve my-project
+maplibre-yaml init my-project
 
 # Validate a configuration
 maplibre-yaml validate my-map.yaml
@@ -37,26 +41,34 @@ maplibre-yaml preview my-map.yaml
 Create a new maplibre-yaml project from a template.
 
 ```bash
-maplibre-yaml init [directory]
+maplibre-yaml init [folder]
 
 Options:
-  -t, --template <name>  Template to use (basic, story, astro)
-  -n, --name <name>      Project name
+  -t, --template <name>  Template to use: basic (default), story, astro
+  -n, --name <name>      Project name (default: the folder name)
+  --list                 List the templates and exit
 ```
 
-If no template is specified, available templates are listed interactively.
+- `basic`: `index.html` + `map.yaml`, loaded from a CDN with an import map.
+  Serve the folder with any static server (`npx serve .`); no install or build.
+- `story`: a scrollytelling `story.yaml`. Its `index.html` uses
+  `<ml-scrollytelling>`, which is not in `@maplibre-yaml/core` 0.7 yet.
+- `astro`: an Astro site rendering `public/configs/map.yaml` with `<ml-map>`.
+
+The folder defaults to `./<name>` (`./my-map` for `basic`) and must be new or
+empty. An unknown template or option exits with code 1 and creates nothing.
 
 **Examples:**
 
 ```bash
-# Interactive template selection
+# Basic template in ./my-project
 maplibre-yaml init my-project
 
-# Specify template directly
+# Astro template
 maplibre-yaml init my-project -t astro
 
-# Scaffold in current directory
-maplibre-yaml init -t basic
+# Into the current (empty) folder
+maplibre-yaml init . -t basic
 ```
 
 ### `validate`
@@ -68,7 +80,7 @@ maplibre-yaml validate <patterns...>
 
 Options:
   -f, --format <type>  Output format: human, json, sarif, vscode (default: human)
-  --strict             Treat warnings as errors (default: false)
+  --strict             Treat warnings as errors (default: on when CI is set; --no-strict to disable)
   -w, --watch          Watch for changes and re-validate (default: false)
 ```
 
@@ -76,10 +88,9 @@ Accepts file paths and glob patterns.
 
 **Exit codes:**
 - `0` - Valid configuration
-- `1` - Validation errors
-- `2` - File not found
-- `3` - Invalid YAML syntax
-- `4` - Unknown error
+- `1` - Errors found, including YAML syntax errors
+- `2` - No file matched
+- `4` - Unexpected internal error
 
 **Examples:**
 
@@ -134,6 +145,27 @@ maplibre-yaml preview config.yaml
 # Custom port, no browser
 maplibre-yaml preview config.yaml --port 8080 --no-open
 ```
+
+### `emit`
+
+Export a `type: map` document to a standalone, spec-valid MapLibre
+`style.json` (renders in plain maplibre-gl and opens in Maputnik).
+
+```bash
+maplibre-yaml emit <file>
+
+Options:
+  -o, --out <path>       Write to a file; a folder (dist/) gets style.json inside
+  --with-fallbacks       Export with fallbacks and warn about losses (the default)
+  --strict               Fail (exit 1) if anything would change what the map shows
+  --target <version>     maplibre-gl version the style is for, e.g. 5.6.0
+  --trust <context>      trusted | untrusted (default)
+  --sprite-base <url>    Absolute URL where generated sprite files will be served
+```
+
+Warnings go to stderr, so `maplibre-yaml emit map.yaml > style.json` stays
+clean. See the [CLI reference](https://docs.maplibre-yaml.org/cli/reference/#emit)
+and [Export classes](https://docs.maplibre-yaml.org/guides/export-classes/).
 
 ## Aliases
 

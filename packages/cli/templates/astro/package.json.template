@@ -2,6 +2,7 @@
   "name": "{{projectName}}",
   "type": "module",
   "version": "0.0.1",
+  "private": true,
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
@@ -9,8 +10,8 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@maplibre-yaml/core": "^0.2.0",
-    "astro": "^4.0.0",
-    "maplibre-gl": "^4.0.0"
+    "@maplibre-yaml/core": "^0.7.0",
+    "astro": "^5.6.1",
+    "maplibre-gl": "^6.4.1"
   }
 }

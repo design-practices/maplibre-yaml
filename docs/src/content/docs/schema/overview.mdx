@@ -82,7 +82,7 @@ id: my-map
 config:
   center: [0, 0]
   zoom: 2
-  mapStyle: "https://example.com/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ```yaml no-validate
@@ -90,7 +90,7 @@ config:
 type: map
 id: my-map
 config:
-  mapStyle: "https://example.com/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 Note that `mapStyle` itself is optional in the schema: the Astro integration can inherit it from a global `defaultMapStyle`. Standalone `<ml-map>` usage still needs it at render time.
