@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Relative paths</title>
+  <!--
+    ml-zft — a YAML file in maps/ whose data paths are bare relative paths.
+    `maps/cities.geojson` (relative to the page) loads; `cities.geojson`
+    (relative to the YAML file) does not, and the notice says to write
+    `maps/cities.geojson`. PASS = red dots and that notice.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/relative-paths.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; }
+    ml-map { display: block; height: 420px; margin-bottom: 16px; }
+    h2 { font-size: 14px; margin: 16px 0 6px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = red dots; a notice for layer from-yaml saying relative paths start from the page and to write maps/cities.geojson.</header>
+  <main>
+    <ml-map id="map" src="maps/rel.yaml"></ml-map>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

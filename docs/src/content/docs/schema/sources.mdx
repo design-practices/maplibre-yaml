@@ -61,6 +61,39 @@ source:
   url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
 ```
 
+#### Files on your own site (relative paths)
+
+`url:` also takes a path to a file served by your own site. All of these work:
+
+```yaml
+source:
+  type: geojson
+  url: "data/cities.geojson"      # relative to the page
+  # url: "./data/cities.geojson"  # the same thing
+  # url: "/data/cities.geojson"   # from the site root
+```
+
+**Relative paths resolve against the web page, not the YAML file.** The
+browser fetches them exactly as it would a link on that page. With this
+layout:
+
+```text
+index.html          <ml-map src="maps/city.yaml">
+maps/city.yaml
+maps/cities.geojson
+```
+
+`url: "cities.geojson"` inside `maps/city.yaml` loads `/cities.geojson` (next
+to `index.html`) and fails. Write `url: "maps/cities.geojson"`, or use a
+root-relative `/maps/cities.geojson`. If a data file doesn't load, the map
+shows a notice naming the file and the full address the browser tried, and,
+for a YAML file in another folder, the path to write instead.
+
+The same rule applies to every URL in a document: other source `url:` and
+`tiles:` entries, `images:`, marker icons, `mapStyle`, and scrollytelling
+chapter `image:`/`video:`. (Older releases rejected a bare relative path
+like `data/x.geojson` and required `./` or `/` in front of it.)
+
 #### Inline Data
 
 ```yaml

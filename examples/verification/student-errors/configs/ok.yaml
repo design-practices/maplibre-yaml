@@ -1,0 +1,15 @@
+type: map
+id: ok
+config:
+  center: [-96, 39]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      url: "data/cities.geojson"
+    paint:
+      circle-radius: 10
+      circle-color: "#e63946"

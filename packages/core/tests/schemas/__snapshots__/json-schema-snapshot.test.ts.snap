@@ -296,7 +296,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "type": "string",
-                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                         "description": "URL to fetch GeoJSON data"
                       },
                       "data": {
@@ -815,7 +815,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "type": "string",
-                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                         "description": "Image URL"
                       },
                       "coordinates": {
@@ -3301,12 +3301,12 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   },
                   "image": {
                     "type": "string",
-                    "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                    "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                     "description": "Hero image: an http(s) URL or a site path such as /images/photo.jpg"
                   },
                   "video": {
                     "type": "string",
-                    "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                    "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                     "description": "Video: an http(s) URL or a site path such as /videos/clip.mp4"
                   },
                   "pitch": {
@@ -4242,7 +4242,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "type": "string",
-                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                     "description": "URL to fetch GeoJSON data"
                   },
                   "data": {
@@ -4761,7 +4761,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "type": "string",
-                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                     "description": "Image URL"
                   },
                   "coordinates": {
@@ -7295,7 +7295,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "type": "string",
-                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                 "description": "URL to fetch GeoJSON data"
                               },
                               "data": {
@@ -7814,7 +7814,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "type": "string",
-                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                 "description": "Image URL"
                               },
                               "coordinates": {
@@ -10810,12 +10810,12 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "image": {
                                 "type": "string",
-                                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                 "description": "Hero image: an http(s) URL or a site path such as /images/photo.jpg"
                               },
                               "video": {
                                 "type": "string",
-                                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                 "description": "Video: an http(s) URL or a site path such as /videos/clip.mp4"
                               },
                               "pitch": {
@@ -11427,7 +11427,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "type": "string",
-                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                     "description": "URL to fetch GeoJSON data"
                                   },
                                   "data": {
@@ -11946,7 +11946,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "type": "string",
-                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                     "description": "Image URL"
                                   },
                                   "coordinates": {
@@ -13840,12 +13840,12 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
               },
               "image": {
                 "type": "string",
-                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                 "description": "Hero image: an http(s) URL or a site path such as /images/photo.jpg"
               },
               "video": {
                 "type": "string",
-                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                 "description": "Video: an http(s) URL or a site path such as /videos/clip.mp4"
               },
               "pitch": {

@@ -75,7 +75,7 @@ describe('StreamConfigSchema', () => {
       expect(() =>
         StreamConfigSchema.parse({
           type: 'websocket',
-          url: 'not-a-url',
+          url: '#not-a-url',
         })
       ).toThrow();
     });
@@ -548,7 +548,7 @@ describe('RasterDEMSourceSchema', () => {
       expect(
         RasterDEMSourceSchema.safeParse({
           type: 'raster-dem',
-          tiles: ['not a url at all'],
+          tiles: ['?not-a-template'],
         }).success
       ).toBe(false);
     });
@@ -843,10 +843,27 @@ describe('same-origin paths in source URL fields', () => {
     ).toBe(true);
   });
 
-  // The relaxation is not "accept any string" -- a bare word is still not
-  // something a browser can fetch, and catching it is the point of the field
-  // having a validator at all.
-  describe.each(['not-a-url', 'data.geojson', 'example.com/data.geojson'])(
+  // ml-zft: a bare relative path is what fetch() and MapLibre resolve
+  // exactly like ./data.geojson — against the page — so it is accepted.
+  describe.each(['data.geojson', 'data/cities.geojson', 'my data/x.geojson'])(
+    'accepts the bare relative path %s',
+    (good) => {
+      it('geojson url', () => {
+        expect(GeoJSONSourceSchema.safeParse({ type: 'geojson', url: good }).success).toBe(
+          true
+        );
+      });
+
+      it('vector TileJSON url', () => {
+        expect(VectorSourceSchema.safeParse({ type: 'vector', url: good }).success).toBe(
+          true
+        );
+      });
+    }
+  );
+
+  // Still not "accept any string": nothing a browser would fetch as a file.
+  describe.each(['', ' data.geojson', '#data', '?x=1', ':data.geojson'])(
     'still rejects %s',
     (bad) => {
       it('geojson url', () => {
