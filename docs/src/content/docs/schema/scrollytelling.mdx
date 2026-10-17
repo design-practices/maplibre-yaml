@@ -9,11 +9,46 @@ This guide explains the fields and shows them in use. For every key — type, de
 
 Scrollytelling creates immersive narrative map experiences where the map transitions between chapters as users scroll through content. Perfect for data journalism, storytelling, and guided tours.
 
+## Showing a story
+
+A story is a YAML file. One engine shows it, from `@maplibre-yaml/core`, in
+whichever kind of site you have.
+
+**A plain HTML page** (no build step; maplibre-yaml from a CDN): the
+`<ml-scrollytelling>` element. Load `@maplibre-yaml/core/register` as in
+[Scrollytelling in plain HTML](/integrations/scrollytelling-html/), then:
+
+```html
+<ml-scrollytelling src="story.yaml"></ml-scrollytelling>
+```
+
+The YAML can also sit inline in a `<script type="text/yaml">` child, or be
+assigned from JavaScript (`element.story = {...}`).
+
+**An Astro site**: the [`<Scrollytelling>`](/integrations/astro/#scrollytelling-component)
+component, which renders the same element. Load and validate the story at build
+time, or let the browser fetch it:
+
+```astro
+---
+import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
+const story = await loadScrollytellingConfig('./src/stories/my-story.yaml');
+---
+<Scrollytelling config={story} />
+<!-- or, from public/: <Scrollytelling src="/stories/my-story.yaml" /> -->
+```
+
+Both show the same thing for the same file: a sticky map with the chapters
+scrolling over it, the camera moves, layer changes and actions below, the
+chapter rail, themes, and reduced-motion handling. Check a story without a
+browser with `npx @maplibre-yaml/cli validate story.yaml`.
+
 ## Scrollytelling Block Structure
 
 A story file is a standalone YAML document with `type: scrollytelling` at the
-top level. That is what `loadScrollytellingConfig`, `<Scrollytelling src>`, a
-stories content collection and `npx @maplibre-yaml/cli validate` all read, and
+top level. That is what `<ml-scrollytelling src>`, `loadScrollytellingConfig`,
+`<Scrollytelling src>`, a stories content collection and
+`npx @maplibre-yaml/cli validate` all read, and
 every full example on this page is written that way, ready to paste into a
 file of its own. (Only inside a site file's `pages:` → `blocks:` list is a
 story a list item, `- type: scrollytelling`; see
@@ -31,6 +66,8 @@ showMarkers: false   # Chapter navigation rail
 layers: [...]        # Persistent layers
 chapters: [...]      # Story chapters (required)
 footer: "..."        # Optional footer HTML
+# Optional, as on a type: map document: sources, markers, legend,
+# state + parameters, images, controls, terrain, sky, projection, light
 ```
 
 ## Scrollytelling Properties
@@ -46,6 +83,7 @@ footer: "..."        # Optional footer HTML
 | `markerColor` | string | No | `"#3FB1CE"` | Color of the rail's dots |
 | `layers` | array | No | `[]` | Persistent layers |
 | `footer` | string | No | - | Footer HTML content |
+| `sources`, `markers`, `legend`, `state`, `parameters`, `popups`, `images`, `controls`, `terrain`, `sky`, `projection`, `light` | - | No | - | The story's map takes every map-level key a [`type: map` document](/schema/map-config/) does, with the same schema (see [Map-level keys](#map-level-keys)) |
 
 ## Chapters
 
@@ -413,8 +451,9 @@ chapters:
 ## Chapter Navigation Rail
 
 `showMarkers: true` adds a navigation rail: a column of dots at the right edge
-of the page, one per chapter. The active chapter's dot is highlighted, and
-clicking a dot (or focusing it and pressing Enter) scrolls to that chapter.
+of the map, one per chapter. The active chapter's dot is highlighted, and
+clicking a dot (or focusing it and pressing Enter) scrolls to that chapter; the
+arrow keys, Home and End move along the rail.
 `markerColor` sets the dots' color. Despite the name, nothing is drawn on the
 map itself; to mark chapter locations on the map, add a layer.
 
@@ -471,6 +510,65 @@ chapters:
     center: [0, 40]
     zoom: 4
 ```
+
+## Map-level keys
+
+A story's map is an ordinary map document, so everything a
+[`type: map` document](/schema/map-config/) takes at its top level works in a
+story too: named `sources:` shared by several layers, standalone `markers:`
+with popups, a `legend:`, the params panel (`state:` + `parameters:`),
+`images:`, `controls:`, and the 3D and globe keys. They are validated with the
+same schema, and a story layer's source takes the
+[GeoJSON sugar](/schema/sources/#geojson-sugar) shorthands (`location:`,
+`locations:`, `region:`, `route:`).
+
+```yaml
+type: scrollytelling
+id: harbour-tour
+config:
+  center: [-74.01, 40.70]
+  zoom: 12
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+sources:
+  piers:
+    type: geojson
+    locations:
+      - coordinates: [-74.017, 40.703]
+        name: Battery Park
+      - coordinates: [-73.997, 40.705]
+        name: South Street Seaport
+layers:
+  - id: pier-dots
+    type: circle
+    source: piers
+    paint:
+      circle-radius: 8
+      circle-color: "#0ea5e9"
+markers:
+  - at: [-74.0445, 40.6892]
+    color: "#16a34a"
+    popup:
+      - h3:
+          - str: Statue of Liberty
+legend:
+  title: Harbour tour
+  items:
+    - { color: "#0ea5e9", label: Pier, shape: circle }
+chapters:
+  - id: piers
+    title: "The piers"
+    center: [-74.01, 40.70]
+    zoom: 13
+  - id: liberty
+    title: "Liberty Island"
+    center: [-74.0445, 40.6892]
+    zoom: 14
+```
+
+The story map's own pan and zoom gestures start off, so the reader's wheel and
+finger scroll the story. Markers, popups, the legend and the params panel stay
+clickable. To let readers move the map, set the gesture in `config:`
+(`scrollZoom: true`, `dragPan: true`, ...), as on any map.
 
 ## Footer
 

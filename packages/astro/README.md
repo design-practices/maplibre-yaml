@@ -73,8 +73,10 @@ const story = await loadScrollytellingConfig('./src/stories/earthquake-history.y
 <Scrollytelling config={story} />
 ```
 
-Load stories at build time as shown. Runtime loading (`src`) does not work for
-`Scrollytelling` yet (tracked as `ml-euv`).
+Load stories at build time as shown, or at runtime from `public/` with
+`<Scrollytelling src="/stories/earthquake-history.yaml" />`. `Scrollytelling`
+renders core's `<ml-scrollytelling>` web component, the same story engine a
+plain HTML page uses, so it needs `@maplibre-yaml/core` 0.8 or later.
 
 ## Components
 
@@ -122,9 +124,14 @@ Immersive narrative experiences with scroll-driven map transitions.
 - `class?: string` - Additional CSS classes
 - `debug?: boolean` - Show debug outlines
 
+Renders `<ml-scrollytelling>` from `@maplibre-yaml/core` (0.8+), which runs
+the story in the browser and dispatches `ml-scrollytelling:chapter`,
+`ml-scrollytelling:action` and `ml-scrollytelling:error`.
+
 ### Chapter
 
-Individual chapter component (typically used internally by Scrollytelling).
+Individual chapter component, for pages that lay out chapters themselves
+(`Scrollytelling` renders its chapters with the same core renderer).
 Import it from the components subpath: `import { Chapter } from '@maplibre-yaml/astro/components'`.
 The package root does not export it.
 
@@ -601,7 +608,7 @@ const feature = findFeature(fc, { source: "...", featureId: "poa-1.1" });
 > **The `src` prop is a URL path, not a filesystem path.** Files in `/public`
 > are served from the root, so `public/configs/map.yaml` should be referenced
 > as `src="/configs/map.yaml"`. (`src` on `Map`/`FullPageMap` needs a release
-> newer than 0.4.1, and `Scrollytelling` `src` is not working yet: `ml-euv`.)
+> newer than 0.4.1, and `Scrollytelling` `src` needs 0.5.0 or later.)
 
 > **`astro dev` with `@maplibre-yaml/core` 0.6.0 or earlier** fails every map
 > with *Map is not a constructor* (builds are fine). Add

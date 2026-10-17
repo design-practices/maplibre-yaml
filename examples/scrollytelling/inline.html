@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A story with its YAML inline</title>
+  <!--
+    The whole story inside the page: <ml-scrollytelling> reads an inline
+    <script type="text/yaml"> child, exactly as <ml-map> does. One file, no
+    fetch. Served from the repo root (pnpm verify:serve), loading the local
+    build; see index.html for the CDN lines to use on your own site.
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <script type="module" src="/packages/core/register.js"></script>
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+  </style>
+</head>
+<body>
+  <ml-scrollytelling id="story">
+    <script type="text/yaml">
+type: scrollytelling
+id: three-cities
+config:
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+  center: [0, 30]
+  zoom: 1.5
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: { name: Lagos }, geometry: { type: Point, coordinates: [3.38, 6.52] } }
+          - { type: Feature, properties: { name: Lima }, geometry: { type: Point, coordinates: [-77.04, -12.05] } }
+          - { type: Feature, properties: { name: Jakarta }, geometry: { type: Point, coordinates: [106.85, -6.21] } }
+    paint:
+      circle-radius: 8
+      circle-color: "#2563eb"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+chapters:
+  - id: lagos
+    title: Lagos
+    description: "<p>The largest city in Africa.</p>"
+    center: [3.38, 6.52]
+    zoom: 5
+  - id: lima
+    title: Lima
+    description: "<p>On the Pacific coast of South America.</p>"
+    center: [-77.04, -12.05]
+    zoom: 5
+    alignment: left
+  - id: jakarta
+    title: Jakarta
+    description: "<p>On the north coast of Java.</p>"
+    center: [106.85, -6.21]
+    zoom: 5
+    alignment: right
+    </script>
+    <!-- Any child with a slot= name goes to the story's map, as on <ml-map>. -->
+    <p slot="bottom-right" id="caption" style="margin:0;padding:4px 8px;background:#fffd;border-radius:4px;font-size:12px">Inline YAML story</p>
+  </ml-scrollytelling>
+</body>
+</html>

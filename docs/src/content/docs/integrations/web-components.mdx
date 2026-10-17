@@ -128,7 +128,8 @@ There are three ways to configure `<ml-map>`, each suited for different use case
   `<ml-map>` expects a **single map block document** — a YAML file whose top
   level is `type: map`. It does not accept a root document (one with a
   `pages:` key); those are multi-page site configurations meant for the Astro
-  integration and will fail validation if passed to `<ml-map>`.
+  integration and will fail validation if passed to `<ml-map>`. A
+  `type: scrollytelling` story has its own element, below.
 </Aside>
 
 <Aside type="note" title="Format v2 renders identically">
@@ -429,6 +430,24 @@ expression is passed through unchanged.
 
 The element's methods, properties, and this event list (from its `@fires`
 JSDoc) are also in the generated [`MLMap` API reference](/reference/api/maplibre-yaml/core/components/classes/mlmap/).
+
+## Story maps: `<ml-scrollytelling>`
+
+The same `register` module also defines `<ml-scrollytelling>`, which shows a
+`type: scrollytelling` document as a scroll-driven story: a sticky `<ml-map>`
+with chapter cards scrolling over it. It takes its story the same three ways
+`<ml-map>` takes a map (`src`, an inline `<script type="text/yaml">`, or a
+`story`/`config` property), hands `slot` children to its map, and dispatches
+`ml-scrollytelling:chapter`, `ml-scrollytelling:action` and
+`ml-scrollytelling:error`.
+
+```html
+<ml-scrollytelling src="story.yaml"></ml-scrollytelling>
+```
+
+See [Scrollytelling in plain HTML](/integrations/scrollytelling-html/) for a
+complete page, the element's API and styling, and
+[Scrollytelling](/schema/scrollytelling/) for what a story file contains.
 
 ## Accessing the MapLibre Instance
 

@@ -213,6 +213,7 @@ export default defineConfig({
           label: "Integrations",
           items: [
             { label: "Vanilla JavaScript", link: "/integrations/vanilla-js/" },
+            { label: "Scrollytelling in plain HTML", link: "/integrations/scrollytelling-html/" },
             { label: "Astro", link: "/integrations/astro/" },
             {
               label: "Astro Content Collections",

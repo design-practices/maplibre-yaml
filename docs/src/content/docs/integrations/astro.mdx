@@ -800,6 +800,10 @@ layers:
       circle-color: "#dc2626"
 ```
 
+Stories take the same shorthands, on their layers' inline sources and in their
+`sources:` block (`loadScrollytellingConfig` and `<Scrollytelling src>` both
+expand them).
+
 See [GeoJSON Sugar](/schema/sources/#geojson-sugar) for the full reference and
 all four shorthands. A runnable version lives in the minimal example at
 `examples/astro/minimal/src/pages/geojson-sugar.astro`.
@@ -822,9 +826,11 @@ hand to `<Map>` is identical either way.
 `Map` and `FullPageMap` hand the whole document to `<ml-map>`, through the
 `config` attribute or the `src` URL. Map-level features therefore work with no
 Astro-specific setup: `markers:`, `images:`, `parameters:` (the params panel),
-`legend:`, and hover popups. One exception: a `Scrollytelling` story's map is
-built from its `config:` and `layers:` only. It has no `sources:`, `markers:`,
-`parameters:` or legend, so give its layers inline sources.
+`legend:`, and hover popups. A `Scrollytelling` story's map is an `<ml-map>`
+too, and since `@maplibre-yaml/core` 0.8 a story takes the same map-level keys:
+`sources:`, `markers:`, `legend:`, `state:` and `parameters:`, `images:`,
+`controls:`, `terrain:`, `projection:` (on 0.7 and earlier a story's map was
+`config:` + `layers:` only).
 
 ## Upgrading to 0.6
 
@@ -999,7 +1005,7 @@ markup and the buttons live inside `<ml-map>`.
 
 ## Chapter Component
 
-The `Chapter` component displays individual narrative sections within scrollytelling experiences. It's typically used internally by the `Scrollytelling` component but can be used independently for custom implementations.
+The `Chapter` component displays one narrative section of a scrollytelling story, for pages that lay out chapters themselves. `Scrollytelling` renders its chapters with the same core renderer (`chapterHTML` from `@maplibre-yaml/core/scrollytelling`) and stylesheet, so a `Chapter` looks exactly like a story's own.
 
 ### Features
 
@@ -1120,7 +1126,7 @@ The `isActive` prop controls visual emphasis:
 - Active chapters: Full opacity (1.0), normal scale
 - Inactive chapters: Reduced opacity (0.4), slightly scaled down (0.98)
 
-This is typically managed by the parent `Scrollytelling` component based on scroll position.
+Inside a story, `<ml-scrollytelling>` sets `is-active` from the scroll position; a standalone `Chapter` shows whatever `isActive` you pass.
 
 ### Accessibility Features
 
@@ -1135,16 +1141,32 @@ This is typically managed by the parent `Scrollytelling` component based on scro
 
 The `Scrollytelling` component creates immersive narrative experiences where the map transitions between different views as users scroll through story chapters. Perfect for data journalism, interactive reports, and guided data tours.
 
+`<Scrollytelling>` renders core's [`<ml-scrollytelling>`](/integrations/scrollytelling-html/)
+web component, the same element a plain HTML page uses from a CDN. Astro adds
+build-time loading: with `config`, the chapters, the rail and the map's
+document are rendered into the page at build time and the element takes them
+over in the browser; with `src`, the element fetches and renders the story
+itself. Either way one engine drives the camera, layers, actions and rail, so
+a story file behaves the same in an Astro site and in a plain page.
+
+<Aside type="note" title="Version pairing">
+  `@maplibre-yaml/astro` 0.6 and later need `@maplibre-yaml/core` 0.8 or later
+  (the release that added `<ml-scrollytelling>`). Upgrade both together:
+  `npm install @maplibre-yaml/astro@latest @maplibre-yaml/core@latest`.
+</Aside>
+
 ### Features
 
 - **Scroll-Driven Navigation**: Map automatically transitions as you scroll through chapters
 - **Smooth Camera Transitions**: Choose from flyTo, easeTo, or jumpTo animations
 - **Layer Control**: Show/hide map layers per chapter for progressive disclosure
 - **Chapter Actions**: Execute custom MapLibre actions on chapter enter/exit
-- **Optional Markers**: Visual navigation dots for quick chapter access
+- **Optional Markers**: A clickable chapter rail, also driven by the keyboard
+- **The whole map document**: `sources:`, `markers:`, `legend:`, the params panel and the rest work in a story
 - **Build-time Loading**: Load and validate the story with `loadScrollytellingConfig`
+- **One error card**: a story that fails in the browser lists each problem with its line number and any did-you-mean
 - **Debug Mode**: Visual indicators to help during development
-- **Accessible**: Full keyboard navigation and screen reader support
+- **Accessible**: keyboard navigation, reduced motion, and the wheel scrolls the story rather than the map
 
 ### Component API
 
@@ -1202,7 +1224,7 @@ config:
   pitch: 0
   bearing: 0
 
-# Map layers (sources are inline: a story has no `sources:` block)
+# Map layers (inline sources here; a `sources:` block works too, as on a map)
 layers:
   - id: earthquake-circles
     type: circle
@@ -1392,12 +1414,15 @@ chapters:
 A layer action naming a layer the map does not have logs a warning and is
 skipped. Enter actions run after the chapter's camera move and layer toggles.
 
-**Events.** The story container dispatches two bubbling events. On every
+**Events.** The story element (`<ml-scrollytelling>`, which keeps the
+`scrollytelling-container` class) dispatches bubbling events. On every
 chapter change it dispatches `ml-scrollytelling:chapter`, with
 `detail: { chapterId, previousChapterId, index, callback, map }`. `callback`
 is the chapter's `callback:` name. On each `custom` action it dispatches
 `ml-scrollytelling:action`, with `detail: { action, chapterId, phase, map }`.
-The container also carries `data-active-chapter`. The example's Tonga chapter
+A story that cannot load or validate dispatches `ml-scrollytelling:error`,
+with `detail: { errors, warnings, source }`. The element also carries
+`data-active-chapter`. The example's Tonga chapter
 uses a `custom` action to show a banner:
 
 ```ts title="examples/astro/site/src/pages/story.astro"
@@ -1413,13 +1438,13 @@ skipped when the reader prefers reduced motion.
 
 ### Chapter Markers
 
-When `showMarkers: true`, navigation dots appear on the right side of the viewport:
+When `showMarkers: true`, navigation dots appear at the right edge of the map:
 
-- Click markers to jump to specific chapters
-- Active marker is highlighted
+- Click a dot to jump to its chapter (the chapters in between are skipped)
+- Tab to the rail, then use the arrow keys, Home and End; Enter or Space activates a dot
+- The active dot is highlighted (and marked `aria-current` for screen readers)
 - Customizable color via `markerColor`
-- Accessible with keyboard navigation
-- Automatically positioned and scaled
+- On phones the cards leave a gutter for the rail, so it never sits on a card
 
 ### Themes
 
@@ -1452,12 +1477,16 @@ The component uses IntersectionObserver with these settings:
 - Smooth map transitions between chapters
 - Progressive chapter content fade in/out
 
-The chapters scroll over a sticky full-viewport map, so the mouse wheel
-scrolls the story rather than zooming the map. The map opens on the story's
-`config` camera. As soon as it has loaded, the chapter sitting in the trigger
-zone is activated without any scrolling. On a page that starts with the story
-that is the first chapter: its camera move, `layers` and `onChapterEnter`
-actions all run on load. Give layers their starting state in `config` and the
+The chapters scroll over a sticky full-viewport map. The story map's own pan
+and zoom gestures are off (set `scrollZoom: true` or `dragPan: true` in
+`config:` to turn one back on), so the mouse wheel and touch scroll the story
+rather than moving the map, while the rail, legend, markers, popups and slots
+on the map stay clickable. The camera is offset so a chapter's `center` is not
+under its card: beside a left or right card, and above the card on a phone.
+The map opens on the story's `config` camera. As soon as it has loaded, the
+chapter sitting in the trigger zone is applied at once, without any scrolling.
+On a page that starts with the story that is the first chapter: its camera,
+`layers` and `onChapterEnter` actions all run on load. Give layers their starting state in `config` and the
 layers themselves (for example `layout: { visibility: none }` on a layer a
 later chapter reveals), and let the first chapter's actions apply its own
 look.
@@ -1465,12 +1494,13 @@ look.
 ### Accessibility
 
 - Semantic HTML with proper ARIA labels
-- Keyboard navigation for chapter markers
+- Keyboard navigation for chapter markers (Tab, arrow keys, Home, End, Enter)
 - Screen reader friendly chapter titles
 - Reduced motion: when the reader's system asks for reduced motion
-  (`prefers-reduced-motion`), chapter cards stop animating, MapLibre turns
-  `flyTo`/`easeTo` chapter moves into instant jumps, and `rotateAnimation` /
-  `spinGlobe` are skipped
+  (`prefers-reduced-motion`), chapter cards stop animating, every chapter
+  camera move and camera action (`flyTo`, `easeTo`, `fitBounds`) is instant
+  (an action whose `options` set `essential: true` still animates), and
+  `rotateAnimation` / `spinGlobe` are skipped
 - High contrast mode support
 
 ### Performance Tips

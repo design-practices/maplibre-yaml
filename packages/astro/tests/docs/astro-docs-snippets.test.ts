@@ -155,13 +155,15 @@ describe("the documented story renders through <Scrollytelling config>", () => {
       "earthquake-circles"
     );
 
-    // Every chapter is in the page, and the (bundled) controller reads the
-    // map through the element's real API (`.map` never existed on <ml-map>).
+    // Every chapter is in the page, and the engine (core's
+    // <ml-scrollytelling>, which this component renders) reads the map
+    // through <ml-map>'s real API (`.map` never existed on <ml-map>).
     for (const chapter of parsed.data!.chapters) {
       expect(html).toContain(`data-chapter-id="${chapter.id}"`);
     }
+    expect(html).toContain("<ml-scrollytelling");
     const controller = readFileSync(
-      join(REPO, "packages/astro/src/client/scrollytelling.ts"),
+      join(REPO, "packages/core/src/components/ml-scrollytelling.ts"),
       "utf8"
     );
     expect(controller).toContain("mapReady()");

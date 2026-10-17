@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 260" role="img" aria-label="A stylised volcano">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#7c2d12"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="260" fill="url(#sky)"/>
+  <path d="M120 260 L285 92 L355 92 L520 260 Z" fill="#292524"/>
+  <path d="M285 92 L300 70 L340 70 L355 92 Z" fill="#f97316"/>
+  <circle cx="320" cy="44" r="22" fill="#78716c" opacity="0.7"/>
+  <circle cx="348" cy="24" r="16" fill="#a8a29e" opacity="0.6"/>
+  <circle cx="298" cy="20" r="12" fill="#a8a29e" opacity="0.5"/>
+</svg>

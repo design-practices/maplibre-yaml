@@ -1,0 +1,154 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json
+#
+# A story map for <ml-scrollytelling src="story.yaml"> (index.html). Plain
+# HTML, no build step: every chapter moves the camera, and the chapters
+# exercise each kind of action a story can run.
+type: scrollytelling
+id: ring-of-fire
+theme: dark
+showMarkers: true
+markerColor: "#f97316"
+config:
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+  center: [160, 10]
+  zoom: 1.5
+
+# A legend, as on any map document (stories take the whole map surface).
+legend:
+  position: bottom-left
+  title: Ring of Fire
+  items:
+    - { color: "#fbbf24", label: Volcano, shape: circle }
+    - { color: "#f97316", label: Subduction arc, shape: line }
+
+layers:
+  - id: arc
+    type: line
+    source:
+      type: geojson
+      data:
+        type: Feature
+        properties: { name: Ring of Fire (sketch) }
+        geometry:
+          type: LineString
+          coordinates: [[-75, -45], [-77, -10], [-100, 18], [-122, 46], [-152, 60], [175, 52], [142, 40], [139, 35], [125, 12], [110, -7], [178, -18], [175, -40]]
+    layout:
+      visibility: none
+    paint:
+      line-color: "#f97316"
+      line-width: 3
+  - id: volcanoes
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: { name: Fuji, elevation: 3776 }, geometry: { type: Point, coordinates: [138.7274, 35.3606] } }
+          - { type: Feature, properties: { name: Sakurajima, elevation: 1117 }, geometry: { type: Point, coordinates: [130.6573, 31.5932] } }
+          - { type: Feature, properties: { name: Asama, elevation: 2568 }, geometry: { type: Point, coordinates: [138.5228, 36.4062] } }
+          - { type: Feature, properties: { name: Cotopaxi, elevation: 5897 }, geometry: { type: Point, coordinates: [-78.4378, -0.6807] } }
+          - { type: Feature, properties: { name: Villarrica, elevation: 2847 }, geometry: { type: Point, coordinates: [-71.9393, -39.4206] } }
+          - { type: Feature, properties: { name: St. Helens, elevation: 2549 }, geometry: { type: Point, coordinates: [-122.1944, 46.1912] } }
+          - { type: Feature, properties: { name: Krakatoa, elevation: 813 }, geometry: { type: Point, coordinates: [105.4233, -6.1021] } }
+          - { type: Feature, properties: { name: Hunga Tonga, elevation: 114 }, geometry: { type: Point, coordinates: [-175.382, -20.536] } }
+    paint:
+      circle-radius: 7
+      circle-color: "#fbbf24"
+      circle-stroke-width: 1.5
+      circle-stroke-color: "#ffffff"
+
+chapters:
+  - id: intro
+    title: The Ring of Fire
+    image: "./volcano.svg"
+    description: >-
+      <p>Three quarters of the world's active volcanoes sit on a 40,000 km
+      horseshoe around the Pacific.
+      <a id="intro-link" href="https://en.wikipedia.org/wiki/Ring_of_Fire">Read more</a>.</p>
+      <p>Scroll to travel around it, or use the dots on the right.</p>
+    center: [160, 10]
+    zoom: 1.5
+
+  - id: japan
+    title: "Japan: the tall ones"
+    description: >-
+      <p>An <code>onChapterEnter</code> filters to volcanoes above
+      <strong>2,500 m</strong> and turns them red; leaving the chapter puts
+      them back.</p>
+    center: [137, 35]
+    zoom: 5
+    pitch: 45
+    bearing: -15
+    alignment: left
+    onChapterEnter:
+      - action: setPaintProperty
+        layer: volcanoes
+        property: circle-color
+        value: "#ef4444"
+      - action: setFilter
+        layer: volcanoes
+        filter: [">=", ["get", "elevation"], 2500]
+    onChapterExit:
+      - action: setFilter
+        layer: volcanoes
+        filter: null
+      - action: setPaintProperty
+        layer: volcanoes
+        property: circle-color
+        value: "#fbbf24"
+
+  - id: andes
+    title: The Andes
+    description: >-
+      <p>The arc appears (<code>layers.show</code>): a subduction zone runs
+      the length of South America.</p>
+    center: [-75, -20]
+    zoom: 3
+    pitch: 40
+    bearing: -20
+    animation: easeTo
+    alignment: right
+    layers:
+      show: [arc]
+
+  - id: pacific
+    title: The whole basin
+    description: >-
+      <p>A <code>fitBounds</code> action frames the Pacific rim, top-down,
+      although the chapter before was tilted.</p>
+    center: [-170, 10]
+    zoom: 2
+    onChapterEnter:
+      - action: fitBounds
+        bounds: [100, -50, 290, 62]
+        options:
+          padding: 40
+          duration: 1500
+
+  - id: tonga
+    title: Hunga Tonga, 2022
+    description: >-
+      <p>The largest explosion ever recorded by modern instruments. A
+      <code>custom</code> action fires an event this page listens for.</p>
+    center: [-175.38, -20.54]
+    zoom: 6
+    alignment: left
+    onChapterEnter:
+      - action: custom
+        options:
+          banner: Pressure wave circled the globe four times
+
+  - id: outro
+    title: Keep exploring
+    description: >-
+      <p>Back to the Cascades. The arc hides again (<code>layers.hide</code>).</p>
+    center: [-122.19, 46.19]
+    zoom: 6
+    alignment: full
+    layers:
+      hide: [arc]
+
+footer: >-
+  <p>Positions approximate; a hand-made sketch for teaching. Built with
+  <code>&lt;ml-scrollytelling&gt;</code> from <code>@maplibre-yaml/core</code>.</p>
