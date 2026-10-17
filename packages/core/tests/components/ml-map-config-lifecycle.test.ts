@@ -332,19 +332,27 @@ describe("ml-i10: an equal config does not rebuild the map", () => {
 describe("ml-aot.2: map construction waits for DOMContentLoaded", () => {
   let state: DocumentReadyState = "loading";
   let navEntry: { domContentLoadedEventStart: number } | undefined;
-  const realGetEntries = performance.getEntriesByType?.bind(performance);
+  // Some environments expose `performance.getEntriesByType` as a read-only
+  // own property (assignment throws on CI's Node 18/20/22), so stub it with
+  // defineProperty and put back the exact original descriptor afterwards.
+  let ownGetEntries: PropertyDescriptor | undefined;
 
   beforeEach(() => {
     state = "loading";
     navEntry = undefined;
     Object.defineProperty(document, "readyState", { configurable: true, get: () => state });
-    performance.getEntriesByType = ((type: string) =>
-      type === "navigation" && navEntry ? [navEntry] : []) as typeof performance.getEntriesByType;
+    ownGetEntries = Object.getOwnPropertyDescriptor(performance, "getEntriesByType");
+    Object.defineProperty(performance, "getEntriesByType", {
+      configurable: true,
+      writable: true,
+      value: (type: string) => (type === "navigation" && navEntry ? [navEntry] : []),
+    });
   });
 
   afterEach(() => {
     delete (document as unknown as Record<string, unknown>).readyState;
-    if (realGetEntries) performance.getEntriesByType = realGetEntries;
+    if (ownGetEntries) Object.defineProperty(performance, "getEntriesByType", ownGetEntries);
+    else delete (performance as unknown as Record<string, unknown>).getEntriesByType;
   });
 
   const contentLoaded = () => {
