@@ -19,7 +19,7 @@
  */
 
 import type { EmitResult, EmitWarning } from "./project";
-import { EmitError } from "./project";
+import { EmitError, sanitizeEmittedAttribution } from "./project";
 
 /**
  * Root properties inherited from the base style.
@@ -77,7 +77,11 @@ export function mergeBasemap(base: unknown, projected: EmitResult): EmitResult {
   const documentStyle = projected.style;
 
   // Sources: base first, document over the top.
-  const baseSources = isPlainObject(base["sources"]) ? base["sources"] : {};
+  // The basemap is fetched from a URL the document chose, so its attribution
+  // is as untrusted as the document's own (GHSA-jrc7-96c5-q579).
+  const baseSources = isPlainObject(base["sources"])
+    ? sanitizeEmittedAttribution(base["sources"], warnings, "basemap")
+    : {};
   const documentSources = isPlainObject(documentStyle["sources"])
     ? documentStyle["sources"]
     : {};

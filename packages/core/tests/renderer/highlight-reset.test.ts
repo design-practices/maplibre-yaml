@@ -23,13 +23,15 @@ vi.mock("maplibre-gl", () => {
     off: vi.fn(),
     remove: vi.fn(),
     addSource: vi.fn(),
+    addControl: vi.fn(),
     getSource: vi.fn(),
     addLayer: vi.fn(),
     getLayer: vi.fn(),
     setFeatureState: vi.fn(),
     getCanvas: vi.fn(() => ({ style: { cursor: "" } })),
   }));
-  return { default: { Map }, Map };
+  const AttributionControl = vi.fn();
+  return { default: { Map, AttributionControl }, Map, AttributionControl };
 });
 
 // Capture the callbacks MapRenderer hands the manager, so the refresh

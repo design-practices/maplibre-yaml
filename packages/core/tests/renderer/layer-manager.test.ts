@@ -235,6 +235,33 @@ describe("LayerManager", () => {
       );
     });
 
+    it("sanitizes source attribution before MapLibre sees it (GHSA-jrc7-96c5-q579)", async () => {
+      // MapLibre renders attribution as HTML through a bypassable sanitizer;
+      // every source path funnels through one sanitizing addSource.
+      await manager.addLayer({
+        id: "attr",
+        type: "fill",
+        visible: true,
+        toggleable: false,
+        source: {
+          type: "vector",
+          tiles: ["https://tiles.test/{z}/{x}/{y}.pbf"],
+          attribution: '<b>x</b> <a href="https://ok.test/" title="t">ok</a>',
+        },
+      } as any);
+
+      const spec = mockMap.addSource.mock.calls[0][1];
+      expect(spec.attribution).toBe('&lt;b&gt;x&lt;/b&gt; <a href="https://ok.test/">ok</a>');
+    });
+
+    it("sanitizes attribution on named sources too", () => {
+      manager.registerSources({
+        named: { type: "raster", tiles: ["https://t.test/{z}/{x}/{y}.png"], attribution: "<i>n</i>" },
+      });
+      const spec = mockMap.addSource.mock.calls[0][1];
+      expect(spec.attribution).toBe("&lt;i&gt;n&lt;/i&gt;");
+    });
+
     it("throws a clear error for a $ref source instead of silently skipping (ml-tfd.8)", async () => {
       // Falling through addSource's type chain left the layer pointing at a
       // source that was never added; MapLibre then killed the document with

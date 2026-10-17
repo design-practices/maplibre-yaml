@@ -24,6 +24,7 @@ import { PollingManager } from "../data/polling-manager";
 import { StreamManager } from "../data/streaming/stream-manager";
 import { DataMerger } from "../data/merge/data-merger";
 import { LoadingManager } from "../ui/loading-manager";
+import { sanitizeAttribution } from "../utils/attribution";
 import type { MergeStrategy } from "../data/merge/data-merger";
 
 type Layer = z.infer<typeof LayerSchema>;
@@ -181,8 +182,23 @@ export class LayerManager {
         continue;
       }
 
-      this.map.addSource(id, this.toMapLibreSourceSpec(spec as any));
+      this.addMapSource(id, this.toMapLibreSourceSpec(spec as any));
     }
+  }
+
+  /**
+   * The one place this manager hands a source to MapLibre.
+   *
+   * @remarks
+   * `attribution` is sanitized here because MapLibre renders it as HTML through
+   * a bypassable sanitizer (GHSA-jrc7-96c5-q579). Every source path — inline,
+   * named, url-fetched — funnels through this, so none can forget.
+   */
+  private addMapSource(id: string, spec: any): void {
+    if (spec && typeof spec === "object" && spec.attribution !== undefined) {
+      spec = { ...spec, attribution: sanitizeAttribution(spec.attribution).html };
+    }
+    this.map.addSource(id, spec);
   }
 
   /**
@@ -386,9 +402,9 @@ export class LayerManager {
         if (geojsonSource.maxzoom !== undefined) sourceSpec.maxzoom = geojsonSource.maxzoom;
         if (geojsonSource.attribution !== undefined) sourceSpec.attribution = geojsonSource.attribution;
 
-        this.map.addSource(sourceId, sourceSpec);
+        this.addMapSource(sourceId, sourceSpec);
       } else if (geojsonSource.stream) {
-        this.map.addSource(sourceId, {
+        this.addMapSource(sourceId, {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
         });
@@ -405,7 +421,7 @@ export class LayerManager {
       if (vectorSource.bounds) vectorSpec.bounds = vectorSource.bounds;
       if (vectorSource.attribution)
         vectorSpec.attribution = vectorSource.attribution;
-      this.map.addSource(sourceId, vectorSpec);
+      this.addMapSource(sourceId, vectorSpec);
     } else if (source.type === "raster") {
       const rasterSource = source as unknown as RasterSourceConfig;
       const rasterSpec: any = { type: "raster" };
@@ -420,7 +436,7 @@ export class LayerManager {
       if (rasterSource.bounds) rasterSpec.bounds = rasterSource.bounds;
       if (rasterSource.attribution)
         rasterSpec.attribution = rasterSource.attribution;
-      this.map.addSource(sourceId, rasterSpec);
+      this.addMapSource(sourceId, rasterSpec);
     } else if (source.type === "raster-dem") {
       // Forwarded whole rather than field-by-field: the schema is passthrough,
       // and `encoding: custom` is meaningless without the redFactor/
@@ -430,20 +446,20 @@ export class LayerManager {
       // geojson's refresh/cache/prefetchedData). This also matches how
       // block-level named sources reach MapLibre.
       const demSource = source as unknown as RasterDEMSourceConfig;
-      this.map.addSource(sourceId, {
+      this.addMapSource(sourceId, {
         ...demSource,
         type: "raster-dem",
       } as any);
     } else if (source.type === "image") {
       const imageSource = source as unknown as ImageSourceConfig;
-      this.map.addSource(sourceId, {
+      this.addMapSource(sourceId, {
         type: "image",
         url: imageSource.url,
         coordinates: imageSource.coordinates,
       });
     } else if (source.type === "video") {
       const videoSource = source as unknown as VideoSourceConfig;
-      this.map.addSource(sourceId, {
+      this.addMapSource(sourceId, {
         type: "video",
         urls: videoSource.urls,
         coordinates: videoSource.coordinates,
@@ -505,7 +521,7 @@ export class LayerManager {
     if (config.generateId !== undefined) sourceSpec.generateId = config.generateId;
     if (config.promoteId !== undefined) sourceSpec.promoteId = config.promoteId;
 
-    this.map.addSource(sourceId, sourceSpec);
+    this.addMapSource(sourceId, sourceSpec);
 
     this.sourceData.set(sourceId, initialData);
 
