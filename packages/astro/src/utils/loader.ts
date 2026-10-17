@@ -38,6 +38,7 @@
  */
 
 import { readFile } from "fs/promises";
+import { resolve as resolvePath } from "path";
 import { parse as parseYAML } from "yaml";
 
 // This loader calls `yaml`'s `parse` directly (in `loadYAML`/`loadFromGlob`)
@@ -71,6 +72,22 @@ import type { MapBlock, ScrollytellingBlock, ParseError } from "@maplibre-yaml/c
  * }
  * ```
  */
+/**
+ * One entry of {@link YAMLLoadError.errors}: core's `ParseError` (`path`,
+ * `line`, `column`) with a self-describing `message` that names the file,
+ * field and line (since 0.5.1), and the fields Astro's error overlay reads.
+ */
+export interface YAMLLoadIssue extends ParseError {
+  /** Core's original message, without file, field or line ("Expected array, got undefined"). */
+  reason?: string;
+  /** Same as `message` (the field Astro 4/5's overlay reads). */
+  text?: string;
+  /** Where in the YAML file (Astro 7's overlay frames it). */
+  loc?: { file: string; line: number; column: number };
+  /** Same as `loc` (Astro 4/5's overlay). */
+  location?: { file: string; line: number; column: number };
+}
+
 export class YAMLLoadError extends Error {
   /**
    * Array of validation errors with paths and messages.
@@ -81,7 +98,7 @@ export class YAMLLoadError extends Error {
    * Omitting the property when there are no structured errors keeps
    * single-message throws compatible with Astro's error pipeline.
    */
-  public errors?: ParseError[];
+  public errors?: YAMLLoadIssue[];
 
   /**
    * Path to the YAML file that failed to load
@@ -91,7 +108,7 @@ export class YAMLLoadError extends Error {
   constructor(
     message: string,
     filePath: string,
-    errors: ParseError[] = [],
+    errors: YAMLLoadIssue[] = [],
     options?: { cause?: unknown },
   ) {
     super(message, options);
@@ -99,6 +116,94 @@ export class YAMLLoadError extends Error {
     this.filePath = filePath;
     if (errors.length > 0) this.errors = errors;
   }
+}
+
+/** A validation finding as core's parser reports it (errors and warnings alike). */
+interface Finding {
+  path: string;
+  message: string;
+  line?: number;
+  column?: number;
+}
+
+/** `chapters.2.center: Expected array, got undefined (line 81, column 5)` */
+function describeFinding(finding: Finding): string {
+  const where =
+    finding.line !== undefined
+      ? ` (line ${finding.line}${finding.column !== undefined ? `, column ${finding.column}` : ""})`
+      : "";
+  return `${finding.path ? `${finding.path}: ` : ""}${finding.message}${where}`;
+}
+
+/**
+ * The error a failed `loadMapConfig` / `loadScrollytellingConfig` throws,
+ * carrying what `mlym validate` would say (ml-aot.4).
+ *
+ * @remarks
+ * Astro treats a thrown error whose `errors` is an array as an aggregate and
+ * its dev overlay shows the FIRST ENTRY, not the top-level message: Astro 7
+ * reads the entry's `message` and frames its `loc` (Oxc's shape), Astro 4/5
+ * read `text` and `location` (esbuild's). Core's `ParseError` messages carry
+ * no path, file or line, so the overlay used to read only "Expected array,
+ * got undefined". Each entry is therefore a self-describing copy of the
+ * ParseError:
+ *
+ * - `message` / `text` — `<file>: <field path>: <reason> (line L, column C)`,
+ *   plus any parser warning on the same object (the unknown-key "did you
+ *   mean" that usually explains a missing field); the first entry also
+ *   counts the other errors;
+ * - `reason` — core's original message, for programmatic use (`path`,
+ *   `line` and `column` are unchanged);
+ * - `loc` / `location` — `{ file, line, column }` in the YAML file, so the
+ *   overlay shows a code frame of the offending line.
+ *
+ * The top-level `message` lists every error and warning, for `astro build`
+ * and logs.
+ */
+function validationError(
+  what: string,
+  path: string,
+  errors: ParseError[],
+  warnings: Finding[] = []
+): YAMLLoadError {
+  const lines = [
+    ...errors.map((e) => `  error   ${describeFinding(e)}`),
+    ...warnings.map((w) => `  warning ${describeFinding(w)}`),
+  ];
+  const message = `${what} validation failed for ${path}:\n${lines.join("\n")}`;
+  const file = resolvePath(path);
+  const parentOf = (p: string) => p.split(".").slice(0, -1).join(".");
+  const entries = errors.map((error, index) => {
+    const related = warnings
+      .filter((w) => parentOf(w.path) === parentOf(error.path))
+      .map((w) => ` Warning: ${describeFinding(w)}`)
+      .join("");
+    const more =
+      index === 0 && errors.length > 1
+        ? ` (+${errors.length - 1} more: ${errors
+            .slice(1)
+            .map((e) => e.path || "(root)")
+            .join(", ")})`
+        : "";
+    const text = `${path}: ${describeFinding(error)}.${related}${more}`;
+    // Oxc's `loc` (Astro 7) counts columns from 1, esbuild's `location`
+    // (Astro 4/5) from 0.
+    const where =
+      error.line !== undefined
+        ? {
+            loc: { file, line: error.line, column: error.column ?? 1 },
+            location: { file, line: error.line, column: Math.max(0, (error.column ?? 1) - 1) },
+          }
+        : {};
+    return {
+      ...error,
+      reason: error.message,
+      message: text,
+      text,
+      ...where,
+    };
+  });
+  return new YAMLLoadError(message, path, entries);
 }
 
 /**
@@ -253,11 +358,7 @@ export async function loadMapConfig(path: string): Promise<MapBlock> {
     const result = YAMLParser.safeParseMapBlock(contents);
 
     if (!result.success) {
-      throw new YAMLLoadError(
-        `Map configuration validation failed for ${path}`,
-        path,
-        result.errors
-      );
+      throw validationError("Map configuration", path, result.errors, result.warnings);
     }
 
     return result.data!;
@@ -332,11 +433,7 @@ export async function loadScrollytellingConfig(
     const result = YAMLParser.safeParseScrollytellingBlock(contents);
 
     if (!result.success) {
-      throw new YAMLLoadError(
-        `Scrollytelling configuration validation failed for ${path}`,
-        path,
-        result.errors
-      );
+      throw validationError("Scrollytelling configuration", path, result.errors, result.warnings);
     }
 
     return result.data!;
@@ -468,16 +565,21 @@ export async function loadFromGlob<T = unknown>(
   if (errors.length > 0) {
     const errorMessage = errors
       .map(({ path, errors: errs }) => {
-        const errList = errs.map((e) => `  ${e.path}: ${e.message}`).join("\n");
+        const errList = errs.map((e) => `  ${describeFinding(e)}`).join("\n");
         return `${path}:\n${errList}`;
       })
       .join("\n\n");
+    const message = `Failed to load ${errors.length} file(s):\n${errorMessage}`;
 
-    throw new YAMLLoadError(
-      `Failed to load ${errors.length} file(s):\n${errorMessage}`,
-      "multiple files",
-      errors.flatMap((e) => e.errors)
-    );
+    // Self-describing entries: Astro's overlay shows the first entry of an
+    // `errors` array, not this message (see validationError).
+    const flat = errors.flatMap(({ path, errors: errs }) => errs.map((e) => ({ file: path, e })));
+    const entries = flat.map(({ file, e }, index) => {
+      const more = index === 0 && flat.length > 1 ? ` (+${flat.length - 1} more; see the build log)` : "";
+      const text = `${file}: ${describeFinding(e)}${more}`;
+      return { ...e, reason: e.message, message: text, text };
+    });
+    throw new YAMLLoadError(message, "multiple files", entries);
   }
 
   return results;

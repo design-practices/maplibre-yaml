@@ -87,8 +87,9 @@ export function escapeHtml(value: unknown): string {
 }
 
 /**
- * Media URLs are schema-validated with zod's `.url()`, which accepts
- * `javascript:` and `data:` as well-formed. Relative and http(s) only.
+ * Relative and http(s) only. Since 0.7.1 core's schema enforces the same
+ * rule (ml-aot.6), but a story handed over as `config` may never have been
+ * validated, so the sink still checks.
  */
 export function safeMediaSrc(value: unknown): string | null {
   // eslint-disable-next-line no-control-regex

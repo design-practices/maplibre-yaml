@@ -15,6 +15,7 @@ import {
   YAMLLoadError,
 } from "../../src/utils/loader";
 import { z } from "zod";
+import { YAMLParser as YAMLParserForGlob } from "@maplibre-yaml/core";
 
 describe("loadYAML", () => {
   let testDir: string;
@@ -226,6 +227,111 @@ config:
       expect(loadError.errors!.length).toBeGreaterThan(0);
       expect(loadError.filePath).toBe(yamlPath);
     }
+  });
+});
+
+/**
+ * ml-aot.4: the Astro dev overlay shows the entries of an `errors` array
+ * (their `text`, framed at `location`), not the thrown message — and core's
+ * ParseError messages carry no path or line. A student's typo'd key used to
+ * read only "Expected array, got undefined" with no file, field or line.
+ */
+describe("validation errors name the file, field and line (ml-aot.4)", () => {
+  let testDir: string;
+
+  beforeEach(async () => {
+    testDir = join(tmpdir(), `astro-aot4-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(testDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  const story = `type: scrollytelling
+id: s
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+chapters:
+  - id: a
+    title: A
+    center: [0, 0]
+    zoom: 2
+  - id: b
+    title: B
+    centre: [10, 10]
+    zoom: 3
+`;
+
+  it("loadScrollytellingConfig: message, overlay text and location all carry path + line + did-you-mean", async () => {
+    const yamlPath = join(testDir, "misspelled.yaml");
+    await writeFile(yamlPath, story);
+
+    const error = (await loadScrollytellingConfig(yamlPath).catch((e) => e)) as YAMLLoadError & {
+      errors: Array<{ text: string; location?: { file: string; line: number } }>;
+    };
+    expect(error).toBeInstanceOf(YAMLLoadError);
+
+    // The build log / top-level message.
+    expect(error.message).toContain(yamlPath);
+    expect(error.message).toMatch(/chapters\.1\.center: Expected array, got undefined \(line \d+/);
+    expect(error.message).toMatch(/warning +chapters\.1\.centre: Unknown key "centre"\. Did you mean "center"\?/);
+
+    // What Astro's dev overlay actually renders: the FIRST entry — its
+    // `message` + `loc` on Astro 7 (Oxc shape), `text` + `location` on 4/5.
+    const first = error.errors[0]! as any;
+    for (const shown of [first.message, first.text]) {
+      expect(shown).toContain(yamlPath);
+      expect(shown).toMatch(/chapters\.1\.center: Expected array, got undefined \(line \d+, column \d+\)/);
+      expect(shown).toMatch(/chapters\.1\.centre: Unknown key "centre"\. Did you mean "center"\?/);
+    }
+    // ...framed at the YAML line (the chapter's mapping, where center is missing).
+    for (const where of [first.loc, first.location]) {
+      expect(where?.file).toBe(yamlPath);
+      expect(where?.line).toBeGreaterThanOrEqual(12);
+    }
+
+    // Programmatic consumers keep the structured fields and core's reason.
+    expect(first.path).toBe("chapters.1.center");
+    expect(first.reason).toBe("Expected array, got undefined");
+  });
+
+  it("loadMapConfig gets the same treatment", async () => {
+    const yamlPath = join(testDir, "map.yaml");
+    await writeFile(
+      yamlPath,
+      `type: map
+id: m
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: pts
+    type: circle
+    source:
+      type: geojson
+      url: "data/cities.geojson"
+`
+    );
+    const error = (await loadMapConfig(yamlPath).catch((e) => e)) as YAMLLoadError & {
+      errors: Array<{ text: string }>;
+    };
+    expect(error.message).toContain(yamlPath);
+    expect(error.message).toMatch(/layers\.0\.source\.url: Must be an absolute URL/);
+    expect(error.errors[0]!.text).toMatch(/map\.yaml: layers\.0\.source\.url: Must be an absolute URL/);
+    expect((error.errors[0] as any).message).toBe(error.errors[0]!.text);
+  });
+
+  it("loadFromGlob's aggregate names each file and field in the overlay text", async () => {
+    const error = (await loadFromGlob(
+      { "/src/stories/bad.yaml": () => story },
+      (yaml) => YAMLParserForGlob.safeParseScrollytellingBlock(yaml)
+    ).catch((e) => e)) as YAMLLoadError & { errors: Array<{ text: string }> };
+    expect(error.errors[0]!.text).toContain("/src/stories/bad.yaml");
+    expect(error.errors[0]!.text).toMatch(/chapters\.1\.center: Expected array, got undefined \(line \d+/);
   });
 });
 

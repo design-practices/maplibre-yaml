@@ -3297,17 +3297,17 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   },
                   "description": {
                     "type": "string",
-                    "description": "Chapter description (HTML/markdown supported)"
+                    "description": "Chapter text as HTML (markdown is not converted)"
                   },
                   "image": {
                     "type": "string",
-                    "format": "uri",
-                    "description": "Hero image URL"
+                    "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                    "description": "Hero image: an http(s) URL or a site path such as /images/photo.jpg"
                   },
                   "video": {
                     "type": "string",
-                    "format": "uri",
-                    "description": "Video URL"
+                    "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                    "description": "Video: an http(s) URL or a site path such as /videos/clip.mp4"
                   },
                   "pitch": {
                     "type": "number",
@@ -10806,17 +10806,17 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "description": {
                                 "type": "string",
-                                "description": "Chapter description (HTML/markdown supported)"
+                                "description": "Chapter text as HTML (markdown is not converted)"
                               },
                               "image": {
                                 "type": "string",
-                                "format": "uri",
-                                "description": "Hero image URL"
+                                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                                "description": "Hero image: an http(s) URL or a site path such as /images/photo.jpg"
                               },
                               "video": {
                                 "type": "string",
-                                "format": "uri",
-                                "description": "Video URL"
+                                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                                "description": "Video: an http(s) URL or a site path such as /videos/clip.mp4"
                               },
                               "pitch": {
                                 "type": "number",
@@ -13836,17 +13836,17 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
               },
               "description": {
                 "type": "string",
-                "description": "Chapter description (HTML/markdown supported)"
+                "description": "Chapter text as HTML (markdown is not converted)"
               },
               "image": {
                 "type": "string",
-                "format": "uri",
-                "description": "Hero image URL"
+                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                "description": "Hero image: an http(s) URL or a site path such as /images/photo.jpg"
               },
               "video": {
                 "type": "string",
-                "format": "uri",
-                "description": "Video URL"
+                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                "description": "Video: an http(s) URL or a site path such as /videos/clip.mp4"
               },
               "pitch": {
                 "type": "number",

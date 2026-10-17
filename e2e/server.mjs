@@ -315,6 +315,18 @@ const server = createServer(async (req, res) => {
       const type = esm[1].endsWith(".map") ? TYPES[".json"] : TYPES[".mjs"];
       return send(200, await readFile(join(MAPLIBRE_DIR, "dist", esm[1])), type);
     }
+    // ml-aot.2: maplibre-gl as a bundler serves it — the entry module from a
+    // directory WITHOUT its worker beside it (v6 then needs setWorkerUrl()).
+    // v4/v5 carry their worker inline, so there it is just the vendor shim.
+    if (path === "/bundled/maplibre-gl.mjs") {
+      if (!MAPLIBRE_ESM_ONLY) {
+        return send(200, ESM_SHIM.replace('"./maplibre-gl.js"', '"/vendor/maplibre-gl.js"'), TYPES[".js"]);
+      }
+      return send(200, await readFile(join(MAPLIBRE_DIR, "dist/maplibre-gl.mjs")), TYPES[".mjs"]);
+    }
+    if (path === "/bundled/maplibre-gl-shared.mjs" && MAPLIBRE_ESM_ONLY) {
+      return send(200, await readFile(join(MAPLIBRE_DIR, "dist/maplibre-gl-shared.mjs")), TYPES[".mjs"]);
+    }
     if (path === "/vendor/maplibre-gl.css") {
       return send(200, await readFile(join(MAPLIBRE_DIR, "dist/maplibre-gl.css")), TYPES[".css"]);
     }

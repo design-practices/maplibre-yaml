@@ -20,13 +20,24 @@ vi.mock("maplibre-gl", () => {
   return { default: { Map }, Map };
 });
 
+// The renderer double keeps its `load` handlers so a test can fire the
+// map's load (the CSS probe runs then, ml-aot.10).
+const loadHandlers: Array<() => void> = [];
 vi.mock("../../src/renderer/map-renderer", () => ({
   MapRenderer: vi.fn().mockImplementation(() => ({
     getMap: vi.fn(() => ({ on: vi.fn(), off: vi.fn() })),
     destroy: vi.fn(),
-    on: vi.fn(),
+    on: vi.fn((name: string, fn: () => void) => {
+      if (name === "load") loadHandlers.push(fn);
+    }),
   })),
 }));
+
+/** Fire every renderer's `load`, then let the deferred CSS probe settle. */
+async function fireMapLoad(): Promise<void> {
+  for (const fn of loadHandlers.splice(0)) fn();
+  await new Promise((r) => setTimeout(r, 20));
+}
 
 import { MLMap } from "../../src/components/ml-map";
 
@@ -64,6 +75,7 @@ describe("MLMap diagnostics", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     document.head.innerHTML = "";
+    loadHandlers.length = 0;
     if (!customElements.get("ml-map")) {
       customElements.define("ml-map", MLMap);
     }
@@ -137,10 +149,65 @@ describe("MLMap diagnostics", () => {
     const el = makeElement();
     document.body.appendChild(el);
     await new Promise((r) => setTimeout(r, 10));
+    await fireMapLoad();
 
     expect(
       warnings().some((m) => m.includes("MapLibre GL CSS"))
     ).toBe(true);
+  });
+
+  it("does not warn about CSS that is applied after the element upgrades but before the map loads (ml-aot.10)", async () => {
+    // Vite dev: `import "maplibre-gl/dist/maplibre-gl.css"` is a module
+    // that injects a <style> AFTER register upgraded the element. The old
+    // probe ran at construction and warned on every map.
+    const el = makeElement();
+    document.body.appendChild(el);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(warnings().some((m) => m.includes("MapLibre GL CSS"))).toBe(false);
+
+    const style = document.createElement("style");
+    style.textContent = ".maplibregl-map { overflow: hidden; position: relative; }";
+    document.head.appendChild(style);
+    await fireMapLoad();
+
+    expect(warnings().some((m) => m.includes("MapLibre GL CSS"))).toBe(false);
+  });
+
+  it("waits for a still-loading stylesheet before warning (ml-ohh.13)", async () => {
+    // An async <link> whose sheet is not in yet when the map loads.
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+
+    const el = makeElement();
+    document.body.appendChild(el);
+    await new Promise((r) => setTimeout(r, 10));
+    await fireMapLoad();
+    expect(warnings().some((m) => m.includes("MapLibre GL CSS"))).toBe(false);
+
+    // The stylesheet arrives.
+    const style = document.createElement("style");
+    style.textContent = ".maplibregl-map { overflow: hidden; position: relative; }";
+    document.head.appendChild(style);
+    link.dispatchEvent(new Event("load"));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(warnings().some((m) => m.includes("MapLibre GL CSS"))).toBe(false);
+  });
+
+  it("still warns after a pending stylesheet loads without MapLibre's rules", async () => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+
+    const el = makeElement();
+    document.body.appendChild(el);
+    await new Promise((r) => setTimeout(r, 10));
+    await fireMapLoad();
+    link.dispatchEvent(new Event("load"));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(warnings().some((m) => m.includes("MapLibre GL CSS"))).toBe(true);
   });
 
   it("does not warn about CSS when the maplibre canary is styled", async () => {
@@ -152,6 +219,7 @@ describe("MLMap diagnostics", () => {
     const el = makeElement();
     document.body.appendChild(el);
     await new Promise((r) => setTimeout(r, 10));
+    await fireMapLoad();
 
     expect(
       warnings().some((m) => m.includes("MapLibre GL CSS"))
@@ -169,6 +237,7 @@ describe("MLMap diagnostics", () => {
     const el = makeElement();
     document.body.appendChild(el);
     await new Promise((r) => setTimeout(r, 10));
+    await fireMapLoad();
 
     expect(
       warnings().some((m) => m.includes("MapLibre GL CSS"))

@@ -362,7 +362,11 @@ maplibre-yaml validate map.yaml
 mlym validate map.yaml
 ```
 
-Use `mlym` as a shorthand for `maplibre-yaml` in all commands.
+Use `mlym` as a shorthand for `maplibre-yaml` in all commands. Both are
+commands installed by `@maplibre-yaml/cli` (globally, or in your project with
+`npm install --save-dev @maplibre-yaml/cli`, then `npx mlym …`). Without an
+install, run `npx @maplibre-yaml/cli …`: `npx mlym` on its own looks for a
+package called `mlym`, which does not exist.
 
 ---
 
@@ -489,7 +493,7 @@ Using [husky](https://typicode.github.io/husky/):
 
 ```bash
 #!/bin/sh
-npx maplibre-yaml validate "$(git diff --cached --name-only --diff-filter=ACM | grep '\.yaml$')"
+npx @maplibre-yaml/cli validate "$(git diff --cached --name-only --diff-filter=ACM | grep '\.yaml$')"
 ```
 
 ---

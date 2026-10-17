@@ -20,23 +20,49 @@ Astro is a natural fit for maplibre-yaml - both embrace configuration-driven app
 
 ## Quick Start
 
-Get a map in your Astro site in 5 minutes.
+Get a map in a new Astro site in 5 minutes. Every command is shown for npm,
+which is what `npm create astro` sets up; use the pnpm or Yarn tab only if your
+project already uses that package manager (mixing them leaves you with two
+lockfiles).
 
 <Steps>
 
-1. **Install dependencies**
+1. **Create an Astro project** (skip this if you already have one)
 
    ```bash
-   pnpm add @maplibre-yaml/core maplibre-gl@^6
+   npm create astro@latest -- --template minimal
    ```
 
-   maplibre-gl 4, 5 and 6 (`>= 6.4.1`) are supported; v6 is recommended.
-   The components set maplibre-gl 6's worker URL themselves, so no
-   `setWorkerUrl()` call is needed in an Astro project.
+   Then `cd` into the folder it created.
 
-2. **Create a map configuration file**
+2. **Install the packages**
 
-   Create `public/configs/hero-map.yaml`:
+   <Tabs syncKey="pkg">
+   <TabItem label="npm">
+   ```bash
+   npm install @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
+   ```
+   </TabItem>
+   <TabItem label="pnpm">
+   ```bash
+   pnpm add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
+   ```
+   </TabItem>
+   <TabItem label="Yarn">
+   ```bash
+   yarn add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
+   ```
+   </TabItem>
+   </Tabs>
+
+   maplibre-gl 4, 5 and 6 (`>= 6.4.1`) are supported; v6 is recommended. The
+   `@maplibre-yaml/astro` components set maplibre-gl 6's worker URL and load
+   its stylesheet for you, so this Quick Start needs no extra setup.
+
+3. **Create a map configuration file**
+
+   Create `public/configs/hero-map.yaml` (make the `configs` folder inside
+   `public/`):
 
    ```yaml
    type: map
@@ -44,7 +70,7 @@ Get a map in your Astro site in 5 minutes.
    config:
      center: [-74.006, 40.7128]
      zoom: 12
-     mapStyle: "https://demotiles.maplibre.org/style.json"
+     mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
    layers:
      - id: marker
        type: circle
@@ -66,57 +92,86 @@ Get a map in your Astro site in 5 minutes.
          circle-stroke-color: "#ffffff"
    ```
 
-3. **Create a Map component**
+   Files in `public/` are served from the site root, so this one is at
+   `/configs/hero-map.yaml`.
 
-   Create `src/components/Map.astro`:
+4. **Put the map on a page**
 
-   ```astro
-   ---
-   interface Props {
-     src: string;
-     height?: string;
-     class?: string;
-   }
-
-   const { src, height = '400px', class: className } = Astro.props;
-   ---
-
-   <ml-map
-     src={src}
-     style={`height: ${height}; display: block;`}
-     class={className}
-   />
-
-   <script>
-     import '@maplibre-yaml/core/register';
-     import 'maplibre-gl/dist/maplibre-gl.css';
-   </script>
-
-   <style>
-     ml-map {
-       width: 100%;
-       border-radius: 8px;
-       overflow: hidden;
-     }
-   </style>
-   ```
-
-4. **Use in a page**
+   Replace the contents of `src/pages/index.astro` with:
 
    ```astro
    ---
-   // src/pages/index.astro
-   import Layout from '../layouts/Layout.astro';
-   import Map from '../components/Map.astro';
+   import { Map } from '@maplibre-yaml/astro';
    ---
 
-   <Layout title="Home">
-     <h1>Welcome</h1>
-     <Map src="/configs/hero-map.yaml" height="500px" />
-   </Layout>
+   <html lang="en">
+     <head>
+       <meta charset="utf-8" />
+       <meta name="viewport" content="width=device-width" />
+       <title>My map</title>
+     </head>
+     <body>
+       <h1>Welcome</h1>
+       <Map src="/configs/hero-map.yaml" height="500px" />
+     </body>
+   </html>
    ```
+
+5. **Run it**
+
+   ```bash
+   npm run dev
+   ```
+
+   Open the address it prints (usually `http://localhost:4321`). You should
+   see a street map of New York with a blue dot. If the YAML has a mistake,
+   the map shows an error card naming the field instead.
 
 </Steps>
+
+Next: load the YAML at build time so mistakes fail the build
+([Basic Usage](#basic-usage-with-map-component)), or tell a story with
+[`<Scrollytelling>`](#scrollytelling-component).
+
+### Using `<ml-map>` directly
+
+The `@maplibre-yaml/astro` components above are the easiest path. If you write
+your own component around the `<ml-map>` web element instead (the
+[Component Patterns](#component-patterns) below), its script has to do what
+the components do for you: point maplibre-gl 6 at its worker, register the
+element, and load MapLibre's stylesheet.
+
+```astro
+---
+// src/components/MyMap.astro
+interface Props {
+  src: string;
+  height?: string;
+}
+
+const { src, height = '400px' } = Astro.props;
+---
+
+<ml-map src={src} style={`height: ${height}; display: block;`}></ml-map>
+
+<script>
+  // maplibre-gl 6 loads its worker from a separate file. Inside a Vite/Astro
+  // bundle it cannot find that file by itself, so tell it where it is.
+  import { setWorkerUrl } from 'maplibre-gl';
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+  import '@maplibre-yaml/core/register';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+
+  setWorkerUrl(workerUrl);
+</script>
+```
+
+The order of these lines does not matter: since `@maplibre-yaml/core` 0.7.1,
+`<ml-map>` waits until the page's scripts have run before it builds its map,
+so the worker URL is always in place first. Leave out the `setWorkerUrl` lines
+and maplibre-gl 6 cannot start, which the map reports on the page as
+*Worker failed to load*. On maplibre-gl 4 or 5, delete the two worker lines
+(there is no worker file to import, and the build fails if you keep them).
 
 ## Using @maplibre-yaml/astro Package
 
@@ -135,9 +190,23 @@ For Astro projects, we recommend using the dedicated `@maplibre-yaml/astro` pack
 
 ### Installation
 
+<Tabs syncKey="pkg">
+<TabItem label="npm">
+```bash
+npm install @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
+```
+</TabItem>
+<TabItem label="pnpm">
 ```bash
 pnpm add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
 ```
+</TabItem>
+<TabItem label="Yarn">
+```bash
+yarn add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
+```
+</TabItem>
+</Tabs>
 
 ### Supported versions
 
@@ -536,8 +605,18 @@ Error display includes:
 - **Validation Errors**: Lists all validation failures with paths (for example `config.zoom: Expected number, got string`)
 - **Network Errors**: Shows fetch failure messages (for example `Failed to fetch /configs/missing.yaml: 404 Not Found`)
 
-With `config`, the same problems surface at build time instead. Handle them
-programmatically like this:
+With `config`, the same problems surface at build time instead, in the
+`astro dev` error overlay and the `astro build` output. The message names the
+file, each failing field with its line, and the parser's warnings, which often
+explain the error:
+
+```
+Scrollytelling configuration validation failed for ./src/stories/trip.yaml:
+  error   chapters.2.center: Expected array, got undefined (line 78, column 5)
+  warning chapters.2.centre: Unknown key "centre". Did you mean "center"? (line 81, column 5)
+```
+
+To handle them yourself:
 
 ```astro
 ---
@@ -551,8 +630,10 @@ try {
     // `errors` is set for validation failures; a missing file or a YAML
     // syntax error carries only `message` (and the original as `cause`).
     console.error(`${error.filePath}: ${error.message}`);
+    // Each entry's `message` already names the file, field and line;
+    // `e.path`, `e.line` and `e.reason` hold the parts.
     error.errors?.forEach(e => {
-      console.error(`  ${e.path}: ${e.message}`);
+      console.error(`  ${e.message}`);
     });
   }
   throw error; // Fail build on invalid config
@@ -1144,9 +1225,8 @@ chapters:
   - id: detail
     title: "Major Fault Lines"
     description: "<p>The San Andreas Fault runs through this region.</p>"
-    # Must be an absolute URL: a relative path such as /images/x.jpg fails
-    # validation ("Invalid URL format").
-    image: "https://example.com/images/fault-lines.jpg"
+    # A file in public/images/ (served at /images/...), or a full https:// URL.
+    image: "/images/fault-lines.jpg"
     center: [-118.0, 34.0]
     zoom: 11
     pitch: 45
@@ -1199,6 +1279,45 @@ const story = await loadScrollytellingConfig('./src/stories/brand-story.yaml');
 </style>
 ```
 
+#### Stories as a content collection
+
+Keep several stories as YAML files in a content collection and build one page
+per story. `getScrollytellingSchema()` validates each file with the same rules
+as `loadScrollytellingConfig`, at build time and in `astro dev`:
+
+```ts
+// src/content.config.ts
+import { defineCollection } from 'astro:content';
+import { glob } from 'astro/loaders';
+import { getScrollytellingSchema } from '@maplibre-yaml/astro/utils';
+
+const stories = defineCollection({
+  loader: glob({ pattern: '*.yaml', base: './src/stories' }),
+  schema: getScrollytellingSchema(),
+});
+
+export const collections = { stories };
+```
+
+```astro
+---
+// src/pages/stories/[id].astro
+import { getCollection } from 'astro:content';
+import { Scrollytelling } from '@maplibre-yaml/astro';
+
+export async function getStaticPaths() {
+  const stories = await getCollection('stories');
+  return stories.map((story) => ({ params: { id: story.id }, props: { story } }));
+}
+
+const { story } = Astro.props;
+---
+<Scrollytelling config={story.data} />
+```
+
+Each file in `src/stories/` is one standalone story document (`type:
+scrollytelling` at the top level, as in [YAML Configuration](#yaml-configuration)).
+
 ### Chapter Configuration
 
 Each chapter supports extensive configuration options:
@@ -1219,9 +1338,12 @@ Each chapter supports extensive configuration options:
 
 **Content:**
 - `title`: Chapter heading (required)
-- `description`: HTML content (rendered as-is, not escaped)
-- `image`: Image URL for visual context (absolute URL)
-- `video`: Video URL with inline player (absolute URL)
+- `description`: HTML content (rendered as-is, not escaped). Markdown is
+  not converted: `**bold**` and `[link](url)` show literally, so write
+  `<strong>bold</strong>` and `<a href="url">link</a>`
+- `image`: Image shown above the text: a full `https://` URL, or a path to a
+  file in `public/` (`/images/fuji.jpg` for `public/images/fuji.jpg`)
+- `video`: Video with an inline player, given the same way as `image`
 - `alignment`: "left", "right", "center", or "full"
 - `hidden`: Hide content for map-only transitions
 
@@ -1332,17 +1454,23 @@ The component uses IntersectionObserver with these settings:
 
 The chapters scroll over a sticky full-viewport map, so the mouse wheel
 scrolls the story rather than zooming the map. The map opens on the story's
-`config` camera with the first chapter marked active. That chapter's `layers`
-and `onChapterEnter` actions run only when a reader scrolls back to it, so
-set its starting state in `config` and the layers themselves (for example
-`layout: { visibility: none }` on a layer a later chapter reveals).
+`config` camera. As soon as it has loaded, the chapter sitting in the trigger
+zone is activated without any scrolling. On a page that starts with the story
+that is the first chapter: its camera move, `layers` and `onChapterEnter`
+actions all run on load. Give layers their starting state in `config` and the
+layers themselves (for example `layout: { visibility: none }` on a layer a
+later chapter reveals), and let the first chapter's actions apply its own
+look.
 
 ### Accessibility
 
 - Semantic HTML with proper ARIA labels
 - Keyboard navigation for chapter markers
 - Screen reader friendly chapter titles
-- Chapter cards respect reduced-motion preferences (the map's camera moves do not; use `animation: jumpTo` where that matters)
+- Reduced motion: when the reader's system asks for reduced motion
+  (`prefers-reduced-motion`), chapter cards stop animating, MapLibre turns
+  `flyTo`/`easeTo` chapter moves into instant jumps, and `rotateAnimation` /
+  `spinGlobe` are skipped
 - High contrast mode support
 
 ### Performance Tips
@@ -1875,7 +2003,10 @@ const feature = findFeature(fc, { source: "...", featureId: "poa-1.1" });
 
 ## Component Patterns
 
-These patterns wrap `<ml-map>` yourself and need only `@maplibre-yaml/core`.
+These patterns wrap `<ml-map>` yourself and need only `@maplibre-yaml/core`
+and `maplibre-gl`. Each script carries the maplibre-gl 6 worker setup explained
+in [Using `<ml-map>` directly](#using-ml-map-directly); on maplibre-gl 4 or 5,
+delete its two worker lines.
 
 <Aside type="caution" title="Astro 4: render pages through a layout with a head">
   Take a page with no `<head>`, such as one that is just `<Map ... />` with no
@@ -1918,8 +2049,12 @@ const { src, height = '400px' } = Astro.props;
 <ml-map src={src} style={`height: ${height}; display: block;`} />
 
 <script>
+  import { setWorkerUrl } from 'maplibre-gl';
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
   import 'maplibre-gl/dist/maplibre-gl.css';
+
+  setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
 ```
 
@@ -1997,8 +2132,12 @@ const configJson = JSON.stringify(result.data);
 <ml-map style={`height: ${height}; display: block;`} config={configJson} />
 
 <script>
+  import { setWorkerUrl } from 'maplibre-gl';
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
   import 'maplibre-gl/dist/maplibre-gl.css';
+
+  setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
 ```
 
@@ -2061,8 +2200,12 @@ const error = result.success ? null : result.errors;
 )}
 
 <script>
+  import { setWorkerUrl } from 'maplibre-gl';
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
   import 'maplibre-gl/dist/maplibre-gl.css';
+
+  setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
 
 <style>
@@ -2193,9 +2336,13 @@ const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
 </div>
 
 <script>
+  import { setWorkerUrl } from 'maplibre-gl';
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import type { MLMap } from '@maplibre-yaml/core/components';
+
+  setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 
   // Initialize all interactive maps
   document.querySelectorAll<HTMLElement>('.interactive-map').forEach(container => {
@@ -2413,8 +2560,12 @@ const configJson = JSON.stringify(mapEntry.data);
 <ml-map style={`height: ${height}; display: block;`} config={configJson} />
 
 <script>
+  import { setWorkerUrl } from 'maplibre-gl';
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
   import 'maplibre-gl/dist/maplibre-gl.css';
+
+  setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
 ```
 
@@ -2449,8 +2600,12 @@ import "@maplibre-yaml/core/register"; // ❌ Crashes during SSR
 <ml-map src="/map.yaml" style="height: 400px; display: block;" />
 
 <script>
+  import { setWorkerUrl } from "maplibre-gl";
+  import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
   import "@maplibre-yaml/core/register";  // ✅ Runs client-side only
   import "maplibre-gl/dist/maplibre-gl.css";
+
+  setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
 ```
 
@@ -2571,6 +2726,20 @@ const files = import.meta.glob<string>('/src/configs/*.yaml', {
 
 `as: 'raw'` still works but is deprecated: Vite warns on every build.
 
+### Blank Map and "Worker failed to load"
+
+**Symptoms:** The map area stays empty or shows a *Map Error* card saying
+*Worker failed to load*; the console names `maplibre-gl-worker.mjs`.
+
+**Cause:** maplibre-gl 6 loads a worker from a separate file, and inside an
+Astro (Vite) bundle it cannot find that file unless it is told where it is.
+The `@maplibre-yaml/astro` components do this for you; a component of your own
+around `<ml-map>` must do it in its script.
+
+**Solution:** Add the two worker lines and the `setWorkerUrl` call shown in
+[Using `<ml-map>` directly](#using-ml-map-directly), or use the package's
+`<Map>` component instead.
+
 ### Web Component Not Defined
 
 **Symptoms:** `<ml-map>` renders as unknown element.
@@ -2581,8 +2750,12 @@ const files = import.meta.glob<string>('/src/configs/*.yaml', {
 
 ```astro
 <script>
+  import { setWorkerUrl } from 'maplibre-gl';
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
   import 'maplibre-gl/dist/maplibre-gl.css';
+
+  setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
 ```
 
