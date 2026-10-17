@@ -7,6 +7,7 @@
  * what makes that range true. For each major it does what a user does:
  *
  *   1. `pnpm pack` core and astro (the exact tarballs npm would publish),
+ *      each AT THE VERSION THE PENDING CHANGESETS WILL RELEASE (below),
  *   2. copy `examples/astro/site` into a fresh directory OUTSIDE the
  *      workspace and `npm install` it against `astro@^N` and the tarballs --
  *      no `--legacy-peer-deps`, so a peer range that excludes N fails here,
@@ -19,6 +20,22 @@
  * mistakes (a file missing from `files`, a dependency only the monorepo
  * hoists) that an npm install of the tarball exposes.
  *
+ * ## Packed at the release versions
+ *
+ * astro's peer range on core is under test too, and it may require a core
+ * that only the next release ships (astro 0.6 needs core >= 0.8 for
+ * `<ml-scrollytelling>`). Packed at the workspace versions (core still 0.7.0
+ * until the version PR), the strict npm install would refuse that pairing
+ * although it is exactly what will be published. So before packing, the
+ * script asks changesets what the pending changesets will release
+ * (`changeset status --output`) and packs each package at that version: it
+ * rewrites `version` in the package.json being packed and restores the
+ * original bytes in a `finally` (and on SIGINT/SIGTERM), so a run, failed or
+ * not, never leaves the tree dirty. With no pending changesets it packs at
+ * the current versions. Peers stay strict: still no `--legacy-peer-deps`,
+ * and a range that excludes the core being released, or an Astro major,
+ * still fails the install step.
+ *
  * Usage:
  *   node scripts/astro-matrix.mjs                     # majors 4 5 6 7, all steps
  *   node scripts/astro-matrix.mjs --majors 6,7
@@ -28,10 +45,10 @@
  * ASTRO_MATRIX_PORT (preview port, dev uses +1; default 4330).
  * Requires `pnpm build` first (core's dist is packed).
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -125,6 +142,50 @@ async function waitForHttp(url, timeoutMs = 120_000) {
   return false;
 }
 
+/**
+ * The versions the pending changesets will release, by package name; `{}`
+ * when there are none (pack at the current versions, as before).
+ */
+function pendingVersions() {
+  const out = join(WORK, "changeset-status.json");
+  rmSync(out, { force: true });
+  // `--output` is resolved against the cwd even when absolute, so pass it
+  // relative to the repo.
+  const res = spawnSync("pnpm", ["exec", "changeset", "status", "--output", relative(REPO, out)], {
+    cwd: REPO,
+    env: ENV,
+    encoding: "utf8",
+  });
+  if (!existsSync(out)) {
+    if (res.status === 0) return {};
+    throw new Error(`changeset status failed:\n${res.stdout}\n${res.stderr}`);
+  }
+  const { releases = [] } = JSON.parse(readFileSync(out, "utf8"));
+  return Object.fromEntries(
+    releases.filter((r) => r.newVersion && r.newVersion !== r.oldVersion).map((r) => [r.name, r.newVersion])
+  );
+}
+
+/** Rewrite `version` in a package.json; returns a function restoring the original bytes. */
+function setVersion(pkgJson, version) {
+  const original = readFileSync(pkgJson, "utf8");
+  const pkg = JSON.parse(original);
+  let restored = false;
+  const restore = () => {
+    if (restored) return;
+    restored = true;
+    writeFileSync(pkgJson, original);
+  };
+  if (!version || pkg.version === version) return restore;
+  console.log(`  packing ${pkg.name} at ${version} (workspace: ${pkg.version})`);
+  writeFileSync(pkgJson, original.replace(`"version": "${pkg.version}"`, `"version": "${version}"`));
+  if (JSON.parse(readFileSync(pkgJson, "utf8")).version !== version) {
+    restore();
+    throw new Error(`could not set the version of ${pkgJson}`);
+  }
+  return restore;
+}
+
 async function pack() {
   if (!existsSync(join(REPO, "packages/core/dist/index.js"))) {
     throw new Error("packages/core/dist is missing; run `pnpm build` first");
@@ -132,9 +193,39 @@ async function pack() {
   const dir = join(WORK, "packs");
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  for (const pkg of ["core", "astro"]) {
-    const code = await run("pnpm", ["pack", "--pack-destination", dir], { cwd: join(REPO, "packages", pkg) });
-    if (code !== 0) throw new Error(`pnpm pack failed for ${pkg}`);
+
+  const versions = pendingVersions();
+  const restores = [];
+  const restoreAll = () => {
+    for (const restore of restores.splice(0)) restore();
+  };
+  // A Ctrl-C mid-pack must not leave a rewritten package.json behind either.
+  const onSignal = (signal) => {
+    restoreAll();
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
+  try {
+    // Both versions before either pack: `pnpm pack` turns astro's
+    // `workspace:*` dev dependency on core into core's current version, so
+    // core must already read as the release version when astro packs.
+    for (const pkg of ["core", "astro"]) {
+      const pkgJson = join(REPO, "packages", pkg, "package.json");
+      const name = JSON.parse(readFileSync(pkgJson, "utf8")).name;
+      restores.push(setVersion(pkgJson, versions[name]));
+    }
+    if (process.env.ASTRO_MATRIX_FAIL_PACK === "1") {
+      throw new Error("ASTRO_MATRIX_FAIL_PACK=1: forced failure (tests the package.json restore)");
+    }
+    for (const pkg of ["core", "astro"]) {
+      const code = await run("pnpm", ["pack", "--pack-destination", dir], { cwd: join(REPO, "packages", pkg) });
+      if (code !== 0) throw new Error(`pnpm pack failed for ${pkg}`);
+    }
+  } finally {
+    restoreAll();
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
   }
   const tarball = (name) => {
     const file = readdirSync(dir).find((f) => f.startsWith(`maplibre-yaml-${name}-`) && f.endsWith(".tgz"));
