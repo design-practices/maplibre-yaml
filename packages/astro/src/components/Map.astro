@@ -52,6 +52,13 @@
  */
 
 import type { MapProps } from "../types";
+import { withBase } from "../utils/base-url";
+// MapLibre's stylesheet as PAGE css, imported here rather than in the client
+// <script>: Astro then links it in the page <head> in dev and build alike.
+// From the script, astro dev injected it with JS as a <style> the server
+// never rendered, and <ClientRouter />'s head swap dropped it after the first
+// soft navigation -- controls and attribution fell out of the map (ml-aot.22).
+import "maplibre-gl/dist/maplibre-gl.css";
 
 interface Props extends MapProps {}
 
@@ -74,6 +81,10 @@ const mapId = `map-${Math.random().toString(36).substring(2, 11)}`;
 
 // Serialize config for client-side if provided
 const serializedConfig = config ? JSON.stringify(config) : null;
+
+// `/configs/map.yaml` lives at `/<base>/configs/map.yaml` on a site deployed
+// under a subpath (GitHub Pages project sites) -- see utils/base-url.ts.
+const resolvedSrc = withBase(src, import.meta.env.BASE_URL);
 ---
 
 <div
@@ -91,7 +102,7 @@ const serializedConfig = config ? JSON.stringify(config) : null;
   <ml-map
     id={mapId}
     config={serializedConfig ?? undefined}
-    src={serializedConfig ? undefined : src}
+    src={serializedConfig ? undefined : resolvedSrc}
   >
     {/*
       Corner slots (ml-l4y.3). Astro reads a child's `slot="top-left"` as a
@@ -132,7 +143,6 @@ const serializedConfig = config ? JSON.stringify(config) : null;
   // first: maplibre-gl 6 needs its worker URL before any map is built
   import "../client/maplibre-worker";
   import "@maplibre-yaml/core/register";
-  import "maplibre-gl/dist/maplibre-gl.css";
 </script>
 
 <style>
