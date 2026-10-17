@@ -9,7 +9,7 @@ The `<ml-map>` web component is the simplest way to add maps to any HTML page. N
 
 ## Quick Start
 
-Get a map on your page in 3 steps.
+Get a map on your page in 4 steps.
 
 <Steps>
 
@@ -17,6 +17,10 @@ Get a map on your page in 3 steps.
 
    ```html
    <head>
+     <meta charset="utf-8" />
+     <!-- Without this line, phones lay the page out at desktop width and the map looks tiny -->
+     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
      <!-- MapLibre GL CSS -->
      <link
        href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
@@ -30,14 +34,14 @@ Get a map on your page in 3 steps.
      <!-- Register the web component -->
      <script
        type="module"
-       src="https://unpkg.com/@maplibre-yaml/core/register.js"
+       src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
      ></script>
    </head>
    ```
 
 2. **Create a YAML configuration file**
 
-   Create `map.yaml` in your project:
+   Create `map.yaml` next to your HTML file:
 
    ```yaml
    type: map
@@ -45,7 +49,7 @@ Get a map on your page in 3 steps.
    config:
      center: [-74.006, 40.7128]
      zoom: 12
-     mapStyle: "https://demotiles.maplibre.org/style.json"
+     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
    layers:
      - id: marker
        type: circle
@@ -68,19 +72,21 @@ Get a map on your page in 3 steps.
 3. **Add the map component**
 
    ```html
-   <ml-map src="map.yaml" style="width: 100%; height: 400px; display: block;">
+   <ml-map src="./map.yaml" style="width: 100%; height: 400px; display: block;">
    </ml-map>
    ```
 
 4. **View in browser**
 
-   Serve your files with any web server (e.g., `npx serve .`) and open in browser!
+   Serve the folder with any web server (for example `npx serve .`) and open
+   the address it prints. Opening the HTML file directly does not work: a
+   `file://` page cannot fetch `map.yaml`.
 
 </Steps>
 
 <Aside type="tip">
-  The `display: block` style is important - custom elements are inline by
-  default, which can cause sizing issues.
+  Give every `<ml-map>` `display: block` and a height. Custom elements are
+  inline and zero-height by default, so without them the map is invisible.
 </Aside>
 
 ## Installation Options
@@ -95,7 +101,7 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 </script>
 <script
   type="module"
-  src="https://unpkg.com/@maplibre-yaml/core/register.js"
+  src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
 ></script>
 ```
 
@@ -114,11 +120,33 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 npm install @maplibre-yaml/core maplibre-gl@^6
 ```
 
+Your JavaScript entry point registers the element, loads MapLibre's CSS and,
+on maplibre-gl 6, tells MapLibre where its worker file is. Inside a bundle
+maplibre-gl cannot find that file by itself: leave the worker lines out and
+the map shows *Worker failed to load* instead of rendering. With Vite:
+
 ```javascript
-// In your JavaScript entry point
+// src/main.js
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "@maplibre-yaml/core/register";
 import "maplibre-gl/dist/maplibre-gl.css";
+
+setWorkerUrl(workerUrl);
 ```
+
+```html
+<!-- index.html -->
+<ml-map src="./map.yaml" style="display: block; height: 400px;"></ml-map>
+<script type="module" src="/src/main.js"></script>
+```
+
+Put `map.yaml`, and every data file it loads, in Vite's **`public/`** folder.
+A YAML file next to `index.html` loads in `npm run dev`, but `npm run build`
+does not copy it, so the built site shows *YAML syntax error … `<!doctype
+html>`*. On maplibre-gl 4 or 5, leave out the worker lines. The full
+walkthrough is in
+[Installation → Using a bundler](/getting-started/installation/#using-a-bundler-vite).
 
 ## Configuration Methods
 
@@ -155,26 +183,26 @@ There are three ways to configure `<ml-map>`, each suited for different use case
 The simplest and cleanest approach - keep your configuration in a separate YAML file:
 
 ```html
-<ml-map src="/maps/my-map.yaml" style="height: 400px; display: block;"></ml-map>
+<ml-map src="./maps/my-map.yaml" style="height: 400px; display: block;"></ml-map>
 ```
 
-**my-map.yaml:**
+**maps/my-map.yaml:**
 
 ```yaml
 type: map
 id: my-map
 config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: points
     type: circle
     source:
       type: geojson
-      url: "https://example.com/data.geojson"
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     paint:
-      circle-radius: 8
+      circle-radius: 5
       circle-color: "#3b82f6"
 ```
 
@@ -199,7 +227,7 @@ id: inline-map
 config:
   center: [-74.006, 40.7128]
   zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: marker
     type: circle
@@ -224,7 +252,10 @@ layers:
 **Why this works:**
 
 - Browser doesn't process `<script type="text/yaml">` content
-- Whitespace and indentation are preserved exactly
+- Whitespace and indentation are preserved exactly. Start the YAML on the line
+  after `<script type="text/yaml">`, not on the same line, and keep every line
+  at the same depth relative to the first one (indenting the whole block to
+  match your HTML is fine)
 - Works in plain HTML, Astro, MDX and Svelte templates; in React, pass the
   YAML as a string child (`<script type="text/yaml">{yaml}</script>`)
 - **Not in Vue templates:** Vue's compiler rejects `<script>` tags in a
@@ -246,7 +277,7 @@ For dynamic or generated configurations:
   { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core/register.js";
+  import "https://unpkg.com/@maplibre-yaml/core@0.7/register.js";
 
   const config = {
     type: "map",
@@ -254,7 +285,7 @@ For dynamic or generated configurations:
     config: {
       center: [-74.006, 40.7128],
       zoom: 12,
-      mapStyle: "https://demotiles.maplibre.org/style.json",
+      mapStyle: "https://tiles.openfreemap.org/styles/liberty",
     },
     layers: [],
   };
@@ -363,7 +394,7 @@ so page chrome (buttons, captions, a custom legend) sits over the map without
 hand-rolled absolute positioning:
 
 ```html
-<ml-map src="/configs/map.yaml">
+<ml-map src="./map.yaml" style="display: block; height: 400px;">
   <div slot="top-right" class="my-controls">
     <button data-action="zoom-in">+</button>
     <button data-action="reset">⟲</button>
@@ -504,8 +535,10 @@ This example demonstrates a complete implementation using the `src` attribute wi
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Earthquake Monitor</title>
     <link
       href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
@@ -516,7 +549,7 @@ This example demonstrates a complete implementation using the `src` attribute wi
     </script>
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
     ></script>
     <style>
       * {
@@ -576,7 +609,7 @@ This example demonstrates a complete implementation using the `src` attribute wi
         <div class="status" id="status">Initializing...</div>
       </header>
 
-      <ml-map id="earthquake-map" src="earthquake-config.yaml"></ml-map>
+      <ml-map id="earthquake-map" src="./earthquake-config.yaml"></ml-map>
     </div>
 
     <script type="module">
@@ -625,7 +658,7 @@ id: earthquake-monitor
 config:
   center: [-120, 40]
   zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle
@@ -686,35 +719,30 @@ Each `<ml-map>` is independent:
 
 ```html
 <div
-  style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 100vh;"
+  style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 400px;"
 >
-  <ml-map id="map-1" style="display: block;"></ml-map>
-  <ml-map id="map-2" style="display: block;"></ml-map>
+  <ml-map src="./map-1.yaml" style="display: block; height: 100%;"></ml-map>
+  <ml-map src="./map-2.yaml" style="display: block; height: 100%;"></ml-map>
 </div>
-
-<script type="importmap">
-  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-</script>
-<script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core/register.js";
-
-  // Configure each map independently
-  document.getElementById("map-1").config = {
-    /* config 1 */
-  };
-  document.getElementById("map-2").config = {
-    /* config 2 */
-  };
-</script>
 ```
+
+Each element loads its own document (`map-1.yaml`, `map-2.yaml`), and the
+page needs the import map and `register.js` only once. A map built in
+JavaScript can take its document through the `config` property instead (see
+[Method 3](#method-3-json-attribute-programmatic)).
 
 ## Framework Compatibility
 
 `<ml-map>` is a standard custom element, so any framework can render it. Import
 `@maplibre-yaml/core/register` once (it defines the element) and import
-`maplibre-gl/dist/maplibre-gl.css` in your entry point. Three things differ
-from framework to framework: how `config` reaches the element, how you listen
-for `ml-map:*` events, and TypeScript.
+`maplibre-gl/dist/maplibre-gl.css` in your entry point. On maplibre-gl 6, the
+same entry point also calls `setWorkerUrl()` with your bundler's URL for the
+worker, exactly as in [npm (With Build Tools)](#npm-with-build-tools); every
+framework below bundles your code, so every one needs it. Files that `src=`
+and YAML `url:`s point at go in the framework's static folder (`public/` in
+Vite and Next.js, `static/` in SvelteKit). Three things differ from framework
+to framework: how `config` reaches the element, how you listen for `ml-map:*`
+events, and TypeScript.
 
 | Framework | `config` object | `ml-map:*` events | TypeScript |
 |-----------|-----------------|-------------------|------------|

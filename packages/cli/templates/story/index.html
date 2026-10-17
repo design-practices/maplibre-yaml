@@ -1,19 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{title}}</title>
-  <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
-  <script type="module">
-    import 'https://unpkg.com/@maplibre-yaml/core/register';
+
+  <!-- MapLibre's stylesheet. Keep it on the same major version (6) as the import map below. -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css">
+
+  <!-- Tells the browser where "maplibre-gl" lives. -->
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
   </script>
+
+  <!--
+    Registers the maplibre-yaml elements. Note: <ml-scrollytelling> is not part
+    of @maplibre-yaml/core 0.7 yet, so this page stays blank until a core release
+    that includes it. story.yaml already validates:
+      npx @maplibre-yaml/cli validate story.yaml
+  -->
+  <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"></script>
+
   <style>
     body { margin: 0; }
-    ml-scrollytelling { display: block; width: 100vw; height: 100vh; }
   </style>
 </head>
 <body>
-  <ml-scrollytelling src="story.yaml"></ml-scrollytelling>
+  <ml-scrollytelling src="./story.yaml"></ml-scrollytelling>
 </body>
 </html>

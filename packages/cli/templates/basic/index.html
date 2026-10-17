@@ -1,19 +1,30 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
+  <!-- Without this line, phones lay the page out at desktop width and the map looks tiny. -->
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{projectName}}</title>
-  <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
-  <script type="module">
-    import 'https://unpkg.com/@maplibre-yaml/core/register';
+
+  <!-- MapLibre's stylesheet. Keep it on the same major version (6) as the import map below. -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css">
+
+  <!-- Tells the browser where "maplibre-gl" lives. The <ml-map> element needs it. -->
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
   </script>
+
+  <!-- Registers the <ml-map> element. "@0.7" means the newest 0.7.x release. -->
+  <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"></script>
+
   <style>
     body { margin: 0; }
-    ml-map { display: block; width: 100vw; height: 100vh; }
+    /* <ml-map> has no size of its own: without a height the map is invisible. */
+    ml-map { display: block; width: 100%; height: 100vh; }
   </style>
 </head>
 <body>
-  <ml-map src="map.yaml"></ml-map>
+  <!-- The map is described in map.yaml. Edit it and reload the page. -->
+  <ml-map src="./map.yaml"></ml-map>
 </body>
 </html>
