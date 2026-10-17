@@ -2,7 +2,7 @@
   "name": "@maplibre-yaml/example-astro-site",
   "private": true,
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Ring of Fire: the @maplibre-yaml/astro example site, built and browser-tested on every supported Astro major",
   "scripts": {
     "dev": "astro dev",
