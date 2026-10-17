@@ -3,7 +3,8 @@
  * @module @maplibre-yaml/core/register
  *
  * @description
- * Import this module to automatically register the `<ml-map>` web component.
+ * Import this module to automatically register the `<ml-map>` and
+ * `<ml-scrollytelling>` web components.
  *
  * ## Usage
  *
@@ -12,7 +13,14 @@
  * import 'maplibre-gl/dist/maplibre-gl.css';
  * ```
  *
- * After importing, the `<ml-map>` element is available in your HTML.
+ * After importing, the `<ml-map>` and `<ml-scrollytelling>` elements are
+ * available in your HTML.
+ *
+ * @example
+ * A scrollytelling story (sticky map + chapters, driven by the scroll)
+ * ```html
+ * <ml-scrollytelling src="/stories/my-story.yaml"></ml-scrollytelling>
+ * ```
  *
  * @example
  * External YAML file (recommended)
@@ -44,12 +52,18 @@
  */
 
 import { MLMap, registerMLMap } from "./components/ml-map.js";
+import {
+  MLScrollytelling,
+  registerMLScrollytelling,
+} from "./components/ml-scrollytelling.js";
 
 // Export for manual use if needed
-export { MLMap, registerMLMap };
+export { MLMap, registerMLMap, MLScrollytelling, registerMLScrollytelling };
 export type { MLMapEventMap, MLMapErrorDetail } from "./components/ml-map.js";
+export type { MLScrollytellingEventMap } from "./components/ml-scrollytelling.js";
 
 // Auto-register when imported in browser context
 if (typeof window !== "undefined") {
   registerMLMap();
+  registerMLScrollytelling();
 }

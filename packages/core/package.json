@@ -36,6 +36,11 @@
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
     },
+    "./scrollytelling": {
+      "types": "./dist/scrollytelling/index.d.ts",
+      "import": "./dist/scrollytelling/index.js"
+    },
+    "./scrollytelling.css": "./dist/scrollytelling.css",
     "./index.browser": "./dist/index.browser.js"
   },
   "typesVersions": {
@@ -53,8 +58,9 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsup && pnpm run emit-schema",
+    "build": "tsup && pnpm run emit-schema && pnpm run emit-css",
     "emit-schema": "tsx scripts/emit-json-schema.ts",
+    "emit-css": "tsx scripts/emit-scrollytelling-css.ts",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",

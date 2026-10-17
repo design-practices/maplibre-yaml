@@ -67,6 +67,8 @@
 
 export { MLMap, registerMLMap, ML_MAP_SLOTS } from "./ml-map.js";
 export type { MLMapEventMap, MLMapErrorDetail } from "./ml-map.js";
+export { MLScrollytelling, registerMLScrollytelling } from "./ml-scrollytelling.js";
+export type { MLScrollytellingEventMap } from "./ml-scrollytelling.js";
 export { defaultStyles, injectStyles } from "./styles";
 
 // Auto-inject styles when module is imported
