@@ -23,6 +23,15 @@
 set -euo pipefail
 
 tag=latest
+# pnpm publish refuses to run off its publish-branch (main) without asking
+# "Do you want to continue? (y/N)" -- which hangs CI on a maintenance branch
+# until the job is cancelled. Publishing from release/<line>.x is intended,
+# so name that branch as the publish branch there.
+publish_args=()
+branch="${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
+case "$branch" in
+    release/*) publish_args+=(--publish-branch "$branch") ;;
+esac
 if [ -f .changeset/pre.json ]; then
     tag=$(jq -r '.tag // empty' .changeset/pre.json)
     if [ -z "$tag" ]; then
@@ -54,6 +63,6 @@ else
 fi
 echo "Publishing with dist-tag: $tag"
 
-pnpm publish -r --access public --tag "$tag"
+pnpm publish -r --access public --tag "$tag" ${publish_args[@]+"${publish_args[@]}"}
 changeset tag
 git push origin --tags
