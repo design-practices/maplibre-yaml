@@ -561,6 +561,14 @@ export class MapRenderer {
         this.chromeLayout().mount(position, element);
       }
 
+      // A narrow map opens MapLibre's compact attribution expanded, across
+      // a bottom-left legend/slot (ml-aot.26): start it collapsed instead,
+      // and again if a resize (phone rotation) re-expands it.
+      if (this.chrome) {
+        this.chrome.collapseCompactAttribution();
+        this.map.on('resize', () => this.chrome?.collapseCompactAttribution());
+      }
+
       // Standalone markers: DOM pins with the document's popup content run
       // through the same trust gate as every popup sink (U5).
       if (options.markers && options.markers.length > 0) {

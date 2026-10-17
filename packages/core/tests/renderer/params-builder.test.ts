@@ -224,6 +224,45 @@ describe("ChromeLayout (KTD10)", () => {
     expect(corner.style.left).toBe("10px");
   });
 
+  it("collapses MapLibre's expanded compact attribution while bottom-left chrome is mounted (ml-aot.26)", () => {
+    const attribution = () => {
+      const el = document.createElement("details");
+      el.className =
+        "maplibregl-ctrl maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show";
+      el.setAttribute("open", "");
+      const corner = document.createElement("div");
+      corner.className = "maplibregl-ctrl-bottom-right";
+      corner.appendChild(el);
+      return { corner, el };
+    };
+
+    // Nothing bottom-left: MapLibre's behaviour is left alone.
+    const host = document.createElement("div");
+    const a = attribution();
+    host.appendChild(a.corner);
+    const chrome = new ChromeLayout(host);
+    chrome.mount("bottom-right", document.createElement("div"));
+    expect(chrome.collapseCompactAttribution()).toBe(false);
+    expect(a.el.classList.contains("maplibregl-compact-show")).toBe(true);
+
+    // A bottom-left legend: the attribution starts collapsed, as after a drag.
+    chrome.mount("bottom-left", document.createElement("div"));
+    expect(chrome.collapseCompactAttribution()).toBe(true);
+    expect(a.el.classList.contains("maplibregl-compact-show")).toBe(false);
+    expect(a.el.hasAttribute("open")).toBe(false);
+    expect(a.el.classList.contains("maplibregl-compact")).toBe(true);
+
+    // A wide map's (non-compact) attribution is never touched.
+    const wideHost = document.createElement("div");
+    const wide = attribution();
+    wide.el.className = "maplibregl-ctrl maplibregl-ctrl-attrib";
+    wideHost.appendChild(wide.corner);
+    const wideChrome = new ChromeLayout(wideHost);
+    wideChrome.mount("bottom-left", document.createElement("div"));
+    expect(wideChrome.collapseCompactAttribution()).toBe(false);
+    expect(wide.el.hasAttribute("open")).toBe(true);
+  });
+
   it("destroy removes every corner container", () => {
     const host = document.createElement("div");
     const chrome = new ChromeLayout(host);
