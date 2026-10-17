@@ -129,6 +129,10 @@ lockfiles).
 
 </Steps>
 
+Publishing on GitHub Pages? Read [Deploying to GitHub Pages](#deploying-to-github-pages-or-any-subpath)
+first: a project site is served under `/<repo>/`, which changes how URLs
+inside your YAML are written.
+
 Next: load the YAML at build time so mistakes fail the build
 ([Basic Usage](#basic-usage-with-map-component)), or tell a story with
 [`<Scrollytelling>`](#scrollytelling-component).
@@ -137,13 +141,14 @@ Next: load the YAML at build time so mistakes fail the build
 
 The `@maplibre-yaml/astro` components above are the easiest path. If you write
 your own component around the `<ml-map>` web element instead (the
-[Component Patterns](#component-patterns) below), its script has to do what
-the components do for you: point maplibre-gl 6 at its worker, register the
-element, and load MapLibre's stylesheet.
+[Component Patterns](#component-patterns) below), it has to do what the
+components do for you: load MapLibre's stylesheet, point maplibre-gl 6 at its
+worker, and register the element.
 
 ```astro
 ---
 // src/components/MyMap.astro
+import 'maplibre-gl/dist/maplibre-gl.css'; // page CSS: here, not in the script tag
 interface Props {
   src: string;
   height?: string;
@@ -160,7 +165,6 @@ const { src, height = '400px' } = Astro.props;
   import { setWorkerUrl } from 'maplibre-gl';
   import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
-  import 'maplibre-gl/dist/maplibre-gl.css';
 
   setWorkerUrl(workerUrl);
 </script>
@@ -172,6 +176,14 @@ so the worker URL is always in place first. Leave out the `setWorkerUrl` lines
 and maplibre-gl 6 cannot start, which the map reports on the page as
 *Worker failed to load*. On maplibre-gl 4 or 5, delete the two worker lines
 (there is no worker file to import, and the build fails if you keep them).
+
+Import the stylesheet in the frontmatter, as above, and the register module in
+the `<script>`. A CSS import in the frontmatter is page CSS, which Astro puts
+in the page's `<head>` in dev and build alike. From the `<script>`, `astro dev`
+injects it with JavaScript instead, and with
+[view transitions](#view-transitions) the next navigation drops
+it. The register module is the opposite: it must stay in the `<script>`
+([why](#referenceerror-htmlelement-is-not-defined)).
 
 ## Using @maplibre-yaml/astro Package
 
@@ -229,7 +241,9 @@ The two cannot nest inside each other. Import `z` from `astro/zod`, which
 works on all four majors. The `/utils` schema helpers are built from the same
 module, so `LocationPointSchema` and the others nest in your `z.object()` on
 every major. (`z` from `astro:content` is the same object, but Astro 6
-deprecated that export.)
+deprecated that export.) The `getCollectionItemWith*Schema()` helpers type
+`entry.data` fully on every major from `@maplibre-yaml/astro` 0.6; on 0.5,
+`astro check` on Astro 6 and 7 typed every field `unknown`.
 
 **Astro 4 only.** The `glob()` collection loaders on this page need three
 changes:
@@ -277,6 +291,8 @@ drift.
 | `/story-runtime` | `<Scrollytelling src>`, loaded in the browser |
 | `/volcanoes` | A Markdown collection (`glob()` + `LocationPointSchema`), one page per entry via `buildMapConfigFromEntry` |
 | `/gallery` | A YAML collection of whole map documents (`extendSchema(getMapSchema(), …)`) |
+| `/field-notes/…` | Dated posts on `getCollectionItemWithLocationSchema()`, one point map each via `buildPointMapConfig` |
+| `/transitions` | `<FullPageMap>` and `<Map>` under `<ClientRouter />` view transitions |
 
 Run it from a clone with `pnpm install && pnpm build`, then
 `pnpm --filter @maplibre-yaml/example-astro-site dev`. To run the CI check for
@@ -295,6 +311,7 @@ import {
   LocationPointSchema,
   getMapSchema,
   extendSchema,
+  getCollectionItemWithLocationSchema,
 } from "@maplibre-yaml/astro/utils";
 
 /** `fuji.md` -> `fuji` on every Astro major (Astro 4 keeps the extension). */
@@ -321,7 +338,20 @@ const maps = defineCollection({
   }),
 });
 
-export const collections = { volcanoes, maps };
+/**
+ * Dated posts with an optional location: the collections guide's Quick Start
+ * helper plus one custom field. `astro check` on every major type-checks the
+ * /field-notes pages against this schema's inferred types (ml-aot.23: on
+ * Astro 6/7 every field used to infer as `unknown`).
+ */
+const fieldNotes = defineCollection({
+  loader: glob({ pattern: "*.md", base: "./src/collections/field-notes", generateId: stripExtension }),
+  schema: getCollectionItemWithLocationSchema({
+    volcano: z.string(),
+  }),
+});
+
+export const collections = { volcanoes, maps, "field-notes": fieldNotes };
 ```
 
 ### Basic Usage with Map Component
@@ -354,7 +384,7 @@ id: my-map
 config:
   center: [-120, 37]
   zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: points
     type: circle
@@ -564,7 +594,7 @@ id: earthquake-map
 config:
   center: [-120, 35]
   zoom: 6
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle
@@ -679,7 +709,7 @@ id: featured-map
 config:
   center: [0, 0]
   zoom: 2
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ```astro
@@ -826,6 +856,187 @@ Astro-specific setup: `markers:`, `images:`, `parameters:` (the params panel),
 built from its `config:` and `layers:` only. It has no `sources:`, `markers:`,
 `parameters:` or legend, so give its layers inline sources.
 
+## Editing in astro dev
+
+What you see after saving a file under `astro dev` depends on how the page
+loads it:
+
+| You edit | What happens |
+|----------|--------------|
+| A content-collection YAML or Markdown file | The page updates by itself. |
+| A YAML file in `public/` (`<Map src>`) | Reload the page to see it. |
+| A file read by `loadMapConfig` / `loadScrollytellingConfig` in page frontmatter, or a `feature_ref` GeoJSON | Reload the page to see it. |
+| The `loadGlobalMapConfig` file (`src/config/maps.yaml`) read by a module's top-level `await` | **Restart `astro dev`** (the module ran once and kept the old file). |
+
+Add the optional integration and every row becomes "the page reloads by
+itself": it watches the files the loaders read and the YAML, GeoJSON and JSON
+under `public/`, and re-runs the modules that read them.
+
+```js
+// astro.config.mjs
+import { defineConfig } from "astro/config";
+import maplibreYaml from "@maplibre-yaml/astro/integration";
+
+export default defineConfig({
+  integrations: [maplibreYaml()],
+});
+```
+
+It only acts under `astro dev`. Builds are the same with or without it.
+(Needs `@maplibre-yaml/astro` 0.6 or later.)
+
+## Deploying to GitHub Pages (or any subpath)
+
+A static Astro build works on any static host. One case needs care: a site
+served from a **subpath**. A GitHub Pages *project* site lives at
+`https://<user>.github.io/<repo>/`, so Astro's
+[GitHub Pages guide](https://docs.astro.build/en/guides/deploy/github/) has you
+set `base`:
+
+```js
+// astro.config.mjs
+import { defineConfig } from "astro/config";
+
+export default defineConfig({
+  site: "https://<user>.github.io",
+  base: "/<repo>",
+});
+```
+
+(A *user* site, the repo named `<user>.github.io`, is served from the root and
+needs no `base`.) Then, everything under `public/` is served under the base:
+`public/configs/hero-map.yaml` is at `/<repo>/configs/hero-map.yaml`.
+
+- **`src` on `Map` and `FullPageMap`: nothing to change.** Keep writing
+  `src="/configs/hero-map.yaml"`. The components add the base for you
+  (`@maplibre-yaml/astro` 0.6 or later). A `src` that already starts with the
+  base, or a full `https://` URL, is used as written.
+- **URLs inside your YAML: include the base.** The components do not rewrite
+  the document, and `<ml-map>` resolves its URLs like any link on the page, so
+  a root-relative `url: "/data/volcanoes.geojson"` asks for
+  `https://<user>.github.io/data/volcanoes.geojson` and 404s. Write the base
+  into every path to your own files: data `url:`s, `images:`, marker `icon:`s.
+
+  ```yaml no-validate
+  sources:
+    volcanoes:
+      type: geojson
+      url: "/<repo>/data/volcanoes.geojson"   # public/data/volcanoes.geojson
+  images:
+    pin: "/<repo>/images/pin.png"             # public/images/pin.png
+  ```
+
+  This works in `astro dev` and `astro preview` too, since both serve the site
+  under the base. Full `https://` URLs need no change. Avoid paths without a
+  leading slash (`data/volcanoes.geojson`): they resolve against the *page*,
+  so they break on any page that is not at the root of your site.
+- **Your own `<ml-map>` components** (the [Component Patterns](#component-patterns)
+  below) pass `src` to the element unchanged, so add the base yourself:
+
+  ```astro
+  ---
+  const { src } = Astro.props;
+  // "/configs/map.yaml" -> "/<repo>/configs/map.yaml". BASE_URL may or may
+  // not end in "/", depending on your config.
+  const url = src.startsWith('/') ? import.meta.env.BASE_URL.replace(/\/$/, '') + src : src;
+  ---
+  <ml-map src={url} style="height: 400px; display: block;"></ml-map>
+  ```
+
+- **Links and images in your own pages** need the base too, as in any Astro
+  site (see Astro's
+  [`base` docs](https://docs.astro.build/en/reference/configuration-reference/#base)).
+- **Build-time paths do not change.** `loadMapConfig('./src/...')`,
+  `loadGlobalMapConfig` and `feature_ref.source` are files on disk, read at
+  build time.
+
+Check it before you push: `npm run build && npm run preview` serves the
+site under the base, so open `http://localhost:4321/<repo>/`. Every map should
+show its data. A data file that 404s appears in the browser's console.
+
+## Server output (SSR)
+
+`output: 'server'` renders pages on request, on the deployed server. The
+components work there, and so do `src`, content collections, the builders and
+`import.meta.glob` (`loadFromGlob`). `loadMapConfig`,
+`loadScrollytellingConfig`, `loadGlobalMapConfig` and `feature_ref` do not:
+they read files from your project folder when the page *renders*, and a
+deployed server has the built site but not your `src/` folder. Such pages fail
+with a 500 and *ENOENT* in the server log.
+
+Prerender the pages that use them, so they run once at build time:
+
+```astro
+---
+export const prerender = true;
+
+import { Map, loadMapConfig } from '@maplibre-yaml/astro';
+const config = await loadMapConfig('./src/configs/map.yaml');
+---
+<Map config={config} />
+```
+
+Or bundle the YAML into the server with an import, which works on request:
+
+```astro
+---
+import { Map } from '@maplibre-yaml/astro';
+import { YAMLParser } from '@maplibre-yaml/core';
+import mapYaml from '../configs/map.yaml?raw';
+
+// Throws on an invalid document, like loadMapConfig.
+const config = YAMLParser.parseMapBlock(mapYaml);
+---
+<Map config={config} />
+```
+
+The default static output (`astro build` with no `output` setting) is not
+affected.
+
+## View transitions
+
+The components work with Astro's client-side router (`<ClientRouter />` in
+your layout's `<head>`; `<ViewTransitions />` on Astro 4): each soft
+navigation builds the new page's maps and removes the old ones, `FullPageMap`'s
+zoom and reset buttons work on every visit, and MapLibre's stylesheet stays
+loaded (`@maplibre-yaml/astro` 0.6 or later). The example site's
+`/transitions` pages are tested this way on every Astro major.
+
+If you write your own component script (like
+[the interactive map below](#advanced-interactive-map-component)), keep in mind
+that Astro runs a component's `<script>` **once per full page load**, not on
+each soft navigation, and import MapLibre's stylesheet in the frontmatter
+([why](#using-ml-map-directly)). Do the per-page work in an `astro:page-load`
+listener, which fires after the first load and after every navigation:
+
+```astro
+<script>
+  document.addEventListener('astro:page-load', () => {
+    for (const mapEl of document.querySelectorAll('ml-map')) {
+      // wire this page's maps here
+    }
+  });
+</script>
+```
+
+## Effects in Astro
+
+[Effects](/guides/effects/) (`effects:` in a layer, such as the tonal hatch)
+need the effects package registered next to the map. Install
+`@maplibre-yaml/effects` and import its register module in the page (or
+layout) that has the map:
+
+```astro
+---
+import { Map } from '@maplibre-yaml/astro';
+---
+<Map src="/configs/hatched.yaml" height="500px" />
+
+<script>
+  import '@maplibre-yaml/effects/register';
+</script>
+```
+
 ## Upgrading to 0.6
 
 Three behavior changes matter when you move an Astro project to 0.6:
@@ -926,15 +1137,23 @@ import { FullPageMap } from '@maplibre-yaml/astro';
 />
 ```
 
-#### With custom styling
+#### Under a site header
+
+`FullPageMap` is `position: fixed` and fills the whole viewport, so on a page
+with a header or nav bar it covers them. Start it below the header with
+`style` (here the header is 64px tall):
 
 ```astro
+<header style="height: 64px;">…</header>
 <FullPageMap
   src="/configs/branded-map.yaml"
-  style="z-index: 100;"
+  style="top: 64px; height: calc(100vh - 64px);"
   class="dashboard-map"
 />
 ```
+
+Don't raise its `z-index` to fix overlap: the map would then cover the header
+and everything else on the page.
 
 #### Build-time loaded with complete configuration
 
@@ -1540,6 +1759,9 @@ For sites with multiple maps, define site-wide defaults (basemap style, center, 
    ```
 
    Top-level `await` is supported in Astro modules during the build phase.
+   In `astro dev` this module runs once, so edits to `maps.yaml` show up
+   only after a restart, unless you add the
+   [integration](#editing-in-astro-dev), which reloads it for you.
 
 3. **Use in pages with map builders**
 
@@ -1955,7 +2177,7 @@ try {
 
 ### Build-time only
 
-`buildFeatureMapConfig` reads from the local filesystem via `process.cwd()` (or the configured `projectRoot`). It is **build-time only** -- invoking it in a deployed SSR adapter context throws a `GeoJSONLoadError` whose ENOENT message includes deployment-context hints. Runtime resolution is planned for V2.
+`buildFeatureMapConfig` reads from the local filesystem via `process.cwd()` (or the configured `projectRoot`). It is **build-time only** -- invoking it in a deployed SSR adapter context throws a `GeoJSONLoadError` whose ENOENT message includes deployment-context hints. With `output: 'server'`, prerender the pages that use it (see [Server output](#server-output-ssr)). Runtime resolution is planned for V2.
 
 ### Performance
 
@@ -1968,8 +2190,8 @@ try {
 
 Files referenced multiple times across collection items are parsed once via an mtime-aware cache. Editing the GeoJSON in `astro dev` invalidates the cache on next page render -- no server restart needed. For files with 200+ features, a per-property index is built lazily on the second access for that property.
 
-<Aside type="note" title="HMR limitation">
-  Editing a GeoJSON file in `astro dev` invalidates the cache (you'll see updated geometry on next page navigation), but Vite doesn't automatically trigger an HMR re-render of pages that reference the file. Manual page refresh after saving is required. Full HMR integration is planned for V2.
+<Aside type="note" title="Reloading after an edit">
+  Editing a GeoJSON file in `astro dev` invalidates the cache (you'll see updated geometry on the next page load), but Vite doesn't know the page depends on the file, so reload it yourself, or add the [integration](#editing-in-astro-dev), which reloads the page when a referenced file changes.
 </Aside>
 
 ### Ignored style overrides
@@ -2038,6 +2260,7 @@ src/
 
 ```astro
 ---
+import 'maplibre-gl/dist/maplibre-gl.css'; // page CSS: here, not in the script tag
 interface Props {
   src: string;
   height?: string;
@@ -2052,7 +2275,6 @@ const { src, height = '400px' } = Astro.props;
   import { setWorkerUrl } from 'maplibre-gl';
   import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
-  import 'maplibre-gl/dist/maplibre-gl.css';
 
   setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
@@ -2096,6 +2318,7 @@ src/
 
 ```astro
 ---
+import 'maplibre-gl/dist/maplibre-gl.css'; // page CSS: here, not in the script tag
 import { YAMLParser } from '@maplibre-yaml/core';
 
 interface Props {
@@ -2135,7 +2358,6 @@ const configJson = JSON.stringify(result.data);
   import { setWorkerUrl } from 'maplibre-gl';
   import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
-  import 'maplibre-gl/dist/maplibre-gl.css';
 
   setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
@@ -2157,7 +2379,8 @@ const configJson = JSON.stringify(result.data);
 **Tradeoffs:**
 
 - ⚠️ More complex component code
-- ⚠️ Requires rebuild to see YAML changes
+- ⚠️ A deployed site needs a rebuild to pick up YAML changes (in `astro dev`,
+  Vite tracks `?raw` imports and reloads the page when you save)
 
 ### Pattern 3: Inline Configuration (Not Recommended)
 
@@ -2171,6 +2394,7 @@ For simple, one-off maps, you can inline configuration. However, this approach h
 
 ```astro
 ---
+import 'maplibre-gl/dist/maplibre-gl.css'; // page CSS: here, not in the script tag
 import { YAMLParser } from '@maplibre-yaml/core';
 
 interface Props {
@@ -2203,7 +2427,6 @@ const error = result.success ? null : result.errors;
   import { setWorkerUrl } from 'maplibre-gl';
   import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
-  import 'maplibre-gl/dist/maplibre-gl.css';
 
   setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
@@ -2236,7 +2459,7 @@ id: simple-map
 config:
   center: [-74.006, 40.7128]
   zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers: []`;
 ---
 
@@ -2273,7 +2496,7 @@ id: earthquake-demo
 config:
   center: [-120, 37]
   zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: quakes
     type: circle
@@ -2300,6 +2523,7 @@ for `ml-map:load` and call `getMap()`.
 
 ```astro
 ---
+import 'maplibre-gl/dist/maplibre-gl.css'; // page CSS: here, not in the script tag
 interface Props {
   src: string;
   height?: string;
@@ -2339,90 +2563,99 @@ const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
   import { setWorkerUrl } from 'maplibre-gl';
   import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
-  import 'maplibre-gl/dist/maplibre-gl.css';
   import type { MLMap } from '@maplibre-yaml/core/components';
 
   setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 
-  // Initialize all interactive maps
-  document.querySelectorAll<HTMLElement>('.interactive-map').forEach(container => {
-    const mapEl = container.querySelector<MLMap>('ml-map');
-    const statusEl = container.querySelector<HTMLElement>('.map-status');
-    const controls = container.querySelector<HTMLElement>('.map-controls');
+  // Wire every interactive map on the page that is not wired yet. This
+  // script runs once per full page load; with view transitions
+  // (<ClientRouter />) later pages arrive without re-running it, so it also
+  // runs on `astro:page-load` (which fires after the first load too -- the
+  // `data-wired` guard keeps a map from being wired twice).
+  function initInteractiveMaps() {
+    document.querySelectorAll<HTMLElement>('.interactive-map:not([data-wired])').forEach(container => {
+      container.dataset.wired = '';
+      const mapEl = container.querySelector<MLMap>('ml-map');
+      const statusEl = container.querySelector<HTMLElement>('.map-status');
+      const controls = container.querySelector<HTMLElement>('.map-controls');
 
-    if (!mapEl || !statusEl) return;
+      if (!mapEl || !statusEl) return;
 
-    let initialCenter: [number, number] | null = null;
-    let initialZoom: number | null = null;
+      let initialCenter: [number, number] | null = null;
+      let initialZoom: number | null = null;
 
-    // Status updates. A layer's first `layer-data-loaded` can fire before
-    // `ml-map:load`, so `load` must not overwrite a feature count.
-    mapEl.addEventListener('ml-map:load', () => {
-      const map = mapEl.getMap();
-      if (!map) return;
-      initialCenter = map.getCenter().toArray() as [number, number];
-      initialZoom = map.getZoom();
-      if (!statusEl.textContent) statusEl.textContent = 'Map ready';
-      statusEl.className = 'map-status ready';
-    });
-
-    mapEl.addEventListener('ml-map:layer-data-loading', (e) => {
-      const { layerId } = (e as CustomEvent<{ layerId: string }>).detail;
-      statusEl.textContent = `Loading ${layerId}...`;
-      statusEl.className = 'map-status loading';
-    });
-
-    mapEl.addEventListener('ml-map:layer-data-loaded', (e) => {
-      const { featureCount } = (e as CustomEvent<{ featureCount: number }>).detail;
-      statusEl.textContent = `${featureCount} features loaded`;
-      statusEl.className = 'map-status ready';
-    });
-
-    mapEl.addEventListener('ml-map:error', (e) => {
-      // `{ error }` for a load/runtime failure, `{ errors }` for a document
-      // that failed to parse or validate.
-      const detail = (e as CustomEvent<{ error?: Error; errors?: { message: string }[] }>).detail;
-      const message = detail.error?.message ?? detail.errors?.map((err) => err.message).join('; ');
-      statusEl.textContent = `Error: ${message}`;
-      statusEl.className = 'map-status error';
-    });
-
-    // Custom click handler
-    const clickHandler = mapEl.dataset.clickHandler;
-    const handler = clickHandler ? (window as any)[clickHandler] : undefined;
-    if (typeof handler === 'function') {
-      mapEl.addEventListener('ml-map:layer-click', (e) => {
-        handler((e as CustomEvent).detail);
+      // Status updates. A layer's first `layer-data-loaded` can fire before
+      // `ml-map:load`, so `load` must not overwrite a feature count.
+      mapEl.addEventListener('ml-map:load', () => {
+        const map = mapEl.getMap();
+        if (!map) return;
+        initialCenter = map.getCenter().toArray() as [number, number];
+        initialZoom = map.getZoom();
+        if (!statusEl.textContent) statusEl.textContent = 'Map ready';
+        statusEl.className = 'map-status ready';
       });
-    }
 
-    // Control buttons — mapReady() resolves with the live map (immediately
-    // once loaded), so an early click waits instead of silently no-oping.
-    if (controls) {
-      controls.addEventListener('click', async (e) => {
-        const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
-        if (!btn) return;
-
-        const map = await mapEl.mapReady();
-
-        const action = btn.dataset.action;
-
-        switch (action) {
-          case 'zoom-in':
-            map.zoomIn();
-            break;
-          case 'zoom-out':
-            map.zoomOut();
-            break;
-          case 'reset':
-            if (initialCenter && initialZoom !== null) {
-              map.flyTo({ center: initialCenter, zoom: initialZoom });
-            }
-            break;
-        }
+      mapEl.addEventListener('ml-map:layer-data-loading', (e) => {
+        const { layerId } = (e as CustomEvent<{ layerId: string }>).detail;
+        statusEl.textContent = `Loading ${layerId}...`;
+        statusEl.className = 'map-status loading';
       });
-    }
-  });
+
+      mapEl.addEventListener('ml-map:layer-data-loaded', (e) => {
+        const { featureCount } = (e as CustomEvent<{ featureCount: number }>).detail;
+        statusEl.textContent = `${featureCount} features loaded`;
+        statusEl.className = 'map-status ready';
+      });
+
+      mapEl.addEventListener('ml-map:error', (e) => {
+        // `{ error }` for a load/runtime failure, `{ errors }` for a document
+        // that failed to parse or validate.
+        const detail = (e as CustomEvent<{ error?: Error; errors?: { message: string }[] }>).detail;
+        const message = detail.error?.message ?? detail.errors?.map((err) => err.message).join('; ');
+        statusEl.textContent = `Error: ${message}`;
+        statusEl.className = 'map-status error';
+      });
+
+      // Custom click handler
+      const clickHandler = mapEl.dataset.clickHandler;
+      const handler = clickHandler ? (window as any)[clickHandler] : undefined;
+      if (typeof handler === 'function') {
+        mapEl.addEventListener('ml-map:layer-click', (e) => {
+          handler((e as CustomEvent).detail);
+        });
+      }
+
+      // Control buttons — mapReady() resolves with the live map (immediately
+      // once loaded), so an early click waits instead of silently no-oping.
+      if (controls) {
+        controls.addEventListener('click', async (e) => {
+          const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
+          if (!btn) return;
+
+          const map = await mapEl.mapReady();
+
+          const action = btn.dataset.action;
+
+          switch (action) {
+            case 'zoom-in':
+              map.zoomIn();
+              break;
+            case 'zoom-out':
+              map.zoomOut();
+              break;
+            case 'reset':
+              if (initialCenter && initialZoom !== null) {
+                map.flyTo({ center: initialCenter, zoom: initialZoom });
+              }
+              break;
+          }
+        });
+      }
+    });
+  }
+
+  initInteractiveMaps();
+  document.addEventListener('astro:page-load', initInteractiveMaps);
 </script>
 
 <style>
@@ -2487,26 +2720,27 @@ For sites with many maps that need build-time validation, you can use Astro Cont
 ```typescript
 import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
-import { z } from "astro/zod";
+import { getMapSchema } from "@maplibre-yaml/astro/utils";
 
 const maps = defineCollection({
   loader: glob({ pattern: "**/*.yaml", base: "./src/collections/maps" }),
-  schema: z.object({
-    type: z.literal("map"),
-    id: z.string(),
-    config: z.object({
-      center: z.tuple([z.number(), z.number()]),
-      zoom: z.number(),
-      mapStyle: z.string(),
-      pitch: z.number().optional(),
-      bearing: z.number().optional(),
-    }),
-    layers: z.array(z.any()),
-  }),
+  // The whole map document schema: sources, layers, legend, markers,
+  // parameters, images, every config key. Add fields with extendSchema().
+  schema: getMapSchema(),
 });
 
 export const collections = { maps };
 ```
+
+<Aside type="caution" title="Don't hand-write the map schema">
+  A `z.object({ type, id, config: z.object({ center, zoom, mapStyle }), layers })`
+  looks enough, but `z.object()` silently drops every key it doesn't list.
+  `sources:`, `legend:`, `markers:`, `parameters:`, `images:` and most
+  `config:` keys (`maxZoom`, `interactive`, ...) vanish before the map sees
+  them, and a layer that names a source then points at nothing. Use
+  `getMapSchema()`, and [`extendSchema()`](#advanced-extending-schemas) for
+  fields of your own.
+</Aside>
 
 **src/collections/maps/headquarters.yaml:**
 
@@ -2516,28 +2750,41 @@ id: headquarters
 config:
   center: [-122.4194, 37.7749]
   zoom: 15
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  maxZoom: 18
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+sources:
+  office:
+    type: geojson
+    data:
+      type: Feature
+      geometry:
+        type: Point
+        coordinates: [-122.4194, 37.7749]
+      properties:
+        name: "Headquarters"
 layers:
   - id: office
     type: circle
-    source:
-      type: geojson
-      data:
-        type: Feature
-        geometry:
-          type: Point
-          coordinates: [-122.4194, 37.7749]
-        properties:
-          name: "Headquarters"
+    source: office
+    legend: { label: Headquarters, color: "#3b82f6" }
     paint:
       circle-radius: 12
       circle-color: "#3b82f6"
+legend:
+  position: bottom-left
+markers:
+  - at: [-122.4180, 37.7762]
+    color: "#e63946"
+    popup:
+      - p:
+          - str: "Visitor parking"
 ```
 
 **CollectionMap.astro:**
 
 ```astro
 ---
+import 'maplibre-gl/dist/maplibre-gl.css'; // page CSS: here, not in the script tag
 import { getEntry } from 'astro:content';
 
 interface Props {
@@ -2563,7 +2810,6 @@ const configJson = JSON.stringify(mapEntry.data);
   import { setWorkerUrl } from 'maplibre-gl';
   import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
-  import 'maplibre-gl/dist/maplibre-gl.css';
 
   setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
@@ -2597,13 +2843,16 @@ import "@maplibre-yaml/core/register"; // ❌ Crashes during SSR
 **Correct:**
 
 ```astro
+---
+import "maplibre-gl/dist/maplibre-gl.css"; // page CSS: here, not in the script tag
+---
+
 <ml-map src="/map.yaml" style="height: 400px; display: block;" />
 
 <script>
   import { setWorkerUrl } from "maplibre-gl";
   import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
   import "@maplibre-yaml/core/register";  // ✅ Runs client-side only
-  import "maplibre-gl/dist/maplibre-gl.css";
 
   setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
@@ -2702,15 +2951,28 @@ Both `height` and `display: block` are required.
 
 ### YAML File Changes Not Updating
 
-**Symptoms:** Changes to YAML files in `/public` don't appear immediately.
+**Symptoms:** You saved a YAML file under `astro dev` and the map didn't change.
 
-**Cause:** Browser caching or dev server needs refresh.
+**Cause:** Vite only reloads the page by itself for files it imports.
 
-**Workaround:**
+**Solution:** See [Editing in astro dev](#editing-in-astro-dev). In short: a
+normal reload shows edits to `public/` YAML (`src=`) and to files read by
+`loadMapConfig` in page frontmatter. The `loadGlobalMapConfig` file needs a
+dev-server restart. Add the `@maplibre-yaml/astro/integration` integration and
+all of them reload by themselves.
 
-- Hard refresh the browser (Cmd+Shift+R or Ctrl+Shift+R)
-- Or restart the dev server
-- Note: Files in `/public` are served statically, so they update immediately without rebuild
+### Maps Work Locally but 404 on GitHub Pages
+
+**Symptoms:** After deploying to `https://<user>.github.io/<repo>/`, a map
+shows *Failed to fetch /configs/map.yaml: 404*, or the basemap shows but your
+data layer is missing (a 404 for `/data/...` in the console).
+
+**Cause:** The site is served under a base path, and a URL without it points at
+the domain root.
+
+**Solution:** See [Deploying to GitHub Pages](#deploying-to-github-pages-or-any-subpath):
+set `base`, update `@maplibre-yaml/astro` (0.6 or later adds the base to
+`src` for you), and write the base into the URLs inside your YAML.
 
 ### TypeScript Errors with `import.meta.glob`
 
@@ -2749,11 +3011,14 @@ around `<ml-map>` must do it in its script.
 **Solution:** Ensure script is in component:
 
 ```astro
+---
+import 'maplibre-gl/dist/maplibre-gl.css'; // page CSS: here, not in the script tag
+---
+
 <script>
   import { setWorkerUrl } from 'maplibre-gl';
   import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import '@maplibre-yaml/core/register';
-  import 'maplibre-gl/dist/maplibre-gl.css';
 
   setWorkerUrl(workerUrl); // maplibre-gl 6: see "Using <ml-map> directly"
 </script>
