@@ -14,8 +14,11 @@
 
 import { z } from "zod";
 import { LngLatSchema, ExpressionSchema } from "./base.schema";
-import { MapConfigSchema } from "./map.schema";
+import { MapConfigSchema, MapBlockSchema } from "./map.schema";
 import { LayerOrReferenceSchema } from "./layer.schema";
+import { STORY_MAP_KEYS } from "../scrollytelling/keys";
+
+export { STORY_MAP_KEYS };
 
 /**
  * A chapter's `image`/`video`: an http(s) URL, or a path that resolves
@@ -349,6 +352,15 @@ export const ChapterSchema = z
 /** Inferred type for chapter. */
 export type Chapter = z.infer<typeof ChapterSchema>;
 
+/** The schemas of {@link STORY_MAP_KEYS}, taken from `MapBlockSchema`. */
+function storyMapKeysShape(): Record<(typeof STORY_MAP_KEYS)[number], z.ZodTypeAny> {
+  const shape = MapBlockSchema.shape as Record<string, z.ZodTypeAny>;
+  return Object.fromEntries(STORY_MAP_KEYS.map((key) => [key, shape[key]])) as Record<
+    (typeof STORY_MAP_KEYS)[number],
+    z.ZodTypeAny
+  >;
+}
+
 /**
  * Scrollytelling block for narrative map stories.
  *
@@ -368,6 +380,8 @@ export type Chapter = z.infer<typeof ChapterSchema>;
  * 2. Persistent layers (visible throughout)
  * 3. Chapters (individual story sections)
  * 4. Optional footer
+ * 5. Optional map-level keys shared with `type: map` documents
+ *    (`sources`, `markers`, `legend`, `state`/`parameters`, `images`, ...)
  *
  * @example Basic Scrollytelling
  * ```yaml
@@ -493,6 +507,13 @@ export const ScrollytellingBlockSchema: z.ZodObject<any> = z
 
     // Footer
     footer: z.string().optional().describe("Footer content (HTML)"),
+
+    // The rest of the map document (ml-t2x). The story's map is rendered by
+    // an `<ml-map>`, so every map-level key a `type: map` document takes
+    // works here too, with the same schema: named `sources:`, standalone
+    // `markers:`, `legend:`, the params panel (`state:` + `parameters:`),
+    // `images:`, `controls:`, and the 3D/globe keys.
+    ...storyMapKeysShape(),
   })
   .describe("Scrollytelling block for narrative map stories");
 

@@ -268,6 +268,7 @@ import { ZodError, type ZodIssue } from "zod";
 import {
   expandSugarInMapBlock,
   expandSugarInRoot,
+  expandSugarInScrollytellingBlock,
   type SugarRemap,
 } from "./expand-sugar";
 import { RootSchema } from "../schemas/page.schema";
@@ -1004,6 +1005,12 @@ export class YAMLParser {
       );
     }
 
+    // Geo-sugar on the story's layer sources (ml-ddg), as parseMapBlock does.
+    const expansion = expandSugarInScrollytellingBlock(parsed);
+    if ("error" in expansion) {
+      throw new Error(expansion.error.message);
+    }
+
     // Validate against ScrollytellingBlockSchema
     return ScrollytellingBlockSchema.parse(parsed);
   }
@@ -1037,8 +1044,57 @@ export class YAMLParser {
     return this.safeParseWithSchema(
       yaml,
       ScrollytellingBlockSchema,
-      false
+      false,
+      // ml-ddg: `location:`/`region:`/`route:` sugar on a story's sources.
+      expandSugarInScrollytellingBlock
     );
+  }
+
+  /**
+   * Validate an already-parsed scrollytelling block — a JSON attribute, or a
+   * story object set programmatically (`<ml-scrollytelling>.story = {...}`,
+   * Astro's `<Scrollytelling config>`).
+   *
+   * @remarks
+   * The scrollytelling twin of {@link safeParseMapBlockValue}: round-trips
+   * through YAML so errors, unknown-key suggestions and sugar expansion are
+   * identical to the YAML entry points. Positions are stripped — they would
+   * point into serialized text the author never wrote.
+   */
+  static safeParseScrollytellingBlockValue(
+    value: unknown
+  ): ParseResult<ScrollytellingBlock> {
+    let asYaml: string;
+    try {
+      asYaml = stringifyYAML(value);
+    } catch (error) {
+      return {
+        success: false,
+        errors: [
+          {
+            path: "",
+            message: `Story could not be validated: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          },
+        ],
+        warnings: [],
+      };
+    }
+
+    const result = this.safeParseScrollytellingBlock(asYaml);
+    const stripPosition = <T extends { line?: number; column?: number }>(
+      entry: T
+    ): T => {
+      const { line, column, ...rest } = entry;
+      return rest as T;
+    };
+
+    return {
+      ...result,
+      errors: result.errors.map(stripPosition),
+      warnings: result.warnings.map(stripPosition),
+    };
   }
 
   /**

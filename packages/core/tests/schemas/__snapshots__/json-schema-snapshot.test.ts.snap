@@ -3493,6 +3493,42 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
             "footer": {
               "type": "string",
               "description": "Footer content (HTML)"
+            },
+            "sources": {
+              "$ref": "#/$defs/any/oneOf/0/properties/sources"
+            },
+            "controls": {
+              "$ref": "#/$defs/any/oneOf/0/properties/controls"
+            },
+            "legend": {
+              "$ref": "#/$defs/any/oneOf/0/properties/legend"
+            },
+            "state": {
+              "$ref": "#/$defs/any/oneOf/0/properties/state"
+            },
+            "parameters": {
+              "$ref": "#/$defs/any/oneOf/0/properties/parameters"
+            },
+            "markers": {
+              "$ref": "#/$defs/any/oneOf/0/properties/markers"
+            },
+            "popups": {
+              "$ref": "#/$defs/any/oneOf/0/properties/popups"
+            },
+            "images": {
+              "$ref": "#/$defs/any/oneOf/0/properties/images"
+            },
+            "terrain": {
+              "$ref": "#/$defs/any/oneOf/0/properties/terrain"
+            },
+            "sky": {
+              "$ref": "#/$defs/any/oneOf/0/properties/sky"
+            },
+            "projection": {
+              "$ref": "#/$defs/any/oneOf/0/properties/projection"
+            },
+            "light": {
+              "$ref": "#/$defs/any/oneOf/0/properties/light"
             }
           },
           "required": [
@@ -11002,6 +11038,42 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "footer": {
                           "type": "string",
                           "description": "Footer content (HTML)"
+                        },
+                        "sources": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/sources"
+                        },
+                        "controls": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/controls"
+                        },
+                        "legend": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend"
+                        },
+                        "state": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/state"
+                        },
+                        "parameters": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/parameters"
+                        },
+                        "markers": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/markers"
+                        },
+                        "popups": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/popups"
+                        },
+                        "images": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/images"
+                        },
+                        "terrain": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/terrain"
+                        },
+                        "sky": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/sky"
+                        },
+                        "projection": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/projection"
+                        },
+                        "light": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/light"
                         }
                       },
                       "required": [
@@ -14032,6 +14104,519 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
         "footer": {
           "type": "string",
           "description": "Footer content (HTML)"
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0"
+          },
+          "description": "Map sources"
+        },
+        "controls": {
+          "type": "object",
+          "properties": {
+            "navigation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Whether control is enabled"
+                    },
+                    "position": {
+                      "$ref": "#/$defs/scrollytelling/properties/config/properties/logoPosition",
+                      "description": "Control position"
+                    }
+                  },
+                  "required": [
+                    "enabled"
+                  ],
+                  "additionalProperties": false,
+                  "patternProperties": {
+                    "^x-": {}
+                  }
+                }
+              ],
+              "description": "Navigation controls (zoom, rotation)"
+            },
+            "geolocate": {
+              "$ref": "#/$defs/scrollytelling/properties/controls/properties/navigation",
+              "description": "Geolocation control"
+            },
+            "scale": {
+              "$ref": "#/$defs/scrollytelling/properties/controls/properties/navigation",
+              "description": "Scale control"
+            },
+            "fullscreen": {
+              "$ref": "#/$defs/scrollytelling/properties/controls/properties/navigation",
+              "description": "Fullscreen control"
+            },
+            "attribution": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Whether control is enabled"
+                    },
+                    "position": {
+                      "$ref": "#/$defs/scrollytelling/properties/config/properties/logoPosition",
+                      "description": "Control position"
+                    },
+                    "compact": {
+                      "type": "boolean",
+                      "description": "Render the attribution control in its compact form"
+                    },
+                    "customAttribution": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ],
+                      "description": "Additional attribution string(s) to display"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "patternProperties": {
+                    "^x-": {}
+                  }
+                }
+              ],
+              "description": "Attribution control"
+            },
+            "globe": {
+              "$ref": "#/$defs/scrollytelling/properties/controls/properties/navigation",
+              "description": "Globe/mercator projection toggle (maplibre-gl >= 5.0.0)"
+            },
+            "terrain": {
+              "$ref": "#/$defs/scrollytelling/properties/controls/properties/navigation",
+              "description": "3D terrain on/off toggle — toggles the document's \`terrain:\`"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Map controls",
+          "patternProperties": {
+            "^x-": {}
+          }
+        },
+        "legend": {
+          "type": "object",
+          "properties": {
+            "position": {
+              "$ref": "#/$defs/scrollytelling/properties/config/properties/logoPosition",
+              "default": "top-left",
+              "description": "Legend position"
+            },
+            "title": {
+              "type": "string",
+              "description": "Legend title"
+            },
+            "collapsed": {
+              "type": "boolean",
+              "default": false,
+              "description": "Start collapsed"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "type": "string",
+                    "description": "Item color"
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "Item label"
+                  },
+                  "shape": {
+                    "type": "string",
+                    "enum": [
+                      "circle",
+                      "square",
+                      "line",
+                      "icon"
+                    ],
+                    "default": "square",
+                    "description": "Symbol shape"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "description": "Icon name/URL (for shape: icon)"
+                  }
+                },
+                "required": [
+                  "color",
+                  "label"
+                ],
+                "additionalProperties": false,
+                "patternProperties": {
+                  "^x-": {}
+                }
+              },
+              "description": "Custom legend items (overrides layer legends)"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Legend configuration",
+          "patternProperties": {
+            "^x-": {}
+          }
+        },
+        "state": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "default": {
+                "description": "Initial value, read by \`global-state\`"
+              }
+            },
+            "additionalProperties": true
+          },
+          "description": "Runtime-tunable values, readable from expressions via \`global-state\`"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "Human-readable control label"
+              },
+              "type": {
+                "type": "string",
+                "description": "Params-panel control kind: \`enum\`/\`select\` (dropdown over \`values\`), \`range\` (slider over \`min\`/\`max\`/\`step\`), or \`toggle\` (checkbox). When omitted it is inferred: \`values\` gives a dropdown, a boolean default gives a toggle; other values render no control"
+              },
+              "values": {
+                "type": "array",
+                "description": "Allowed values, for enum parameters"
+              },
+              "min": {
+                "type": "number",
+                "description": "Lower bound, for range parameters"
+              },
+              "max": {
+                "type": "number",
+                "description": "Upper bound, for range parameters"
+              },
+              "step": {
+                "type": "number",
+                "description": "Increment, for range parameters"
+              }
+            },
+            "additionalProperties": true
+          },
+          "description": "Presentation metadata for \`state\` keys — label, type, range"
+        },
+        "markers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": [
+                  {
+                    "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/0"
+                  },
+                  {
+                    "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
+                  }
+                ],
+                "description": "Marker position [lng, lat]"
+              },
+              "color": {
+                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
+                "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
+              },
+              "size": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Scale multiplier for the pin (1 = MapLibre's default size)"
+              },
+              "icon": {
+                "type": "string",
+                "description": "Image URL replacing the default pin"
+              },
+              "popup": {
+                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/popup",
+                "description": "Popup opened by clicking the marker (same structured content as layer popups)"
+              }
+            },
+            "required": [
+              "at"
+            ],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          },
+          "description": "Standalone markers — DOM pins live, symbol layers + sprite on export"
+        },
+        "popups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": [
+                  {
+                    "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/0"
+                  },
+                  {
+                    "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
+                  }
+                ],
+                "description": "Popup anchor position [lng, lat]"
+              },
+              "content": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/interactive/properties/hover/properties/popup/items"
+                },
+                "description": "Popup content (same structured items as layer popups; \`str:\` for text)"
+              },
+              "closeButton": {
+                "type": "boolean",
+                "description": "Show the close button (MapLibre default: true)"
+              },
+              "closeOnClick": {
+                "type": "boolean",
+                "description": "Close when the map is clicked (MapLibre default: true)"
+              },
+              "maxWidth": {
+                "type": "string",
+                "description": "CSS max-width of the popup, e.g. \\"300px\\" (MapLibre default: 240px)"
+              }
+            },
+            "required": [
+              "at",
+              "content"
+            ],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          },
+          "description": "Standalone popups open at a coordinate — no layer, no marker"
+        },
+        "images": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "Image URL (shorthand for \`{ url }\`)"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "Image URL"
+                  },
+                  "sdf": {
+                    "type": "boolean",
+                    "description": "Treat as a signed-distance-field icon (tintable via icon-color)"
+                  },
+                  "pixelRatio": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Source density — 2 means the file is @2x (half its pixels in CSS px)"
+                  }
+                },
+                "required": [
+                  "url"
+                ],
+                "additionalProperties": false,
+                "patternProperties": {
+                  "^x-": {}
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "pattern": "^(?!(?:__proto__|constructor|prototype)$)[a-zA-Z0-9_-]+$"
+          },
+          "description": "Named images for symbol layers and patterns — loaded live, merged into the sprite on export"
+        },
+        "terrain": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of the \`raster-dem\` source supplying elevation"
+            },
+            "exaggeration": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Vertical exaggeration multiplier (spec default 1)"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "additionalProperties": false,
+          "description": "3D terrain from a raster-dem source — setTerrain live, style.json \`terrain\` on export",
+          "patternProperties": {
+            "^x-": {}
+          }
+        },
+        "sky": {
+          "type": "object",
+          "properties": {
+            "sky-color": {
+              "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+              "description": "Color of the sky above the horizon"
+            },
+            "horizon-color": {
+              "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+              "description": "Color at the horizon, where sky meets fog"
+            },
+            "fog-color": {
+              "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+              "description": "Color of the fog over distant 3D terrain"
+            },
+            "sky-horizon-blend": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                }
+              ],
+              "description": "How far the horizon color blends up into the sky (0-1)"
+            },
+            "horizon-fog-blend": {
+              "$ref": "#/$defs/scrollytelling/properties/sky/properties/sky-horizon-blend",
+              "description": "How far the horizon color blends down into the fog (0-1)"
+            },
+            "fog-ground-blend": {
+              "$ref": "#/$defs/scrollytelling/properties/sky/properties/sky-horizon-blend",
+              "description": "Where fog starts over terrain: 0 at the camera, 1 at the horizon"
+            },
+            "atmosphere-blend": {
+              "$ref": "#/$defs/scrollytelling/properties/sky/properties/sky-horizon-blend",
+              "description": "Globe atmosphere opacity (0-1); draws under globe projection only (maplibre-gl >= 5)"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Sky, fog, and globe atmosphere — setSky live (maplibre-gl >= 4.5), style.json \`sky\` on export",
+          "patternProperties": {
+            "^x-": {}
+          }
+        },
+        "projection": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "mercator",
+                "globe"
+              ],
+              "description": "Projection: \`mercator\` (default) or \`globe\` (maplibre-gl >= 5.0.0)"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false,
+          "description": "Map projection (\`globe\` needs maplibre-gl >= 5) — style.json \`projection\` on export",
+          "patternProperties": {
+            "^x-": {}
+          }
+        },
+        "light": {
+          "type": "object",
+          "properties": {
+            "anchor": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "map",
+                    "viewport"
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                }
+              ],
+              "description": "\`map\` fixes the light to the map (it turns with the bearing); \`viewport\` (default) fixes it to the screen"
+            },
+            "position": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                }
+              ],
+              "description": "[radial, azimuthal°, polar°] — distance from the centre of the base of an object, direction clockwise from north (0° = north at anchor map), height above the horizon (0° = overhead). Default [1.15, 210, 30]"
+            },
+            "color": {
+              "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color",
+              "description": "Light color (default white)"
+            },
+            "intensity": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
+                }
+              ],
+              "description": "Light intensity, 0–1; higher is more extreme contrast (default 0.5)"
+            }
+          },
+          "additionalProperties": false,
+          "description": "The style-spec light shading fill-extrusion faces — map.setLight live, style.json \`light\` on export",
+          "patternProperties": {
+            "^x-": {}
+          }
         }
       },
       "required": [
