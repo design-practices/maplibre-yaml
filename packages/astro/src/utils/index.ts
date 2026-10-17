@@ -51,6 +51,7 @@ export {
   loadScrollytellingConfig,
   loadFromGlob,
   YAMLLoadError,
+  type YAMLLoadIssue,
 } from "./loader";
 
 // Content collection utilities

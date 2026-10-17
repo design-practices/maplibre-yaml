@@ -1363,7 +1363,17 @@ export class YAMLParser {
           break;
 
         case "invalid_string":
-          if (err.validation === "url") {
+          // A message the schema wrote itself (the source-URL and chapter-
+          // media regexes say what to write instead) beats a generic one.
+          // zod's own defaults are "Invalid" (regex) and "Invalid <check>";
+          // anything else came from the schema (ml-zft, ml-aot.6).
+          if (
+            err.message &&
+            err.message !== "Invalid" &&
+            err.message !== `Invalid ${String(err.validation)}`
+          ) {
+            message = err.message;
+          } else if (err.validation === "url") {
             message = "Invalid URL format";
           } else if (err.validation === "email") {
             message = "Invalid email format";

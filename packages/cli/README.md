@@ -137,7 +137,10 @@ maplibre-yaml preview config.yaml --port 8080 --no-open
 
 ## Aliases
 
-The CLI provides a shorter `mlym` alias:
+Once installed (globally, or in a project with `npm install --save-dev
+@maplibre-yaml/cli` and then `npx mlym …`), the CLI also answers to `mlym`.
+`npx mlym` without an install fails: there is no `mlym` package. Use
+`npx @maplibre-yaml/cli …` for one-off runs.
 
 ```bash
 mlym validate config.yaml
