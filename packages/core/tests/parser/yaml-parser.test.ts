@@ -765,6 +765,58 @@ chapters:
       expect(result.data?.type).toBe("scrollytelling");
     });
 
+    // ml-aot.6: a photo in public/images/ validates; an unusable value says
+    // what to write instead of zod's generic "Invalid URL format".
+    const storyWithImage = (image: string) => `
+type: scrollytelling
+id: story
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+chapters:
+  - id: intro
+    title: "Introduction"
+    center: [0, 0]
+    zoom: 2
+    image: "${image}"
+`;
+
+    it("accepts a chapter image served from the site (/images/x.jpg)", () => {
+      const result = YAMLParser.safeParseScrollytellingBlock(storyWithImage("/images/fuji.jpg"));
+      expect(result.errors).toEqual([]);
+      expect(result.data?.chapters[0]?.image).toBe("/images/fuji.jpg");
+    });
+
+    it("rejects a javascript: chapter image with a message naming the fix and the line", () => {
+      const result = YAMLParser.safeParseScrollytellingBlock(storyWithImage("javascript:alert(1)"));
+      expect(result.success).toBe(false);
+      expect(result.errors[0]?.path).toBe("chapters.0.image");
+      expect(result.errors[0]?.message).toMatch(/http\(s\) URL .* or a path to a file on your site \(\/images\/photo\.jpg/);
+      expect(result.errors[0]?.line).toBe(13);
+    });
+
+    it("keeps the schema's own message for a bad source url (ml-zft), not 'Invalid string format: regex'", () => {
+      const result = YAMLParser.safeParseMapBlock(`
+type: map
+id: m
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://example.com/style.json"
+layers:
+  - id: pts
+    type: circle
+    source:
+      type: geojson
+      url: "data/cities.geojson"
+`);
+      expect(result.success).toBe(false);
+      const messages = result.errors.map((e) => e.message).join(" | ");
+      expect(messages).toMatch(/Must be an absolute URL/);
+      expect(messages).not.toMatch(/Invalid string format/);
+    });
+
     it("returns success: false with errors for invalid config", () => {
       const yaml = `
 type: scrollytelling

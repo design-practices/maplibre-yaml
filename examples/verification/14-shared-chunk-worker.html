@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ml-map: register before the worker URL (shared chunk)</title>
+  <!--
+    ml-aot.2 — what a bundler emits when `@maplibre-yaml/core/register` lands
+    in a shared chunk: the entry's static imports are evaluated first, so
+    `register` defines <ml-map> (and upgrades the elements below) BEFORE the
+    entry's own body sets maplibre-gl 6's worker URL. maplibre-gl is served
+    from /bundled/, a directory with no worker beside it, exactly as in a
+    Vite/Astro build.
+    PASS = a green map with a red dot (the geojson layer needs the worker).
+    FAIL = a blank map and "Worker failed to load" (0.7.0 built the map
+    while `register` evaluated, before setWorkerUrl ran).
+    With ?noworker the page never sets the worker URL at all: on
+    maplibre-gl 6 it must show an on-page "Map Error" card naming
+    setWorkerUrl() — not a silent blank map.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/14-shared-chunk-worker.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/bundled/maplibre-gl.mjs" } }
+  </script>
+</head>
+<body>
+  <header>
+    PASS = green map with a red dot. FAIL = blank map ("Worker failed to load").
+  </header>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: shared-chunk
+config:
+  center: [-74.006, 40.7128]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: poi
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: {}
+    paint:
+      circle-radius: 14
+      circle-color: "#e63946"
+    </script>
+  </ml-map>
+  <script type="module">
+    // Static imports evaluate first: <ml-map> is defined and upgraded here...
+    import "../../packages/core/register.js";
+    import * as gl from "maplibre-gl";
+
+    // ...and only then does the entry's own code point maplibre-gl 6 at its
+    // worker — the order a shared `register` chunk produces.
+    const major = Number(gl.getVersion().split(".")[0]);
+    if (major >= 6 && !location.search.includes("noworker")) {
+      gl.setWorkerUrl("/vendor/maplibre-gl-worker.mjs");
+    }
+    window.__workerOrder = { readyStateAtSetup: document.readyState, major };
+  </script>
+</body>
+</html>

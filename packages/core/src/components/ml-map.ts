@@ -127,6 +127,32 @@ function configKey(value: unknown): string | null {
   }
 }
 
+/**
+ * Whether the document's deferred and module scripts may still be waiting to
+ * run, i.e. DOMContentLoaded has not fired yet.
+ *
+ * @remarks
+ * `readyState` alone cannot tell: module and `defer` scripts run AFTER
+ * parsing ends, when it already reads `"interactive"`, and DOMContentLoaded
+ * fires only once they have all run. The navigation timing entry's
+ * `domContentLoadedEventStart` stays 0 until that event starts, which
+ * closes the gap. Without a navigation entry (jsdom, odd embeddings) an
+ * `"interactive"` document counts as ready — the pre-0.7.1 behaviour.
+ */
+function pageScriptsPending(doc: Document): boolean {
+  if (doc.readyState === "loading") return true;
+  if (doc.readyState !== "interactive") return false;
+  try {
+    const perf = doc.defaultView?.performance;
+    const nav = perf?.getEntriesByType?.("navigation")?.[0] as
+      | PerformanceNavigationTiming
+      | undefined;
+    return nav !== undefined && nav.domContentLoadedEventStart === 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Class on the element's own map container — the only child it owns while a map renders. */
 const MAP_CONTAINER_CLASS = "ml-map-container";
 
@@ -197,6 +223,12 @@ export class MLMap extends HTMLElement {
   private cancelPendingEmptyCheck: (() => void) | null = null;
 
   /**
+   * Cancels a map construction waiting for DOMContentLoaded (ml-aot.2), or
+   * `null` when none is waiting. See {@link renderMap}.
+   */
+  private cancelDeferredRender: (() => void) | null = null;
+
+  /**
    * The effects attached to the current map (experimental, 0.7), and the
    * subscription waiting for an effects host that registers late. Both are
    * torn down with the renderer, so a reload never leaks a custom layer.
@@ -210,6 +242,12 @@ export class MLMap extends HTMLElement {
    * not re-spam the same console warnings.
    */
   private diagnosticsRun = false;
+
+  /**
+   * Whether the MapLibre-CSS diagnostic is still owed: armed by the one-time
+   * diagnostics, run when the first map loads (ml-aot.10).
+   */
+  private cssCheckPending = false;
 
   /**
    * Observed attributes that trigger attributeChangedCallback
@@ -597,6 +635,38 @@ export class MLMap extends HTMLElement {
     }
 
     this.appendChild(this.mapContainer);
+
+    // Never build the MapLibre map while the page's module scripts are still
+    // evaluating (ml-aot.2). A bundler can hoist `register` ahead of the code
+    // that sets maplibre-gl 6's worker URL (side-effect order is not kept
+    // across shared chunks), and a map constructed in that window spawns its
+    // workers from the wrong URL: "Worker failed to load", a blank map. Every
+    // deferred and module script has run by DOMContentLoaded, so wait for it
+    // when it is still ahead; otherwise (elements created later, frameworks,
+    // maplibre-gl 4/5) this is the same synchronous path as before.
+    const doc = this.ownerDocument;
+    if (pageScriptsPending(doc)) {
+      const resume = () => {
+        this.cancelDeferredRender = null;
+        if (this.initialized && this.isConnected) this.constructRenderer(mapBlock);
+      };
+      doc.addEventListener("DOMContentLoaded", resume, { once: true });
+      this.cancelDeferredRender = () => {
+        doc.removeEventListener("DOMContentLoaded", resume);
+        this.cancelDeferredRender = null;
+      };
+      return;
+    }
+    this.constructRenderer(mapBlock);
+  }
+
+  /**
+   * Build the MapRenderer for a validated document into the (already
+   * attached) map container. Split from {@link renderMap} so the DOM-ready
+   * deferral can run it later.
+   */
+  private constructRenderer(mapBlock: MapBlock): void {
+    if (!this.mapContainer) return;
     const slots = this.collectSlots();
 
     try {
@@ -607,7 +677,7 @@ export class MLMap extends HTMLElement {
       // trip, so a dropped or invented key fails the suite rather than shipping.
       const model = toModel(mapBlock as never);
 
-      this.renderer = new MapRenderer(
+      const renderer: MapRenderer = new MapRenderer(
         this.mapContainer,
         denormalizeConfig(model),
         denormalizeLayers(model),
@@ -623,20 +693,37 @@ export class MLMap extends HTMLElement {
           // dispatched event is invisible and the document fails silently
           // (ml-tfd.8 contract audit). Hosts still get the event.
           console.error("[maplibre-yaml] map error:", error);
+          // MapLibre reports a worker that could not start as a runtime
+          // error, but the map can never load without one: treat it as
+          // terminal and put it on the page, not only on the console — a
+          // student otherwise sees an empty box (ml-aot.2).
+          const workerFailure = /worker failed to load/i.test(error.message);
+          const terminal = fatal !== false || workerFailure;
           // Only load-aborting failures are terminal for mapReady();
           // runtime maplibre errors (a 404'd tile) precede a successful
           // load all the time and must not poison readiness.
-          if (fatal !== false) this.lastError = error;
+          if (terminal) this.lastError = error;
           this.dispatchEvent(
             new CustomEvent("ml-map:error", {
               bubbles: true,
-              detail: { error, fatal: fatal !== false },
+              detail: { error, fatal: terminal },
             })
           );
+          if (workerFailure) {
+            // Out of MapLibre's event dispatch before tearing its map down;
+            // once only, however many workers in the pool report it.
+            queueMicrotask(() => {
+              if (this.renderer !== renderer) return;
+              this.showErrorCard([{ path: "", message: error.message }], {
+                title: "Map Error",
+              });
+            });
+          }
         },
         },
         denormalizeSources(model)
       );
+      this.renderer = renderer;
 
       // Set up event forwarding
       this.setupEventForwarding();
@@ -708,18 +795,59 @@ export class MLMap extends HTMLElement {
       );
     }
 
-    // (b) A map was created but MapLibre's stylesheet is missing.
-    if (this.renderer && !MLMap.isMapLibreCssLoaded()) {
-      console.warn(
-        "[ml-map] MapLibre GL CSS does not appear to be loaded, so the map " +
-          "canvas and controls may render incorrectly. Load it, for example: " +
-          '`<link rel="stylesheet" href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css">`.'
-      );
-    }
+    // (b) A map was created but MapLibre's stylesheet is missing. Checked
+    // once the map has LOADED, not at construction (ml-aot.10, ml-ohh.13):
+    // under Vite dev the stylesheet is injected by a module that may run
+    // after the element upgrades, and an async stylesheet (`media="print"`
+    // swap, a late `<link>`) is not applied yet either. Both warned on every
+    // map although the CSS was there a moment later.
+    // The forwarding `load` handler runs it (see setupEventForwarding).
+    if (this.renderer) this.cssCheckPending = true;
   }
 
   /**
-   * Probe whether MapLibre's CSS is loaded.
+   * Warn once if MapLibre's stylesheet is still not applied, after giving
+   * any stylesheet that is still loading in this element's document the
+   * chance to finish.
+   */
+  private async warnIfMapLibreCssMissing(): Promise<void> {
+    const doc = this.ownerDocument;
+    if (MLMap.isMapLibreCssLoaded(doc)) return;
+
+    const pending = Array.from(
+      doc.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"]')
+    ).filter((link) => !link.sheet);
+    if (pending.length > 0) {
+      await Promise.race([
+        Promise.all(
+          pending.map(
+            (link) =>
+              new Promise<void>((resolve) => {
+                link.addEventListener("load", () => resolve(), { once: true });
+                link.addEventListener("error", () => resolve(), { once: true });
+              })
+          )
+        ),
+        new Promise<void>((resolve) => setTimeout(resolve, 10_000)),
+      ]);
+    }
+    // One more task: a `media="print"` → `"all"` swap runs in the link's
+    // own load handler, which may queue after ours.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    if (!this.isConnected || MLMap.isMapLibreCssLoaded(doc)) return;
+
+    console.warn(
+      "[ml-map] MapLibre GL CSS does not appear to be loaded, so the map " +
+        "canvas and controls may render incorrectly. Import it from the " +
+        'maplibre-gl package you installed (`import "maplibre-gl/dist/maplibre-gl.css"`), ' +
+        "or load the matching version from a CDN, for example: " +
+        '`<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@<version>/dist/maplibre-gl.css">`.'
+    );
+  }
+
+  /**
+   * Probe whether MapLibre's CSS is loaded in `doc` (the element's own
+   * document, so a map inside an iframe checks the iframe's stylesheets).
    *
    * @remarks
    * Two signatures, either one counts. maplibre-gl up to 4.x paints a
@@ -729,17 +857,19 @@ export class MLMap extends HTMLElement {
    * `position: relative; overflow: hidden`. Checking only the canary warned
    * "CSS not loaded" on every maplibre-gl 5 page, CSS or not.
    */
-  private static isMapLibreCssLoaded(): boolean {
+  private static isMapLibreCssLoaded(doc: Document): boolean {
     try {
-      const probe = document.createElement("div");
+      const view = doc.defaultView;
+      if (!view || !doc.body) return true;
+      const probe = doc.createElement("div");
       probe.className = "maplibregl-canary maplibregl-map";
       probe.style.display = "none";
-      document.body.appendChild(probe);
-      const style = window.getComputedStyle(probe);
+      doc.body.appendChild(probe);
+      const style = view.getComputedStyle(probe);
       const loaded =
         style.backgroundColor === "rgb(250, 128, 114)" ||
         (style.position === "relative" && style.overflow === "hidden");
-      document.body.removeChild(probe);
+      doc.body.removeChild(probe);
       return loaded;
     } catch {
       // If we cannot probe (unusual DOM), do not nag.
@@ -758,6 +888,10 @@ export class MLMap extends HTMLElement {
     // readiness signal mapReady()'s fast path keys on.
     this.renderer.on("load", () => {
       this.documentLoaded = true;
+      if (this.cssCheckPending) {
+        this.cssCheckPending = false;
+        void this.warnIfMapLibreCssMissing();
+      }
       this.dispatchEvent(
         new CustomEvent("ml-map:load", {
           bubbles: true,
@@ -967,6 +1101,7 @@ export class MLMap extends HTMLElement {
    * then the renderer is destroyed.
    */
   private teardownRenderer(): void {
+    this.cancelDeferredRender?.();
     this.teardownEffects();
     this.parkSlots();
     if (this.renderer) {
@@ -1001,6 +1136,17 @@ export class MLMap extends HTMLElement {
       })
     );
 
+    this.showErrorCard(errors, { showHelp });
+  }
+
+  /**
+   * Replace the map with the on-page error card (no event; callers dispatch
+   * their own `ml-map:error`).
+   */
+  private showErrorCard(
+    errors: ParseError[],
+    { showHelp = false, title = "Configuration Error" }: { showHelp?: boolean; title?: string } = {}
+  ): void {
     // Build error UI
     const helpSection = showHelp
       ? `
@@ -1071,7 +1217,7 @@ export class MLMap extends HTMLElement {
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
           </svg>
-          Configuration Error
+          ${escapeHtml(title)}
         </div>
         <div style="font-size: 14px;">
           ${errorItems}

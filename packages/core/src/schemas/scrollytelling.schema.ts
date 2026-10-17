@@ -18,6 +18,39 @@ import { MapConfigSchema } from "./map.schema";
 import { LayerOrReferenceSchema } from "./layer.schema";
 
 /**
+ * A chapter's `image`/`video`: an http(s) URL, or a path that resolves
+ * against the page — root-relative (`/images/fuji.jpg`, a file in an Astro or
+ * Vite `public/` folder), protocol-relative, or explicitly relative
+ * (`./clip.mp4`).
+ *
+ * @remarks
+ * This used to be `z.string().url()`, which rejected the root-relative path
+ * every static-site author reaches for ("Invalid URL format") while
+ * accepting `javascript:` and `data:` (well-formed to `new URL()`). The
+ * renderers already took relative paths (`safeMediaSrc`); the schema now
+ * agrees with them (ml-aot.6). Same shape as the source-URL rule in
+ * `source.schema.ts` — a regex, so it stays a `ZodString` and emits a
+ * `pattern` into the JSON Schema — but scheme-restricted to http(s): a media
+ * element has no use for other schemes, and the trust model keeps
+ * `javascript:`/`data:` out of author-supplied media. Bare relative paths
+ * (`images/x.jpg`) stay rejected, as for sources: they resolve against the
+ * page's own folder, which is rarely what was meant.
+ */
+// Spelled case-insensitively without the `i` flag, which JSON Schema
+// `pattern` cannot carry: editors and zod must agree.
+const MEDIA_REFERENCE = /^(?:[hH][tT][tT][pP][sS]?:\/\/|\/|\.\.?\/)/;
+
+const MediaURLSchema = (what: "image" | "video") =>
+  z
+    .string()
+    .regex(
+      MEDIA_REFERENCE,
+      `Must be an http(s) URL (https://example.com/${what === "image" ? "photo.jpg" : "clip.mp4"}) ` +
+        `or a path to a file on your site (/${what === "image" ? "images/photo.jpg" : "videos/clip.mp4"}, ` +
+        "for a file in public/)"
+    );
+
+/**
  * Chapter action for map state changes.
  *
  * @remarks
@@ -135,8 +168,8 @@ export type ChapterLayers = z.infer<typeof ChapterLayersSchema>;
  *
  * **Content:**
  * - `description` - HTML description (supports markdown)
- * - `image` - Hero image URL
- * - `video` - Video URL
+ * - `image` - Hero image: http(s) URL or site path (`/images/x.jpg`)
+ * - `video` - Video: http(s) URL or site path
  *
  * **Camera:**
  * - `pitch` - Camera tilt (0-85)
@@ -235,9 +268,13 @@ export const ChapterSchema = z
     description: z
       .string()
       .optional()
-      .describe("Chapter description (HTML/markdown supported)"),
-    image: z.string().url().optional().describe("Hero image URL"),
-    video: z.string().url().optional().describe("Video URL"),
+      .describe("Chapter text as HTML (markdown is not converted)"),
+    image: MediaURLSchema("image")
+      .optional()
+      .describe("Hero image: an http(s) URL or a site path such as /images/photo.jpg"),
+    video: MediaURLSchema("video")
+      .optional()
+      .describe("Video: an http(s) URL or a site path such as /videos/clip.mp4"),
 
     // Camera
     pitch: z

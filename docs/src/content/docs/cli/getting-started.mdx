@@ -31,10 +31,20 @@ npx @maplibre-yaml/cli <command>
 
 ### Short Alias
 
-The CLI provides a shorter `mlym` alias:
+Once the CLI is installed, it also answers to the shorter `mlym`:
 
 ```bash
 mlym validate config.yaml
+```
+
+`mlym` is a command name inside `@maplibre-yaml/cli`, not a package of its
+own, so `npx mlym` without an install fails with a 404. Either run the full
+package name, `npx @maplibre-yaml/cli validate config.yaml`, or install the CLI
+into your project first and then use the alias through npx:
+
+```bash
+npm install --save-dev @maplibre-yaml/cli
+npx mlym validate config.yaml
 ```
 
 ## Validate Configuration

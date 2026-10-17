@@ -61,6 +61,7 @@ export {
   loadScrollytellingConfig,
   loadFromGlob,
   YAMLLoadError,
+  type YAMLLoadIssue,
 } from "./utils/loader";
 
 export {

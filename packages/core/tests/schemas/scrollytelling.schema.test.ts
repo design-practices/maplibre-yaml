@@ -243,6 +243,36 @@ describe("ChapterSchema", () => {
       };
       expect(ChapterSchema.parse(chapter)).toMatchObject(chapter);
     });
+
+    // ml-aot.6: students put photos in public/images/. The renderers took
+    // these paths all along; the schema said "Invalid URL format".
+    it.each([
+      ["image", "/images/fuji.jpg"],
+      ["image", "./images/fuji.jpg"],
+      ["image", "../shared/fuji.jpg"],
+      ["image", "//cdn.example.com/fuji.jpg"],
+      ["image", "http://example.com/fuji.jpg"],
+      ["video", "/videos/clip.mp4"],
+      ["video", "HTTPS://example.com/clip.mp4"],
+    ])("accepts %s %s (absolute http(s) or a site path)", (field, value) => {
+      const chapter = { id: "t", title: "T", center: [0, 0], zoom: 3, [field]: value };
+      expect(ChapterSchema.safeParse(chapter).success).toBe(true);
+    });
+
+    // The trust model: author media never carries script or inline data.
+    it.each([
+      ["image", "javascript:alert(1)"],
+      ["image", "JavaScript:alert(1)"],
+      ["image", "data:image/png;base64,AAAA"],
+      ["video", "data:video/mp4;base64,AAAA"],
+      ["image", "vbscript:msgbox(1)"],
+      ["image", "file:///etc/passwd"],
+      ["image", "images/fuji.jpg"],
+      ["image", ""],
+    ])("rejects %s %j", (field, value) => {
+      const chapter = { id: "t", title: "T", center: [0, 0], zoom: 3, [field]: value };
+      expect(ChapterSchema.safeParse(chapter).success).toBe(false);
+    });
   });
 
   describe("camera settings", () => {

@@ -9,7 +9,7 @@
  * property set before the element is even defined is not lost (ml-mpm); and
  * re-assigning a JSON-equal config does not rebuild the map (ml-i10).
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 vi.mock("maplibre-gl", () => {
   const Map = vi.fn(() => ({ on: vi.fn(), off: vi.fn(), remove: vi.fn() }));
@@ -318,5 +318,163 @@ describe("ml-i10: an equal config does not rebuild the map", () => {
     el.config = validBlock() as any;
     await settle();
     expect(constructed()).toHaveLength(2);
+  });
+});
+
+/**
+ * ml-aot.2: `<ml-map>` must not build its MapLibre map while the page's
+ * module scripts are still evaluating — a bundler can hoist `register` ahead
+ * of the maplibre-gl 6 worker-URL setup, and a map constructed in that window
+ * loads its worker from the wrong URL. The browser proof (real shared-chunk
+ * ordering, real maplibre-gl 6) is e2e/dom-ready-worker.spec.ts; these pin the
+ * element's state machine around the wait.
+ */
+describe("ml-aot.2: map construction waits for DOMContentLoaded", () => {
+  let state: DocumentReadyState = "loading";
+  let navEntry: { domContentLoadedEventStart: number } | undefined;
+  const realGetEntries = performance.getEntriesByType?.bind(performance);
+
+  beforeEach(() => {
+    state = "loading";
+    navEntry = undefined;
+    Object.defineProperty(document, "readyState", { configurable: true, get: () => state });
+    performance.getEntriesByType = ((type: string) =>
+      type === "navigation" && navEntry ? [navEntry] : []) as typeof performance.getEntriesByType;
+  });
+
+  afterEach(() => {
+    delete (document as unknown as Record<string, unknown>).readyState;
+    if (realGetEntries) performance.getEntriesByType = realGetEntries;
+  });
+
+  const contentLoaded = () => {
+    state = "interactive";
+    if (navEntry) navEntry.domContentLoadedEventStart = 1;
+    document.dispatchEvent(new Event("DOMContentLoaded"));
+  };
+
+  it("defers the renderer while the document is loading, then builds it once", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    const events = recordEvents(el);
+    el.setAttribute("config", JSON.stringify(validBlock()));
+    document.body.appendChild(el);
+    const ready = el.mapReady();
+    await settle();
+
+    expect(constructed()).toHaveLength(0);
+    // Waiting is not an error: no "No configuration provided" card.
+    expect(events).toEqual([]);
+    expect(el.querySelector(".ml-map-error")).toBeNull();
+    expect(el.getMap()).toBeNull();
+
+    contentLoaded();
+    expect(constructed()).toHaveLength(1);
+    constructed()[0].handlers.get("load")();
+    await expect(ready).resolves.toBeTruthy();
+  });
+
+  it("defers while module scripts run (readyState 'interactive', DOMContentLoaded not yet fired)", async () => {
+    // Module and defer scripts run after parsing ends, when readyState
+    // already reads "interactive" — readyState alone would not defer.
+    state = "interactive";
+    navEntry = { domContentLoadedEventStart: 0 };
+    const el = document.createElement("ml-map") as MLMap;
+    el.setAttribute("config", JSON.stringify(validBlock()));
+    document.body.appendChild(el);
+    await settle();
+    expect(constructed()).toHaveLength(0);
+
+    contentLoaded();
+    expect(constructed()).toHaveLength(1);
+  });
+
+  it("does not defer once DOMContentLoaded has fired (elements created later)", async () => {
+    state = "interactive";
+    navEntry = { domContentLoadedEventStart: 42 };
+    const el = document.createElement("ml-map") as MLMap;
+    el.setAttribute("config", JSON.stringify(validBlock()));
+    document.body.appendChild(el);
+    expect(constructed()).toHaveLength(1);
+  });
+
+  it("a config assigned during the wait is the one rendered", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.setAttribute("config", JSON.stringify(validBlock()));
+    document.body.appendChild(el);
+    el.config = { ...validBlock(), config: { ...validBlock().config, zoom: 3 } } as any;
+    await settle();
+    expect(constructed()).toHaveLength(0);
+
+    contentLoaded();
+    expect(constructed()).toHaveLength(1);
+    expect(constructed()[0].config.zoom).toBe(3);
+  });
+
+  it("an element removed during the wait never builds a map", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.setAttribute("config", JSON.stringify(validBlock()));
+    document.body.appendChild(el);
+    el.remove();
+    contentLoaded();
+    await settle();
+    expect(constructed()).toHaveLength(0);
+  });
+
+  it("a validation error during the wait shows the card immediately and cancels the build", async () => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.setAttribute("config", JSON.stringify(validBlock()));
+    document.body.appendChild(el);
+    el.config = { ...validBlock(), layers: [{ id: "bad", type: "nope" }] } as any;
+    expect(el.querySelector(".ml-map-error")).toBeTruthy();
+
+    contentLoaded();
+    await settle();
+    expect(constructed()).toHaveLength(0);
+  });
+});
+
+describe("ml-aot.2: a maplibre-gl worker that fails to load is an on-page error", () => {
+  const mounted = async (initial: unknown) => {
+    const el = document.createElement("ml-map") as MLMap;
+    el.config = initial as any;
+    document.body.appendChild(el);
+    await settle();
+    expect(constructed()).toHaveLength(1);
+    return el;
+  };
+
+  it("replaces the blank map with an error card carrying the setWorkerUrl hint, and rejects mapReady()", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const el = await mounted(validBlock());
+    const events = recordEvents(el);
+    const ready = el.mapReady().then(
+      () => null,
+      (e: Error) => e
+    );
+    const onError = constructed()[0].options.onError;
+    const message =
+      "Worker failed to load maplibre-gl 6.14.0 is ESM-only ... call setWorkerUrl() from maplibre-gl ...";
+    // MapLibre reports it as a runtime (non-fatal) error, once per worker.
+    onError(new Error(message), false);
+    onError(new Error(message), false);
+    await settle();
+
+    const card = el.querySelector(".ml-map-error");
+    expect(card?.textContent).toContain("Map Error");
+    expect(card?.textContent).toContain("setWorkerUrl()");
+    expect(constructed()[0].destroy).toHaveBeenCalledTimes(1);
+    expect(events[0].detail.fatal).toBe(true);
+    expect((await ready)?.message).toMatch(/Worker failed to load/);
+    errSpy.mockRestore();
+  });
+
+  it("other runtime errors stay non-fatal and leave the map in place", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const el = await mounted(validBlock());
+    constructed()[0].options.onError(new Error("tile 404"), false);
+    await settle();
+    expect(el.querySelector(".ml-map-error")).toBeNull();
+    expect(el.getRenderer()).toBeTruthy();
+    errSpy.mockRestore();
   });
 });
