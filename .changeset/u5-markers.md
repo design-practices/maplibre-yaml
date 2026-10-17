@@ -3,8 +3,8 @@
 "@maplibre-yaml/cli": minor
 ---
 
-`markers:` — standalone map pins as first-class YAML (R8), and the format's
-first construct that *exports with a fallback* (R5). Live, each entry is a real
+`markers:` — standalone map pins as first-class YAML, and the format's
+first construct that *exports with a fallback*. Live, each entry is a real
 `maplibregl.Marker` DOM pin: `at:` position, `color:`/`size:` on the default
 pin, `icon:` swapping in any image URL (a failed load or unsafe URL scheme
 falls back to the pin with one console note), and `popup:` carrying the same
@@ -20,7 +20,4 @@ On export, `mlym emit --with-fallbacks` lowers markers to a symbol layer
 reported as a `lossy` warning; `--strict` refuses marker documents, because a
 DOM marker and a symbol layer are close but not identical. Icon URLs are not
 embedded yet (that arrives with `images:`) — the emitted style substitutes
-the default pin and says so. The export-class registry carries the lowering as
-its `export()` hook, so the doctrine's fallback contract is mechanical, not
-prose. Three gallery pages flip Gap → YAML (default marker, custom
-icons, marker popup).
+the default pin and says so. The export-class registry carries the lowering as its `export()` hook. Three gallery examples (default marker, custom icons, marker popup) are now plain YAML.

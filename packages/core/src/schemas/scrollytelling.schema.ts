@@ -278,7 +278,7 @@ export const ChapterSchema = z
       .boolean()
       .optional()
       .describe(
-        "Not implemented (warns, no effect). Globe projection itself is the map-level `projection: { type: globe }`"
+        "Slowly pan the camera westward while this chapter is active (paused under prefers-reduced-motion). Globe projection itself is the map-level `projection:`"
       ),
 
     // Layout

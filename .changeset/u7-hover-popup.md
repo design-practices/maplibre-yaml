@@ -2,7 +2,7 @@
 "@maplibre-yaml/core": minor
 ---
 
-Hover popups join click popups as a built-in (R10): `hover.popup` shows a
+Hover popups join click popups as a built-in: `hover.popup` shows a
 chromeless preview while hovering a feature — deduped per feature entered,
 not per mousemove — and dismisses when the pointer leaves. Coexistence is
 part of the contract: with both `hover.popup` and `click.popup` on one

@@ -6,10 +6,11 @@
  *   standalone block resolves `$ref` against its own `sources:` record and
  *   hard-errors when the target is missing (todos/039 is stale); v2
  *   hard-errors on the shape itself ($ref is a v1 affordance).
- * - Unimplemented scrollytelling fields (spinGlobe, rotateAnimation,
- *   callback, fitBounds/custom/flyTo/easeTo chapter actions) →
- *   `kind: "unimplemented"` warnings, which never promote: the document is
- *   not wrong, the engine is behind.
+ * - Scrollytelling fields that once warned `kind: "unimplemented"`
+ *   (spinGlobe, rotateAnimation, callback, and the fitBounds/custom/flyTo/
+ *   easeTo chapter actions) run in @maplibre-yaml/astro since 0.7, so they
+ *   must no longer warn; a stale "not implemented" note would tell authors
+ *   to delete a working field.
  */
 import { describe, it, expect } from "vitest";
 import { YAMLParser } from "../../src/parser/yaml-parser";
@@ -54,7 +55,7 @@ layers:
   });
 });
 
-describe("unimplemented scrollytelling fields warn without promoting", () => {
+describe("implemented scrollytelling fields do not warn as unimplemented", () => {
   const scrolly = (chapterExtra: string) => `type: scrollytelling
 id: s
 config:
@@ -69,41 +70,30 @@ chapters:
 ${chapterExtra}
 `;
 
-  it("spinGlobe warns with kind unimplemented", () => {
-    const { result } = YAMLParser.safeParseAny(scrolly(`    spinGlobe: true`));
-    expect(result.success).toBe(true);
-    const w = result.warnings.find((x) => x.path.endsWith("spinGlobe"));
-    expect(w).toBeDefined();
-    expect(w!.kind).toBe("unimplemented");
-    expect(w!.message).toMatch(/not implemented/);
-  });
-
-  it("rotateAnimation and callback warn too", () => {
+  it("spinGlobe, rotateAnimation and callback raise no unimplemented warning", () => {
     const { result } = YAMLParser.safeParseAny(
-      scrolly(`    rotateAnimation: true
+      scrolly(`    spinGlobe: true
+    rotateAnimation: true
     callback: doThing`)
     );
     expect(result.success).toBe(true);
-    const kinds = result.warnings.filter((x) => x.kind === "unimplemented");
-    expect(kinds.map((x) => x.path.split(".").pop()).sort()).toEqual([
-      "callback",
-      "rotateAnimation",
-    ]);
+    expect(result.warnings.filter((x) => x.kind === "unimplemented")).toEqual([]);
+    expect(result.warnings.filter((x) => /not implemented/.test(x.message))).toEqual([]);
   });
 
-  it("a fitBounds chapter action warns; an implemented action does not", () => {
+  it("fitBounds, custom, flyTo and easeTo chapter actions raise no unimplemented warning", () => {
     const { result } = YAMLParser.safeParseAny(
       scrolly(`    onChapterEnter:
       - action: fitBounds
         layer: p
+      - action: custom
+      - action: flyTo
+      - action: easeTo
+    onChapterExit:
       - action: setFilter
         layer: p`)
     );
     expect(result.success).toBe(true);
-    const unimplemented = result.warnings.filter(
-      (x) => x.kind === "unimplemented" && x.path.endsWith("action")
-    );
-    expect(unimplemented).toHaveLength(1);
-    expect(unimplemented[0].path).toContain("onChapterEnter.0");
+    expect(result.warnings.filter((x) => x.kind === "unimplemented")).toEqual([]);
   });
 });

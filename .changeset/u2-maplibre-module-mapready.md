@@ -2,7 +2,7 @@
 "@maplibre-yaml/core": minor
 ---
 
-Two new routes for page JavaScript close the census's F2 gap. `@maplibre-yaml/core/maplibre`
+Two new routes for page JavaScript. `@maplibre-yaml/core/maplibre`
 re-exports the maplibre-gl module core renders with — `addProtocol` (pmtiles,
 COG, custom schemes) finally registers on the module instance the document's
 requests actually go through, instead of a copy the map never consults. The
