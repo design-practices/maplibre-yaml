@@ -27,8 +27,9 @@
  * `<ml-scrollytelling>`). Packed at the workspace versions (core still 0.7.0
  * until the version PR), the strict npm install would refuse that pairing
  * although it is exactly what will be published. So before packing, the
- * script asks changesets what the pending changesets will release
- * (`changeset status --output`) and packs each package at that version: it
+ * script runs `changeset version` in a throwaway, git-less copy of the
+ * workspace manifests (not `changeset status`, which needs the base branch
+ * in git) and packs each package at the version it releases: it
  * rewrites `version` in the package.json being packed and restores the
  * original bytes in a `finally` (and on SIGINT/SIGTERM), so a run, failed or
  * not, never leaves the tree dirty. With no pending changesets it packs at
@@ -48,7 +49,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -145,25 +146,61 @@ async function waitForHttp(url, timeoutMs = 120_000) {
 /**
  * The versions the pending changesets will release, by package name; `{}`
  * when there are none (pack at the current versions, as before).
+ *
+ * @remarks
+ * Runs `changeset version` in a throwaway copy of the workspace's manifests
+ * (root package.json, pnpm-workspace.yaml, every workspace package.json, and
+ * `.changeset/`), then reads the versions it wrote. Not `changeset status`:
+ * that always diffs against the base branch through git, and CI's shallow
+ * checkout has no `main` to diff against. The copy is not a git repository
+ * and the real tree is never touched.
  */
 function pendingVersions() {
-  const out = join(WORK, "changeset-status.json");
-  rmSync(out, { force: true });
-  // `--output` is resolved against the cwd even when absolute, so pass it
-  // relative to the repo.
-  const res = spawnSync("pnpm", ["exec", "changeset", "status", "--output", relative(REPO, out)], {
-    cwd: REPO,
+  const preview = join(WORK, "changeset-preview");
+  rmSync(preview, { recursive: true, force: true });
+  mkdirSync(join(preview, ".changeset"), { recursive: true });
+  const changesets = readdirSync(join(REPO, ".changeset")).filter((f) => f.endsWith(".md") && f !== "README.md");
+  if (changesets.length === 0) return {};
+
+  for (const f of ["package.json", "pnpm-workspace.yaml"]) cpSync(join(REPO, f), join(preview, f));
+  for (const f of changesets) cpSync(join(REPO, ".changeset", f), join(preview, ".changeset", f));
+  // No changelog generator: it is resolved from .changeset/, which the copy
+  // has no node_modules for, and only versions are wanted here.
+  const config = JSON.parse(readFileSync(join(REPO, ".changeset/config.json"), "utf8"));
+  writeFileSync(join(preview, ".changeset/config.json"), JSON.stringify({ ...config, changelog: false }, null, 2));
+
+  // Workspace package directories: pnpm-workspace.yaml's `dir` and `dir/*` entries.
+  const patterns = [...readFileSync(join(REPO, "pnpm-workspace.yaml"), "utf8").matchAll(/^\s*-\s*['"]?([^'"\n]+?)['"]?\s*$/gm)].map(
+    (m) => m[1]
+  );
+  const dirs = patterns.flatMap((pattern) => {
+    if (!pattern.endsWith("/*")) return [pattern];
+    const parent = pattern.slice(0, -2);
+    if (!existsSync(join(REPO, parent))) return [];
+    return readdirSync(join(REPO, parent), { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => `${parent}/${d.name}`);
+  });
+  const manifests = dirs.filter((d) => existsSync(join(REPO, d, "package.json")));
+  for (const d of manifests) {
+    mkdirSync(join(preview, d), { recursive: true });
+    cpSync(join(REPO, d, "package.json"), join(preview, d, "package.json"));
+  }
+
+  const res = spawnSync(process.execPath, [join(REPO, "node_modules/@changesets/cli/bin.js"), "version"], {
+    cwd: preview,
     env: ENV,
     encoding: "utf8",
   });
-  if (!existsSync(out)) {
-    if (res.status === 0) return {};
-    throw new Error(`changeset status failed:\n${res.stdout}\n${res.stderr}`);
+  if (res.status !== 0) throw new Error(`changeset version (preview) failed:\n${res.stdout}\n${res.stderr}`);
+
+  const versions = {};
+  for (const d of manifests) {
+    const before = JSON.parse(readFileSync(join(REPO, d, "package.json"), "utf8"));
+    const after = JSON.parse(readFileSync(join(preview, d, "package.json"), "utf8"));
+    if (after.version !== before.version) versions[after.name] = after.version;
   }
-  const { releases = [] } = JSON.parse(readFileSync(out, "utf8"));
-  return Object.fromEntries(
-    releases.filter((r) => r.newVersion && r.newVersion !== r.oldVersion).map((r) => [r.name, r.newVersion])
-  );
+  return versions;
 }
 
 /** Rewrite `version` in a package.json; returns a function restoring the original bytes. */
