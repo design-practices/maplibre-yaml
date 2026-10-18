@@ -832,10 +832,12 @@ test.describe("images: declared images register before layers (U6)", () => {
     expect(warnings.filter((w) => w.includes("primary-icon")).length).toBe(0);
 
     // A hard-missing reference (no coalesce) DOES fire it — and the renderer
-    // warns once, not once per render.
+    // warns once, not once per render. The name is one the document itself
+    // uses: names only the basemap asks for are not the document's to warn
+    // about (ml-aot.37).
     await page.evaluate(() => {
       const map = (document.getElementById("map") as any).getMap();
-      map.setLayoutProperty("fallback", "icon-image", "definitely-missing");
+      map.setLayoutProperty("fallback", "icon-image", "primary-icon");
     });
     await page.waitForFunction(() =>
       (document.getElementById("map") as any).getMap().isStyleLoaded()
@@ -848,7 +850,7 @@ test.describe("images: declared images register before layers (U6)", () => {
       await new Promise((r) => setTimeout(r, 300));
     });
     expect(
-      warnings.filter((w) => w.includes('references image "definitely-missing"')).length
+      warnings.filter((w) => w.includes('references image "primary-icon"')).length
     ).toBe(1);
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });

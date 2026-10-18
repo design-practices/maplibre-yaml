@@ -7,6 +7,7 @@ import type { LngLat } from 'maplibre-gl';
 import { Map as MapLibreMap, AttributionControl, runtimeVersion, withWorkerUrlHint } from './maplibre-interop';
 import { installAttributionGuard, type AttributionGuard } from './attribution-guard';
 import { sanitizeCustomAttribution, sanitizeSourcesAttribution } from '../utils/attribution';
+import { createImageRefs, noteLayerImageRefs } from '../utils/image-refs';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
@@ -266,6 +267,8 @@ export class MapRenderer {
   private popupsManager: PopupsManager | null = null;
   /** Layer types this runtime cannot render, warned once each (U14). */
   private warnedUnsupportedTypes = new Set<string>();
+  /** Image names the document's own layers can ask for (ml-aot.37). */
+  private imageRefs = createImageRefs();
   private controlsManager: ControlsManager;
   private attributionGuard: AttributionGuard;
   private eventListeners: Map<string, Set<Function>>;
@@ -687,6 +690,7 @@ export class MapRenderer {
     // is bounded because data-driven icon-image makes the id space
     // feature-data-sized — past the cap, one final note and silence.
     const MISSING_WARN_CAP = 100;
+    for (const layer of layers) noteLayerImageRefs(this.imageRefs, layer);
     const missingWarned = new Set<string>();
     const warnMissing = (id: string) => {
       if (missingWarned.has(id) || missingWarned.size > MISSING_WARN_CAP) return;
@@ -698,10 +702,21 @@ export class MapRenderer {
         );
         return;
       }
-      console.warn(
-        `[maplibre-yaml] layer references image "${id}" but no images: entry, ` +
-          'sprite, or addImage call supplies it.'
-      );
+      // MapLibre does not say which layer asked; only blame the document for
+      // a name its own layers can produce (ml-aot.37). A basemap icon the
+      // basemap's sprite lacks is MapLibre's own console warning already.
+      if (this.imageRefs.names.has(id)) {
+        console.warn(
+          `[maplibre-yaml] layer references image "${id}" but no images: entry, ` +
+            'sprite, or addImage call supplies it.'
+        );
+      } else if (this.imageRefs.dynamic) {
+        console.warn(
+          `[maplibre-yaml] image "${id}" is missing. If one of your layers builds ` +
+            'its icon name from feature data, add this image under images:; if it ' +
+            "is a basemap icon, the basemap's sprite lacks it and you can ignore this."
+        );
+      }
     };
     this.map.on('styleimagemissing', (e: { id: string }) => {
       if (missingWarned.has(e.id) || missingWarned.size > MISSING_WARN_CAP) return;
@@ -815,6 +830,7 @@ export class MapRenderer {
       }
       return;
     }
+    noteLayerImageRefs(this.imageRefs, layer);
     await this.layerManager.addLayer(layer);
     this.eventHandler.attachEvents(layer);
     this.emit('layer:added', { layerId: layer.id });
