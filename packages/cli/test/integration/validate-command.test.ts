@@ -186,6 +186,70 @@ describe('validate command (integration)', () => {
     expect(parsed).toHaveProperty('valid');
   });
 
+  // ml-aot.31: every positional argument is validated, not just the first.
+  // `validate a.yaml b.yaml c.yaml` and an unquoted shell glob both arrive as
+  // separate argv entries; dropping all but the first was a silent false pass.
+  describe('multiple positional arguments (ml-aot.31)', () => {
+    const run = async (args: string) => {
+      try {
+        const { stdout, stderr } = await execAsync(`node "${CLI}" validate ${args}`);
+        return { code: 0, stdout, stderr };
+      } catch (error: any) {
+        return { code: error.code as number, stdout: error.stdout as string, stderr: error.stderr as string };
+      }
+    };
+
+    it('validates every file when given three files (2nd and 3rd broken)', async () => {
+      const r = await run(
+        'test/fixtures/valid-basic.yaml test/fixtures/invalid-missing-config.yaml test/fixtures/invalid-bad-layer.yaml'
+      );
+      expect(r.code).toBe(1);
+      expect(r.stdout).toContain('valid-basic.yaml');
+      expect(r.stdout).toContain('invalid-missing-config.yaml');
+      expect(r.stdout).toContain('invalid-bad-layer.yaml');
+      expect(r.stdout).toContain('2 file(s) with issues');
+    });
+
+    it('validates a shell-expanded glob (unquoted) — every match, not only the first', async () => {
+      // The shell expands this before the CLI sees it; valid-basic sorts first.
+      const r = await run('test/fixtures/valid-basic.yaml test/fixtures/invalid-*.yaml');
+      expect(r.code).toBe(1);
+      expect(r.stdout).toContain('invalid-unknown-type.yaml');
+      expect(r.stdout).toContain('invalid-yaml-syntax.yaml');
+    });
+
+    it('accepts several quoted glob patterns (docs "Multiple patterns")', async () => {
+      const r = await run('"test/fixtures/valid-basic.yaml" "test/fixtures/invalid-bad-*.yaml"');
+      expect(r.code).toBe(1);
+      expect(r.stdout).toContain('valid-basic.yaml');
+      expect(r.stdout).toContain('invalid-bad-layer.yaml');
+    });
+
+    it('JSON output covers every file', async () => {
+      const r = await run(
+        'test/fixtures/valid-basic.yaml test/fixtures/valid-with-layers.yaml test/fixtures/invalid-missing-config.yaml --format json'
+      );
+      expect(r.code).toBe(1);
+      const parsed = JSON.parse(r.stdout);
+      expect(parsed.files).toHaveLength(3);
+      expect(parsed.valid).toBe(false);
+    });
+
+    it('reports a pattern that matches nothing and exits non-zero, still validating the rest', async () => {
+      const r = await run('test/fixtures/valid-basic.yaml test/fixtures/does-not-exist.yaml');
+      expect(r.code).not.toBe(0);
+      expect(r.stdout).toContain('valid-basic.yaml');
+      expect(r.stdout + r.stderr).toContain('does-not-exist.yaml');
+      expect(r.stdout + r.stderr).toMatch(/No files? (found|match)/i);
+    });
+
+    it('all-valid multiple files exit 0', async () => {
+      const r = await run('test/fixtures/valid-basic.yaml test/fixtures/valid-with-layers.yaml');
+      expect(r.code).toBe(0);
+      expect(r.stdout).toContain('2 file(s) valid');
+    });
+  });
+
   it('SARIF output includes location info', async () => {
     try {
       await execAsync(
