@@ -864,7 +864,9 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await expect(page.locator("ml-map")).toHaveCount(0);
     await expect(card).toHaveAttribute("role", "alert");
     await expect(card).toContainText("story.yaml");
-    await expect(card).toContainText("chapters.1.centre");
+    // The message names the chapter, so the 0-based path is not repeated (ml-aot.62).
+    await expect(card).toContainText(/Chapter 2 \(/);
+    await expect(card).not.toContainText("chapters.1.");
     await expect(card).toContainText(/line \d+/);
     await expect(card).toContainText(/centre[\s\S]*center/);
     // The failure is logged once, as an error, naming the file.
