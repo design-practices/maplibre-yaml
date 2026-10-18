@@ -309,6 +309,11 @@ export interface StoryController {
    * as failed: chapters keep activating and announcing, with `map: null`.
    */
   setMap(map: StoryMap | null): void;
+  /**
+   * Re-apply the active chapter's camera, instantly, for a changed layout
+   * (window resize, rotation): new padding, same chapter.
+   */
+  realign(): void;
   /** Stop ambient animation and ignore later calls. */
   destroy(): void;
   readonly activeChapterId: string | null;
@@ -495,9 +500,46 @@ export function createStoryController(
     if (chapter) applyChapter(chapter, index, true);
   }
 
+  /**
+   * Put the camera back on the active chapter after the layout changed (a
+   * window resize, a phone rotated): the chapter's camera with the padding
+   * the new layout gives, and its camera actions, all instant. Layer
+   * toggles and other actions are not re-run (ml-aot.58).
+   */
+  function realign(): void {
+    if (destroyed || !map || activeId === null || appliedId !== activeId) return;
+    const index = chapters.findIndex((c) => c.id === activeId);
+    const chapter = chapters[index];
+    if (!chapter) return;
+    const padding = options.padding?.(chapter);
+    map.jumpTo({
+      center: chapter.center,
+      zoom: chapter.zoom,
+      pitch: chapter.pitch ?? 0,
+      bearing: chapter.bearing ?? 0,
+      ...(padding ? { padding } : {}),
+    });
+    for (const action of chapter.onChapterEnter ?? []) {
+      if (action.action !== "flyTo" && action.action !== "easeTo" && action.action !== "fitBounds") continue;
+      runChapterAction(map, action, {
+        container,
+        chapterId: chapter.id,
+        phase: "enter",
+        chapter,
+        reducedMotion: true,
+        padding,
+        mapSize: options.mapSize?.(),
+        onProblem: problem,
+        layerIds,
+      });
+    }
+    startAmbient(chapter, true);
+  }
+
   return {
     activate,
     setMap,
+    realign,
     destroy() {
       destroyed = true;
     },

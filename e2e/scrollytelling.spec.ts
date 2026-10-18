@@ -633,6 +633,62 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await context.close();
   });
 
+  for (const key of ["PageDown", "Space"] as const) {
+    test(`reading with ${key}: every chapter in turn, each card wholly on screen (ml-aot.67)`, async ({ browser, baseURL }) => {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+      const page = await context.newPage();
+      const errors = await guard(page, baseURL!);
+      await page.goto(EXAMPLE, { waitUntil: "domcontentloaded" });
+      await storyReady(page);
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.mouse.click(5, 5);
+      const ids = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>(".scrolly-chapter")].map((s) => s.dataset.chapterId!)
+      );
+      const seen: string[] = [];
+      const whole = new Set<string>();
+      for (let i = 0; i < ids.length + 3; i++) {
+        await page.keyboard.press(key);
+        await page.waitForTimeout(400);
+        const s = await page.evaluate(() => {
+          const el = document.querySelector("ml-scrollytelling") as HTMLElement;
+          const id = el.dataset.activeChapter ?? null;
+          const card = id
+            ? el.querySelector(`.scrolly-chapter[data-chapter-id="${id}"] .chapter-content`)!.getBoundingClientRect()
+            : null;
+          return { id, whole: !!card && card.top >= 0 && card.bottom <= innerHeight, y: scrollY, max: document.documentElement.scrollHeight - innerHeight };
+        });
+        if (s.id && seen[seen.length - 1] !== s.id) seen.push(s.id);
+        if (s.id && s.whole) whole.add(s.id);
+      }
+      expect(seen, "every chapter, in order").toEqual(ids);
+      expect([...whole].sort(), "each card wholly on screen at its stop").toEqual([...ids].sort());
+      // Past the last chapter the key scrolls the page on as usual.
+      const end = await page.evaluate(() => ({ y: scrollY, max: document.documentElement.scrollHeight - innerHeight }));
+      expect(end.y).toBeGreaterThan(end.max - 900);
+      expect(errors).toEqual([]);
+      await context.close();
+    });
+  }
+
+  test("PageDown in a text field is left alone (ml-aot.67)", async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    await guard(page, baseURL!);
+    await page.goto(EXAMPLE, { waitUntil: "domcontentloaded" });
+    await storyReady(page);
+    const handled = await page.evaluate(() => {
+      const input = document.createElement("input");
+      document.body.prepend(input);
+      input.focus();
+      const e = new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true, cancelable: true });
+      input.dispatchEvent(e);
+      return e.defaultPrevented;
+    });
+    expect(handled).toBe(false);
+    await context.close();
+  });
+
   test("reduced motion: chapter camera moves are instant (ml-cxk)", async ({ browser, baseURL }) => {
     const context = await browser.newContext({ reducedMotion: "reduce", viewport: { width: 1280, height: 800 } });
     const page = await context.newPage();
@@ -807,6 +863,86 @@ async function serveDocs(page: Page, baseURL: string, files: Record<string, stri
 
 test.describe("docs: Scrollytelling in plain HTML, run verbatim", () => {
   const PAGE = "integrations/scrollytelling-html.mdx";
+
+  /** The active chapter, and how far the map's centre is from its `center` (degrees). */
+  const cameraVsActive = (page: Page) =>
+    page.evaluate(() => {
+      const el = document.querySelector("ml-scrollytelling") as any;
+      const id = el.dataset.activeChapter;
+      const chapter = el.story.chapters.find((c: any) => c.id === id);
+      const c = el.getMap().getCenter();
+      const [lng, lat] = chapter.center;
+      return { id, off: Math.max(Math.abs(c.lng - lng), Math.abs(c.lat - lat)), zoom: el.getMap().getZoom() };
+    });
+
+  /** Rotate the phone: resize the viewport, then wait for the camera to settle. */
+  async function rotate(page: Page, width: number, height: number) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(400);
+    await settled(page);
+    await page.waitForTimeout(300);
+  }
+
+  test("rotating a phone mid-story keeps the reader's chapter and its camera (ml-aot.58, ml-aot.59)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const page = await context.newPage();
+    const [html] = fences(PAGE, "html");
+    const [yaml] = fences(PAGE, "yaml");
+    const errors = await serveDocs(page, baseURL!, { "index.html": html, "story.yaml": yaml });
+    await page.goto("/__docs/story/", { waitUntil: "domcontentloaded" });
+    await storyReady(page, "cities");
+    const log: string[] = [];
+    for (const id of ["jakarta", "lima"]) {
+      await scrollToChapter(page, id);
+      await settled(page);
+      for (const [w, h] of [
+        [844, 390],
+        [390, 844],
+        [844, 390],
+        [390, 844],
+      ] as const) {
+        await rotate(page, w, h);
+        const s = await cameraVsActive(page);
+        // The same chapter (ml-aot.59), and the camera on it (ml-aot.58).
+        if (s.id !== id) log.push(`reading ${id}, after ${w}x${h}: ${s.id} active`);
+        if (s.off > 0.05) log.push(`reading ${id}, after ${w}x${h}: camera ${s.off.toFixed(2)}° off ${s.id}`);
+      }
+    }
+    expect(log, log.join("\n")).toEqual([]);
+    expect(errors, errors.join("\n")).toEqual([]);
+    await context.close();
+  });
+
+  test("after a rotation that changes the active chapter, the camera follows (ml-aot.58)", async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const page = await context.newPage();
+    const [html] = fences(PAGE, "html");
+    const [yaml] = fences(PAGE, "yaml");
+    const errors = await serveDocs(page, baseURL!, { "index.html": html, "story.yaml": yaml });
+    await page.goto("/__docs/story/", { waitUntil: "domcontentloaded" });
+    await storyReady(page, "cities");
+    await scrollToChapter(page, "jakarta");
+    await settled(page);
+    // Resize so the page's own scroll offset now shows another chapter, the
+    // way 0.8.1's first rotation fix candidates could: the camera must land
+    // on whichever chapter is active afterwards.
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.evaluate(() => {
+      const s = document.querySelector<HTMLElement>('.scrolly-chapter[data-chapter-id="lima"]')!;
+      const c = (s.querySelector(".chapter-content") ?? s).getBoundingClientRect();
+      scrollBy(0, c.top + c.height / 2 - innerHeight / 2);
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(500);
+    await settled(page);
+    const s = await cameraVsActive(page);
+    expect(s.off, `camera ${s.off.toFixed(2)}° off active chapter ${s.id}`).toBeLessThan(0.05);
+    expect(errors, errors.join("\n")).toEqual([]);
+    await context.close();
+  });
 
   test("the quick start (index.html + story.yaml) is a working story", async ({ page, baseURL }) => {
     const [html, inlineHtml] = fences(PAGE, "html");

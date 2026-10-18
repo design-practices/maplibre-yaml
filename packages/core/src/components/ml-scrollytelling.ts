@@ -710,17 +710,136 @@ export class MLScrollytelling extends HTMLElement {
     };
     const view = this.ownerDocument.defaultView;
     this.checkMediaLoaded();
+
+    // Where the reader is: the active chapter's card, as a fraction of the
+    // screen height. A resize (a phone rotated) changes every section's
+    // height while the page keeps its scroll offset in pixels, so the reader
+    // landed chapters away (ml-aot.59); the card is put back where it was.
+    let anchor: { id: string; at: number } | null = null;
+    let size = view ? { w: view.innerWidth, h: view.innerHeight } : { w: 0, h: 0 };
+    const cardOf = (id: string) => {
+      const section = this.sectionFor(id);
+      return (section?.querySelector<HTMLElement>(".chapter-content") ?? section)?.getBoundingClientRect() ?? null;
+    };
+    const remember = () => {
+      const id = controller.activeChapterId;
+      const box = id ? cardOf(id) : null;
+      anchor = id && box && view && view.innerHeight > 0 ? { id, at: (box.top + box.height / 2) / view.innerHeight } : null;
+    };
+    // The layout changed size. Order matters (ml-aot.58): put the reader's
+    // card back, resize the map NOW (its own ResizeObserver runs later, so a
+    // chapter camera computed first was framed for the old canvas), and
+    // only then pick the chapter and re-frame it with the new padding.
+    const resized = () => {
+      if (!view) return;
+      size = { w: view.innerWidth, h: view.innerHeight };
+      if (anchor) {
+        const box = cardOf(anchor.id);
+        if (box) {
+          const shift = box.top + box.height / 2 - anchor.at * view.innerHeight;
+          if (Math.abs(shift) > 1) view.scrollTo({ top: view.scrollY + shift, behavior: "instant" as ScrollBehavior });
+        }
+      }
+      (this.mapElement?.getMap() as { resize?: () => void } | null | undefined)?.resize?.();
+      const before = controller.activeChapterId;
+      sync();
+      if (controller.activeChapterId === before) controller.realign();
+      this.placeChrome();
+      remember();
+    };
     let frame = 0;
     const onScroll = () => {
       if (frame || !view) return;
       frame = view.requestAnimationFrame(() => {
         frame = 0;
+        if (this.controller !== controller) return;
+        // A scroll caused by a resize (the page got shorter) arrives as a
+        // scroll: handle it as the resize it is.
+        if (view.innerWidth !== size.w || view.innerHeight !== size.h) {
+          resized();
+          return;
+        }
         sync();
-        if (this.controller === controller) this.placeChrome();
+        this.placeChrome();
+        remember();
       });
     };
+    const onResize = () => {
+      if (!view || (view.innerWidth === size.w && view.innerHeight === size.h)) return;
+      if (frame) view.cancelAnimationFrame(frame);
+      frame = 0;
+      resized();
+    };
+    // Page keys read the story one chapter at a time (ml-aot.67): a screen-
+    // high PageDown/Space skipped the intro and left cards cut at the edges.
+    // Only while the story is on screen, with focus on the page or in the
+    // story (not a field, button or link), and only between chapters: before
+    // the first and after the last, the key scrolls the page as usual.
+    let keyTarget: number | null = null;
+    const onKey = (event: KeyboardEvent) => {
+      if (!view || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const space = event.key === " " || event.key === "Spacebar";
+      const forward = event.key === "PageDown" || (space && !event.shiftKey);
+      const back = event.key === "PageUp" || (space && event.shiftKey);
+      if (!forward && !back) return;
+      const target = event.target instanceof Element ? event.target : null;
+      const doc = this.ownerDocument;
+      if (target && target !== doc.body && target !== doc.documentElement && !this.contains(target)) return;
+      if (target?.closest("input, textarea, select, button, a[href], summary, [contenteditable], [role=button], [role=textbox]")) {
+        return;
+      }
+      const story = this.getBoundingClientRect();
+      const h = view.innerHeight;
+      if (story.bottom <= 0 || story.top >= h) return;
+      const sections = Array.from(
+        this.querySelectorAll<HTMLElement>(":scope > .scrolly-chapters > .scrolly-chapter")
+      );
+      const box = (i: number) =>
+        (sections[i]?.querySelector<HTMLElement>(".chapter-content") ?? sections[i])?.getBoundingClientRect();
+      const mid = h / 2;
+      const centre = (r: DOMRect) => r.top + r.height / 2;
+      // Where the reader is: a chapter still being scrolled to by an
+      // earlier press, else the card nearest the middle of the screen.
+      let base = -1;
+      if (keyTarget !== null && box(keyTarget) && Math.abs(centre(box(keyTarget)!) - mid) > 4) base = keyTarget;
+      else {
+        let best = Infinity;
+        sections.forEach((_, i) => {
+          const r = box(i);
+          if (!r || r.height === 0 || r.bottom <= 0 || r.top >= h) return;
+          const d = Math.abs(centre(r) - mid);
+          if (d < best) {
+            best = d;
+            base = i;
+          }
+        });
+      }
+      let next = -1;
+      if (base === -1) {
+        // No card on screen (before the first, after the last, or between
+        // tall sections): the next card ahead of the middle, or behind it.
+        sections.forEach((_, i) => {
+          const c = box(i);
+          if (!c || c.height === 0) return;
+          if (forward && next === -1 && centre(c) > mid + 4) next = i;
+          if (back && centre(c) < mid - 4) next = i;
+        });
+      } else if (forward) next = centre(box(base)!) > mid + 4 ? base : base + 1;
+      else next = centre(box(base)!) < mid - 4 ? base : base - 1;
+      const r = next >= 0 ? box(next) : undefined;
+      if (!r) {
+        keyTarget = null;
+        return;
+      }
+      event.preventDefault();
+      keyTarget = next;
+      const shift = r.height > h - 32 ? r.top - 16 : centre(r) - mid;
+      view.scrollTo({ top: view.scrollY + shift, behavior: prefersReducedMotion() ? ("instant" as ScrollBehavior) : "smooth" });
+    };
+    this.ownerDocument.addEventListener("keydown", onKey);
+
     view?.addEventListener("scroll", onScroll, { passive: true, capture: true });
-    view?.addEventListener("resize", onScroll, { passive: true });
+    view?.addEventListener("resize", onResize, { passive: true });
     // Cards also move without a scroll: the active card's scale transition
     // ends, a chapter photo loads and makes its card taller. Re-place the
     // chrome then too, or a legend could stay where a card now is.
@@ -728,7 +847,8 @@ export class MLScrollytelling extends HTMLElement {
     this.addEventListener("load", onScroll, true);
     this.stopScrollSync = () => {
       view?.removeEventListener("scroll", onScroll, { capture: true });
-      view?.removeEventListener("resize", onScroll);
+      view?.removeEventListener("resize", onResize);
+      this.ownerDocument.removeEventListener("keydown", onKey);
       this.removeEventListener("transitionend", onScroll);
       this.removeEventListener("load", onScroll, true);
       if (frame) view?.cancelAnimationFrame(frame);
