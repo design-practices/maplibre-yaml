@@ -84,6 +84,59 @@ function message(lines: string[], culprit: LineInfo, reference: LineInfo): strin
 }
 
 /**
+ * Explain a quote inside a quoted value (`description: "a "walk" here"`),
+ * which the yaml library reports as "Unexpected scalar at node end"
+ * (ml-aot.62), or return `undefined` when the line isn't that.
+ *
+ * @param yaml - The source text.
+ * @param reportedLine - The 1-based line the library reported.
+ */
+export function explainQuoteError(
+  yaml: string,
+  reportedLine: number | undefined
+): { message: string; line: number; column: number } | undefined {
+  if (reportedLine === undefined) return undefined;
+  const text = yaml.split(/\r?\n/)[reportedLine - 1];
+  if (text === undefined) return undefined;
+  const m = /^(\s*(?:-\s+)?)([^\s:#"'][^:#]*?):\s+(["'])/.exec(text);
+  if (!m) return undefined;
+  const key = m[2]!;
+  const quote = m[3]! as '"' | "'";
+  const valueStart = m[0].length; // index just after the opening quote
+  // Where the quoted value ends, honouring the escapes each style allows.
+  let end = -1;
+  for (let i = valueStart; i < text.length; i++) {
+    const c = text[i];
+    if (quote === '"' && c === "\\") {
+      i++;
+      continue;
+    }
+    if (c === quote) {
+      if (quote === "'" && text[i + 1] === "'") {
+        i++;
+        continue;
+      }
+      end = i;
+      break;
+    }
+  }
+  if (end < 0) return undefined;
+  const after = text.slice(end + 1).trim();
+  if (after === "" || after.startsWith("#")) return undefined;
+  const word = /^\S+/.exec(text.slice(end + 1))?.[0] ?? "";
+  const escape = quote === '"' ? '\\"' : "''";
+  const other = quote === '"' ? "single" : "double";
+  return {
+    message:
+      `Line ${reportedLine}: a ${quote} inside a ${quote}…${quote} value ends it early — the value ` +
+      `of "${key}:" stops at the ${quote} before ${word}. Use ${other} quotes around the whole ` +
+      `value, or write ${escape} for each ${quote} inside it.`,
+    line: reportedLine,
+    column: end + 1,
+  };
+}
+
+/**
  * Explain a YAML indentation error, or return `undefined` to keep the
  * library's message.
  *

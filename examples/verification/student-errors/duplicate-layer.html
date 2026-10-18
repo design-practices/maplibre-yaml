@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Two layers with one id</title>
+  <!--
+    Review F3 — two layers share the id "walk" (a copied layer). 0.8.0 drew
+    the first and failed the repeat on its own; it must not fail the whole
+    map. PASS = the map renders with the purple route (the first "walk",
+    a line), no red dots from the repeat, and the notice says the repeat was
+    skipped. FAIL = an error card instead of a map.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/duplicate-layer.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: duplicate-layer
+config:
+  center: [5, 25]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: walk
+    type: line
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: LineString, coordinates: [[0, 20], [10, 30]] } }
+    paint: { line-color: "#7c3aed", line-width: 4 }
+  - id: walk
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [5, 25] } }
+    paint: { circle-color: "#d62828", circle-radius: 8 }
+    </script>
+  </ml-map>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

@@ -60,6 +60,14 @@ when one of those is nested inside `config:`, where it does nothing
 (`"markers" belongs at the top level, next to config:, not inside it`), and
 when `config:` has a key that is neither (`Unknown key "fooBar" in config`).
 
+Coordinates are always `[longitude, latitude]`, longitude first (map sites
+often show latitude first). When a `center:` (or a story chapter's `center:`)
+looks swapped -- written the other way round, it would land among the
+document's own data, markers or other centers -- validation and the map's
+notice say so: `center is [40.75, -73.98] — coordinates are [longitude,
+latitude]; did you mean [-73.98, 40.75]?`. A latitude beyond about ±85, which
+a web map can't show, warns too.
+
 ## Runtime state and parameters
 
 `state:` declares runtime-tunable values a map can change after it loads, read

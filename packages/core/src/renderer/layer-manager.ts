@@ -132,6 +132,8 @@ export class LayerManager {
   private loadingManager: LoadingManager;
   private sourceData: Map<string, FeatureCollection>;
   private layerToSource: Map<string, string>;
+  /** Layer ids this manager has added (or is adding): a repeat is refused. */
+  private claimedLayerIds = new Set<string>();
   /** Block-level `sources:` specs, kept for their YAML-only refresh config. */
   private namedSources: Map<string, Record<string, unknown>>;
   /** How many live layers reference each named source. */
@@ -287,6 +289,30 @@ export class LayerManager {
   }
 
   async addLayer(layer: Layer): Promise<void> {
+    // A document that repeats a layer id (review F3): the first one wins, as
+    // in 0.8.0, and the repeat is refused here -- synchronously, before any
+    // await, so the first in document order claims the id even when the
+    // layers are added concurrently, and before the repeat can add a second
+    // `<id>-source` or bump a shared source's refcount. The caller reports
+    // the message on the map. (A clash with a basemap layer is left to
+    // MapLibre, as before.)
+    if (this.claimedLayerIds.has(layer.id)) {
+      throw new Error(
+        `Another layer already has id "${layer.id}": the first one is drawn and this ` +
+          `one is skipped. Give each layer its own id.`
+      );
+    }
+    this.claimedLayerIds.add(layer.id);
+    try {
+      await this.addClaimedLayer(layer);
+    } catch (error) {
+      // A layer that failed to add holds no id: a later retry is not a repeat.
+      this.claimedLayerIds.delete(layer.id);
+      throw error;
+    }
+  }
+
+  private async addClaimedLayer(layer: Layer): Promise<void> {
     // Background layers are sourceless by spec — resolving a source for one
     // dereferenced `layer.source.type` on undefined and threw, so a
     // schema-valid background layer killed the whole document (ml-chf).
@@ -748,6 +774,7 @@ export class LayerManager {
   }
 
   removeLayer(layerId: string): void {
+    this.claimedLayerIds.delete(layerId);
     // Stop all data updates
     this.pollingManager.stop(layerId);
     this.streamManager.disconnect(layerId);
@@ -805,5 +832,6 @@ export class LayerManager {
     // Clear data references
     this.sourceData.clear();
     this.layerToSource.clear();
+    this.claimedLayerIds.clear();
   }
 }

@@ -115,7 +115,8 @@ chapters:
 
 Each chapter needs its own `id`: copying a chapter and keeping its `id` is a
 validation error naming both lines (`Two chapters have id "the-met" (lines 96
-and 144)`). Layer ids must be unique too. A chapter's `layers.show` /
+and 144)`). Give layers their own ids too: a repeated layer id warns, and the
+map draws the first layer with that id and skips the repeat. A chapter's `layers.show` /
 `layers.hide` or action `layer:` that is a near miss of one of the story's
 layers (`walking` for `walk`) gets a did-you-mean warning; a name unlike any
 of them is taken to be a basemap layer and is not flagged.

@@ -3,7 +3,7 @@
  * @module @maplibre-yaml/core/parser/document-checks
  *
  * @description
- * Mistakes a student makes in the first hour that validated silently and then
+ * Common authoring mistakes that validated silently and then
  * misbehaved (0.8.1 pass-2 check, ml-aot.46/.48/.51): a copied chapter that
  * kept its `id`, keys nested one level too deep under `config:`, a chapter
  * that shows a layer by a misspelled name, a `fitTo.source` typo, a CSV file
@@ -11,7 +11,8 @@
  * chapters, names across `layers:` and `sources:`), so they run after the
  * schema, on the materialized value, with the YAML document for positions.
  *
- * Duplicate ids are errors (the second chapter/layer is unusable). The rest
+ * A duplicate chapter id is an error (the second chapter is unusable); a
+ * duplicate layer id warns (the first layer is drawn, as in 0.8.0). The rest
  * are warnings: the document still renders, and some names (a basemap layer
  * in `layers.show`) can only be checked at runtime, so a reference warns only
  * when it is a near miss of a name the document declares.
@@ -129,13 +130,23 @@ function nearMiss(input: string, names: string[]): string | undefined {
   return contained.length === 1 ? contained[0] : undefined;
 }
 
-/** Duplicate `id`s in an array of objects: an error on every repeat. */
+/**
+ * Duplicate `id`s in an array of objects, one finding on every repeat.
+ *
+ * @remarks
+ * A repeated chapter id is an error: the story cannot tell the chapters
+ * apart (the copy flies to the original's camera, its rail dot jumps back).
+ * A repeated layer id is a warning: 0.8.0 rendered such a document with the
+ * first layer drawn and the repeat failing on its own, and documents pinned
+ * to `@0.8` (or an `astro build`) must not start failing outright in a
+ * patch. The renderer skips the repeat and says so on the map.
+ */
 function duplicateIds(
   items: unknown,
   arrayPath: (string | number)[],
   noun: "chapter" | "layer",
   pos: Positions | undefined,
-  errors: DocumentCheckError[]
+  out: { errors: DocumentCheckError[]; warnings: ValidationWarning[] }
 ): void {
   if (!Array.isArray(items)) return;
   const first = new Map<string, number>();
@@ -153,8 +164,19 @@ function duplicateIds(
       here.line !== undefined && there.line !== undefined
         ? `lines ${there.line} and ${here.line}`
         : `${noun}s ${earlier + 1} and ${index + 1}`;
-    errors.push({
-      path: [...arrayPath, index, "id"].join("."),
+    const path = [...arrayPath, index, "id"].join(".");
+    if (noun === "layer") {
+      out.warnings.push({
+        path,
+        message:
+          `Two layers have id "${id}" (${where}): the first one is drawn and this one is ` +
+          `skipped. Give each layer its own id.`,
+        ...here,
+      });
+      return;
+    }
+    out.errors.push({
+      path,
       message: `Two ${noun}s have id "${id}" (${where}). Each ${noun} needs its own id: rename this one.`,
       ...here,
     });
@@ -192,6 +214,103 @@ function csvSource(
   }
 }
 
+/** The highest latitude a web map shows (Web Mercator's limit). */
+const MAX_MAP_LATITUDE = 85.06;
+
+type Point = [number, number];
+
+const isPair = (v: unknown): v is Point =>
+  Array.isArray(v) &&
+  v.length >= 2 &&
+  typeof v[0] === "number" &&
+  typeof v[1] === "number" &&
+  Number.isFinite(v[0]) &&
+  Number.isFinite(v[1]);
+
+/** Every [x, y] position in an inline GeoJSON value (bounded, for huge data). */
+function geojsonPoints(value: unknown, out: Point[], limit = 5000): void {
+  if (out.length >= limit) return;
+  if (isPair(value)) {
+    out.push([value[0], value[1]]);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) geojsonPoints(item, out, limit);
+    return;
+  }
+  if (!isObject(value)) return;
+  if ("coordinates" in value) geojsonPoints(value["coordinates"], out, limit);
+  if ("geometry" in value) geojsonPoints(value["geometry"], out, limit);
+  if (Array.isArray(value["features"])) geojsonPoints(value["features"], out, limit);
+  if (Array.isArray(value["geometries"])) geojsonPoints(value["geometries"], out, limit);
+}
+
+/** The document's own places: inline data, markers, and the given centers. */
+function referencePoints(value: Record<string, unknown>): Point[] {
+  const points: Point[] = [];
+  const sources = isObject(value["sources"]) ? value["sources"] : {};
+  for (const source of Object.values(sources)) {
+    if (isObject(source) && isObject(source["data"])) geojsonPoints(source["data"], points);
+  }
+  for (const layer of Array.isArray(value["layers"]) ? value["layers"] : []) {
+    const source = isObject(layer) ? layer["source"] : undefined;
+    if (isObject(source) && isObject(source["data"])) geojsonPoints(source["data"], points);
+  }
+  for (const marker of Array.isArray(value["markers"]) ? value["markers"] : []) {
+    if (isObject(marker) && isPair(marker["at"])) points.push([marker["at"][0], marker["at"][1]]);
+  }
+  // Plausible positions only: a pair that is itself out of range says nothing.
+  return points.filter(([x, y]) => Math.abs(x) <= 180 && Math.abs(y) <= 90);
+}
+
+/** Whether `p` lies in the box around `points`, padded so a nearby view counts. */
+function near(p: Point, points: Point[]): boolean {
+  let [w, s, e, n] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [x, y] of points) {
+    w = Math.min(w, x);
+    e = Math.max(e, x);
+    s = Math.min(s, y);
+    n = Math.max(n, y);
+  }
+  const padX = Math.max(2, (e - w) * 0.5);
+  const padY = Math.max(2, (n - s) * 0.5);
+  return p[0] >= w - padX && p[0] <= e + padX && p[1] >= s - padY && p[1] <= n + padY;
+}
+
+/**
+ * A center written [latitude, longitude] -- the order map sites show -- puts
+ * the map thousands of kilometres from its data, with nothing to say why
+ * (ml-aot.65). Flag it when the swapped pair lands among the document's own
+ * places and the written one doesn't; and flag a latitude past what a web map
+ * shows (±85), which can only be a mistake.
+ */
+function swappedCenter(
+  center: unknown,
+  references: Point[],
+  owner: string
+): string | undefined {
+  if (!isPair(center)) return undefined;
+  const [lng, lat] = center;
+  const written = `[${lng}, ${lat}]`;
+  if (references.length > 0) {
+    const swapped: Point = [lat, lng];
+    if (Math.abs(lng) <= 90 && !near([lng, lat], references) && near(swapped, references)) {
+      return (
+        `${owner} is ${written} — coordinates are [longitude, latitude]; ` +
+        `did you mean [${lat}, ${lng}]?`
+      );
+    }
+  }
+  if (Math.abs(lat) > MAX_MAP_LATITUDE && Math.abs(lat) <= 90) {
+    return (
+      `${owner} is ${written}: a latitude of ${lat} is beyond what the map can show ` +
+      `(about ±85). Coordinates are [longitude, latitude]` +
+      (Math.abs(lng) <= MAX_MAP_LATITUDE ? `; did you mean [${lat}, ${lng}]?` : ".")
+    );
+  }
+  return undefined;
+}
+
 /**
  * Run every whole-document check on a v1 map block or a scrollytelling block.
  *
@@ -199,13 +318,15 @@ function csvSource(
  * @param kind - Which block it is.
  * @param positions - The YAML document and line counter, when the value came
  *   from YAML text; omitted, messages count items instead of quoting lines.
- * @param existing - Warnings already collected, so a key is not reported twice.
+ * @param existing - Errors and warnings already collected, so one mistake is
+ *   reported once (ml-aot.63): a `centre:` typo that is already THE error is
+ *   not reported again as an unknown config key.
  */
 export function checkDocument(
   value: unknown,
   kind: "map" | "scrollytelling",
   positions?: Positions,
-  existing: ValidationWarning[] = []
+  existing: ReadonlyArray<{ path: string }> = []
 ): DocumentCheckResult {
   const errors: DocumentCheckError[] = [];
   const warnings: ValidationWarning[] = [];
@@ -219,10 +340,10 @@ export function checkDocument(
   const sources = isObject(value["sources"]) ? value["sources"] : {};
   const sourceNames = Object.keys(sources);
 
-  // ml-aot.46 — duplicate ids.
-  duplicateIds(value["layers"], ["layers"], "layer", positions, errors);
+  // ml-aot.46 — duplicate ids (layers warn, chapters fail; see duplicateIds).
+  duplicateIds(value["layers"], ["layers"], "layer", positions, { errors, warnings });
   if (kind === "scrollytelling") {
-    duplicateIds(value["chapters"], ["chapters"], "chapter", positions, errors);
+    duplicateIds(value["chapters"], ["chapters"], "chapter", positions, { errors, warnings });
   }
 
   // ml-aot.48 — keys under config: that belong at the root, and keys no one reads.
@@ -274,6 +395,36 @@ export function checkDocument(
       });
     }
   }
+
+  // ml-aot.65 — a center written [latitude, longitude].
+  const places = referencePoints(value);
+  const chapterList = kind === "scrollytelling" && Array.isArray(value["chapters"]) ? value["chapters"] : [];
+  const chapterCenters = chapterList.map((c) => (isObject(c) && isPair(c["center"]) ? (c["center"] as Point) : undefined));
+  const configCenter = isObject(config) && isPair(config["center"]) ? (config["center"] as Point) : undefined;
+  if (configCenter && !already.has("config.center")) {
+    const refs = [...places, ...chapterCenters.filter((c): c is Point => c !== undefined)];
+    const problem = swappedCenter(configCenter, refs, "center");
+    if (problem) {
+      warnings.push({ path: "config.center", message: problem, ...at(positions, ["config", "center"]), onPage: true });
+    }
+  }
+  chapterCenters.forEach((center, ci) => {
+    if (!center || already.has(`chapters.${ci}.center`)) return;
+    const refs = [
+      ...places,
+      ...(configCenter ? [configCenter] : []),
+      ...chapterCenters.filter((c, j): c is Point => c !== undefined && j !== ci),
+    ];
+    const problem = swappedCenter(center, refs, `${chapterLabel(chapterList, ci)} center`);
+    if (problem) {
+      warnings.push({
+        path: `chapters.${ci}.center`,
+        message: problem,
+        ...at(positions, ["chapters", ci, "center"]),
+        onPage: true,
+      });
+    }
+  });
 
   // ml-aot.51 — CSV where GeoJSON is expected.
   for (const name of sourceNames) csvSource(sources[name], ["sources", name], positions, warnings);

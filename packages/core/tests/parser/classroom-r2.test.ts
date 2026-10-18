@@ -116,16 +116,16 @@ describe("duplicate ids (ml-aot.46)", () => {
     );
   });
 
-  it("two layers with the same id are an error (map and story)", () => {
+  it("two layers with the same id warn (map and story): the first is drawn (review F3)", () => {
     const m = parseMap(map({ rest: "  - id: places\n    type: circle\n    source: places\n" }));
-    expect(m.success).toBe(false);
-    expect(m.errors[0]).toMatchObject({
-      path: "layers.1.id",
-      message: 'Two layers have id "places" (lines 12 and 15). Each layer needs its own id: rename this one.',
+    expect(m.success).toBe(true);
+    expect(m.warnings.find((w) => w.path === "layers.1.id")).toMatchObject({
+      message:
+        'Two layers have id "places" (lines 12 and 15): the first one is drawn and this one is skipped. Give each layer its own id.',
     });
     const s = parseStory(story({ layers: "  - id: walk\n    type: line\n    source: places\n" }));
-    expect(s.success).toBe(false);
-    expect(s.errors[0]?.message).toContain('Two layers have id "walk"');
+    expect(s.success).toBe(true);
+    expect(s.warnings.some((w) => w.message.includes('Two layers have id "walk"'))).toBe(true);
   });
 
   it("distinct ids still validate", () => {

@@ -1001,8 +1001,14 @@ config:
 
       expect(blockType).toBe("unknown");
       expect(result.success).toBe(false);
+      // A map-shaped document is told what to add (ml-aot.62).
+      expect(result.errors[0].message).toContain("missing type:");
       expect(result.errors[0].message).toContain("type: map");
-      expect(result.errors[0].message).toContain("pages");
+
+      // A document of no recognisable shape keeps the full explanation.
+      const other = YAMLParser.safeParseAny("id: mystery\nfoo: 1\n");
+      expect(other.result.errors[0].message).toContain("type: map");
+      expect(other.result.errors[0].message).toContain("pages");
     });
 
     it("returns YAML syntax errors without throwing", () => {

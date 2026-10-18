@@ -170,9 +170,8 @@ pages:
     const err = result.errors.find((e) => e.path === "sources.terrain");
     expect(err).toBeDefined();
     // The real per-field failure, not a generic "matched no union member".
-    expect(err!.message).toBe(
-      "Invalid enum value. Expected 'terrarium' | 'mapbox' | 'custom', received 'srtm'"
-    );
+    // Plain enum wording (ml-aot.62): the field, the value, the choices.
+    expect(err!.message).toBe('encoding: "srtm" is not one of terrarium, mapbox, custom.');
     expect(err!.line).toBe(3);
   });
 

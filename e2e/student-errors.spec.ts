@@ -147,6 +147,30 @@ test.describe("src fetch failures (ml-aot.13)", () => {
     expect(errors).toEqual([]);
   });
 
+  test("two layers with one id: the map renders the first, the notice says the repeat was skipped (review F3)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/duplicate-layer.html`, { waitUntil: "domcontentloaded" });
+    const outcome = await page.evaluate(() =>
+      (document.getElementById("map") as any).mapReady().then(
+        () => "loaded",
+        (e: Error) => `failed: ${e.message}`
+      )
+    );
+    expect(outcome).toBe("loaded");
+    await expect(page.locator("#map .ml-map-error")).toHaveCount(0);
+    const layer = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return { type: map.getLayer("walk")?.type, sources: Object.keys(map.getStyle().sources).filter((s) => s.startsWith("walk")) };
+    });
+    expect(layer).toEqual({ type: "line", sources: ["walk-source"] });
+    await expect(page.locator("#map .ml-map-notice")).toBeVisible({ timeout: 30_000 });
+    const shown = await text(page, "#map .ml-map-notice");
+    expect(shown).toContain('Another layer already has id "walk": the first one is drawn and this one is skipped.');
+    expect(errors).toEqual([]);
+  });
+
   test("a root key nested under config: is named on the map, not just the console (ml-aot.48)", async ({ page }) => {
     const errors = await guard(page);
     await page.goto(`${DIR}/misplaced-keys.html`, { waitUntil: "domcontentloaded" });

@@ -296,7 +296,9 @@ import {
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
 import { checkDocument, chapterLabel } from "./document-checks";
-import { explainIndentationError } from "./yaml-errors";
+import { explainIndentationError, explainQuoteError } from "./yaml-errors";
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export type { ValidationWarning } from "./validation-utils";
 
@@ -530,18 +532,21 @@ export class YAMLParser {
       // An unquoted `#ef4444` inside a flow map is a syntax error whose text
       // says nothing about colours or comments (ml-okw).
       const hint = hashSyntaxHint(yaml, start?.line);
-      // Indentation slips in plain words, at the line to fix (ml-aot.52).
-      const indentation = hint ? undefined : explainIndentationError(yaml, err.code, start?.line);
-      if (indentation) {
+      // A quote inside a quoted value (ml-aot.62) and indentation slips
+      // (ml-aot.52) in plain words, at the line to fix.
+      const quoted = hint ? undefined : explainQuoteError(yaml, start?.line);
+      const indentation = hint || quoted ? undefined : explainIndentationError(yaml, err.code, start?.line);
+      const explained = quoted ?? indentation;
+      if (explained) {
         return {
           doc,
           lineCounter,
           syntaxError: {
             path: "",
             code: "yaml-syntax",
-            message: `YAML indentation error: ${indentation.message}`,
-            line: indentation.line,
-            column: indentation.column,
+            message: `${quoted ? "YAML quoting error" : "YAML indentation error"}: ${explained.message}`,
+            line: explained.line,
+            column: explained.column,
           },
         };
       }
@@ -1304,6 +1309,25 @@ export class YAMLParser {
       return { blockType: "root", result: this.safeParse(yaml) };
     }
 
+    // A block whose `type:` line was deleted (ml-aot.62): its shape says
+    // which one it was, so say what to add -- the same words the block
+    // parsers use, so `mlym validate` and the browser card agree.
+    if (doc !== null && ("chapters" in doc || "config" in doc || "layers" in doc)) {
+      return {
+        blockType: "unknown",
+        result: {
+          success: false,
+          errors: [
+            {
+              path: "type",
+              message: missingTypeMessage("chapters" in doc ? "scrollytelling" : "map"),
+            },
+          ],
+          warnings: [],
+        },
+      };
+    }
+
     return {
       blockType: "unknown",
       result: {
@@ -1478,10 +1502,29 @@ export class YAMLParser {
       const formatted = this.formatIssue(err, ctx);
       // `chapters.3` is the fourth chapter: name it the way the author sees
       // it, counted from 1 and by id (ml-aot.52). The path stays as is.
-      const chapter = /^chapters\.(\d+)(?:\.|$)/.exec(formatted.path);
+      // A reader sees this message without the 0-based path in front of it
+      // (`displayPath`), so the field is named in the message itself unless
+      // the message already starts with it (`center needs square brackets…`).
+      const chapter = /^chapters\.(\d+)(?:\.(.*))?$/.exec(formatted.path);
       if (chapter && ctx && !formatted.message.startsWith("Chapter ")) {
         const label = chapterLabel(valueAtPath(ctx.value, ["chapters"]), Number(chapter[1]));
-        return { ...formatted, message: `${label}: ${formatted.message}` };
+        const rest = chapter[2];
+        const field = rest?.split(".").pop();
+        const named =
+          !rest ||
+          (field !== undefined &&
+            (new RegExp(`^${escapeRegExp(field)}[: ]`).test(formatted.message) ||
+              formatted.message.includes(`"${field}"`)));
+        return {
+          ...formatted,
+          message: named ? `${label}: ${formatted.message}` : `${label}, ${rest}: ${formatted.message}`,
+        };
+      }
+      // `config.theme: theme: "blue" is not one of …` -- the path already
+      // names the field; don't say it twice.
+      const last = formatted.path.split(".").pop();
+      if (last && formatted.message.startsWith(`${last}: `)) {
+        return { ...formatted, message: formatted.message.slice(last.length + 2) };
       }
       return formatted;
     });
@@ -1526,7 +1569,23 @@ export class YAMLParser {
           message =
             err.received === "undefined"
               ? missingKeyMessage(err.path, String(err.expected), ctx?.value)
-              : `Expected ${err.expected}, got ${err.received}`;
+              : (bracketlessPairMessage(err, ctx?.value) ??
+                `Expected ${err.expected}, got ${err.received}`);
+          break;
+        }
+
+        case "invalid_enum_value": {
+          // `alignment: middle`: name the field, list the values in plain
+          // words and suggest the likely one (ml-aot.62).
+          const key = String(err.path[err.path.length - 1] ?? "value");
+          const options = err.options.map(String);
+          const received = String(err.received);
+          const hint = enumHint(received, options);
+          // Named here; formatZodErrors drops the name again when the
+          // reported path already ends with it (`config.theme: "blue" …`).
+          message =
+            `${key}: "${received}" is not one of ${options.join(", ")}.` +
+            (hint ? ` Did you mean "${hint}"?` : "");
           break;
         }
 
@@ -1609,6 +1668,16 @@ export class YAMLParser {
           // `type: Map` — say what was expected AND that case matters.
           const expected = JSON.stringify(err.expected);
           const received = valueAtPath(ctx?.value, err.path);
+          // The `type:` line was deleted: say that, the same way every entry
+          // point does (see missingTypeMessage), with no line to point at.
+          if (
+            received === undefined &&
+            err.path.length === 1 &&
+            err.path[0] === "type" &&
+            typeof err.expected === "string"
+          ) {
+            return { path: "type", message: missingTypeMessage(err.expected) };
+          }
           message = `Expected ${expected}`;
           if (received !== undefined) message += `, got ${JSON.stringify(received)}`;
           if (
@@ -1716,8 +1785,10 @@ export class YAMLParser {
       }
       const match = findMatchingSourceBranch(err.unionErrors);
       if (match) {
-        const real = this.formatZodErrors(match)[0];
-        if (real) return real.message;
+        // The message is reported at the union's path (the source), not the
+        // field's, so keep the field's name in it (`encoding: "srtm" …`).
+        const issue = match.errors[0];
+        if (issue) return this.formatIssue(issue).message;
       }
     }
 
@@ -1782,7 +1853,7 @@ function withDocumentChecks<T>(
   kind: "map" | "scrollytelling",
   positions: { doc: Document; lineCounter: LineCounter } | undefined
 ): ParseResult<T> {
-  const checks = checkDocument(value, kind, positions, result.warnings);
+  const checks = checkDocument(value, kind, positions, [...result.errors, ...result.warnings]);
   if (checks.errors.length === 0 && checks.warnings.length === 0) return result;
   const warnings = [...result.warnings, ...checks.warnings];
   if (checks.errors.length === 0) return { ...result, warnings };
@@ -1864,6 +1935,59 @@ function sameSpotTypeMessage(
  * A `[longitude, latitude]` pair whose latitude is out of range but which
  * reads correctly swapped (`[39, -98]`) gets the swapped suggestion.
  */
+/**
+ * `center: -73.982, 40.743` -- two numbers with no brackets, which YAML reads
+ * as the string "-73.982, 40.743" (ml-aot.62): show the bracketed line.
+ */
+function bracketlessPairMessage(
+  err: ZodIssue & { code: "invalid_type" },
+  root: unknown
+): string | undefined {
+  if (err.expected !== "array" || err.received !== "string") return undefined;
+  const raw = valueAtPath(root, err.path);
+  if (typeof raw !== "string") return undefined;
+  const numbers = raw.split(",").map((part) => part.trim());
+  if (numbers.length < 2 || numbers.length > 4) return undefined;
+  if (!numbers.every((n) => /^[-+]?\d+(\.\d+)?$/.test(n))) return undefined;
+  const key = String(err.path[err.path.length - 1]);
+  return `${key} needs square brackets: ${key}: [${numbers.join(", ")}]`;
+}
+
+/** Everyday words for an enum value an author is likely to type instead. */
+const ENUM_SYNONYMS: Record<string, string> = {
+  middle: "center",
+  mid: "center",
+  centre: "center",
+  centred: "center",
+  centered: "center",
+  wide: "full",
+  fullwidth: "full",
+  "full-width": "full",
+  "full width": "full",
+};
+
+/** A did-you-mean for an enum value: a synonym, a case slip, or a near spelling. */
+function enumHint(received: string, options: string[]): string | undefined {
+  const lower = received.trim().toLowerCase();
+  const synonym = ENUM_SYNONYMS[lower];
+  if (synonym && options.includes(synonym)) return synonym;
+  const sameCase = options.find((o) => o.toLowerCase() === lower);
+  if (sameCase) return sameCase;
+  return suggest(received, options);
+}
+
+/**
+ * The document has no `type:` line (ml-aot.62). One wording for the browser
+ * card and `mlym validate`, whichever entry point found it.
+ */
+export function missingTypeMessage(expected: string): string {
+  const other = expected === "scrollytelling" ? "map" : "scrollytelling";
+  return (
+    `The document is missing type: at the top — add type: ${expected} as its first ` +
+    `line (or type: ${other}, for a ${other === "map" ? "single map" : "story"}).`
+  );
+}
+
 function lngLatSwapHint(
   path: (string | number)[],
   root: unknown
