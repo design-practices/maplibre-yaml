@@ -172,6 +172,30 @@ test.describe("explore: <FullPageMap> with the 0.7 surface", () => {
     expect(errors).toEqual([]);
   });
 
+  test("Reset view returns to the fitTo framing the page opened with, not the YAML camera (ml-aot.60) @dev", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto("/explore-fit/", { waitUntil: "domcontentloaded" });
+    await mapReady(page, MAP);
+    await layerLoaded(page, MAP, "volcanoes");
+    // The fit is applied once the data file loads (after the map's load):
+    // wait until the camera has left the YAML's [0, 0] z4 (the volcanoes
+    // span the Pacific, so the fit zooms out).
+    await expect
+      .poll(async () => (await camera(page, MAP)).zoom, { message: "fitTo framed the data" })
+      .toBeLessThan(3);
+    await page.waitForTimeout(300);
+    const opened = await camera(page, MAP);
+
+    await page.click('[data-action="zoom-in"]');
+    await page.click('[data-action="zoom-in"]');
+    await expect.poll(async () => (await camera(page, MAP)).zoom).toBeGreaterThan(opened.zoom + 1.5);
+    await page.click('[data-action="reset"]');
+    await expectCameraNear(page, MAP, [opened.lng, opened.lat], opened.zoom, 0.5);
+    expect(errors).toEqual([]);
+  });
+
   test("a document with its own navigation control gets one set of zoom buttons (ml-aot.40) @dev", async ({
     page,
   }) => {

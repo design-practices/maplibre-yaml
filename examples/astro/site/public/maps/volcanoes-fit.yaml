@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Loaded at RUNTIME by /explore-fit/. The YAML camera (center [0, 0], zoom
+# 4) is only where the map starts: fitTo frames the volcanoes once their
+# file loads, and that framing is what FullPageMap's "Reset view" returns to
+# (ml-aot.60), not the YAML camera.
+type: map
+id: volcanoes-fit
+config:
+  center: [0, 0]
+  zoom: 4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  fitTo:
+    source: volcanoes
+    padding: 40
+sources:
+  volcanoes:
+    type: geojson
+    url: "/data/volcanoes.geojson"
+layers:
+  - id: volcanoes
+    type: circle
+    source: volcanoes
+    paint:
+      circle-radius: 7
+      circle-color: "#d62828"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

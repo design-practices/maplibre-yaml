@@ -326,7 +326,7 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
   };
 
   if (firstRun) {
-    // The reset target is the document's own initial view, re-captured on
+    // The reset target is the view the page opened with, re-captured on
     // every (re)load so reload() or a new config resets to the new camera.
     // `ml-map:load` bubbles, so this also sees maps on pages swapped in later.
     document.addEventListener("ml-map:load", (event) => {
@@ -334,6 +334,17 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
       if (target instanceof Element && mapOf(target) === target) {
         captureHome(target as MLMap);
         syncZoomButtons(target);
+      }
+    });
+
+    // A `fitTo` on a fetched source frames the map AFTER load, once its data
+    // arrives: that framing is the view the page opened with, so it becomes
+    // the reset target, not the YAML's center/zoom (ml-aot.60). The fit is
+    // applied without animation before the event fires.
+    document.addEventListener("ml-map:camera-fit", (event) => {
+      const target = event.target;
+      if (target instanceof Element && mapOf(target) === target) {
+        captureHome(target as MLMap);
       }
     });
 
