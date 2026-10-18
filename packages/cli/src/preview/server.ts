@@ -4,7 +4,7 @@
 
 import { createServer, type ViteDevServer } from 'vite';
 import { watch } from 'chokidar';
-import { resolve, dirname, join, basename, extname } from 'pathe';
+import { resolve, dirname, join, basename, extname, relative, isAbsolute } from 'pathe';
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -196,6 +196,25 @@ function inlineJson(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
+/**
+ * The file as the status bar shows it: relative to the folder the command
+ * runs in when the file is inside it (`map.yaml`, `maps/city.yaml`), else
+ * the full path. The bar truncates it with an ellipsis and keeps the full
+ * path on hover (ml-aot.66: an absolute path wrapped into "Connected" on
+ * phones).
+ */
+export function statusPath(absolute: string, cwd: string = process.cwd()): string {
+  const real = (p: string) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  const rel = relative(real(cwd), real(absolute));
+  return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : absolute;
+}
+
 /** The block types preview renders. */
 export type PreviewKind = 'map' | 'scrollytelling';
 
@@ -208,6 +227,8 @@ export interface PreviewPageInput {
   error: string | null;
   /** Path shown in the status bar */
   configPath: string;
+  /** The file's full path, shown on hover (defaults to `configPath`) */
+  configFullPath?: string;
   /** Import-map target for @maplibre-yaml/core/register */
   coreUrl: string;
   /** Where maplibre-gl comes from */
@@ -229,6 +250,7 @@ export interface PreviewPageInput {
  */
 export function createPreviewHTML(input: PreviewPageInput): string {
   const { config, error, configPath, coreUrl, maplibre, debug } = input;
+  const fullPath = input.configFullPath ?? configPath;
   const story = input.kind === 'scrollytelling';
   const errorOverlay = error ? '<div class="error-overlay"><div class="error-box"><div class="error-title">Configuration Error</div><div class="error-message">' + escapeHtml(error) + '</div></div></div>' : '';
   const statusDotClass = error ? 'error' : '';
@@ -259,9 +281,9 @@ export function createPreviewHTML(input: PreviewPageInput): string {
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>maplibre-yaml preview</title>'
     + '<link href="' + escapeHtml(maplibre.cssUrl) + '" rel="stylesheet" />'
     + '<script type="importmap">' + importMap + '</script>'
-    + '<style>* { margin: 0; padding: 0; box-sizing: border-box; }body { font-family: system-ui, -apple-system, sans-serif; }#map { width: 100vw; height: calc(100vh - 32px); }.error-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }.error-box { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 24px; max-width: 600px; max-height: 80vh; overflow: auto; }.error-title { color: #dc2626; font-weight: 600; font-size: 18px; margin-bottom: 12px; }.error-message { color: #991b1b; font-family: monospace; font-size: 14px; white-space: pre-wrap; }.status-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 32px; background: #1f2937; color: white; padding: 0 16px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; z-index: 999; }.status-indicator { display: flex; align-items: center; gap: 8px; }.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }.status-dot.error { background: #ef4444; }' + storyCSS + debugCSS + '</style></head>'
+    + '<style>* { margin: 0; padding: 0; box-sizing: border-box; }body { font-family: system-ui, -apple-system, sans-serif; }#map { width: 100vw; height: calc(100vh - 32px); }.error-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }.error-box { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 24px; max-width: 600px; max-height: 80vh; overflow: auto; }.error-title { color: #dc2626; font-weight: 600; font-size: 18px; margin-bottom: 12px; }.error-message { color: #991b1b; font-family: monospace; font-size: 14px; white-space: pre-wrap; }.status-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 32px; background: #1f2937; color: white; padding: 0 16px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; z-index: 999; }.status-bar { gap: 12px; }.status-indicator { display: flex; align-items: center; gap: 8px; flex: none; white-space: nowrap; }.status-path { min-width: 0; overflow: hidden; text-align: right; }.status-path span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }.status-dot.error { background: #ef4444; }' + storyCSS + debugCSS + '</style></head>'
     + '<body>' + container + errorOverlay + debugPanel
-    + '<div class="status-bar"><div class="status-indicator"><div class="status-dot ' + statusDotClass + '"></div><span>' + statusText + '</span></div><div><span>' + escapeHtml(configPath) + '</span></div></div>'
+    + '<div class="status-bar"><div class="status-indicator"><div class="status-dot ' + statusDotClass + '"></div><span>' + statusText + '</span></div><div class="status-path"><span title="' + escapeHtml(fullPath) + '">' + escapeHtml(configPath) + '</span></div></div>'
     + '<script type="module">import \'@maplibre-yaml/core/register\';const config = ' + inlineJson(config ?? null) + ';if (config) {' + render + '}</script>'
     + '<script type="module">import { createHotContext } from \'/@vite/client\';const hot = createHotContext(\'/__maplibre-yaml/preview\');hot.on(\'yaml-update\', () => {console.log(\'[preview] Config updated, reloading...\');window.location.reload();});</script>'
     + '<script>' + debugJS + '</script></body></html>';
@@ -359,7 +381,8 @@ export async function createPreviewServer(
                   config: currentConfig,
                   kind: currentKind,
                   error: currentError,
-                  configPath,
+                  configPath: statusPath(absoluteConfigPath),
+                  configFullPath: absoluteConfigPath,
                   coreUrl: coreRegister.importUrl,
                   maplibre,
                   debug: options.debug,
@@ -410,7 +433,13 @@ export async function createPreviewServer(
       await viteServer.listen();
       logger.success('Preview server running at ' + serverUrl);
 
-      watcher = watch(absoluteConfigPath, { ignoreInitial: true });
+      // Wait until a save has finished before reading: a save that truncates
+      // first and writes after could otherwise be read half-way, showing a
+      // spurious "Unable to determine document type" over the real error.
+      watcher = watch(absoluteConfigPath, {
+        ignoreInitial: true,
+        awaitWriteFinish: { stabilityThreshold: 60, pollInterval: 20 },
+      });
       watcher.on('change', async () => {
         logger.info('Configuration changed, reloading...');
         const result = await loadConfig();

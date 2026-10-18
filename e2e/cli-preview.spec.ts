@@ -154,10 +154,10 @@ test("preview renders the map on the locally installed maplibre-gl 6", async ({ 
 });
 
 /** Start a second preview server on `file` (in the temp copy); resolves once it listens. */
-async function startPreview(file: string): Promise<{ url: string; stop: () => void }> {
+async function startPreview(file: string, cwd: string = dir): Promise<{ url: string; stop: () => void }> {
   const port = await freePort();
   const proc = spawn(process.execPath, [CLI, "preview", join(dir, file), "--port", String(port), "--no-open"], {
-    cwd: dir,
+    cwd,
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";
@@ -216,6 +216,55 @@ test("the status bar leaves MapLibre's attribution visible, for maps and stories
     }
   } finally {
     story.stop();
+  }
+});
+
+/** The status bar's two halves: one line each, side by side, not overlapping. */
+const statusBarLayout = (page: Page) =>
+  page.evaluate(() => {
+    const bar = document.querySelector<HTMLElement>(".status-bar")!;
+    const [left, right] = Array.from(bar.children) as HTMLElement[];
+    const l = left!.getBoundingClientRect();
+    const r = right!.getBoundingClientRect();
+    const b = bar.getBoundingClientRect();
+    const path = right!.querySelector<HTMLElement>("span") ?? right!;
+    const lineHeight = parseFloat(getComputedStyle(path).lineHeight) || 16;
+    return {
+      text: path.textContent ?? "",
+      title: path.getAttribute("title"),
+      gap: Math.round(r.left - l.right),
+      oneLine: path.getBoundingClientRect().height <= lineHeight * 1.5,
+      inside: r.right <= b.right + 0.5 && r.top >= b.top - 0.5 && r.bottom <= b.bottom + 0.5,
+    };
+  });
+
+test("on a phone the status bar keeps the file path on one line, clear of 'Connected' (ml-aot.66)", async ({
+  browser,
+}) => {
+  // Run from the YAML's own folder (the usual case): the bar shows the path
+  // relative to it. Then from another folder: the full path, truncated.
+  const outside = await startPreview("map.yaml", ROOT);
+  try {
+    for (const [label, target, expected] of [
+      ["inside cwd", url, "map.yaml"],
+      ["outside cwd", outside.url, join(dir, "map.yaml")],
+    ] as const) {
+      const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+      const { errors } = await guard(page);
+      await page.goto(target, { waitUntil: "domcontentloaded" });
+      await page.waitForSelector(".status-bar");
+      const s = await statusBarLayout(page);
+      expect(s.text, label).toBe(expected);
+      expect(s.title, `${label}: full path on hover`).toBe(join(dir, "map.yaml"));
+      expect(s.oneLine, `${label}: path on one line ${JSON.stringify(s)}`).toBe(true);
+      expect(s.gap, `${label}: gap after 'Connected'`).toBeGreaterThanOrEqual(8);
+      expect(s.inside, `${label}: path inside the bar`).toBe(true);
+      await page.screenshot({ path: `e2e/results/preview-status-bar-mob-${label.replace(/\s+/g, "-")}.png` });
+      expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+      await page.close();
+    }
+  } finally {
+    outside.stop();
   }
 });
 
