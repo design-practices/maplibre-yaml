@@ -1,7 +1,7 @@
 {
   "name": "@maplibre-yaml/astro",
   "version": "0.5.1",
-  "description": "Astro components for maplibre-yaml",
+  "description": "Astro components for maplibre-yaml: YAML-defined MapLibre maps and scrollytelling story maps, with build-time loaders and content-collection helpers",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -45,9 +45,11 @@
     "astro",
     "astro-component",
     "maplibre",
+    "maplibre-gl",
     "maps",
     "yaml",
-    "scrollytelling"
+    "scrollytelling",
+    "content-collections"
   ],
   "license": "MIT",
   "publishConfig": {
@@ -58,5 +60,9 @@
     "type": "git",
     "url": "https://github.com/design-practices/maplibre-yaml.git",
     "directory": "packages/astro"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/design-practices/maplibre-yaml/issues"
+  },
+  "homepage": "https://docs.maplibre-yaml.org/integrations/astro/"
 }

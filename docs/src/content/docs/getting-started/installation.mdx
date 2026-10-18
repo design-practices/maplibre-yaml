@@ -115,7 +115,7 @@ external (not bundled). Leave it out and the page stays blank, with
     <!-- Register the <ml-map> web component -->
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"
     ></script>
   </head>
   <body>
@@ -130,8 +130,8 @@ address) does not work: the browser blocks the page from fetching `map.yaml`.
 
 ### Versions in CDN URLs
 
-`@maplibre-yaml/core@0.7` in the URL means "the newest 0.7.x release": you get
-bug fixes automatically, and a later 0.8 with breaking changes never arrives
+`@maplibre-yaml/core@0.8` in the URL means "the newest 0.8.x release": you get
+bug fixes automatically, and a later 0.9 with breaking changes never arrives
 by surprise in the middle of a term. Change the number on purpose when you
 upgrade. `maplibre-gl@6` works the same way for MapLibre.
 
@@ -147,7 +147,7 @@ To use the JavaScript API (`YAMLParser`, `MapRenderer`) from a CDN instead of th
   import {
     YAMLParser,
     MapRenderer,
-  } from "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl";
+  } from "https://esm.sh/@maplibre-yaml/core@0.8?external=maplibre-gl";
 
   // Your map code here
 </script>

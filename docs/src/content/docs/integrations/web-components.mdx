@@ -34,7 +34,7 @@ Get a map on your page in 4 steps.
      <!-- Register the web component -->
      <script
        type="module"
-       src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
+       src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"
      ></script>
    </head>
    ```
@@ -101,7 +101,7 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 </script>
 <script
   type="module"
-  src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
+  src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"
 ></script>
 ```
 
@@ -147,6 +147,12 @@ does not copy it, so the built site shows *YAML syntax error … `<!doctype
 html>`*. On maplibre-gl 4 or 5, leave out the worker lines. The full
 walkthrough is in
 [Installation → Using a bundler](/getting-started/installation/#using-a-bundler-vite).
+
+`@maplibre-yaml/core/register` defines the elements as soon as it is
+imported. To decide when that happens yourself, import the element classes
+from `@maplibre-yaml/core/components` instead and call `registerMLMap()`
+(defines `<ml-map>`) or `registerMLScrollytelling()` (defines
+`<ml-scrollytelling>` and `<ml-map>`, which it renders).
 
 ## Configuration Methods
 
@@ -284,7 +290,7 @@ For dynamic or generated configurations:
   { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core@0.7/register.js";
+  import "https://unpkg.com/@maplibre-yaml/core@0.8/register.js";
 
   const config = {
     type: "map",
@@ -653,7 +659,7 @@ This example demonstrates a complete implementation using the `src` attribute wi
     </script>
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"
     ></script>
     <style>
       * {

@@ -1,7 +1,7 @@
 {
   "name": "@maplibre-yaml/cli",
   "version": "0.4.1",
-  "description": "CLI tools for maplibre-yaml",
+  "description": "Command line for maplibre-yaml: scaffold a project, validate and preview YAML maps, export them to MapLibre style.json",
   "type": "module",
   "bin": {
     "maplibre-yaml": "dist/cli.js",
@@ -45,10 +45,13 @@
   },
   "keywords": [
     "maplibre",
+    "maplibre-gl",
     "yaml",
     "cli",
     "validation",
-    "preview"
+    "preview",
+    "scaffold",
+    "style-json"
   ],
   "license": "MIT",
   "repository": {
@@ -63,5 +66,5 @@
   "bugs": {
     "url": "https://github.com/design-practices/maplibre-yaml/issues"
   },
-  "homepage": "https://github.com/design-practices/maplibre-yaml#readme"
+  "homepage": "https://docs.maplibre-yaml.org/cli/getting-started/"
 }

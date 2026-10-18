@@ -40,7 +40,7 @@ The fastest way to get started - no JavaScript code needed!
        <!-- Register the <ml-map> web component -->
        <script
          type="module"
-         src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
+         src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"
        ></script>
        <style>
          body {
@@ -159,7 +159,7 @@ For cases where you need programmatic control or want to use the lower-level API
      YAMLParser,
      MapRenderer,
      toModel,
-   } from "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl";
+   } from "https://esm.sh/@maplibre-yaml/core@0.8?external=maplibre-gl";
 
    // Fetch and parse YAML configuration
    const response = await fetch("map.yaml");
@@ -231,7 +231,7 @@ For quick prototypes or simple projects. To use the web component, provide `mapl
 </script>
 <script
   type="module"
-  src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
+  src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"
 ></script>
 ```
 
@@ -246,7 +246,7 @@ To use the JavaScript API, import the package from esm.sh, which resolves `yaml`
     YAMLParser,
     MapRenderer,
     toModel,
-  } from "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl";
+  } from "https://esm.sh/@maplibre-yaml/core@0.8?external=maplibre-gl";
   // Your code here
 </script>
 ```
@@ -396,6 +396,15 @@ try {
   console.error("Parse error:", error.message);
 }
 ```
+
+Pick the method by document type. `parseMapBlock` / `safeParseMapBlock` take
+one `type: map` document, and `parseScrollytellingBlock` /
+`safeParseScrollytellingBlock` one `type: scrollytelling` story.
+`parseYAMLConfig` / `safeParseYAMLConfig` (the same as `YAMLParser.parse` /
+`safeParse`) parse a whole root document, a `pages:` list of pages and
+blocks, and reject a bare map block. Every parser method, and the data
+utilities (`DataFetcher`, `PollingManager`, `StreamManager`, `DataMerger`),
+are in the [TypeScript API reference](/reference/api/maplibre-yaml/core/).
 
 ### MapRenderer
 
@@ -673,7 +682,7 @@ import {
   YAMLParser,
   MapRenderer,
   toModel,
-} from "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl";
+} from "https://esm.sh/@maplibre-yaml/core@0.8?external=maplibre-gl";
 
 // State
 let visible = true;

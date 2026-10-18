@@ -1,118 +1,121 @@
 # maplibre-yaml
 
-Declarative web maps with YAML configuration.
+Declarative [MapLibre](https://maplibre.org/) web maps from YAML. Describe a
+map (basemap, data, layers, popups, legend) or a scroll-driven story map in a
+YAML file and put it on a page with one HTML element, from a CDN with no
+build step, or with Astro components. Made for students, content creators
+and developers who want a working map without writing map code.
 
+[![npm](https://img.shields.io/npm/v/@maplibre-yaml/core.svg)](https://www.npmjs.com/package/@maplibre-yaml/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-## Overview
+**Documentation: [docs.maplibre-yaml.org](https://docs.maplibre-yaml.org)**
 
-maplibre-yaml lets you create interactive web maps using simple YAML configuration instead of JavaScript code. It's designed for:
+## Quick start
 
-- **Students** learning web mapping without deep programming knowledge
-- **Developers** who want rapid map prototyping
-- **Content creators** building story maps and data visualizations
-
-## Packages
-
-| Package | Description | Version |
-|---------|-------------|---------|
-| [`@maplibre-yaml/core`](./packages/core) | Core library: schemas, parser, renderer, web components | [![npm](https://img.shields.io/npm/v/@maplibre-yaml/core.svg)](https://www.npmjs.com/package/@maplibre-yaml/core) |
-| [`@maplibre-yaml/astro`](./packages/astro) | Astro components: Map, FullPageMap, Scrollytelling | [![npm](https://img.shields.io/npm/v/@maplibre-yaml/astro.svg)](https://www.npmjs.com/package/@maplibre-yaml/astro) |
-| [`@maplibre-yaml/cli`](./packages/cli) | CLI tools: validation, preview, project scaffolding | [![npm](https://img.shields.io/npm/v/@maplibre-yaml/cli.svg)](https://www.npmjs.com/package/@maplibre-yaml/cli) |
-
-## Quick Start
-
-### Web Component
+`index.html`:
 
 ```html
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css">
-<style>
-  ml-map { display: block; height: 400px; }
-</style>
-
-<ml-map src="/map.yaml"></ml-map>
-
-<!-- Tell the browser where to find maplibre-gl (kept external, not bundled) -->
-<script type="importmap">
-  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-</script>
-<!-- Register the <ml-map> web component -->
-<script
-  type="module"
-  src="https://unpkg.com/@maplibre-yaml/core/register.js"
-></script>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My map</title>
+    <link
+      href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      ml-map {
+        display: block;
+        height: 400px;
+      }
+    </style>
+    <!-- Tell the browser where to find maplibre-gl -->
+    <script type="importmap">
+      { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
+    </script>
+    <!-- Register the <ml-map> web component -->
+    <script
+      type="module"
+      src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"
+    ></script>
+  </head>
+  <body>
+    <ml-map src="./map.yaml"></ml-map>
+  </body>
+</html>
 ```
 
-With a bundler (Vite, Webpack, etc.) skip the import map and CDN script — install `@maplibre-yaml/core maplibre-gl` and `import '@maplibre-yaml/core/register'` instead.
-
-### YAML Configuration
+`map.yaml`, next to it:
 
 ```yaml
 type: map
 id: my-map
 config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  center: [-90, 38]
+  zoom: 3.5
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
-  - id: points
-    type: circle
+  - id: rivers
+    type: line
     source:
       type: geojson
-      url: "https://example.com/data.geojson"
+      url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines.geojson"
     paint:
-      circle-radius: 8
-      circle-color: "#ff0000"
+      line-color: "#2563eb"
+      line-width: 2
 ```
 
-### Astro
+Serve the folder (`npx serve .`) and open the address it prints. Or let the
+CLI write both files: `npx maplibre-yaml init my-map`.
+
+In Astro:
 
 ```astro
 ---
 import { Map } from '@maplibre-yaml/astro';
 ---
-<Map src="/configs/my-map.yaml" height="400px" />
+<Map src="/configs/hero-map.yaml" height="500px" />
 ```
+
+## Packages
+
+| Package | What it is |
+| --- | --- |
+| [`@maplibre-yaml/core`](https://www.npmjs.com/package/@maplibre-yaml/core) | The engine: `<ml-map>` and `<ml-scrollytelling>` web components, YAML parser, schemas, renderer |
+| [`@maplibre-yaml/astro`](https://www.npmjs.com/package/@maplibre-yaml/astro) | Astro components (`Map`, `FullPageMap`, `Scrollytelling`), loaders, content-collection helpers |
+| [`@maplibre-yaml/cli`](https://www.npmjs.com/package/@maplibre-yaml/cli) | `init`, `validate`, `preview`, `emit` (export to `style.json`), `schema` |
+| [`maplibre-yaml`](https://www.npmjs.com/package/maplibre-yaml) | Runs the CLI as `npx maplibre-yaml …` |
+| [`@maplibre-yaml/effects`](https://www.npmjs.com/package/@maplibre-yaml/effects) | Shader effects on 3D buildings (experimental) |
 
 ## Features
 
-- **Declarative Configuration** - Define maps in YAML
-- **Runtime Data Fetching** - Load GeoJSON at runtime with caching and retry
-- **Real-time Support** - WebSocket and Server-Sent Events
-- **Full MapLibre Support** - All layer types and styles
-- **Scrollytelling** - Narrative story maps with chapter-based transitions
-- **Web Components** - Framework-agnostic `<ml-map>` element
-- **Astro Integration** - Components, content collections, and blog integration
-- **CLI Tools** - Validation, preview server, and project scaffolding
-- **Type-Safe** - Full TypeScript support with Zod schemas
+- **Maps from YAML:** every MapLibre layer type, GeoJSON and tile sources,
+  popups, hover, markers, legends, a parameters panel. Works with maplibre-gl
+  4, 5 and 6.
+- **Story maps:** `<ml-scrollytelling>` turns a `type: scrollytelling` YAML
+  file into a scroll-driven story, in a plain HTML page or in Astro.
+- **Live data:** polling, Server-Sent Events and WebSocket updates.
+- **Mistakes explained on the page:** error cards with line numbers and
+  did-you-mean hints, and a notice for a layer or file that didn't load.
+- **Export:** `emit` writes a standalone MapLibre `style.json`
+  ([export classes](https://docs.maplibre-yaml.org/guides/export-classes/)).
+- **Examples:** the [MapLibre example gallery](https://docs.maplibre-yaml.org/examples/gallery/)
+  rebuilt in maplibre-yaml, each marked YAML, YAML + JavaScript or YAML + plugin.
 
 ## Development
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Build all packages
 pnpm build
-
-# Run tests
 pnpm test
-
-# Development mode
-pnpm dev
+pnpm presubmit   # build, typecheck, lint, test, docs snippet check
 ```
 
-## Documentation
-
-- [Documentation Site](https://docs.maplibre-yaml.org)
-- [Getting Started](https://docs.maplibre-yaml.org/getting-started/introduction/)
-- [YAML Schema Reference](https://docs.maplibre-yaml.org/schema/overview/)
-- [Astro Integration](https://docs.maplibre-yaml.org/integrations/astro/)
-- [CLI Reference](https://docs.maplibre-yaml.org/cli/getting-started/)
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines.
+See [CONTRIBUTING.md](https://github.com/design-practices/maplibre-yaml/blob/main/CONTRIBUTING.md).
+Releases go through [changesets](https://github.com/changesets/changesets).
 
 ## License
 

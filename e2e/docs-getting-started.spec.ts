@@ -16,6 +16,8 @@
  *  - vanilla-js.mdx "JavaScript API" quick start (esm.sh `?external=maplibre-gl`
  *    + `MapRenderer.fromModel(toModel(...))`);
  *  - web-components.mdx Quick Start steps and the Slots example;
+ *  - the READMEs' plain-HTML quick starts (packages/core/README.md, which npm
+ *    shows, and the repo root README.md, which GitHub shows);
  *  - the page `mlym init --template basic` scaffolds (the CLI's own output,
  *    which the getting-started path hands to students).
  *
@@ -33,11 +35,21 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const DOCS = join(__dirname, "..", "docs/src/content/docs");
+const REPO = join(__dirname, "..");
+const DOCS = join(REPO, "docs/src/content/docs");
 
-/** Fenced code blocks of one language, in document order, de-indented. */
+/** Fenced code blocks of one language in a docs page, in document order, de-indented. */
 function fences(file: string, lang: string): string[] {
-  const lines = readFileSync(join(DOCS, file), "utf8").split("\n");
+  return fencesIn(join(DOCS, file), lang);
+}
+
+/** The same, for a README (path relative to the repo root): what npm and GitHub show. */
+function readmeFences(file: string, lang: string): string[] {
+  return fencesIn(join(REPO, file), lang);
+}
+
+function fencesIn(path: string, lang: string): string[] {
+  const lines = readFileSync(path, "utf8").split("\n");
   const out: string[] = [];
   let open: { indent: number; fence: string; lang: string; body: string[] } | null = null;
   for (const line of lines) {
@@ -69,6 +81,18 @@ const QUAKES = {
     geometry: { type: "Point", coordinates: [lng, lat] },
     properties: { title, mag: 2 },
   })),
+};
+
+/** A stand-in for the Natural Earth rivers file the root README maps. */
+const RIVERS = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: [[-95, 36], [-90, 38], [-85, 40]] },
+      properties: { name: "Mississippi (fixture)" },
+    },
+  ],
 };
 
 /**
@@ -107,18 +131,17 @@ function cdnTable(baseURL: string): Record<string, string | { js: string } | obj
   return {
     "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css": `${baseURL}/vendor/maplibre-gl.css`,
     "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs": { js: trackingMaplibre(baseURL) },
-    // Core is pinned to the 0.7 line in every beginner snippet (and the CLI's
-    // basic template); an unpinned `@maplibre-yaml/core/register.js` is not here.
-    "https://unpkg.com/@maplibre-yaml/core@0.7/register.js": `${baseURL}/packages/core/register.js`,
-    // The CLI templates pin the release that ships <ml-scrollytelling> and base.
+    // Core is pinned to the 0.8 line (the release that ships <ml-scrollytelling>
+    // and `base`) in every beginner snippet, the npm READMEs and the CLI's
+    // templates; an unpinned or stale (`@0.7`) core URL is not here.
     "https://unpkg.com/@maplibre-yaml/core@0.8/register.js": `${baseURL}/packages/core/register.js`,
     "https://unpkg.com/@maplibre-yaml/core@0.8/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
-    "https://unpkg.com/@maplibre-yaml/core@0.7/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
-    "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl": `${baseURL}/packages/core/dist/index.browser.js`,
+    "https://esm.sh/@maplibre-yaml/core@0.8?external=maplibre-gl": `${baseURL}/packages/core/dist/index.browser.js`,
     // The beginner basemap (streets + labels, no key) and the world-map one.
     "https://tiles.openfreemap.org/styles/liberty": `${baseURL}/examples/verification/configs/local-style.json`,
     "https://demotiles.maplibre.org/style.json": `${baseURL}/examples/verification/configs/local-style.json`,
     "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson": QUAKES,
+    "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines.geojson": RIVERS,
   };
 }
 
@@ -398,6 +421,46 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     expect(box!.height).toBe(400);
     await expect(page.locator(".my-controls")).toBeVisible();
     await expect(page.getByText("Data: city open data portal")).toBeVisible();
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("README (core): the CDN page + earthquake-map.yaml render the earthquake layer", async ({
+    page,
+    baseURL,
+  }) => {
+    const [html] = readmeFences("packages/core/README.md", "html");
+    const [yaml] = readmeFences("packages/core/README.md", "yaml");
+    expect(html).toContain('src="./earthquake-map.yaml"');
+    expectKnownUrls(baseURL!, html, yaml);
+
+    const errors = await serveSnippet(page, baseURL!, "readme-core", {
+      "index.html": html,
+      "earthquake-map.yaml": yaml,
+    });
+    await page.goto(`/__docs/readme-core/`, { waitUntil: "domcontentloaded" });
+    await orReport(waitForRenderedLayer(page, "earthquakes"), errors);
+    const zoom = await page.evaluate(() => (document.querySelector("ml-map") as any).getMap().getZoom());
+    expect(zoom).toBeCloseTo(5, 3);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("README (repo root): the quick-start page + map.yaml render the rivers layer", async ({
+    page,
+    baseURL,
+  }) => {
+    const [html] = readmeFences("README.md", "html");
+    const [yaml] = readmeFences("README.md", "yaml");
+    expect(html).toContain('src="./map.yaml"');
+    expectKnownUrls(baseURL!, html, yaml);
+
+    const errors = await serveSnippet(page, baseURL!, "readme-root", {
+      "index.html": html,
+      "map.yaml": yaml,
+    });
+    await page.goto(`/__docs/readme-root/`, { waitUntil: "domcontentloaded" });
+    await orReport(waitForRenderedLayer(page, "rivers"), errors);
+    const box = await page.locator("ml-map").boundingBox();
+    expect(box!.height).toBe(400);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
