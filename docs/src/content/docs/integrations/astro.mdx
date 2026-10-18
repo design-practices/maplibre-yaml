@@ -992,6 +992,15 @@ Check it before you push: `npm run build && npm run preview` serves the
 site under the base, so open `http://localhost:4321/<repo>/`. Every map should
 show its data. A data file that doesn't load is listed in a notice on the map.
 
+<Aside type="note" title="&quot;Some chunks are larger than 500 kB&quot; is expected">
+  Every build of a site with a map prints a yellow `[WARN] [vite] Some chunks
+  are larger than 500 kB after minification`. That chunk is the map engine
+  (maplibre-gl plus maplibre-yaml, about 1.5 MB before compression, loaded
+  only by pages with a map); it is a size notice, not an error, and the
+  build succeeded. To quiet it, raise Vite's limit in `astro.config.mjs`:
+  `vite: { build: { chunkSizeWarningLimit: 2000 } }`.
+</Aside>
+
 **Relative paths mean "from `public/`", with or without a base.** The
 components pass the base even when it is the default `/`, so
 `url: "data/volcanoes.geojson"` loads `public/data/volcanoes.geojson` on every
