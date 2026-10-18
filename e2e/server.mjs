@@ -36,6 +36,9 @@
  *  - `/_astro/*`, `/classics/*`, `/examples/classics/`, `/fonts/*`  the built docs site (docs/dist): the
  *                                  classics launch page, mounted where the
  *                                  site serves it
+ *  - `/my-repo/*`                  examples/verification/base-path/site, as
+ *                                  GitHub Pages serves a project site
+ *                                  (ml-aot.30)
  *  - everything else               static from the repo root
  */
 import { createServer } from "node:http";
@@ -382,6 +385,24 @@ const server = createServer(async (req, res) => {
       const rel = normalize(path.endsWith("/") ? `${path}index.html` : path).replace(/^(\.\.[/\\])+/, "");
       const file = join(DIST, rel);
       if (!file.startsWith(DIST)) return send(403, "forbidden", "text/plain");
+      return send(200, await readFile(file), TYPES[extname(file)] ?? "application/octet-stream");
+    }
+
+    // ml-aot.30: a site published under a subpath, the way GitHub Pages
+    // serves a project site — examples/verification/base-path/site/ at
+    // /my-repo/. Only this folder is under the base: a path the page forgets
+    // to put under it (/data/…) falls through to the repo root and 404s,
+    // exactly as on <user>.github.io.
+    if (path === "/my-repo") {
+      res.writeHead(301, { location: "/my-repo/" });
+      return res.end();
+    }
+    if (path.startsWith("/my-repo/")) {
+      const SITE = join(ROOT, "examples", "verification", "base-path", "site");
+      const sub = path.slice("/my-repo".length);
+      const rel = normalize(sub.endsWith("/") ? `${sub}index.html` : sub).replace(/^(\.\.[/\\])+/, "");
+      const file = join(SITE, rel);
+      if (!file.startsWith(SITE)) return send(403, "forbidden", "text/plain");
       return send(200, await readFile(file), TYPES[extname(file)] ?? "application/octet-stream");
     }
 

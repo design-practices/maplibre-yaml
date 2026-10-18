@@ -101,6 +101,15 @@ The same rule applies to every URL in a document: other source `url:` and
 chapter `image:`/`video:`. (Older releases rejected a bare relative path
 like `data/x.geojson` and required `./` or `/` in front of it.)
 
+**On a site published under a subpath** (a GitHub Pages project site at
+`https://<user>.github.io/<repo>/`), give `<ml-map>` a `base`:
+`<ml-map src="maps/city.yaml" base="/<repo>/">`. Then `/data/cities.geojson`
+and `data/cities.geojson` both load `/<repo>/data/cities.geojson`, on every
+page, without writing the repo name into the YAML. The Astro `Map` and
+`FullPageMap` components set it for you. See
+[Sites under a subpath](/integrations/web-components/#sites-under-a-subpath-github-pages)
+for the full list of fields it applies to.
+
 #### Inline Data
 
 ```yaml

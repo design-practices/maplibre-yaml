@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Base path: with base</title>
+  <!--
+    ml-aot.30 — a site published under a subpath, like a GitHub Pages project
+    site (https://<user>.github.io/my-repo/). The e2e server mounts this
+    folder at /my-repo/. The YAML says /data/cities.geojson, data/route.geojson,
+    /images/tri.png... with no "my-repo" anywhere; base="/my-repo/" makes them
+    load. PASS = red city dots joined by a dark route line, two large red icon
+    symbols (peaks, from images: tri)
+    and a blue-dot icon marker (images/pin.png), and no notice.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/my-repo/
+    (no-base.html is the same page without base: it shows the notice.)
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 480px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>/my-repo/ with base="/my-repo/" — PASS = red city dots joined by a dark route line, two large red icon symbols (peaks), a blue-dot icon marker, no notice.</header>
+  <ml-map id="map" src="/configs/map.yaml" base="/my-repo/"></ml-map>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!--
+    ml-aot.30 — the page-wide alternative: <base href="/my-repo/"> and NO base
+    attribute. The browser resolves every relative URL on the page against
+    it, the map's included, but a root-relative path (/data/cities.geojson)
+    still starts at the domain root. PASS = route line and peaks draw (they
+    are relative); the notice lists /data/cities.geojson, /images/tri.png and
+    /images/pin.png. That is why the docs recommend the base attribute.
+    Open: http://localhost:4174/my-repo/base-href.html
+  -->
+  <base href="/my-repo/" />
+  <title>Base path: base href</title>
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 480px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>&lt;base href="/my-repo/"&gt; instead of the attribute — relative paths load; /paths do not.</header>
+  <ml-map id="map" src="configs/map.yaml"></ml-map>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

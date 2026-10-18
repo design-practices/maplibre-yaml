@@ -75,6 +75,7 @@ const {
   legendPosition = "top-right",
   class: className,
   style,
+  base,
 } = Astro.props;
 
 // Validate that either src or config is provided
@@ -143,6 +144,13 @@ const serializedConfig = effectiveConfig ? JSON.stringify(effectiveConfig) : nul
 // `/configs/map.yaml` lives at `/<base>/configs/map.yaml` on a site deployed
 // under a subpath (GitHub Pages project sites) -- see utils/base-url.ts.
 const resolvedSrc = withBase(src, import.meta.env.BASE_URL);
+
+// Every path INSIDE the document -- source urls, images, marker icons --
+// resolves against the site's base too, so YAML written for `public/`
+// (`/data/x.geojson` or `data/x.geojson`) works on every page and under a
+// GitHub Pages subpath (ml-aot.30). Always set, "/" included: files in
+// public/ are site paths, never page-relative. `base={false}` opts out.
+const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_URL);
 ---
 
 <div
@@ -160,6 +168,7 @@ const resolvedSrc = withBase(src, import.meta.env.BASE_URL);
     id={mapId}
     config={serializedConfig ?? undefined}
     src={serializedConfig ? undefined : resolvedSrc}
+    base={documentBase}
   >
     {
       showControls && (

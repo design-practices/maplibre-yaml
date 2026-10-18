@@ -19,6 +19,7 @@
  * ## What it types
  *
  * - `src` — URL of a YAML document.
+ * - `base` — where site paths start on a subpath deployment (`"/my-repo/"`).
  * - `config` — on React 19 a `MapBlock` object or its JSON string (React 19
  *   sets it as a property); on React 18 a JSON string only, because React 18
  *   sets unknown props on custom elements as attributes and an object would
@@ -76,7 +77,13 @@ export type MLMapProps = DetailedHTMLProps<HTMLAttributes<MLMap>, MLMap> & {
    * is the reliable spelling.
    */
   quiet?: boolean | "";
-} & (IsReact19Types extends true ? MLMapEventProps : unknown);
+  /**
+   * Where the site paths in the document start, for a site deployed under a
+   * subpath (`"/my-repo/"` on a GitHub Pages project site). Vite exposes it
+   * as `import.meta.env.BASE_URL`.
+   */
+  base?: string;
+} &(IsReact19Types extends true ? MLMapEventProps : unknown);
 
 declare module "react" {
   namespace JSX {

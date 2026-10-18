@@ -182,6 +182,14 @@ export {
   createSimpleMapConfig,
   ConfigResolutionError,
 } from "./utils/config-resolver";
+// `<ml-map base>` (ml-aot.30): the resolver behind it, for hosts that render
+// documents or media themselves (`<ml-scrollytelling>` chapter media, say).
+export {
+  resolveDocumentUrl,
+  normalizeDocumentBase,
+  applyDocumentBase,
+  applyDocumentBaseToLayer,
+} from "./utils/document-base";
 
 // Note: Components are exported separately via './components' entry point
 // to avoid auto-registering custom elements when not needed

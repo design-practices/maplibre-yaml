@@ -77,6 +77,12 @@ import {
 } from "../effects-host.js";
 import type { ChromeMount, MapRendererEvents } from "../renderer/map-renderer.js";
 import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
+import {
+  applyDocumentBase,
+  applyDocumentBaseToLayer,
+  normalizeDocumentBase,
+  resolveDocumentUrl,
+} from "../utils/document-base.js";
 
 /**
  * Named slots v1 (KTD9): the four chrome corners plus `legend`, which
@@ -304,7 +310,33 @@ export class MLMap extends HTMLElement {
    * Observed attributes that trigger attributeChangedCallback
    */
   static get observedAttributes(): string[] {
-    return ["src", "config", "quiet"];
+    return ["src", "config", "quiet", "base"];
+  }
+
+  /**
+   * Where the site paths in this map start: the path a site is deployed
+   * under, such as `"/my-repo/"` for a GitHub Pages project site. Reflects the
+   * `base` attribute; `null` when unset.
+   *
+   * @remarks
+   * With a base, every path to a file of your own — the `src` attribute and,
+   * inside the document, source `url`/`tiles`/`data`, `images:`, marker
+   * `icon:`, `mapStyle` and popup links — resolves against it:
+   * `/data/x.geojson` and `data/x.geojson` both load
+   * `/my-repo/data/x.geojson`, on every page of the site. A path that already
+   * starts with the base is used as written, and full URLs (`https://…`,
+   * `//cdn…`, `blob:`, `data:`) are never changed. Without a base, relative
+   * paths resolve against the page and `/…` against the domain root, as
+   * before. The Astro components set it from `import.meta.env.BASE_URL`.
+   * Changing it re-renders the map.
+   */
+  get base(): string | null {
+    return this.getAttribute("base");
+  }
+
+  set base(value: string | null) {
+    if (value === null || value === undefined) this.removeAttribute("base");
+    else this.setAttribute("base", String(value));
   }
 
   /**
@@ -418,6 +450,7 @@ export class MLMap extends HTMLElement {
     // element class was registered) is an own data property that shadows the
     // accessor and would be silently ignored. Re-route it through the setter
     // (the standard custom-element `_upgradeProperty` pattern).
+    this.upgradeProperty("base");
     this.upgradeProperty("config");
 
     // Create internal map container
@@ -436,7 +469,7 @@ export class MLMap extends HTMLElement {
    * Re-apply an own property set on the element before it was upgraded, so
    * it reaches the class accessor instead of shadowing it.
    */
-  private upgradeProperty(name: "config"): void {
+  private upgradeProperty(name: "config" | "base"): void {
     if (Object.prototype.hasOwnProperty.call(this, name)) {
       const self = this as unknown as Record<string, unknown>;
       const value = self[name];
@@ -473,6 +506,16 @@ export class MLMap extends HTMLElement {
 
     // Only process changes after initialization
     if (!this.initialized) return;
+
+    if (name === "base") {
+      // Every URL in the document may move: re-fetch `src` (its own path
+      // depends on the base) or re-render the document already loaded.
+      if (normalizeDocumentBase(oldValue) === normalizeDocumentBase(newValue)) return;
+      const src = this.getAttribute("src");
+      if (src) void this.loadFromURL(src);
+      else if (this._config && this.renderer) this.renderMap(this._config);
+      return;
+    }
 
     if (name === "src" && newValue) {
       this.loadFromURL(newValue);
@@ -622,15 +665,22 @@ export class MLMap extends HTMLElement {
     );
 
     const doc = this.ownerDocument;
-    const resolved = resolveUrl(url, doc.baseURI);
+    // With a `base`, `src` is a site path like every path inside the document.
+    const target = resolveDocumentUrl(url, this.base);
+    const resolved = resolveUrl(target, doc.baseURI);
     const filePage = isFilePage(doc);
 
     let response: Response;
     let yamlContent: string;
     try {
-      response = await fetch(url);
+      response = await fetch(target);
       if (!response.ok) {
-        this.showFailure(srcHttpErrorCard(url, resolved, response.status, response.statusText));
+        this.showFailure(
+          srcHttpErrorCard(url, resolved, response.status, response.statusText, {
+            pageUrl: doc.baseURI,
+            base: this.base,
+          })
+        );
         return;
       }
       yamlContent = await response.text();
@@ -640,7 +690,7 @@ export class MLMap extends HTMLElement {
     }
 
     if (looksLikeHtml(yamlContent, response.headers?.get?.("content-type") ?? null)) {
-      this.showFailure(srcHtmlCard(url, resolved));
+      this.showFailure(srcHtmlCard(url, resolved, { pageUrl: doc.baseURI, base: this.base }));
       return;
     }
 
@@ -770,7 +820,9 @@ export class MLMap extends HTMLElement {
       // production path through it here is what proves the normalization loses
       // nothing — every component and renderer test now exercises the round
       // trip, so a dropped or invented key fails the suite rather than shipping.
-      const model = toModel(mapBlock as never);
+      // `base` (GitHub Pages project sites) resolves every URL in the
+      // document in one pass, before anything fetches (ml-aot.30).
+      const model = applyDocumentBase(toModel(mapBlock as never), this.base);
 
       const renderer: MapRenderer = new MapRenderer(
         this.mapContainer,
@@ -1164,6 +1216,7 @@ export class MLMap extends HTMLElement {
           pageUrl: this.ownerDocument.baseURI,
           documentUrl: this.documentUrl ?? undefined,
           filePage: isFilePage(this.ownerDocument),
+          base: this.base,
         }),
         { log: true }
       );
@@ -1625,7 +1678,7 @@ export class MLMap extends HTMLElement {
    * ```
    */
   async addLayer(layer: any): Promise<void> {
-    await this.renderer?.addLayer(layer);
+    await this.renderer?.addLayer(applyDocumentBaseToLayer(layer, this.base));
   }
 
   /**

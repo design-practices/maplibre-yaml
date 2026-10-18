@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"Pikes Peak"},"geometry":{"type":"Point","coordinates":[-105.04,38.84]}},{"type":"Feature","properties":{"name":"Mount Rainier"},"geometry":{"type":"Point","coordinates":[-121.76,46.85]}}]}

@@ -13,6 +13,7 @@ import {
   srcHttpErrorCard,
   styleFailureCard,
   filePageWorkerCard,
+  subpathBaseHint,
 } from "../../src/components/student-messages";
 
 const ajax = (status: number, statusText: string, url: string) =>
@@ -169,5 +170,48 @@ describe("runtime layer and data problems (ml-aot.15)", () => {
     const text = describeDataProblem("l", file, { pageUrl: "file:///s/index.html", filePage: true });
     expect(text).toContain("pages opened from a file (file://) can't load data files");
     expect(text).toContain("npx serve .");
+  });
+});
+
+describe("a site path that 404s on a page under a subpath suggests base (ml-aot.30)", () => {
+  const hint =
+    'If this site is published under /my-repo/ (a GitHub Pages project site, for example), add base="/my-repo/" to <ml-map> so paths starting with "/" start there.';
+  const notFound = (url: string) => Object.assign(new Error(`HTTP 404: Not Found for ${url}`), { url });
+
+  it("names the page's first folder in the data notice", () => {
+    const text = describeDataProblem("pts", notFound("/data/pts.geojson"), {
+      pageUrl: "https://u.github.io/my-repo/blog/post/",
+      filePage: false,
+    });
+    expect(text).toBe(
+      "Data file `/data/pts.geojson` didn't load (404 Not Found), so layer `pts` has no data. " +
+        `The browser looked for https://u.github.io/data/pts.geojson. ${hint}`
+    );
+    expect(subpathBaseHint("/data/pts.geojson", "https://u.github.io/my-repo/", undefined)).toBe(hint);
+  });
+
+  it("and on the src card", () => {
+    const card = srcHttpErrorCard("/configs/map.yaml", "https://u.github.io/configs/map.yaml", 404, "", {
+      pageUrl: "https://u.github.io/my-repo/index.html",
+    });
+    expect(card.hint).toContain(hint);
+    const html = srcHtmlCard("/configs/map.yaml", "https://u.github.io/configs/map.yaml", {
+      pageUrl: "https://u.github.io/my-repo/",
+    });
+    expect(html.hint).toContain(hint);
+  });
+
+  it("stays quiet when a base is set, the page is at the root, the path is relative or already under the folder", () => {
+    expect(subpathBaseHint("/data/x.geojson", "https://u.github.io/my-repo/", "/my-repo/")).toBeUndefined();
+    expect(subpathBaseHint("/data/x.geojson", "https://u.github.io/", undefined)).toBeUndefined();
+    expect(subpathBaseHint("/data/x.geojson", "https://u.github.io/index.html", undefined)).toBeUndefined();
+    expect(subpathBaseHint("data/x.geojson", "https://u.github.io/my-repo/", undefined)).toBeUndefined();
+    expect(subpathBaseHint("//cdn.test/x.geojson", "https://u.github.io/my-repo/", undefined)).toBeUndefined();
+    expect(subpathBaseHint("/my-repo/x.geojson", "https://u.github.io/my-repo/", undefined)).toBeUndefined();
+    expect(subpathBaseHint("/x.geojson", "file:///home/s/site/index.html", undefined)).toBeUndefined();
+    const card = srcHttpErrorCard("/x.yaml", "https://u.github.io/x.yaml", 500, "", {
+      pageUrl: "https://u.github.io/my-repo/",
+    });
+    expect(card.hint).not.toContain("base=");
   });
 });
