@@ -111,6 +111,29 @@ describe("runChapterAction covers every action the schema accepts", () => {
   });
 });
 
+describe("fitBounds never asks for more padding than the map has (review of ml-aot.39)", () => {
+  // MapLibre ADDS the map's padding to fitBounds' padding. A centred desktop
+  // card pads the bottom by up to 75%; with the action's own padding: 100 the
+  // total exceeded the canvas: "Map cannot fit within canvas", no move.
+  it("shrinks the card padding so card + action padding leave room for the bounds", () => {
+    const { map, calls } = fakeMap();
+    const c = { ...ctx(), padding: { top: 0, right: 0, bottom: 540, left: 0 }, mapSize: { width: 1280, height: 720 } };
+    runChapterAction(map, { action: "fitBounds", bounds: [-74.3, 40.5, -73.7, 40.9], options: { padding: 100 } }, c);
+    const jump = calls.find((call) => call[0] === "jumpTo")![1] as { padding: { top: number; bottom: number } };
+    // 720 tall: 100 + 100 for the action, and at least a fifth of the map
+    // left for the bounds themselves.
+    expect(jump.padding.top + jump.padding.bottom + 200).toBeLessThanOrEqual(720 - 144);
+    expect(jump.padding.bottom).toBeGreaterThan(0);
+  });
+
+  it("leaves the card padding alone when everything fits", () => {
+    const { map, calls } = fakeMap();
+    const c = { ...ctx(), padding: { top: 0, right: 0, bottom: 200, left: 0 }, mapSize: { width: 1280, height: 720 } };
+    runChapterAction(map, { action: "fitBounds", bounds: [-74.3, 40.5, -73.7, 40.9], options: { padding: 50 } }, c);
+    expect(calls.find((call) => call[0] === "jumpTo")![1]).toEqual({ padding: { top: 0, right: 0, bottom: 200, left: 0 } });
+  });
+});
+
 describe("fitBounds frames at the chapter's own pitch/bearing (ml-aot.9)", () => {
   // The bug: fitBounds keeps the CURRENT pitch/bearing and interrupts the
   // chapter's flyTo, so a chapter after a pitched one stayed pitched.

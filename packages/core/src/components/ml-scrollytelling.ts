@@ -627,6 +627,10 @@ export class MLScrollytelling extends HTMLElement {
     this.stopEngine();
     const controller = createStoryController(this, story, null, {
       padding: (chapter) => this.cameraPadding(chapter),
+      mapSize: () => {
+        const box = this.querySelector(":scope > .scrolly-map-container")?.getBoundingClientRect();
+        return box && box.width > 0 ? { width: box.width, height: box.height } : undefined;
+      },
     });
     this.controller = controller;
 

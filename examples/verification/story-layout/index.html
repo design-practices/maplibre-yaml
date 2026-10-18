@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Story layout checks</title>
+  <!--
+    Story layout fixtures for the 0.8.1 review (ml-aot.39/.50, review items
+    A2/A3). ?doc=<name> loads <name>.yaml from this folder:
+      fitbounds.yaml  a centred card + an onChapterEnter fitBounds with
+                      padding 100. PASS = the camera frames the bounds (no
+                      "Map cannot fit within canvas").
+      chrome.yaml     scale bar + bottom-left legend + a hidden chapter, left /
+                      centre / full cards with a large photo. PASS = the
+                      legend and scale bar stay visible (never under a card,
+                      never on top of each other), photos never fill the map.
+    Serve from the repo root (pnpm verify:serve), then open
+    /examples/verification/story-layout/index.html?doc=chrome
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <ml-scrollytelling id="story"></ml-scrollytelling>
+  <script>
+    const doc = new URLSearchParams(location.search).get("doc") || "chrome";
+    document.getElementById("story").setAttribute("src", doc.replace(/[^a-z0-9-]/gi, "") + ".yaml");
+  </script>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

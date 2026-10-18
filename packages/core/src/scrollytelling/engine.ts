@@ -131,6 +131,43 @@ export interface ActionContext {
    * `fitBounds` frames its bounds inside it.
    */
   padding?: CameraPadding;
+  /** The map's size in CSS pixels, so padding never exceeds it. */
+  mapSize?: { width: number; height: number };
+}
+
+/**
+ * The card padding a `fitBounds` action may keep. MapLibre adds the map's
+ * padding to the action's own, and refuses ("Map cannot fit within canvas")
+ * when the two leave no room: a centred card's bottom padding (up to 75%)
+ * plus `padding: 100` did exactly that, and the camera never moved. Shrink
+ * the card padding on each axis so at least a fifth of the map is left for
+ * the bounds after both paddings.
+ */
+function fitWithin(
+  card: CameraPadding,
+  own: unknown,
+  size: { width: number; height: number } | undefined
+): CameraPadding {
+  if (!size || size.width <= 0 || size.height <= 0) return card;
+  const fit =
+    typeof own === "number"
+      ? { top: own, right: own, bottom: own, left: own }
+      : own && typeof own === "object"
+        ? (own as Partial<CameraPadding>)
+        : {};
+  const axis = (a: number, b: number, fitA: number, fitB: number, length: number): number => {
+    const room = Math.max(0, length * 0.8 - fitA - fitB);
+    return a + b <= room ? 1 : a + b === 0 ? 1 : room / (a + b);
+  };
+  const v = axis(card.top, card.bottom, fit.top ?? 0, fit.bottom ?? 0, size.height);
+  const h = axis(card.left, card.right, fit.left ?? 0, fit.right ?? 0, size.width);
+  if (v === 1 && h === 1) return card;
+  return {
+    top: Math.floor(card.top * v),
+    bottom: Math.floor(card.bottom * v),
+    left: Math.floor(card.left * h),
+    right: Math.floor(card.right * h),
+  };
 }
 
 /**
@@ -211,7 +248,7 @@ export function runChapterAction(
       // The action interrupts the chapter's camera move mid-flight, padding
       // included: settle the padding first, so the bounds are framed in the
       // part of the map the chapter's card leaves visible.
-      if (ctx.padding) map.jumpTo({ padding: ctx.padding });
+      if (ctx.padding) map.jumpTo({ padding: fitWithin(ctx.padding, options.padding, ctx.mapSize) });
       map.fitBounds(
         [
           [west, south],
@@ -240,6 +277,8 @@ export interface StoryControllerOptions {
    * every activation, so it can follow the layout. Default: none.
    */
   padding?: (chapter: Chapter) => CameraPadding | undefined;
+  /** The map's size, so a `fitBounds` action's padding fits in it. */
+  mapSize?: () => { width: number; height: number } | undefined;
   /** Whether camera moves should be instant. Default: the OS setting. */
   reducedMotion?: () => boolean;
 }
@@ -375,6 +414,7 @@ export function createStoryController(
         chapter,
         reducedMotion: reduce || instant,
         padding,
+        mapSize: options.mapSize?.(),
       });
     }
 

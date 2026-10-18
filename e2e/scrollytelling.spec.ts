@@ -424,6 +424,40 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     });
   }
 
+  test("a fitBounds action under a tall centred card still frames its bounds (review A3)", async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    const errors = await guard(page, baseURL!);
+    const warnings: string[] = [];
+    page.on("console", (m) => warnings.push(m.text()));
+    await page.goto("/examples/verification/story-layout/index.html?doc=fitbounds", { waitUntil: "domcontentloaded" });
+    await storyReady(page, "pts");
+    await scrollToChapter(page, "frame");
+    await settled(page);
+    const state = await page.evaluate(() => {
+      const el = document.querySelector("ml-scrollytelling") as any;
+      const map = el.getMap();
+      const card = el.querySelector('.scrolly-chapter[data-chapter-id="frame"] .chapter-content').getBoundingClientRect();
+      const box = el.querySelector(".scrolly-map-container").getBoundingClientRect();
+      const p = (at: [number, number]) => {
+        const q = map.project(at);
+        return { x: box.left + q.x, y: box.top + q.y };
+      };
+      return { a: p([10, 40]), b: p([30, 50]), cardHeight: card.height, center: map.getCenter() };
+    });
+    expect(state.cardHeight, "fixture drifted: the centred card should be ~330px").toBeGreaterThan(250);
+    for (const pt of [state.a, state.b]) {
+      expect(pt.x).toBeGreaterThan(0);
+      expect(pt.x).toBeLessThan(1280);
+      expect(pt.y).toBeGreaterThan(0);
+      expect(pt.y).toBeLessThan(720);
+    }
+    expect(state.center.lng, "camera never left the chapter's own center").toBeGreaterThan(0);
+    expect(warnings.filter((w) => /cannot fit/i.test(w))).toEqual([]);
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+
   test("reduced motion: chapter camera moves are instant (ml-cxk)", async ({ browser, baseURL }) => {
     const context = await browser.newContext({ reducedMotion: "reduce", viewport: { width: 1280, height: 800 } });
     const page = await context.newPage();
