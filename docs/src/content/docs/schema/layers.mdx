@@ -651,7 +651,7 @@ Each item is one of these:
 | `property: population` | The feature's `population` property |
 | `property: …` plus `else: "n/a"` | `else` is shown when the property is missing or `null` (without `else`, nothing is shown) |
 | `property: …` plus `format: ",.0f"` | Formats a number. `,` adds thousands separators and `.Nf` keeps N decimal places: `",.0f"` gives `8,336,817`, `".2f"` gives `0.12`. Text values are shown unchanged |
-| `href: "https://…"` plus `text: "Read more"` | A link. It opens in a new tab (with `rel="noopener noreferrer"`). Without `text`, the URL is the link text |
+| `href: "https://…"` plus `str: "Read more"` (or `text:`) | A link with that text. Without `str` or `text`, the URL is the link text. See [Links](#links) |
 | `src: "https://…/photo.jpg"` plus `alt: "…"` | An image |
 
 Put links and images inside `p:` (or `div:`):
@@ -659,25 +659,36 @@ Put links and images inside `p:` (or `div:`):
 ```yaml
 popup:
   - p:
-      - href: "https://en.wikipedia.org/wiki/New_York_City"
-        text: "New York on Wikipedia"
+      - str: "New York on Wikipedia"
+        href: "https://en.wikipedia.org/wiki/New_York_City"
   - p:
       - src: "https://maplibre.org/img/maplibre-logo-big.svg"
         alt: "MapLibre logo"
 ```
 
-Wrapping them in `a:` or `img:` instead also displays them, but the page then
-contains an extra empty `<a>` or `<img>` element.
+Wrapping a link in `a:` or an image in `img:` instead gives the same result.
 
-<Aside type="caution" title="Two link forms that do not work as expected">
-- **`str` with `href` is not a link.** `- p: [{ str: "Wikipedia", href: "https://…" }]`
-  shows the text "Wikipedia" and silently drops the URL, because `str` wins.
-  Use `text:` for the link text.
-- **`target:`** chooses where a link opens: `_blank` (the default), `_self`,
-  `_parent` or `_top`. It works, but in 0.7 validation also logs
-  `Unknown key "target"`. That warning is wrong and harmless. Omit `target`
-  to keep the default new tab.
-</Aside>
+### Links
+
+A link item needs `href`. Its text is `str` or `text` (if both are given,
+`text` wins), and the URL itself when neither is given.
+
+- **`href`** is an absolute URL (`https://…`, `http://…`, `mailto:…`, `tel:…`)
+  or a relative path (`/about`, `./notes.html`, `notes.html`, `#top`). A link
+  with any other scheme, such as `javascript:`, is shown as plain text and the
+  console logs a warning.
+- **`target`** chooses where the link opens: `_blank` (the default, a new tab,
+  with `rel="noopener noreferrer"`), `_self` (this tab), `_parent` or `_top`.
+  Any other value fails validation with
+  `target must be one of: _blank, _self, _parent, _top`.
+
+```yaml
+popup:
+  - p:
+      - str: "Back to the class page"
+        href: "/"
+        target: _self
+```
 
 The link URL is fixed text. An item cannot build a URL from a feature
 property.

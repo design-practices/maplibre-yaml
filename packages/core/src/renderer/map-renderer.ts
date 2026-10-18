@@ -116,6 +116,32 @@ function resolveFitTo(
 }
 
 /**
+ * What part of the document a reported error belongs to — the third argument
+ * of {@link MapRendererOptions.onError}.
+ *
+ * @remarks
+ * - `style`: the basemap style never loaded (a 404/403/CORS failure, a URL
+ *   that is not a style, an invalid inline style). Always fatal: no layer can
+ *   draw without it.
+ * - `layer`: one document layer was rejected or could not be added (a bad
+ *   paint value, a `source:` naming a source that does not exist). The rest
+ *   of the map keeps working.
+ * - `source`: one document source failed at runtime (tiles or a TileJSON
+ *   that would not load).
+ *
+ * Errors with no context (a basemap tile, a glyph) are not the document's.
+ */
+export interface MapErrorContext {
+  kind: 'style' | 'layer' | 'source';
+  /** The document layer, for `layer` errors. */
+  layerId?: string;
+  /** The document source, for `source` errors. */
+  sourceId?: string;
+  /** The style URL, for `style` errors when the style was given as a URL. */
+  url?: string;
+}
+
+/**
  * Options for MapRenderer
  */
 export interface MapRendererOptions {
@@ -124,9 +150,12 @@ export interface MapRendererOptions {
    * `fatal` distinguishes load-aborting failures (source registration, layer
    * add — the document will never reach `load`) from runtime maplibre error
    * events (a 404'd tile, a missing sprite) that the map survives. Optional
-   * second argument, so existing single-arg callbacks are unaffected.
+   * second argument, so existing single-arg callbacks are unaffected. The
+   * optional third, {@link MapErrorContext}, says which part of the document
+   * failed — the basemap style (fatal), one layer, or one source — or is
+   * absent for errors that are not the document's (a basemap tile).
    */
-  onError?: (error: Error, fatal?: boolean) => void;
+  onError?: (error: Error, fatal?: boolean, context?: MapErrorContext) => void;
   /** Controls declared in the YAML `controls:` block — added automatically on map load */
   controls?: ControlsConfig;
   /** Legend declared in the YAML `legend:` block — built automatically on map load */
@@ -612,7 +641,21 @@ export class MapRenderer {
       imagesReady
         .then(() => {
           if (this.destroyed) return;
-          return Promise.all(layers.map((layer) => this.addLayer(layer))).then(() => {
+          // One layer failing to add (a `source:` that names nothing) is a
+          // layer problem, not a document one: report it against the layer
+          // and let the rest of the map load (ml-aot.15). It used to reject
+          // the whole document — the basemap stayed up, every other layer
+          // drew, but `load` never fired and nothing said which layer broke.
+          const addOne = (layer: Layer) =>
+            this.addLayer(layer).catch((error: unknown) => {
+              if (this.destroyed) return;
+              options.onError?.(
+                error instanceof Error ? error : new Error(String(error)),
+                false,
+                { kind: 'layer', layerId: layer.id }
+              );
+            });
+          return Promise.all(layers.map(addOne)).then(() => {
             this.layersAdded = true;
             if (terrainPending && options.terrain) {
               applyTerrain(map3d, options.terrain, true);
@@ -673,8 +716,49 @@ export class MapRenderer {
       });
     });
 
-    // Handle errors. Runtime maplibre error events are non-fatal: the map
-    // still reaches `load` after a failed tile/sprite/glyph request.
+    // Which runtime errors belong to the document: its own layers (named
+    // in MapLibre's validation messages, or on the event) and its own
+    // sources (named sources, plus the `<layer>-source` an inline one gets).
+    const documentLayerIds = layers.map((layer) => layer.id);
+    const documentSourceIds = new Set<string>([
+      ...Object.keys(sources ?? {}),
+      ...layers
+        .filter((layer) => layer.source && typeof layer.source === 'object')
+        .map((layer) => `${layer.id}-source`),
+    ]);
+    const styleUrl = typeof config.mapStyle === 'string' ? config.mapStyle : undefined;
+    let styleLoaded = false;
+    this.map.on('style.load', () => {
+      styleLoaded = true;
+    });
+    const classify = (
+      e: { sourceId?: unknown; tile?: unknown; layer?: { id?: unknown } },
+      message: string
+    ): MapErrorContext | undefined => {
+      // Before the style has loaded, an error that is not about a source
+      // or tile is the style itself failing: a 404/403, a CORS refusal, a
+      // URL that returned something other than style JSON, or style
+      // validation. MapLibre never fires `load` after it (ml-aot.14).
+      if (!styleLoaded && !this.isLoaded && e.sourceId === undefined && e.tile === undefined) {
+        if (/worker failed to load/i.test(message)) return undefined;
+        return { kind: 'style', ...(styleUrl ? { url: styleUrl } : {}) };
+      }
+      const eventLayer = typeof e.layer?.id === 'string' ? e.layer.id : undefined;
+      const layerId =
+        (eventLayer && documentLayerIds.includes(eventLayer) ? eventLayer : undefined) ??
+        documentLayerIds.find(
+          (id) => message.startsWith(`layers.${id}.`) || message.startsWith(`layers.${id}:`)
+        );
+      if (layerId) return { kind: 'layer', layerId };
+      if (typeof e.sourceId === 'string' && documentSourceIds.has(e.sourceId)) {
+        return { kind: 'source', sourceId: e.sourceId };
+      }
+      return undefined;
+    };
+
+    // Handle errors. Runtime maplibre error events are non-fatal — the map
+    // still reaches `load` after a failed tile/sprite/glyph request — except
+    // a basemap style that never loaded (classified above).
     // maplibre-gl v6 types `e.error` as `{ message }` (ErrorLike), not
     // Error; normalise so onError's contract holds on every major.
     this.map.on('error', (e) => {
@@ -692,7 +776,10 @@ export class MapRenderer {
             );
       const hinted = withWorkerUrlHint(error.message, runtimeVersion());
       if (hinted !== error.message) error = Object.assign(new Error(hinted), { cause: raw });
-      options.onError?.(error, false);
+      const context = classify(e as never, error.message);
+      // A basemap style that never loads is fatal: without it no layer can
+      // draw and `load` never fires.
+      options.onError?.(error, context?.kind === 'style', context);
     });
   }
 

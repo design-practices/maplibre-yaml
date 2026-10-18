@@ -276,26 +276,31 @@ chapters:
 
     // The build log / top-level message.
     expect(error.message).toContain(yamlPath);
-    expect(error.message).toMatch(/chapters\.1\.center: Expected array, got undefined \(line \d+/);
-    expect(error.message).toMatch(/warning +chapters\.1\.centre: Unknown key "centre"\. Did you mean "center"\?/);
+    // The typo itself is the error (core ml-okw), with its line; the
+    // matching unknown-key warning is not repeated.
+    expect(error.message).toMatch(
+      /chapters\.1\.centre: Unknown key "centre" — did you mean "center"\? \("center" is required here\.\) \(line \d+/
+    );
+    expect(error.message).not.toMatch(/warning +chapters\.1\.centre/);
 
     // What Astro's dev overlay actually renders: the FIRST entry — its
     // `message` + `loc` on Astro 7 (Oxc shape), `text` + `location` on 4/5.
     const first = error.errors[0]! as any;
     for (const shown of [first.message, first.text]) {
       expect(shown).toContain(yamlPath);
-      expect(shown).toMatch(/chapters\.1\.center: Expected array, got undefined \(line \d+, column \d+\)/);
-      expect(shown).toMatch(/chapters\.1\.centre: Unknown key "centre"\. Did you mean "center"\?/);
+      expect(shown).toMatch(
+        /chapters\.1\.centre: Unknown key "centre" — did you mean "center"\? \("center" is required here\.\) \(line \d+, column \d+\)/
+      );
     }
-    // ...framed at the YAML line (the chapter's mapping, where center is missing).
+    // ...framed at the YAML line of the typo.
     for (const where of [first.loc, first.location]) {
       expect(where?.file).toBe(yamlPath);
       expect(where?.line).toBeGreaterThanOrEqual(12);
     }
 
     // Programmatic consumers keep the structured fields and core's reason.
-    expect(first.path).toBe("chapters.1.center");
-    expect(first.reason).toBe("Expected array, got undefined");
+    expect(first.path).toBe("chapters.1.centre");
+    expect(first.reason).toBe('Unknown key "centre" — did you mean "center"? ("center" is required here.)');
   });
 
   it("loadMapConfig gets the same treatment", async () => {
@@ -313,7 +318,7 @@ layers:
     type: circle
     source:
       type: geojson
-      url: "data/cities.geojson"
+      url: "#cities.geojson"
 `
     );
     const error = (await loadMapConfig(yamlPath).catch((e) => e)) as YAMLLoadError & {
@@ -331,7 +336,7 @@ layers:
       (yaml) => YAMLParserForGlob.safeParseScrollytellingBlock(yaml)
     ).catch((e) => e)) as YAMLLoadError & { errors: Array<{ text: string }> };
     expect(error.errors[0]!.text).toContain("/src/stories/bad.yaml");
-    expect(error.errors[0]!.text).toMatch(/chapters\.1\.center: Expected array, got undefined \(line \d+/);
+    expect(error.errors[0]!.text).toMatch(/chapters\.1\.centre: Unknown key "centre" — did you mean "center"\? .*\(line \d+/);
   });
 });
 

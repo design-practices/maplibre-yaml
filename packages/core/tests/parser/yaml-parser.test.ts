@@ -792,7 +792,9 @@ chapters:
       const result = YAMLParser.safeParseScrollytellingBlock(storyWithImage("javascript:alert(1)"));
       expect(result.success).toBe(false);
       expect(result.errors[0]?.path).toBe("chapters.0.image");
-      expect(result.errors[0]?.message).toMatch(/http\(s\) URL .* or a path to a file on your site \(\/images\/photo\.jpg/);
+      expect(result.errors[0]?.message).toMatch(
+        /http\(s\) URL .* or a path to a file on your site \(images\/photo\.jpg, or \/images\/photo\.jpg/
+      );
       expect(result.errors[0]?.line).toBe(13);
     });
 
@@ -809,7 +811,7 @@ layers:
     type: circle
     source:
       type: geojson
-      url: "data/cities.geojson"
+      url: "#cities.geojson"
 `);
       expect(result.success).toBe(false);
       const messages = result.errors.map((e) => e.message).join(" | ");

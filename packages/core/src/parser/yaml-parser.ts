@@ -276,7 +276,12 @@ import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
 import type { z } from "zod";
 import {
+  checkSourceReferences,
   collectWarnings,
+  findHashCommentValues,
+  hashCommentMessage,
+  hashSyntaxHint,
+  positionForKey,
   positionForPath,
   suggest,
   unknownTypeMessage,
@@ -285,8 +290,10 @@ import {
   LAYER_TYPES,
   SOURCE_TYPES,
   BLOCK_TYPES,
+  type HashCommentValue,
   type ValidationWarning,
 } from "./validation-utils";
+import { isLikelyMisspelling } from "../utils/suggest";
 
 export type { ValidationWarning } from "./validation-utils";
 
@@ -517,13 +524,16 @@ export class YAMLParser {
     if (doc.errors.length > 0) {
       const err = doc.errors[0]!;
       const start = err.linePos?.[0];
+      // An unquoted `#ef4444` inside a flow map is a syntax error whose text
+      // says nothing about colours or comments (ml-okw).
+      const hint = hashSyntaxHint(yaml, start?.line);
       return {
         doc,
         lineCounter,
         syntaxError: {
           path: "",
           code: "yaml-syntax",
-          message: `YAML syntax error: ${err.message}`,
+          message: `YAML syntax error: ${err.message}${hint ? `\n${hint}` : ""}`,
           ...(start ? { line: start.line, column: start.col } : {}),
         },
       };
@@ -591,18 +601,41 @@ export class YAMLParser {
       lineCounter
     );
 
+    // Values YAML emptied because an unquoted `#` started a comment
+    // (`circle-color: #ef4444`). Their schema errors say nothing useful
+    // ("Value does not match any of the expected formats"), so they are
+    // replaced by one that says what happened and shows the quoted fix.
+    const hashValues = findHashCommentValues(doc, lineCounter);
+
     const result = schema.safeParse(value);
     if (!result.success) {
+      const errors = this.formatZodErrors(result.error, {
+        doc,
+        lineCounter,
+        value,
+        remaps,
+      });
+      const finalErrors = replaceHashCommentErrors(errors, hashValues);
+      // A typo reported as THE error (`config.centre: Unknown key "centre" —
+      // did you mean "center"?`) need not be repeated as a warning.
+      const repeated = (w: ValidationWarning) =>
+        w.suggestion !== undefined &&
+        finalErrors.some((e) => e.path === w.path && e.suggestion === w.suggestion);
       return {
         success: false,
-        errors: this.formatZodErrors(result.error, {
-          doc,
-          lineCounter,
-          value,
-          remaps,
-        }),
-        warnings,
+        errors: finalErrors,
+        warnings: warnings.filter((w) => !repeated(w)),
       };
+    }
+
+    // A field that tolerates an empty value still lost what the author
+    // wrote: say so, as a warning.
+    for (const finding of hashValues) {
+      warnings.push({
+        path: finding.path.join("."),
+        message: hashCommentMessage(finding),
+        ...(finding.line !== undefined ? { line: finding.line, column: finding.column } : {}),
+      });
     }
 
     if (resolveRefs) {
@@ -871,19 +904,30 @@ export class YAMLParser {
     }
     const remaps = expansion.remaps;
 
+    // A layer `source:` that almost names a declared source (`citeis` for
+    // `cities`) validates — the name could be a basemap source — but is
+    // almost certainly a typo; say so with a did-you-mean (ml-aot.15).
+    const sourceRefWarnings = checkSourceReferences(m.value, m.doc, m.lineCounter);
+    const withSourceRefWarnings = <T>(result: ParseResult<T>): ParseResult<T> =>
+      sourceRefWarnings.length === 0
+        ? result
+        : { ...result, warnings: [...result.warnings, ...sourceRefWarnings] };
+
     if (detected.version === 2) {
       // v2 validates against MapBlockV2Schema (U2). `resolveRefs: false`: v2
       // reuses YAML-native anchors/merge, already resolved at parse via
       // toJSSafe — the v1 `{$ref}` JSON-pointer resolution is a v1 affordance.
       // Turning the validated block into a MapModel is U3's job (the `toModel`
       // v2 branch stays a stub).
-      return this.validateAgainst(
-        m.value,
-        m.doc,
-        m.lineCounter,
-        MapBlockV2Schema,
-        false,
-        remaps
+      return withSourceRefWarnings(
+        this.validateAgainst(
+          m.value,
+          m.doc,
+          m.lineCounter,
+          MapBlockV2Schema,
+          false,
+          remaps
+        )
       );
     }
 
@@ -892,13 +936,15 @@ export class YAMLParser {
     // flagship `<ml-map src>` path. Leaving it unresolved passed the raw
     // `{$ref}` object to the renderer, which saw no `type` and silently added
     // nothing — a config that validated and produced no layer.
-    return this.validateAgainst(
-      m.value,
-      m.doc,
-      m.lineCounter,
-      MapBlockSchema,
-      true,
-      remaps
+    return withSourceRefWarnings(
+      this.validateAgainst(
+        m.value,
+        m.doc,
+        m.lineCounter,
+        MapBlockSchema,
+        true,
+        remaps
+      )
     );
   }
 
@@ -1308,7 +1354,24 @@ export class YAMLParser {
       remaps?: SugarRemap[];
     }
   ): ParseError[] {
-    return error.errors.map((err) => {
+    return error.errors.map((err) => this.formatIssue(err, ctx));
+  }
+
+  /**
+   * Format one Zod issue (see {@link formatZodErrors}).
+   *
+   * @internal
+   */
+  private static formatIssue(
+    err: ZodIssue,
+    ctx?: {
+      doc: Document;
+      lineCounter: LineCounter;
+      value: unknown;
+      remaps?: SugarRemap[];
+    }
+  ): ParseError {
+    {
       // Re-anchor a schema error on a sugar-synthesized `data:` back to the
       // authored sugar key (KTD1a). The internal `err.path` is left untouched
       // for the value lookups below (they index the *mutated* value, which does
@@ -1320,9 +1383,17 @@ export class YAMLParser {
 
       let message: string;
       switch (err.code) {
-        case "invalid_type":
+        case "invalid_type": {
+          // A required key is missing and a sibling is a likely misspelling
+          // of it (`centre:` for `center:`): the typo is the error to report,
+          // not the missing key (ml-okw).
+          if (err.received === "undefined" && ctx) {
+            const misspelled = misspelledKeyError(err.path, ctx);
+            if (misspelled) return misspelled;
+          }
           message = `Expected ${err.expected}, got ${err.received}`;
           break;
+        }
 
         case "invalid_union_discriminator": {
           const received = ctx
@@ -1340,6 +1411,15 @@ export class YAMLParser {
 
         case "invalid_union":
           message = this.formatUnionError(err, ctx);
+          if (message === UNION_FALLBACK) {
+            // Report the failure inside the union instead of the union
+            // itself: `layers.0.paint.circle-color: "bleu" is not a colour
+            // name`, not `layers.0: Value does not match any of the
+            // expected formats` (ml-okw).
+            const deeper = mostSpecificUnionIssue(err);
+            if (deeper) return this.formatIssue(deeper, ctx);
+            message = sameSpotTypeMessage(err, ctx?.value) ?? message;
+          }
           break;
 
         case "too_small":
@@ -1349,6 +1429,8 @@ export class YAMLParser {
             message = `String must have at least ${err.minimum} character(s)`;
           } else {
             message = `Value must be >= ${err.minimum}`;
+            const swap = lngLatSwapHint(err.path, ctx?.value);
+            if (swap) message += `. ${swap}`;
           }
           break;
 
@@ -1359,6 +1441,8 @@ export class YAMLParser {
             message = `String must have at most ${err.maximum} character(s)`;
           } else {
             message = `Value must be <= ${err.maximum}`;
+            const swap = lngLatSwapHint(err.path, ctx?.value);
+            if (swap) message += `. ${swap}`;
           }
           break;
 
@@ -1386,6 +1470,22 @@ export class YAMLParser {
           message = err.message || "Validation failed";
           break;
 
+        case "invalid_literal": {
+          // `type: Map` — say what was expected AND that case matters.
+          const expected = JSON.stringify(err.expected);
+          const received = valueAtPath(ctx?.value, err.path);
+          message = `Expected ${expected}`;
+          if (received !== undefined) message += `, got ${JSON.stringify(received)}`;
+          if (
+            typeof received === "string" &&
+            typeof err.expected === "string" &&
+            received.toLowerCase() === err.expected.toLowerCase()
+          ) {
+            message += ` (values are case-sensitive: write ${expected})`;
+          }
+          break;
+        }
+
         default:
           message = err.message || "Validation error";
       }
@@ -1399,7 +1499,7 @@ export class YAMLParser {
         message,
         ...(pos ? { line: pos.line, column: pos.column } : {}),
       };
-    });
+    }
   }
 
   /**
@@ -1435,7 +1535,7 @@ export class YAMLParser {
     err: ZodIssue & { code: "invalid_union" },
     ctx?: { doc: Document; lineCounter: LineCounter; value: unknown }
   ): string {
-    const fallback = "Value does not match any of the expected formats";
+    const fallback = UNION_FALLBACK;
     const value = ctx?.value;
 
     // 1) A discriminated union failing on its discriminator (a layer with an
@@ -1488,6 +1588,186 @@ export class YAMLParser {
 
     return fallback;
   }
+}
+
+/** The generic message for a union no branch of which matched. */
+const UNION_FALLBACK = "Value does not match any of the expected formats";
+
+/** Issue codes that only say "wrong type", as opposed to a refined check. */
+const TYPE_ONLY_CODES = new Set<string>([
+  "invalid_type",
+  "invalid_literal",
+  "invalid_union_discriminator",
+  "unrecognized_keys",
+]);
+
+/**
+ * The issue inside a failed union that best explains the failure, or
+ * `undefined` when the union itself is the most specific place to report.
+ *
+ * @remarks
+ * A layer is `LayerSchema | LayerReferenceSchema`: a bad paint value fails
+ * the first branch deep inside (`paint.circle-color`) and the second at the
+ * top (`$ref` missing). The deepest issue wins; at equal depth, a refinement
+ * (`custom` — the value had the right type but failed a check, like an
+ * unknown colour name) beats a plain type mismatch from a sibling branch.
+ */
+function mostSpecificUnionIssue(
+  err: ZodIssue & { code: "invalid_union" }
+): ZodIssue | undefined {
+  let best: ZodIssue | undefined;
+  let bestScore = -1;
+  for (const branch of err.unionErrors) {
+    for (const issue of branch.issues) {
+      const specific = TYPE_ONLY_CODES.has(issue.code) ? 0 : 1;
+      const score = issue.path.length * 2 + specific;
+      if (score > bestScore) {
+        bestScore = score;
+        best = issue;
+      }
+    }
+  }
+  if (!best) return undefined;
+  const deeper = best.path.length > err.path.length;
+  const refined = best.path.length === err.path.length && !TYPE_ONLY_CODES.has(best.code);
+  return deeper || refined ? best : undefined;
+}
+
+/**
+ * When every branch of a union failed only on type, at the union's own
+ * spot, list what was expected: `Expected number or array, got string`. A
+ * quoted number or one with a unit (`"10px"`) gets the plain-number fix.
+ */
+function sameSpotTypeMessage(
+  err: ZodIssue & { code: "invalid_union" },
+  root: unknown
+): string | undefined {
+  const issues = err.unionErrors.flatMap((branch) => branch.issues);
+  if (issues.length === 0) return undefined;
+  const samePath = (issue: ZodIssue) =>
+    issue.path.length === err.path.length &&
+    issue.path.every((segment, i) => segment === err.path[i]);
+  if (!issues.every((issue) => issue.code === "invalid_type" && samePath(issue))) {
+    return undefined;
+  }
+  const typed = issues as Array<ZodIssue & { code: "invalid_type" }>;
+  const expected = [...new Set(typed.map((issue) => String(issue.expected)))];
+  const received = String(typed[0]!.received);
+  let message = `Expected ${expected.join(" or ")}, got ${received}`;
+  const value = valueAtPath(root, err.path);
+  if (expected.includes("number") && typeof value === "string") {
+    const numeric = value.match(/^\s*(-?\d+(?:\.\d+)?)\s*[a-z%]*\s*$/i);
+    if (numeric) message += `. Write a plain number, without quotes or units: ${numeric[1]}`;
+  }
+  return message;
+}
+
+/**
+ * A `[longitude, latitude]` pair whose latitude is out of range but which
+ * reads correctly swapped (`[39, -98]`) gets the swapped suggestion.
+ */
+function lngLatSwapHint(
+  path: (string | number)[],
+  root: unknown
+): string | undefined {
+  if (path[path.length - 1] !== 1) return undefined;
+  const pair = valueAtPath(root, path.slice(0, -1));
+  if (!Array.isArray(pair) || pair.length < 2 || pair.length > 3) return undefined;
+  const [first, second] = pair;
+  if (typeof first !== "number" || typeof second !== "number") return undefined;
+  if (Math.abs(first) > 90 || Math.abs(second) <= 90 || Math.abs(second) > 180) {
+    return undefined;
+  }
+  return (
+    "Coordinates are [longitude, latitude] — longitude first. " +
+    `Did you mean [${second}, ${first}]?`
+  );
+}
+
+/**
+ * For a missing required key, the error to report instead when a sibling key
+ * is a likely misspelling of it (`centre` for `center`, `Zoom`, `zom`), or —
+ * for `center` — when the position was given as separate lat/lng keys.
+ */
+function misspelledKeyError(
+  path: (string | number)[],
+  ctx: { doc: Document; lineCounter: LineCounter; value: unknown }
+): ParseError | undefined {
+  const missing = path[path.length - 1];
+  if (typeof missing !== "string") return undefined;
+  const parentPath = path.slice(0, -1);
+  const parent = valueAtPath(ctx.value, parentPath);
+  if (parent === null || typeof parent !== "object" || Array.isArray(parent)) {
+    return undefined;
+  }
+  const siblings = Object.keys(parent);
+  const at = (key: string) => {
+    const pos = positionForKey(ctx.doc, ctx.lineCounter, parentPath, key);
+    return {
+      path: [...parentPath, key].join("."),
+      ...(pos ? { line: pos.line, column: pos.column } : {}),
+    };
+  };
+
+  if (missing === "center") {
+    const split = siblings.find((key) =>
+      /^(lat|latitude|lng|lon|long|longitude)$/i.test(key)
+    );
+    if (split) {
+      return {
+        ...at(split),
+        message:
+          "Set the position with center: [longitude, latitude] — longitude first, " +
+          `for example center: [-74.0, 40.7] — not with a separate "${split}" key.`,
+        suggestion: "center",
+      };
+    }
+  }
+
+  const typo = siblings.find((key) => isLikelyMisspelling(key, missing));
+  if (!typo) return undefined;
+  return {
+    ...at(typo),
+    message: `Unknown key "${typo}" — did you mean "${missing}"? ("${missing}" is required here.)`,
+    suggestion: missing,
+  };
+}
+
+/**
+ * Replace the schema errors caused by values an unquoted `#` emptied with
+ * one error per emptied value that says what happened (ml-okw). An error is
+ * "caused by" a finding when its path is the finding's path or an ancestor
+ * of it — the generic union error at `layers.0` included.
+ */
+function replaceHashCommentErrors(
+  errors: ParseError[],
+  findings: HashCommentValue[]
+): ParseError[] {
+  if (findings.length === 0) return errors;
+  const findingPaths = findings.map((f) => f.path.map(String));
+  const explained = (error: ParseError) => {
+    const segments = error.path === "" ? [] : error.path.split(".");
+    return findingPaths.some(
+      (fp) =>
+        segments.length <= fp.length && segments.every((s, i) => s === fp[i])
+    );
+  };
+  const relevant = findings.filter((finding) => {
+    const fp = finding.path.map(String);
+    return errors.some((error) => {
+      const segments = error.path === "" ? [] : error.path.split(".");
+      return segments.length <= fp.length && segments.every((s, i) => s === fp[i]);
+    });
+  });
+  if (relevant.length === 0) return errors;
+  return [
+    ...relevant.map((finding) => ({
+      path: finding.path.join("."),
+      message: hashCommentMessage(finding),
+      ...(finding.line !== undefined ? { line: finding.line, column: finding.column } : {}),
+    })),
+    ...errors.filter((error) => !explained(error)),
+  ];
 }
 
 /**

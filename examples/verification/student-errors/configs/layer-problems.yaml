@@ -1,0 +1,46 @@
+# ml-aot.15: three layer-level mistakes and one good layer. The map must keep
+# working (the good layer draws, ml-map:load fires) and say what broke.
+type: map
+id: layer-problems
+config:
+  center: [-96, 39]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  cities:
+    type: geojson
+    url: "data/cities.geojson"
+layers:
+  # A source-name typo: `citeis` for `cities`.
+  - id: typo-layer
+    type: circle
+    source: citeis
+    paint:
+      circle-radius: 6
+      circle-color: "#2563eb"
+  # A data file that does not exist (bare relative path, accepted since ml-zft).
+  - id: missing-data
+    type: circle
+    source:
+      type: geojson
+      url: "data/citys.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#16a34a"
+  # A colour MapLibre cannot parse, inside an expression (validation cannot
+  # see into expressions, so MapLibre rejects the layer at runtime).
+  - id: bad-colour
+    type: circle
+    source: cities
+    paint:
+      circle-radius: 9
+      circle-color: ["match", ["get", "kind"], "park", "bleu", "#e63946"]
+  # The one that works.
+  - id: good
+    type: circle
+    source: cities
+    paint:
+      circle-radius: 12
+      circle-color: "#e63946"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

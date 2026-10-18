@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>mapStyle is not a style</title>
+  <!--
+    ml-aot.14 — mapStyle points at a GeoJSON file. PASS = a card saying the
+    URL "isn't a valid MapLibre style" and naming the first problem.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/not-a-style.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; }
+    ml-map { display: block; height: 420px; margin-bottom: 16px; }
+    h2 { font-size: 14px; margin: 16px 0 6px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = card "The basemap style didn't load" … isn't a valid MapLibre style. FAIL = blank box.</header>
+  <main>
+    <ml-map id="map" src="configs/not-a-style.yaml"></ml-map>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

@@ -25,6 +25,7 @@ import { ExpressionSchema } from "../schemas/base.schema";
 import { GeoJSONSchema } from "../schemas/geojson.schema";
 import { SPEC_PAINT_KEYS, SPEC_LAYOUT_KEYS } from "./spec-keys.generated";
 import { getEffectsHost } from "../effects-host";
+import { suggest, spellingVariantOf } from "../utils/suggest";
 
 /**
  * A non-fatal validation finding surfaced alongside errors.
@@ -139,58 +140,9 @@ export const ZERO_ARG_OPERATORS = new Set<string>([
   "heatmap-density", "line-progress", "resolved-locale",
 ]);
 
-/**
- * Compute the Levenshtein edit distance between two strings.
- *
- * @remarks
- * Small hand-rolled implementation (iterative two-row DP) so we do not take on a
- * dependency just for did-you-mean hints.
- */
-export function levenshtein(a: string, b: string): number {
-  if (a === b) return 0;
-  if (a.length === 0) return b.length;
-  if (b.length === 0) return a.length;
-
-  let prev = new Array<number>(b.length + 1);
-  let curr = new Array<number>(b.length + 1);
-  for (let j = 0; j <= b.length; j++) prev[j] = j;
-
-  for (let i = 1; i <= a.length; i++) {
-    curr[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      curr[j] = Math.min(
-        prev[j]! + 1, // deletion
-        curr[j - 1]! + 1, // insertion
-        prev[j - 1]! + cost // substitution
-      );
-    }
-    [prev, curr] = [curr, prev];
-  }
-  return prev[b.length]!;
-}
-
-/**
- * Return the closest candidate to `input` within `maxDistance` edits, or
- * `undefined` when nothing is close enough.
- */
-export function suggest(
-  input: string,
-  candidates: Iterable<string>,
-  maxDistance = 2
-): string | undefined {
-  let best: string | undefined;
-  let bestDistance = maxDistance + 1;
-  for (const candidate of candidates) {
-    if (candidate === input) continue;
-    const distance = levenshtein(input, candidate);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = candidate;
-    }
-  }
-  return bestDistance <= maxDistance ? best : undefined;
-}
+// The did-you-mean primitives live in utils/suggest so the schemas can use
+// them without importing this module (which imports the schemas).
+export { levenshtein, suggest } from "../utils/suggest";
 
 /**
  * Build the canonical "unknown type" message for a layer or source.
@@ -537,6 +489,23 @@ function walk(
             ...(pos ? { line: pos.line, column: pos.column } : {}),
             ...(hint ? { suggestion: hint } : {}),
           });
+        } else {
+          // An open passthrough object (the map `config`, sources) forwards
+          // keys it does not list to MapLibre, so an unknown key there is
+          // usually legitimate — but `centre`/`mapstyle` is a typo for a key
+          // it DOES list, and passing it through silently drops the value
+          // (ml-okw). Only unambiguous variants (letter case, British
+          // spelling) warn; edit distance alone would flag real options.
+          const variant = spellingVariantOf(key, knownKeys);
+          if (variant && !(variant in value)) {
+            const pos = positionForKey(ctx.doc, ctx.lineCounter, path, key);
+            ctx.warnings.push({
+              path: [...path, key].join("."),
+              message: `Unknown key "${key}". Did you mean "${variant}"?`,
+              ...(pos ? { line: pos.line, column: pos.column } : {}),
+              suggestion: variant,
+            });
+          }
         }
       }
       return;
@@ -769,4 +738,163 @@ function checkExpression(
       ...(pos ? { line: pos.line, column: pos.column } : {}),
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Student-mistake detectors (ml-okw, ml-aot.15)
+// ---------------------------------------------------------------------------
+
+/**
+ * A key whose value YAML read as empty because an unquoted `#` started a
+ * comment: `circle-color: #ef4444` is `circle-color: null`.
+ */
+export interface HashCommentValue {
+  /** JSON path of the emptied value. */
+  path: (string | number)[];
+  /** The key as written. */
+  key: string;
+  /** What the author meant to write, `#` included (`#ef4444`). */
+  intended: string;
+  line?: number;
+  column?: number;
+}
+
+/**
+ * Find every value that is empty only because an unquoted `#` turned it into
+ * a comment — the single most common YAML mistake in a styling document
+ * (`circle-color: #ef4444`).
+ *
+ * @remarks
+ * Read from the AST: the `yaml` library keeps the swallowed text as the null
+ * scalar's `comment`. A comment counts as a lost value only when it sits on
+ * the key's own line and starts right after the `#` — `key: # a note` (with a
+ * space) is an ordinary comment on an intentionally empty key.
+ */
+export function findHashCommentValues(
+  doc: Document,
+  lineCounter: LineCounter
+): HashCommentValue[] {
+  const found: HashCommentValue[] = [];
+  const visitNode = (node: any, path: (string | number)[]): void => {
+    if (!node || typeof node !== "object" || !Array.isArray(node.items)) return;
+    node.items.forEach((item: any, index: number) => {
+      const isPair = item && typeof item === "object" && "key" in item && "value" in item;
+      if (!isPair) {
+        visitNode(item, [...path, index]);
+        return;
+      }
+      const key = item.key && typeof item.key === "object" ? item.key.value : item.key;
+      if (typeof key !== "string" && typeof key !== "number") return;
+      const childPath = [...path, key];
+      const value = item.value;
+      const comment: unknown = value?.comment;
+      if (
+        value &&
+        value.value === null &&
+        typeof comment === "string" &&
+        comment.length > 0 &&
+        !/^\s/.test(comment) &&
+        Array.isArray(item.key?.range) &&
+        Array.isArray(value.range)
+      ) {
+        // The empty value sits on the key's own line (its range end can run
+        // into trailing whitespace on the next one, so compare the start).
+        const keyPos = lineCounter.linePos(item.key.range[0]);
+        const valuePos = lineCounter.linePos(value.range[0]);
+        if (keyPos.line === valuePos.line) {
+          found.push({
+            path: childPath,
+            key: String(key),
+            intended: `#${comment.trim()}`,
+            line: keyPos.line,
+            column: keyPos.col,
+          });
+          return;
+        }
+      }
+      visitNode(value, childPath);
+    });
+  };
+  visitNode(doc.contents, []);
+  return found;
+}
+
+/**
+ * The message for a {@link HashCommentValue}: say that YAML ate the value
+ * and show the quoted fix.
+ */
+export function hashCommentMessage(finding: HashCommentValue): string {
+  const looksLikeColour = /^#[0-9a-fA-F]{3,8}$/.test(finding.intended);
+  const fix = `${finding.key}: "${finding.intended}"`;
+  return looksLikeColour
+    ? `Colours starting with # must be quoted: ${fix}. Without quotes, YAML reads # as the start of a comment, so this value is empty.`
+    : `This value is empty because YAML reads an unquoted # as the start of a comment. Put it in quotes: ${fix}`;
+}
+
+/**
+ * A YAML syntax error near an unquoted `#hex` (typically inside a flow map,
+ * `paint: { "circle-color": #ef4444 }`) gets a hint about quoting it.
+ *
+ * @param yaml - the document source
+ * @param line - the 1-based line the syntax error was reported at
+ */
+export function hashSyntaxHint(yaml: string, line: number | undefined): string | undefined {
+  if (line === undefined) return undefined;
+  const lines = yaml.split(/\r?\n/);
+  // The parser often reports the line AFTER the offending flow collection.
+  for (const candidate of [line - 1, line - 2, line]) {
+    const text = lines[candidate];
+    if (text && /[:,[{]\s*#[0-9a-fA-F]{3,8}\b/.test(text)) {
+      return (
+        'Hint: colours starting with # must be quoted, e.g. "#ef4444" — ' +
+        "YAML reads an unquoted # as the start of a comment."
+      );
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Warn when a layer's `source:` names a source the document does not
+ * declare but almost does (`citeis` for `cities`).
+ *
+ * @remarks
+ * Only a near-miss warns: a name matching nothing may be a source from the
+ * basemap style (`openmaptiles`), which is legitimate and only checkable at
+ * runtime — where the renderer reports a genuinely missing one on the page.
+ * v1 declares sources under `sources:`; v2 under `style.sources:`.
+ */
+export function checkSourceReferences(
+  value: unknown,
+  doc: Document,
+  lineCounter: LineCounter
+): ValidationWarning[] {
+  if (!isPlainObject(value)) return [];
+  const style = isPlainObject(value["style"]) ? value["style"] : undefined;
+  const v1 = Array.isArray(value["layers"]);
+  const declared = v1 ? value["sources"] : style?.["sources"];
+  const layers = v1 ? value["layers"] : style?.["layers"];
+  if (!isPlainObject(declared) || !Array.isArray(layers)) return [];
+  const layersPath = v1 ? ["layers"] : ["style", "layers"];
+  const names = Object.keys(declared);
+  const warnings: ValidationWarning[] = [];
+  layers.forEach((layer: unknown, index: number) => {
+    if (!isPlainObject(layer)) return;
+    const source = layer["source"];
+    if (typeof source !== "string" || names.includes(source)) return;
+    const hint = suggest(source, names);
+    if (!hint) return;
+    const path = [...layersPath, index, "source"];
+    const pos = positionForPath(doc, lineCounter, path);
+    const id = typeof layer["id"] === "string" ? `Layer "${layer["id"]}"` : "This layer";
+    warnings.push({
+      path: path.join("."),
+      message:
+        `${id} uses source "${source}", which is not declared under sources:. ` +
+        `Did you mean "${hint}"?`,
+      ...(pos ? { line: pos.line, column: pos.column } : {}),
+      suggestion: hint,
+    });
+  });
+  return warnings;
 }
