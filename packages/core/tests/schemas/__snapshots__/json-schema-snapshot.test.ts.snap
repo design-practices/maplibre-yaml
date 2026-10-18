@@ -3272,6 +3272,16 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               "default": "#3FB1CE",
               "description": "Chapter marker color"
             },
+            "cameraOffset": {
+              "type": "boolean",
+              "default": true,
+              "description": "Offset the camera so each chapter's \`center\` is not under its card (false: centre it in the whole map)"
+            },
+            "moveChrome": {
+              "type": "boolean",
+              "default": true,
+              "description": "Move the legend and corner slots out of a card's way as it scrolls past (false: they stay in their corners)"
+            },
             "layers": {
               "type": "array",
               "items": {
@@ -3386,6 +3396,48 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                     "type": "boolean",
                     "default": false,
                     "description": "Hide chapter content (map-only)"
+                  },
+                  "padding": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "top": {
+                            "type": "number",
+                            "minimum": 0,
+                            "default": 0,
+                            "description": "Pixels kept clear at the top"
+                          },
+                          "right": {
+                            "type": "number",
+                            "minimum": 0,
+                            "default": 0,
+                            "description": "Pixels kept clear on the right"
+                          },
+                          "bottom": {
+                            "type": "number",
+                            "minimum": 0,
+                            "default": 0,
+                            "description": "Pixels kept clear at the bottom"
+                          },
+                          "left": {
+                            "type": "number",
+                            "minimum": 0,
+                            "default": 0,
+                            "description": "Pixels kept clear on the left"
+                          }
+                        },
+                        "additionalProperties": false,
+                        "patternProperties": {
+                          "^x-": {}
+                        }
+                      }
+                    ],
+                    "description": "Camera padding in pixels for this chapter, used as written instead of the automatic offset that keeps \`center\` clear of the card"
                   },
                   "layers": {
                     "type": "object",
@@ -10849,6 +10901,16 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "default": "#3FB1CE",
                           "description": "Chapter marker color"
                         },
+                        "cameraOffset": {
+                          "type": "boolean",
+                          "default": true,
+                          "description": "Offset the camera so each chapter's \`center\` is not under its card (false: centre it in the whole map)"
+                        },
+                        "moveChrome": {
+                          "type": "boolean",
+                          "default": true,
+                          "description": "Move the legend and corner slots out of a card's way as it scrolls past (false: they stay in their corners)"
+                        },
                         "layers": {
                           "type": "array",
                           "items": {
@@ -10963,6 +11025,48 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "type": "boolean",
                                 "default": false,
                                 "description": "Hide chapter content (map-only)"
+                              },
+                              "padding": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "top": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "default": 0,
+                                        "description": "Pixels kept clear at the top"
+                                      },
+                                      "right": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "default": 0,
+                                        "description": "Pixels kept clear on the right"
+                                      },
+                                      "bottom": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "default": 0,
+                                        "description": "Pixels kept clear at the bottom"
+                                      },
+                                      "left": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "default": 0,
+                                        "description": "Pixels kept clear on the left"
+                                      }
+                                    },
+                                    "additionalProperties": false,
+                                    "patternProperties": {
+                                      "^x-": {}
+                                    }
+                                  }
+                                ],
+                                "description": "Camera padding in pixels for this chapter, used as written instead of the automatic offset that keeps \`center\` clear of the card"
                               },
                               "layers": {
                                 "type": "object",
@@ -11515,6 +11619,16 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
           "type": "string",
           "default": "#3FB1CE",
           "description": "Chapter marker color"
+        },
+        "cameraOffset": {
+          "type": "boolean",
+          "default": true,
+          "description": "Offset the camera so each chapter's \`center\` is not under its card (false: centre it in the whole map)"
+        },
+        "moveChrome": {
+          "type": "boolean",
+          "default": true,
+          "description": "Move the legend and corner slots out of a card's way as it scrolls past (false: they stay in their corners)"
         },
         "layers": {
           "type": "array",
@@ -14045,6 +14159,48 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                 "type": "boolean",
                 "default": false,
                 "description": "Hide chapter content (map-only)"
+              },
+              "padding": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "top": {
+                        "type": "number",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Pixels kept clear at the top"
+                      },
+                      "right": {
+                        "type": "number",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Pixels kept clear on the right"
+                      },
+                      "bottom": {
+                        "type": "number",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Pixels kept clear at the bottom"
+                      },
+                      "left": {
+                        "type": "number",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Pixels kept clear on the left"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  }
+                ],
+                "description": "Camera padding in pixels for this chapter, used as written instead of the automatic offset that keeps \`center\` clear of the card"
               },
               "layers": {
                 "type": "object",

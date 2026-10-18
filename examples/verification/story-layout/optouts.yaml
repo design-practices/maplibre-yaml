@@ -1,0 +1,64 @@
+type: scrollytelling
+id: story-optouts
+cameraOffset: false
+moveChrome: false
+showMarkers: true
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [0, 20]
+  zoom: 2
+controls:
+  scale: true
+legend:
+  position: bottom-left
+  title: Places
+  items:
+    - { label: Volcano, color: "#d62828" }
+    - { label: Town, color: "#f77f00" }
+    - { label: Port, color: "#3b82f6" }
+layers:
+  - id: pts
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [10, 40] } }
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [-20, 10] } }
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [60, -10] } }
+    paint: { circle-radius: 8, circle-color: "#d62828" }
+chapters:
+  - id: intro
+    title: A left card with a photo
+    image: photo.svg
+    description: "<p>Read me. The legend and the scale bar must stay visible while this card scrolls past.</p>"
+    center: [10, 40]
+    zoom: 3
+    alignment: left
+  - id: gap
+    title: A map-only moment
+    hidden: true
+    center: [-20, 10]
+    zoom: 3
+  - id: centred
+    title: A centred card with a photo
+    image: photo.svg
+    description: "<p>The centred card keeps the chapter's centre above it.</p>"
+    center: [-20, 10]
+    zoom: 4
+  - id: full
+    title: A full-width card with a photo
+    image: photo.svg
+    description: "<p>A full-width card: its photo is capped, so it never fills the map.</p>"
+    center: [60, -10]
+    zoom: 4
+    alignment: full
+  - id: right
+    padding: { top: 0, right: 0, bottom: 0, left: 300 }
+    title: A right card
+    description: "<p>The last chapter.</p>"
+    center: [10, 40]
+    zoom: 2
+    alignment: right
+footer: "<p>The footer scrolls over the map too: the legend must stay clear of it.</p>"

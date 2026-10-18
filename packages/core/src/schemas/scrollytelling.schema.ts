@@ -332,6 +332,20 @@ export const ChapterSchema = z
       .boolean()
       .default(false)
       .describe("Hide chapter content (map-only)"),
+    padding: z
+      .union([
+        z.number().min(0),
+        z.object({
+          top: z.number().min(0).default(0).describe("Pixels kept clear at the top"),
+          right: z.number().min(0).default(0).describe("Pixels kept clear on the right"),
+          bottom: z.number().min(0).default(0).describe("Pixels kept clear at the bottom"),
+          left: z.number().min(0).default(0).describe("Pixels kept clear on the left"),
+        }),
+      ])
+      .optional()
+      .describe(
+        "Camera padding in pixels for this chapter, used as written instead of the automatic offset that keeps `center` clear of the card"
+      ),
 
     // Layers
     layers: ChapterLayersSchema.optional().describe("Layer visibility control"),
@@ -494,6 +508,20 @@ export const ScrollytellingBlockSchema: z.ZodObject<any> = z
       .default(false)
       .describe("Show chapter markers on map"),
     markerColor: z.string().default("#3FB1CE").describe("Chapter marker color"),
+
+    // Layout helpers (both on by default)
+    cameraOffset: z
+      .boolean()
+      .default(true)
+      .describe(
+        "Offset the camera so each chapter's `center` is not under its card (false: centre it in the whole map)"
+      ),
+    moveChrome: z
+      .boolean()
+      .default(true)
+      .describe(
+        "Move the legend and corner slots out of a card's way as it scrolls past (false: they stay in their corners)"
+      ),
 
     // Layers (persistent across all chapters)
     layers: z

@@ -645,6 +645,49 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     });
   }
 
+  test("opt-outs: cameraOffset: false, moveChrome: false, and a chapter's own padding (review N4)", async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    const errors = await guard(page, baseURL!);
+    await page.goto("/examples/verification/story-layout/index.html?doc=optouts", { waitUntil: "domcontentloaded" });
+    await storyReady(page, "pts");
+    const at = (id: string) =>
+      page.evaluate((chapterId) => {
+        const el = document.querySelector("ml-scrollytelling") as any;
+        const map = el.getMap();
+        const chapter = el.story.chapters.find((c: any) => c.id === chapterId);
+        const box = el.querySelector(".scrolly-map-container").getBoundingClientRect();
+        const p = map.project(chapter.center);
+        const corner = document.querySelector(".ml-map-legend")!.closest<HTMLElement>(".ml-map-chrome")!;
+        return {
+          x: p.x / box.width,
+          y: p.y / box.height,
+          padding: map.getPadding(),
+          chromeMoved: corner.style.getPropertyValue("--ml-scrolly-chrome-bottom") !== "" || corner.style.getPropertyValue("--ml-scrolly-chrome-x") !== "",
+        };
+      }, id);
+    // cameraOffset: false -- a left card's chapter is at the map's centre.
+    await scrollToChapter(page, "intro");
+    await settled(page);
+    const intro = await at("intro");
+    expect(intro.x).toBeCloseTo(0.5, 1);
+    expect(intro.y).toBeCloseTo(0.5, 1);
+    // A chapter's own padding is used as written.
+    await scrollToChapter(page, "right");
+    await settled(page);
+    const right = await at("right");
+    expect(right.padding).toEqual({ top: 0, right: 0, bottom: 0, left: 300 });
+    // moveChrome: false -- the legend never moves, at any scroll position.
+    const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+    for (let y = 0; y <= end; y += 200) {
+      await page.evaluate((to) => scrollTo(0, to), y);
+      await settle(page);
+      expect((await at("intro")).chromeMoved, `legend moved at ${y}`).toBe(false);
+    }
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+
   test("a short desktop window (mouse) keeps a centred card centred; only touch screens get the side cards (review N2)", async ({
     browser,
     baseURL,

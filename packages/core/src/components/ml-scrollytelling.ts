@@ -1082,6 +1082,12 @@ export class MLScrollytelling extends HTMLElement {
    */
   private cameraPadding(chapter: Chapter): CameraPadding | undefined {
     const zero: CameraPadding = { top: 0, right: 0, bottom: 0, left: 0 };
+    // The author's own padding, as written; or no offset at all when the
+    // story turns it off (review N4).
+    const own = (chapter as { padding?: number | Partial<CameraPadding> }).padding;
+    if (typeof own === "number") return { top: own, right: own, bottom: own, left: own };
+    if (own && typeof own === "object") return { ...zero, ...own };
+    if ((this._story as { cameraOffset?: boolean } | null)?.cameraOffset === false) return zero;
     const mapBox = this.querySelector(":scope > .scrolly-map-container")?.getBoundingClientRect();
     const section = this.sectionFor(chapter.id);
     const card = section?.querySelector<HTMLElement>(".chapter-content");
@@ -1130,6 +1136,8 @@ export class MLScrollytelling extends HTMLElement {
   private placeChrome(): void {
     const container = this.querySelector<HTMLElement>(":scope > .scrolly-map-container");
     if (!container) return;
+    // `moveChrome: false`: the legend and slots stay in their corners (N4).
+    if ((this._story as { moveChrome?: boolean } | null)?.moveChrome === false) return;
     const mapBox = container.getBoundingClientRect();
     if (mapBox.height === 0) return;
     // Only cards near the viewport can cover the map (review N1).

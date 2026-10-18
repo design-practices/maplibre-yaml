@@ -81,6 +81,8 @@ footer: "..."        # Optional footer HTML
 | `theme` | `"light"` \| `"dark"` | No | `"light"` | Visual theme |
 | `showMarkers` | boolean | No | `false` | Show a navigation rail: one dot per chapter at the right edge of the page, which readers can click to jump to a chapter. It does not put markers on the map |
 | `markerColor` | string | No | `"#3FB1CE"` | Color of the rail's dots |
+| `cameraOffset` | boolean | No | `true` | Offset the camera so each chapter's `center` isn't under its card (beside a left/right card, above a centred one, above the card on a phone). `false` centres it in the whole map. A chapter's own `padding` always wins |
+| `moveChrome` | boolean | No | `true` | Move the legend and corner slots out of a card's way while it scrolls past them (never onto the map's controls or notice). `false` keeps them in their corners |
 | `layers` | array | No | `[]` | Persistent layers |
 | `footer` | string | No | - | Footer HTML content |
 | `sources`, `markers`, `legend`, `state`, `parameters`, `popups`, `images`, `controls`, `terrain`, `sky`, `projection`, `light` | - | No | - | The story's map takes every map-level key a [`type: map` document](/schema/map-config/) does, with the same schema (see [Map-level keys](#map-level-keys)) |
@@ -149,6 +151,7 @@ of them is taken to be a basemap layer and is not flagged.
 |----------|------|---------|-------------|
 | `alignment` | string | `"center"` | Content position: `left`, `right`, `center`, `full` |
 | `hidden` | boolean | `false` | Hide chapter content (map-only) |
+| `padding` | number or `{ top, right, bottom, left }` | — | Camera padding in pixels for this chapter, used as written instead of the automatic offset that keeps `center` clear of the card |
 
 ## Basic Example
 
