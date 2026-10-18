@@ -53,17 +53,17 @@ import LiveMap from "../../components/LiveMap.astro";
 type: map
 id: my-first-map
 config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  center: [-90, 38]
+  zoom: 3.5
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
-  - id: bike-lanes
+  - id: rivers
     type: line
     source:
       type: geojson
-      url: "https://data.cityofnewyork.us/resource/bikes.geojson"
+      url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines.geojson"
     paint:
-      line-color: "#00ff00"
+      line-color: "#2563eb"
       line-width: 2
 controls:
   navigation: true

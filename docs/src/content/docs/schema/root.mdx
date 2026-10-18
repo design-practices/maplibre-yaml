@@ -57,7 +57,7 @@ Configure how data is fetched across all maps:
 config:
   title: "My Map Application"
   description: "Interactive maps and data visualization"
-  defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+  defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
   theme: dark
   dataFetching:
     defaultStrategy: build
@@ -88,9 +88,10 @@ layers:
     type: symbol
     source:
       type: geojson
-      url: "https://example.com/cities.geojson"
+      url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_populated_places_simple.geojson"
     layout:
       text-field: ["get", "name"]
+      text-font: ["Noto Sans Regular"] # a font the basemap's glyphs include
       text-size: 12
 
 pages:
@@ -146,7 +147,7 @@ Sources declared in the **root** `sources:` map (next to `pages:`) can be shared
 sources:
   boundaries:
     type: geojson
-    url: "https://example.com/boundaries.geojson"
+    url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
 
 pages:
   - path: "/"
@@ -195,7 +196,7 @@ See [Pages & Blocks](/schema/pages/) for detailed page configuration.
 config:
   title: "Earthquake Monitoring"
   description: "Real-time earthquake visualization"
-  defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+  defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
   theme: dark
   dataFetching:
     defaultStrategy: runtime
@@ -332,7 +333,7 @@ import { type RootConfig, type GlobalConfig } from '@maplibre-yaml/core/schemas'
 const config: RootConfig = {
   config: {
     title: "My App",
-    defaultMapStyle: "https://example.com/style.json",
+    defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty",
     theme: "dark"
   },
   pages: [

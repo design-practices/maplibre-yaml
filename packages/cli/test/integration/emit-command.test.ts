@@ -64,6 +64,28 @@ layers:
     expect(style.version).toBe(8);
   });
 
+  it('writes style.json inside a folder given as --out dist/ (not a file named dist)', async () => {
+    const dir = await mkdir();
+    const doc = join(dir, 'map.yaml');
+    await writeFile(doc, DOC);
+
+    await execAsync(`node "${CLI}" emit "${doc}" --out dist/`, { cwd: dir });
+    const style = JSON.parse(await readFile(join(dir, 'dist', 'style.json'), 'utf-8'));
+    expect(style.version).toBe(8);
+  });
+
+  it('writes style.json inside an existing folder given without a trailing slash', async () => {
+    const dir = await mkdir();
+    const doc = join(dir, 'map.yaml');
+    await writeFile(doc, DOC);
+    const { mkdir: mkdirp } = await import('node:fs/promises');
+    await mkdirp(join(dir, 'out'));
+
+    await execAsync(`node "${CLI}" emit "${doc}" --out out`, { cwd: dir });
+    const style = JSON.parse(await readFile(join(dir, 'out', 'style.json'), 'utf-8'));
+    expect(style.version).toBe(8);
+  });
+
   it('fails with a non-zero exit on an invalid document', async () => {
     const dir = await mkdir();
     const doc = join(dir, 'bad.yaml');

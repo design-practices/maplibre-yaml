@@ -12,6 +12,12 @@ Interactivity in maplibre-yaml is primarily configured through:
 - **Legends** - Interactive layer information
 - **Layer Interactions** - Click, hover, and pointer events (configured at layer level)
 
+Most snippets on this page are fragments. One that starts with `config:`,
+`controls:`, `legend:`, `interactive:` or `- id:` shows a single part of a map
+document and goes inside a complete one. The documents under
+[Complete Examples](#complete-examples), and any snippet that starts with
+`type: map`, run as printed.
+
 ## Map Controls
 
 Map controls provide standard UI elements for map interaction. See [Map Configuration](/schema/map-config/) for detailed control configuration.
@@ -136,7 +142,7 @@ config:
   center: [-74.006, 40.7128]
   zoom: 12
   interactive: false
-  mapStyle: "..."
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ### Selective Interactions
@@ -152,7 +158,7 @@ config:
   dragRotate: false      # Disable rotation
   touchPitch: false      # Disable pitch on mobile
   doubleClickZoom: false # Disable double-click zoom
-  mapStyle: "..."
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ### Interaction Properties
@@ -173,13 +179,15 @@ config:
 
 Layers declare interactivity through an `interactive:` block. These are real
 schema fields handled by the renderer — not something you wire up yourself.
+This layer entry (it goes under a document's `layers:`) reads the live USGS
+earthquake feed, whose features carry `title` and `place` properties:
 
 ```yaml
-- id: stations
+- id: quakes
   type: circle
   source:
     type: geojson
-    url: "https://example.com/stations.geojson"
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     generateId: true
   paint:
     circle-radius: 8
@@ -190,10 +198,10 @@ schema fields handled by the renderer — not something you wire up yourself.
       highlight: true
     click:
       popup:
-        - h3: [{ property: name }]
-        - p: [{ property: description }]
+        - h3: [{ property: title }]
+        - p: [{ property: place }]
       flyTo:
-        zoom: 14
+        zoom: 8
         duration: 600
 ```
 
@@ -203,7 +211,7 @@ schema fields handled by the renderer — not something you wire up yourself.
 |----------|------|-------------|
 | `cursor` | string | CSS cursor while the pointer is over a feature |
 | `highlight` | boolean | Recolour the hovered feature |
-| `popup` | popup content | Chromeless preview popup while hovering (once per feature entered, dismissed on leave). A pinned `click.popup` suppresses hover previews until dismissed; touch devices tap into `click.popup` instead |
+| `popup` | popup content | Same content format as `click.popup` ([Popups](/schema/layers/#popups)). Chromeless preview popup while hovering (once per feature entered, dismissed on leave). A pinned `click.popup` suppresses hover previews until dismissed; touch devices tap into `click.popup` instead |
 
 `highlight: true` wraps the layer's primary colour in a `feature-state` expression
 for you, so no paint authoring is required. Two things follow from how
@@ -225,7 +233,7 @@ highlight state.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `popup` | array | Popup content blocks (see [Popups](/schema/layers/#popups)) |
+| `popup` | array | Popup content: tags, items, links, number formats (see [Popups](/schema/layers/#popups)) |
 | `flyTo` | object | Animate the camera to the clicked feature |
 | `emit` | object | Dispatch a named host event with a payload projected from the feature |
 
@@ -264,17 +272,17 @@ Each `payload` key is projected independently:
 ```yaml
 version: 1
 type: map
-id: parcels-map
+id: quake-select
 config:
-  center: [-73.98, 40.75]
-  zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
-  - id: parcels
+  - id: quakes
     type: circle
     source:
       type: geojson
-      url: "https://example.com/parcels.geojson"
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
       generateId: true
     paint:
       circle-radius: 6
@@ -285,12 +293,12 @@ layers:
           event: select
           payload:
             id:
-              property: id
+              property: code
             label:
-              property: name
+              property: place
               else: "Untitled"
             kind:
-              str: parcel
+              str: earthquake
 ```
 
 A missing or null property yields a **defined-absent** value: the key stays in
@@ -362,7 +370,7 @@ and leave `highlight` off:
   type: fill
   source:
     type: geojson
-    url: "https://example.com/regions.geojson"
+    url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
     generateId: true
   paint:
     fill-color:
@@ -399,7 +407,7 @@ config:
   center: [0, 0]
   zoom: 2
   keyboard: false
-  mapStyle: "..."
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ## Touch Interactions
@@ -414,7 +422,7 @@ config:
   zoom: 2
   touchZoomRotate: true
   touchPitch: true
-  mapStyle: "..."
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ### Disable Pitch on Touch
@@ -427,7 +435,7 @@ config:
   zoom: 2
   touchZoomRotate: true
   touchPitch: false
-  mapStyle: "..."
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ## URL Hash Syncing
@@ -439,7 +447,7 @@ config:
   center: [-74.006, 40.7128]
   zoom: 12
   hash: true  # Enable URL hash syncing
-  mapStyle: "..."
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 When enabled, the URL will update as users interact with the map:
@@ -456,152 +464,171 @@ The map automatically changes the cursor to indicate interactivity:
 
 ## Complete Examples
 
+Each example is a complete document: save it as a `.yaml` file and load it
+with `<ml-map src="…">`.
+
 ### Fully Interactive Map
 
 ```yaml
-- type: map
-  id: interactive-map
-  config:
-    center: [-74.006, 40.7128]
-    zoom: 12
-    hash: true
-    mapStyle: "https://demotiles.maplibre.org/style.json"
-  layers:
-    - id: buildings
-      type: fill
-      source:
-        type: geojson
-        url: "https://example.com/buildings.geojson"
-      paint:
-        fill-color:
-          - case
-          - ["boolean", ["feature-state", "hover"], false]
-          - "#3b82f6"
-          - "#cbd5e1"
-        fill-opacity: 0.7
-  controls:
-    navigation: true
-    geolocate: true
-    scale: true
-    fullscreen: true
-  legend:
-    title: "Buildings"
-    position: top-right
-    items:
-      - color: "#cbd5e1"
-        label: "Building"
-        shape: square
-      - color: "#3b82f6"
-        label: "Hovered"
-        shape: square
+type: map
+id: interactive-map
+config:
+  center: [-98, 39]
+  zoom: 3
+  hash: true
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: states
+    type: fill
+    source:
+      type: geojson
+      url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
+      generateId: true
+    paint:
+      fill-color:
+        - case
+        - ["boolean", ["feature-state", "hover"], false]
+        - "#3b82f6"
+        - "#cbd5e1"
+      fill-opacity: 0.7
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: STATE_NAME
+controls:
+  navigation: true
+  geolocate: true
+  scale: true
+  fullscreen: true
+legend:
+  title: "US states"
+  position: top-right
+  items:
+    - color: "#cbd5e1"
+      label: "State"
+      shape: square
+    - color: "#3b82f6"
+      label: "Hovered"
+      shape: square
 ```
 
 ### Limited Interaction Map
 
 ```yaml
-- type: map
-  id: limited-map
-  config:
-    center: [0, 20]
-    zoom: 2
-    scrollZoom: true
-    dragPan: true
-    dragRotate: false
-    touchPitch: false
-    doubleClickZoom: false
-    keyboard: false
-    minZoom: 1
-    maxZoom: 8
-    mapStyle: "https://demotiles.maplibre.org/style.json"
-  layers:
-    - id: data-layer
-      type: circle
-      source:
-        type: geojson
-        url: "https://example.com/data.geojson"
-      paint:
-        circle-radius: 6
-        circle-color: "#3b82f6"
-  controls:
-    navigation: true
-    scale: true
-  legend:
-    title: "Data Points"
-    position: top-left
+type: map
+id: limited-map
+config:
+  center: [0, 20]
+  zoom: 2
+  scrollZoom: true
+  dragPan: true
+  dragRotate: false
+  touchPitch: false
+  doubleClickZoom: false
+  keyboard: false
+  minZoom: 1
+  maxZoom: 8
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: quakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#3b82f6"
+    legend:
+      color: "#3b82f6"
+      label: "Earthquake"
+      shape: circle
+controls:
+  navigation: true
+  scale: true
+legend:
+  title: "Earthquakes this week"
+  position: top-left
 ```
 
 ### Static Presentation Map
 
 ```yaml
-- type: map
-  id: static-map
-  style: "height: 500px;"
-  config:
-    center: [-74.006, 40.7128]
-    zoom: 12
-    pitch: 45
-    bearing: -30
-    interactive: false
-    attributionControl: false
-    mapStyle: "https://demotiles.maplibre.org/style.json"
-  layers:
-    - id: buildings
-      type: fill-extrusion
-      source:
-        type: vector
-        url: "https://demotiles.maplibre.org/tiles/tiles.json"
-      source-layer: building
-      paint:
-        fill-extrusion-color: "#aaa"
-        fill-extrusion-height: ["get", "height"]
-        fill-extrusion-opacity: 0.8
-  legend:
-    title: "3D Buildings"
-    position: bottom-right
-    items:
-      - color: "#aaa"
-        label: "Building"
-        shape: square
+type: map
+id: static-map
+config:
+  center: [-74.006, 40.7128]
+  zoom: 15
+  pitch: 45
+  bearing: -30
+  interactive: false
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+sources:
+  omt:
+    type: vector
+    url: "https://tiles.openfreemap.org/planet"
+layers:
+  - id: buildings
+    type: fill-extrusion
+    source: omt
+    source-layer: building
+    paint:
+      fill-extrusion-color: "#aaaaaa"
+      fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
+      fill-extrusion-opacity: 0.8
+legend:
+  title: "3D Buildings"
+  position: bottom-right
+  items:
+    - color: "#aaaaaa"
+      label: "Building"
+      shape: square
 ```
 
 ### Touch-Optimized Mobile Map
 
 ```yaml
-- type: map
-  id: mobile-map
-  config:
-    center: [-74.006, 40.7128]
-    zoom: 12
-    touchZoomRotate: true
-    touchPitch: false        # Disable pitch to prevent accidental tilts
-    dragRotate: false        # Disable rotation
-    keyboard: false          # Not needed on mobile
-    mapStyle: "https://demotiles.maplibre.org/style.json"
-  layers:
-    - id: points
-      type: circle
-      source:
-        type: geojson
-        url: "https://example.com/points.geojson"
-      paint:
-        circle-radius: 12     # Larger for touch targets
-        circle-color: "#3b82f6"
-        circle-stroke-width: 2
-        circle-stroke-color: "#ffffff"
-  controls:
-    navigation:
-      enabled: true
-      position: top-right
-    geolocate:
-      enabled: true
-      position: top-right
-    scale:
-      enabled: true
-      position: bottom-left
-  legend:
-    title: "Locations"
-    position: top-left
-    collapsed: true          # Start collapsed on mobile
+type: map
+id: mobile-map
+config:
+  center: [-120, 37]
+  zoom: 4
+  touchZoomRotate: true
+  touchPitch: false        # Disable pitch to prevent accidental tilts
+  dragRotate: false        # Disable rotation
+  keyboard: false          # Not needed on mobile
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: quakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 12     # Larger for touch targets
+      circle-color: "#3b82f6"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+    legend:
+      color: "#3b82f6"
+      label: "Earthquake"
+      shape: circle
+controls:
+  navigation:
+    enabled: true
+    position: top-right
+  geolocate:
+    enabled: true
+    position: top-right
+  scale:
+    enabled: true
+    position: bottom-left
+legend:
+  title: "Earthquakes"
+  position: top-left
+  collapsed: true          # Start collapsed on mobile
 ```
 
 ## Best Practices
@@ -656,7 +683,7 @@ const legend: LegendConfig = {
 const interactiveConfig: MapConfig = {
   center: [-74.006, 40.7128],
   zoom: 12,
-  mapStyle: "https://demotiles.maplibre.org/style.json",
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
   interactive: true,
   scrollZoom: true,
   dragPan: true,

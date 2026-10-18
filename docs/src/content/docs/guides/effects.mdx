@@ -52,11 +52,11 @@ config:
   zoom: 15.9
   pitch: 60
   bearing: 29
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 images:
-  building-hatch: { url: "https://example.com/hatch/building.png", pixelRatio: 4 }
+  building-hatch: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/building-fallback.png", pixelRatio: 4 }
   # the 3x3 tonal atlas tonal-hatch samples (Tangram's hatch.png)
-  hatch-atlas: { url: "https://example.com/hatch/hatch-atlas.png" }
+  hatch-atlas: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/hatch-atlas.png" }
 sources:
   omt:
     type: vector
@@ -117,7 +117,7 @@ From a CDN with an import map:
   { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core/register.js";
+  import "https://unpkg.com/@maplibre-yaml/core@0.7/register.js";
   import "https://unpkg.com/@maplibre-yaml/effects/register.js";
 </script>
 ```

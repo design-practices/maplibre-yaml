@@ -79,14 +79,18 @@ Includes:
 
 ### YAML Schema Settings
 
-Add to `.vscode/settings.json` for autocomplete:
+For autocomplete, hover docs and as-you-type checks, install the Red Hat
+**YAML** extension (`redhat.vscode-yaml`) and add to `.vscode/settings.json`:
 
 ```json
 {
   "yaml.schemas": {
-    "https://raw.githubusercontent.com/design-practices/maplibre-yaml/main/schemas/map-block.json": [
+    "https://docs.maplibre-yaml.org/schema/latest/map.schema.json": [
       "configs/**/*.yaml",
-      "*.map.yaml"
+      "**/*.map.yaml"
+    ],
+    "https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json": [
+      "**/*.story.yaml"
     ]
   },
   "files.associations": {
@@ -95,6 +99,16 @@ Add to `.vscode/settings.json` for autocomplete:
   }
 }
 ```
+
+Or skip the settings and put a modeline on the first line of each file, as
+the files `init` creates do:
+
+```yaml no-validate
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+```
+
+[Editor Setup](/guides/editor-setup/) covers both, the other block schemas,
+and offline use.
 
 [Download complete settings.json](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/settings.json)
 
@@ -148,7 +162,7 @@ This enables VSCode to:
 The `--format vscode` flag produces Problem Matcher-compatible output:
 
 ```bash
-maplibre-yaml validate config.yaml --format vscode
+npx @maplibre-yaml/cli validate config.yaml --format vscode
 ```
 
 Output:

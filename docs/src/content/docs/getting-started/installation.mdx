@@ -3,7 +3,15 @@ title: Installation
 description: How to install maplibre-yaml in your project
 ---
 
-import { Tabs, TabItem } from "@astrojs/starlight/components";
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+There are two ways to load maplibre-yaml:
+
+- **From a CDN, in a plain HTML page.** No install and no build step: you
+  write an HTML file and a YAML file and serve the folder. Start here if you
+  are new. See [Browser usage (CDN)](#browser-usage-cdn).
+- **From npm, with a bundler** such as Vite. See
+  [Using a bundler (Vite)](#using-a-bundler-vite).
 
 ## Supported maplibre-gl versions
 
@@ -21,7 +29,7 @@ module, which works as-is from a CDN or any static server.
 **Bundlers (Vite, webpack, …) on v6:** inside a bundle MapLibre cannot find its
 worker, and every map fails with *"Worker failed to load"* (maplibre-yaml's
 `ml-map:error` then spells out this fix). Tell MapLibre where the worker is
-before the first map renders — with Vite:
+in the same entry file that imports maplibre-yaml. With Vite:
 
 ```ts
 import { setWorkerUrl } from "maplibre-gl";
@@ -30,7 +38,8 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 setWorkerUrl(workerUrl);
 ```
 
-The `@maplibre-yaml/astro` components do this for you. v4 and v5 need nothing.
+The full setup is under [Using a bundler (Vite)](#using-a-bundler-vite). The
+`@maplibre-yaml/astro` components do this for you. v4 and v5 need nothing.
 
 ## Package installation
 
@@ -74,12 +83,21 @@ MapLibre GL JS requires its CSS for proper rendering. Add it to your HTML or imp
 
 ## Browser usage (CDN)
 
-For quick prototypes or simple pages, you can use maplibre-yaml directly from a CDN — no build tools needed. An [import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap) tells the browser where to find `maplibre-gl`, which is kept external (not bundled):
+For quick prototypes, class projects and simple pages, you can use
+maplibre-yaml directly from a CDN: no install, no build tools. An
+[import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap)
+tells the browser where to find `maplibre-gl`, which the register bundle keeps
+external (not bundled). Leave it out and the page stays blank, with
+*Failed to resolve module specifier "maplibre-gl"* in the console.
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8" />
+    <!-- Without this line, phones lay the page out at desktop width and the map looks tiny -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My map</title>
     <link
       href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
       rel="stylesheet"
@@ -97,14 +115,27 @@ For quick prototypes or simple pages, you can use maplibre-yaml directly from a 
     <!-- Register the <ml-map> web component -->
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
     ></script>
   </head>
   <body>
-    <ml-map src="/map.yaml"></ml-map>
+    <ml-map src="./map.yaml"></ml-map>
   </body>
 </html>
 ```
+
+Serve the folder with any static web server, for example `npx serve .`, and
+open the address it prints. Opening the HTML file directly (a `file://`
+address) does not work: the browser blocks the page from fetching `map.yaml`.
+
+### Versions in CDN URLs
+
+`@maplibre-yaml/core@0.7` in the URL means "the newest 0.7.x release": you get
+bug fixes automatically, and a later 0.8 with breaking changes never arrives
+by surprise in the middle of a term. Change the number on purpose when you
+upgrade. `maplibre-gl@6` works the same way for MapLibre.
+
+### JavaScript API from a CDN
 
 To use the JavaScript API (`YAMLParser`, `MapRenderer`) from a CDN instead of the web component, import the package from esm.sh, which resolves `yaml` and `zod` for you. Keep the same import map and add `?external=maplibre-gl` so the library uses the maplibre-gl you pinned, not a second copy chosen by esm.sh:
 
@@ -116,11 +147,66 @@ To use the JavaScript API (`YAMLParser`, `MapRenderer`) from a CDN instead of th
   import {
     YAMLParser,
     MapRenderer,
-  } from "https://esm.sh/@maplibre-yaml/core?external=maplibre-gl";
+  } from "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl";
 
   // Your map code here
 </script>
 ```
+
+## Using a bundler (Vite)
+
+With npm and a bundler, your entry file does three things: point maplibre-gl 6
+at its worker, register `<ml-map>`, and load MapLibre's CSS. Starting from a
+new Vite project:
+
+```bash
+npm create vite@latest my-map -- --template vanilla
+cd my-map
+npm install @maplibre-yaml/core maplibre-gl@^6
+```
+
+Replace the contents of `src/main.js` with:
+
+```javascript
+// src/main.js
+// maplibre-gl 6 loads its worker from a separate file. Inside a Vite bundle it
+// cannot find that file by itself, so tell it where it is.
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import "@maplibre-yaml/core/register";
+import "maplibre-gl/dist/maplibre-gl.css";
+
+setWorkerUrl(workerUrl);
+```
+
+Replace the `<body>` of `index.html` with:
+
+```html
+<body style="margin: 0;">
+  <ml-map src="./map.yaml" style="display: block; height: 100vh;"></ml-map>
+  <script type="module" src="/src/main.js"></script>
+</body>
+```
+
+Put `map.yaml` in the **`public/`** folder (`public/map.yaml`), together with
+any data files it loads. Vite serves `public/` at the site root during
+`npm run dev` and copies it into `dist/` on `npm run build`.
+
+<Aside type="caution" title="YAML next to index.html works in dev, then breaks">
+A `map.yaml` next to `index.html` loads in `npm run dev`, but `npm run build`
+does not copy it: Vite only bundles files your code imports. The built site
+then answers the request with `index.html`, and the map shows
+*YAML syntax error … `<!doctype html>`*. Keep every file that `src=` or a
+`url:` in your YAML points at in `public/`.
+</Aside>
+
+`npm run dev` shows the map; `npm run build` then `npm run preview` serves
+the production build. On maplibre-gl 4 or 5, delete the two worker lines and
+the `setWorkerUrl` call (there is no worker file to import, and the build
+fails if you keep them).
+
+The same entry-file setup applies to other bundlers and frameworks: see
+[Framework Compatibility](/integrations/web-components/#framework-compatibility).
 
 ## Web component registration
 
@@ -134,8 +220,8 @@ Then use it in your HTML:
 
 ```html
 <ml-map
-  style="width: 100%; height: 400px;"
-  config='{"type":"map","id":"my-map","config":{"center":[-74,40],"zoom":10,"mapStyle":"https://demotiles.maplibre.org/style.json"},"layers":[]}'
+  style="display: block; width: 100%; height: 400px;"
+  config='{"type":"map","id":"my-map","config":{"center":[-74,40.7],"zoom":10,"mapStyle":"https://tiles.openfreemap.org/styles/liberty"},"layers":[]}'
 >
 </ml-map>
 ```
@@ -154,7 +240,8 @@ const mapBlock: MapBlock = YAMLParser.parseMapBlock(yamlString);
 
 ## Verify installation
 
-Create a simple test to verify everything is working:
+Check that the parser loads and validates a document (this checks parsing
+only; a map still needs a page to render in):
 
 ```javascript
 import { YAMLParser } from "@maplibre-yaml/core";
@@ -165,14 +252,14 @@ id: test
 config:
   center: [0, 0]
   zoom: 2
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers: []
 `;
 
 const result = YAMLParser.safeParseMapBlock(yaml);
 
 if (result.success) {
-  console.log("✓ maplibre-yaml is working!");
+  console.log("✓ maplibre-yaml parsed the document");
   console.log("  Map ID:", result.data.id);
 } else {
   for (const error of result.errors) {
@@ -183,4 +270,7 @@ if (result.success) {
 
 ## Next steps
 
-Now that you have maplibre-yaml installed, let's [create your first map](/getting-started/quick-start/).
+Now that you have maplibre-yaml installed, follow the
+[Quick Start](/getting-started/quick-start/) to build your first map, then
+read [Your First Map](/getting-started/first-map/) for what each part of the
+YAML does.

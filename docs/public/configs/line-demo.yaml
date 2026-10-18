@@ -4,7 +4,7 @@ id: line-demo
 config:
   center: [-122.4, 37.75]
   zoom: 11
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: route
     type: line

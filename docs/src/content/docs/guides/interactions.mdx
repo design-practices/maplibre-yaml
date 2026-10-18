@@ -30,20 +30,20 @@ Every interaction lives under a layer's `interactive:` block, split into a
 ```yaml
 version: 1
 type: map
-id: stations-map
+id: cities-map
 config:
-  center: [-73.98, 40.75]
-  zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  center: [10, 30]
+  zoom: 1.5
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
-  - id: stations
+  - id: cities
     type: circle
     source:
       type: geojson
-      url: "https://example.com/stations.geojson"
+      url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_populated_places_simple.geojson"
       generateId: true
     paint:
-      circle-radius: 8
+      circle-radius: 6
       circle-color: "#3b82f6"
     interactive:
       hover:
@@ -52,10 +52,10 @@ layers:
       click:
         popup:
           - h3: [{ property: name }]
-          - p: [{ property: description }]
+          - p: [{ property: adm0name }]
         zoomToFeature:
           padding: 40
-          maxZoom: 16
+          maxZoom: 9
           duration: 300
 ```
 
@@ -145,8 +145,8 @@ const handle = attachInteractions(map, projection, {
 });
 
 // The returned InteractionsHandle drives the lifecycle:
-handle.resetFeatureState("stations"); // drop hover state after a data refresh
-handle.detach("stations");            // release one layer's listeners
+handle.resetFeatureState("cities");   // drop hover state after a data refresh
+handle.detach("cities");              // release one layer's listeners
 handle.destroy();                     // release everything, remove any popup
 ```
 
@@ -180,17 +180,17 @@ control to host code, it is gated, and the gate is the point.
 ```yaml
 version: 1
 type: map
-id: parcels-map
+id: states-map
 config:
-  center: [-73.98, 40.75]
-  zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  center: [-96, 38]
+  zoom: 3
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
-  - id: parcels
+  - id: states
     type: fill
     source:
       type: geojson
-      url: "https://example.com/parcels.geojson"
+      url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
       generateId: true
     paint:
       fill-color: "#2563eb"
@@ -200,8 +200,8 @@ layers:
         emit:
           event: select-feature
           payload:
-            id: { property: pid }
-            kind: { str: parcel }
+            id: { property: STATE_ID }
+            kind: { str: state }
 ```
 
 `emit` fires only through `attachInteractions`, and only when **both** of these

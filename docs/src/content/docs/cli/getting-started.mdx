@@ -3,7 +3,15 @@ title: CLI Getting Started
 description: Install and use the maplibre-yaml CLI
 ---
 
-The maplibre-yaml CLI provides command-line tools for validating and previewing your YAML map configurations. It helps catch errors early and enables rapid development with hot reload.
+The maplibre-yaml CLI provides command-line tools for starting a project,
+validating and previewing your YAML map configurations, and exporting them to
+`style.json`. It helps catch errors early and enables rapid development with
+hot reload.
+
+The commands on this page use `npx @maplibre-yaml/cli`, which works without
+installing anything (you need [Node.js](https://nodejs.org/) 18 or later).
+If you install the CLI, the shorter `mlym` does the same; see
+[Short Alias](#short-alias).
 
 ## Installation
 
@@ -38,14 +46,36 @@ mlym validate config.yaml
 ```
 
 `mlym` is a command name inside `@maplibre-yaml/cli`, not a package of its
-own, so `npx mlym` without an install fails with a 404. Either run the full
-package name, `npx @maplibre-yaml/cli validate config.yaml`, or install the CLI
-into your project first and then use the alias through npx:
+own, so `npx mlym` without an install fails with a 404. For a one-off run
+without installing, use `npx maplibre-yaml validate config.yaml` (a small
+package that runs the CLI) or the full name, `npx @maplibre-yaml/cli validate
+config.yaml`. Or install the CLI into your project first and then use the
+short name through npx:
 
 ```bash
 npm install --save-dev @maplibre-yaml/cli
 npx mlym validate config.yaml
 ```
+
+## Start a Project
+
+`init` creates a folder with a working map in it:
+
+```bash
+npx @maplibre-yaml/cli init my-map
+cd my-map
+npx serve .
+```
+
+Open the address `serve` prints (usually http://localhost:3000). The `basic`
+template (the default) is a plain HTML page and a `map.yaml`, loaded from a
+CDN, so there is nothing to install or build. Edit `map.yaml` and reload the
+page. Opening `index.html` by double-clicking it does not work: browsers block
+a `file://` page from loading `map.yaml`.
+
+Other templates: `--template astro` (an Astro site) and `--template story` (a
+scrollytelling document). Run `npx @maplibre-yaml/cli init --list` to see
+them, and see the [init reference](/cli/reference/#init) for details.
 
 ## Validate Configuration
 
@@ -56,7 +86,7 @@ Validate your YAML configuration files to catch errors before runtime.
 Validate a single file:
 
 ```bash
-maplibre-yaml validate my-map.yaml
+npx @maplibre-yaml/cli validate my-map.yaml
 ```
 
 Output for valid configuration:
@@ -82,13 +112,13 @@ Validate multiple files using glob patterns:
 
 ```bash
 # Validate all YAML files in a directory
-maplibre-yaml validate "configs/**/*.yaml"
+npx @maplibre-yaml/cli validate "configs/**/*.yaml"
 
 # Validate specific patterns
-maplibre-yaml validate "maps/*.yaml"
+npx @maplibre-yaml/cli validate "maps/*.yaml"
 
 # Multiple patterns
-maplibre-yaml validate "src/**/*.map.yaml" "configs/*.yaml"
+npx @maplibre-yaml/cli validate "src/**/*.map.yaml" "configs/*.yaml"
 ```
 
 Output with progress indicator (for >10 files):
@@ -108,7 +138,7 @@ Choose from multiple output formats:
 #### Human-Readable (default)
 
 ```bash
-maplibre-yaml validate my-map.yaml
+npx @maplibre-yaml/cli validate my-map.yaml
 ```
 
 #### JSON for CI/CD
@@ -116,7 +146,7 @@ maplibre-yaml validate my-map.yaml
 Get structured JSON output:
 
 ```bash
-maplibre-yaml validate my-map.yaml --format json
+npx @maplibre-yaml/cli validate my-map.yaml --format json
 ```
 
 Output:
@@ -147,7 +177,7 @@ Output:
 Generate SARIF format for GitHub Advanced Security:
 
 ```bash
-maplibre-yaml validate my-map.yaml --format sarif
+npx @maplibre-yaml/cli validate my-map.yaml --format sarif
 ```
 
 #### VSCode Problem Matcher
@@ -155,7 +185,7 @@ maplibre-yaml validate my-map.yaml --format sarif
 Output format compatible with VSCode's Problem Matcher:
 
 ```bash
-maplibre-yaml validate my-map.yaml --format vscode
+npx @maplibre-yaml/cli validate my-map.yaml --format vscode
 ```
 
 Output:
@@ -172,7 +202,7 @@ See [VSCode Integration](/cli/vscode) for setup instructions.
 Continuously validate files as they change:
 
 ```bash
-maplibre-yaml validate "configs/**/*.yaml" --watch
+npx @maplibre-yaml/cli validate "configs/**/*.yaml" --watch
 ```
 
 Features:
@@ -183,10 +213,12 @@ Features:
 
 ### Strict Mode
 
-Treat warnings as errors:
+Treat warnings as errors. Strict mode is on by default when the `CI`
+environment variable is set (CI services set it) and off on your own machine;
+`--strict` and `--no-strict` override that:
 
 ```bash
-maplibre-yaml validate my-map.yaml --strict
+npx @maplibre-yaml/cli validate my-map.yaml --strict
 ```
 
 ### Exit Codes
@@ -196,10 +228,9 @@ The validate command uses specific exit codes for automation:
 | Code | Meaning             |
 | ---- | ------------------- |
 | 0    | Valid configuration |
-| 1    | Validation errors   |
-| 2    | File not found      |
-| 3    | Invalid YAML syntax |
-| 4    | Unknown error       |
+| 1    | Errors found, including YAML syntax errors |
+| 2    | No file matched the pattern |
+| 4    | Unexpected internal error |
 
 ### Performance
 
@@ -252,10 +283,11 @@ Start a local development server with hot reload to preview your map as you edit
 ### Basic Preview
 
 ```bash
-maplibre-yaml preview my-map.yaml
+npx @maplibre-yaml/cli preview my-map.yaml
 ```
 
-This will:
+This renders the YAML document on a page of its own (to see your own HTML page
+around the map, serve your folder with `npx serve .` instead). It will:
 
 - Start a Vite development server on port 3000
 - Open your browser automatically
@@ -267,7 +299,7 @@ This will:
 Use a different port:
 
 ```bash
-maplibre-yaml preview my-map.yaml --port 8080
+npx @maplibre-yaml/cli preview my-map.yaml --port 8080
 ```
 
 ### Don't Open Browser
@@ -275,7 +307,7 @@ maplibre-yaml preview my-map.yaml --port 8080
 Start the server without opening the browser:
 
 ```bash
-maplibre-yaml preview my-map.yaml --no-open
+npx @maplibre-yaml/cli preview my-map.yaml --no-open
 ```
 
 ### Preview Features
@@ -294,7 +326,7 @@ If your configuration has errors, the preview will show:
 
 - A dark overlay with the error message
 - Red status indicator
-- Specific error details (path, line, column)
+- Specific error details (the field path and message)
 - No map render (prevents confusion)
 
 Example error display:
@@ -310,7 +342,7 @@ config: Expected object, got undefined
 1. Start the preview server:
 
    ```bash
-   maplibre-yaml preview my-map.yaml
+   npx @maplibre-yaml/cli preview my-map.yaml
    ```
 
 2. Edit your YAML file in your editor
@@ -330,9 +362,9 @@ config: Expected object, got undefined
 Get help for any command:
 
 ```bash
-maplibre-yaml --help
-maplibre-yaml validate --help
-maplibre-yaml preview --help
+npx @maplibre-yaml/cli --help
+npx @maplibre-yaml/cli validate --help
+npx @maplibre-yaml/cli preview --help
 ```
 
 ### Version
@@ -340,7 +372,7 @@ maplibre-yaml preview --help
 Check the installed version:
 
 ```bash
-maplibre-yaml --version
+npx @maplibre-yaml/cli --version
 ```
 
 ## Next Steps

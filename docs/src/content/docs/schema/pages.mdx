@@ -44,7 +44,7 @@ pages:
         config:
           center: [0, 0]
           zoom: 2
-          mapStyle: "https://demotiles.maplibre.org/style.json"
+          mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 
   - path: "/about"
     title: "About Us"
@@ -99,13 +99,13 @@ Standard interactive map with configurable size and layers.
     zoom: 12
     pitch: 45
     bearing: 0
-    mapStyle: "https://demotiles.maplibre.org/style.json"
+    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   layers:
     - id: points
       type: circle
       source:
         type: geojson
-        url: "https://example.com/points.geojson"
+        url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
       paint:
         circle-radius: 8
         circle-color: "#3b82f6"
@@ -126,7 +126,7 @@ Full viewport map that fills the entire screen.
   config:
     center: [0, 20]
     zoom: 3
-    mapStyle: "https://demotiles.maplibre.org/style.json"
+    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   layers:
     - id: earthquakes
       type: circle
@@ -148,7 +148,7 @@ Narrative-driven map experience with chapters that update the map view.
   config:
     center: [0, 20]
     zoom: 2
-    mapStyle: "https://demotiles.maplibre.org/style.json"
+    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   chapters:
     - id: intro
       title: "Introduction"
@@ -206,7 +206,7 @@ Arrange blocks horizontally:
       config:
         center: [-74, 40]
         zoom: 10
-        mapStyle: "https://demotiles.maplibre.org/style.json"
+        mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 ### Column Layout
@@ -330,16 +330,17 @@ Mixed blocks can be nested for complex layouts:
         center: [-74.006, 40.7128]
         zoom: 12
         pitch: 45
-        mapStyle: "https://demotiles.maplibre.org/style.json"
+        mapStyle: "https://tiles.openfreemap.org/styles/liberty"
       layers:
         - id: buildings
           type: fill-extrusion
           source:
             type: vector
-            url: "https://demotiles.maplibre.org/tiles/tiles.json"
+            url: "https://tiles.openfreemap.org/planet"
+          source-layer: building
           paint:
             fill-extrusion-color: "#aaa"
-            fill-extrusion-height: ["get", "height"]
+            fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
       controls:
         navigation: true
         scale: true
@@ -357,7 +358,7 @@ Mixed blocks can be nested for complex layouts:
       config:
         center: [0, 20]
         zoom: 2
-        mapStyle: "https://demotiles.maplibre.org/style.json"
+        mapStyle: "https://tiles.openfreemap.org/styles/liberty"
       chapters:
         - id: intro
           title: "The Beginning"
@@ -422,7 +423,7 @@ Complete example with multiple pages:
 ```yaml
 config:
   title: "Multi-Page Map App"
-  defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+  defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
 
 pages:
   - path: "/"
