@@ -1819,9 +1819,12 @@ Enable `debug` prop to see:
 
 ### Scroll Behavior
 
-The component uses IntersectionObserver with these settings:
-- Trigger zone: Middle 20% of viewport (40% margin top/bottom)
-- Activates when chapter enters the trigger zone
+- The active chapter is the one whose card is on screen and nearest the
+  middle of it, recomputed as the page scrolls, so scrolling back and forth
+  always lands on the chapter you are reading. On phones the map moves on
+  once the next card is on screen, not before.
+- The story starts reacting once its first chapter reaches the middle 20%
+  of the screen (the trigger zone)
 - Smooth map transitions between chapters
 - Progressive chapter content fade in/out
 

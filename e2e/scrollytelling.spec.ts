@@ -336,6 +336,94 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await context.close();
   });
 
+  /**
+   * The active chapter is always the one being read (ml-aot.44, ml-aot.45):
+   * the chapter whose card is on screen and nearest the middle of it.
+   * Scrolling back a little and forward again near a boundary used to leave
+   * the previous chapter active; on phones the map moved on while the new
+   * card was still below the screen.
+   */
+  async function readingState(page: Page) {
+    return page.evaluate(() => {
+      const el = document.querySelector("ml-scrollytelling") as HTMLElement;
+      const h = innerHeight;
+      const cards = [...el.querySelectorAll<HTMLElement>(".scrolly-chapter")].map((s) => {
+        const c = (s.querySelector(".chapter-content") ?? s).getBoundingClientRect();
+        return { id: s.dataset.chapterId!, top: c.top, bottom: c.bottom, mid: (c.top + c.bottom) / 2 };
+      });
+      const onScreen = cards.filter((c) => c.bottom > 0 && c.top < h);
+      const nearest = [...onScreen].sort((a, b) => Math.abs(a.mid - h / 2) - Math.abs(b.mid - h / 2))[0];
+      const active = el.dataset.activeChapter ?? null;
+      return {
+        active,
+        nearest: nearest?.id ?? null,
+        // Ties (two cards equally far from the middle) may go either way.
+        tie: onScreen.filter((c) => Math.abs(Math.abs(c.mid - h / 2) - Math.abs(nearest.mid - h / 2)) < 3).length > 1,
+        activeOnScreen: onScreen.some((c) => c.id === active),
+        scrollY: Math.round(scrollY),
+      };
+    });
+  }
+
+  const settle = (page: Page) =>
+    page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 120)))));
+
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+    { width: 844, height: 390 },
+  ]) {
+    test(`back-and-forth scrolling always leaves the chapter being read active, ${viewport.width}x${viewport.height} (ml-aot.44/45)`, async ({
+      browser,
+      baseURL,
+    }) => {
+      const mobile = viewport.width < 768;
+      const context = await browser.newContext({ viewport, reducedMotion: "reduce", isMobile: mobile, hasTouch: mobile });
+      const page = await context.newPage();
+      const errors = await guard(page, baseURL!);
+      await page.goto(EXAMPLE, { waitUntil: "domcontentloaded" });
+      await storyReady(page);
+      const top = await page.evaluate(
+        () => (document.querySelector("ml-scrollytelling") as HTMLElement).getBoundingClientRect().top + scrollY
+      );
+      const end = await page.evaluate(
+        () => (document.querySelector(".scrolly-footer, .scrolly-chapter:last-child") as HTMLElement).getBoundingClientRect().top + scrollY
+      );
+
+      // A deterministic walk: forward steps of several sizes with small
+      // corrections back (a trackpad overshooting and correcting).
+      const steps = [180, -70, 260, -120, 90, -40, 330, -150, 60, 210, -95, 140, -30, 400, -200, 75];
+      let y = top;
+      const wrong: string[] = [];
+      for (let i = 0; y < end && i < 200; i++) {
+        y = Math.max(top, y + steps[i % steps.length]!);
+        await page.evaluate((to) => scrollTo(0, to), y);
+        await settle(page);
+        const s = await readingState(page);
+        if (s.nearest === null) continue;
+        if (!s.tie && (s.active !== s.nearest || !s.activeOnScreen)) {
+          wrong.push(`at ${s.scrollY}: active ${s.active}, reading ${s.nearest}`);
+        }
+      }
+      expect(wrong, wrong.join("\n")).toEqual([]);
+
+      // The bead's sequence: boundary between two chapters at 30% → 50% →
+      // 30% → 10% of the screen must end on the later chapter.
+      const boundary = await page.evaluate(() => {
+        const s = document.querySelector<HTMLElement>('.scrolly-chapter[data-chapter-id="andes"]')!;
+        return s.getBoundingClientRect().top + scrollY;
+      });
+      for (const at of [0.3, 0.5, 0.3, 0.1]) {
+        await page.evaluate(([b, f]) => scrollTo(0, b - innerHeight * f), [boundary, at] as const);
+        await settle(page);
+      }
+      const final = await readingState(page);
+      expect(final.active).toBe(final.nearest);
+      expect(errors).toEqual([]);
+      await context.close();
+    });
+  }
+
   test("reduced motion: chapter camera moves are instant (ml-cxk)", async ({ browser, baseURL }) => {
     const context = await browser.newContext({ reducedMotion: "reduce", viewport: { width: 1280, height: 800 } });
     const page = await context.newPage();

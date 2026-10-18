@@ -140,6 +140,8 @@ export class MLScrollytelling extends HTMLElement {
   private hasRendered = false;
   private controller: StoryController | null = null;
   private observer: IntersectionObserver | null = null;
+  /** Removes the scroll/resize listeners that keep the active chapter in sync. */
+  private stopScrollSync: (() => void) | null = null;
   private cancelEmptyCheck: (() => void) | null = null;
   /** Chapter the rail is scrolling to; activations in between are ignored. */
   private navTarget: string | null = null;
@@ -628,37 +630,50 @@ export class MLScrollytelling extends HTMLElement {
     });
     this.controller = controller;
 
+    // Which chapter is active is a function of where the page is scrolled,
+    // nothing else (ml-aot.44): recomputed from the live layout on every
+    // scroll frame and whenever a section crosses the trigger band. Acting
+    // on IntersectionObserver "entering" entries alone kept a history: after
+    // scrolling back a little and forward again near a boundary, the later
+    // section never re-entered the band (it never left), so the earlier
+    // chapter stayed active.
+    const sync = () => {
+      if (this.controller !== controller) return;
+      const id = this.chapterInView();
+      if (id === null) return;
+      // A rail jump skips the chapters it scrolls past.
+      if (this.navTarget !== null) {
+        if (id === this.navTarget) this.clearNav?.();
+        return;
+      }
+      controller.activate(id);
+    };
+    const view = this.ownerDocument.defaultView;
+    let frame = 0;
+    const onScroll = () => {
+      if (frame || !view) return;
+      frame = view.requestAnimationFrame(() => {
+        frame = 0;
+        sync();
+      });
+    };
+    view?.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    view?.addEventListener("resize", onScroll, { passive: true });
+    this.stopScrollSync = () => {
+      view?.removeEventListener("scroll", onScroll, { capture: true });
+      view?.removeEventListener("resize", onScroll);
+      if (frame) view?.cancelAnimationFrame(frame);
+      frame = 0;
+    };
+
     if (typeof IntersectionObserver === "function") {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          // Entries are queued, not live: one computed before an instant
-          // jump (reduced motion, a rail click right after load) can arrive
-          // after it. Act only on sections that are in the band NOW.
-          const band = (section: Element): boolean => {
-            const r = section.getBoundingClientRect();
-            const h = this.ownerDocument.defaultView?.innerHeight ?? 0;
-            return h === 0 || (r.top <= h * 0.6 && r.bottom >= h * 0.4);
-          };
-          const entering = entries
-            .filter((entry) => entry.isIntersecting && band(entry.target))
-            .map((entry) => (entry.target as HTMLElement).dataset.chapterId)
-            .filter((id): id is string => Boolean(id));
-          // A rail jump skips the chapters it scrolls past -- including one
-          // reported in the same batch as the target (a fast smooth scroll
-          // can move two sections across the band in one frame).
-          if (this.navTarget !== null) {
-            if (entering.includes(this.navTarget)) {
-              const target = this.navTarget;
-              this.clearNav?.();
-              controller.activate(target);
-            }
-            return;
-          }
-          const id = entering[entering.length - 1];
-          if (id) controller.activate(id);
-        },
-        { root: null, rootMargin: "-40% 0px -40% 0px", threshold: 0 }
-      );
+      // Also on band crossings: the first activation on load, layout shifts
+      // (an image loading), and environments that scroll without events.
+      const observer = new IntersectionObserver(() => sync(), {
+        root: null,
+        rootMargin: "-40% 0px -40% 0px",
+        threshold: 0,
+      });
       this.querySelectorAll(":scope > .scrolly-chapters > .scrolly-chapter").forEach((section) =>
         observer.observe(section)
       );
@@ -688,7 +703,48 @@ export class MLScrollytelling extends HTMLElement {
     );
   }
 
+  /**
+   * The chapter being read, from the layout as it is now (ml-aot.44/45):
+   * the chapter whose card is on screen and nearest the middle of it (a
+   * hidden chapter counts by its section). Only once the story reaches the
+   * trigger band (the middle 20% of the screen); before the story and after
+   * it, `null` (the active chapter stays as it is).
+   *
+   * Cards, not sections: on phones a card sits at the bottom of its
+   * section, so a section crossing the middle used to move the map while the
+   * new card was still below the screen and the previous one was being read
+   * (ml-aot.45).
+   */
+  private chapterInView(): string | null {
+    const h = this.ownerDocument.defaultView?.innerHeight ?? 0;
+    const sections = Array.from(
+      this.querySelectorAll<HTMLElement>(":scope > .scrolly-chapters > .scrolly-chapter")
+    );
+    if (h === 0) return sections[0]?.dataset.chapterId ?? null;
+    const boxes = sections.map((section) => ({
+      id: section.dataset.chapterId ?? null,
+      section: section.getBoundingClientRect(),
+      card: (section.querySelector<HTMLElement>(".chapter-content") ?? section).getBoundingClientRect(),
+    }));
+    const inBand = boxes.some((b) => b.section.top <= h * 0.6 && b.section.bottom >= h * 0.4);
+    if (!inBand) return null;
+    const middle = h / 2;
+    let best: { id: string | null; distance: number } | null = null;
+    for (const b of boxes) {
+      if (!b.id || b.card.height === 0 || b.card.bottom <= 0 || b.card.top >= h) continue;
+      const distance = Math.abs((b.card.top + b.card.bottom) / 2 - middle);
+      if (!best || distance < best.distance) best = { id: b.id, distance };
+    }
+    if (best) return best.id;
+    // No card on screen (a card taller than the screen, scrolled through):
+    // the section under the middle of the screen.
+    const under = boxes.find((b) => b.section.top <= middle && b.section.bottom >= middle);
+    return under?.id ?? null;
+  }
+
   private stopEngine(): void {
+    this.stopScrollSync?.();
+    this.stopScrollSync = null;
     this.observer?.disconnect();
     this.observer = null;
     this.controller?.destroy();
