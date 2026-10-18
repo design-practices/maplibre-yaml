@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ring of Fire: a story map in plain HTML</title>
+  <!--
+    <ml-scrollytelling> in a plain HTML page: no build step, no framework.
+    The story is story.yaml next to this file.
+
+    Served from the repo root (pnpm verify:serve, then
+    http://localhost:4174/examples/scrollytelling/index.html), this page loads
+    maplibre-gl and @maplibre-yaml/core from the local build. On your own
+    site, use the CDN lines from the docs instead
+    (docs: Integrations > Scrollytelling in plain HTML):
+
+      <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css" />
+      <script type="importmap">
+        { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
+      </script>
+      <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"></script>
+
+    The story sits inside an ordinary page -- a header above it and an
+    article below -- to show it does not need to own the whole page.
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <script type="module" src="/packages/core/register.js"></script>
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; color: #1f2937; }
+    .page { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1.25rem; line-height: 1.6; }
+    h1 { font-size: 2rem; margin: 0 0 0.5rem; }
+    .banner {
+      position: fixed; left: 50%; bottom: 2rem; transform: translateX(-50%); z-index: 30;
+      padding: 0.75rem 1.25rem; border-radius: 999px; background: #ffd166; color: #1c1917;
+      font-weight: 600; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  </style>
+</head>
+<body>
+  <header class="page">
+    <h1>The Ring of Fire</h1>
+    <p>A story map written as a YAML file and shown with one HTML element,
+    <code>&lt;ml-scrollytelling src="story.yaml"&gt;</code>. Scroll down to start.</p>
+  </header>
+
+  <ml-scrollytelling id="story" src="story.yaml"></ml-scrollytelling>
+
+  <article class="page" id="after">
+    <h2>After the story</h2>
+    <p>The page carries on as normal once the story ends: the map was sticky
+    only while its chapters were on screen.</p>
+  </article>
+
+  <div class="banner" id="banner" role="status" aria-live="polite" hidden></div>
+
+  <script type="module">
+    // The Tonga chapter's `action: custom` runs nothing itself: it dispatches
+    // `ml-scrollytelling:action` for the page to handle.
+    const story = document.getElementById("story");
+    const banner = document.getElementById("banner");
+    story.addEventListener("ml-scrollytelling:action", (event) => {
+      banner.textContent = String(event.detail.action.options?.banner ?? "");
+      banner.hidden = false;
+    });
+    story.addEventListener("ml-scrollytelling:chapter", (event) => {
+      if (event.detail.chapterId !== "tonga") banner.hidden = true;
+    });
+  </script>
+</body>
+</html>

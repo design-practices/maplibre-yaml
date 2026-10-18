@@ -250,9 +250,11 @@ test.describe("story: <Scrollytelling config>", () => {
     expect(await map(`map.getFilter("spotlight")`)).toEqual(["==", ["get", "country"], "none"]);
     expect(await map(`map.getPaintProperty("volcanoes", "circle-color")`)).toBe("#ffd166");
 
-    // fitBounds action frames the Andes
+    // fitBounds action frames the Andes -- top-down, although the Cascades
+    // chapter before it is tilted (ml-aot.9)
     await goToChapter(page, "andes");
     await expectCameraNear(page, MAP, [-74, -19.5], undefined, 3);
+    await expect.poll(() => map<number>(`Math.round(map.getPitch())`)).toBe(0);
 
     // custom action -> page event -> banner
     await goToChapter(page, "tonga");
@@ -293,6 +295,154 @@ test.describe("runtime story: <Scrollytelling src> (ml-euv)", () => {
     await expectCameraNear(page, MAP, [-122.1944, 46.1912], 10.5, 0.3);
     await goToChapter(page, "rainier");
     await expectCameraNear(page, MAP, [-121.7603, 46.8523], 10, 0.3);
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe("story: the shared <ml-scrollytelling> engine (ml-aot.1)", () => {
+  const MAP = ".scrollytelling-container ml-map";
+
+  test("<Scrollytelling> renders core's <ml-scrollytelling> element", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto("/story/", { waitUntil: "domcontentloaded" });
+    await mapReady(page, MAP);
+    const story = page.locator("ml-scrollytelling");
+    await expect(story).toHaveCount(1);
+    await expect(story).toHaveClass(/scrollytelling-container/);
+    expect(await story.evaluate((el) => (el as any).story?.id)).toBe("ring-of-fire-story");
+    expect(errors).toEqual([]);
+  });
+
+  test("rail dots take a real mouse click (ml-07q) and the keyboard", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto("/story/", { waitUntil: "domcontentloaded" });
+    await mapReady(page, MAP);
+    await goToChapter(page, "pacific");
+
+    // Nothing covers the dots: each is the top element at its own centre.
+    const covered = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>(".chapter-marker")]
+        .filter((b) => {
+          const r = b.getBoundingClientRect();
+          return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) !== b;
+        })
+        .map((b) => b.dataset.chapterId)
+    );
+    expect(covered).toEqual([]);
+
+    // A real mouse click (page.mouse, not dispatchEvent): the hit test is the bug.
+    const dot = (await page.locator('.chapter-marker[data-chapter-id="cascades"]').boundingBox())!;
+    await page.mouse.click(dot.x + dot.width / 2, dot.y + dot.height / 2);
+    await expect(page.locator(".scrollytelling-container")).toHaveAttribute("data-active-chapter", "cascades");
+    await expectCameraNear(page, MAP, [-122, 46.5], 6.3);
+
+    // Keyboard: arrows move along the rail and go to the chapter.
+    await page.locator('.chapter-marker[data-chapter-id="cascades"]').focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.locator(".scrollytelling-container")).toHaveAttribute("data-active-chapter", "andes");
+    expect(await page.evaluate(() => (document.activeElement as HTMLElement).dataset.chapterId)).toBe("andes");
+    expect(errors).toEqual([]);
+  });
+
+  test("the wheel over the map scrolls the story; the map does not zoom", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto("/story/", { waitUntil: "domcontentloaded" });
+    await mapReady(page, MAP);
+    await goToChapter(page, "boundaries");
+    await expectCameraNear(page, MAP, [-170, 15], 1.5);
+    // Settled on the chapter's own zoom before the wheel turns.
+    await expect.poll(async () => Math.round((await camera(page, MAP)).zoom * 1000) / 1000).toBe(1.5);
+    const zoom = (await camera(page, MAP)).zoom;
+    const before = await page.evaluate(() => scrollY);
+    // Right-hand side of the map, clear of the left-aligned card.
+    await page.mouse.move(1000, 600);
+    expect(await page.evaluate(() => document.elementFromPoint(1000, 600)?.tagName)).toBe("CANVAS");
+    await page.mouse.wheel(0, 120);
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(before + 100);
+    expect((await camera(page, MAP)).zoom).toBeCloseTo(zoom, 5);
+    expect(errors).toEqual([]);
+  });
+
+  test("mobile: the chapter's subject shows above its card; the rail stays off it (ml-aot.8)", async ({ browser }) => {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+      reducedMotion: "reduce",
+    });
+    const page = await context.newPage();
+    const errors = await guard(page);
+    await page.goto("/story/", { waitUntil: "domcontentloaded" });
+    await mapReady(page, MAP);
+    await layerLoaded(page, MAP, "volcanoes");
+    // Bring the Japan card to the middle of the screen, as a reader would.
+    await page.evaluate(() => {
+      const card = document.querySelector('.scrolly-chapter[data-chapter-id="japan"] .chapter-content')!;
+      const r = card.getBoundingClientRect();
+      scrollBy(0, r.top + r.height / 2 - innerHeight / 2);
+    });
+    await expect(page.locator(".scrollytelling-container")).toHaveAttribute("data-active-chapter", "japan");
+    await expectCameraNear(page, MAP, [135, 34], 4.6);
+    const layout = await page.evaluate((sel) => {
+      const el = document.querySelector(sel) as any;
+      const map = el.getMap();
+      const box = el.getBoundingClientRect();
+      const fuji = map.project([138.7274, 35.3606]);
+      const card = document
+        .querySelector('.scrolly-chapter[data-chapter-id="japan"] .chapter-content')!
+        .getBoundingClientRect();
+      const rail = [...document.querySelectorAll(".chapter-marker")].map((b) => b.getBoundingClientRect());
+      return {
+        fujiY: box.top + fuji.y,
+        cardTop: card.top,
+        cardRight: card.right,
+        railLeft: Math.min(...rail.map((r) => r.left)),
+        scrollWidth: document.documentElement.scrollWidth,
+      };
+    }, MAP);
+    expect(layout.fujiY).toBeGreaterThan(0);
+    expect(layout.fujiY, "Mount Fuji shows above the Japan card").toBeLessThan(layout.cardTop);
+    expect(layout.railLeft, "the rail sits beside the card, not on it").toBeGreaterThanOrEqual(layout.cardRight);
+    expect(layout.scrollWidth).toBeLessThanOrEqual(390);
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+
+  test("a broken src story shows one error card with the line and the did-you-mean (ml-aot.7) @dev", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto("/story-broken/", { waitUntil: "domcontentloaded" });
+    const card = page.locator(".scrolly-error");
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("chapters.1.centre");
+    await expect(card).toContainText(/line \d+/);
+    await expect(card).toContainText(/centre[\s\S]*center/);
+    await page.waitForTimeout(1000); // a ghost card would be up by now
+    await expect(page.locator(".scrolly-error, .ml-map-error")).toHaveCount(1);
+    await expect(page.getByText("No configuration provided")).toHaveCount(0);
+    // The one console error is the story's own report.
+    expect(errors.filter((e) => !/ml-scrollytelling/.test(e))).toEqual([]);
+  });
+
+  test("a slow src story never reports 'No configuration provided' (ml-4al) @dev", async ({ page }) => {
+    const errors = await guard(page);
+    await page.route("**/stories/cascadia.yaml", async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      return route.continue();
+    });
+    await page.addInitScript(() => {
+      (window as any).__mapErrors = [];
+      document.addEventListener("ml-map:error", (e: any) =>
+        (window as any).__mapErrors.push(JSON.stringify(e.detail?.errors ?? e.detail?.error?.message))
+      );
+    });
+    await page.goto("/story-runtime/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".chapters-loading")).toBeVisible();
+    await mapReady(page, MAP);
+    await expect(page.locator(".scrolly-chapter")).toHaveCount(3);
+    expect(await page.evaluate(() => (window as any).__mapErrors)).toEqual([]);
+    await expect(page.getByText("No configuration provided")).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 });
@@ -388,6 +538,74 @@ test.describe("view transitions: <ClientRouter /> soft navigation (ml-aot.22)", 
       expect(await maplibreCss(page)).toBe("absolute");
     }
 
+    expect(await page.evaluate(() => (window as any).__softNav), "navigations were soft").toBe(true);
+    expect(errors).toEqual([]);
+  });
+
+  test("a story survives soft navigations: its CSS, a fresh map per visit, the rail on a revisit @dev", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    page.on("console", (m) => {
+      if (/CSS does not appear to be loaded/.test(m.text())) errors.push(`css probe: ${m.text()}`);
+    });
+    const STORY = "ml-scrollytelling ml-map";
+    // Start ON the story (a full load: whatever its scripts inject is in the
+    // head), then leave and come back twice with soft navigations.
+    await page.goto("/transitions/story/", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      (window as any).__softNav = true;
+      (window as any).__storyMaps = [];
+    });
+
+    for (let visit = 0; visit < 3; visit++) {
+      if (visit > 0) {
+        await page.click('[data-testid="vt-to-story"]');
+        await expect(page).toHaveURL(/\/transitions\/story\/?$/);
+      }
+      await mapReady(page, STORY);
+      await page.evaluate(() =>
+        (window as any).__storyMaps.push((document.querySelector("ml-scrollytelling") as any).getMap())
+      );
+      // The story's own CSS and MapLibre's both applied after the head swap.
+      const styles = await page.evaluate(() => ({
+        sticky: getComputedStyle(document.querySelector(".scrolly-map-container")!).position,
+        corner: getComputedStyle(document.querySelector(".maplibregl-ctrl-bottom-right")!).position,
+      }));
+      expect(styles, `visit ${visit + 1}`).toEqual({ sticky: "sticky", corner: "absolute" });
+      // One story, one map on the page.
+      expect(await page.locator("ml-scrollytelling").count()).toBe(1);
+      expect(await page.locator(".maplibregl-map").count()).toBe(1);
+
+      // The rail works on every visit (a real mouse click) -- once the view
+      // transition's snapshot overlay, which takes every click while it
+      // animates, has gone and the dot is the element under the pointer.
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const b = document.querySelector('.chapter-marker[data-chapter-id="cascades"]')!;
+            const r = b.getBoundingClientRect();
+            return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === b;
+          })
+        )
+        .toBe(true);
+      const dot = (await page.locator('.chapter-marker[data-chapter-id="cascades"]').boundingBox())!;
+      await page.mouse.click(dot.x + dot.width / 2, dot.y + dot.height / 2);
+      await expect(page.locator("ml-scrollytelling")).toHaveAttribute("data-active-chapter", "cascades");
+      await expectCameraNear(page, STORY, [-122, 46.5], 6.3);
+
+      // Leave through the link in the map's corner slot.
+      await page.locator('[data-testid="vt-story-to-inline"]').click();
+      await expect(page).toHaveURL(/\/transitions\/inline\/?$/);
+      await mapReady(page, '[data-testid="vt-inline-map"] ml-map');
+      // The story's map went with its page: removed, not leaked.
+      expect(
+        await page.evaluate((i) => (window as any).__storyMaps[i]._removed === true, visit),
+        `visit ${visit + 1}: the story's map was removed`
+      ).toBe(true);
+    }
+
+    expect(await page.evaluate(() => (window as any).__storyMaps[0] !== (window as any).__storyMaps[1])).toBe(true);
     expect(await page.evaluate(() => (window as any).__softNav), "navigations were soft").toBe(true);
     expect(errors).toEqual([]);
   });

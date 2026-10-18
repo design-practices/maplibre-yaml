@@ -1,6 +1,6 @@
 {
   "name": "story",
-  "description": "A scrollytelling story (story.yaml). Its index.html needs <ml-scrollytelling>, which is not in core 0.7 yet",
+  "description": "A scrollytelling story map: index.html with <ml-scrollytelling> and the story in story.yaml",
   "version": "1.0.0",
   "variables": [
     {

@@ -8,23 +8,25 @@
  * between different views as users scroll through narrative chapters.
  * Perfect for data journalism, interactive reports, and guided tours.
  *
- * ## Features
+ * Since @maplibre-yaml/core 0.8 this is a thin wrapper over core's
+ * `<ml-scrollytelling>` web component: the same element a plain HTML page
+ * uses from the CDN, so both paths run one engine (camera, layers, chapter
+ * actions, the rail, reduced motion, events).
  *
- * - **Scroll-Driven Navigation**: Map transitions triggered by scroll position
- * - **Smooth Camera Transitions**: flyTo, easeTo, or jumpTo animations
- * - **Layer Control**: Show/hide layers per chapter
- * - **Chapter Actions**: setFilter / setPaintProperty / setLayoutProperty,
- *   camera moves (flyTo / easeTo / fitBounds) and `custom` events, on enter
- *   and on exit
- * - **Optional Markers**: A clickable chapter rail on the map
- * - **Dual Loading**: Build-time (`config`) or runtime (`src`) YAML loading
- * - **Corner slots**: `slot="top-left|top-right|bottom-left|bottom-right|legend"`
- *   children are forwarded to the story's `<ml-map>`
- * - **Debug Mode**: Visual indicators for development
+ * - **`config`** (build time): the story is rendered to HTML here -- the
+ *   sticky `<ml-map>` with its document, every chapter, the rail and the
+ *   footer -- and the element takes it over in the browser, so the chapters
+ *   are in the page before any script runs.
+ * - **`src`** (runtime): the element fetches, validates and renders the
+ *   story in the browser; until then a loading state shows, and a story that
+ *   fails shows one error card with line numbers.
  *
- * The browser half lives in `../client/scrollytelling.ts` (bundled), which
- * documents the `ml-scrollytelling:chapter` / `ml-scrollytelling:action`
- * events it dispatches.
+ * Corner slots (`slot="top-left|top-right|bottom-left|bottom-right|legend"`)
+ * reach the story's `<ml-map>` either way.
+ *
+ * Events: `ml-scrollytelling:chapter`, `ml-scrollytelling:action` and
+ * `ml-scrollytelling:error`, dispatched on the story element (which keeps
+ * the `scrollytelling-container` class and `data-active-chapter`).
  *
  * @example Runtime loading
  * ```astro
@@ -34,7 +36,7 @@
  * <Scrollytelling src="/stories/climate-change.yaml" />
  * ```
  *
- * @example Build-time loading with markers
+ * @example Build-time loading
  * ```astro
  * ---
  * import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
@@ -49,293 +51,161 @@
  * ```
  */
 
-import Chapter from "./Chapter.astro";
-import { storyMapDocument } from "../client/scrollytelling";
+import {
+  storyMapDocument,
+  chaptersHTML,
+  footerHTML,
+  railHTML,
+} from "@maplibre-yaml/core/scrollytelling";
+// The element injects these rules itself; importing the file too styles a
+// server-rendered story from the first paint.
+import "@maplibre-yaml/core/scrollytelling.css";
+// MapLibre's stylesheet as PAGE css (not from the client script): Astro links
+// it in the page head in dev and build alike, so it survives <ClientRouter />
+// soft navigations in astro dev (ml-aot.22), as on Map/FullPageMap.
+import "maplibre-gl/dist/maplibre-gl.css";
 import type { ScrollytellingProps } from "../types";
-import type { Chapter as ChapterType } from "@maplibre-yaml/core/schemas";
+import { withBase } from "../utils/base-url";
 
 interface Props extends ScrollytellingProps {}
 
-const { src, config, class: className, debug = false } = Astro.props;
+const { src, config, class: className, debug = false, base } = Astro.props;
 
-// Validate that either src or config is provided
 if (!src && !config) {
-  throw new Error(
-    "Scrollytelling component requires either 'src' or 'config' prop"
-  );
+  throw new Error("Scrollytelling component requires either 'src' or 'config' prop");
 }
 
-// Extract config properties
-const chapters: ChapterType[] = config?.chapters ?? [];
 const theme = config?.theme ?? "light";
-const showMarkers = config?.showMarkers ?? false;
-const footer = config?.footer;
+
+// A site under a subpath (GitHub Pages): `/stories/x.yaml` lives at
+// `/<base>/stories/x.yaml`, and every path in the story -- its map document
+// and chapter media -- resolves against the base too. Always set, "/"
+// included, as on Map; `base={false}` opts out.
+const resolvedSrc = withBase(src, import.meta.env.BASE_URL);
+const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_URL);
 
 // Generate unique ID for this instance
 const storyId = `scrolly-${Math.random().toString(36).substring(2, 11)}`;
 
-// Serialize config for client-side if provided
-const serializedConfig = config ? JSON.stringify(config) : null;
-
-// The map half of the story as a real map document, rendered straight onto
-// <ml-map>. (A `src` story gets the same document from the client loader.)
+// The story for the element (it validates it again in the browser), and the
+// map half as a real map document, rendered straight onto <ml-map> so the map
+// starts loading before the element upgrades.
+const serializedConfig = config ? JSON.stringify(config) : undefined;
 const mapDocument = config ? JSON.stringify(storyMapDocument(config)) : undefined;
+const chapterMarkup = config ? chaptersHTML(config, { base: documentBase }) + footerHTML(config) : "";
+const railMarkup = config ? railHTML(config) : "";
 
+const hasSlot = {
+  "top-left": Astro.slots.has("top-left"),
+  "top-right": Astro.slots.has("top-right"),
+  "bottom-left": Astro.slots.has("bottom-left"),
+  "bottom-right": Astro.slots.has("bottom-right"),
+  legend: Astro.slots.has("legend"),
+};
 ---
 
-<div
+<ml-scrollytelling
   class:list={[
     "scrollytelling-container",
-    `theme-${theme}`,
+    config && `theme-${theme}`,
     config?.className,
     className,
-    { debug },
+    { debug, "has-markers": config?.showMarkers === true },
   ]}
   style={config?.style}
   id={storyId}
-  data-src={config ? undefined : src}
-  data-config={serializedConfig}
+  src={config ? undefined : resolvedSrc}
+  config={serializedConfig}
+  base={documentBase}
 >
-  <!-- Sticky map container -->
-  <div class="scrolly-map-container">
-    <ml-map
-      id={`${storyId}-map`}
-      config={mapDocument}
-      style="width: 100%; height: 100%; display: block;"
-    >
-      {/*
-        Corner slots (ml-l4y.3). Astro reads a child's `slot="top-left"` as a
-        named slot of THIS component, so it would never reach <ml-map>; each
-        one is re-emitted as an <ml-map> slot child. The attribute is spread
-        because the compiler strips a literal `slot="…"` inside an expression,
-        and slot names are spelled out because <slot name> must be static.
-      */}
-      {Astro.slots.has("top-left") && (
+  {/*
+    Corner slots (ml-l4y.3). Astro reads a child's `slot="top-left"` as a
+    named slot of THIS component, so it would never reach <ml-map>; each one
+    is re-emitted as a slot child. The attribute is spread because the
+    compiler strips a literal `slot="…"` inside an expression, and slot names
+    are spelled out because <slot name> must be static. With `config` they go
+    straight into the server-rendered <ml-map>; with `src` they sit on
+    <ml-scrollytelling>, which hands them to the map it creates.
+  */}
+  {config ? (
+    <div class="scrolly-map-container">
+      <ml-map id={`${storyId}-map`} config={mapDocument} base={documentBase}>
+        {hasSlot["top-left"] && (
+          <div {...{ slot: "top-left" }} class="ml-astro-slot" data-ml-slot="top-left">
+            <slot name="top-left" />
+          </div>
+        )}
+        {hasSlot["top-right"] && (
+          <div {...{ slot: "top-right" }} class="ml-astro-slot" data-ml-slot="top-right">
+            <slot name="top-right" />
+          </div>
+        )}
+        {hasSlot["bottom-left"] && (
+          <div {...{ slot: "bottom-left" }} class="ml-astro-slot" data-ml-slot="bottom-left">
+            <slot name="bottom-left" />
+          </div>
+        )}
+        {hasSlot["bottom-right"] && (
+          <div {...{ slot: "bottom-right" }} class="ml-astro-slot" data-ml-slot="bottom-right">
+            <slot name="bottom-right" />
+          </div>
+        )}
+        {hasSlot.legend && (
+          <div {...{ slot: "legend" }} class="ml-astro-slot" data-ml-slot="legend">
+            <slot name="legend" />
+          </div>
+        )}
+      </ml-map>
+      <Fragment set:html={railMarkup} />
+    </div>
+  ) : (
+    <Fragment>
+      {hasSlot["top-left"] && (
         <div {...{ slot: "top-left" }} class="ml-astro-slot" data-ml-slot="top-left">
           <slot name="top-left" />
         </div>
       )}
-      {Astro.slots.has("top-right") && (
+      {hasSlot["top-right"] && (
         <div {...{ slot: "top-right" }} class="ml-astro-slot" data-ml-slot="top-right">
           <slot name="top-right" />
         </div>
       )}
-      {Astro.slots.has("bottom-left") && (
+      {hasSlot["bottom-left"] && (
         <div {...{ slot: "bottom-left" }} class="ml-astro-slot" data-ml-slot="bottom-left">
           <slot name="bottom-left" />
         </div>
       )}
-      {Astro.slots.has("bottom-right") && (
+      {hasSlot["bottom-right"] && (
         <div {...{ slot: "bottom-right" }} class="ml-astro-slot" data-ml-slot="bottom-right">
           <slot name="bottom-right" />
         </div>
       )}
-      {Astro.slots.has("legend") && (
+      {hasSlot.legend && (
         <div {...{ slot: "legend" }} class="ml-astro-slot" data-ml-slot="legend">
           <slot name="legend" />
         </div>
       )}
-    </ml-map>
+    </Fragment>
+  )}
 
-    {
-      showMarkers && (
-        <div class="chapter-markers" id={`${storyId}-markers`}>
-          {/* Markers injected by client script */}
-        </div>
-      )
-    }
-  </div>
-
-  <!-- Scrollable chapters container -->
   <div class="scrolly-chapters">
-    {
-      config ? (
-        // Server-rendered chapters when config is provided
-        chapters.map((chapter, index) => (
-          <Chapter
-            id={chapter.id}
-            title={chapter.title}
-            description={chapter.description}
-            image={chapter.image}
-            video={chapter.video}
-            alignment={chapter.alignment}
-            hidden={chapter.hidden}
-            theme={theme}
-            isActive={index === 0}
-          />
-        ))
-      ) : (
-        // Placeholder for client-rendered chapters when using src
-        <div class="chapters-loading">
-          <div class="loading-spinner" />
-          <p>Loading story...</p>
-        </div>
-      )
-    }
-
-    {footer && <footer class="scrolly-footer" set:html={footer} />}
+    {config ? (
+      <Fragment set:html={chapterMarkup} />
+    ) : (
+      <div class="chapters-loading" role="status">
+        <div class="loading-spinner" />
+        <p>Loading story...</p>
+      </div>
+    )}
   </div>
-</div>
+</ml-scrollytelling>
 
 <script>
   // first: maplibre-gl 6 needs its worker URL before any map is built
   import "../client/maplibre-worker";
+  // registers <ml-map> and <ml-scrollytelling> -- the whole story runtime.
+  // No per-page init: the element sets itself up when it connects and tears
+  // down when it leaves, so <ClientRouter /> soft navigations re-create the
+  // story (and its map) on every visit and dispose of the old one.
   import "@maplibre-yaml/core/register";
-  import "maplibre-gl/dist/maplibre-gl.css";
-  import { initAllScrollytelling } from "../client/scrollytelling";
-
-  // One bundled script for every story on the page: the `src` loader and the
-  // scroll controller. (Both used to be per-instance `is:inline` scripts; the
-  // loader's bare `import("@maplibre-yaml/core")` never resolved -- ml-euv.)
-  initAllScrollytelling();
 </script>
-
-<style>
-  /* Container */
-  .scrollytelling-container {
-    position: relative;
-    width: 100%;
-  }
-
-  /* Sticky map */
-  .scrolly-map-container {
-    position: sticky;
-    top: 0;
-    width: 100%;
-    height: 100vh;
-    z-index: 0;
-  }
-
-  /* Chapters overlay */
-  .scrolly-chapters {
-    position: relative;
-    z-index: 1;
-    /* Overlay the sticky map instead of starting below it. Without this the
-       first screen was bare map: no chapter visible, and the wheel zoomed the
-       map rather than scrolling the story. */
-    margin-top: -100vh;
-    pointer-events: none;
-  }
-
-  /* :global -- the chapter sections are rendered by Chapter.astro and carry
-     ITS scope attribute, so a scoped `> *` never matched them: every chapter
-     inherited `pointer-events: none`, the mouse wheel fell through to the
-     map (which zoomed instead of the page scrolling), and links/videos in a
-     chapter were unclickable. */
-  .scrolly-chapters > :global(*) {
-    pointer-events: auto;
-  }
-
-  /* Loading state */
-  .chapters-loading {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: #64748b;
-  }
-
-  .loading-spinner {
-    width: 48px;
-    height: 48px;
-    border: 4px solid #e2e8f0;
-    border-top-color: #3b82f6;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-bottom: 16px;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  /* Chapter markers. :global -- a `src` story builds the rail and its
-     buttons in the browser, where they carry no scope attribute (the
-     buttons always did: they were unstyled 0x0 boxes before 0.7). */
-  .scrolly-map-container :global(.chapter-markers) {
-    position: absolute;
-    top: 50%;
-    right: 20px;
-    transform: translateY(-50%);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    z-index: 10;
-  }
-
-  .scrolly-map-container :global(.chapter-marker) {
-    width: 12px;
-    height: 12px;
-    border: 2px solid white;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    padding: 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  }
-
-  .scrolly-map-container :global(.chapter-marker:hover) {
-    transform: scale(1.3);
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
-  }
-
-  .scrolly-map-container :global(.chapter-marker.active) {
-    transform: scale(1.5);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  }
-
-  /* Footer (:global: a `src` story renders it in the browser) */
-  .scrolly-chapters :global(.scrolly-footer) {
-    min-height: 50vh;
-    padding: 40px 20px;
-    background: var(--footer-bg, #f8fafc);
-    color: var(--footer-text, #1f2937);
-    text-align: center;
-  }
-
-  .scrollytelling-container.theme-dark :global(.scrolly-footer) {
-    --footer-bg: #1f2937;
-    --footer-text: #f9fafb;
-  }
-
-  /* A `src` story that failed to load or validate */
-  .scrolly-chapters :global(.scrolly-error) {
-    min-height: 100vh;
-    padding: 40px;
-    text-align: center;
-    color: #b91c1c;
-    background: rgba(255, 255, 255, 0.95);
-  }
-
-  .scrolly-chapters :global(.scrolly-error ul) {
-    text-align: left;
-    max-width: 600px;
-    margin: 20px auto;
-  }
-
-  /* Debug mode (:global for the same Chapter.astro scoping reason as above) */
-  .scrollytelling-container.debug :global(.scrolly-chapter) {
-    outline: 2px dashed rgba(255, 0, 0, 0.5);
-    outline-offset: -2px;
-  }
-
-  .scrollytelling-container.debug :global(.scrolly-chapter.is-active) {
-    outline-color: rgba(0, 255, 0, 0.8);
-  }
-
-  /* Responsive */
-  @media (max-width: 768px) {
-    .scrolly-map-container :global(.chapter-markers) {
-      right: 10px;
-      gap: 8px;
-    }
-
-    .scrolly-map-container :global(.chapter-marker) {
-      width: 10px;
-      height: 10px;
-    }
-  }
-</style>

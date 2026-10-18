@@ -1,0 +1,20 @@
+---
+import Transitions from "../../layouts/Transitions.astro";
+import { Scrollytelling, loadScrollytellingConfig } from "@maplibre-yaml/astro";
+
+const story = await loadScrollytellingConfig("./src/stories/ring-of-fire.yaml");
+---
+
+<Transitions title="View transitions: story">
+  <!--
+    A story reached by a soft navigation: <ml-scrollytelling> sets itself up
+    when it connects and tears its map down when it leaves, so every visit
+    gets a working story (rail included) and no map outlives its page.
+  -->
+  <Scrollytelling config={story}>
+    <nav slot="top-left" class="caption" data-testid="vt-story-nav">
+      <strong>Story</strong>
+      <a href="/transitions/inline/" data-testid="vt-story-to-inline">&larr; Inline map</a>
+    </nav>
+  </Scrollytelling>
+</Transitions>

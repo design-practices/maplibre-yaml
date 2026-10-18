@@ -13,7 +13,7 @@ config:
   mapStyle: "https://tiles.openfreemap.org/styles/dark"
   interactive: false
 
-# A story's layers carry inline sources (a story has no `sources:` block).
+# Inline sources here; a story can also share named `sources:`, as a map can.
 layers:
   - id: ring
     type: line
@@ -97,6 +97,7 @@ chapters:
       This chapter recolours the volcanoes with <code>setPaintProperty</code>.</p>
     center: [-122, 46.5]
     zoom: 6.3
+    pitch: 30
     animation: easeTo
     alignment: left
     onChapterEnter:
@@ -114,7 +115,8 @@ chapters:
     title: The Andes
     description: >-
       <p>From Colombia to Patagonia, the Nazca plate sinks under South America.
-      This chapter frames the whole range with a <code>fitBounds</code> action.</p>
+      This chapter frames the whole range with a <code>fitBounds</code> action,
+      top-down although the chapter before was tilted.</p>
     center: [-75, -18]
     zoom: 3
     alignment: right

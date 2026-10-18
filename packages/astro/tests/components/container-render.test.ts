@@ -21,6 +21,22 @@ import Scrollytelling from "../../src/components/Scrollytelling.astro";
 import Chapter from "../../src/components/Chapter.astro";
 import { buildPolygonMapConfig } from "../../src/utils/map-builders";
 
+/**
+ * The attributes of the first `<name ...>` open tag, values as written.
+ * (Attribute values may hold `>` -- a story's HTML footer does -- so a
+ * `[^>]*` regex cannot find the end of the tag.)
+ */
+function openTag(html: string, name: string): Record<string, string> {
+  const start = html.indexOf(`<${name}`);
+  expect(start).toBeGreaterThan(-1);
+  const attrs: Record<string, string> = {};
+  const re = /\s([\w:-]+)(?:="([^"]*)")?/y;
+  re.lastIndex = start + name.length + 1;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) attrs[m[1]] = m[2] ?? "";
+  return attrs;
+}
+
 let container: AstroContainer;
 beforeAll(async () => {
   container = await AstroContainer.create();
@@ -209,21 +225,46 @@ describe("Scrollytelling", () => {
     expect(html).toContain("<p>The end</p>");
   });
 
-  it("styles Chapter.astro's sections through :global selectors", () => {
-    // The sections carry Chapter.astro's scope attribute, never this
-    // component's, so a scoped selector cannot reach them. Scoped, the
-    // overlay's `pointer-events: auto` never applied: the wheel zoomed the
-    // map instead of scrolling the story, and debug outlines never showed.
-    // Container rendering doesn't emit component CSS, so read the source.
-    const source = readFileSync(
-      fileURLToPath(
-        new URL("../../src/components/Scrollytelling.astro", import.meta.url)
-      ),
-      "utf8"
+  it("renders core's <ml-scrollytelling> with the story, the map document and the chapters", async () => {
+    const html = await container.renderToString(Scrollytelling as any, {
+      props: { config: SCROLLY_CONFIG, debug: true },
+    });
+    // One engine (ml-aot.1): the element a plain HTML page uses, server-
+    // rendered here and taken over in the browser.
+    const tag = openTag(html, "ml-scrollytelling");
+    expect(tag.class.split(" ")).toEqual(
+      expect.arrayContaining(["scrollytelling-container", "theme-light", "debug", "has-markers"])
     );
-    expect(source).toContain(".scrolly-chapters > :global(*)");
-    expect(source).toContain(".scrollytelling-container.debug :global(.scrolly-chapter)");
-    expect(source).not.toMatch(/\.scrolly-chapters > \*\s*\{/);
+    expect(JSON.parse(tag.config.replace(/&#34;|&quot;/g, '"')).chapters).toHaveLength(2);
+    // The sticky map, its document, and core's chapter markup.
+    expect(html).toMatch(/class="scrolly-map-container"[^>]*>\s*<ml-map[^>]*\sconfig="/);
+    expect(html).toContain('class="scrolly-chapter align-center theme-light is-active" data-chapter-id="c1"');
+    expect(html).toContain('<nav class="chapter-markers" aria-label="Story chapters">');
+    expect(html).toContain("--ml-marker-color: #ff0000");
+    // No per-instance browser script: the element is the runtime.
+    expect(html).not.toMatch(/<script[^>]*is:inline/);
+  });
+
+  it("the map document turns the map's own gestures off so the wheel scrolls the story", async () => {
+    const html = await container.renderToString(Scrollytelling as any, {
+      props: { config: SCROLLY_CONFIG },
+    });
+    const attr = html.match(/<ml-map[^>]*\sconfig="([^"]*)"/)![1];
+    const doc = JSON.parse(attr.replace(/&#34;|&quot;/g, '"').replace(/&amp;/g, "&"));
+    expect(doc.config).toMatchObject({ scrollZoom: false, dragPan: false, touchZoomRotate: false });
+  });
+
+  it("imports core's stylesheet, so a server-rendered story is styled before any script runs", () => {
+    // Container rendering doesn't emit component CSS, so read the sources.
+    for (const file of ["Scrollytelling.astro", "Chapter.astro"]) {
+      const source = readFileSync(
+        fileURLToPath(new URL(`../../src/components/${file}`, import.meta.url)),
+        "utf8"
+      );
+      expect(source).toContain('import "@maplibre-yaml/core/scrollytelling.css"');
+      // The rules live in core, once, for every path.
+      expect(source).not.toMatch(/\.scrolly-chapter\s*\{/);
+    }
   });
 });
 
@@ -232,8 +273,14 @@ describe("Scrollytelling src (ml-euv)", () => {
     const html = await container.renderToString(Scrollytelling as any, {
       props: { src: "/stories/tour.yaml" },
     });
-    expect(html).toMatch(/class="scrollytelling-container[^"]*"[^>]*data-src="\/stories\/tour.yaml"/);
+    const tag = openTag(html, "ml-scrollytelling");
+    expect(tag.class).toBe("scrollytelling-container");
+    expect(tag.src).toBe("/stories/tour.yaml");
+    expect(tag.config).toBeUndefined();
     expect(html).toContain("Loading story...");
+    // No <ml-map> until the story has loaded and validated: an empty map
+    // would report "No configuration provided" meanwhile (ml-4al, ml-aot.7).
+    expect(html).not.toContain("<ml-map");
     // The old loader: an is:inline script doing import("@maplibre-yaml/core"),
     // a bare specifier no browser resolves.
     expect(html).not.toContain('import("@maplibre-yaml/core")');
@@ -292,6 +339,17 @@ describe("corner slots reach <ml-map> (ml-l4y.3)", () => {
     // Unused corners emit nothing (no empty corner boxes).
     expect(body).not.toContain('data-ml-slot="top-right"');
     expect(body).not.toContain('data-ml-slot="bottom-left"');
+  });
+
+  it("Scrollytelling src puts slot children on <ml-scrollytelling>, which hands them to its map", async () => {
+    const html = await container.renderToString(Scrollytelling as any, {
+      props: { src: "/stories/tour.yaml" },
+      slots: SLOTS,
+    });
+    const story = html.slice(html.indexOf("<ml-scrollytelling"), html.indexOf("</ml-scrollytelling>"));
+    for (const [name, markup] of Object.entries(SLOTS)) {
+      expect(story).toMatch(new RegExp(`<div\\sslot="${name}"[^>]*>\\s*${markup}\\s*</div>`));
+    }
   });
 
   it("Map without slot children renders no slot wrappers", async () => {

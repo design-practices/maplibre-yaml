@@ -1,0 +1,13 @@
+---
+import Base from "../layouts/Base.astro";
+import { Scrollytelling } from "@maplibre-yaml/astro";
+---
+
+<Base title="Broken story" bleed>
+  <!--
+    Not linked from the nav: the test suite's fixture for a story that fails
+    validation in the browser (public/stories/broken.yaml). It shows one error
+    card with the line number and the did-you-mean, and no map.
+  -->
+  <Scrollytelling src="/stories/broken.yaml" />
+</Base>

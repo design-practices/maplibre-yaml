@@ -103,22 +103,17 @@ export function nextSteps(template: string, cdPath: string | null): string[] {
     lines.push(`  ${pc.cyan('npm run dev')}`);
     lines.push('');
     lines.push(`  ${pc.dim('Edit public/configs/map.yaml to change the map.')}`);
-  } else if (template === 'story') {
-    lines.push(`  ${pc.cyan(`${cli} validate`)} story.yaml`);
-    lines.push('');
-    lines.push(`  ${pc.yellow('Note:')} index.html uses <ml-scrollytelling>, which is not part of`);
-    lines.push('  @maplibre-yaml/core 0.7 yet, so the page stays blank until a core');
-    lines.push('  release that includes it. story.yaml validates today; Astro sites can');
-    lines.push('  render it now with the <Scrollytelling> component from @maplibre-yaml/astro.');
   } else {
+    // basic and story: a static page that fetches its YAML file.
+    const file = template === 'story' ? 'story.yaml' : 'map.yaml';
     lines.push(`  ${pc.cyan('npx serve .')}`);
     lines.push('');
     lines.push('  Then open the http://localhost address it prints (usually http://localhost:3000).');
     lines.push(`  ${pc.dim('Opening index.html by double-clicking does not work: the browser blocks')}`);
-    lines.push(`  ${pc.dim('it from loading map.yaml. Any static web server works instead of serve.')}`);
+    lines.push(`  ${pc.dim(`it from loading ${file}. Any static web server works instead of serve.`)}`);
     lines.push('');
-    lines.push(`  ${pc.dim('Edit map.yaml and reload the page. Check it for mistakes with:')}`);
-    lines.push(`  ${pc.cyan(`${cli} validate`)} map.yaml`);
+    lines.push(`  ${pc.dim(`Edit ${file} and reload the page. Check it for mistakes with:`)}`);
+    lines.push(`  ${pc.cyan(`${cli} validate`)} ${file}`);
   }
   return lines;
 }

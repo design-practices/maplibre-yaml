@@ -254,7 +254,7 @@ have) prints an error and exits with code `1`, and nothing is created.
 | Template | Creates | Run it with |
 | -------- | ------- | ----------- |
 | `basic` | `index.html` (CDN import map, `<ml-map>` with a height, viewport meta tag) and `map.yaml` (a street basemap and one clickable point) | `npx serve .` in the folder, then open the address it prints. Needs no install or build |
-| `story` | `index.html` and a scrollytelling `story.yaml` | `story.yaml` validates today. The page uses `<ml-scrollytelling>`, which is not part of `@maplibre-yaml/core` 0.7, so it stays blank until a core release that includes it |
+| `story` | `index.html` and a scrollytelling `story.yaml` | A story map with no build step: the page loads `<ml-scrollytelling>` from the CDN (`@maplibre-yaml/core` 0.8). Serve the folder (`npx serve .`) and scroll; see [Scrollytelling in plain HTML](/integrations/scrollytelling-html/) |
 | `astro` | An Astro project that renders `public/configs/map.yaml` with `<ml-map>` | `npm install`, then `npm run dev` |
 
 Every YAML file the templates write starts with the

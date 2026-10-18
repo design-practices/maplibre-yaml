@@ -264,16 +264,27 @@ export function expandSugarInMapBlock(
 }
 
 /**
+ * Expand sugar in a standalone scrollytelling block (ml-ddg).
+ *
+ * @remarks
+ * A story's map half sits where a v1 map block's does — the `sources:`
+ * record and every inline `layers[].source` — so this is the v1 walker.
+ * Mutates `value` in place; returns the remaps or the first error.
+ */
+export function expandSugarInScrollytellingBlock(
+  value: unknown
+): ExpandSugarResult | { error: ParseError } {
+  return expandSugarInMapBlock(value, 1);
+}
+
+/**
  * Walk a `pages[].blocks[]` array, expanding v1-shaped map blocks and recursing
  * into `mixed` containers. Root blocks are v1-shaped (RootSchema nests the v1
  * `MapBlockSchema`).
  *
- * `scrollytelling` blocks also carry inline geojson sources on their
- * `layers[]`, but sugar there is **not** expanded today (nor on the standalone
- * `safeParseScrollytellingBlock` path, which passes no expander) — sugar on a
- * scrollytelling layer source surfaces the raw geojson error instead. Tracked
- * as a follow-up (ml- bead) rather than silently scoped: see the plan's R1
- * "format-wide" definition.
+ * `scrollytelling` blocks are v1-shaped too: their map half is `sources:` +
+ * `layers[].source`, the same positions a v1 map block has, so they take the
+ * same walker (ml-ddg — sugar there used to surface the raw geojson error).
  */
 function expandBlocks(
   blocks: unknown[],
@@ -284,7 +295,7 @@ function expandBlocks(
     const block = blocks[k];
     if (!isPlainObject(block)) continue;
     const type = block["type"];
-    if (type === "map" || type === "map-fullpage") {
+    if (type === "map" || type === "map-fullpage" || type === "scrollytelling") {
       const e = expandV1Block(block, [...basePath, k], remaps);
       if (e) return e;
     } else if (type === "mixed" && Array.isArray(block["blocks"])) {

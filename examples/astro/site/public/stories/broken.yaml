@@ -1,0 +1,19 @@
+# A deliberately broken story for the test suite: chapter "rainier" spells
+# `center` the British way. <Scrollytelling src="/stories/broken.yaml" />
+# (src/pages/story-broken.astro) must show ONE error card -- the error with its
+# line number and the did-you-mean -- and no map (ml-aot.7).
+type: scrollytelling
+id: broken
+config:
+  center: [-122.5, 46.5]
+  zoom: 5
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+chapters:
+  - id: range
+    title: The Cascade Range
+    center: [-122.5, 46.5]
+    zoom: 5
+  - id: rainier
+    title: Mount Rainier
+    centre: [-121.7603, 46.8523]
+    zoom: 10

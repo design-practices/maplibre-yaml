@@ -1,4 +1,14 @@
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json
+#
+# Tips:
+# - Indent with spaces (2 per level), never tabs.
+# - Coordinates are [longitude, latitude].
+# - Each chapter is one section of the story: its camera (center, zoom,
+#   pitch, bearing) and its card (title, description as HTML, alignment).
+# - Paths to your own files (an image, a data file) are relative to
+#   index.html (images/photo.jpg), or start at the site root with "/"
+#   (/images/photo.jpg). On GitHub Pages, see the base note in index.html.
+# - Check this file for mistakes: npx @maplibre-yaml/cli validate story.yaml
 type: scrollytelling
 id: {{projectName}}
 config:

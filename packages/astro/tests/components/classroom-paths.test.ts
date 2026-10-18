@@ -17,6 +17,8 @@ import { fileURLToPath } from "node:url";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import Map from "../../src/components/Map.astro";
 import FullPageMap from "../../src/components/FullPageMap.astro";
+import Scrollytelling from "../../src/components/Scrollytelling.astro";
+import Chapter from "../../src/components/Chapter.astro";
 
 let container: AstroContainer;
 beforeAll(async () => {
@@ -117,8 +119,63 @@ function parts(file: string): { frontmatter: string; script: string } {
   return { frontmatter, script };
 }
 
+describe("stories under the site's base (ml-aot.1 + ml-aot.30)", () => {
+  const story = {
+    type: "scrollytelling",
+    id: "s",
+    config: { center: [0, 0], zoom: 2, mapStyle: "https://example.com/style.json" },
+    layers: [],
+    chapters: [
+      { id: "a", title: "A", image: "/images/hatch-atlas.png", video: "/videos/tutorial.mp4", center: [0, 0], zoom: 3 },
+    ],
+  };
+  const attr = (html: string, tag: string, name: string) =>
+    html.match(new RegExp(`<${tag}[^>]*?\\s${name}="([^"]*)"`))?.[1];
+
+  it("Scrollytelling src: the URL gets the base; the element gets base", async () => {
+    vi.stubEnv("BASE_URL", "/my-repo");
+    const html = await container.renderToString(Scrollytelling as any, {
+      props: { src: "/stories/tour.yaml" },
+    });
+    expect(attr(html, "ml-scrollytelling", "src")).toBe("/my-repo/stories/tour.yaml");
+    expect(attr(html, "ml-scrollytelling", "base")).toBe("/my-repo");
+  });
+
+  it("Scrollytelling config: chapter media and the story's <ml-map> use the base", async () => {
+    vi.stubEnv("BASE_URL", "/my-repo/");
+    const html = await container.renderToString(Scrollytelling as any, { props: { config: story } });
+    expect(attr(html, "img", "src")).toBe("/my-repo/images/hatch-atlas.png");
+    expect(attr(html, "video", "src")).toBe("/my-repo/videos/tutorial.mp4");
+    expect(baseAttr(html)).toBe("/my-repo/");
+    expect(html).toMatch(/<ml-scrollytelling[^]*?\sbase="\/my-repo\/"/);
+  });
+
+  it('Scrollytelling: "/" by default, a base prop overrides, base={false} opts out', async () => {
+    vi.stubEnv("BASE_URL", "/");
+    expect(baseAttr(await container.renderToString(Scrollytelling as any, { props: { config: story } }))).toBe("/");
+    const custom = await container.renderToString(Scrollytelling as any, { props: { config: story, base: "/other/" } });
+    expect(attr(custom, "img", "src")).toBe("/other/images/hatch-atlas.png");
+    const off = await container.renderToString(Scrollytelling as any, { props: { config: story, base: false } });
+    expect(baseAttr(off)).toBeUndefined();
+    expect(attr(off, "img", "src")).toBe("/images/hatch-atlas.png");
+  });
+
+  it("Chapter media use the base; a standalone Chapter renders active (ml-aot.28)", async () => {
+    vi.stubEnv("BASE_URL", "/my-repo");
+    const html = await container.renderToString(Chapter as any, {
+      props: { id: "c", title: "C", image: "/images/hatch-atlas.png" },
+    });
+    expect(attr(html, "img", "src")).toBe("/my-repo/images/hatch-atlas.png");
+    expect(html).toMatch(/class="scrolly-chapter[^"]*\bis-active\b/);
+    const dim = await container.renderToString(Chapter as any, {
+      props: { id: "c", title: "C", isActive: false },
+    });
+    expect(dim).not.toMatch(/\bis-active\b/);
+  });
+});
+
 describe("view transitions (ml-aot.22)", () => {
-  for (const file of ["Map.astro", "FullPageMap.astro"]) {
+  for (const file of ["Map.astro", "FullPageMap.astro", "Scrollytelling.astro"]) {
     it(`${file} imports MapLibre's CSS as page CSS (frontmatter), not from the client script`, () => {
       const { frontmatter, script } = parts(file);
       // From the script, astro dev injects it with JS and <ClientRouter />'s

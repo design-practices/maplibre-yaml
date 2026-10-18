@@ -7,6 +7,9 @@ export default defineConfig([
       "src/index.ts",
       "src/schemas/index.ts",
       "src/components/index.ts",
+      // The DOM-free scrollytelling engine + renderers (server-safe: Astro
+      // frontmatter imports it; the element lives in components/register).
+      "src/scrollytelling/index.ts",
       "src/register.ts",
       "src/maplibre.ts",
       // Types-only entry (React JSX typings). Its JS output is an empty

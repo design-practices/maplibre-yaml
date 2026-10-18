@@ -1,0 +1,47 @@
+# ml-aot.1 + ml-aot.30 — a story written for a site's own files, with NO repo
+# name in any path: the story file itself, its map document, and chapter media.
+# They only load when <ml-scrollytelling base="/my-repo/"> resolves them there.
+type: scrollytelling
+id: base-story
+config:
+  center: [-96, 39]
+  zoom: 3
+  mapStyle: "styles/basemap.json"         # bare relative
+images:
+  tri: "/images/tri.png"                  # root-relative
+markers:
+  - at: [-80, 30]
+    icon: "/images/pin.png"               # root-relative
+sources:
+  cities:
+    type: geojson
+    url: "/data/cities.geojson"           # root-relative
+layers:
+  - id: cities
+    type: circle
+    source: cities
+    paint:
+      circle-radius: 10
+      circle-color: "#e63946"
+      circle-stroke-color: "#ffffff"
+      circle-stroke-width: 2
+  - id: route
+    type: line
+    source:
+      type: geojson
+      url: "data/route.geojson"           # bare relative
+    paint:
+      line-color: "#1d3557"
+      line-width: 4
+chapters:
+  - id: overview
+    title: Three cities
+    image: "/images/tri.png"              # root-relative chapter image
+    description: "<p>Root-relative data, images and a marker icon, all under the base.</p>"
+    center: [-96, 39]
+    zoom: 3
+  - id: east
+    title: The east coast
+    center: [-80, 35]
+    zoom: 4.5
+    alignment: left

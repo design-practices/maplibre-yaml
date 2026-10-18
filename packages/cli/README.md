@@ -52,8 +52,9 @@ Options:
 
 - `basic`: `index.html` + `map.yaml`, loaded from a CDN with an import map.
   Serve the folder with any static server (`npx serve .`); no install or build.
-- `story`: a scrollytelling `story.yaml`. Its `index.html` uses
-  `<ml-scrollytelling>`, which is not in `@maplibre-yaml/core` 0.7 yet.
+- `story`: a scrollytelling story map: `index.html` with
+  `<ml-scrollytelling>` (from the CDN, `@maplibre-yaml/core` 0.8) and the
+  story in `story.yaml`. Serve the folder (`npx serve .`) and scroll.
 - `astro`: an Astro site rendering `public/configs/map.yaml` with `<ml-map>`.
 
 The folder defaults to `./<name>` (`./my-map` for `basic`) and must be new or

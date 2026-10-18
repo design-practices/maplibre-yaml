@@ -43,6 +43,19 @@ The simplest way to use maplibre-yaml is with the `<ml-map>` web component:
 
 With a bundler (Vite, Webpack, etc.) skip the import map and CDN script — `import '@maplibre-yaml/core/register'` in your entry point instead.
 
+### Story maps (scrollytelling)
+
+The same setup registers `<ml-scrollytelling>`, which shows a
+`type: scrollytelling` YAML document as a scroll-driven story: a sticky map
+with chapter cards scrolling over it, camera moves, layer changes and actions
+per chapter.
+
+```html
+<ml-scrollytelling src="/story.yaml"></ml-scrollytelling>
+```
+
+See the docs page *Scrollytelling in plain HTML* for a complete example.
+
 ### JavaScript API
 
 ```typescript
@@ -89,9 +102,11 @@ The package provides multiple entry points for different use cases:
 | Import | Purpose |
 |--------|---------|
 | `@maplibre-yaml/core` | Main entry: parser, renderer, data utilities |
-| `@maplibre-yaml/core/register` | Auto-registers `<ml-map>` web component |
+| `@maplibre-yaml/core/register` | Auto-registers the `<ml-map>` and `<ml-scrollytelling>` web components |
 | `@maplibre-yaml/core/schemas` | Zod schemas for validation and types |
 | `@maplibre-yaml/core/components` | Manual component registration |
+| `@maplibre-yaml/core/scrollytelling` | The story engine without the element (DOM-free; server renderers) |
+| `@maplibre-yaml/core/scrollytelling.css` | The story stylesheet, for server-rendered stories |
 
 ## YAML Configuration
 

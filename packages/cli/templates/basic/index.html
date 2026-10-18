@@ -14,8 +14,8 @@
     { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
   </script>
 
-  <!-- Registers the <ml-map> element. "@0.7" means the newest 0.7.x release. -->
-  <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"></script>
+  <!-- Registers the <ml-map> element. "@0.8" means the newest 0.8.x release. -->
+  <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"></script>
 
   <style>
     body { margin: 0; }
@@ -24,7 +24,13 @@
   </style>
 </head>
 <body>
-  <!-- The map is described in map.yaml. Edit it and reload the page. -->
-  <ml-map src="./map.yaml"></ml-map>
+  <!--
+    The map is described in map.yaml. Edit it and reload the page.
+
+    Publishing on GitHub Pages as a project site (you.github.io/my-repo/)?
+    Add base="/my-repo/" here so paths in map.yaml that start with "/" start
+    there. Docs: Integrations > Web Components > "Sites under a subpath".
+  -->
+  <ml-map src="map.yaml"></ml-map>
 </body>
 </html>
