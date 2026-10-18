@@ -1,0 +1,26 @@
+{
+  "version": 8,
+  "name": "verification-noto-only",
+  "_comment": "ml-aot.53: a basemap whose glyph server only has 'Noto Sans Regular' (like OpenFreeMap). MapLibre's default text-font ('Open Sans Regular,Arial Unicode MS Regular') 404s here, as it does on OpenFreeMap. The glyph range file is an empty (valid) protobuf, so nothing visible renders.",
+  "glyphs": "/examples/verification/glyphs-limited/{fontstack}/{range}.pbf",
+  "sources": {
+    "basemap-places": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          { "type": "Feature", "geometry": { "type": "Point", "coordinates": [1, 1] }, "properties": { "name": "Basemap" } }
+        ]
+      }
+    }
+  },
+  "layers": [
+    { "id": "background", "type": "background", "paint": { "background-color": "#cfe8c9" } },
+    {
+      "id": "basemap-labels",
+      "type": "symbol",
+      "source": "basemap-places",
+      "layout": { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"] }
+    }
+  ]
+}

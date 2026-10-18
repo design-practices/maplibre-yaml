@@ -274,6 +274,8 @@ export class MapRenderer {
   private popupsManager: PopupsManager | null = null;
   /** Layer types this runtime cannot render, warned once each (U14). */
   private warnedUnsupportedTypes = new Set<string>();
+  /** A label layer had no text-font and the basemap named none (ml-aot.53). */
+  private warnedNoTextFont = false;
   /** Image names the document's own layers can ask for (ml-aot.37). */
   private imageRefs = createImageRefs();
   private controlsManager: ControlsManager;
@@ -867,9 +869,54 @@ export class MapRenderer {
       return;
     }
     noteLayerImageRefs(this.imageRefs, layer);
+    layer = this.withBasemapTextFont(layer);
     await this.layerManager.addLayer(layer);
     this.eventHandler.attachEvents(layer);
     this.emit('layer:added', { layerId: layer.id });
+  }
+
+  /**
+   * A label layer with no `text-font` gets the basemap's own font stack
+   * (ml-aot.53). MapLibre's default ("Open Sans Regular, Arial Unicode MS
+   * Regular") is missing from most basemaps' glyphs (OpenFreeMap serves Noto
+   * Sans), which floods the console with glyph 404s and one warning per
+   * character. When the basemap names no font, warn once with the fix.
+   */
+  private withBasemapTextFont(layer: Layer): Layer {
+    if (layer.type !== 'symbol') return layer;
+    const layout = (layer as { layout?: Record<string, unknown> }).layout;
+    if (!layout || layout['text-field'] === undefined || layout['text-font'] !== undefined) return layer;
+    const font = this.basemapTextFont();
+    if (font) return { ...layer, layout: { ...layout, 'text-font': font } } as Layer;
+    if (!this.warnedNoTextFont) {
+      this.warnedNoTextFont = true;
+      console.warn(
+        `[maplibre-yaml] layer "${layer.id}" shows text but has no text-font, and the ` +
+          `basemap names no font to borrow, so MapLibre asks the glyphs server for its ` +
+          `default font. Add text-font: ["<a font your glyphs: URL serves>"] to the ` +
+          `layer's layout (OpenFreeMap: "Noto Sans Regular").`
+      );
+    }
+    return layer;
+  }
+
+  /** The first plain text-font stack in the loaded basemap style. */
+  private basemapTextFont(): string[] | undefined {
+    let layers: Array<{ layout?: Record<string, unknown> }> = [];
+    try {
+      layers = ((this.map as unknown as { getStyle?: () => { layers?: unknown[] } })
+        .getStyle?.()?.layers ?? []) as typeof layers;
+    } catch {
+      return undefined;
+    }
+    for (const styleLayer of layers) {
+      let font = styleLayer?.layout?.['text-font'];
+      if (Array.isArray(font) && font[0] === 'literal') font = font[1];
+      if (Array.isArray(font) && font.length > 0 && font.every((f) => typeof f === 'string')) {
+        return [...(font as string[])];
+      }
+    }
+    return undefined;
   }
 
   /** The running maplibre-gl version, as best the runtime reports it. */
