@@ -215,3 +215,54 @@ describe("a site path that 404s on a page under a subpath suggests base (ml-aot.
     expect(card.hint).not.toContain("base=");
   });
 });
+
+describe("with base set, a 404 explains where files are looked up (ml-aot.36)", () => {
+  it("page outside the base (local preview at /): names base and both fixes, drops the page-relative advice", () => {
+    const card = srcHttpErrorCard("map.yaml", "http://localhost:4446/my-repo/map.yaml", 404, "", {
+      pageUrl: "http://localhost:4446/",
+      base: "/my-repo/",
+    });
+    expect(card.title).toBe("Map file not found");
+    expect(card.hint).toBe(
+      'This page sets base="/my-repo/", so files are looked up under /my-repo/ — but the page ' +
+        "itself is at /, outside /my-repo/. If you're previewing locally, serve the parent folder " +
+        "so this page opens at /my-repo/, or remove base while developing."
+    );
+    expect(card.hint).not.toContain("relative to this page's folder");
+  });
+
+  it("the same on the HTML-fallback card and the data notice", () => {
+    const html = srcHtmlCard("story.yaml", "http://localhost:4321/my-repo/story.yaml", {
+      pageUrl: "http://localhost:4321/index.html",
+      base: "/my-repo",
+    });
+    expect(html.hint).toContain('This page sets base="/my-repo/"');
+    expect(html.hint).toContain("previewing locally");
+    const notice = describeDataProblem(
+      "pts",
+      Object.assign(new Error("HTTP 404: Not Found for /my-repo/data/pts.geojson"), { url: "/my-repo/data/pts.geojson" }),
+      { pageUrl: "http://localhost:4446/", filePage: false, base: "/my-repo/" }
+    );
+    expect(notice).toContain('This page sets base="/my-repo/"');
+    expect(notice).toContain("previewing locally");
+  });
+
+  it("page under the base: says every path starts at the base, not next to the page", () => {
+    const card = srcHttpErrorCard("maps/x.yaml", "https://u.github.io/my-repo/maps/x.yaml", 404, "", {
+      pageUrl: "https://u.github.io/my-repo/blog/post/",
+      base: "/my-repo/",
+    });
+    expect(card.hint).toContain('base="/my-repo/"');
+    expect(card.hint).toContain("looked up under /my-repo/");
+    expect(card.hint).not.toContain("previewing locally");
+    expect(card.hint).not.toContain("relative to this page's folder");
+  });
+
+  it("an absolute src outside the base keeps the ordinary advice", () => {
+    const card = srcHttpErrorCard("https://cdn.test/x.yaml", "https://cdn.test/x.yaml", 404, "", {
+      pageUrl: "http://localhost:4446/",
+      base: "/my-repo/",
+    });
+    expect(card.hint).not.toContain("base=");
+  });
+});

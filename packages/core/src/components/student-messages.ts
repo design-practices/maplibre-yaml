@@ -89,6 +89,54 @@ export function subpathBaseHint(
 }
 
 /**
+ * With a `base` set, a file that 404'd was looked up under the base, not next
+ * to the page — so the usual page-relative advice is wrong (ml-aot.36). When
+ * the page itself is outside the base (a GitHub Pages site previewed locally
+ * with `npx serve .` inside the repo folder, so the page is at `/` while
+ * files are fetched from `/my-repo/…`), say how to preview it properly.
+ *
+ * @param resolved - The URL the browser requested (already resolved under the base).
+ * @returns The hint, or `undefined` without a base or when `resolved` is not under it
+ *   (an absolute URL to another site).
+ */
+export function baseLookupHint(
+  resolved: string,
+  pageUrl: string | undefined,
+  base: string | null | undefined
+): string | undefined {
+  const normalized = normalizeDocumentBase(base);
+  if (normalized === null || !pageUrl) return undefined;
+  let page: URL;
+  let baseUrl: URL;
+  let target: URL;
+  try {
+    page = new URL(pageUrl);
+    baseUrl = new URL(normalized, page);
+    target = new URL(resolved, page);
+  } catch {
+    return undefined;
+  }
+  if (page.protocol !== "http:" && page.protocol !== "https:") return undefined;
+  const basePath = baseUrl.pathname;
+  if (target.origin !== baseUrl.origin || !target.pathname.startsWith(basePath)) return undefined;
+
+  const pageUnderBase = page.origin === baseUrl.origin && page.pathname.startsWith(basePath);
+  if (!pageUnderBase) {
+    return (
+      `This page sets base="${normalized}", so files are looked up under ${basePath} — ` +
+      `but the page itself is at ${page.pathname}, outside ${basePath}. If you're ` +
+      `previewing locally, serve the parent folder so this page opens at ${basePath}, ` +
+      `or remove base while developing.`
+    );
+  }
+  return (
+    `This page sets base="${normalized}", so every path (with or without a leading "/") ` +
+    `is looked up under ${basePath}, not next to this page. Check the file name and ` +
+    `that the file is in that folder.`
+  );
+}
+
+/**
  * Whether a fetched `src` body is a web page rather than YAML — what a dev
  * server or host with an SPA fallback returns (status 200) for a path that
  * does not exist.
@@ -149,6 +197,7 @@ export function srcHttpErrorCard(
 ): ErrorCardContent {
   const reason = statusText.trim() || STATUS_TEXT[status] || "";
   const baseHint = status === 404 ? subpathBaseHint(src, context.pageUrl, context.base) : undefined;
+  const underBase = status === 404 ? baseLookupHint(resolved, context.pageUrl, context.base) : undefined;
   return {
     title: status === 404 ? "Map file not found" : "Couldn't load the map file",
     errors: [
@@ -158,7 +207,7 @@ export function srcHttpErrorCard(
       },
       { path: "", message: `The browser looked for it at ${resolved}` },
     ],
-    hint: baseHint ? `${PATH_HINT} ${baseHint}` : PATH_HINT,
+    hint: underBase ?? (baseHint ? `${PATH_HINT} ${baseHint}` : PATH_HINT),
   };
 }
 
@@ -169,6 +218,7 @@ export function srcHtmlCard(
   context: { pageUrl?: string; base?: string | null } = {}
 ): ErrorCardContent {
   const baseHint = subpathBaseHint(src, context.pageUrl, context.base);
+  const underBase = baseLookupHint(resolved, context.pageUrl, context.base);
   return {
     title: "Map file not found",
     errors: [
@@ -181,7 +231,7 @@ export function srcHtmlCard(
       { path: "", message: `The browser looked for it at ${resolved}` },
     ],
     hint:
-      `${PATH_HINT} Many servers answer a missing file with the site's main ` +
+      `${underBase ?? PATH_HINT} Many servers answer a missing file with the site's main ` +
       "page instead of a 404, which is why this is an HTML page." +
       (baseHint ? ` ${baseHint}` : ""),
   };
@@ -364,7 +414,10 @@ export function describeDataProblem(
     } else if (resolved !== url) {
       text += ".";
     }
-    const baseHint = http ? subpathBaseHint(url, context.pageUrl, context.base) : undefined;
+    const baseHint = http
+      ? (baseLookupHint(resolved, context.pageUrl, context.base) ??
+        subpathBaseHint(url, context.pageUrl, context.base))
+      : undefined;
     if (baseHint) text += ` ${baseHint}`;
   }
   if (context.filePage) text += ` ${FILE_PAGE_HINT}`;

@@ -229,6 +229,11 @@ a site-hosted style) and chapter `image` / `video` paths then resolve under
 `/my-repo/`. Full `https://` URLs are never changed. It works exactly like
 [`<ml-map base>`](/integrations/web-components/#sites-under-a-subpath-github-pages).
 
+To preview it locally, serve the folder *above* the repository (so the page
+opens at `http://localhost:3000/my-repo/`), or leave `base` off while you
+work: `npx serve .` inside the repository puts the page at `/`, outside
+`/my-repo/`, and the story's files 404.
+
 ## Corner slots
 
 Children with a `slot` attribute are handed to the story's map, exactly as on

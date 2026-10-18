@@ -124,6 +124,26 @@ test.describe("src fetch failures (ml-aot.13)", () => {
     expect(shown).toMatch(/The browser looked for it at http:\/\/localhost:\d+\/examples\/verification\/student-errors\/configs\/my-map\.yaml/);
   });
 
+  test("base set but the page previewed outside it: both cards name base and the local-preview fix (ml-aot.36)", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/base-preview.html`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#map .ml-map-error")).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("#story .scrolly-error, #story .ml-map-error").first()).toBeVisible({ timeout: 30_000 });
+    for (const [selector, title, file] of [
+      ["#map .ml-map-error", "Map file not found", "map.yaml"],
+      ["#story .scrolly-error, #story .ml-map-error", "Story file not found", "story.yaml"],
+    ] as const) {
+      const shown = await text(page, selector);
+      expect(shown).toContain(title);
+      expect(shown).toMatch(new RegExp(`The browser looked for it at http://localhost:\\d+/my-repo/${file.replace(".", "\\.")}`));
+      expect(shown).toContain('This page sets base="/my-repo/", so files are looked up under /my-repo/');
+      expect(shown).toContain("If you're previewing locally, serve the parent folder so this page opens at /my-repo/, or remove base while developing.");
+      expect(shown).not.toContain("relative to this page's folder");
+    }
+    await page.screenshot({ path: "e2e/results/base-preview-cards.png", fullPage: true });
+    expect(errors).toEqual([]);
+  });
+
   test("a src that returns a web page says the path is probably wrong", async ({ page }) => {
     await guard(page);
     await page.goto(`${DIR}/src-html.html`, { waitUntil: "domcontentloaded" });

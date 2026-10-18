@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>base set, page previewed outside it</title>
+  <!--
+    ml-aot.36 — a GitHub Pages site with base="/my-repo/", previewed locally
+    with "npx serve ." inside the repo folder: the page is NOT under
+    /my-repo/, so src="map.yaml" is fetched from /my-repo/map.yaml and 404s.
+    PASS = both cards ("Map file not found", "Story file not found") say
+    'This page sets base="/my-repo/"' and how to preview locally; neither
+    blames page-relative paths.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/base-preview.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; }
+    ml-map, ml-scrollytelling { display: block; height: 420px; margin-bottom: 16px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = both cards name base="/my-repo/" and the local-preview fix. FAIL = "relative to this page's folder".</header>
+  <main>
+    <ml-map id="map" src="map.yaml" base="/my-repo/"></ml-map>
+    <ml-scrollytelling id="story" src="story.yaml" base="/my-repo/"></ml-scrollytelling>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

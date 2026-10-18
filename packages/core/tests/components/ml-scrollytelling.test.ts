@@ -331,6 +331,24 @@ chapters:
     expect(cards[0]!.textContent).toContain("404");
   });
 
+  it("src that 404s under base while the page is outside it: the card names base and the local-preview fix (ml-aot.36)", async () => {
+    mute("error");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 404, statusText: "Not Found", text: () => Promise.resolve("") }))
+    );
+    const el = document.createElement("ml-scrollytelling");
+    el.setAttribute("base", "/my-repo/");
+    el.setAttribute("src", "story.yaml");
+    document.body.appendChild(el);
+    await settle();
+    const text = document.querySelector(".scrolly-error, .ml-map-error")!.textContent!;
+    expect(text).toContain("Story file not found");
+    expect(text).toContain('base="/my-repo/"');
+    expect(text).toContain("previewing locally");
+    expect(text).not.toContain("relative to this page's folder");
+  });
+
   it("no story at all: one card that says how to give it one", async () => {
     mute("error");
     const el = document.createElement("ml-scrollytelling");
