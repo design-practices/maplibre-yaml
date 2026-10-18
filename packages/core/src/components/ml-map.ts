@@ -289,7 +289,7 @@ export class MLMap extends HTMLElement {
   private heightObserver: ResizeObserver | null = null;
 
   /**
-   * The non-fatal "part of this map didn't load" notice (ml-aot.15), created
+   * The non-fatal "part of this map couldn't load" notice (ml-aot.15), created
    * on the first layer/source/data problem of the current render.
    */
   private notice: MapNotice | null = null;
@@ -344,7 +344,7 @@ export class MLMap extends HTMLElement {
 
   /**
    * Whether on-page notices for NON-fatal problems are suppressed — the
-   * "part of this map didn't load" notice and the zero-height hint. Reflects
+   * "part of this map couldn't load" notice and the zero-height hint. Reflects
    * the boolean `quiet` attribute.
    *
    * @remarks

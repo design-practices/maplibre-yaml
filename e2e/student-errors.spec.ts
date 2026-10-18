@@ -88,7 +88,11 @@ test.describe("layer problems keep the map working (ml-aot.15)", () => {
     await expect(notice).toContainText("bad-colour");
     expect(await notice.getAttribute("role")).toBe("status");
     const shown = await text(page, "#map .ml-map-notice");
-    expect(shown).toContain("Part of this map didn't load");
+    expect(shown).toContain("Part of this map couldn't load");
+    // The author's fix sits under "Details for the site's author": open on
+    // this local page, closed (one click away) on a published site.
+    expect(await page.locator("#map .ml-map-notice summary").innerText()).toBe("Details for the site's author");
+    expect(await page.locator("#map .ml-map-notice details").evaluate((d) => (d as HTMLDetailsElement).open)).toBe(true);
     expect(shown).toContain('Layer typo-layer didn\'t draw: Source "citeis" doesn\'t exist. Did you mean "cities"?');
     expect(shown).toContain("Data file data/citys.geojson didn't load (404 Not Found), so layer missing-data has no data.");
     expect(shown).toMatch(/The browser looked for http:\/\/localhost:\d+\/examples\/verification\/student-errors\/data\/citys\.geojson/);

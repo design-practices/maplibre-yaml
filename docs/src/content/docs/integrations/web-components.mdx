@@ -475,7 +475,12 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
   inside an expression), a layer whose `source:` names a source that doesn't
   exist, a data file that didn't load, or an `images:` entry or marker icon
   that failed. Each line names the layer or file. The map still fires
-  `ml-map:load` and `mapReady()` resolves.
+  `ml-map:load` and `mapReady()` resolves. The notice is written for two
+  readers: it leads with "Part of this map couldn't load" for anyone visiting
+  the site, and keeps the fix in a "Details for the site's author" section
+  below it. That section starts open while the page is served from your own
+  computer (`localhost`, `127.0.0.1`, a `file://` page) and closed on a
+  published site, where a click opens it.
 - **Height hint** — a map with no height is invisible, so the element shows a
   short note saying to give it one, and removes it once the map has a height.
 
