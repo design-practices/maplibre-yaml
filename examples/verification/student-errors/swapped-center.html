@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>center written [latitude, longitude]</title>
+  <!--
+    ml-aot.65 — center: [40.75, -73.98] (latitude first, as many web maps
+    show it). The map opened on an empty spot with no hint. PASS = each map's
+    notice says center looks swapped and suggests [-73.98, 40.75]: the first
+    with inline data, the second with a fetched data file.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/swapped-center.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    ml-map { display: block; height: 360px; margin-bottom: 12px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-map id="inline">
+    <script type="text/yaml">
+type: map
+id: swapped-inline
+config:
+  center: [40.75, -73.98]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: places
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [-73.97, 40.78] } }
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [-73.99, 40.71] } }
+    paint: { circle-radius: 8, circle-color: "#d62828" }
+    </script>
+  </ml-map>
+  <ml-map id="fetched">
+    <script type="text/yaml">
+type: map
+id: swapped-fetched
+config:
+  center: [40.75, -73.98]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  places:
+    type: geojson
+    url: "data/nyc-places.geojson"
+layers:
+  - id: places
+    type: circle
+    source: places
+    paint: { circle-radius: 8, circle-color: "#d62828" }
+    </script>
+  </ml-map>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

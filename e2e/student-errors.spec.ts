@@ -217,6 +217,19 @@ test.describe("src fetch failures (ml-aot.13)", () => {
     expect(errors).toEqual([]);
   });
 
+  test("center written [latitude, longitude] is named on the map with the fix (ml-aot.65)", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/swapped-center.html`, { waitUntil: "domcontentloaded" });
+    for (const id of ["inline", "fetched"]) {
+      const notice = page.locator(`#${id} .ml-map-notice`);
+      await expect(notice).toBeVisible({ timeout: 30_000 });
+      await expect(notice).toContainText(
+        "center is [40.75, -73.98], but this map's data is around [-73.98, 40.75]. Coordinates are [longitude, latitude]: did you mean center: [-73.98, 40.75]?"
+      );
+    }
+    expect(errors).toEqual([]);
+  });
+
   test("a src that returns a web page says the path is probably wrong", async ({ page }) => {
     await guard(page);
     await page.goto(`${DIR}/src-html.html`, { waitUntil: "domcontentloaded" });

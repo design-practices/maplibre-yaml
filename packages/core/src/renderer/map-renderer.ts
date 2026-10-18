@@ -19,6 +19,7 @@ import { ControlsManager } from './controls-manager';
 import { MarkersManager } from './markers-manager';
 import { PopupsManager } from './popups-manager';
 import { geojsonBounds, type Bounds } from '../interactions/geometry-bounds';
+import { swappedCenter } from '../utils/swapped-center';
 import { COLOR_RELIEF_RUNTIME_FLOOR, meetsVersion } from '../capabilities';
 import { loadDocumentImages } from './images-loader';
 import { ChromeLayout, type ChromeCorner } from './chrome-layout';
@@ -137,14 +138,22 @@ function resolveFitTo(
  * Errors with no context (a basemap tile, a glyph) are not the document's.
  */
 export interface MapErrorContext {
-  /** `fit`: `config.fitTo.source` names no source; the map keeps its authored camera. */
-  kind: 'style' | 'layer' | 'source' | 'fit';
+  /**
+   * `fit`: `config.fitTo.source` names no source; the map keeps its authored
+   * camera. `center`: `config.center` looks written [latitude, longitude] —
+   * far from the document's data, while the swapped pair lands on it.
+   */
+  kind: 'style' | 'layer' | 'source' | 'fit' | 'center';
+  /** For `center`: the center as written. */
+  center?: [number, number];
   /** The document layer, for `layer` errors. */
   layerId?: string;
   /** The document source, for `source` errors; the name `fitTo.source` gave, for `fit`. */
   sourceId?: string;
   /** For `fit`: the closest source name, when one is close. */
   suggestion?: string;
+  /** For `center`: the swapped pair, [longitude, latitude]. */
+  swapped?: [number, number];
   /** The style URL, for `style` errors when the style was given as a URL. */
   url?: string;
 }
@@ -297,6 +306,8 @@ export class MapRenderer {
   private mapReadyFit: { source: string; bounds: Bounds } | null = null;
   /** `fitTo` (U14): set once the camera framed its source — never re-fit. */
   private fitApplied = false;
+  /** ml-aot.65: check `config.center` against the document's inline data, on load. */
+  private checkInlineCenter: (() => void) | null = null;
   private autoLegendContainer: HTMLElement | null;
 
 
@@ -473,6 +484,51 @@ export class MapRenderer {
     }
 
     // Initialize managers
+    // `center: [lat, lng]` (ml-aot.65): once the document's data is known,
+    // a center far from it whose swapped pair lands on it is reported (once).
+    // Not when fitTo or bounds frame the camera: the center is not used then.
+    let dataBounds: Bounds | null = null;
+    let centerChecked = Boolean(fitTo) || (config as { bounds?: unknown }).bounds !== undefined;
+    const unionBounds = (add: Bounds | null) => {
+      if (!add) return;
+      dataBounds = dataBounds
+        ? [
+            [Math.min(dataBounds[0][0], add[0][0]), Math.min(dataBounds[0][1], add[0][1])],
+            [Math.max(dataBounds[1][0], add[1][0]), Math.max(dataBounds[1][1], add[1][1])],
+          ]
+        : add;
+    };
+    const inlineData = (source: unknown): unknown => {
+      if (!source || typeof source !== 'object') return undefined;
+      const s = source as Record<string, unknown>;
+      return s['data'] && typeof s['data'] === 'object' ? s['data'] : s['prefetchedData'];
+    };
+    const checkCenter = () => {
+      if (centerChecked || this.destroyed || !dataBounds) return;
+      const swapped = swappedCenter(config.center, dataBounds);
+      if (!swapped) return;
+      centerChecked = true;
+      const center = config.center as [number, number];
+      console.warn(
+        `[maplibre-yaml] config.center [${center[0]}, ${center[1]}] is far from this map's data, ` +
+          `but [${swapped[0]}, ${swapped[1]}] is on it. Coordinates are [longitude, latitude].`
+      );
+      options.onError?.(new Error('config.center looks like [latitude, longitude]'), false, {
+        kind: 'center',
+        center: [center[0], center[1]],
+        swapped,
+      });
+    };
+    const checkInlineCenter = () => {
+      for (const source of Object.values(sources ?? {})) unionBounds(geojsonBounds(inlineData(source) ?? null));
+      for (const layer of layers) {
+        const source = (layer as { source?: unknown }).source;
+        if (source && typeof source === 'object') unionBounds(geojsonBounds(inlineData(source) ?? null));
+      }
+      checkCenter();
+    };
+    this.checkInlineCenter = checkInlineCenter;
+
     const layerCallbacks: LayerManagerCallbacks = {
       onDataLoading: (layerId) => this.emit('layer:data-loading', { layerId }),
       onDataLoaded: (layerId, featureCount) => {
@@ -496,6 +552,17 @@ export class MapRenderer {
         // feature now holds it — a different one. Drop it; the next mousemove
         // re-applies the highlight under the cursor.
         this.eventHandler.resetFeatureState(layerId);
+        if (!centerChecked) {
+          // Advisory only: never let it get in the way of the data load.
+          try {
+            const sourceId = this.layerManager.getSourceIdForLayer?.(layerId);
+            const data = sourceId ? this.layerManager.getSourceData?.(sourceId) : undefined;
+            unionBounds(data ? geojsonBounds(data) : null);
+            checkCenter();
+          } catch {
+            /* the center check is a hint; skip it */
+          }
+        }
         this.emit('layer:data-loaded', { layerId, featureCount });
       },
       onDataError: (layerId, error) => this.emit('layer:data-error', { layerId, error }),
@@ -700,6 +767,7 @@ export class MapRenderer {
               }
             }
             this.pendingVisibility.clear();
+            this.checkInlineCenter?.();
             this.emit('load', undefined);
             options.onLoad?.();
           });

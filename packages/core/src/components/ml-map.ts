@@ -59,6 +59,7 @@ import {
   describeMarkerIconProblem,
   describeSourceProblem,
   describeFitToProblem,
+  describeSwappedCenter,
   filePageWorkerCard,
   isFilePage,
   looksLikeHtml,
@@ -846,6 +847,11 @@ export class MLMap extends HTMLElement {
           // the console; put it on the map too. Not a map error.
           if (context?.kind === "fit" && context.sourceId) {
             this.reportProblem(describeFitToProblem(context.sourceId, context.suggestion));
+            return;
+          }
+          // `center: [lat, lng]` (ml-aot.65): the renderer warned; show it.
+          if (context?.kind === "center" && context.center && context.swapped) {
+            this.reportProblem(describeSwappedCenter(context.center, context.swapped));
             return;
           }
           // Loud by default: with no `ml-map:error` listener attached, a

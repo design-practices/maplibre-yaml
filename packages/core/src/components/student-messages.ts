@@ -460,6 +460,15 @@ export function describeFitToProblem(source: string, suggestion?: string): strin
   );
 }
 
+/** `config.center` written [latitude, longitude] (ml-aot.65). */
+export function describeSwappedCenter(center: [number, number], suggestion: [number, number]): string {
+  const pair = (p: [number, number]) => `[${p[0]}, ${p[1]}]`;
+  return (
+    `\`center\` is ${pair(center)}, but this map's data is around ${pair(suggestion)}. ` +
+    `Coordinates are [longitude, latitude]: did you mean center: ${pair(suggestion)}?`
+  );
+}
+
 /** A declared `images:` entry failed. */
 export function describeImageProblem(name: string, url: string): string {
   return `Image \`${name}\` (${url}) didn't load, so layers using it draw without it.`;
