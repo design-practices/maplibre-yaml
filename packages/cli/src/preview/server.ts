@@ -4,9 +4,9 @@
 
 import { createServer, type ViteDevServer } from 'vite';
 import { watch } from 'chokidar';
-import { resolve, dirname, join, basename } from 'pathe';
+import { resolve, dirname, join, basename, extname } from 'pathe';
 import { readFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { YAMLParser, type ParseError } from '@maplibre-yaml/core';
 import { logger } from '../lib/logger.js';
@@ -19,8 +19,26 @@ export interface PreviewServer {
   url: string;
 }
 
+/** Prefix of every route the preview serves itself (vs. files in the config dir) */
+const ROUTE_PREFIX = '/__maplibre-yaml/';
+
 /** Virtual route the import map points at when serving the locally installed core */
-const LOCAL_REGISTER_ROUTE = '/__maplibre-yaml/register.js';
+const LOCAL_REGISTER_ROUTE = ROUTE_PREFIX + 'register.js';
+
+/** Virtual directory the locally installed maplibre-gl `dist/` is served from */
+const LOCAL_MAPLIBRE_ROUTE = ROUTE_PREFIX + 'maplibre-gl/';
+
+/**
+ * CDN fallback when no usable maplibre-gl is installed. Major 6 is the line
+ * the docs recommend (>= 6.4.1 carries the GHSA-jrc7-96c5-q579 fix); it is
+ * ESM-only, and its worker is located relative to the module's own URL, so
+ * the `dist/*.mjs` file is loaded directly -- esm.sh rewrites it and breaks
+ * that lookup.
+ */
+const CDN_MAPLIBRE = {
+  moduleUrl: 'https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs',
+  cssUrl: 'https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css',
+};
 
 interface CoreRegisterSource {
   /** Absolute path to the local register bundle (undefined -> CDN fallback) */
@@ -29,36 +47,203 @@ interface CoreRegisterSource {
   importUrl: string;
 }
 
+/** Where the preview page loads maplibre-gl from. */
+export interface MaplibreSource {
+  /** Absolute path to the installed `maplibre-gl/dist` (undefined -> CDN) */
+  distDir?: string;
+  /** Installed version, when served locally */
+  version?: string;
+  /** Import-map target for the bare `maplibre-gl` specifier */
+  moduleUrl: string;
+  /** Stylesheet URL */
+  cssUrl: string;
+}
+
+/**
+ * Find `<ancestor>/node_modules/<name>` walking up from `fromDir`, the way
+ * Node resolves a bare specifier -- without going through the package's
+ * `exports` (core exports only an `import` condition and no `package.json`,
+ * so `require.resolve` cannot be used). Returns the real path, so a pnpm
+ * symlink resolves to the store entry whose sibling `node_modules` holds the
+ * package's own (peer) dependencies.
+ */
+function findPackageDir(name: string, fromDir: string): string | undefined {
+  let dir = fromDir;
+  for (;;) {
+    const candidate = join(dir, 'node_modules', name);
+    if (existsSync(join(candidate, 'package.json'))) return realpathSync(candidate);
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
+/** Directory of this module (src/preview in tests, dist/ when bundled). */
+function selfDir(): string {
+  return dirname(fileURLToPath(import.meta.url));
+}
+
+/** The installed @maplibre-yaml/core package directory, if any. */
+function resolveCoreDir(): string | undefined {
+  return findPackageDir('@maplibre-yaml/core', selfDir());
+}
+
 /**
  * Resolve the register bundle of the locally installed @maplibre-yaml/core,
  * so preview renders with the same core version that validated the config.
  *
- * Uses import.meta.resolve because the package's "./register" export only
- * declares an "import" condition (createRequire().resolve would fail with
- * ERR_PACKAGE_PATH_NOT_EXPORTED). Falls back to esm.sh pinned to the
- * installed version if the browser bundle is missing, and to unpinned
- * esm.sh only if local resolution fails entirely.
+ * Falls back to esm.sh pinned to the installed version if the browser bundle
+ * is missing, and to unpinned esm.sh only if local resolution fails entirely.
  */
-function resolveCoreRegister(): CoreRegisterSource {
-  try {
-    const registerPath = fileURLToPath(import.meta.resolve('@maplibre-yaml/core/register'));
-    const distDir = dirname(registerPath);
-
-    // Prefer the browser bundle: yaml/zod are inlined, only maplibre-gl is
-    // left as a bare specifier (mapped in the page's import map)
-    const browserBundle = join(distDir, 'register.browser.js');
-    if (existsSync(browserBundle)) {
-      return { localFile: browserBundle, importUrl: LOCAL_REGISTER_ROUTE };
-    }
-
-    // No browser bundle in this install -- fall back to esm.sh pinned to the
-    // INSTALLED version, read from the resolved package's package.json
-    const pkg = JSON.parse(readFileSync(join(dirname(distDir), 'package.json'), 'utf-8'));
-    return { importUrl: 'https://esm.sh/@maplibre-yaml/core@' + pkg.version + '/dist/register.js' };
-  } catch {
+function resolveCoreRegister(coreDir: string | undefined): CoreRegisterSource {
+  if (!coreDir) {
     // Local resolution failed entirely -- last resort, unpinned esm.sh
     return { importUrl: 'https://esm.sh/@maplibre-yaml/core/dist/register.js' };
   }
+
+  // Prefer the browser bundle: yaml/zod are inlined, only maplibre-gl is
+  // left as a bare specifier (mapped in the page's import map)
+  const browserBundle = join(coreDir, 'dist', 'register.browser.js');
+  if (existsSync(browserBundle)) {
+    return { localFile: browserBundle, importUrl: LOCAL_REGISTER_ROUTE };
+  }
+
+  // No browser bundle in this install -- fall back to esm.sh pinned to the
+  // INSTALLED version
+  try {
+    const pkg = JSON.parse(readFileSync(join(coreDir, 'package.json'), 'utf-8'));
+    return { importUrl: 'https://esm.sh/@maplibre-yaml/core@' + pkg.version + '/dist/register.js' };
+  } catch {
+    return { importUrl: 'https://esm.sh/@maplibre-yaml/core/dist/register.js' };
+  }
+}
+
+/**
+ * Resolve the maplibre-gl the preview page should load.
+ *
+ * @remarks
+ * Searched from the installed core first -- maplibre-gl is core's peer, so
+ * that is the copy installed alongside it (npm and pnpm both place it where
+ * core resolves it) -- then from each extra directory (the config's folder,
+ * the working directory). The first maplibre-gl 6+ install with an ES module
+ * build is served from disk: preview then works offline and matches the
+ * installed version, and the worker (which v6 loads from next to its own
+ * module URL) is served from the same directory.
+ *
+ * maplibre-gl 3-5 ship only a UMD bundle, which cannot satisfy the import
+ * map's `maplibre-gl` ES module, so such an install falls back to the
+ * maplibre-gl 6 CDN build, as does no install at all.
+ */
+export function resolveMaplibre(searchFrom: Array<string | undefined>): MaplibreSource {
+  for (const from of searchFrom) {
+    if (!from) continue;
+    const dir = findPackageDir('maplibre-gl', from);
+    if (!dir) continue;
+    try {
+      const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8'));
+      const major = Number(String(pkg.version).split('.')[0]);
+      const distDir = join(dir, 'dist');
+      if (major >= 6 && existsSync(join(distDir, 'maplibre-gl.mjs'))) {
+        return {
+          distDir,
+          version: pkg.version,
+          moduleUrl: LOCAL_MAPLIBRE_ROUTE + 'maplibre-gl.mjs',
+          cssUrl: LOCAL_MAPLIBRE_ROUTE + 'maplibre-gl.css',
+        };
+      }
+    } catch {
+      // Unreadable package.json -- keep looking
+    }
+  }
+  return { ...CDN_MAPLIBRE };
+}
+
+const CONTENT_TYPES: Record<string, string> = {
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+};
+
+/**
+ * Map a request under {@link LOCAL_MAPLIBRE_ROUTE} to a file in the installed
+ * maplibre-gl `dist/`. Only plain file names with a served extension resolve
+ * -- no separators, no dot segments -- so nothing outside `dist/` is reachable.
+ */
+function maplibreFile(distDir: string, requested: string): string | undefined {
+  let name: string;
+  try {
+    name = decodeURIComponent(requested);
+  } catch {
+    return undefined;
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name) || name.includes('..')) return undefined;
+  if (!CONTENT_TYPES[extname(name)]) return undefined;
+  const file = join(distDir, name);
+  return existsSync(file) ? file : undefined;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** JSON safe to inline in a `<script>` (a string value cannot close the tag). */
+function inlineJson(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+export interface PreviewPageInput {
+  /** Parsed config, or null when it failed to load/validate */
+  config: unknown;
+  /** Error to overlay, or null */
+  error: string | null;
+  /** Path shown in the status bar */
+  configPath: string;
+  /** Import-map target for @maplibre-yaml/core/register */
+  coreUrl: string;
+  /** Where maplibre-gl comes from */
+  maplibre: Pick<MaplibreSource, 'moduleUrl' | 'cssUrl'>;
+  /** Show the debug panel */
+  debug?: boolean;
+}
+
+/**
+ * The preview page: maplibre-gl CSS, an import map for `maplibre-gl` and
+ * the core register bundle, the `<ml-map>`, and a live-reload hook.
+ *
+ * @remarks
+ * The page is served raw (not through Vite's HTML transform, which would try
+ * to resolve the bare specifiers against the config folder), so
+ * `import.meta.hot` does not exist in its inline script. Live reload
+ * subscribes explicitly through the Vite client's `createHotContext`, in its
+ * own module so a failure there cannot stop the map from rendering.
+ */
+export function createPreviewHTML(input: PreviewPageInput): string {
+  const { config, error, configPath, coreUrl, maplibre, debug } = input;
+  const errorOverlay = error ? '<div class="error-overlay"><div class="error-box"><div class="error-title">Configuration Error</div><div class="error-message">' + escapeHtml(error) + '</div></div></div>' : '';
+  const statusDotClass = error ? 'error' : '';
+  const statusText = error ? 'Error in configuration' : 'Connected';
+
+  // Debug panel (if enabled)
+  const debugPanel = debug ? getDebugPanelHTML(config ?? null) : '';
+  const debugCSS = debug ? getDebugPanelCSS() : '';
+  const debugJS = debug ? getDebugPanelJS() : '';
+
+  const importMap = inlineJson({ imports: { '@maplibre-yaml/core/register': coreUrl, 'maplibre-gl': maplibre.moduleUrl } });
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>maplibre-yaml preview</title>'
+    + '<link href="' + escapeHtml(maplibre.cssUrl) + '" rel="stylesheet" />'
+    + '<script type="importmap">' + importMap + '</script>'
+    + '<style>* { margin: 0; padding: 0; box-sizing: border-box; }body { font-family: system-ui, -apple-system, sans-serif; }#map { width: 100vw; height: 100vh; }.error-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }.error-box { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 24px; max-width: 600px; max-height: 80vh; overflow: auto; }.error-title { color: #dc2626; font-weight: 600; font-size: 18px; margin-bottom: 12px; }.error-message { color: #991b1b; font-family: monospace; font-size: 14px; white-space: pre-wrap; }.status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1f2937; color: white; padding: 8px 16px; font-size: 12px; display: flex; justify-content: space-between; z-index: 999; }.status-indicator { display: flex; align-items: center; gap: 8px; }.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }.status-dot.error { background: #ef4444; }' + debugCSS + '</style></head>'
+    + '<body><div id="map"></div>' + errorOverlay + debugPanel
+    + '<div class="status-bar"><div class="status-indicator"><div class="status-dot ' + statusDotClass + '"></div><span>' + statusText + '</span></div><div><span>' + escapeHtml(configPath) + '</span></div></div>'
+    + '<script type="module">import \'@maplibre-yaml/core/register\';const config = ' + inlineJson(config ?? null) + ';if (config) {const mapEl = document.createElement(\'ml-map\');mapEl.style.cssText = \'width: 100%; height: 100%;\';mapEl.config = config;document.getElementById(\'map\').appendChild(mapEl);mapEl.addEventListener(\'ml-map:load\', () => console.log(\'[preview] Map loaded\'));mapEl.addEventListener(\'ml-map:error\', (e) => console.error(\'[preview] Map error:\', e.detail));}</script>'
+    + '<script type="module">import { createHotContext } from \'/@vite/client\';const hot = createHotContext(\'/__maplibre-yaml/preview\');hot.on(\'yaml-update\', () => {console.log(\'[preview] Config updated, reloading...\');window.location.reload();});</script>'
+    + '<script>' + debugJS + '</script></body></html>';
 }
 
 /**
@@ -74,10 +259,12 @@ export async function createPreviewServer(
 
   let viteServer: ViteDevServer | null = null;
   let watcher: ReturnType<typeof watch> | null = null;
-  let currentConfig: string | null = null;
+  let currentConfig: unknown = null;
   let currentError: string | null = null;
 
-  const coreRegister = resolveCoreRegister();
+  const coreDir = resolveCoreDir();
+  const coreRegister = resolveCoreRegister(coreDir);
+  const maplibre = resolveMaplibre([coreDir, configDir, process.cwd()]);
 
   async function loadConfig(): Promise<{ valid: boolean; config?: any; error?: string }> {
     try {
@@ -100,7 +287,7 @@ export async function createPreviewServer(
         return { valid: false, error: currentError };
       }
 
-      currentConfig = JSON.stringify(result.data);
+      currentConfig = result.data;
       currentError = null;
       return { valid: true, config: result.data };
     } catch (error) {
@@ -108,29 +295,6 @@ export async function createPreviewServer(
       currentError = error instanceof Error ? error.message : String(error);
       return { valid: false, error: currentError };
     }
-  }
-
-  function escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  function createPreviewHTML(config: string | null, error: string | null): string {
-    const errorOverlay = error ? '<div class="error-overlay"><div class="error-box"><div class="error-title">Configuration Error</div><div class="error-message">' + escapeHtml(error) + '</div></div></div>' : '';
-    const statusDotClass = error ? 'error' : '';
-    const statusText = error ? 'Error in configuration' : 'Connected';
-    const configJson = config ?? 'null';
-    const configObj = config ? JSON.parse(config) : null;
-
-    // Debug panel (if enabled)
-    const debugPanel = options.debug ? getDebugPanelHTML(configObj) : '';
-    const debugCSS = options.debug ? getDebugPanelCSS() : '';
-    const debugJS = options.debug ? getDebugPanelJS() : '';
-
-    return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>maplibre-yaml preview</title><link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" /><script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script><script type="importmap">' + JSON.stringify({ imports: { '@maplibre-yaml/core/register': coreRegister.importUrl, 'maplibre-gl': 'https://esm.sh/maplibre-gl@4' } }) + '</script><style>* { margin: 0; padding: 0; box-sizing: border-box; }body { font-family: system-ui, -apple-system, sans-serif; }#map { width: 100vw; height: 100vh; }.error-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }.error-box { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 24px; max-width: 600px; max-height: 80vh; overflow: auto; }.error-title { color: #dc2626; font-weight: 600; font-size: 18px; margin-bottom: 12px; }.error-message { color: #991b1b; font-family: monospace; font-size: 14px; white-space: pre-wrap; }.status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1f2937; color: white; padding: 8px 16px; font-size: 12px; display: flex; justify-content: space-between; z-index: 999; }.status-indicator { display: flex; align-items: center; gap: 8px; }.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }.status-dot.error { background: #ef4444; }' + debugCSS + '</style></head><body><div id="map"></div>' + errorOverlay + debugPanel + '<div class="status-bar"><div class="status-indicator"><div class="status-dot ' + statusDotClass + '"></div><span>' + statusText + '</span></div><div><span>' + configPath + '</span></div></div><script type="module">import \'@maplibre-yaml/core/register\';const config = ' + configJson + ';if (config) {const mapEl = document.createElement(\'ml-map\');mapEl.style.cssText = \'width: 100%; height: 100%;\';mapEl.config = config;document.getElementById(\'map\').appendChild(mapEl);mapEl.addEventListener(\'ml-map:load\', () => console.log(\'[preview] Map loaded\'));mapEl.addEventListener(\'ml-map:error\', (e) => console.error(\'[preview] Map error:\', e.detail));}if (import.meta.hot) {import.meta.hot.on(\'yaml-update\', () => {console.log(\'[preview] Config updated, reloading...\');window.location.reload();});}</script><script>' + debugJS + '</script></body></html>';
   }
 
   const serverUrl = 'http://localhost:' + port;
@@ -141,25 +305,56 @@ export async function createPreviewServer(
     async start() {
       await loadConfig();
 
+      if (maplibre.distDir) {
+        logger.info('Using maplibre-gl ' + maplibre.version + ' from ' + dirname(maplibre.distDir));
+      } else {
+        logger.warn('maplibre-gl 6 is not installed next to @maplibre-yaml/core; loading it from ' + maplibre.moduleUrl + ' (needs network)');
+      }
+
       viteServer = await createServer({
         root: configDir,
+        // The page is generated, not an index.html Vite could scan
+        optimizeDeps: { noDiscovery: true, include: [] },
         server: { port, open: options.open ?? true },
         plugins: [{
           name: 'maplibre-yaml-preview',
           configureServer(server) {
             server.middlewares.use((req, res, next) => {
-              const url = (req.url ?? '').split('?')[0];
+              const url = (req.url ?? '').split('?')[0] ?? '';
 
               if (url === '/' || url === '/index.html') {
-                res.setHeader('Content-Type', 'text/html');
-                res.end(createPreviewHTML(currentConfig, currentError));
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                res.end(createPreviewHTML({
+                  config: currentConfig,
+                  error: currentError,
+                  configPath,
+                  coreUrl: coreRegister.importUrl,
+                  maplibre,
+                  debug: options.debug,
+                }));
                 return;
               }
 
-              // Serve the locally installed core register bundle (and its
-              // sourcemap, requested relative to the bundle's real filename)
-              if (coreRegister.localFile && url.startsWith('/__maplibre-yaml/')) {
-                const requested = url.slice('/__maplibre-yaml/'.length);
+              if (!url.startsWith(ROUTE_PREFIX)) {
+                next();
+                return;
+              }
+
+              // The installed maplibre-gl dist: module, shared chunk, worker,
+              // CSS and their sourcemaps
+              if (url.startsWith(LOCAL_MAPLIBRE_ROUTE)) {
+                const file = maplibre.distDir
+                  ? maplibreFile(maplibre.distDir, url.slice(LOCAL_MAPLIBRE_ROUTE.length))
+                  : undefined;
+                if (file) {
+                  res.setHeader('Content-Type', CONTENT_TYPES[extname(file)]!);
+                  res.end(readFileSync(file));
+                  return;
+                }
+              } else if (coreRegister.localFile) {
+                // The installed core register bundle (and its sourcemap,
+                // requested relative to the bundle's real filename)
+                const requested = url.slice(ROUTE_PREFIX.length);
                 const files: Record<string, string> = {
                   'register.js': coreRegister.localFile,
                   [basename(coreRegister.localFile) + '.map']: coreRegister.localFile + '.map',
@@ -172,7 +367,9 @@ export async function createPreviewServer(
                 }
               }
 
-              next();
+              res.statusCode = 404;
+              res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+              res.end('Not found');
             });
           },
         }],
