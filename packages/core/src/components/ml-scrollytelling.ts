@@ -81,7 +81,7 @@ import {
 } from "./student-messages.js";
 
 /** The layout breakpoint the stylesheet switches to stacked cards at. */
-const NARROW_QUERY = "(max-width: 768px)";
+const NARROW_QUERY = "(max-width: 768px), (max-height: 500px) and (max-width: 1000px)";
 
 /**
  * Every event `<ml-scrollytelling>` dispatches, typed with its `detail`. All
@@ -659,6 +659,7 @@ export class MLScrollytelling extends HTMLElement {
       frame = view.requestAnimationFrame(() => {
         frame = 0;
         sync();
+        if (this.controller === controller) this.placeChrome();
       });
     };
     view?.addEventListener("scroll", onScroll, { passive: true, capture: true });
@@ -673,11 +674,13 @@ export class MLScrollytelling extends HTMLElement {
     if (typeof IntersectionObserver === "function") {
       // Also on band crossings: the first activation on load, layout shifts
       // (an image loading), and environments that scroll without events.
-      const observer = new IntersectionObserver(() => sync(), {
-        root: null,
-        rootMargin: "-40% 0px -40% 0px",
-        threshold: 0,
-      });
+      const observer = new IntersectionObserver(
+        () => {
+          sync();
+          onScroll();
+        },
+        { root: null, rootMargin: "-40% 0px -40% 0px", threshold: 0 }
+      );
       this.querySelectorAll(":scope > .scrolly-chapters > .scrolly-chapter").forEach((section) =>
         observer.observe(section)
       );
@@ -694,6 +697,8 @@ export class MLScrollytelling extends HTMLElement {
         for (const w of waiters) w.resolve(map);
         if (generation === this.generation && this.controller === controller) {
           controller.setMap(map as unknown as StoryMap);
+          // The legend and slots mount as the map loads: place them now.
+          onScroll();
         }
       },
       (error: Error) => {
@@ -730,8 +735,12 @@ export class MLScrollytelling extends HTMLElement {
       section: section.getBoundingClientRect(),
       card: (section.querySelector<HTMLElement>(".chapter-content") ?? section).getBoundingClientRect(),
     }));
-    const inBand = boxes.some((b) => b.section.top <= h * 0.6 && b.section.bottom >= h * 0.4);
-    if (!inBand) return null;
+    // The story has reached the trigger band (its top is above 60% of the
+    // screen) and is still on screen. Before it and once it has scrolled
+    // away: no change. (Not "a section is in the band": at the very end the
+    // footer fills the band while the last card is still being read.)
+    const reached = boxes.some((b) => b.section.top <= h * 0.6 && b.section.bottom > 0);
+    if (!reached) return null;
     const middle = h / 2;
     let best: { id: string | null; distance: number } | null = null;
     for (const b of boxes) {
@@ -822,24 +831,20 @@ export class MLScrollytelling extends HTMLElement {
    * chapter's `center` lands in the part the reader can see (ml-aot.8).
    *
    * @remarks
-   * Narrow screens stack the card low in the chapter: pad the bottom by the
-   * card and the space under it, and lift bottom-corner chrome (a legend,
-   * slots) above that band so the card does not cover it (ml-aot.39). Wide
-   * screens pad the side a left/right card sits on; a centred card sits over
-   * the middle of the map, so the camera is offset upward to put the
-   * chapter's `center` above it (ml-aot.39). Full-width and hidden chapters
-   * keep the plain centre. At most 60% of the map (75% above a centred
-   * card), so a huge card never squeezes the map to nothing.
+   * Narrow screens (and short landscape ones) stack the card low in the
+   * chapter: pad the bottom by the card and the space under it. Wide screens
+   * pad the side a left/right card sits on; a centred or full-width card
+   * sits over the middle of the map, so the camera is offset upward to put
+   * the chapter's `center` above it (ml-aot.39, ml-aot.50). Hidden chapters
+   * keep the plain centre. At most 60% of the map (75% above a centred or
+   * full-width card), so a huge card never squeezes the map to nothing.
    */
   private cameraPadding(chapter: Chapter): CameraPadding | undefined {
     const zero: CameraPadding = { top: 0, right: 0, bottom: 0, left: 0 };
     const mapBox = this.querySelector(":scope > .scrolly-map-container")?.getBoundingClientRect();
     const section = this.sectionFor(chapter.id);
     const card = section?.querySelector<HTMLElement>(".chapter-content");
-    if (!mapBox || mapBox.width === 0 || !section || !card || chapter.hidden) {
-      this.setCardZone(0);
-      return zero;
-    }
+    if (!mapBox || mapBox.width === 0 || !section || !card || chapter.hidden) return zero;
     const box = card.getBoundingClientRect();
     const view = this.ownerDocument.defaultView;
     const narrow = view?.matchMedia?.(NARROW_QUERY).matches ?? false;
@@ -847,33 +852,80 @@ export class MLScrollytelling extends HTMLElement {
 
     if (narrow) {
       const below = parseFloat(view?.getComputedStyle(section).paddingBottom ?? "0") || 0;
-      const bottom = cap(box.height + below, mapBox.height);
-      this.setCardZone(bottom);
-      return { ...zero, bottom };
+      return { ...zero, bottom: cap(box.height + below, mapBox.height) };
     }
-    this.setCardZone(0);
     const alignment = chapter.alignment ?? "center";
     if (alignment === "left") return { ...zero, left: cap(box.right - mapBox.left + 16, mapBox.width) };
     if (alignment === "right") return { ...zero, right: cap(mapBox.right - box.left + 16, mapBox.width) };
-    if (alignment === "center") {
-      // The card rests centred on the map (the chapter is one map-height
-      // tall and centres it): pad from its top edge down. The strip above a
-      // tall card (a chapter image) is all the reader sees of the map, so
-      // this one may take up to 75%.
-      const bottom = mapBox.height / 2 + box.height / 2 + 16;
-      return { ...zero, bottom: Math.round(Math.max(0, Math.min(bottom, mapBox.height * 0.75))) };
-    }
-    return zero;
+    // Centred and full-width: the card rests centred on the map (the
+    // chapter is one map-height tall and centres it): pad from its top edge
+    // down. The strip above a tall card (a chapter image) is all the reader
+    // sees of the map, so this one may take up to 75%.
+    const bottom = mapBox.height / 2 + box.height / 2 + 16;
+    return { ...zero, bottom: Math.round(Math.max(0, Math.min(bottom, mapBox.height * 0.75))) };
   }
 
   /**
-   * The band at the bottom of the map a narrow-screen card rests in, as
-   * `--ml-scrolly-card-zone`: the stylesheet lifts bottom-corner chrome above
-   * it (ml-aot.39).
+   * Keep the map's corner chrome (legend, slots, params panel) out from
+   * under the chapter cards (ml-aot.39, ml-aot.50). The cards scroll over
+   * the map above its chrome, so a legend in any corner was covered by
+   * every card passing through it -- on phones for most of each chapter.
+   * Each frame, every corner the cards overlap sideways is moved
+   * vertically to the nearest spot no card covers, never closer to the
+   * edge than its own inset (which clears MapLibre's scale bar and
+   * attribution) and never off the map. With no free spot it stays home.
+   * The offset is a CSS variable the stylesheet reads, so it composes with
+   * ChromeLayout's own placement instead of overriding it.
    */
-  private setCardZone(px: number): void {
-    if (px > 0) this.style.setProperty("--ml-scrolly-card-zone", `${px}px`);
-    else this.style.removeProperty("--ml-scrolly-card-zone");
+  private placeChrome(): void {
+    const container = this.querySelector<HTMLElement>(":scope > .scrolly-map-container");
+    if (!container) return;
+    const mapBox = container.getBoundingClientRect();
+    if (mapBox.height === 0) return;
+    const cards = Array.from(
+      this.querySelectorAll<HTMLElement>(":scope > .scrolly-chapters .chapter-content")
+    )
+      .map((card) => card.getBoundingClientRect())
+      .filter((r) => r.height > 0 && r.bottom > mapBox.top && r.top < mapBox.bottom);
+    const set = (el: HTMLElement, name: string, px: number | null) => {
+      const value = px === null ? "" : `${Math.round(px)}px`;
+      if (el.style.getPropertyValue(name) === value) return;
+      if (value) el.style.setProperty(name, value);
+      else el.style.removeProperty(name);
+    };
+    for (const corner of Array.from(container.querySelectorAll<HTMLElement>(".ml-map-chrome"))) {
+      const bottom = /-bottom-/.test(corner.className);
+      const left = /-left\b/.test(corner.className);
+      const yVar = bottom ? "--ml-scrolly-chrome-bottom" : "--ml-scrolly-chrome-top";
+      const insetY = parseFloat(corner.style.getPropertyValue("--ml-chrome-inset")) || 10;
+      const insetX = 10;
+      const { width, height } = corner.getBoundingClientRect();
+      if (height === 0 || width === 0) continue;
+      // Offsets from the corner's own edges: home, then just past each card
+      // (vertically: above/below it; sideways: beside it).
+      const ys = [
+        insetY,
+        ...cards.map((r) => (bottom ? mapBox.bottom - r.top + 10 : r.bottom - mapBox.top + 10)),
+      ].filter((o) => o >= insetY && o + height <= mapBox.height - 10);
+      const xs = [
+        insetX,
+        ...cards.map((r) => (left ? r.right - mapBox.left + 10 : mapBox.right - r.left + 10)),
+      ].filter((o) => o >= insetX && o + width <= mapBox.width - 10);
+      let best: { x: number; y: number; cost: number } | null = null;
+      for (const x of xs) {
+        for (const y of ys) {
+          const l = left ? mapBox.left + x : mapBox.right - x - width;
+          const t = bottom ? mapBox.bottom - y - height : mapBox.top + y;
+          const covered = cards.some((r) => r.left < l + width && l < r.right && r.top < t + height && t < r.bottom);
+          if (covered) continue;
+          // Prefer the smallest move, and up/down over sideways.
+          const cost = (y - insetY) + 2 * (x - insetX);
+          if (!best || cost < best.cost) best = { x, y, cost };
+        }
+      }
+      set(corner, yVar, best && best.y !== insetY ? best.y : null);
+      set(corner, "--ml-scrolly-chrome-x", best && best.x !== insetX ? best.x : null);
+    }
   }
 
   // ------------------------------------------------------------------

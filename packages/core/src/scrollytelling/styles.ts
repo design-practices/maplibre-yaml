@@ -369,7 +369,48 @@ ml-scrollytelling[debug] .scrolly-chapter.is-active {
   background: #000;
 }
 
-@media (max-width: 768px) {
+/* Map chrome (legend, slots, params panel) stays out from under the cards:
+   the element sets --ml-scrolly-chrome-bottom / -top on a corner a card
+   would cover (ml-aot.39, ml-aot.50), and the corner never comes closer to
+   the edge than ChromeLayout's own inset (--ml-chrome-inset), which clears
+   MapLibre's scale bar and attribution. !important: ChromeLayout's offset is
+   an inline style. No transition: the chrome moves with the scroll. */
+ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-left,
+ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
+  bottom: max(var(--ml-chrome-inset, 10px), var(--ml-scrolly-chrome-bottom, 0px)) !important;
+}
+
+ml-scrollytelling > .scrolly-map-container .ml-map-chrome-top-left,
+ml-scrollytelling > .scrolly-map-container .ml-map-chrome-top-right {
+  top: max(var(--ml-chrome-inset, 10px), var(--ml-scrolly-chrome-top, 0px)) !important;
+}
+
+ml-scrollytelling > .scrolly-map-container .ml-map-chrome-top-left,
+ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-left {
+  left: max(10px, var(--ml-scrolly-chrome-x, 0px)) !important;
+}
+
+ml-scrollytelling > .scrolly-map-container .ml-map-chrome-top-right,
+ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
+  right: max(10px, var(--ml-scrolly-chrome-x, 0px)) !important;
+}
+
+/* A chapter photo or video never fills the map (ml-aot.50): a full-width
+   card scaled its photo to the whole width, taller than the screen. */
+.scrolly-chapter .chapter-media img {
+  width: auto;
+  max-width: 100%;
+  max-height: 40vh;
+  margin: 0 auto;
+}
+
+.scrolly-chapter .chapter-media video {
+  max-height: 40vh;
+}
+
+/* Phones, and short landscape screens (a phone on its side is wider than
+   768px but only ~400px tall: desktop cards were taller than the screen). */
+@media (max-width: 768px), (max-height: 500px) and (max-width: 1000px) {
   /* Cards sit low in their chapter; the camera is offset to match, so the
      chapter's subject shows above the card instead of under it. */
   .scrolly-chapter {
@@ -395,17 +436,6 @@ ml-scrollytelling[debug] .scrolly-chapter.is-active {
     font-size: 1rem;
   }
 
-  /* Bottom-corner chrome (a legend, slots) rides above the band the active
-     card rests in (--ml-scrolly-card-zone, set by the element), so the card
-     does not cover it (ml-aot.39). !important: the corner's offset is an
-     inline style. */
-  ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-left,
-  ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
-    bottom: calc(var(--ml-scrolly-card-zone, 0px) + 10px) !important;
-    max-height: calc(100% - var(--ml-scrolly-card-zone, 0px) - 20px) !important;
-    transition: bottom 0.3s ease;
-  }
-
   /* A gutter for the rail, so it never sits on a card. */
   ml-scrollytelling.has-markers .scrolly-chapter {
     padding-right: 44px;
@@ -413,6 +443,31 @@ ml-scrollytelling[debug] .scrolly-chapter.is-active {
 
   ml-scrollytelling .chapter-markers {
     right: 8px;
+  }
+}
+
+/* A phone on its side: the screen is short, so the card is narrow (it
+   leaves the map's sides, and the chrome there, uncovered), its photo
+   shorter, its padding smaller. Full-width cards too. */
+@media (max-height: 500px) and (max-width: 1000px) and (min-width: 769px) {
+  .scrolly-chapter .chapter-content,
+  .scrolly-chapter.align-full .chapter-content {
+    max-width: 480px;
+    padding: 16px 20px;
+  }
+
+  .scrolly-chapter .chapter-media img,
+  .scrolly-chapter .chapter-media video {
+    max-height: 30vh;
+  }
+
+  .scrolly-chapter .chapter-media {
+    margin-bottom: 10px;
+  }
+
+  .scrolly-chapter .chapter-title {
+    font-size: 1.25rem;
+    margin-bottom: 8px;
   }
 }
 

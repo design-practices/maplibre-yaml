@@ -166,9 +166,11 @@ chapters:
   while the story scrolls; each chapter is a card. `alignment: left | right |
   center | full` places the card, and the camera is offset so the chapter's
   `center` is not hidden behind it: beside a left or right card, above a
-  centred one. On phones the card sits in the lower part of the screen, the
-  map's subject shows above it, and a bottom-corner legend moves up out of
-  the card's way.
+  centred or full-width one. On phones (and phones on their side) the card
+  sits in the lower part of the screen and the map's subject shows above it.
+  The map's legend and slots move out of a card's way as it scrolls past, so
+  they stay visible, and a chapter photo is never taller than 40% of the
+  screen.
 - **Camera moves** per chapter: `center`, `zoom`, `pitch`, `bearing`, and
   `animation: flyTo | easeTo | jumpTo` (with `speed`, `curve`).
 - **Layers and actions:** `layers.show` / `layers.hide`, and

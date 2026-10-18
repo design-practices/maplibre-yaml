@@ -458,6 +458,95 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await context.close();
   });
 
+  /** Map chrome vs the cards and MapLibre's own bottom controls, now. */
+  const chromeState = (page: Page) =>
+    page.evaluate(() => {
+      const el = document.querySelector("ml-scrollytelling") as HTMLElement;
+      const legend = el.querySelector<HTMLElement>(".ml-map-legend")!.getBoundingClientRect();
+      const map = el.querySelector(".scrolly-map-container")!.getBoundingClientRect();
+      const hit = (a: DOMRect, b: DOMRect) =>
+        a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+      const cards = [...el.querySelectorAll<HTMLElement>(".chapter-content")]
+        .map((c) => ({ id: c.closest<HTMLElement>(".scrolly-chapter")!.dataset.chapterId, r: c.getBoundingClientRect() }))
+        .filter((c) => c.r.height > 0);
+      const controls = [...el.querySelectorAll<HTMLElement>(".maplibregl-ctrl-scale, .maplibregl-ctrl-attrib")].map((c) =>
+        c.getBoundingClientRect()
+      );
+      return {
+        underCard: cards.filter((c) => hit(c.r, legend)).map((c) => c.id),
+        onControl: controls.some((c) => c.height > 0 && hit(c, legend)),
+        inside: legend.top >= map.top - 1 && legend.bottom <= map.bottom + 1,
+        legend: [legend.left, legend.top, legend.right, legend.bottom].map(Math.round),
+        scrollY: Math.round(scrollY),
+      };
+    });
+
+  for (const [doc, viewport] of [
+    ["chrome", { width: 390, height: 844 }],
+    ["chrome", { width: 1280, height: 800 }],
+    ["chrome-top", { width: 844, height: 390 }],
+    ["chrome", { width: 844, height: 390 }],
+  ] as const) {
+    test(`story chrome stays visible while reading: ${doc}, ${viewport.width}x${viewport.height} (ml-aot.50, review A2)`, async ({
+      browser,
+      baseURL,
+    }) => {
+      const mobile = viewport.width < 900 && viewport.height < 900 && (viewport.width < 768 || viewport.height < 500);
+      const context = await browser.newContext({ viewport, reducedMotion: "reduce", isMobile: mobile, hasTouch: mobile });
+      const page = await context.newPage();
+      const errors = await guard(page, baseURL!);
+      await page.goto(`/examples/verification/story-layout/index.html?doc=${doc}`, { waitUntil: "domcontentloaded" });
+      await storyReady(page, "pts");
+      await page.waitForSelector(".ml-map-legend");
+      const top = await page.evaluate(() => document.querySelector("ml-scrollytelling")!.getBoundingClientRect().top + scrollY);
+      const end = await page.evaluate(
+        () => document.querySelector(".scrolly-chapter:last-child")!.getBoundingClientRect().bottom + scrollY - innerHeight
+      );
+      const bad: string[] = [];
+      for (let y = top; y <= end; y += Math.round(viewport.height / 7)) {
+        await page.evaluate((to) => scrollTo(0, to), y);
+        await settle(page);
+        const s = await chromeState(page);
+        if (s.underCard.length || s.onControl || !s.inside) {
+          bad.push(`at ${s.scrollY}: legend ${s.legend} under ${s.underCard.join(",") || "-"}${s.onControl ? " on scale/attribution" : ""}${s.inside ? "" : " outside the map"}`);
+        }
+      }
+      await page.screenshot({ path: `e2e/results/story-chrome-${doc}-${viewport.width}x${viewport.height}.png` });
+      expect(bad, bad.join("\n")).toEqual([]);
+      // No transition on the chrome under reduced motion.
+      const transition = await page.evaluate(
+        () => getComputedStyle(document.querySelector(".ml-map-legend")!.closest<HTMLElement>("[class*=ml-map-chrome-]")!).transitionDuration
+      );
+      expect(transition.split(",").every((d) => parseFloat(d) === 0)).toBe(true);
+      expect(errors).toEqual([]);
+      await context.close();
+    });
+  }
+
+  test("a full-width card's photo never fills the map, and its subject shows (ml-aot.50)", async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    const errors = await guard(page, baseURL!);
+    await page.goto("/examples/verification/story-layout/index.html?doc=chrome", { waitUntil: "domcontentloaded" });
+    await storyReady(page, "pts");
+    await scrollToChapter(page, "full");
+    await settled(page);
+    const s = await page.evaluate(() => {
+      const el = document.querySelector("ml-scrollytelling") as any;
+      const card = el.querySelector('.scrolly-chapter[data-chapter-id="full"] .chapter-content').getBoundingClientRect();
+      const img = el.querySelector('.scrolly-chapter[data-chapter-id="full"] .chapter-media img').getBoundingClientRect();
+      const box = el.querySelector(".scrolly-map-container").getBoundingClientRect();
+      const p = el.getMap().project([60, -10]);
+      return { cardHeight: card.height, imgHeight: img.height, cardTop: card.top, subjectY: box.top + p.y };
+    });
+    expect(s.imgHeight).toBeLessThanOrEqual(800 * 0.4 + 1);
+    expect(s.cardHeight).toBeLessThan(800 * 0.8);
+    expect(s.subjectY, "subject above the full-width card").toBeLessThan(s.cardTop);
+    expect(s.subjectY).toBeGreaterThan(0);
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+
   test("reduced motion: chapter camera moves are instant (ml-cxk)", async ({ browser, baseURL }) => {
     const context = await browser.newContext({ reducedMotion: "reduce", viewport: { width: 1280, height: 800 } });
     const page = await context.newPage();
