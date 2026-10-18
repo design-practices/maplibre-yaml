@@ -82,7 +82,7 @@ import {
 } from "./student-messages.js";
 
 /** The layout breakpoint the stylesheet switches to stacked cards at. */
-const NARROW_QUERY = "(max-width: 768px), (max-height: 500px) and (max-width: 1000px)";
+const NARROW_QUERY = "(max-width: 768px)";
 
 /**
  * Every event `<ml-scrollytelling>` dispatches, typed with its `detail`. All
@@ -899,9 +899,18 @@ export class MLScrollytelling extends HTMLElement {
       const below = parseFloat(view?.getComputedStyle(section).paddingBottom ?? "0") || 0;
       return { ...zero, bottom: cap(box.height + below, mapBox.height) };
     }
-    const alignment = chapter.alignment ?? "center";
-    if (alignment === "left") return { ...zero, left: cap(box.right - mapBox.left + 16, mapBox.width) };
-    if (alignment === "right") return { ...zero, right: cap(mapBox.right - box.left + 16, mapBox.width) };
+    // A card beside the map's centre pads that side. Measured, not read from
+    // `alignment`: on a phone on its side centred cards sit on the left.
+    const middle = (box.left + box.right) / 2;
+    const mapMiddle = (mapBox.left + mapBox.right) / 2;
+    if (box.width < mapBox.width * 0.6) {
+      if (middle < mapMiddle - mapBox.width * 0.1) {
+        return { ...zero, left: cap(box.right - mapBox.left + 16, mapBox.width) };
+      }
+      if (middle > mapMiddle + mapBox.width * 0.1) {
+        return { ...zero, right: cap(mapBox.right - box.left + 16, mapBox.width) };
+      }
+    }
     // Centred and full-width: the card rests centred on the map (the
     // chapter is one map-height tall and centres it): pad from its top edge
     // down. The strip above a tall card (a chapter image) is all the reader
@@ -928,7 +937,7 @@ export class MLScrollytelling extends HTMLElement {
     const mapBox = container.getBoundingClientRect();
     if (mapBox.height === 0) return;
     const cards = Array.from(
-      this.querySelectorAll<HTMLElement>(":scope > .scrolly-chapters .chapter-content")
+      this.querySelectorAll<HTMLElement>(":scope > .scrolly-chapters .chapter-content, :scope > .scrolly-chapters > .scrolly-footer")
     )
       .map((card) => card.getBoundingClientRect())
       .filter((r) => r.height > 0 && r.bottom > mapBox.top && r.top < mapBox.bottom);

@@ -58,3 +58,4 @@ chapters:
     center: [10, 40]
     zoom: 2
     alignment: right
+footer: "<p>The footer scrolls over the map too: the legend must stay clear of it.</p>"

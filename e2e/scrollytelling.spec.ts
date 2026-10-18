@@ -500,7 +500,7 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
       await page.waitForSelector(".ml-map-legend");
       const top = await page.evaluate(() => document.querySelector("ml-scrollytelling")!.getBoundingClientRect().top + scrollY);
       const end = await page.evaluate(
-        () => document.querySelector(".scrolly-chapter:last-child")!.getBoundingClientRect().bottom + scrollY - innerHeight
+        () => document.documentElement.scrollHeight - innerHeight
       );
       const bad: string[] = [];
       for (let y = top; y <= end; y += Math.round(viewport.height / 7)) {
@@ -522,6 +522,49 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
       await context.close();
     });
   }
+
+  test("phone on its side: every chapter's subject is beside its card, not under it (ml-aot.50)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({
+      viewport: { width: 844, height: 390 },
+      reducedMotion: "reduce",
+      isMobile: true,
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    const errors = await guard(page, baseURL!);
+    await page.goto("/examples/verification/story-layout/index.html?doc=chrome", { waitUntil: "domcontentloaded" });
+    await storyReady(page, "pts");
+    const covered: string[] = [];
+    for (const [id, at] of [
+      ["intro", [10, 40]],
+      ["centred", [-20, 10]],
+      ["full", [60, -10]],
+      ["right", [10, 40]],
+    ] as const) {
+      await scrollToChapter(page, id);
+      await settled(page);
+      const s = await page.evaluate(
+        ([chapterId, lngLat]) => {
+          const el = document.querySelector("ml-scrollytelling") as any;
+          const card = el.querySelector(`.scrolly-chapter[data-chapter-id="${chapterId}"] .chapter-content`).getBoundingClientRect();
+          const box = el.querySelector(".scrolly-map-container").getBoundingClientRect();
+          const p = el.getMap().project(lngLat);
+          const x = box.left + p.x;
+          const y = box.top + p.y;
+          return { x, y, under: x > card.left && x < card.right && y > card.top && y < card.bottom, cardHeight: card.height };
+        },
+        [id, at] as const
+      );
+      if (s.under) covered.push(`${id}: subject (${Math.round(s.x)}, ${Math.round(s.y)}) under its card`);
+      expect(s.cardHeight, `${id}: card fits the short screen`).toBeLessThan(390);
+    }
+    expect(covered, covered.join("\n")).toEqual([]);
+    expect(errors).toEqual([]);
+    await context.close();
+  });
 
   test("a full-width card's photo never fills the map, and its subject shows (ml-aot.50)", async ({ browser, baseURL }) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });

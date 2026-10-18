@@ -419,9 +419,8 @@ ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
   opacity: 0.85;
 }
 
-/* Phones, and short landscape screens (a phone on its side is wider than
-   768px but only ~400px tall: desktop cards were taller than the screen). */
-@media (max-width: 768px), (max-height: 500px) and (max-width: 1000px) {
+/* Phones. (A phone on its side has its own block below.) */
+@media (max-width: 768px) {
   /* Cards sit low in their chapter; the camera is offset to match, so the
      chapter's subject shows above the card instead of under it. */
   .scrolly-chapter {
@@ -457,14 +456,30 @@ ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
   }
 }
 
-/* A phone on its side: the screen is short, so the card is narrow (it
-   leaves the map's sides, and the chrome there, uncovered), its photo
-   shorter, its padding smaller. Full-width cards too. */
+/* A phone on its side (ml-aot.50): wider than 768px but only ~400px tall,
+   where desktop cards were taller than the screen and a centred one sat on
+   the chapter's subject. Cards stay beside the map's centre -- a narrow,
+   short card on one side (centred and full-width ones go left) -- so the
+   camera keeps the subject on the other side, and the photo is shorter. */
 @media (max-height: 500px) and (max-width: 1000px) and (min-width: 769px) {
+  .scrolly-chapter {
+    padding: 8vh 3vw;
+  }
+
+  .scrolly-chapter.align-center,
+  .scrolly-chapter.align-full {
+    justify-content: flex-start;
+  }
+
   .scrolly-chapter .chapter-content,
   .scrolly-chapter.align-full .chapter-content {
-    max-width: 480px;
-    padding: 16px 20px;
+    max-width: min(46%, 420px);
+    padding: 14px 18px;
+    text-align: left;
+  }
+
+  ml-scrollytelling.has-markers .scrolly-chapter {
+    padding-right: 44px;
   }
 
   .scrolly-chapter .chapter-media img,
