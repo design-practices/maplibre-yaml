@@ -6,7 +6,13 @@
  * schema is listed here, so a field added without resolution fails the walk
  * test rather than 404ing on someone's deployed site.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// The export check below imports the package barrel, which loads
+// maplibre-gl. On the CI matrix's 4.x/5.x legs that is the UMD bundle,
+// which calls URL.createObjectURL at import time (absent in jsdom). The
+// resolver itself never touches MapLibre, so a stub is enough.
+vi.mock("maplibre-gl", () => ({ default: {} }));
 import { YAMLParser } from "../../src/parser/yaml-parser";
 import { toModel } from "../../src/model/to-model";
 import {
