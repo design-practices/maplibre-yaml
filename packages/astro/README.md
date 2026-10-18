@@ -612,7 +612,8 @@ const feature = findFeature(fc, { source: "...", featureId: "poa-1.1" });
 > "@maplibre-yaml/astro/integration"` and add `maplibreYaml()` to
 > `integrations` to have `astro dev` reload the page when a file read by
 > `loadMapConfig` / `loadGlobalMapConfig` / `feature_ref`, or map data under
-> `public/`, changes. Without it, `loadGlobalMapConfig` edits need a
+> `public/`, changes, and to pre-bundle maplibre-gl and core so the first map
+> page does not trigger a dependency re-optimization. Without it, `loadGlobalMapConfig` edits need a
 > dev-server restart.
 
 > **`astro dev` with `@maplibre-yaml/core` 0.6.0 or earlier** fails every map

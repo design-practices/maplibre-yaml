@@ -882,7 +882,11 @@ export default defineConfig({
 });
 ```
 
-It only acts under `astro dev`. Builds are the same with or without it.
+It also pre-bundles maplibre-gl and `@maplibre-yaml/core` when the dev server
+starts. Without that, the first page with a map makes Vite discover them
+late: the terminal says *new dependencies optimized ... reloading*, the
+browser console shows *504 (Outdated Optimize Dep)*, and the page reloads
+once. It only acts under `astro dev`. Builds are the same with or without it.
 (Needs `@maplibre-yaml/astro` 0.6 or later.)
 
 ## Deploying to GitHub Pages (or any subpath)
@@ -1001,6 +1005,27 @@ navigation builds the new page's maps and removes the old ones, `FullPageMap`'s
 zoom and reset buttons work on every visit, and MapLibre's stylesheet stays
 loaded (`@maplibre-yaml/astro` 0.6 or later). The example site's
 `/transitions` pages are tested this way on every Astro major.
+
+<Aside type="note" title="Astro 6: a reload on the first page with the router">
+  Astro 6's dev server finds the router's own scripts only when the first page
+  using `<ClientRouter />` loads. Vite then re-bundles them and reloads that
+  page once (*504 (Outdated Optimize Dep)* in the console). It is harmless,
+  dev-only, and fixed in Astro 7. To avoid it, pre-bundle them in
+  `astro.config.mjs`:
+
+  ```js
+  vite: {
+    optimizeDeps: {
+      include: [
+        "astro/virtual-modules/transitions-router.js",
+        "astro/virtual-modules/transitions-types.js",
+        "astro/virtual-modules/transitions-events.js",
+        "astro/virtual-modules/transitions-swap-functions.js",
+      ],
+    },
+  },
+  ```
+</Aside>
 
 If you write your own component script (like
 [the interactive map below](#advanced-interactive-map-component)), keep in mind

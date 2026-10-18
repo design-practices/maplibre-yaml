@@ -84,6 +84,10 @@ describe("maplibreYaml() integration", () => {
     setup(params("dev"));
     expect(updates).toHaveLength(1);
     expect(updates[0].vite.plugins[0].name).toBe("maplibre-yaml:dev-reload");
+    // The components' client deps are pre-bundled up front, so the first
+    // map page does not trigger a re-optimize + reload (504 Outdated
+    // Optimize Dep) mid-visit.
+    expect(updates[0].vite.optimizeDeps.include).toEqual(["maplibre-gl", "@maplibre-yaml/core/register"]);
   });
 
   for (const vite6 of [false, true]) {

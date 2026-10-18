@@ -22,6 +22,9 @@ export type MaplibreYamlOptions = Record<string, never>;
  */
 export default function maplibreYaml(options?: MaplibreYamlOptions): AstroIntegration;
 
+/** @internal The browser dependencies the integration pre-bundles in `astro dev`. */
+export const CLIENT_DEPS: readonly string[];
+
 /** @internal The Vite plugin behind the integration. */
 export function devReloadPlugin(
   publicDir: string,

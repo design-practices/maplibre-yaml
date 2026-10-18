@@ -13,7 +13,10 @@
  *   module-level `await loadGlobalMapConfig(...)` (which otherwise kept the
  *   old file until a restart, ml-aot.24) picks up the edit;
  * - YAML / GeoJSON / JSON under `public/` (what `<Map src>` fetches) -- the
- *   browser reloads.
+ *   browser reloads;
+ * - maplibre-gl and `@maplibre-yaml/core/register` are pre-bundled when the
+ *   dev server starts, so the first page with a map does not trigger a
+ *   dependency re-optimization and a reload.
  *
  * Content-collection files need none of this; Astro reloads those itself.
  *
@@ -52,6 +55,12 @@ function watchedFiles() {
   return (store[WATCHED_KEY] ??= new Set());
 }
 
+/**
+ * What the components' client scripts import from node_modules: maplibre-gl
+ * (the worker-URL setup) and core's element registration.
+ */
+export const CLIENT_DEPS = Object.freeze(["maplibre-gl", "@maplibre-yaml/core/register"]);
+
 /** Extensions under `public/` whose edits reload the page. */
 const PUBLIC_EXTENSIONS = new Set([".yaml", ".yml", ".geojson", ".json"]);
 
@@ -81,6 +90,13 @@ export default function maplibreYaml(_options = {}) {
         );
         updateConfig({
           vite: {
+            // Pre-bundle the components' browser dependencies up front. They
+            // are imported only from the components' <script>s, which Vite's
+            // dependency scan does not see on Astro 4-6, so the first page
+            // with a map discovered them late: Vite re-optimized, answered
+            // already-requested modules with "504 (Outdated Optimize Dep)"
+            // and reloaded the page mid-visit.
+            optimizeDeps: { include: [...CLIENT_DEPS] },
             plugins: [devReloadPlugin(publicDir, (message) => logger?.info(message))],
           },
         });
