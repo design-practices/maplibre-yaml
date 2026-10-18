@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Popup links</title>
+  <!--
+    ml-aot.29 — popup link items render live links.
+    PASS = clicking the red dot opens a popup whose "Wikipedia" text is a link
+    (opens a new tab) and whose "Same tab" text is a link that navigates this
+    tab. FAIL = "Wikipedia" is plain text (the `str` + `href` URL was dropped),
+    or the console warns `Unknown key "target"`. Serve from the repo root
+    (pnpm verify:serve), then open /examples/verification/15-popup-links.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; width: 800px; height: 500px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = click the dot: "Wikipedia" and "Same tab" are both links. FAIL = "Wikipedia" is plain text.</header>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: popup-links
+config:
+  center: [-87.623, 41.881]
+  zoom: 4
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: city
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-87.623, 41.881] }
+            properties: { name: "Chicago" }
+    paint:
+      circle-radius: 14
+      circle-color: "#e63946"
+      circle-stroke-width: 3
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - str: "Wikipedia"
+                href: "https://en.wikipedia.org/wiki/Chicago"
+          - p:
+              - str: "Same tab"
+                href: "/examples/verification/configs/local-style.json"
+                target: _self
+    </script>
+  </ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

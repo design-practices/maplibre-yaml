@@ -1,0 +1,29 @@
+# ml-pru: the `mlym preview` browser check (e2e/cli-preview.spec.ts).
+# By hand: node packages/cli/dist/cli.js preview examples/verification/cli-preview/map.yaml
+# PASS = a green map with two red dots (New York, Chicago), loaded with no
+# network access; saving an edit to this file reloads the page with it.
+type: map
+id: cli-preview
+config:
+  center: [-80, 41]
+  zoom: 3.5
+  mapStyle: "/style.json"
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: { name: "New York" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-87.623, 41.881] }
+            properties: { name: "Chicago" }
+    paint:
+      circle-radius: 14
+      circle-color: "#e63946"
+      circle-stroke-width: 3
+      circle-stroke-color: "#ffffff"
