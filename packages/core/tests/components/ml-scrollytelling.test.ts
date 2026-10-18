@@ -277,7 +277,7 @@ chapters:
     expect(card.textContent).not.toContain("No configuration provided");
     expect(el.querySelector("ml-map")).toBeNull();
     expect(errors).toHaveLength(1);
-    await expect(el.mapReady()).rejects.toThrow(/chapters\.0\.centre/);
+    await expect(el.mapReady()).rejects.toThrow(/Chapter 1 \("a"\).*centre/);
   });
 
   it("src: no <ml-map> exists (so none can complain) until the story has arrived", async () => {

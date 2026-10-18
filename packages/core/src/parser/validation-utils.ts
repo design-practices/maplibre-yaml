@@ -73,7 +73,8 @@ export interface ValidationWarning {
  * integrations), but printing it in front of the message read as two
  * different chapters (ml-aot.62). Show the path for everything else.
  */
-export function displayPath(problem: { path: string; message: string }): string {
+export function displayPath(problem: { path?: string; message: string }): string {
+  if (!problem.path) return "";
   const chapter = /^chapters\.(\d+)(?:\.|$)/.exec(problem.path);
   if (chapter && problem.message.startsWith(`Chapter ${Number(chapter[1]) + 1}`)) return "";
   return problem.path;

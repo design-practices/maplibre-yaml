@@ -79,6 +79,7 @@ import {
 } from "../effects-host.js";
 import type { ChromeMount, MapRendererEvents } from "../renderer/map-renderer.js";
 import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
+import { displayPath } from "../parser/validation-utils.js";
 import {
   applyDocumentBase,
   applyDocumentBaseToLayer,
@@ -947,7 +948,7 @@ export class MLMap extends HTMLElement {
               warning.column !== undefined ? `, column ${warning.column}` : ""
             })`
           : "";
-      const path = warning.path ? `${warning.path}: ` : "";
+      const path = displayPath(warning) ? `${displayPath(warning)}: ` : "";
       console.warn(`[ml-map] ${path}${warning.message}${location}`);
       // A valid document where part of it silently does nothing (a root key
       // nested under config:): also say so on the page (ml-aot.48). Still
@@ -1454,7 +1455,7 @@ export class MLMap extends HTMLElement {
     this.lastError = Object.assign(
       new Error(
         `[ml-map] ${errors
-          .map((e) => (e.path ? `${e.path}: ${e.message}` : e.message))
+          .map((e) => (displayPath(e) ? `${displayPath(e)}: ${e.message}` : e.message))
           .join("; ")}`
       ),
       { errors }
@@ -1654,7 +1655,7 @@ export class MLMap extends HTMLElement {
               new Error(
                 `[ml-map] ${detail.errors
                   .map((e: { path?: string; message: string }) =>
-                    e.path ? `${e.path}: ${e.message}` : e.message
+                    displayPath(e) ? `${displayPath(e)}: ${e.message}` : e.message
                   )
                   .join("; ")}`
               ),

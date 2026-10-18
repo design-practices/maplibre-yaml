@@ -312,6 +312,18 @@ describe("storyMapDocument", () => {
     });
   });
 
+  it("root keys misplaced under the story's config: are not passed to the map (one message per mistake, ml-aot.63)", () => {
+    const doc = storyMapDocument({
+      id: "s",
+      config: { center: [0, 0], zoom: 1, theme: "dark", markers: [], legend: {} } as never,
+    } as never);
+    const config = doc.config as Record<string, unknown>;
+    expect(config.theme).toBeUndefined();
+    expect(config.markers).toBeUndefined();
+    expect(config.legend).toBeUndefined();
+    expect(config.center).toEqual([0, 0]);
+  });
+
   it("a story that sets a gesture keeps it", () => {
     const doc = storyMapDocument({ id: "s", config: { scrollZoom: true } as never } as never);
     expect((doc.config as Record<string, unknown>).scrollZoom).toBe(true);

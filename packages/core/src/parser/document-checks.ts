@@ -81,7 +81,7 @@ function rootKeysOf(schema: unknown): string[] {
  * the block schemas (so a new root key is covered automatically), minus keys
  * that are also map options (`style`, `bounds` …) and the block's identity.
  */
-function misplacedRootKeys(kind: "map" | "scrollytelling"): Set<string> {
+export function misplacedRootKeys(kind: "map" | "scrollytelling"): Set<string> {
   const config = new Set([...configKeys(), ...MAPLIBRE_MAP_OPTIONS]);
   const keys = new Set<string>();
   for (const key of [...rootKeysOf(MapBlockSchema), ...rootKeysOf(ScrollytellingBlockSchema)]) {

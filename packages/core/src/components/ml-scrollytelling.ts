@@ -69,6 +69,7 @@ import {
 } from "../scrollytelling/render";
 import { injectScrollytellingStyles } from "../scrollytelling/styles";
 import { normalizeDocumentBase, resolveDocumentUrl } from "../utils/document-base.js";
+import { displayPath } from "../parser/validation-utils.js";
 import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
 import {
@@ -549,7 +550,7 @@ export class MLScrollytelling extends HTMLElement {
           : "";
       if (warning.onPage) this.pageWarnings.push(`${warning.message}${where}`);
       console.warn(
-        `[ml-scrollytelling] ${source ? `${source}: ` : ""}${warning.path ? `${warning.path}: ` : ""}${warning.message}${where}`
+        `[ml-scrollytelling] ${source ? `${source}: ` : ""}${displayPath(warning) ? `${displayPath(warning)}: ` : ""}${warning.message}${where}`
       );
     }
     if (result.success && result.data) {
@@ -1018,7 +1019,7 @@ export class MLScrollytelling extends HTMLElement {
       })
     );
 
-    const message = errors.map((e) => (e.path ? `${e.path}: ${e.message}` : e.message)).join("; ");
+    const message = errors.map((e) => (displayPath(e) ? `${displayPath(e)}: ${e.message}` : e.message)).join("; ");
     this.lastError = Object.assign(
       new Error(`[ml-scrollytelling] ${source ? `${source}: ` : ""}${message}`),
       { errors }

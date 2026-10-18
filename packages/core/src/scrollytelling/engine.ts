@@ -29,6 +29,7 @@ import type {
 } from "../schemas/scrollytelling.schema";
 import { STORY_MAP_KEYS } from "./keys";
 import { suggest } from "../utils/suggest";
+import { misplacedRootKeys } from "../parser/document-checks";
 
 /** The slice of a maplibre `Map` the engine drives. */
 export interface StoryMap {
@@ -99,6 +100,12 @@ export function storyMapDocument(story: ScrollytellingBlock): Record<string, unk
     config: { ...STORY_GESTURE_DEFAULTS, ...(story.config ?? {}) },
     layers: story.layers ?? [],
   };
+  // A story-root key written under config: (theme, markers, legend…) does
+  // nothing there. The story already reports it, with its line; passing it
+  // on made the story's map report it again as an unknown map option
+  // (ml-aot.63).
+  const config = doc.config as Record<string, unknown>;
+  for (const key of misplacedRootKeys("scrollytelling")) delete config[key];
   const source = story as Record<string, unknown>;
   for (const key of STORY_MAP_KEYS) {
     if (source[key] !== undefined) doc[key] = source[key];
