@@ -65,6 +65,11 @@ chapters:
         filter: ["==", ["geometry-type"], "LineString"]
     </script>
   </ml-scrollytelling>
+  <script>
+    // ?quiet: the same story with quiet set (review F1) — no notice, no
+    // card note; the console keeps every message.
+    if (new URLSearchParams(location.search).has("quiet")) document.getElementById("story").setAttribute("quiet", "");
+  </script>
   <script type="module" src="../../../packages/core/register.js"></script>
 </body>
 </html>

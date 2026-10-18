@@ -126,7 +126,7 @@ interface Waiter {
  */
 export class MLScrollytelling extends HTMLElement {
   static get observedAttributes(): string[] {
-    return ["src", "config", "base"];
+    return ["src", "config", "base", "quiet"];
   }
 
   /** The validated story being shown, or `null`. */
@@ -183,16 +183,18 @@ export class MLScrollytelling extends HTMLElement {
     const holder = media.closest<HTMLElement>(".chapter-media");
     if (!holder || !this.contains(holder) || holder.querySelector(".chapter-media-missing")) return;
     const written = media.getAttribute("src") ?? "";
+    console.warn(`[ml-scrollytelling] chapter media "${written}" didn't load (${media.currentSrc || written})`);
+    media.style.display = "none";
+    // `quiet`: no note on the card (the console line above stays).
+    if (this.hasAttribute("quiet")) return;
     const note = this.ownerDocument.createElement("p");
     note.className = "chapter-media-missing";
     note.setAttribute("role", "status");
     note.textContent =
       `${media instanceof HTMLVideoElement ? "Video" : "Image"} "${written}" didn't load. ` +
       `Check the file name and folder — capital letters count (Photo.JPG and photo.jpg are ` +
-      `different files on GitHub Pages).`;
-    media.style.display = "none";
+      `different files on most web servers).`;
     holder.appendChild(note);
-    console.warn(`[ml-scrollytelling] chapter media "${written}" didn't load (${media.currentSrc || written})`);
   }
 
   /**
@@ -201,9 +203,14 @@ export class MLScrollytelling extends HTMLElement {
    */
   private checkMediaLoaded(): void {
     for (const img of Array.from(this.querySelectorAll<HTMLImageElement>(".chapter-media img"))) {
-      if (img.complete && img.naturalWidth === 0 && img.getAttribute("src")) {
-        this.onMediaError({ target: img } as unknown as Event);
-      }
+      // Already settled before this element listened. decode() rejects only
+      // for an image that failed; `naturalWidth === 0` also flagged a good
+      // SVG without intrinsic size (review N5). Still loading: the captured
+      // `error` event covers it.
+      if (!img.complete || !img.getAttribute("src") || typeof img.decode !== "function") continue;
+      img.decode().catch(() => {
+        if (img.isConnected) this.onMediaError({ target: img } as unknown as Event);
+      });
     }
   }
 
@@ -354,6 +361,14 @@ export class MLScrollytelling extends HTMLElement {
   }
 
   attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null): void {
+    if (name === "quiet") {
+      // Like <ml-map quiet>: no on-page notice or card notes (the console
+      // keeps every message). Forwarded to the story's map.
+      const mapEl = this.mapElement;
+      if (mapEl) mapEl.toggleAttribute("quiet", newValue !== null);
+      if (newValue !== null) this.querySelectorAll(".chapter-media-missing").forEach((n) => n.remove());
+      return;
+    }
     if (oldValue === newValue || !this.initialized) return;
     if (name === "base") {
       // Every path in the story may move: re-fetch `src` (its own path
@@ -670,6 +685,8 @@ export class MLScrollytelling extends HTMLElement {
     const base = this.base;
     if (base === null) mapEl.removeAttribute("base");
     else if (mapEl.getAttribute("base") !== base) mapEl.setAttribute("base", base);
+    // `quiet` on the story reaches its map (review F1): no on-page notice.
+    mapEl.toggleAttribute("quiet", this.hasAttribute("quiet"));
   }
 
   /** Hand `slot="…"` children of the story to its map. */

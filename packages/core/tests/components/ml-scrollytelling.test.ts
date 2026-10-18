@@ -451,6 +451,41 @@ describe("hydrating server-rendered markup (Astro <Scrollytelling config>)", () 
   });
 });
 
+describe("chapter media that settled before the element listened (review N5)", () => {
+  /** A server-rendered chapter image that has already finished, as given. */
+  function settledImage(decodes: boolean): HTMLImageElement {
+    const img = document.createElement("img");
+    img.setAttribute("src", decodes ? "icon.svg" : "Missing.JPG");
+    Object.defineProperty(img, "complete", { value: true });
+    // An SVG with no width/height reports 0 on some browsers although it
+    // drew fine; only decode() tells a failure apart.
+    Object.defineProperty(img, "naturalWidth", { value: 0 });
+    img.decode = decodes ? () => Promise.resolve() : () => Promise.reject(new Error("broken"));
+    return img;
+  }
+
+  it("a good image without an intrinsic size gets no 'didn't load' note; a broken one does", async () => {
+    mute("warn");
+    const story = storyObject();
+    document.body.innerHTML = `<ml-scrollytelling config='${JSON.stringify(story)}'></ml-scrollytelling>`;
+    const el = document.querySelector("ml-scrollytelling")! as any;
+    await settle();
+    const media = (img: HTMLImageElement) => {
+      const holder = document.createElement("div");
+      holder.className = "chapter-media";
+      holder.appendChild(img);
+      el.querySelector(".chapter-content")!.prepend(holder);
+      return holder;
+    };
+    const good = media(settledImage(true));
+    const bad = media(settledImage(false));
+    el.checkMediaLoaded();
+    await settle();
+    expect(good.querySelector(".chapter-media-missing")).toBeNull();
+    expect(bad.querySelector(".chapter-media-missing")?.textContent).toContain("Missing.JPG");
+  });
+});
+
 describe("map hand-off", () => {
   it("mapReady() resolves with the story's map once it loads, and the active chapter lands", async () => {
     const el = inline(STORY_YAML);

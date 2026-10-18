@@ -289,6 +289,7 @@ The element dispatches bubbling events and carries the active chapter's id in
 | `base` attribute / property | Where the story's own paths start, for a site under a subpath ([above](#sites-under-a-subpath-github-pages)) |
 | `story` (alias `config`) property | Set the story as an object (or JSON string) instead |
 | `debug` attribute | Outline each chapter (green when active) |
+| `quiet` attribute | Hide the on-page notes for a finished site: the map's "Part of this map couldn't load" notice and a chapter's "image didn't load" note. Every message stays in the browser console; a story that can't load at all still shows its error card. Passed on to the story's map. |
 | `story` getter | The validated story, or `null` |
 | `activeChapterId` | The active chapter's `id` |
 | `mapReady()` | Promise of the MapLibre map once it has loaded |

@@ -206,6 +206,32 @@ test.describe("src fetch failures (ml-aot.13)", () => {
     expect(errors).toEqual([]);
   });
 
+  test("quiet on a story hides the notice and the card note; the console keeps them (review F1, ml-aot.64)", async ({ page }) => {
+    const errors = await guard(page);
+    const consoleLines: string[] = [];
+    page.on("console", (m) => consoleLines.push(m.text()));
+    await page.goto(`${DIR}/story-mistakes.html?quiet`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("story") as any).mapReady().then(() => null));
+    await page.evaluate(() => (document.getElementById("story") as any).goToChapter("route"));
+    await page.waitForTimeout(1500);
+    expect(await page.locator("#story ml-map").getAttribute("quiet")).toBe("");
+    await expect(page.locator("#story .ml-map-notice")).toHaveCount(0);
+    await expect(page.locator(".chapter-media-missing")).toHaveCount(0);
+    expect(consoleLines.some((l) => l.includes('"theme" belongs at the top level'))).toBe(true);
+    expect(consoleLines.some((l) => l.includes("Volcano.SVG"))).toBe(true);
+    // Turning quiet off later brings the notes back on the next problem.
+    expect(errors).toEqual([]);
+  });
+
+  test("a chapter's missing photo note is worded for any web server (review F4)", async ({ page }) => {
+    await guard(page);
+    await page.goto(`${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
+    const note = page.locator('.scrolly-chapter[data-chapter-id="start"] .chapter-media-missing');
+    await expect(note).toBeVisible({ timeout: 15_000 });
+    await expect(note).toContainText("on most web servers");
+    await expect(note).not.toContainText("GitHub Pages");
+  });
+
   test("a chapter action naming a missing layer is on the page, with a did-you-mean (ml-aot.51)", async ({ page }) => {
     const errors = await guard(page);
     await page.goto(`${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
