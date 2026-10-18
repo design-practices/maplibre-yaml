@@ -854,6 +854,40 @@ test.describe("images: declared images register before layers (U6)", () => {
     ).toBe(1);
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
+
+  test("a genuinely missing image the YAML names warns exactly once, however often it renders", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const warnings: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "warning") warnings.push(message.text());
+    });
+    // The same twin, with its layer naming an image nothing supplies: no
+    // coalesce, no images: entry, not in the sprite.
+    await page.route("**/configs/use-a-fallback-image.yaml", async (route) => {
+      const original = await (await page.request.fetch(route.request())).text();
+      const body = original.replace(
+        /icon-image: \[.*\]/,
+        'icon-image: "definitely-missing"'
+      );
+      expect(body).toContain('icon-image: "definitely-missing"');
+      return route.fulfill({ body, contentType: "text/yaml" });
+    });
+    await openExample(page, "use-a-fallback-image", ["fallback"]);
+    await page.evaluate(async () => {
+      const map = (document.getElementById("map") as any).getMap();
+      for (let i = 0; i < 3; i++) {
+        map.panBy([30, 0], { duration: 0 });
+        map.panBy([-30, 0], { duration: 0 });
+        await new Promise((r) => setTimeout(r, 150));
+      }
+    });
+    expect(
+      warnings.filter((w) => w.includes('[maplibre-yaml] layer references image "definitely-missing"')).length
+    ).toBe(1);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
 });
 
 test.describe("U16: YAML + JavaScript rows that 0.7 made YAML-only", () => {

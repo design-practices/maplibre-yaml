@@ -7,7 +7,7 @@ import type { LngLat } from 'maplibre-gl';
 import { Map as MapLibreMap, AttributionControl, runtimeVersion, withWorkerUrlHint } from './maplibre-interop';
 import { installAttributionGuard, type AttributionGuard } from './attribution-guard';
 import { sanitizeCustomAttribution, sanitizeSourcesAttribution } from '../utils/attribution';
-import { createImageRefs, noteLayerImageRefs } from '../utils/image-refs';
+import { createImageRefs, noteImageValue, noteLayerImageRefs } from '../utils/image-refs';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
@@ -803,6 +803,19 @@ export class MapRenderer {
    */
   getMap(): MapLibreMap {
     return this.map;
+  }
+
+  /**
+   * Record an image property value the document sets at runtime (a story's
+   * `setLayoutProperty` action, for example), so a missing image it names is
+   * reported as the document's, not dismissed as a basemap sprite gap.
+   * Values of non-image properties are ignored.
+   *
+   * @param property - The layout/paint property (`icon-image`, `fill-pattern`, …).
+   * @param value - Its value: a name, a `{token}` string, or an expression.
+   */
+  noteImageReference(property: string, value: unknown): void {
+    noteImageValue(this.imageRefs, property, value);
   }
 
   /**

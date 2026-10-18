@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Story action sets a missing icon</title>
+  <!--
+    A5 (ml-aot.37 follow-up) — a chapter's setLayoutProperty action switches
+    the pins to icon-image "chapter-only-icon", which nothing supplies. The
+    name is the document's (it is in the story YAML), so the console must say
+    "[maplibre-yaml] layer references image "chapter-only-icon" …" once.
+    Before, only names in the layers themselves counted and this miss was
+    silent. Serve from the repo root (pnpm verify:serve), then open
+    /examples/verification/story-image-action.html and scroll to chapter 2.
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-scrollytelling id="story">
+    <script type="text/yaml">
+type: scrollytelling
+id: story-image-action
+config:
+  center: [0, 0]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+images:
+  dot: "/examples/gallery/assets/icon-b.png"
+layers:
+  - id: pins
+    type: symbol
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [0, 0] }
+            properties: {}
+    layout:
+      icon-image: dot
+      icon-allow-overlap: true
+chapters:
+  - id: one
+    title: One
+    description: "<p>The pins use the declared dot.</p>"
+    center: [0, 0]
+    zoom: 3
+  - id: two
+    title: Two
+    description: "<p>This chapter switches them to an icon nothing supplies.</p>"
+    center: [0, 0]
+    zoom: 4
+    onChapterEnter:
+      - action: setLayoutProperty
+        layer: pins
+        property: icon-image
+        value: chapter-only-icon
+    </script>
+  </ml-scrollytelling>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

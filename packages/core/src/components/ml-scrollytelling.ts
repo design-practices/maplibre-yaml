@@ -69,6 +69,7 @@ import {
 } from "../scrollytelling/render";
 import { injectScrollytellingStyles } from "../scrollytelling/styles";
 import { normalizeDocumentBase, resolveDocumentUrl } from "../utils/document-base.js";
+import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
 import {
   isFilePage,
@@ -696,6 +697,7 @@ export class MLScrollytelling extends HTMLElement {
       (map) => {
         for (const w of waiters) w.resolve(map);
         if (generation === this.generation && this.controller === controller) {
+          noteStoryImageRefs(mapEl.getRenderer(), story);
           controller.setMap(map as unknown as StoryMap);
           // The legend and slots mount as the map loads: place them now.
           onScroll();

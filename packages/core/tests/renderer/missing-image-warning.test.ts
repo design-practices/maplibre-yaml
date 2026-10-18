@@ -106,6 +106,50 @@ describe("missing-image warning (ml-aot.37)", () => {
     expect(ours().map((m) => m.match(/"([^"]+)"/)![1])).toEqual(["cup", "stripes"]);
   });
 
+  it("a legacy token string ('{icon}-15') is data-built: a miss gets the data note, never silence (A5)", async () => {
+    await missing(
+      [{ id: "pins", type: "symbol", source: inline, layout: { "icon-image": "{icon}-15" } }],
+      ["cafe-15"]
+    );
+    const msgs = warnSpy.mock.calls.map((c) => String(c[0]));
+    expect(msgs.some((m) => m.includes('image "cafe-15"') && m.includes("feature data"))).toBe(true);
+  });
+
+  it("a name the document sets at runtime (noteImageReference) is the document's (A5)", async () => {
+    const r = await missing([{ id: "pts", type: "circle", source: inline }], []);
+    r.noteImageReference("icon-image", ["match", ["get", "kind"], "a", "chapter-icon", "other-icon"]);
+    r.noteImageReference("circle-color", "not-an-image");
+    const map = r.getMap() as any;
+    for (const id of ["chapter-icon", "not-an-image"]) map.emit("styleimagemissing", { id });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(ours().map((m) => m.match(/"([^"]+)"/)![1])).toEqual(["chapter-icon"]);
+  });
+
+  it("a story's chapter actions that set image properties are recorded (A5)", async () => {
+    const { noteStoryImageRefs } = await import("../../src/utils/image-refs");
+    const noted: Array<[string, unknown]> = [];
+    noteStoryImageRefs(
+      { noteImageReference: (p: string, v: unknown) => noted.push([p, v]) },
+      {
+        chapters: [
+          {
+            id: "a",
+            onChapterEnter: [
+              { action: "setLayoutProperty", layer: "pins", property: "icon-image", value: "star" },
+              { action: "setPaintProperty", layer: "pins", property: "icon-color", value: "#f00" },
+            ],
+            onChapterExit: [{ action: "setPaintProperty", layer: "area", property: "fill-pattern", value: "dots" }],
+          },
+        ],
+      } as any
+    );
+    expect(noted).toEqual([
+      ["icon-image", "star"],
+      ["icon-color", "#f00"],
+      ["fill-pattern", "dots"],
+    ]);
+  });
+
   it("with a name built from feature data, a miss is reported without blaming the YAML", async () => {
     await missing(
       [{ id: "pins", type: "symbol", source: inline, layout: { "icon-image": ["get", "icon"] } }],
