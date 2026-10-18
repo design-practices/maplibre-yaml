@@ -1,30 +1,28 @@
 ---
-// A page that renders public/configs/map.yaml with the <ml-map> web component.
+// A page that renders public/configs/map.yaml with @maplibre-yaml/astro's <Map>.
+// Other components: <FullPageMap> (a map that fills the window) and
+// <Scrollytelling> (a story map). See https://docs.maplibre-yaml.org/integrations/astro/
+import Layout from '../layouts/Layout.astro';
+import { Map } from '@maplibre-yaml/astro';
 ---
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{projectName}}</title>
-  <style>
-    body { margin: 0; }
-    /* <ml-map> has no size of its own: without a height the map is invisible. */
-    ml-map { display: block; width: 100%; height: 100vh; }
-  </style>
-</head>
-<body>
-  <ml-map src="/configs/map.yaml"></ml-map>
 
-  <script>
-    // maplibre-gl 6 loads its worker from a separate file. Inside a Vite/Astro
-    // bundle it cannot find that file by itself, so tell it where it is.
-    import { setWorkerUrl } from 'maplibre-gl';
-    import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-    import '@maplibre-yaml/core/register';
-    import 'maplibre-gl/dist/maplibre-gl.css';
+<Layout title="{{projectName}}">
+  <main>
+    <h1>{{projectName}}</h1>
+    <p>
+      This map is <code>public/configs/map.yaml</code>. Edit it, save, and the page reloads.
+    </p>
 
-    setWorkerUrl(workerUrl);
-  </script>
-</body>
-</html>
+    <!-- src is a file in public/. On GitHub Pages (base set in astro.config.mjs)
+         the component looks for it under your base for you. -->
+    <Map src="/configs/map.yaml" height="70vh" />
+  </main>
+</Layout>
+
+<style>
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+</style>

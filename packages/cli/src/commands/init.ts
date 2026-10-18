@@ -14,6 +14,7 @@ import {
   listTemplates,
 } from '../lib/template-engine.js';
 import { logger } from '../lib/logger.js';
+import { CORE_VERSION, ASTRO_VERSION, caretRange } from '../lib/package-versions.js';
 import { EXIT_CODES } from '../types.js';
 
 // Get templates directory (bundled with CLI)
@@ -102,7 +103,11 @@ export function nextSteps(template: string, cdPath: string | null): string[] {
     lines.push(`  ${pc.cyan('npm install')}`);
     lines.push(`  ${pc.cyan('npm run dev')}`);
     lines.push('');
-    lines.push(`  ${pc.dim('Edit public/configs/map.yaml to change the map.')}`);
+    lines.push('  Then open the http://localhost address it prints (usually http://localhost:4321).');
+    lines.push(`  ${pc.dim('Edit public/configs/map.yaml and save: the page reloads.')}`);
+    lines.push('');
+    lines.push(`  ${pc.dim('Publishing on GitHub Pages? Set site and base in astro.config.mjs')}`);
+    lines.push(`  ${pc.dim('(base: "/<your-repo>") and push: .github/workflows/deploy.yml builds it.')}`);
   } else {
     // basic and story: a static page that fetches its YAML file.
     const file = template === 'story' ? 'story.yaml' : 'map.yaml';
@@ -206,9 +211,12 @@ export const initCommand = defineCommand({
         }
       }
 
-      // Gather variables
+      // Gather variables. The package ranges are the ones this CLI was built
+      // with, so a scaffold never depends on an older core/astro line.
       const variables: Record<string, string> = {
         projectName,
+        coreRange: caretRange(CORE_VERSION),
+        astroRange: caretRange(ASTRO_VERSION),
       };
 
       // Apply defaults for any missing variables

@@ -1,5 +1,17 @@
-import { defineConfig } from 'astro/config';
+// @ts-check
+import { defineConfig } from "astro/config";
+import maplibreYaml from "@maplibre-yaml/astro/integration";
 
 export default defineConfig({
-  // Astro configuration
+  // ── Publishing on GitHub Pages? ─────────────────────────────────────────
+  // A project site lives at https://<your-user>.github.io/<your-repo>/.
+  // Uncomment these two lines and put in your user and repository names.
+  // The maps then load their YAML, data and images from under /<your-repo>/
+  // with no other change. Leave them commented while you work locally.
+  //
+  // site: "https://<your-user>.github.io",
+  // base: "/<your-repo>",
+
+  // Reloads the page in `npm run dev` when you save a YAML or GeoJSON file.
+  integrations: [maplibreYaml()],
 });

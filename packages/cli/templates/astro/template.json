@@ -1,6 +1,6 @@
 {
   "name": "astro",
-  "description": "Astro project rendering maps with the maplibre-yaml web component (<ml-map>)",
+  "description": "Astro site using @maplibre-yaml/astro's <Map>, ready for GitHub Pages",
   "version": "1.0.0",
   "variables": [
     {

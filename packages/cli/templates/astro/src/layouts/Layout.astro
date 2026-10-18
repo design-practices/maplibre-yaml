@@ -1,0 +1,28 @@
+---
+// The page shell every page uses: <head> (with the viewport line phones need)
+// and the page body. Pages put their content where <slot /> is.
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Without this line, phones lay the page out at desktop width and the map looks tiny. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    line-height: 1.5;
+  }
+</style>
