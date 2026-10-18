@@ -461,7 +461,9 @@ test.describe("story: the shared <ml-scrollytelling> engine (ml-aot.1)", () => {
     await page.goto("/story-broken/", { waitUntil: "domcontentloaded" });
     const card = page.locator(".scrolly-error");
     await expect(card).toBeVisible();
-    await expect(card).toContainText("chapters.1.centre");
+    // The message names the chapter, so the 0-based path is not repeated (ml-aot.62).
+    await expect(card).toContainText(/Chapter 2 \("rainier"\)/);
+    await expect(card).not.toContainText("chapters.1.");
     await expect(card).toContainText(/line \d+/);
     await expect(card).toContainText(/centre[\s\S]*center/);
     await page.waitForTimeout(1000); // a ghost card would be up by now
