@@ -88,7 +88,7 @@ keeps the JSON clean.
 
 ## Compatibility
 
-Node.js 20.9 or later (22 or 24 LTS recommended). The CLI validates with the
+Node.js `^18.17.0 || ^20.3.0 || >=21.0.0` (22 or 24 LTS recommended). The CLI validates with the
 `@maplibre-yaml/core` it depends on, so its results match what `<ml-map>` of
 the same version accepts.
 

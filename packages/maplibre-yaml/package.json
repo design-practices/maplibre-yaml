@@ -15,7 +15,7 @@
     "@maplibre-yaml/cli": "workspace:^"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
   },
   "keywords": [
     "maplibre",

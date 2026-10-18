@@ -27,7 +27,7 @@
     "consola": "^3.2.3",
     "pathe": "^1.1.2",
     "picocolors": "^1.0.0",
-    "sharp": "0.35.5",
+    "sharp": "0.34.5",
     "tinyglobby": "^0.2.17",
     "vite": "^6.4.4",
     "yaml": "^2.4.0"
@@ -41,7 +41,7 @@
     "vitest": "^1.4.0"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
   },
   "keywords": [
     "maplibre",
