@@ -1149,6 +1149,44 @@ The `FullPageMap` component creates a full-viewport map with built-in controls a
 
 ### Basic Usage
 
+The map document. For runtime loading (`src`), save it as
+`public/configs/world-map.yaml`; for build-time loading, as
+`src/configs/world-map.yaml`:
+
+```yaml title="public/configs/world-map.yaml"
+type: map
+id: world-map
+config:
+  center: [10, 25]
+  zoom: 1.5
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: capitals
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-77.04, 38.91] }
+            properties: { name: Washington }
+          - type: Feature
+            geometry: { type: Point, coordinates: [2.35, 48.86] }
+            properties: { name: Paris }
+          - type: Feature
+            geometry: { type: Point, coordinates: [139.69, 35.69] }
+            properties: { name: Tokyo }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-43.17, -22.91] }
+            properties: { name: Rio de Janeiro }
+    paint:
+      circle-radius: 8
+      circle-color: "#e63946"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+```
+
 A whole page, e.g. `src/pages/map.astro`:
 
 <Tabs>
@@ -1520,19 +1558,21 @@ interface ScrollytellingProps {
 
 ### Basic Usage
 
-Load the story at build time and pass it as `config`. A whole page, e.g.
-`src/pages/story.astro`:
+Load the story at build time and pass it as `config`. Save the story from
+[YAML Configuration](#yaml-configuration) below as
+`src/stories/earthquakes.yaml` (it needs no other files), then make a whole
+page, e.g. `src/pages/story.astro`:
 
 ```astro
 ---
 import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
-const story = await loadScrollytellingConfig('./src/stories/climate-change.yaml');
+const story = await loadScrollytellingConfig('./src/stories/earthquakes.yaml');
 ---
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Climate change</title>
+    <title>Los Angeles earthquakes</title>
   </head>
   <body style="margin: 0;">
     <Scrollytelling config={story} />
@@ -1562,9 +1602,11 @@ place of the chapters:
 
 ### YAML Configuration
 
-A complete scrollytelling story includes base map configuration, layers, and chapters:
+A complete scrollytelling story includes base map configuration, layers, and
+chapters. This one is self-contained (its data is inline), so it works as
+soon as you save it as `src/stories/earthquakes.yaml`:
 
-```yaml
+```yaml title="src/stories/earthquakes.yaml"
 type: scrollytelling
 id: earthquake-story
 theme: dark                    # 'light' or 'dark'
@@ -1579,16 +1621,37 @@ config:
   pitch: 0
   bearing: 0
 
-# Map layers (inline sources here; a `sources:` block works too, as on a map)
+# Map layers (inline sources here; a `sources:` block works too, as on a map).
+# For your own data, put a GeoJSON file in public/data/ and replace `data:`
+# with `url: "/data/earthquakes.geojson"`.
 layers:
   - id: earthquake-circles
     type: circle
     source:
       type: geojson
-      url: "/data/earthquakes.geojson"
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-118.537, 34.213] }
+            properties: { name: "Northridge, 1994", magnitude: 6.7 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-118.40, 34.42] }
+            properties: { name: "San Fernando, 1971", magnitude: 6.6 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-118.08, 34.06] }
+            properties: { name: "Whittier Narrows, 1987", magnitude: 5.9 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-118.00, 34.26] }
+            properties: { name: "Sierra Madre, 1991", magnitude: 5.6 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-117.76, 33.95] }
+            properties: { name: "Chino Hills, 2008", magnitude: 5.4 }
     paint:
       circle-radius: 8
       circle-color: "#ff0000"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
 
 # Story chapters
 chapters:
@@ -1602,8 +1665,8 @@ chapters:
   - id: detail
     title: "Major Fault Lines"
     description: "<p>The San Andreas Fault runs through this region.</p>"
-    # A file in public/images/ (served at /images/...), or a full https:// URL.
-    image: "/images/fault-lines.jpg"
+    # To show a picture above the text, add a file in public/images/ and
+    # write `image: "/images/fault-lines.jpg"` (or use a full https:// URL).
     center: [-118.0, 34.0]
     zoom: 11
     pitch: 45

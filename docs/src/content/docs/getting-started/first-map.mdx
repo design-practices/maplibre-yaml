@@ -189,6 +189,33 @@ layers:
       circle-color: "#e63946"
 ```
 
+`data/places.geojson` is a GeoJSON file, for example one you drew on
+[geojson.io](https://geojson.io) and saved. To try the snippet first, save
+this as `data/places.geojson`:
+
+```json title="data/places.geojson"
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "City Hall" },
+      "geometry": { "type": "Point", "coordinates": [-74.006, 40.7128] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "One World Trade Center" },
+      "geometry": { "type": "Point", "coordinates": [-74.0134, 40.7127] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Brooklyn Bridge" },
+      "geometry": { "type": "Point", "coordinates": [-73.9969, 40.7061] }
+    }
+  ]
+}
+```
+
 Two rules for local paths:
 
 - `data/places.geojson` and `./data/places.geojson` mean the same thing: a
