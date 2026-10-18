@@ -279,7 +279,7 @@ chapters:
     // The typo itself is the error (core ml-okw), with its line; the
     // matching unknown-key warning is not repeated.
     expect(error.message).toMatch(
-      /chapters\.1\.centre: Unknown key "centre" — did you mean "center"\? \("center" is required here\.\) \(line \d+/
+      /chapters\.1\.centre: Chapter 2 \("b"\): Unknown key "centre" — did you mean "center"\? \("center" is required here\.\) \(line \d+/
     );
     expect(error.message).not.toMatch(/warning +chapters\.1\.centre/);
 
@@ -289,7 +289,7 @@ chapters:
     for (const shown of [first.message, first.text]) {
       expect(shown).toContain(yamlPath);
       expect(shown).toMatch(
-        /chapters\.1\.centre: Unknown key "centre" — did you mean "center"\? \("center" is required here\.\) \(line \d+, column \d+\)/
+        /chapters\.1\.centre: Chapter 2 \("b"\): Unknown key "centre" — did you mean "center"\? \("center" is required here\.\) \(line \d+, column \d+\)/
       );
     }
     // ...framed at the YAML line of the typo.
@@ -300,7 +300,7 @@ chapters:
 
     // Programmatic consumers keep the structured fields and core's reason.
     expect(first.path).toBe("chapters.1.centre");
-    expect(first.reason).toBe('Unknown key "centre" — did you mean "center"? ("center" is required here.)');
+    expect(first.reason).toBe('Chapter 2 ("b"): Unknown key "centre" — did you mean "center"? ("center" is required here.)');
   });
 
   it("loadMapConfig gets the same treatment", async () => {
@@ -336,7 +336,7 @@ layers:
       (yaml) => YAMLParserForGlob.safeParseScrollytellingBlock(yaml)
     ).catch((e) => e)) as YAMLLoadError & { errors: Array<{ text: string }> };
     expect(error.errors[0]!.text).toContain("/src/stories/bad.yaml");
-    expect(error.errors[0]!.text).toMatch(/chapters\.1\.centre: Unknown key "centre" — did you mean "center"\? .*\(line \d+/);
+    expect(error.errors[0]!.text).toMatch(/chapters\.1\.centre: Chapter 2 \("b"\): Unknown key "centre" — did you mean "center"\? .*\(line \d+/);
   });
 });
 

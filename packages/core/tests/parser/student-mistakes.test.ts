@@ -62,11 +62,11 @@ describe("a misspelled required key is reported as the typo (ml-okw)", () => {
     expect(result.errors[0]?.message).toContain("center: [longitude, latitude] — longitude first");
   });
 
-  it("a missing key with no look-alike sibling keeps the plain message", () => {
+  it("a missing key with no look-alike sibling says it is missing, with the line to add (ml-aot.52)", () => {
     const result = parse(doc({ config: "  zoom: 3" }));
     expect(result.errors[0]).toMatchObject({
       path: "config.center",
-      message: "Expected array, got undefined",
+      message: "config is missing center: — add center: [longitude, latitude].",
     });
   });
 

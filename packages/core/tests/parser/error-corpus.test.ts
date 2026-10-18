@@ -75,7 +75,7 @@ const CORPUS: Expectation[] = [
     path: "config",
     line: 1,
     column: 1,
-    messageContains: "Expected object, got undefined",
+    messageContains: "The document is missing config: — add a config: block with center:, zoom: and mapStyle:.",
   },
   {
     file: "syntax-unterminated-string.yaml",

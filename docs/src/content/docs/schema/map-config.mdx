@@ -48,6 +48,18 @@ config:
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
+### What goes inside `config:`
+
+`config:` holds the camera and map options on this page and any other
+[MapLibre map option](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/)
+(`cooperativeGestures`, `zoomSnap`, …), which are passed to MapLibre as they
+are. Everything else is a document-root key, a sibling of `config:`:
+`layers`, `sources`, `markers`, `legend`, `controls`, `state`, `popups`,
+`images`, `terrain`, and (in a story) `theme` and `chapters`. Validation warns
+when one of those is nested inside `config:`, where it does nothing
+(`"markers" belongs at the top level, next to config:, not inside it`), and
+when `config:` has a key that is neither (`Unknown key "fooBar" in config`).
+
 ## Runtime state and parameters
 
 `state:` declares runtime-tunable values a map can change after it loads, read

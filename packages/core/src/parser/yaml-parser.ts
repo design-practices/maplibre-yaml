@@ -295,6 +295,8 @@ import {
   type ValidationWarning,
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
+import { checkDocument, chapterLabel } from "./document-checks";
+import { explainIndentationError } from "./yaml-errors";
 
 export type { ValidationWarning } from "./validation-utils";
 
@@ -528,6 +530,21 @@ export class YAMLParser {
       // An unquoted `#ef4444` inside a flow map is a syntax error whose text
       // says nothing about colours or comments (ml-okw).
       const hint = hashSyntaxHint(yaml, start?.line);
+      // Indentation slips in plain words, at the line to fix (ml-aot.52).
+      const indentation = hint ? undefined : explainIndentationError(yaml, err.code, start?.line);
+      if (indentation) {
+        return {
+          doc,
+          lineCounter,
+          syntaxError: {
+            path: "",
+            code: "yaml-syntax",
+            message: `YAML indentation error: ${indentation.message}`,
+            line: indentation.line,
+            column: indentation.column,
+          },
+        };
+      }
       return {
         doc,
         lineCounter,
@@ -881,6 +898,20 @@ export class YAMLParser {
   static safeParseMapBlock(
     yaml: string
   ): ParseResult<MapBlock | MapBlockV2> {
+    return this.parseMapBlockText(yaml, true);
+  }
+
+  /**
+   * {@link safeParseMapBlock}, with `positioned: false` for the value entry
+   * point: its YAML is a serialization the author never saw, so whole-document
+   * messages count items instead of quoting its line numbers.
+   *
+   * @internal
+   */
+  private static parseMapBlockText(
+    yaml: string,
+    positioned: boolean
+  ): ParseResult<MapBlock | MapBlockV2> {
     // One materialization feeds both version detection and validation, so the
     // fan-out DoS guard (in materialize → toJSSafe) runs before the version tag
     // is ever read — a hostile v2-tagged document is refused, not expanded.
@@ -937,15 +968,20 @@ export class YAMLParser {
     // flagship `<ml-map src>` path. Leaving it unresolved passed the raw
     // `{$ref}` object to the renderer, which saw no `type` and silently added
     // nothing — a config that validated and produced no layer.
-    return withSourceRefWarnings(
-      this.validateAgainst(
-        m.value,
-        m.doc,
-        m.lineCounter,
-        MapBlockSchema,
-        true,
-        remaps
-      )
+    return withDocumentChecks(
+      withSourceRefWarnings(
+        this.validateAgainst(
+          m.value,
+          m.doc,
+          m.lineCounter,
+          MapBlockSchema,
+          true,
+          remaps
+        )
+      ),
+      m.value,
+      "map",
+      positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
     );
   }
 
@@ -985,7 +1021,7 @@ export class YAMLParser {
       };
     }
 
-    const result = this.safeParseMapBlock(asYaml);
+    const result = this.parseMapBlockText(asYaml, false);
     const stripPosition = <T extends { line?: number; column?: number }>(
       entry: T
     ): T => {
@@ -1087,12 +1123,40 @@ export class YAMLParser {
   static safeParseScrollytellingBlock(
     yaml: string
   ): ParseResult<ScrollytellingBlock> {
-    return this.safeParseWithSchema(
-      yaml,
-      ScrollytellingBlockSchema,
-      false,
-      // ml-ddg: `location:`/`region:`/`route:` sugar on a story's sources.
-      expandSugarInScrollytellingBlock
+    return this.parseScrollytellingText(yaml, true);
+  }
+
+  /**
+   * {@link safeParseScrollytellingBlock}; `positioned` as in
+   * {@link parseMapBlockText}.
+   *
+   * @internal
+   */
+  private static parseScrollytellingText(
+    yaml: string,
+    positioned: boolean
+  ): ParseResult<ScrollytellingBlock> {
+    const m = this.materialize(yaml);
+    if ("error" in m) {
+      return { success: false, errors: [m.error], warnings: [] };
+    }
+    // ml-ddg: `location:`/`region:`/`route:` sugar on a story's sources.
+    const expansion = expandSugarInScrollytellingBlock(m.value);
+    if ("error" in expansion) {
+      return { success: false, errors: [expansion.error], warnings: [] };
+    }
+    return withDocumentChecks(
+      this.validateAgainst(
+        m.value,
+        m.doc,
+        m.lineCounter,
+        ScrollytellingBlockSchema,
+        false,
+        expansion.remaps
+      ),
+      m.value,
+      "scrollytelling",
+      positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
     );
   }
 
@@ -1128,7 +1192,7 @@ export class YAMLParser {
       };
     }
 
-    const result = this.safeParseScrollytellingBlock(asYaml);
+    const result = this.parseScrollytellingText(asYaml, false);
     const stripPosition = <T extends { line?: number; column?: number }>(
       entry: T
     ): T => {
@@ -1410,7 +1474,17 @@ export class YAMLParser {
       remaps?: SugarRemap[];
     }
   ): ParseError[] {
-    return error.errors.map((err) => this.formatIssue(err, ctx));
+    return error.errors.map((err) => {
+      const formatted = this.formatIssue(err, ctx);
+      // `chapters.3` is the fourth chapter: name it the way the author sees
+      // it, counted from 1 and by id (ml-aot.52). The path stays as is.
+      const chapter = /^chapters\.(\d+)(?:\.|$)/.exec(formatted.path);
+      if (chapter && ctx && !formatted.message.startsWith("Chapter ")) {
+        const label = chapterLabel(valueAtPath(ctx.value, ["chapters"]), Number(chapter[1]));
+        return { ...formatted, message: `${label}: ${formatted.message}` };
+      }
+      return formatted;
+    });
   }
 
   /**
@@ -1447,7 +1521,12 @@ export class YAMLParser {
             const misspelled = misspelledKeyError(err.path, ctx);
             if (misspelled) return misspelled;
           }
-          message = `Expected ${err.expected}, got ${err.received}`;
+          // A required key that is simply absent: say it is missing and show
+          // the line to add, not "Expected array, got undefined" (ml-aot.52).
+          message =
+            err.received === "undefined"
+              ? missingKeyMessage(err.path, String(err.expected), ctx?.value)
+              : `Expected ${err.expected}, got ${err.received}`;
           break;
         }
 
@@ -1647,6 +1726,69 @@ export class YAMLParser {
 }
 
 /** The generic message for a union no branch of which matched. */
+/** What to write for the required keys students leave out most. */
+const MISSING_KEY_EXAMPLES: Record<string, string> = {
+  center: "center: [longitude, latitude]",
+  zoom: "zoom: 12 (a number from 0 to 24)",
+  id: "id: a-short-name",
+  title: 'title: "…"',
+  type: "type: …",
+  config: "a config: block with center:, zoom: and mapStyle:",
+  chapters: "a chapters: list",
+  layers: "layers: [] (or a list of layers)",
+  source: "source: (a source name or an inline source)",
+};
+
+/**
+ * `Chapter 3 ("bridge") is missing center: — add center: [longitude, latitude].`
+ * The owner is named the way the author sees it: chapters counted from 1 and
+ * by id, a layer by id, otherwise the parent key.
+ */
+function missingKeyMessage(
+  path: (string | number)[],
+  expected: string,
+  value: unknown
+): string {
+  const key = String(path[path.length - 1]);
+  const parent = path.slice(0, -1);
+  let owner: string;
+  const chapterAt = parent.length === 2 && parent[0] === "chapters" && typeof parent[1] === "number";
+  const layerAt = parent.length >= 2 && parent[parent.length - 2] === "layers" && typeof parent[parent.length - 1] === "number";
+  if (chapterAt) {
+    owner = chapterLabel(valueAtPath(value, ["chapters"]), parent[1] as number);
+  } else if (layerAt) {
+    const layer = valueAtPath(value, parent) as Record<string, unknown> | undefined;
+    const id = layer && typeof layer["id"] === "string" ? layer["id"] : undefined;
+    owner = id ? `Layer "${id}"` : `Layer ${(parent[parent.length - 1] as number) + 1}`;
+  } else if (parent.length === 0) {
+    owner = "The document";
+  } else {
+    owner = String(parent[parent.length - 1]);
+  }
+  const example = MISSING_KEY_EXAMPLES[key];
+  return example
+    ? `${owner} is missing ${key}: — add ${example}.`
+    : `${owner} is missing ${key}: (required; expected ${expected === "object" ? "a block of keys" : `a${/^[aeiou]/.test(expected) ? "n" : ""} ${expected}`}).`;
+}
+
+/**
+ * Merge the whole-document checks ({@link checkDocument}) into a block's
+ * result: their warnings join the schema's, and a duplicate id fails the
+ * document (ml-aot.46/.48/.51).
+ */
+function withDocumentChecks<T>(
+  result: ParseResult<T>,
+  value: unknown,
+  kind: "map" | "scrollytelling",
+  positions: { doc: Document; lineCounter: LineCounter } | undefined
+): ParseResult<T> {
+  const checks = checkDocument(value, kind, positions, result.warnings);
+  if (checks.errors.length === 0 && checks.warnings.length === 0) return result;
+  const warnings = [...result.warnings, ...checks.warnings];
+  if (checks.errors.length === 0) return { ...result, warnings };
+  return { success: false, errors: [...result.errors, ...checks.errors], warnings };
+}
+
 const UNION_FALLBACK = "Value does not match any of the expected formats";
 
 /** Issue codes that only say "wrong type", as opposed to a refined check. */

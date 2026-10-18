@@ -113,6 +113,13 @@ chapters:
 | `center` | [number, number] | Map center [longitude, latitude] |
 | `zoom` | number | Zoom level (0-24) |
 
+Each chapter needs its own `id`: copying a chapter and keeping its `id` is a
+validation error naming both lines (`Two chapters have id "the-met" (lines 96
+and 144)`). Layer ids must be unique too. A chapter's `layers.show` /
+`layers.hide` or action `layer:` that is a near miss of one of the story's
+layers (`walking` for `walk`) gets a did-you-mean warning; a name unlike any
+of them is taken to be a basemap layer and is not flagged.
+
 ### Optional Chapter Properties
 
 #### Content
