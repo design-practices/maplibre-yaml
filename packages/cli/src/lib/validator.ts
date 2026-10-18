@@ -70,13 +70,18 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
   }
 
   // Convert parse errors to validation errors
-  const errors: ValidationError[] = result.errors.map((err: ParseError) => ({
-    path: err.path,
-    message: err.message,
-    line: err.line,
-    column: err.column,
-    severity: 'error' as const,
-  }));
+  const lines = content.split(/\r?\n/);
+  const errors: ValidationError[] = result.errors.map((err: ParseError) => {
+    const located = isRootFallback(err, lines)
+      ? {}
+      : { line: err.line, column: err.column };
+    return {
+      path: err.path,
+      message: err.message,
+      ...located,
+      severity: 'error' as const,
+    };
+  });
 
   return {
     file: filePath,
@@ -84,6 +89,21 @@ export async function validateFile(filePath: string): Promise<ValidationResult> 
     errors,
     warnings,
   };
+}
+
+/**
+ * Whether an error's location is only the document's first key, standing in
+ * for a top-level key that is missing (`config: Expected object, got
+ * undefined` "at line 1, column 1"). The parser points at the nearest node
+ * that exists; for a missing top-level key that is the root mapping, which
+ * tells the reader nothing (ml-aot.54). A real top-level key at column 1
+ * (`type: mapp`) keeps its location.
+ */
+function isRootFallback(err: ParseError, lines: string[]): boolean {
+  if (err.line === undefined || err.column !== 1 || !err.path) return false;
+  const key = err.path.split('.')[0];
+  const text = lines[err.line - 1] ?? '';
+  return !new RegExp(`^["']?${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']?\\s*:`).test(text);
 }
 
 /**

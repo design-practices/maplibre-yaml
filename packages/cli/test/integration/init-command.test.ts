@@ -5,6 +5,7 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
+import { parse as parseYAML } from 'yaml';
 import { initArgsError, nextSteps } from '../../src/commands/init';
 
 const execAsync = promisify(exec);
@@ -77,7 +78,7 @@ describe('init command (integration)', () => {
       const { stdout } = await run('init my-map --template basic', dir);
       expect(stdout).toContain('cd my-map');
       expect(stdout).toContain('npx serve .');
-      expect(stdout).toContain('npx @maplibre-yaml/cli validate map.yaml');
+      expect(stdout).toContain('npx maplibre-yaml validate map.yaml');
       // A bare `maplibre-yaml …` command only exists after an install.
       expect(stdout).not.toMatch(/^\s*(maplibre-yaml|mlym) /m);
     });
@@ -154,10 +155,23 @@ describe('init command (integration)', () => {
       // The "element is not in core 0.7 yet" note is gone; serve-and-open steps instead.
       expect(result.stdout).not.toMatch(/not part of|0\.7 yet/);
       expect(result.stdout).toContain('npx serve .');
-      expect(result.stdout).toContain('npx @maplibre-yaml/cli validate story.yaml');
+      expect(result.stdout).toContain('npx maplibre-yaml validate story.yaml');
 
       const validate = await run(`validate "${join(dir, 'my-story', 'story.yaml')}"`, dir);
       expect(validate.code).toBe(0);
+    });
+
+    it('puts theme at the top level, where the engine reads it, and no document keys under config (ml-aot.48)', async () => {
+      const dir = await mkdir();
+      expect((await run('init my-story --template story', dir)).code).toBe(0);
+      const doc = parseYAML(await readFile(join(dir, 'my-story', 'story.yaml'), 'utf-8')) as Record<string, any>;
+      expect(doc.theme).toBe('light');
+      // Keys that belong next to config:, not inside it: the engine ignores them there.
+      const documentKeys = [
+        'theme', 'markers', 'legend', 'state', 'popups', 'layers', 'sources', 'controls',
+        'images', 'parameters', 'chapters', 'showMarkers', 'markerColor', 'footer',
+      ];
+      expect(Object.keys(doc.config).filter((k) => documentKeys.includes(k))).toEqual([]);
     });
   });
 

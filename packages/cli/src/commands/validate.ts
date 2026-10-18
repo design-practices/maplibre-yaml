@@ -15,7 +15,8 @@ import { formatVSCode } from '../lib/formatter-vscode.js';
 import { createWatcher, formatWatchEvent } from '../lib/watcher.js';
 import { loadProjectConfig, mergeConfig } from '../lib/config-loader.js';
 import { logger } from '../lib/logger.js';
-import { resolveTargets } from '../lib/glob.js';
+import { resolveTargets, isGlobPattern } from '../lib/glob.js';
+import { relative } from 'pathe';
 import { createProgress } from '../lib/progress.js';
 import { validateWithCache, clearCache } from '../lib/cache.js';
 import { EXIT_CODES } from '../types.js';
@@ -111,11 +112,13 @@ export const validateCommand = defineCommand({
     const positionals: Array<string | number> =
       Array.isArray(args._) && args._.length > 0 ? args._ : [patterns];
 
-    // Resolve each file/glob to files, remembering any that matched nothing
+    // Resolve each file/folder/glob to files, remembering any that matched
+    // nothing and any the project's ignorePatterns excluded
     let files: string[];
     let unmatched: string[];
+    let ignored: string[];
     try {
-      ({ files, unmatched } = await resolveTargets(positionals, {
+      ({ files, unmatched, ignored } = await resolveTargets(positionals, {
         ignore: projectConfig?.validate?.ignorePatterns,
       }));
     } catch (error) {
@@ -123,19 +126,27 @@ export const validateCommand = defineCommand({
       process.exit(EXIT_CODES.FILE_NOT_FOUND);
     }
 
-    if (files.length === 0) {
-      console.log(pc.yellow('No files found matching pattern(s):'), unmatched.join(', '));
-      process.exit(EXIT_CODES.FILE_NOT_FOUND);
+    // Machine-readable formats keep stdout parseable; notices go to stderr.
+    const machineFormat = format === 'json' || format === 'sarif';
+    const say = machineFormat ? console.error : console.log;
+    function reportUnmatched() {
+      for (const u of unmatched) {
+        // A plain path (no * ? [ { ) is a file that isn't there; a pattern
+        // is one that found nothing (ml-aot.54).
+        say(
+          isGlobPattern(u)
+            ? pc.red(`✗ No files match ${JSON.stringify(u)}`) + pc.dim(' (check the pattern)')
+            : pc.red(`✗ File not found: ${u}`) + pc.dim(' (check the path and spelling)')
+        );
+      }
+      for (const i of ignored) {
+        say(pc.dim(`- Skipped ${i}: excluded by validate.ignorePatterns in your maplibre-yaml config`));
+      }
     }
 
-    // Machine-readable formats keep stdout parseable; the notice goes to stderr.
-    const machineFormat = format === 'json' || format === 'sarif';
-    function reportUnmatched() {
-      if (unmatched.length === 0) return;
-      const say = machineFormat ? console.error : console.log;
-      for (const u of unmatched) {
-        say(pc.red(`✗ No files match ${JSON.stringify(u)}`) + pc.dim(' (check the path and spelling)'));
-      }
+    if (files.length === 0) {
+      reportUnmatched();
+      process.exit(EXIT_CODES.FILE_NOT_FOUND);
     }
 
     // Define validation function
@@ -206,7 +217,14 @@ export const validateCommand = defineCommand({
             output = formatVSCode(results);
             break;
           default:
-            output = formatHuman(results);
+            // Paths relative to where the command ran, as the docs show
+            // (`✓ my-map.yaml`), unless the file is outside that folder.
+            output = formatHuman(
+              results.map((r) => {
+                const rel = relative(process.cwd(), r.file);
+                return { ...r, file: rel.startsWith('..') ? r.file : rel };
+              })
+            );
         }
         console.log(output);
         reportUnmatched();

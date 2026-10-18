@@ -67,6 +67,9 @@ export function formatHuman(results: ValidationResult[]): string {
       pc.yellow(`⚠ ${filesWithWarnings} file(s) with warnings: ${totalWarnings} warning(s)`)
     );
   } else {
+    // A mixed run says how many passed too (ml-aot.54), as the docs show.
+    const validCount = results.length - filesWithErrors;
+    if (validCount > 0) lines.push(pc.green(`✓ ${validCount} file(s) valid`));
     const errorText = pc.red(`${totalErrors} error(s)`);
     const warningText = totalWarnings > 0 ? pc.yellow(`${totalWarnings} warning(s)`) : '';
     const separator = totalWarnings > 0 ? ', ' : '';

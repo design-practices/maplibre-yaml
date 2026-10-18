@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 
 const execAsync = promisify(exec);
@@ -117,22 +119,23 @@ describe('validate command (integration)', () => {
     }
   });
 
-  it('handles file not found gracefully', async () => {
-    try {
-      await execAsync(`node "${CLI}" validate "nonexistent.yaml"`);
-    } catch (error: any) {
-      expect(error.code).toBe(2);
-      expect(error.stdout).toContain('No files found');
-    }
+  it('a plain path that does not exist says "File not found" (ml-aot.54)', async () => {
+    const error: any = await execAsync(`node "${CLI}" validate "nonexistent.yaml"`).then(
+      () => expect.unreachable('should have exited non-zero'),
+      (e) => e
+    );
+    expect(error.code).toBe(2);
+    expect(error.stdout).toContain('File not found: nonexistent.yaml');
+    expect(error.stdout).not.toContain('pattern');
   });
 
-  it('handles no matches for glob pattern', async () => {
-    try {
-      await execAsync(`node "${CLI}" validate "test/fixtures/*.nonexistent"`);
-    } catch (error: any) {
-      expect(error.code).toBe(2); // FILE_NOT_FOUND exit code
-      expect(error.stdout).toContain('No files found');
-    }
+  it('a glob that matches nothing says "No files match"', async () => {
+    const error: any = await execAsync(`node "${CLI}" validate "test/fixtures/*.nonexistent"`).then(
+      () => expect.unreachable('should have exited non-zero'),
+      (e) => e
+    );
+    expect(error.code).toBe(2); // FILE_NOT_FOUND exit code
+    expect(error.stdout).toContain('No files match "test/fixtures/*.nonexistent"');
   });
 
   it('catches errors in complex invalid fixture', async () => {
@@ -240,7 +243,7 @@ describe('validate command (integration)', () => {
       expect(r.code).not.toBe(0);
       expect(r.stdout).toContain('valid-basic.yaml');
       expect(r.stdout + r.stderr).toContain('does-not-exist.yaml');
-      expect(r.stdout + r.stderr).toMatch(/No files? (found|match)/i);
+      expect(r.stdout + r.stderr).toContain('File not found: test/fixtures/does-not-exist.yaml');
     });
 
     it('all-valid multiple files exit 0', async () => {
@@ -261,5 +264,103 @@ describe('validate command (integration)', () => {
         expect(parsed.runs[0].results[0]).toHaveProperty('locations');
       }
     }
+  });
+
+  // Second-round review of ml-aot.31: arguments with spaces, folders, and the
+  // project's ignorePatterns.
+  describe('targets: spaces, folders, ignorePatterns (ml-aot.31 review)', () => {
+    let dir: string;
+    const VALID = readFileSync('test/fixtures/valid-basic.yaml', 'utf-8');
+    const INVALID = readFileSync('test/fixtures/invalid-missing-config.yaml', 'utf-8');
+
+    beforeAll(() => {
+      dir = mkdtempSync(join(tmpdir(), 'mlym-targets-'));
+      mkdirSync(join(dir, 'My Maps'));
+      writeFileSync(join(dir, 'My Maps', 'good.yaml'), VALID);
+      writeFileSync(join(dir, 'My Maps', 'bad.yaml'), INVALID);
+      mkdirSync(join(dir, 'maps', 'nested'), { recursive: true });
+      writeFileSync(join(dir, 'maps', 'a.yaml'), VALID);
+      writeFileSync(join(dir, 'maps', 'nested', 'b.yml'), INVALID);
+      writeFileSync(join(dir, 'maps', 'notes.txt'), 'not yaml');
+      mkdirSync(join(dir, 'drafts'));
+      writeFileSync(join(dir, 'drafts', 'wip.yaml'), INVALID);
+      writeFileSync(
+        join(dir, 'maplibre-yaml.config.json'),
+        JSON.stringify({ validate: { ignorePatterns: ['drafts/**'] } })
+      );
+    });
+    afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+    const runIn = async (args: string) => {
+      try {
+        const { stdout, stderr } = await execAsync(`node "${CLI}" validate ${args}`, { cwd: dir });
+        return { code: 0, stdout, stderr };
+      } catch (error: any) {
+        return { code: error.code as number, stdout: error.stdout as string, stderr: error.stderr as string };
+      }
+    };
+
+    it('a quoted glob in a folder with a space is one pattern, not two', async () => {
+      const r = await runIn('"My Maps/*.yaml"');
+      expect(r.code).toBe(1);
+      expect(r.stdout).toContain('My Maps/good.yaml');
+      expect(r.stdout).toContain('My Maps/bad.yaml');
+      expect(r.stdout).not.toContain('No files match');
+    });
+
+    it('a folder argument validates the YAML files under it', async () => {
+      const r = await runIn('maps/');
+      expect(r.code).toBe(1);
+      expect(r.stdout).toContain('maps/a.yaml');
+      expect(r.stdout).toContain('maps/nested/b.yml');
+      expect(r.stdout).not.toContain('notes.txt');
+    });
+
+    it('a literal path still honours validate.ignorePatterns', async () => {
+      const r = await runIn('maps/a.yaml drafts/wip.yaml');
+      expect(r.code).toBe(0);
+      expect(r.stdout).toContain('maps/a.yaml');
+      expect(r.stdout).not.toContain('✗ drafts/wip.yaml');
+      expect(r.stdout).toContain('drafts/wip.yaml');
+      expect(r.stdout).toMatch(/ignorePatterns/);
+    });
+
+    it('the older single-string spelling "a.yaml b.yaml" still splits', async () => {
+      const r = await runIn('"maps/a.yaml My Maps/good.yaml"');
+      // "My Maps/good.yaml" is not a path after splitting; the run says so.
+      expect(r.stdout).toContain('maps/a.yaml');
+    });
+  });
+
+  // ml-aot.54: output matches docs/src/content/docs/cli/getting-started.mdx.
+  describe('human output matches the docs (ml-aot.54)', () => {
+    const run = async (args: string) => {
+      try {
+        const { stdout } = await execAsync(`node "${CLI}" validate ${args}`);
+        return { code: 0, stdout };
+      } catch (error: any) {
+        return { code: error.code as number, stdout: error.stdout as string };
+      }
+    };
+
+    it('prints file paths relative to the current folder', async () => {
+      const r = await run('test/fixtures/valid-basic.yaml');
+      expect(r.stdout).toContain('✓ test/fixtures/valid-basic.yaml');
+      expect(r.stdout).not.toContain(process.cwd());
+    });
+
+    it('a mixed run prints both the valid and the issues summary lines', async () => {
+      const r = await run(
+        'test/fixtures/valid-basic.yaml test/fixtures/invalid-missing-config.yaml test/fixtures/invalid-bad-layer.yaml'
+      );
+      expect(r.stdout).toContain('✓ 1 file(s) valid');
+      expect(r.stdout).toMatch(/✗ 2 file\(s\) with issues: 2 error\(s\)/);
+    });
+
+    it('a missing top-level key has no fake "line 1, column 1" location', async () => {
+      const r = await run('test/fixtures/invalid-missing-config.yaml');
+      expect(r.stdout).toContain('error config: Expected object, got undefined');
+      expect(r.stdout).not.toContain('at line 1, column 1');
+    });
   });
 });
