@@ -408,6 +408,17 @@ ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
   max-height: 40vh;
 }
 
+/* A chapter image or video that didn't load says so (ml-aot.51). */
+.scrolly-chapter .chapter-media-missing {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed currentColor;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
 /* Phones, and short landscape screens (a phone on its side is wider than
    768px but only ~400px tall: desktop cards were taller than the screen). */
 @media (max-width: 768px), (max-height: 500px) and (max-width: 1000px) {

@@ -157,7 +157,45 @@ export class MLScrollytelling extends HTMLElement {
     super();
     this.addEventListener("click", (event) => this.onClick(event));
     this.addEventListener("keydown", (event) => this.onKeydown(event));
+    // A chapter photo or video that fails to load (error does not bubble:
+    // capture it). The card showed a broken image with only its alt text
+    // and the 404 was in the console alone (ml-aot.51).
+    this.addEventListener("error", (event) => this.onMediaError(event), true);
   }
+
+  /** Say on the card that its image or video did not load, and why it may not have. */
+  private onMediaError(event: Event): void {
+    const media = event.target;
+    if (!(media instanceof HTMLImageElement || media instanceof HTMLVideoElement)) return;
+    const holder = media.closest<HTMLElement>(".chapter-media");
+    if (!holder || !this.contains(holder) || holder.querySelector(".chapter-media-missing")) return;
+    const written = media.getAttribute("src") ?? "";
+    const note = this.ownerDocument.createElement("p");
+    note.className = "chapter-media-missing";
+    note.setAttribute("role", "status");
+    note.textContent =
+      `${media instanceof HTMLVideoElement ? "Video" : "Image"} "${written}" didn't load. ` +
+      `Check the file name and folder — capital letters count (Photo.JPG and photo.jpg are ` +
+      `different files on GitHub Pages).`;
+    media.style.display = "none";
+    holder.appendChild(note);
+    console.warn(`[ml-scrollytelling] chapter media "${written}" didn't load (${media.currentSrc || written})`);
+  }
+
+  /**
+   * Images that failed before this element was listening (server-rendered
+   * chapters, e.g. Astro's): they are `complete` with no pixels.
+   */
+  private checkMediaLoaded(): void {
+    for (const img of Array.from(this.querySelectorAll<HTMLImageElement>(".chapter-media img"))) {
+      if (img.complete && img.naturalWidth === 0 && img.getAttribute("src")) {
+        this.onMediaError({ target: img } as unknown as Event);
+      }
+    }
+  }
+
+  /** Validation warnings to repeat on the map once it exists (ml-aot.48). */
+  private pageWarnings: string[] = [];
 
   // ------------------------------------------------------------------
   // Properties
@@ -477,11 +515,13 @@ export class MLScrollytelling extends HTMLElement {
 
   private applyResult(result: ParseResult<ScrollytellingBlock>, source: string | null): void {
     this.cancelEmptyCheck?.();
+    this.pageWarnings = [];
     for (const warning of result.warnings ?? []) {
       const where =
         warning.line !== undefined
           ? ` (line ${warning.line}${warning.column !== undefined ? `, column ${warning.column}` : ""})`
           : "";
+      if (warning.onPage) this.pageWarnings.push(`${warning.message}${where}`);
       console.warn(
         `[ml-scrollytelling] ${source ? `${source}: ` : ""}${warning.path ? `${warning.path}: ` : ""}${warning.message}${where}`
       );
@@ -628,6 +668,7 @@ export class MLScrollytelling extends HTMLElement {
     this.stopEngine();
     const controller = createStoryController(this, story, null, {
       padding: (chapter) => this.cameraPadding(chapter),
+      onProblem: (message) => this.mapElement?._reportNotice(message),
       mapSize: () => {
         const box = this.querySelector(":scope > .scrolly-map-container")?.getBoundingClientRect();
         return box && box.width > 0 ? { width: box.width, height: box.height } : undefined;
@@ -654,6 +695,7 @@ export class MLScrollytelling extends HTMLElement {
       controller.activate(id);
     };
     const view = this.ownerDocument.defaultView;
+    this.checkMediaLoaded();
     let frame = 0;
     const onScroll = () => {
       if (frame || !view) return;
@@ -698,6 +740,7 @@ export class MLScrollytelling extends HTMLElement {
         for (const w of waiters) w.resolve(map);
         if (generation === this.generation && this.controller === controller) {
           noteStoryImageRefs(mapEl.getRenderer(), story);
+          for (const message of this.pageWarnings) mapEl._reportNotice(message);
           controller.setMap(map as unknown as StoryMap);
           // The legend and slots mount as the map loads: place them now.
           onScroll();

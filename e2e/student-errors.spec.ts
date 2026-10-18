@@ -147,6 +147,37 @@ test.describe("src fetch failures (ml-aot.13)", () => {
     expect(errors).toEqual([]);
   });
 
+  test("a root key nested under config: is named on the map, not just the console (ml-aot.48)", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/misplaced-keys.html`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#map .ml-map-notice")).toBeVisible({ timeout: 30_000 });
+    const shown = await text(page, "#map .ml-map-notice");
+    expect(shown).toContain('"markers" belongs at the top level');
+    expect(shown).toMatch(/line \d+/);
+    expect(errors).toEqual([]);
+  });
+
+  test("story mistakes show on the page: layers.show typo, theme under config, a missing chapter image (ml-aot.48/.51)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("story") as any).mapReady().then(() => null));
+    const notice = page.locator("#story .ml-map-notice");
+    await expect(notice).toBeVisible({ timeout: 30_000 });
+    await expect(notice).toContainText('"theme" belongs at the top level');
+    // The layers.show typo is found when its chapter runs, against the map's
+    // real layers (a basemap layer would be fine).
+    await page.evaluate(() => (document.getElementById("story") as any).goToChapter("route"));
+    await expect(notice).toContainText("route shows layer walking, but the map has no layer by that name. Did you mean walk?");
+    const missing = page.locator('.scrolly-chapter[data-chapter-id="start"] .chapter-media-missing');
+    await expect(missing).toBeVisible({ timeout: 15_000 });
+    await expect(missing).toContainText("Volcano.SVG");
+    await expect(missing).toContainText("capital letters");
+    await page.screenshot({ path: "e2e/results/story-mistakes.png" });
+    expect(errors).toEqual([]);
+  });
+
   test("a src that returns a web page says the path is probably wrong", async ({ page }) => {
     await guard(page);
     await page.goto(`${DIR}/src-html.html`, { waitUntil: "domcontentloaded" });

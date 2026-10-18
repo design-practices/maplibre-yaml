@@ -54,6 +54,13 @@ export interface ValidationWarning {
    * unknown-key and expression warnings, which promote as before.
    */
   kind?: "deprecation" | "unimplemented";
+  /**
+   * Also shown on the page, in the map's "part of this map didn't load"
+   * notice, not only the console: the document is valid but part of it
+   * silently does nothing (a root key nested under `config:`, a chapter
+   * naming a layer the document doesn't have). ml-aot.48 / ml-aot.51.
+   */
+  onPage?: boolean;
 }
 
 /** Valid MapLibre layer `type` values, in the order surfaced to users. */

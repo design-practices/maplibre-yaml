@@ -293,6 +293,8 @@ export class MLMap extends HTMLElement {
    * on the first layer/source/data problem of the current render.
    */
   private notice: MapNotice | null = null;
+  /** The current document's `onPage` warnings, shown once its map renders. */
+  private documentNotices: string[] = [];
 
   /**
    * Resolved URL of the YAML file the current document came from (`src`),
@@ -764,6 +766,9 @@ export class MLMap extends HTMLElement {
     // Destroy existing renderer (slot children parked first — the renderer
     // only borrows them, and its teardown removes their corner containers).
     this.teardownRenderer();
+    // The teardown cleared the notice; this document's on-page warnings
+    // (logged as it was parsed, just before) go back on it.
+    for (const message of this.documentNotices) this.reportProblem(message);
 
     // A fresh render resets the readiness state a pending or future
     // mapReady() reads.
@@ -927,6 +932,7 @@ export class MLMap extends HTMLElement {
    * card, which is reserved for hard failures.
    */
   private logWarnings(warnings: ValidationWarning[] | undefined): void {
+    this.documentNotices = [];
     if (!warnings || warnings.length === 0) return;
     for (const warning of warnings) {
       const location =
@@ -937,7 +943,22 @@ export class MLMap extends HTMLElement {
           : "";
       const path = warning.path ? `${warning.path}: ` : "";
       console.warn(`[ml-map] ${path}${warning.message}${location}`);
+      // A valid document where part of it silently does nothing (a root key
+      // nested under config:): also say so on the page (ml-aot.48). Still
+      // the non-fatal notice, never the error card.
+      if (warning.onPage) this.documentNotices.push(`${warning.message}${location}`);
     }
+  }
+
+  /**
+   * Put one line in this map's non-fatal notice ("part of this map didn't
+   * load"). For `<ml-scrollytelling>`, which reports its own document's
+   * problems on its map (ml-aot.48, ml-aot.51). Respects `quiet`.
+   *
+   * @internal
+   */
+  _reportNotice(message: string): void {
+    this.reportProblem(message);
   }
 
   /**

@@ -240,6 +240,7 @@ export function checkDocument(
             `"${key}" belongs at the top level, next to config:, not inside it. Move it ` +
             `out of config: (indent it like config:); inside config: it does nothing.`,
           ...atKey(positions, ["config"], key),
+          onPage: true,
         });
         continue;
       }

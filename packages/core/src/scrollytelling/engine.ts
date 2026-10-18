@@ -28,6 +28,7 @@ import type {
   ScrollytellingBlock,
 } from "../schemas/scrollytelling.schema";
 import { STORY_MAP_KEYS } from "./keys";
+import { suggest } from "../utils/suggest";
 
 /** The slice of a maplibre `Map` the engine drives. */
 export interface StoryMap {
@@ -133,6 +134,8 @@ export interface ActionContext {
   padding?: CameraPadding;
   /** The map's size in CSS pixels, so padding never exceeds it. */
   mapSize?: { width: number; height: number };
+  /** Report a problem the reader should see (a layer the map doesn't have). */
+  onProblem?: (message: string) => void;
 }
 
 /**
@@ -207,6 +210,9 @@ export function runChapterAction(
     console.warn(
       `[ml-scrollytelling] ${action.action} in chapter "${ctx.chapterId}": no layer "${action.layer ?? ""}" on the map`
     );
+    ctx.onProblem?.(
+      `Chapter \`${ctx.chapterId}\`'s ${action.action} names layer \`${action.layer ?? ""}\`, but the map has no layer by that name, so it did nothing.`
+    );
     return false;
   };
 
@@ -279,6 +285,12 @@ export interface StoryControllerOptions {
   padding?: (chapter: Chapter) => CameraPadding | undefined;
   /** The map's size, so a `fitBounds` action's padding fits in it. */
   mapSize?: () => { width: number; height: number } | undefined;
+  /**
+   * A problem the reader should see on the page: a chapter showing, hiding
+   * or acting on a layer the map doesn't have (ml-aot.51). Reported once
+   * per message.
+   */
+  onProblem?: (message: string) => void;
   /** Whether camera moves should be instant. Default: the OS setting. */
   reducedMotion?: () => boolean;
 }
@@ -319,6 +331,12 @@ export function createStoryController(
 ): StoryController {
   const chapters: Chapter[] = story.chapters ?? [];
   const reduced = options.reducedMotion ?? prefersReducedMotion;
+  const reported = new Set<string>();
+  const problem = (message: string) => {
+    if (reported.has(message)) return;
+    reported.add(message);
+    options.onProblem?.(message);
+  };
   let map: StoryMap | null = initialMap;
   /** The map is settled: loaded (`map` set) or failed (`map` null). */
   let mapSettled = initialMap !== null;
@@ -376,6 +394,7 @@ export function createStoryController(
         phase: "exit",
         chapter: previous,
         reducedMotion: reduce,
+        onProblem: problem,
       });
     }
 
@@ -398,11 +417,23 @@ export function createStoryController(
       else if (animation === "easeTo") map.easeTo(camera);
       else map.flyTo({ ...camera, speed: chapter.speed ?? 0.6, curve: chapter.curve ?? 1 });
 
-      for (const id of chapter.layers?.show ?? []) {
-        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
-      }
-      for (const id of chapter.layers?.hide ?? []) {
-        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+      for (const [verb, visibility] of [
+        ["show", "visible"],
+        ["hide", "none"],
+      ] as const) {
+        for (const id of chapter.layers?.[verb] ?? []) {
+          if (map.getLayer(id)) {
+            map.setLayoutProperty(id, "visibility", visibility);
+            continue;
+          }
+          // Silently skipped before (ml-aot.51): the route never appeared and
+          // nothing said why.
+          const near = suggest(id, ((story.layers ?? []) as Array<{ id: string }>).map((l) => l.id), 3);
+          problem(
+            `Chapter \`${chapter.id}\` ${verb === "show" ? "shows" : "hides"} layer \`${id}\`, but the map has no layer by that name.` +
+              (near ? ` Did you mean \`${near}\`?` : "")
+          );
+        }
       }
     }
 
@@ -415,6 +446,7 @@ export function createStoryController(
         reducedMotion: reduce || instant,
         padding,
         mapSize: options.mapSize?.(),
+        onProblem: problem,
       });
     }
 
