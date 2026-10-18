@@ -111,7 +111,9 @@ describe("documented YAML documents validate", () => {
 
   it("finds the map and story documents", () => {
     expect(maps.length).toBeGreaterThan(5);
-    expect(stories.length).toBeGreaterThanOrEqual(2);
+    // The integration page's complete story. (The README used to carry a
+    // second one; it is now an orientation that links to the docs instead.)
+    expect(stories.length).toBeGreaterThanOrEqual(1);
   });
 
   it.each(maps.map((f, i) => [`${f.file} map #${i + 1}`, f]))("%s", (_l, f) => {

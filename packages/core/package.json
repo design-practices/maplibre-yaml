@@ -1,7 +1,7 @@
 {
   "name": "@maplibre-yaml/core",
   "version": "0.7.1",
-  "description": "Core library for declarative MapLibre maps with YAML",
+  "description": "Declarative MapLibre web maps from YAML: the <ml-map> and <ml-scrollytelling> web components, parser, schemas and renderer",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -103,11 +103,14 @@
   },
   "keywords": [
     "maplibre",
+    "maplibre-gl",
     "maps",
     "yaml",
     "geojson",
     "web-components",
-    "declarative"
+    "declarative",
+    "scrollytelling",
+    "story-map"
   ],
   "license": "MIT",
   "publishConfig": {
@@ -122,5 +125,5 @@
   "bugs": {
     "url": "https://github.com/design-practices/maplibre-yaml/issues"
   },
-  "homepage": "https://github.com/design-practices/maplibre-yaml#readme"
+  "homepage": "https://docs.maplibre-yaml.org/"
 }

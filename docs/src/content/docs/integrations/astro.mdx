@@ -70,7 +70,7 @@ lockfiles).
    config:
      center: [-74.006, 40.7128]
      zoom: 12
-     mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
    layers:
      - id: marker
        type: circle
@@ -566,6 +566,24 @@ const maps = await loadFromGlob(
 If any file fails validation, `loadFromGlob` throws a single `YAMLLoadError`
 listing every failing file, which fails the build. A pattern that matches
 nothing returns an empty array without an error.
+
+#### Other loaders and types
+
+`loadScrollytellingConfig(path)` loads and validates a story the way
+`loadMapConfig` loads a map (see [Scrollytelling Component](#scrollytelling-component)).
+`loadYAML(path, schema?)` reads any YAML file with core's parse options and,
+given a zod schema, validates it; without one it returns the parsed value
+unchecked.
+
+The package exports the types of its props and builders for your own
+components: `MapProps`, `FullPageMapProps`, `ScrollytellingProps`,
+`ChapterProps`, the frontmatter shapes `LocationPoint`, `RegionPolygon`,
+`RouteLine` and `FeatureRef`, and the builder options (`PointMapOptions`,
+`MultiPointMapOptions`, `PolygonMapOptions`, `RouteMapOptions`, …):
+
+```typescript
+import type { MapProps, LocationPoint } from '@maplibre-yaml/astro';
+```
 
 ### Content Collections Integration
 
@@ -1069,7 +1087,7 @@ listener, which fires after the first load and after every navigation:
 
 ## Effects in Astro
 
-[Effects](/guides/effects/) (`effects:` in a layer, such as the tonal hatch)
+[Effects](/guides/effects/) (`effect:` on a layer, such as the tonal hatch)
 need the effects package registered next to the map. Install
 `@maplibre-yaml/effects` and import its register module in the page (or
 layout) that has the map:
@@ -1441,6 +1459,9 @@ interface ScrollytellingProps {
   config?: ScrollytellingBlock;  // Pre-loaded scrollytelling configuration
   class?: string;            // Additional CSS class for container
   debug?: boolean;           // Debug mode - shows chapter boundaries
+  // Where the story's paths start (default: import.meta.env.BASE_URL).
+  // false = resolve relative paths against the page.
+  base?: string | false;
 }
 ```
 

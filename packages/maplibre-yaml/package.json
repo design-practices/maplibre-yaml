@@ -1,7 +1,7 @@
 {
   "name": "maplibre-yaml",
   "version": "0.1.0",
-  "description": "Alias for @maplibre-yaml/cli, so `npx maplibre-yaml` runs the maplibre-yaml command line (validate, preview, init, schema, emit).",
+  "description": "Runs @maplibre-yaml/cli as `npx maplibre-yaml` (init, validate, preview, emit, schema, bake) with no install.",
   "type": "module",
   "bin": {
     "maplibre-yaml": "bin.js"
@@ -24,12 +24,15 @@
     "maps",
     "cli"
   ],
-  "homepage": "https://docs.maplibre-yaml.org",
+  "homepage": "https://docs.maplibre-yaml.org/cli/reference/",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/design-practices/maplibre-yaml.git",
     "directory": "packages/maplibre-yaml"
+  },
+  "bugs": {
+    "url": "https://github.com/design-practices/maplibre-yaml/issues"
   },
   "publishConfig": {
     "access": "public",
