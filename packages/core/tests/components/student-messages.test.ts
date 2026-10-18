@@ -225,10 +225,50 @@ describe("with base set, a 404 explains where files are looked up (ml-aot.36)", 
     expect(card.title).toBe("Map file not found");
     expect(card.hint).toBe(
       'This page sets base="/my-repo/", so files are looked up under /my-repo/ — but the page ' +
-        "itself is at /, outside /my-repo/. If you're previewing locally, serve the parent folder " +
-        "so this page opens at /my-repo/, or remove base while developing."
+        "itself is at /, outside /my-repo/. If you're previewing locally, either remove base " +
+        "while developing, or serve the folder one level up and open /my-repo/. That folder " +
+        'must be named "my-repo" (a GitHub "Download ZIP" folder is called "my-repo-main": ' +
+        "rename it)."
     );
     expect(card.hint).not.toContain("relative to this page's folder");
+  });
+
+  it("a page AT the base without its trailing slash (astro dev, npx serve) counts as under it (A1)", () => {
+    const card = srcHttpErrorCard("configs/x.yaml", "http://localhost:4321/my-repo/configs/x.yaml", 404, "", {
+      pageUrl: "http://localhost:4321/my-repo",
+      base: "/my-repo/",
+    });
+    expect(card.hint).toContain("looked up under /my-repo/");
+    expect(card.hint).not.toContain("previewing locally");
+    expect(card.hint).not.toContain("remove base");
+  });
+
+  it('base "/" (what Astro always passes) talks about the site root, never base="/" (A1, ml-aot.51)', () => {
+    const card = srcHttpErrorCard("configs/x.yaml", "http://localhost:4321/configs/x.yaml", 404, "", {
+      pageUrl: "http://localhost:4321/blog/post/",
+      base: "/",
+    });
+    expect(card.hint).not.toContain('base="/"');
+    expect(card.hint).toContain("site root");
+    expect(card.hint).toContain("public/");
+    expect(card.hint).not.toContain("previewing locally");
+    const notice = describeDataProblem(
+      "pts",
+      Object.assign(new Error("HTTP 404: Not Found for /data/pts.geojson"), { url: "/data/pts.geojson" }),
+      { pageUrl: "http://localhost:4321/", filePage: false, base: "/" }
+    );
+    expect(notice).not.toContain('base="/"');
+    expect(notice).toContain("site root");
+  });
+
+  it("a cross-origin base gives no local-preview advice (A1)", () => {
+    const card = srcHttpErrorCard("map.yaml", "https://cdn.example.com/site/map.yaml", 404, "", {
+      pageUrl: "http://localhost:4446/",
+      base: "https://cdn.example.com/site/",
+    });
+    expect(card.hint).toContain("https://cdn.example.com/site/");
+    expect(card.hint).not.toContain("previewing locally");
+    expect(card.hint).not.toContain("remove base");
   });
 
   it("the same on the HTML-fallback card and the data notice", () => {

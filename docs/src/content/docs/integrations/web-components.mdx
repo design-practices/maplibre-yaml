@@ -373,7 +373,9 @@ subpath, the notice on the map suggests the `base` to add.
 folder puts the page at `http://localhost:3000/`, outside `/my-repo/`, so
 every file 404s (the error card says so). Run `npx serve` from the folder
 *above* the repository instead and open `http://localhost:3000/my-repo/`, or
-leave `base` off until you publish.
+leave `base` off until you publish. The repository folder must be named
+exactly like the base: a GitHub **Download ZIP** unpacks to `my-repo-main`,
+which is served at `/my-repo-main/`, so rename it to `my-repo` first.
 
 **Why not `<base href>`?** A `<base href="/<repo>/">` in the page's `<head>`
 makes the browser resolve every *relative* URL on the page against it, the

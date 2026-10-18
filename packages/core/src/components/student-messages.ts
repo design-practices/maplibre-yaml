@@ -120,13 +120,36 @@ export function baseLookupHint(
   const basePath = baseUrl.pathname;
   if (target.origin !== baseUrl.origin || !target.pathname.startsWith(basePath)) return undefined;
 
-  const pageUnderBase = page.origin === baseUrl.origin && page.pathname.startsWith(basePath);
+  // A base on another site (a CDN): the page's own location says nothing
+  // about it, so no local-preview advice (A1).
+  if (baseUrl.origin !== page.origin) {
+    return (
+      `This map's base is "${normalized}", so its files are loaded from there. Check the ` +
+      `file name and that the file exists at that address.`
+    );
+  }
+
+  // base "/" is what Astro passes on a site at the root: the author never
+  // set a base, so talk about the site root, not `base="/"` (A1, ml-aot.51).
+  if (basePath === "/") {
+    return (
+      `Paths in this map start at the site root (for an Astro site, the public/ folder), ` +
+      `with or without a leading "/", not next to this page. Check the file name and ` +
+      `that the file is in that folder.`
+    );
+  }
+
+  // `astro dev` and `npx serve` serve the base itself as /my-repo, with no
+  // trailing slash: that page is at the base, not outside it (A1).
+  const pageUnderBase = page.pathname.startsWith(basePath) || page.pathname + "/" === basePath;
   if (!pageUnderBase) {
+    const folder = basePath.split("/").filter(Boolean).pop() ?? "";
     return (
       `This page sets base="${normalized}", so files are looked up under ${basePath} — ` +
       `but the page itself is at ${page.pathname}, outside ${basePath}. If you're ` +
-      `previewing locally, serve the parent folder so this page opens at ${basePath}, ` +
-      `or remove base while developing.`
+      `previewing locally, either remove base while developing, or serve the folder one ` +
+      `level up and open ${basePath}. That folder must be named "${folder}" (a GitHub ` +
+      `"Download ZIP" folder is called "${folder}-main": rename it).`
     );
   }
   return (

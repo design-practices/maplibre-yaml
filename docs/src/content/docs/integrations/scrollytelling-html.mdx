@@ -236,7 +236,9 @@ a site-hosted style) and chapter `image` / `video` paths then resolve under
 To preview it locally, serve the folder *above* the repository (so the page
 opens at `http://localhost:3000/my-repo/`), or leave `base` off while you
 work: `npx serve .` inside the repository puts the page at `/`, outside
-`/my-repo/`, and the story's files 404.
+`/my-repo/`, and the story's files 404. The repository folder must be named
+exactly like the base (a GitHub **Download ZIP** unpacks to `my-repo-main`:
+rename it to `my-repo`).
 
 ## Corner slots
 

@@ -137,7 +137,10 @@ test.describe("src fetch failures (ml-aot.13)", () => {
       expect(shown).toContain(title);
       expect(shown).toMatch(new RegExp(`The browser looked for it at http://localhost:\\d+/my-repo/${file.replace(".", "\\.")}`));
       expect(shown).toContain('This page sets base="/my-repo/", so files are looked up under /my-repo/');
-      expect(shown).toContain("If you're previewing locally, serve the parent folder so this page opens at /my-repo/, or remove base while developing.");
+      expect(shown).toContain(
+        "If you're previewing locally, either remove base while developing, or serve the folder one level up and open /my-repo/. " +
+          'That folder must be named "my-repo" (a GitHub "Download ZIP" folder is called "my-repo-main": rename it).'
+      );
       expect(shown).not.toContain("relative to this page's folder");
     }
     await page.screenshot({ path: "e2e/results/base-preview-cards.png", fullPage: true });
