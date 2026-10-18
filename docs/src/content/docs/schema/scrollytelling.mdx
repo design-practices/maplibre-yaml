@@ -41,14 +41,14 @@ const story = await loadScrollytellingConfig('./src/stories/my-story.yaml');
 Both show the same thing for the same file: a sticky map with the chapters
 scrolling over it, the camera moves, layer changes and actions below, the
 chapter rail, themes, and reduced-motion handling. Check a story without a
-browser with `npx @maplibre-yaml/cli validate story.yaml`.
+browser with `npx maplibre-yaml validate story.yaml`.
 
 ## Scrollytelling Block Structure
 
 A story file is a standalone YAML document with `type: scrollytelling` at the
 top level. That is what `<ml-scrollytelling src>`, `loadScrollytellingConfig`,
 `<Scrollytelling src>`, a stories content collection and
-`npx @maplibre-yaml/cli validate` all read, and
+`npx maplibre-yaml validate` all read, and
 every full example on this page is written that way, ready to paste into a
 file of its own. (Only inside a site file's `pages:` → `blocks:` list is a
 story a list item, `- type: scrollytelling`; see
