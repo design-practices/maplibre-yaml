@@ -136,6 +136,8 @@ export interface ActionContext {
   mapSize?: { width: number; height: number };
   /** Report a problem the reader should see (a layer the map doesn't have). */
   onProblem?: (message: string) => void;
+  /** The document's layer ids, for a did-you-mean. */
+  layerIds?: string[];
 }
 
 /**
@@ -210,8 +212,10 @@ export function runChapterAction(
     console.warn(
       `[ml-scrollytelling] ${action.action} in chapter "${ctx.chapterId}": no layer "${action.layer ?? ""}" on the map`
     );
+    const near = action.layer ? suggest(action.layer, ctx.layerIds ?? [], 3) : undefined;
     ctx.onProblem?.(
-      `Chapter \`${ctx.chapterId}\`'s ${action.action} names layer \`${action.layer ?? ""}\`, but the map has no layer by that name, so it did nothing.`
+      `Chapter \`${ctx.chapterId}\`: its ${action.action} action names layer \`${action.layer ?? ""}\`, but the map has no layer by that name, so it did nothing.` +
+        (near ? ` Did you mean \`${near}\`?` : "")
     );
     return false;
   };
@@ -331,6 +335,7 @@ export function createStoryController(
 ): StoryController {
   const chapters: Chapter[] = story.chapters ?? [];
   const reduced = options.reducedMotion ?? prefersReducedMotion;
+  const layerIds = ((story.layers ?? []) as Array<{ id: string }>).map((l) => l.id);
   const reported = new Set<string>();
   const problem = (message: string) => {
     if (reported.has(message)) return;
@@ -395,6 +400,7 @@ export function createStoryController(
         chapter: previous,
         reducedMotion: reduce,
         onProblem: problem,
+        layerIds,
       });
     }
 
@@ -428,7 +434,7 @@ export function createStoryController(
           }
           // Silently skipped before (ml-aot.51): the route never appeared and
           // nothing said why.
-          const near = suggest(id, ((story.layers ?? []) as Array<{ id: string }>).map((l) => l.id), 3);
+          const near = suggest(id, layerIds, 3);
           problem(
             `Chapter \`${chapter.id}\` ${verb === "show" ? "shows" : "hides"} layer \`${id}\`, but the map has no layer by that name.` +
               (near ? ` Did you mean \`${near}\`?` : "")
@@ -447,6 +453,7 @@ export function createStoryController(
         padding,
         mapSize: options.mapSize?.(),
         onProblem: problem,
+        layerIds,
       });
     }
 

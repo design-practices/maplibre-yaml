@@ -178,6 +178,17 @@ test.describe("src fetch failures (ml-aot.13)", () => {
     expect(errors).toEqual([]);
   });
 
+  test("a chapter action naming a missing layer is on the page, with a did-you-mean (ml-aot.51)", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("story") as any).mapReady().then(() => null));
+    await page.evaluate(() => (document.getElementById("story") as any).goToChapter("filter"));
+    await expect(page.locator("#story .ml-map-notice")).toContainText(
+      "Chapter filter: its setFilter action names layer wlak, but the map has no layer by that name, so it did nothing. Did you mean walk?"
+    );
+    expect(errors).toEqual([]);
+  });
+
   test("a src that returns a web page says the path is probably wrong", async ({ page }) => {
     await guard(page);
     await page.goto(`${DIR}/src-html.html`, { waitUntil: "domcontentloaded" });

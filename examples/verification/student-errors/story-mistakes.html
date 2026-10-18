@@ -54,6 +54,15 @@ chapters:
     zoom: 4
     layers:
       show: [walking]
+  - id: filter
+    title: Filter the route
+    description: "<p>The action names wlak, but the layer is walk.</p>"
+    center: [5, 25]
+    zoom: 4
+    onChapterEnter:
+      - action: setFilter
+        layer: wlak
+        filter: ["==", ["geometry-type"], "LineString"]
     </script>
   </ml-scrollytelling>
   <script type="module" src="../../../packages/core/register.js"></script>
