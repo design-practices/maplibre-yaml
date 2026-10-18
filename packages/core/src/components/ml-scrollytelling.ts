@@ -768,8 +768,8 @@ export class MLScrollytelling extends HTMLElement {
    * screens pad the side a left/right card sits on; a centred card sits over
    * the middle of the map, so the camera is offset upward to put the
    * chapter's `center` above it (ml-aot.39). Full-width and hidden chapters
-   * keep the plain centre. At most 60% of the map either way, so a huge card
-   * never squeezes the map to nothing.
+   * keep the plain centre. At most 60% of the map (75% above a centred
+   * card), so a huge card never squeezes the map to nothing.
    */
   private cameraPadding(chapter: Chapter): CameraPadding | undefined {
     const zero: CameraPadding = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -797,8 +797,11 @@ export class MLScrollytelling extends HTMLElement {
     if (alignment === "right") return { ...zero, right: cap(mapBox.right - box.left + 16, mapBox.width) };
     if (alignment === "center") {
       // The card rests centred on the map (the chapter is one map-height
-      // tall and centres it): pad from its top edge down.
-      return { ...zero, bottom: cap(mapBox.height / 2 + box.height / 2 + 16, mapBox.height) };
+      // tall and centres it): pad from its top edge down. The strip above a
+      // tall card (a chapter image) is all the reader sees of the map, so
+      // this one may take up to 75%.
+      const bottom = mapBox.height / 2 + box.height / 2 + 16;
+      return { ...zero, bottom: Math.round(Math.max(0, Math.min(bottom, mapBox.height * 0.75))) };
     }
     return zero;
   }
