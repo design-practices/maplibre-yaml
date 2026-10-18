@@ -1,0 +1,5 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"name":"Denver"},"geometry":{"type":"Point","coordinates":[-104.99,39.74]}},
+{"type":"Feature","properties":{"name":"Chicago"},"geometry":{"type":"Point","coordinates":[-87.63,41.88]}},
+{"type":"Feature","properties":{"name":"Dallas"},"geometry":{"type":"Point","coordinates":[-96.8,32.78]}}
+]}

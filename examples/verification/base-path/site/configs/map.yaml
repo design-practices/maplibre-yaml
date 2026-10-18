@@ -1,0 +1,44 @@
+# ml-aot.30 — a map written for a site's own files, with NO repo name in any
+# path. The e2e server mounts this folder at /my-repo/ the way GitHub Pages
+# serves a project site, so these paths only load when <ml-map base="/my-repo/">
+# resolves them there.
+type: map
+id: base-path
+config:
+  center: [-96, 39]
+  zoom: 3
+  mapStyle: "styles/basemap.json"         # bare relative
+images:
+  tri: "/images/tri.png"                  # root-relative
+markers:
+  - at: [-80, 30]
+    icon: "/images/pin.png"               # root-relative
+sources:
+  cities:
+    type: geojson
+    url: "/data/cities.geojson"           # root-relative
+layers:
+  - id: cities
+    type: circle
+    source: cities
+    paint:
+      circle-radius: 10
+      circle-color: "#e63946"
+      circle-stroke-color: "#ffffff"
+      circle-stroke-width: 2
+  - id: route
+    type: line
+    source:
+      type: geojson
+      url: "data/route.geojson"           # bare relative
+    paint:
+      line-color: "#1d3557"
+      line-width: 4
+  - id: peaks
+    type: symbol
+    source:
+      type: geojson
+      url: "./data/peaks.geojson"         # dot relative
+    layout:
+      icon-image: tri
+      icon-allow-overlap: true
