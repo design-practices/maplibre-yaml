@@ -9,6 +9,8 @@ npx maplibre-yaml init my-map
 npx maplibre-yaml validate my-map/map.yaml
 ```
 
+Needs Node.js 20.9 or later (22 or 24 LTS recommended).
+
 Every command and flag is the CLI's own: `init`, `validate`, `preview`,
 `emit`, `schema` and `bake`. See the
 [command reference](https://docs.maplibre-yaml.org/cli/reference/).

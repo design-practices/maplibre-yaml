@@ -9,8 +9,10 @@ validating and previewing your YAML map configurations, and exporting them to
 hot reload.
 
 The commands on this page use `npx maplibre-yaml`, which works without
-installing anything (you need [Node.js](https://nodejs.org/) 18 or later;
-the current LTS, 22 or 24, is recommended).
+installing anything (you need [Node.js](https://nodejs.org/) 20.9 or later;
+the current LTS, 22 or 24, is recommended). On an older Node the CLI stops
+with "maplibre-yaml needs Node.js 20.9 or newer". Only the command line
+needs Node: maps and stories in a web page don't.
 `maplibre-yaml` is a small package that runs `@maplibre-yaml/cli`;
 `npx @maplibre-yaml/cli` is the same program under its full name.
 If you install the CLI, the shorter `mlym` does the same; see

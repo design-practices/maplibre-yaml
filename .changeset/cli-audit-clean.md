@@ -3,4 +3,6 @@
 "maplibre-yaml": patch
 ---
 
-Installing the CLI reports far fewer known vulnerabilities. Vite moves to 6.4 (dev-server advisories, plus the old esbuild that Vite 5 brought) and chokidar to 4, and file matching moves from fast-glob to tinyglobby. The `braces` package under fast-glob and chokidar 3 has an advisory with no fixed release. Commands and options are unchanged. sharp stays at 0.34.5: its libvips/libheif/librsvg advisories are fixed only in sharp 0.35, which needs Node.js 20.9 or later, and the CLI still supports Node 18. sharp only reads your own sprite images (`emit`/`bake`).
+Installing the CLI no longer reports known vulnerabilities. `npm install @maplibre-yaml/cli` used to print "9 vulnerabilities (8 high), no fix available"; it now reports 0. sharp moves to 0.35.5, which fixes the libvips, libheif and librsvg advisories. Vite moves to 6.4, fixing dev-server advisories and the old esbuild Vite 5 brought. chokidar moves to 4 and file matching from fast-glob to tinyglobby, because the `braces` package they used has an advisory with no fixed release. Commands and options are unchanged.
+
+**The CLI now needs Node.js 20.9 or later** (22 or 24 LTS recommended). sharp 0.35's security fixes don't run on older Node, and Node 18 reached end of life in 2025. On an older Node the CLI stops at once with "maplibre-yaml needs Node.js 20.9 or newer, but this is Node.js 18.x" and how to update, instead of failing later. This applies to the command line only: `@maplibre-yaml/core` and `@maplibre-yaml/astro` still support Node 18.

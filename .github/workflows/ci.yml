@@ -31,14 +31,33 @@ jobs:
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
 
+            # Node 18: core, astro and effects still support it; the CLI (and
+            # the maplibre-yaml alias) need Node 20.9+ (sharp 0.35), and the
+            # docs site runs the CLI at build time. So that leg skips those
+            # three; Node 20 and 22 run everything.
             - name: Build
+              if: matrix.node-version != 18
               run: pnpm build
 
+            - name: Build (Node 18 -- without the CLI and docs)
+              if: matrix.node-version == 18
+              run: pnpm -r --filter '!@maplibre-yaml/cli' --filter '!maplibre-yaml' --filter '!@maplibre-yaml/docs' build
+
             - name: Type check
+              if: matrix.node-version != 18
               run: pnpm typecheck
 
+            - name: Type check (Node 18 -- without the CLI and docs)
+              if: matrix.node-version == 18
+              run: pnpm -r --filter '!@maplibre-yaml/cli' --filter '!maplibre-yaml' --filter '!@maplibre-yaml/docs' typecheck
+
             - name: Run tests
+              if: matrix.node-version != 18
               run: pnpm test
+
+            - name: Run tests (Node 18 -- without the CLI and docs)
+              if: matrix.node-version == 18
+              run: pnpm -r --filter '!@maplibre-yaml/cli' --filter '!maplibre-yaml' --filter '!@maplibre-yaml/docs' test
 
             - name: Validate doc YAML snippets
               run: pnpm docs:validate-snippets
