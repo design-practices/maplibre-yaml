@@ -1,5 +1,27 @@
 # @maplibre-yaml/cli
 
+## 0.4.2
+
+### Patch Changes
+
+- b7a8f09: `init --template story` now scaffolds a story map that works as soon as you serve the folder: its page loads `<ml-scrollytelling>` from `@maplibre-yaml/core@0.8` on the CDN (the release that adds it), and the "not part of core 0.7 yet" notes are gone; `init` prints the same serve-and-open steps as for `basic`. Both the `basic` and `story` pages now pin core 0.8 and carry a commented `base="/my-repo/"` hint for publishing on a GitHub Pages project site, and the YAML tip no longer says paths must start with `./` (plain relative paths and `/`-paths both work).
+- 6750a12: The npm READMEs are rewritten for 0.8 as short orientations that match the docs site: what the package is, how to install it, one working example per way of using it (copied from the docs and run as printed), the main features, supported versions, and links to the docs pages for everything else. The core README now pins the CDN example to `@maplibre-yaml/core@0.8`, uses the `MapRenderer.fromModel` API the docs teach, covers `<ml-scrollytelling>`, `base`, slots and the on-page error card, and includes maplibre-gl 6's `setWorkerUrl` bundler setup (the effects README and guide gained it too: without it, an effects page built with Vite failed with _Worker failed to load_). The CLI README explains when `npx maplibre-yaml`, `npx @maplibre-yaml/cli` and `mlym` work. Each package's `homepage` now points at its docs page, and the descriptions and keywords say what the package does.
+- Updated dependencies [c354c2c]
+- Updated dependencies [c354c2c]
+- Updated dependencies [c354c2c]
+- Updated dependencies [1ce286a]
+- Updated dependencies [c354c2c]
+- Updated dependencies [c6ad0fc]
+- Updated dependencies [81e8809]
+- Updated dependencies [6750a12]
+- Updated dependencies [c354c2c]
+- Updated dependencies [b7a8f09]
+- Updated dependencies [8144227]
+- Updated dependencies [8144227]
+- Updated dependencies [c354c2c]
+- Updated dependencies [c354c2c]
+  - @maplibre-yaml/core@0.8.0
+
 ## 0.4.1
 
 ### Patch Changes
