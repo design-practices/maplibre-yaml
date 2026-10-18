@@ -126,13 +126,14 @@ export class ChromeLayout {
    * moment later), so while bottom-left chrome is mounted the attribution
    * starts collapsed, exactly as MapLibre leaves it after a drag. The (i)
    * button still expands it on demand. Same-corner placement past MapLibre's
-   * own controls is unchanged.
+   * own controls is unchanged. MapLibre's own controls in the bottom-left
+   * corner -- the scale bar, by default -- count too (ml-aot.38); its logo
+   * alone does not.
    *
    * @returns Whether an expanded attribution was collapsed.
    */
   collapseCompactAttribution(): boolean {
-    const bottomLeft = this.corners.get("bottom-left");
-    if (!bottomLeft || bottomLeft.childElementCount === 0) return false;
+    if (!this.bottomLeftOccupied()) return false;
     let collapsed = false;
     for (const attribution of this.host.querySelectorAll<HTMLElement>(
       ".maplibregl-ctrl-attrib.maplibregl-compact.maplibregl-compact-show"
@@ -142,6 +143,19 @@ export class ChromeLayout {
       collapsed = true;
     }
     return collapsed;
+  }
+
+  /** Whether anything readable sits in the bottom-left corner. */
+  private bottomLeftOccupied(): boolean {
+    const chrome = this.corners.get("bottom-left");
+    if (chrome && chrome.childElementCount > 0) return true;
+    const controls = this.host?.querySelector?.<HTMLElement>(".maplibregl-ctrl-bottom-left");
+    if (!controls) return false;
+    return [...controls.children].some(
+      (child) =>
+        !child.classList.contains("maplibregl-ctrl-logo") &&
+        !child.querySelector(".maplibregl-ctrl-logo")
+    );
   }
 
   /** Remove every corner container (renderer destroy). */

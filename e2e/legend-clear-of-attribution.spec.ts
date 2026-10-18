@@ -73,3 +73,28 @@ test("a bottom-left legend is readable on a phone; the attribution starts collap
 
   expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
 });
+
+test("a bottom-left scale bar (no bottom-left chrome) is readable on a phone (ml-aot.38)", async ({ page }) => {
+  const errors = await guard(page);
+  await page.goto("/examples/verification/16-scale-clear-of-attribution.html", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".maplibregl-ctrl-scale") !== null &&
+      document.querySelector(".ml-map-legend") !== null &&
+      document.querySelector(".maplibregl-ctrl-attrib.maplibregl-compact") !== null,
+    undefined,
+    { timeout: 60_000 }
+  );
+  await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+  const covered = await page.evaluate(() => {
+    const scale = document.querySelector<HTMLElement>(".maplibregl-ctrl-scale")!;
+    const r = scale.getBoundingClientRect();
+    const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return top && (scale.contains(top) || top.contains(scale)) ? null : top?.className ?? "nothing";
+  });
+  expect(covered, "scale bar covered by").toBeNull();
+  const attrib = page.locator(".maplibregl-ctrl-attrib");
+  await expect(attrib).not.toHaveClass(/maplibregl-compact-show/);
+  await page.screenshot({ path: "e2e/results/scale-clear-of-attribution-mob.png" });
+  expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+});
