@@ -1310,6 +1310,11 @@ the top-right corner with anything else placed there (a top-right legend, the
 params panel, a navigation control) and stack below it instead of
 overlapping.
 
+When the document has its own zoom buttons (`controls: { navigation: true }`),
+`FullPageMap` shows only its reset button, so one YAML file can serve both
+`<Map>` and `<FullPageMap>` without two stacks of +/− in the corner.
+`showControls={false}` removes the reset button too.
+
 <Aside type="note" title="Before 0.7">
 Earlier versions drew their own buttons and legend over the map, wired to a
 `.map` property `<ml-map>` never had — so neither ever worked. If you styled

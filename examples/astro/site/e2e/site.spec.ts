@@ -172,6 +172,24 @@ test.describe("explore: <FullPageMap> with the 0.7 surface", () => {
     expect(errors).toEqual([]);
   });
 
+  test("a document with its own navigation control gets one set of zoom buttons (ml-aot.40) @dev", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto("/explore-controls/", { waitUntil: "domcontentloaded" });
+    await mapReady(page, MAP);
+    // MapLibre's +/− from the document, and FullPageMap's reset beside them.
+    await expect(page.locator(`${MAP} .maplibregl-ctrl-zoom-in`)).toBeVisible();
+    await expect(page.locator(`${MAP} [data-action="reset"]`)).toBeVisible();
+    await expect(page.locator(`${MAP} [data-action="zoom-in"]`)).toBeHidden();
+    await expect(page.locator(`${MAP} [data-action="zoom-out"]`)).toBeHidden();
+    // The /explore/ document has no navigation control: all three stay.
+    await page.goto("/explore/", { waitUntil: "domcontentloaded" });
+    await mapReady(page, MAP);
+    await expect(page.locator(`${MAP} [data-action="zoom-in"]`)).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test("legend, markers, params panel, hover popup and the slotted caption", async ({ page }) => {
     const errors = await guard(page);
     await page.goto("/explore/", { waitUntil: "domcontentloaded" });

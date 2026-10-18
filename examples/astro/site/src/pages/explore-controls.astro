@@ -1,0 +1,20 @@
+---
+import Base from "../layouts/Base.astro";
+import { FullPageMap } from "@maplibre-yaml/astro";
+---
+
+<Base title="Explore (document controls)" bleed>
+  <!--
+    The document declares controls: { navigation: true, fullscreen: true }.
+    MapLibre's +/−/compass already zoom, so FullPageMap keeps only its reset
+    button: one set of zoom buttons in the corner, not two (ml-aot.40).
+  -->
+  <FullPageMap src="/maps/japan-arc-controls.yaml" />
+</Base>
+
+<style is:global>
+  body.bleed .ml-fullpage-map {
+    top: var(--header-h);
+    height: calc(100vh - var(--header-h));
+  }
+</style>
