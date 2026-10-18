@@ -5,7 +5,13 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 
-const execAsync = promisify(exec);
+const execRaw = promisify(exec);
+/**
+ * The CLI, without colour codes: picocolors colours output whenever `CI` is
+ * set, and the assertions match plain text ("error config: …").
+ */
+const execAsync = (command: string, options: { cwd?: string } = {}) =>
+  execRaw(command, { ...options, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '' } });
 const CLI = join(process.cwd(), 'dist/cli.js');
 
 describe('validate command (integration)', () => {
