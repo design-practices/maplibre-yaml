@@ -369,12 +369,6 @@ importers:
         specifier: workspace:^
         version: link:../cli
 
-  packages/mlym:
-    dependencies:
-      '@maplibre-yaml/cli':
-        specifier: workspace:^
-        version: link:../cli
-
 packages:
 
   '@ampproject/remapping@2.3.0':

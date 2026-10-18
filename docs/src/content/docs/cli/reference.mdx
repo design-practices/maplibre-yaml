@@ -28,9 +28,11 @@ npm install -g @maplibre-yaml/cli
 mlym validate map.yaml
 ```
 
-Without an install, `npx mlym` and a bare `maplibre-yaml …` do not work: the
-short names exist only once `@maplibre-yaml/cli` is installed. Wherever this
-page says `npx @maplibre-yaml/cli`, an installed `mlym` does the same.
+Without an install, `npx mlym` does not work: `mlym` exists only once
+`@maplibre-yaml/cli` is installed. `npx maplibre-yaml …` does work without an
+install (it is a small package that runs the CLI). Wherever this page says
+`npx @maplibre-yaml/cli`, `npx maplibre-yaml` or an installed `mlym` does the
+same.
 
 ## Global Options
 
