@@ -18,8 +18,9 @@ npx @maplibre-yaml/cli <command>
 ```
 
 An install provides two command names for the same program, `maplibre-yaml`
-and the shorter `mlym`. Without an install, use `npx @maplibre-yaml/cli`:
-`npx mlym` only works in a project that has `@maplibre-yaml/cli` installed.
+and the shorter `mlym`. Without an install, use `npx maplibre-yaml` or
+`npx @maplibre-yaml/cli`: `npx mlym` only works in a project that has
+`@maplibre-yaml/cli` installed.
 
 ## Quick Start
 
@@ -171,7 +172,8 @@ and [Export classes](https://docs.maplibre-yaml.org/guides/export-classes/).
 
 Once installed (globally, or in a project with `npm install --save-dev
 @maplibre-yaml/cli` and then `npx mlym …`), the CLI also answers to `mlym`.
-`npx mlym` without an install fails: there is no `mlym` package. Use
+`npx mlym` without an install fails: there is no `mlym` package (npm reserves
+the name as too similar to existing packages). Use `npx maplibre-yaml …` or
 `npx @maplibre-yaml/cli …` for one-off runs.
 
 ```bash
