@@ -392,7 +392,7 @@ function storyMapKeysShape(): Record<(typeof STORY_MAP_KEYS)[number], z.ZodTypeA
  *   config:
  *     center: [-74.006, 40.7128]
  *     zoom: 12
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   chapters:
  *     - id: intro
  *       title: "Introduction"
@@ -416,7 +416,7 @@ function storyMapKeysShape(): Record<(typeof STORY_MAP_KEYS)[number], z.ZodTypeA
  *   config:
  *     center: [0, 0]
  *     zoom: 2
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   chapters:
  *     - id: chapter1
  *       title: "Chapter 1"
@@ -431,7 +431,7 @@ function storyMapKeysShape(): Record<(typeof STORY_MAP_KEYS)[number], z.ZodTypeA
  *   config:
  *     center: [-120, 35]
  *     zoom: 5
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   layers:
  *     - id: base-layer
  *       type: circle
@@ -462,7 +462,7 @@ function storyMapKeysShape(): Record<(typeof STORY_MAP_KEYS)[number], z.ZodTypeA
  *   config:
  *     center: [0, 0]
  *     zoom: 2
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   chapters:
  *     - id: chapter1
  *       title: "Chapter 1"

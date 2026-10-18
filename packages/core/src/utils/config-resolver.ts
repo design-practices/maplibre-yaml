@@ -12,7 +12,7 @@
  * import { resolveMapConfig, resolveMapBlock } from '@maplibre-yaml/core/utils';
  *
  * const globalConfig = {
- *   defaultMapStyle: 'https://demotiles.maplibre.org/style.json',
+ *   defaultMapStyle: 'https://tiles.openfreemap.org/styles/liberty',
  *   theme: 'dark'
  * };
  *
@@ -23,7 +23,7 @@
  * };
  *
  * const resolved = resolveMapConfig(mapConfig, globalConfig);
- * // resolved.mapStyle === 'https://demotiles.maplibre.org/style.json'
+ * // resolved.mapStyle === 'https://tiles.openfreemap.org/styles/liberty'
  * ```
  */
 

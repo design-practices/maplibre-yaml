@@ -45,7 +45,7 @@ config:
   zoom: 15.9
   pitch: 60
   # a basemap with no 3D buildings of its own, so only `buildings` draws them
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
 sources:
   omt:
     type: vector

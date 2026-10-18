@@ -11,7 +11,7 @@
  * import type { MapConfig, Layer, Page, RootConfig } from '@maplibre-yaml/core/types';
  *
  * const config: MapConfig = {
- *   mapStyle: 'https://demotiles.maplibre.org/style.json',
+ *   mapStyle: 'https://tiles.openfreemap.org/styles/liberty',
  *   center: [-74, 40],
  *   zoom: 10,
  * };

@@ -108,6 +108,21 @@ function topLevelType(content) {
   return m ? m[1] : null;
 }
 
+/** Highest zoom demotiles is useful at (it has country shapes only). */
+const DEMOTILES_MAX_ZOOM = 6;
+
+/** The problem with a fence that zooms demotiles past its detail, or null. */
+function demotilesZoomProblem(content) {
+  if (!/demotiles\.maplibre\.org\/style\.json/.test(content)) return null;
+  const zooms = [...content.matchAll(/^\s*-?\s*zoom:[ \t]*([\d.]+)/gm)].map((m) => Number(m[1]));
+  const max = Math.max(...zooms, -Infinity);
+  if (max <= DEMOTILES_MAX_ZOOM) return null;
+  return (
+    `uses demotiles at zoom ${max}: demotiles has country shapes only, so past zoom ` +
+    `${DEMOTILES_MAX_ZOOM} the map is a flat fill. Use "https://tiles.openfreemap.org/styles/liberty".`
+  );
+}
+
 const args = process.argv.slice(2);
 const files = args.length > 0 ? args.map((f) => join(process.cwd(), f)) : defaultFileSet();
 
@@ -126,6 +141,15 @@ for (const file of files) {
   }
 
   for (const fence of extractYamlFences(text)) {
+    // demotiles has country polygons only: past zoom ~6 a map or story on it
+    // is a flat green field with no coastline, roads or labels, which a
+    // reader takes for a broken map (ml-aot.34). Checked on every fence,
+    // fragments included, since readers copy those too.
+    const demoZoom = demotilesZoomProblem(fence.content);
+    if (demoZoom) {
+      failures.push({ file: rel, index: fence.index, line: fence.line, errors: [demoZoom] });
+    }
+
     if (/\bno-validate\b/.test(fence.meta)) {
       skipped++;
       continue;

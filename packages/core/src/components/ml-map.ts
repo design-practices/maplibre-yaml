@@ -22,7 +22,7 @@
  * config:
  *   center: [-74.006, 40.7128]
  *   zoom: 12
- *   mapStyle: "https://demotiles.maplibre.org/style.json"
+ *   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * layers: []
  *   </script>
  * </ml-map>

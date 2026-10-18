@@ -91,7 +91,7 @@ const { Content } = await post.render();
 const mapConfig = post.data.location ? {
   version: "1.0",
   map: {
-    style: "https://demotiles.maplibre.org/style.json", // Your global style URL
+    style: "https://tiles.openfreemap.org/styles/liberty", // Your global style URL
     center: post.data.location.coordinates,
     zoom: post.data.location.zoom,
   },
@@ -223,7 +223,7 @@ export const collections = {
 # src/content/maps/portland-coffee.yaml
 version: "1.0"
 map:
-  style: "https://demotiles.maplibre.org/style.json"
+  style: "https://tiles.openfreemap.org/styles/liberty"
   center: [-122.6765, 45.5231]
   zoom: 14
 
@@ -392,7 +392,7 @@ export function createLocationMap(options: LocationMapOptions): MapBlock {
     description,
     zoom = 12,
     markerColor = "#3b82f6",
-    globalStyle = "https://demotiles.maplibre.org/style.json",
+    globalStyle = "https://tiles.openfreemap.org/styles/liberty",
     markerIcon = 'circle'
   } = options;
 
@@ -452,7 +452,7 @@ export function createMultiLocationMap(
   const {
     zoom = 10,
     center = locations[0]?.coordinates || [0, 0],
-    style = "https://demotiles.maplibre.org/style.json"
+    style = "https://tiles.openfreemap.org/styles/liberty"
   } = options;
 
   return {

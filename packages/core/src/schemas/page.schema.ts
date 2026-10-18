@@ -236,14 +236,14 @@ export type Page = z.infer<typeof PageSchema>;
  * config:
  *   title: "My Map App"
  *   description: "Interactive maps and stories"
- *   defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+ *   defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * ```
  *
  * @example With Data Fetching
  * ```yaml
  * config:
  *   title: "My Map App"
- *   defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+ *   defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   theme: dark
  *   dataFetching:
  *     defaultStrategy: build
@@ -323,14 +323,14 @@ export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
  *         config:
  *           center: [0, 0]
  *           zoom: 2
- *           mapStyle: "https://demotiles.maplibre.org/style.json"
+ *           mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * ```
  *
  * @example With Global Config
  * ```yaml
  * config:
  *   title: "My App"
- *   defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+ *   defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *
  * pages:
  *   - path: "/"
@@ -346,7 +346,7 @@ export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
  * @example With Global Layers
  * ```yaml
  * config:
- *   defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+ *   defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *
  * layers:
  *   bikeLayer:
@@ -418,7 +418,7 @@ export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
  * ```yaml
  * config:
  *   title: "Multi-Page Map App"
- *   defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+ *   defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *
  * pages:
  *   - path: "/"
