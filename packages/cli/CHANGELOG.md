@@ -1,5 +1,17 @@
 # @maplibre-yaml/cli
 
+## 0.4.1
+
+### Patch Changes
+
+- 4fb7da1: `mlym preview` now renders on maplibre-gl 6, served from your own install instead of a CDN. The preview page used to load maplibre-gl 4 from unpkg and esm.sh, so it ran a different MapLibre than the docs recommend and showed a blank page offline. It now loads the maplibre-gl installed with `@maplibre-yaml/core` (and that core's browser bundle), including maplibre-gl 6's worker, so the preview matches the versions you installed and works without network access. If no maplibre-gl 6 is installed, the preview falls back to the maplibre-gl 6 CDN build and logs which one it used. Saving an edit to the YAML file now reloads the page as intended; the reload hook never fired before. Validation errors still appear in the page overlay.
+- 6fc625a: `mlym init` now scaffolds projects that work as soon as they are served. The `basic` template's page loads maplibre-gl 6 through an import map (before, it stayed blank with "Failed to resolve module specifier maplibre-gl"), pins `@maplibre-yaml/core@0.7`, has a viewport meta tag and an explicit map height, and its `map.yaml` uses a free street basemap with labels. The `story` and `astro` templates get the same fixes; the `astro` template now depends on `@maplibre-yaml/core` 0.7, maplibre-gl 6 and Astro 5, and sets up the maplibre-gl 6 worker in a bundled script. `init` defaults to the `basic` template, adds `--list`, and exits with code 1, creating nothing, on an unknown template or option such as `--dir` (it used to print the template list and exit 0). The printed next steps now say how to serve the folder and use `npx @maplibre-yaml/cli` instead of a bare `maplibre-yaml` command that only exists after an install. `mlym emit --out dist/` (or an existing folder) now writes `style.json` inside that folder instead of a file named `dist`.
+- Updated dependencies [a6ced0f]
+- Updated dependencies [a6ced0f]
+- Updated dependencies [70967e7]
+- Updated dependencies [a6ced0f]
+  - @maplibre-yaml/core@0.7.1
+
 ## 0.4.0
 
 ### Minor Changes
