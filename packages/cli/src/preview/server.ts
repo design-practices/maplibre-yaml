@@ -196,9 +196,14 @@ function inlineJson(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
+/** The block types preview renders. */
+export type PreviewKind = 'map' | 'scrollytelling';
+
 export interface PreviewPageInput {
   /** Parsed config, or null when it failed to load/validate */
   config: unknown;
+  /** What the config is: a map (`<ml-map>`) or a story (`<ml-scrollytelling>`). Default map. */
+  kind?: PreviewKind;
   /** Error to overlay, or null */
   error: string | null;
   /** Path shown in the status bar */
@@ -224,24 +229,34 @@ export interface PreviewPageInput {
  */
 export function createPreviewHTML(input: PreviewPageInput): string {
   const { config, error, configPath, coreUrl, maplibre, debug } = input;
+  const story = input.kind === 'scrollytelling';
   const errorOverlay = error ? '<div class="error-overlay"><div class="error-box"><div class="error-title">Configuration Error</div><div class="error-message">' + escapeHtml(error) + '</div></div></div>' : '';
   const statusDotClass = error ? 'error' : '';
   const statusText = error ? 'Error in configuration' : 'Connected';
 
-  // Debug panel (if enabled)
-  const debugPanel = debug ? getDebugPanelHTML(config ?? null) : '';
-  const debugCSS = debug ? getDebugPanelCSS() : '';
-  const debugJS = debug ? getDebugPanelJS() : '';
+  // Debug panel (if enabled; it inspects a map's config, so maps only)
+  const withDebug = debug && !story;
+  const debugPanel = withDebug ? getDebugPanelHTML(config ?? null) : '';
+  const debugCSS = withDebug ? getDebugPanelCSS() : '';
+  const debugJS = withDebug ? getDebugPanelJS() : '';
+
+  // A map fills #map; a story is a page that scrolls, so it goes in the body
+  // flow (with room for the status bar) and #map is not used.
+  const render = story
+    ? 'const el = document.createElement(\'ml-scrollytelling\');el.config = config;document.getElementById(\'story\').appendChild(el);el.addEventListener(\'ml-scrollytelling:error\', (e) => console.error(\'[preview] Story error:\', e.detail));el.mapReady().then(() => console.log(\'[preview] Story loaded\'), () => {});'
+    : 'const mapEl = document.createElement(\'ml-map\');mapEl.style.cssText = \'width: 100%; height: 100%;\';mapEl.config = config;document.getElementById(\'map\').appendChild(mapEl);mapEl.addEventListener(\'ml-map:load\', () => console.log(\'[preview] Map loaded\'));mapEl.addEventListener(\'ml-map:error\', (e) => console.error(\'[preview] Map error:\', e.detail));';
+  const container = story ? '<div id="story"></div>' : '<div id="map"></div>';
+  const storyCSS = story ? '#story { padding-bottom: 34px; }' : '';
 
   const importMap = inlineJson({ imports: { '@maplibre-yaml/core/register': coreUrl, 'maplibre-gl': maplibre.moduleUrl } });
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>maplibre-yaml preview</title>'
     + '<link href="' + escapeHtml(maplibre.cssUrl) + '" rel="stylesheet" />'
     + '<script type="importmap">' + importMap + '</script>'
-    + '<style>* { margin: 0; padding: 0; box-sizing: border-box; }body { font-family: system-ui, -apple-system, sans-serif; }#map { width: 100vw; height: 100vh; }.error-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }.error-box { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 24px; max-width: 600px; max-height: 80vh; overflow: auto; }.error-title { color: #dc2626; font-weight: 600; font-size: 18px; margin-bottom: 12px; }.error-message { color: #991b1b; font-family: monospace; font-size: 14px; white-space: pre-wrap; }.status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1f2937; color: white; padding: 8px 16px; font-size: 12px; display: flex; justify-content: space-between; z-index: 999; }.status-indicator { display: flex; align-items: center; gap: 8px; }.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }.status-dot.error { background: #ef4444; }' + debugCSS + '</style></head>'
-    + '<body><div id="map"></div>' + errorOverlay + debugPanel
+    + '<style>* { margin: 0; padding: 0; box-sizing: border-box; }body { font-family: system-ui, -apple-system, sans-serif; }#map { width: 100vw; height: 100vh; }.error-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }.error-box { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 24px; max-width: 600px; max-height: 80vh; overflow: auto; }.error-title { color: #dc2626; font-weight: 600; font-size: 18px; margin-bottom: 12px; }.error-message { color: #991b1b; font-family: monospace; font-size: 14px; white-space: pre-wrap; }.status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1f2937; color: white; padding: 8px 16px; font-size: 12px; display: flex; justify-content: space-between; z-index: 999; }.status-indicator { display: flex; align-items: center; gap: 8px; }.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }.status-dot.error { background: #ef4444; }' + storyCSS + debugCSS + '</style></head>'
+    + '<body>' + container + errorOverlay + debugPanel
     + '<div class="status-bar"><div class="status-indicator"><div class="status-dot ' + statusDotClass + '"></div><span>' + statusText + '</span></div><div><span>' + escapeHtml(configPath) + '</span></div></div>'
-    + '<script type="module">import \'@maplibre-yaml/core/register\';const config = ' + inlineJson(config ?? null) + ';if (config) {const mapEl = document.createElement(\'ml-map\');mapEl.style.cssText = \'width: 100%; height: 100%;\';mapEl.config = config;document.getElementById(\'map\').appendChild(mapEl);mapEl.addEventListener(\'ml-map:load\', () => console.log(\'[preview] Map loaded\'));mapEl.addEventListener(\'ml-map:error\', (e) => console.error(\'[preview] Map error:\', e.detail));}</script>'
+    + '<script type="module">import \'@maplibre-yaml/core/register\';const config = ' + inlineJson(config ?? null) + ';if (config) {' + render + '}</script>'
     + '<script type="module">import { createHotContext } from \'/@vite/client\';const hot = createHotContext(\'/__maplibre-yaml/preview\');hot.on(\'yaml-update\', () => {console.log(\'[preview] Config updated, reloading...\');window.location.reload();});</script>'
     + '<script>' + debugJS + '</script></body></html>';
 }
@@ -260,6 +275,7 @@ export async function createPreviewServer(
   let viteServer: ViteDevServer | null = null;
   let watcher: ReturnType<typeof watch> | null = null;
   let currentConfig: unknown = null;
+  let currentKind: PreviewKind = 'map';
   let currentError: string | null = null;
 
   const coreDir = resolveCoreDir();
@@ -277,6 +293,14 @@ export async function createPreviewServer(
         return { valid: false, error: currentError };
       }
 
+      if (blockType === 'scrollytelling') {
+        // core 0.8's <ml-scrollytelling> renders a story (ml-aot.41)
+        currentConfig = result.data;
+        currentKind = 'scrollytelling';
+        currentError = null;
+        return { valid: true, config: result.data };
+      }
+
       if (blockType !== 'map') {
         // Valid document, but not something preview can render yet
         const kind = blockType === 'root' ? 'multi-page root document' : '"' + blockType + '" block';
@@ -288,6 +312,7 @@ export async function createPreviewServer(
       }
 
       currentConfig = result.data;
+      currentKind = 'map';
       currentError = null;
       return { valid: true, config: result.data };
     } catch (error) {
@@ -326,6 +351,7 @@ export async function createPreviewServer(
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
                 res.end(createPreviewHTML({
                   config: currentConfig,
+                  kind: currentKind,
                   error: currentError,
                   configPath,
                   coreUrl: coreRegister.importUrl,

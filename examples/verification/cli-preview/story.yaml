@@ -1,0 +1,44 @@
+# ml-aot.41: `mlym preview` renders a story (e2e/cli-preview.spec.ts).
+# By hand: node packages/cli/dist/cli.js preview examples/verification/cli-preview/story.yaml
+# PASS = a two-chapter story over a green map with two red dots; scrolling
+# moves from New York to Chicago. FAIL = "Visual preview currently supports
+# only type: map blocks".
+type: scrollytelling
+id: cli-preview-story
+showMarkers: true
+config:
+  center: [-80, 41]
+  zoom: 3.5
+  mapStyle: "/style.json"
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: { name: "New York" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-87.623, 41.881] }
+            properties: { name: "Chicago" }
+    paint:
+      circle-radius: 14
+      circle-color: "#e63946"
+      circle-stroke-width: 3
+      circle-stroke-color: "#ffffff"
+chapters:
+  - id: new-york
+    title: New York
+    description: "<p>The first stop.</p>"
+    center: [-74.006, 40.7128]
+    zoom: 6
+    alignment: left
+  - id: chicago
+    title: Chicago
+    description: "<p>The second stop.</p>"
+    center: [-87.623, 41.881]
+    zoom: 6
+    alignment: left

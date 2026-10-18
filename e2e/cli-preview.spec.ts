@@ -153,6 +153,51 @@ test("preview renders the map on the locally installed maplibre-gl 6", async ({ 
   expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
 });
 
+test("preview renders a scrollytelling story (ml-aot.41)", async ({ page }, testInfo) => {
+  const port = await freePort();
+  const storyUrl = `http://localhost:${port}/`;
+  const story = spawn(
+    process.execPath,
+    [CLI, "preview", join(dir, "story.yaml"), "--port", String(port), "--no-open"],
+    { cwd: dir, stdio: ["ignore", "pipe", "pipe"] }
+  );
+  try {
+    let output = "";
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`preview did not start:\n${output}`)), 30_000);
+      const onData = (chunk: Buffer) => {
+        output += chunk.toString();
+        if (output.includes("Preview server running")) {
+          clearTimeout(timer);
+          resolve();
+        }
+      };
+      story.stdout!.on("data", onData);
+      story.stderr!.on("data", onData);
+    });
+    const { errors } = await guard(page);
+    await page.goto(storyUrl, { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".error-overlay")).toHaveCount(0);
+    await expect(page.locator("ml-scrollytelling .scrolly-chapter")).toHaveCount(2);
+    await page.evaluate(() => (document.querySelector("ml-scrollytelling") as any).mapReady());
+    await expect
+      .poll(() => page.evaluate(() => (document.querySelector("ml-scrollytelling") as HTMLElement).dataset.activeChapter))
+      .toBe("new-york");
+    // Scroll on to the second chapter: the story drives the camera.
+    await page.evaluate(() => {
+      const s = document.querySelector('.scrolly-chapter[data-chapter-id="chicago"]')!;
+      scrollBy(0, s.getBoundingClientRect().top);
+    });
+    await expect
+      .poll(() => page.evaluate(() => (document.querySelector("ml-scrollytelling") as HTMLElement).dataset.activeChapter))
+      .toBe("chicago");
+    await testInfo.attach("story", { body: await page.screenshot(), contentType: "image/png" });
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  } finally {
+    story.kill();
+  }
+});
+
 test("editing the YAML live-reloads the preview; an invalid edit shows the error", async ({ page }, testInfo) => {
   const { errors } = await guard(page);
   await page.goto(url, { waitUntil: "domcontentloaded" });

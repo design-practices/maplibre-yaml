@@ -166,8 +166,10 @@ npx @maplibre-yaml/cli validate config.yaml --format vscode
 ### preview
 
 Start a local development server to preview your map with hot reload.
-`preview` renders the YAML document on a page of its own; to see the HTML page
-you wrote around it, serve your folder instead (for example `npx serve .`).
+`preview` renders the YAML document — a map (`type: map`) or a story
+(`type: scrollytelling`, from CLI 0.4.3) — on a page of its own; to see the
+HTML page you wrote around it, serve your folder instead (for example
+`npx serve .`). `--debug` applies to maps only.
 
 ```bash
 npx @maplibre-yaml/cli preview <config> [options]
