@@ -1,0 +1,42 @@
+---
+// The collections guide's Quick Start page, on a collection whose schema is
+// getCollectionItemWithLocationSchema({ volcano }). Every `entry.data.*` use
+// below is type-checked by `astro check` on Astro 4-7 (ml-aot.23).
+import Base from "../../layouts/Base.astro";
+import { Map, buildPointMapConfig } from "@maplibre-yaml/astro";
+import { getCollection, render } from "astro:content";
+import { globalMapConfig } from "../../lib/map-config";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("field-notes");
+  return entries.map((entry) => ({ params: { id: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+
+const title: string = entry.data.title;
+const published: string = entry.data.pubDate.toISOString().slice(0, 10);
+const volcano: string = entry.data.volcano;
+
+const mapConfig = entry.data.location
+  ? buildPointMapConfig({ location: entry.data.location }, globalMapConfig)
+  : null;
+---
+
+<Base title={title}>
+  <main>
+    <h1>{title}</h1>
+    <p class="lede" data-testid="note-meta">{volcano} · <time datetime={published}>{published}</time></p>
+    {
+      mapConfig && (
+        <div class="map-frame" data-testid="note-map">
+          <Map config={mapConfig} height="320px" />
+        </div>
+      )
+    }
+    <article class="section">
+      <Content />
+    </article>
+  </main>
+</Base>

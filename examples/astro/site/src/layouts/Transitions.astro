@@ -1,0 +1,29 @@
+---
+// A layout with Astro's client-side router: links between pages that use it
+// are soft navigations (the document stays, <body> is swapped). Maps must
+// re-initialise, FullPageMap's buttons must keep working and MapLibre's CSS
+// must survive the head swap (ml-aot.22). Astro 5+ call the router
+// <ClientRouter />; Astro 4 calls it <ViewTransitions />.
+import * as transitions from "astro:transitions";
+import "../styles/site.css";
+
+const Router = (transitions as any).ClientRouter ?? (transitions as any).ViewTransitions;
+
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · Ring of Fire</title>
+    <Router />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

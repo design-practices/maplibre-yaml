@@ -8,6 +8,7 @@ import {
   LocationPointSchema,
   getMapSchema,
   extendSchema,
+  getCollectionItemWithLocationSchema,
 } from "@maplibre-yaml/astro/utils";
 
 /** `fuji.md` -> `fuji` on every Astro major (Astro 4 keeps the extension). */
@@ -34,4 +35,17 @@ const maps = defineCollection({
   }),
 });
 
-export const collections = { volcanoes, maps };
+/**
+ * Dated posts with an optional location: the collections guide's Quick Start
+ * helper plus one custom field. `astro check` on every major type-checks the
+ * /field-notes pages against this schema's inferred types (ml-aot.23: on
+ * Astro 6/7 every field used to infer as `unknown`).
+ */
+const fieldNotes = defineCollection({
+  loader: glob({ pattern: "*.md", base: "./src/collections/field-notes", generateId: stripExtension }),
+  schema: getCollectionItemWithLocationSchema({
+    volcano: z.string(),
+  }),
+});
+
+export const collections = { volcanoes, maps, "field-notes": fieldNotes };

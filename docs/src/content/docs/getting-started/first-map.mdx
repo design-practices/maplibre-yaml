@@ -19,7 +19,7 @@ id: my-map # Required: unique identifier
 config: # Map settings
   center: [-74.006, 40.7128] # [longitude, latitude]
   zoom: 12 # Zoom level
-  mapStyle: "https://demotiles.maplibre.org/style.json" # Style URL
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty" # Basemap style URL
 
 layers: [] # Array of layer configurations
 
@@ -28,12 +28,16 @@ controls: {} # Optional: map controls
 
 ## The host page
 
-The YAML on its own doesn't render anything — it needs a host page with the `<ml-map>` element, the MapLibre CSS, and the web component registered:
+The YAML on its own doesn't render anything — it needs a host page with the `<ml-map>` element, the MapLibre CSS, and the web component registered. Save the YAML as `my-map.yaml` next to this `index.html`, then serve the folder (`npx serve .`) and open the address it prints:
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8" />
+    <!-- Without this line, phones lay the page out at desktop width and the map looks tiny -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My map</title>
     <link
       href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
       rel="stylesheet"
@@ -45,7 +49,7 @@ The YAML on its own doesn't render anything — it needs a host page with the `<
     <!-- Register the <ml-map> web component -->
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
     ></script>
     <style>
       ml-map {
@@ -55,7 +59,7 @@ The YAML on its own doesn't render anything — it needs a host page with the `<
     </style>
   </head>
   <body>
-    <ml-map src="/my-map.yaml"></ml-map>
+    <ml-map src="./my-map.yaml"></ml-map>
   </body>
 </html>
 ```
@@ -75,7 +79,7 @@ The `config` section defines the initial map view:
 config:
   center: [-74.006, 40.7128] # New York City
   zoom: 12 # Street level
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 
   # Optional settings
   pitch: 45 # Tilt angle (0-85)
@@ -89,6 +93,15 @@ config:
   height="350px"
   caption="Map with pitch and bearing applied"
 />
+
+<Aside type="tip" title="Maps inside a scrolling page, on phones">
+  A map that sits in the middle of a longer page catches one-finger drags on a
+  phone, so the reader pans the map when they meant to scroll the page. Add
+  `cooperativeGestures: true` under `config:` and the map then pans with two
+  fingers (and zooms with Ctrl or ⌘ plus the scroll wheel on a computer),
+  leaving one-finger swipes to the page. See the
+  [cooperative gestures example](/examples/gallery/cooperative-gestures/).
+</Aside>
 
 ### Coordinates
 
@@ -112,7 +125,10 @@ center: [40.7128, -74.006]
 The `mapStyle` property accepts any MapLibre-compatible style URL:
 
 ```yaml
-# MapLibre demo tiles (free, good for testing)
+# OpenFreeMap Liberty: streets and labels, free, no API key (used throughout these docs)
+mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+
+# MapLibre demo tiles: country outlines only, fine for world maps
 mapStyle: "https://demotiles.maplibre.org/style.json"
 
 # Self-hosted style
@@ -152,6 +168,39 @@ layers:
   caption="Three US cities displayed as circle markers"
 />
 
+Colours go in quotes. In YAML `#` starts a comment, so an unquoted
+`circle-color: #3b82f6` leaves the colour empty and the layer fails
+validation.
+
+### Using your own data file
+
+To load a GeoJSON file of your own, put it in your site folder and point the
+source's `url:` at it:
+
+```yaml
+layers:
+  - id: my-places
+    type: circle
+    source:
+      type: geojson
+      url: "./data/places.geojson"
+    paint:
+      circle-radius: 8
+      circle-color: "#e63946"
+```
+
+Two rules for local paths:
+
+- Start them with `./` (or `/` for the site root). A bare
+  `data/places.geojson` is rejected by validation.
+- They are resolved against the **page** (`index.html`), not against the YAML
+  file. With `index.html` and `my-map.yaml` side by side and the data in a
+  `data/` folder next to them, `./data/places.geojson` is right.
+
+Files on other websites work too (`url: "https://…"`), as long as that server
+allows cross-origin requests (CORS). If it doesn't, the layer stays empty and
+the browser console shows a CORS error.
+
 ## Map controls
 
 Add navigation and other controls:
@@ -180,7 +229,7 @@ id: complete-example
 config:
   center: [-98, 39]
   zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   minZoom: 2
   maxZoom: 18
 
@@ -228,6 +277,7 @@ layers:
           - p:
               - str: "Population: "
               - property: population
+                format: ",.0f" # 8336817 → 8,336,817
 
 controls:
   navigation: true
@@ -245,5 +295,6 @@ controls:
 Now that you understand the basics, learn about:
 
 - [Layer types and styling](/guides/layers/)
+- [Popup content](/schema/layers/#popups)
 - [Loading data from URLs](/guides/data-sources/)
 - [Live data updates](/guides/live-data/)

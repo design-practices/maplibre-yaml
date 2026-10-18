@@ -4,7 +4,7 @@ id: earthquake-tracker
 config:
   center: [-120, 40]
   zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle

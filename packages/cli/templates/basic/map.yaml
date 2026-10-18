@@ -1,10 +1,21 @@
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+#
+# Tips:
+# - Indent with spaces (2 per level), never tabs.
+# - Put colours in quotes: "#3b82f6". Without quotes, YAML reads everything
+#   after # as a comment and the colour disappears.
+# - Coordinates are [longitude, latitude].
+# - Paths to your own files start with ./ and are relative to index.html,
+#   not to this file: url: "./data/places.geojson".
 type: map
 id: {{projectName}}
 config:
   center: {{mapCenter}}
   zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  # A free street-level basemap that needs no API key.
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+controls:
+  navigation: true
 layers:
   - id: marker
     type: circle
@@ -24,3 +35,10 @@ layers:
       circle-color: "#3b82f6"
       circle-stroke-width: 2
       circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: name
