@@ -900,7 +900,12 @@ export class MapRenderer {
     return layer;
   }
 
-  /** The first plain text-font stack in the loaded basemap style. */
+  /**
+   * The basemap font stack to borrow: the first plain stack that is all
+   * "Regular" faces, else the stack its labels use most (ml-aot.61). Not
+   * simply the first: OpenFreeMap Liberty's first label layer is a water
+   * label in Noto Sans Italic, which made every borrowed label italic.
+   */
   private basemapTextFont(): string[] | undefined {
     let layers: Array<{ layout?: Record<string, unknown> }> = [];
     try {
@@ -909,14 +914,27 @@ export class MapRenderer {
     } catch {
       return undefined;
     }
+    const stacks: string[][] = [];
     for (const styleLayer of layers) {
       let font = styleLayer?.layout?.['text-font'];
       if (Array.isArray(font) && font[0] === 'literal') font = font[1];
       if (Array.isArray(font) && font.length > 0 && font.every((f) => typeof f === 'string')) {
-        return [...(font as string[])];
+        stacks.push([...(font as string[])]);
       }
     }
-    return undefined;
+    if (stacks.length === 0) return undefined;
+    const regular = stacks.find((stack) => stack.every((f) => /regular/i.test(f)));
+    if (regular) return regular;
+    const counts = new Map<string, { stack: string[]; n: number }>();
+    for (const stack of stacks) {
+      const key = stack.join('\u0000');
+      const entry = counts.get(key) ?? { stack, n: 0 };
+      entry.n += 1;
+      counts.set(key, entry);
+    }
+    let best: { stack: string[]; n: number } | undefined;
+    for (const entry of counts.values()) if (!best || entry.n > best.n) best = entry;
+    return best?.stack;
   }
 
   /** The running maplibre-gl version, as best the runtime reports it. */

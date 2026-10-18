@@ -70,15 +70,27 @@ describe("label layers without text-font (ml-aot.53)", () => {
 
   afterEach(() => warn.mockRestore());
 
-  it("borrows the basemap's first text-font stack", async () => {
+  it("borrows the basemap's Regular stack, not its first (ml-aot.61: Liberty starts with an italic water label)", async () => {
     styleLayers = [
       { id: "water", type: "fill" },
-      { id: "poi", type: "symbol", layout: { "text-font": ["Noto Sans Italic"], "text-field": "{name}" } },
+      { id: "waterway_line_label", type: "symbol", layout: { "text-font": ["Noto Sans Italic"], "text-field": "{name}" } },
+      { id: "water_name", type: "symbol", layout: { "text-font": ["Noto Sans Italic"] } },
       { id: "road", type: "symbol", layout: { "text-font": ["Noto Sans Regular"] } },
+      { id: "place", type: "symbol", layout: { "text-font": ["Noto Sans Bold"] } },
     ];
     await renderer.addLayer(labels({ "text-field": ["get", "name"] }) as any);
-    expect(added[0].layout["text-font"]).toEqual(["Noto Sans Italic"]);
+    expect(added[0].layout["text-font"]).toEqual(["Noto Sans Regular"]);
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("with no Regular stack, borrows the stack the basemap uses most", async () => {
+    styleLayers = [
+      { id: "a", type: "symbol", layout: { "text-font": ["Open Sans Italic"] } },
+      { id: "b", type: "symbol", layout: { "text-font": ["Open Sans Semibold"] } },
+      { id: "c", type: "symbol", layout: { "text-font": ["Open Sans Semibold"] } },
+    ];
+    await renderer.addLayer(labels({ "text-field": "x" }) as any);
+    expect(added[0].layout["text-font"]).toEqual(["Open Sans Semibold"]);
   });
 
   it("reads a literal-wrapped stack, and leaves an authored text-font alone", async () => {

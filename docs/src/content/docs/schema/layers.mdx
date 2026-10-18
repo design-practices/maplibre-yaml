@@ -393,9 +393,10 @@ layers:
 Draws text labels and icons at points (or along lines). Text is drawn with
 the basemap style's fonts (its `glyphs`), so `text-font` must name a font
 that style has: the OpenFreeMap styles have `Noto Sans Regular`, `Noto Sans
-Bold` and `Noto Sans Italic`. A label layer without `text-font` uses the
-first font the basemap style's own labels use (from core 0.8.1), so its
-text loads from the basemap's glyphs; if the basemap has no labels to borrow
+Bold` and `Noto Sans Italic`. A label layer without `text-font` borrows a
+font the basemap style's own labels use (from core 0.8.1): its "Regular"
+font if it has one (`Noto Sans Regular` on OpenFreeMap), otherwise the one
+its labels use most, so the text loads from the basemap's glyphs; if the basemap has no labels to borrow
 from, the console says so once and MapLibre falls back to `Open Sans
 Regular`, which most styles lack. Set `text-font` to choose the font.
 Spec: [`symbol`](https://maplibre.org/maplibre-style-spec/layers/#symbol).
