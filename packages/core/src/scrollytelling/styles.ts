@@ -395,6 +395,17 @@ ml-scrollytelling[debug] .scrolly-chapter.is-active {
     font-size: 1rem;
   }
 
+  /* Bottom-corner chrome (a legend, slots) rides above the band the active
+     card rests in (--ml-scrolly-card-zone, set by the element), so the card
+     does not cover it (ml-aot.39). !important: the corner's offset is an
+     inline style. */
+  ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-left,
+  ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
+    bottom: calc(var(--ml-scrolly-card-zone, 0px) + 10px) !important;
+    max-height: calc(100% - var(--ml-scrolly-card-zone, 0px) - 20px) !important;
+    transition: bottom 0.3s ease;
+  }
+
   /* A gutter for the rail, so it never sits on a card. */
   ml-scrollytelling.has-markers .scrolly-chapter {
     padding-right: 44px;

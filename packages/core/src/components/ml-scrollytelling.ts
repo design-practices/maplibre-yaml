@@ -763,17 +763,23 @@ export class MLScrollytelling extends HTMLElement {
    *
    * @remarks
    * Narrow screens stack the card low in the chapter: pad the bottom by the
-   * card and the space under it. Wide screens pad the side a left/right card
-   * sits on. Centred, full-width and hidden chapters keep the plain centre.
-   * At most 60% of the map either way, so a huge card never squeezes the
-   * map to nothing.
+   * card and the space under it, and lift bottom-corner chrome (a legend,
+   * slots) above that band so the card does not cover it (ml-aot.39). Wide
+   * screens pad the side a left/right card sits on; a centred card sits over
+   * the middle of the map, so the camera is offset upward to put the
+   * chapter's `center` above it (ml-aot.39). Full-width and hidden chapters
+   * keep the plain centre. At most 60% of the map either way, so a huge card
+   * never squeezes the map to nothing.
    */
   private cameraPadding(chapter: Chapter): CameraPadding | undefined {
     const zero: CameraPadding = { top: 0, right: 0, bottom: 0, left: 0 };
     const mapBox = this.querySelector(":scope > .scrolly-map-container")?.getBoundingClientRect();
     const section = this.sectionFor(chapter.id);
     const card = section?.querySelector<HTMLElement>(".chapter-content");
-    if (!mapBox || mapBox.width === 0 || !section || !card || chapter.hidden) return zero;
+    if (!mapBox || mapBox.width === 0 || !section || !card || chapter.hidden) {
+      this.setCardZone(0);
+      return zero;
+    }
     const box = card.getBoundingClientRect();
     const view = this.ownerDocument.defaultView;
     const narrow = view?.matchMedia?.(NARROW_QUERY).matches ?? false;
@@ -781,12 +787,30 @@ export class MLScrollytelling extends HTMLElement {
 
     if (narrow) {
       const below = parseFloat(view?.getComputedStyle(section).paddingBottom ?? "0") || 0;
-      return { ...zero, bottom: cap(box.height + below, mapBox.height) };
+      const bottom = cap(box.height + below, mapBox.height);
+      this.setCardZone(bottom);
+      return { ...zero, bottom };
     }
+    this.setCardZone(0);
     const alignment = chapter.alignment ?? "center";
     if (alignment === "left") return { ...zero, left: cap(box.right - mapBox.left + 16, mapBox.width) };
     if (alignment === "right") return { ...zero, right: cap(mapBox.right - box.left + 16, mapBox.width) };
+    if (alignment === "center") {
+      // The card rests centred on the map (the chapter is one map-height
+      // tall and centres it): pad from its top edge down.
+      return { ...zero, bottom: cap(mapBox.height / 2 + box.height / 2 + 16, mapBox.height) };
+    }
     return zero;
+  }
+
+  /**
+   * The band at the bottom of the map a narrow-screen card rests in, as
+   * `--ml-scrolly-card-zone`: the stylesheet lifts bottom-corner chrome above
+   * it (ml-aot.39).
+   */
+  private setCardZone(px: number): void {
+    if (px > 0) this.style.setProperty("--ml-scrolly-card-zone", `${px}px`);
+    else this.style.removeProperty("--ml-scrolly-card-zone");
   }
 
   // ------------------------------------------------------------------

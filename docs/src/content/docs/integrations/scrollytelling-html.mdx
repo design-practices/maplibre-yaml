@@ -165,8 +165,10 @@ chapters:
 - **A sticky map and a chapter column.** The map fills the screen and stays put
   while the story scrolls; each chapter is a card. `alignment: left | right |
   center | full` places the card, and the camera is offset so the chapter's
-  `center` is not hidden behind it. On phones the card sits in the lower part
-  of the screen and the map's subject shows above it.
+  `center` is not hidden behind it: beside a left or right card, above a
+  centred one. On phones the card sits in the lower part of the screen, the
+  map's subject shows above it, and a bottom-corner legend moves up out of
+  the card's way.
 - **Camera moves** per chapter: `center`, `zoom`, `pitch`, `bearing`, and
   `animation: flyTo | easeTo | jumpTo` (with `speed`, `curve`).
 - **Layers and actions:** `layers.show` / `layers.hide`, and

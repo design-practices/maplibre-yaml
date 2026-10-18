@@ -545,4 +545,98 @@ test.describe("docs: Scrollytelling in plain HTML, run verbatim", () => {
     await expectCameraNear(page, [10, 50], 3.5);
     expect(errors2, errors2.join("\n")).toEqual([]);
   });
+
+  /** Where a chapter's center lands on screen, and its card's box. */
+  const subjectAndCard = (page: Page, chapterId: string, lngLat: [number, number]) =>
+    page.evaluate(
+      ([id, at]) => {
+        const el = document.querySelector("ml-scrollytelling") as any;
+        const p = el.getMap().project(at);
+        const box = el.querySelector(".scrolly-map-container").getBoundingClientRect();
+        const card = el.querySelector(`.scrolly-chapter[data-chapter-id="${id}"] .chapter-content`).getBoundingClientRect();
+        return {
+          subject: { x: box.left + p.x, y: box.top + p.y },
+          card: { left: card.left, right: card.right, top: card.top, bottom: card.bottom },
+        };
+      },
+      [chapterId, lngLat] as const
+    );
+
+  test("desktop: a centre-aligned chapter's subject is not under its card (ml-aot.39)", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const [html] = fences(PAGE, "html");
+    const [yaml] = fences(PAGE, "yaml");
+    const errors = await serveDocs(page, baseURL!, { "index.html": html, "story.yaml": yaml });
+    await page.goto("/__docs/story/", { waitUntil: "domcontentloaded" });
+    await storyReady(page, "cities");
+    await scrollToChapter(page, "lagos");
+    await settled(page);
+    // Still the chapter's camera (getCenter() is the padded centre)...
+    await expectCameraNear(page, [3.38, 6.52], 5);
+    // ...but drawn above the card, where the reader can see it.
+    const { subject, card } = await subjectAndCard(page, "lagos", [3.38, 6.52]);
+    const under = subject.x > card.left && subject.x < card.right && subject.y > card.top && subject.y < card.bottom;
+    expect(under, `Lagos at ${JSON.stringify(subject)} vs card ${JSON.stringify(card)}`).toBe(false);
+    expect(subject.y).toBeGreaterThan(0);
+    expect(subject.y).toBeLessThan(card.top);
+    await page.screenshot({ path: "e2e/results/story-center-card-desk.png" });
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("phone: a bottom-left legend sits above the chapter card, not under it (ml-aot.39)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const page = await context.newPage();
+    const [html] = fences(PAGE, "html");
+    const [yaml] = fences(PAGE, "yaml");
+    // A legend with a few entries and chapter text long enough to fill the
+    // card's width, as in a student's story (ml-aot.39's screenshot).
+    const long =
+      "<p>The largest city in Africa, on the Gulf of Guinea. Its lagoons, islands and " +
+      "bridges hold more than fifteen million people.</p>";
+    const withLegend = yaml
+      .replace("layers:\n", "legend:\n  position: bottom-left\n  title: Cities\n  items:\n    - { label: Megacity, color: \"#f97316\" }\n    - { label: Port, color: \"#22c55e\" }\n    - { label: Capital, color: \"#3b82f6\" }\nlayers:\n")
+      .replace('"<p>The largest city in Africa.</p>"', JSON.stringify(long))
+      .replace('"<p>On the Pacific coast of South America.</p>"', JSON.stringify(long));
+    expect(withLegend).toContain("position: bottom-left");
+    expect(withLegend).toContain("fifteen million");
+    const errors = await serveDocs(page, baseURL!, { "index.html": html, "story.yaml": withLegend });
+    await page.goto("/__docs/story/", { waitUntil: "domcontentloaded" });
+    await storyReady(page, "cities");
+    for (const id of ["lagos", "lima"]) {
+      await scrollToChapter(page, id);
+      // Where a reader stops: the chapter filling the screen, its card resting
+      // low (the layout the camera offset is computed for).
+      await page.evaluate((chapterId) => {
+        const s = document.querySelector(`.scrolly-chapter[data-chapter-id="${chapterId}"]`)!;
+        scrollBy(0, s.getBoundingClientRect().top);
+      }, id);
+      await expect.poll(() => active(page)).toBe(id);
+      await settled(page);
+      const hit = await page.evaluate((chapterId) => {
+        const legend = document.querySelector<HTMLElement>(".ml-map-legend")!;
+        const card = document
+          .querySelector(`.scrolly-chapter[data-chapter-id="${chapterId}"] .chapter-content`)!
+          .getBoundingClientRect();
+        const r = legend.getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + 12);
+        const overlap =
+          r.left < card.right && card.left < r.right && r.top < card.bottom && card.top < r.bottom;
+        return {
+          onTop: !!top && legend.contains(top),
+          overlap,
+          legend: [r.left, r.top, r.right, r.bottom].map(Math.round),
+          card: [card.left, card.top, card.right, card.bottom].map(Math.round),
+          top: top?.className ?? null,
+        };
+      }, id);
+      expect(hit.overlap, `${id}: legend ${hit.legend} overlaps card ${hit.card}`).toBe(false);
+      expect(hit.onTop, `${id}: legend title covered by ${hit.top}`).toBe(true);
+    }
+    await page.screenshot({ path: "e2e/results/story-legend-mob.png" });
+    expect(errors, errors.join("\n")).toEqual([]);
+    await context.close();
+  });
 });
