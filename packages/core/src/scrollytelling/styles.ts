@@ -456,12 +456,13 @@ ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
   }
 }
 
-/* A phone on its side (ml-aot.50): wider than 768px but only ~400px tall,
+/* A phone on its side (ml-aot.50; touch screens only -- a short desktop
+   window keeps the author's alignment): wider than 768px but only ~400px tall,
    where desktop cards were taller than the screen and a centred one sat on
    the chapter's subject. Cards stay beside the map's centre -- a narrow,
    short card on one side (centred and full-width ones go left) -- so the
    camera keeps the subject on the other side, and the photo is shorter. */
-@media (max-height: 500px) and (max-width: 1000px) and (min-width: 769px) {
+@media (max-height: 500px) and (max-width: 1000px) and (min-width: 769px) and (pointer: coarse) {
   .scrolly-chapter {
     padding: 8vh 3vw;
   }

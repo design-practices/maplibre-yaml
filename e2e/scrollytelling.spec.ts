@@ -609,6 +609,66 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await context.close();
   });
 
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1280, height: 800 },
+  ]) {
+    test(`a legend moved out of a card's way never lands on top-corner controls or the notice, ${viewport.width}x${viewport.height} (review N3)`, async ({
+      browser,
+      baseURL,
+    }) => {
+      const mobile = viewport.width < 768;
+      const context = await browser.newContext({ viewport, reducedMotion: "reduce", isMobile: mobile, hasTouch: mobile });
+      const page = await context.newPage();
+      await guard(page, baseURL!);
+      await page.goto("/examples/verification/story-layout/index.html?doc=obstacles", { waitUntil: "domcontentloaded" });
+      await storyReady(page, "pts");
+      await expect(page.locator(".ml-map-notice")).toBeVisible({ timeout: 30_000 });
+      const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      const bad: string[] = [];
+      for (let y = 0; y <= end; y += Math.round(viewport.height / 9)) {
+        await page.evaluate((to) => scrollTo(0, to), y);
+        await settle(page);
+        const hit = await page.evaluate(() => {
+          const legend = document.querySelector(".ml-map-legend")!.getBoundingClientRect();
+          const overlaps = (r: DOMRect) =>
+            r.height > 0 && legend.left < r.right - 1 && r.left < legend.right - 1 && legend.top < r.bottom - 1 && r.top < legend.bottom - 1;
+          const others = [
+            ...document.querySelectorAll<HTMLElement>(".maplibregl-ctrl-top-left > *, .maplibregl-ctrl-top-right > *, .ml-map-notice"),
+          ];
+          return others.filter((o) => overlaps(o.getBoundingClientRect())).map((o) => o.className.split(" ")[0]);
+        });
+        if (hit.length) bad.push(`at ${y}: legend on ${hit.join(", ")}`);
+      }
+      expect(bad, bad.join("\n")).toEqual([]);
+      await context.close();
+    });
+  }
+
+  test("a short desktop window (mouse) keeps a centred card centred; only touch screens get the side cards (review N2)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const centreOf = async (opts: Parameters<typeof browser.newContext>[0]) => {
+      const context = await browser.newContext({ reducedMotion: "reduce", ...opts });
+      const page = await context.newPage();
+      await guard(page, baseURL!);
+      await page.goto("/examples/verification/story-layout/index.html?doc=chrome", { waitUntil: "domcontentloaded" });
+      await storyReady(page, "pts");
+      await scrollToChapter(page, "centred");
+      const x = await page.evaluate(() => {
+        const r = document.querySelector('.scrolly-chapter[data-chapter-id="centred"] .chapter-content')!.getBoundingClientRect();
+        return (r.left + r.right) / 2 / innerWidth;
+      });
+      await context.close();
+      return x;
+    };
+    // A browser window 900x450 with a mouse: the author's centred card.
+    expect(await centreOf({ viewport: { width: 900, height: 450 } })).toBeCloseTo(0.5, 1);
+    // A phone on its side: the narrow card on the left.
+    expect(await centreOf({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true })).toBeLessThan(0.4);
+  });
+
   test("a full-width card's photo never fills the map, and its subject shows (ml-aot.50)", async ({ browser, baseURL }) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     const page = await context.newPage();

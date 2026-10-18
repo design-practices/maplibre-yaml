@@ -1147,7 +1147,18 @@ export class MLScrollytelling extends HTMLElement {
       if (value) el.style.setProperty(name, value);
       else el.style.removeProperty(name);
     };
-    for (const corner of Array.from(container.querySelectorAll<HTMLElement>(".ml-map-chrome"))) {
+    // What the moved chrome must not land on besides the cards (review N3):
+    // MapLibre's own controls in every corner, the on-map notice, and the
+    // other chrome corners.
+    const fixed = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        ".maplibregl-ctrl-top-left > *, .maplibregl-ctrl-top-right > *, .maplibregl-ctrl-bottom-left > *, .maplibregl-ctrl-bottom-right > *, .ml-map-notice"
+      )
+    )
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.height > 0 && r.width > 0);
+    const corners = Array.from(container.querySelectorAll<HTMLElement>(".ml-map-chrome"));
+    for (const corner of corners) {
       // A corner that changes size later (a legend filled in after the map
       // loaded, or collapsed/expanded by the reader) is placed again then.
       this.watchChromeSize(corner);
@@ -1158,22 +1169,27 @@ export class MLScrollytelling extends HTMLElement {
       const insetX = 10;
       const { width, height } = corner.getBoundingClientRect();
       if (height === 0 || width === 0) continue;
-      // Offsets from the corner's own edges: home, then just past each card
-      // (vertically: above/below it; sideways: beside it).
+      const others = corners
+        .filter((c) => c !== corner)
+        .map((c) => c.getBoundingClientRect())
+        .filter((r) => r.height > 0 && r.width > 0);
+      const obstacles = [...cards, ...fixed, ...others];
+      // Offsets from the corner's own edges: home, then just past each
+      // obstacle (vertically: above/below it; sideways: beside it).
       const ys = [
         insetY,
-        ...cards.map((r) => (bottom ? mapBox.bottom - r.top + 10 : r.bottom - mapBox.top + 10)),
+        ...obstacles.map((r) => (bottom ? mapBox.bottom - r.top + 10 : r.bottom - mapBox.top + 10)),
       ].filter((o) => o >= insetY && o + height <= mapBox.height - 10);
       const xs = [
         insetX,
-        ...cards.map((r) => (left ? r.right - mapBox.left + 10 : mapBox.right - r.left + 10)),
+        ...obstacles.map((r) => (left ? r.right - mapBox.left + 10 : mapBox.right - r.left + 10)),
       ].filter((o) => o >= insetX && o + width <= mapBox.width - 10);
       let best: { x: number; y: number; cost: number } | null = null;
       for (const x of xs) {
         for (const y of ys) {
           const l = left ? mapBox.left + x : mapBox.right - x - width;
           const t = bottom ? mapBox.bottom - y - height : mapBox.top + y;
-          const covered = cards.some((r) => r.left < l + width && l < r.right && r.top < t + height && t < r.bottom);
+          const covered = obstacles.some((r) => r.left < l + width && l < r.right && r.top < t + height && t < r.bottom);
           if (covered) continue;
           // Prefer the smallest move, and up/down over sideways.
           const cost = (y - insetY) + 2 * (x - insetX);
