@@ -359,7 +359,7 @@ describe('validate command (integration)', () => {
 
     it('a missing top-level key has no fake "line 1, column 1" location', async () => {
       const r = await run('test/fixtures/invalid-missing-config.yaml');
-      expect(r.stdout).toContain('error config: Expected object, got undefined');
+      expect(r.stdout).toContain('error config: The document is missing config:');
       expect(r.stdout).not.toContain('at line 1, column 1');
     });
   });
