@@ -604,9 +604,12 @@ const feature = findFeature(fc, { source: "...", featureId: "poa-1.1" });
 > newer than 0.4.1, and `Scrollytelling` `src` is not working yet: `ml-euv`.)
 
 > **Deploying under a base path** (a GitHub Pages project site, `base: '/repo'`):
-> `Map`/`FullPageMap` add the base to a root-relative `src` for you (0.6+).
-> URLs *inside* your YAML (`url: "/repo/data/x.geojson"`) must include the
-> base. See the docs' *Deploying to GitHub Pages* section.
+> `Map`/`FullPageMap` (0.6+, with core 0.8+) pass the site's base to
+> `<ml-map base>`, so `src` and the paths *inside* your YAML
+> (`url: "/data/x.geojson"`, `images:`, marker `icon:`) load from under it
+> with no change to the YAML. Relative paths (`data/x.geojson`) mean "from
+> `public/`" on every page, with or without a base; `base={false}` restores
+> page-relative resolution. See the docs' *Deploying to GitHub Pages* section.
 
 > **Optional dev integration.** `import maplibreYaml from
 > "@maplibre-yaml/astro/integration"` and add `maplibreYaml()` to

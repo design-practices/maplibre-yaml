@@ -129,9 +129,10 @@ lockfiles).
 
 </Steps>
 
-Publishing on GitHub Pages? Read [Deploying to GitHub Pages](#deploying-to-github-pages-or-any-subpath)
-first: a project site is served under `/<repo>/`, which changes how URLs
-inside your YAML are written.
+Publishing on GitHub Pages? A project site is served under `/<repo>/`: set
+`base` in `astro.config.mjs` as [Deploying to GitHub Pages](#deploying-to-github-pages-or-any-subpath)
+shows. `Map` and `FullPageMap` then put the paths in your YAML under it for
+you.
 
 Next: load the YAML at build time so mistakes fail the build
 ([Basic Usage](#basic-usage-with-map-component)), or tell a story with
@@ -157,7 +158,8 @@ interface Props {
 const { src, height = '400px' } = Astro.props;
 ---
 
-<ml-map src={src} style={`height: ${height}; display: block;`}></ml-map>
+<!-- base: paths in the YAML (and src) start at your site's base, on every page -->
+<ml-map src={src} base={import.meta.env.BASE_URL} style={`height: ${height}; display: block;`}></ml-map>
 
 <script>
   // maplibre-gl 6 loads its worker from a separate file. Inside a Vite/Astro
@@ -449,6 +451,10 @@ interface MapProps {
   height?: string;           // Container height (default: "400px")
   class?: string;            // CSS class name
   style?: string;            // Inline styles
+
+  // Where the paths in the document start (default: your site's base,
+  // import.meta.env.BASE_URL). false = resolve relative paths against the page.
+  base?: string | false;
 }
 ```
 
@@ -911,42 +917,43 @@ export default defineConfig({
 needs no `base`.) Then, everything under `public/` is served under the base:
 `public/configs/hero-map.yaml` is at `/<repo>/configs/hero-map.yaml`.
 
-- **`src` on `Map` and `FullPageMap`: nothing to change.** Keep writing
-  `src="/configs/hero-map.yaml"`. The components add the base for you
-  (`@maplibre-yaml/astro` 0.6 or later). A `src` that already starts with the
-  base, or a full `https://` URL, is used as written.
-- **URLs inside your YAML: include the base.** The components do not rewrite
-  the document, and `<ml-map>` resolves its URLs like any link on the page, so
-  a root-relative `url: "/data/volcanoes.geojson"` asks for
-  `https://<user>.github.io/data/volcanoes.geojson` and 404s. Write the base
-  into every path to your own files: data `url:`s, `images:`, marker `icon:`s.
+- **`Map` and `FullPageMap`: nothing to change.** Keep writing
+  `src="/configs/hero-map.yaml"`, and keep the paths *inside* your YAML as
+  they are. The components hand the site's base to `<ml-map>` (its
+  [`base` attribute](/integrations/web-components/#sites-under-a-subpath-github-pages)),
+  which puts every path to your own files under it: data `url:`s, `tiles:`,
+  `images:`, marker `icon:`s, a site-hosted `mapStyle`, and popup links.
 
   ```yaml no-validate
   sources:
     volcanoes:
       type: geojson
-      url: "/<repo>/data/volcanoes.geojson"   # public/data/volcanoes.geojson
+      url: "/data/volcanoes.geojson"   # public/data/volcanoes.geojson
   images:
-    pin: "/<repo>/images/pin.png"             # public/images/pin.png
+    pin: "images/pin.png"              # public/images/pin.png
   ```
 
-  This works in `astro dev` and `astro preview` too, since both serve the site
-  under the base. Full `https://` URLs need no change. Avoid paths without a
-  leading slash (`data/volcanoes.geojson`): they resolve against the *page*,
-  so they break on any page that is not at the root of your site.
+  Both spellings load from `public/` on every page of your site, including
+  nested ones like `/<repo>/blog/my-post/`. A path that already includes the
+  base (`/<repo>/data/volcanoes.geojson`, the workaround older versions
+  needed) is used as written, and full `https://` URLs are never changed.
+  (Needs `@maplibre-yaml/astro` 0.6 and `@maplibre-yaml/core` 0.8 or later.)
 - **Your own `<ml-map>` components** (the [Component Patterns](#component-patterns)
-  below) pass `src` to the element unchanged, so add the base yourself:
+  below) add one attribute, `base={import.meta.env.BASE_URL}`. It applies to
+  the element's `src` too, so pass `src` unchanged:
 
   ```astro
-  ---
-  const { src } = Astro.props;
-  // "/configs/map.yaml" -> "/<repo>/configs/map.yaml". BASE_URL may or may
-  // not end in "/", depending on your config.
-  const url = src.startsWith('/') ? import.meta.env.BASE_URL.replace(/\/$/, '') + src : src;
-  ---
-  <ml-map src={url} style="height: 400px; display: block;"></ml-map>
+  <ml-map
+    src={src}
+    base={import.meta.env.BASE_URL}
+    style="height: 400px; display: block;"
+  ></ml-map>
   ```
 
+- **`Scrollytelling` does not take the base yet.** In a story, write the
+  base into the paths to your own files (data `url:`s, chapter
+  `image:`/`video:`) and into its `src`:
+  `image: "/<repo>/images/photo.jpg"`.
 - **Links and images in your own pages** need the base too, as in any Astro
   site (see Astro's
   [`base` docs](https://docs.astro.build/en/reference/configuration-reference/#base)).
@@ -956,7 +963,14 @@ needs no `base`.) Then, everything under `public/` is served under the base:
 
 Check it before you push: `npm run build && npm run preview` serves the
 site under the base, so open `http://localhost:4321/<repo>/`. Every map should
-show its data. A data file that 404s appears in the browser's console.
+show its data. A data file that doesn't load is listed in a notice on the map.
+
+**Relative paths mean "from `public/`", with or without a base.** The
+components pass the base even when it is the default `/`, so
+`url: "data/volcanoes.geojson"` loads `public/data/volcanoes.geojson` on every
+page. (Before 0.6, a relative path resolved against the page, so on
+`/blog/my-post/` it asked for `/blog/my-post/data/volcanoes.geojson`.) To get
+the old page-relative behaviour back for one map, pass `base={false}`.
 
 ## Server output (SSR)
 
@@ -1129,6 +1143,9 @@ interface FullPageMapProps {
   // Styling (optional - component is fixed viewport by default)
   class?: string;                  // Additional CSS classes
   style?: string;                  // Additional inline styles
+
+  // Where the paths in the document start (default: import.meta.env.BASE_URL)
+  base?: string | false;
 }
 ```
 
@@ -2996,8 +3013,10 @@ data layer is missing (a 404 for `/data/...` in the console).
 the domain root.
 
 **Solution:** See [Deploying to GitHub Pages](#deploying-to-github-pages-or-any-subpath):
-set `base`, update `@maplibre-yaml/astro` (0.6 or later adds the base to
-`src` for you), and write the base into the URLs inside your YAML.
+set `base` in `astro.config.mjs` and update to `@maplibre-yaml/astro` 0.6 and
+`@maplibre-yaml/core` 0.8 or later. `Map` and `FullPageMap` then add the base to
+`src` and to every path inside your YAML. Your own `<ml-map>` components need
+`base={import.meta.env.BASE_URL}`.
 
 ### TypeScript Errors with `import.meta.glob`
 

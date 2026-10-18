@@ -798,6 +798,18 @@ renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
 });
 ```
 
+4. **The site is published under a subpath** (a GitHub Pages project site,
+   `https://<user>.github.io/<repo>/`) and the paths in the YAML start with
+   `/` (`/data/x.geojson`), so they point at the domain root. With
+   `<ml-map>`, add `base="/<repo>/"`
+   ([details](/integrations/web-components/#sites-under-a-subpath-github-pages)).
+   With `MapRenderer`, resolve the paths before rendering, as the element
+   does: `const model = applyDocumentBase(toModel(block), "/<repo>/")`, then
+   build the renderer from `denormalizeConfig(model)`,
+   `denormalizeLayers(model)`, `denormalizeOptions(model)` and
+   `denormalizeSources(model)` (all exported by `@maplibre-yaml/core`). For a
+   single URL, `resolveDocumentUrl(url, "/<repo>/")`.
+
 ### YAML Parsing Errors
 
 **Symptoms:** `safeParseMapBlock` returns `success: false` with errors.

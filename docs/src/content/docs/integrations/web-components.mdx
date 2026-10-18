@@ -209,6 +209,8 @@ layers:
 Relative paths inside the YAML (`url: "data/points.geojson"`) resolve against
 the **page**, not the YAML file. See
 [Files on your own site](/schema/sources/#files-on-your-own-site-relative-paths).
+Publishing under a subpath, such as a GitHub Pages project site? Add a
+[`base`](#sites-under-a-subpath-github-pages).
 
 **Why this is best:**
 
@@ -318,6 +320,57 @@ For dynamic or generated configurations:
   waits for it. A `config` assigned *before* `register.js` loads is picked up
   when the element upgrades. On 0.6, the error card flashed in both cases.
 </Aside>
+
+## Sites under a subpath (GitHub Pages)
+
+A GitHub Pages *project* site is published at
+`https://<user>.github.io/<repo>/`, so your files live under `/<repo>/`:
+`data/cities.geojson` in the repository is
+`https://<user>.github.io/<repo>/data/cities.geojson`. Paths in your YAML that
+start with `/` (`/data/cities.geojson`) then point at the domain root and 404,
+and relative paths only work on pages at the top of the site.
+
+Add the `base` attribute with the subpath, and leave the YAML as it is:
+
+```html
+<ml-map src="maps/city.yaml" base="/<repo>/"></ml-map>
+```
+
+With a base, every path to a file of your own resolves against it, whichever
+page the map is on:
+
+| Written in the document | Loads (with `base="/my-repo/"`) |
+| --- | --- |
+| `/data/cities.geojson` | `/my-repo/data/cities.geojson` |
+| `data/cities.geojson` or `./data/cities.geojson` | `/my-repo/data/cities.geojson` |
+| `/my-repo/data/cities.geojson` | used as written (the base is never doubled) |
+| `https://…`, `//cdn…`, `blob:`, `data:` | used as written |
+
+It applies to the `src` attribute and to these fields of the document:
+`mapStyle` (v2: `style.basemap`) when it is a path, and the `sprite`, `glyphs`
+and source URLs of an inline style object; source `url`, `tiles` and video
+`urls`, a GeoJSON `data` written as a path, and `stream.url`, in `sources:`
+and in a layer's own `source:`; `images:`; marker `icon:`; and `href` links in
+popups (layer, marker and standalone `popups:`). URLs inside a style JSON or
+GeoJSON file you load are not rewritten.
+
+`base="/<repo>"` and `base="<repo>"` mean the same thing. Without `base`,
+nothing changes: relative paths resolve against the page and `/…` against the
+domain root. Setting the `base` property (`map.base = "/my-repo/"`) re-renders
+the map. A user site (`<user>.github.io`) or a custom domain is served from the
+root and needs no base. If a `/…` path 404s on a page that sits under a
+subpath, the notice on the map suggests the `base` to add.
+
+**Why not `<base href>`?** A `<base href="/<repo>/">` in the page's `<head>`
+makes the browser resolve every *relative* URL on the page against it, the
+map's included, so `data/cities.geojson` loads from `/<repo>/data/`. It does
+not change paths that start with `/`, and it also changes every other relative
+link and image on the page. The `base` attribute covers both kinds of path and
+only affects the map.
+
+On Astro, the `Map` and `FullPageMap` components set `base` from your site's
+`base` setting for you: see
+[Deploying to GitHub Pages](/integrations/astro/#deploying-to-github-pages-or-any-subpath).
 
 ## Component Lifecycle
 
@@ -1238,6 +1291,7 @@ file.
 | `src`     | string      | URL to external YAML configuration file    |
 | `config`  | JSON string | Map configuration as stringified JSON      |
 | `quiet`   | boolean     | Keep non-fatal notices and the zero-height hint off the page ([details](#when-something-goes-wrong)) |
+| `base`    | string      | Where the paths in `src` and in the document start, for a site under a subpath (`"/my-repo/"`) ([details](#sites-under-a-subpath-github-pages)) |
 
 ### Properties
 
@@ -1245,6 +1299,7 @@ file.
 | -------- | ------------------ | ---------------------------------- |
 | `config` | Object or string   | Map configuration object (set/get) |
 | `quiet`  | boolean            | Reflects the `quiet` attribute     |
+| `base`   | string or `null`   | Reflects the `base` attribute; setting it re-renders the map |
 
 ### Methods
 
