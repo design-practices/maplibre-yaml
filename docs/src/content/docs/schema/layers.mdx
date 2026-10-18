@@ -5,7 +5,7 @@ description: Complete reference for all layer types
 
 import SchemaTable from "../../../components/SchemaTable.astro";
 import LiveMap from "../../../components/LiveMap.astro";
-import { Tabs, TabItem } from "@astrojs/starlight/components";
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 :::tip[Complete field reference]
 This guide explains the fields and shows them in use. For every key — type, default, allowed values, and description, generated from the schemas so it always matches the validator — see the generated [Layers reference](/reference/yaml/layers/).
@@ -131,7 +131,7 @@ config:
   center: [-74.0118, 40.7075]
   zoom: 15.9
   pitch: 60
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 sources:
   omt:
     type: vector
@@ -168,7 +168,7 @@ id: circle-demo
 config:
   center: [-74.006, 40.7128]
   zoom: 10
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: points
     type: circle
@@ -248,6 +248,9 @@ layers:
 
 ### Example
 
+The two layer entries below go under a document's `layers:` list. Both read
+the live USGS earthquake feed, whose features carry the magnitude in `mag`.
+
 <Tabs>
 <TabItem label="Basic">
 
@@ -256,7 +259,7 @@ layers:
   type: circle
   source:
     type: geojson
-    url: "https://example.com/points.geojson"
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
   paint:
     circle-radius: 8
     circle-color: "#ff0000"
@@ -270,12 +273,12 @@ layers:
   type: circle
   source:
     type: geojson
-    url: "https://example.com/earthquakes.geojson"
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
   paint:
     circle-radius:
       - interpolate
       - ["linear"]
-      - ["get", "magnitude"]
+      - ["get", "mag"]
       - 1
       - 4
       - 5
@@ -285,7 +288,7 @@ layers:
     circle-color:
       - interpolate
       - ["linear"]
-      - ["get", "magnitude"]
+      - ["get", "mag"]
       - 1
       - "#ffffcc"
       - 5
@@ -299,11 +302,221 @@ layers:
 
 ---
 
+The sections below show each remaining layer type with a complete document
+you can paste into a `.yaml` file and load with `<ml-map src="…">`. Each layer
+type takes MapLibre's own `paint` and `layout` properties unchanged, so the
+[MapLibre style spec](https://maplibre.org/maplibre-style-spec/layers/) is the
+reference for those. The generated [Layers reference](/reference/yaml/layers/)
+lists the keys maplibre-yaml adds.
+
 ## Line Layer
 
-Renders lines and line strings. Perfect for routes, boundaries, and networks.
+Draws `LineString` features, and polygon outlines: routes, rivers, borders.
+Spec: [`line`](https://maplibre.org/maplibre-style-spec/layers/#line).
 
-{/* Similar structure for line, fill, symbol, etc. */}
+```yaml
+type: map
+id: rivers
+config:
+  center: [-95, 40]
+  zoom: 3
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: rivers
+    type: line
+    source:
+      type: geojson
+      url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_rivers_lake_centerlines.geojson"
+    layout:
+      line-cap: round
+      line-join: round
+    paint:
+      line-color: "#2563eb"
+      line-width: 3
+```
+
+## Fill Layer
+
+Shades polygon areas: regions, parcels, choropleths.
+Spec: [`fill`](https://maplibre.org/maplibre-style-spec/layers/#fill).
+
+```yaml
+type: map
+id: states
+config:
+  center: [-98, 39]
+  zoom: 3
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: states
+    type: fill
+    source:
+      type: geojson
+      url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
+    paint:
+      fill-color: "#22c55e"
+      fill-opacity: 0.4
+      fill-outline-color: "#166534"
+```
+
+## Fill-Extrusion Layer
+
+Extrudes polygons into 3D, usually buildings. Tilt the camera with `pitch` to
+see the height.
+Spec: [`fill-extrusion`](https://maplibre.org/maplibre-style-spec/layers/#fill-extrusion).
+
+```yaml
+type: map
+id: buildings-3d
+config:
+  center: [-74.0118, 40.7075]
+  zoom: 15.5
+  pitch: 60
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+sources:
+  omt:
+    type: vector
+    url: "https://tiles.openfreemap.org/planet"
+layers:
+  - id: buildings
+    type: fill-extrusion
+    source: omt
+    source-layer: building
+    paint:
+      fill-extrusion-color: "#f59e0b"
+      fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
+      fill-extrusion-opacity: 0.8
+```
+
+## Symbol Layer
+
+Draws text labels and icons at points (or along lines). Text is drawn with
+the basemap style's fonts (its `glyphs`), so `text-font` must name a font
+that style has: the OpenFreeMap styles have `Noto Sans Regular`, `Noto Sans
+Bold` and `Noto Sans Italic`. Without `text-font`, MapLibre asks for
+`Open Sans Regular`, which these styles lack.
+Spec: [`symbol`](https://maplibre.org/maplibre-style-spec/layers/#symbol).
+
+```yaml
+type: map
+id: city-labels
+config:
+  center: [10, 30]
+  zoom: 1.5
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: cities
+    type: symbol
+    source:
+      type: geojson
+      url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_populated_places_simple.geojson"
+    layout:
+      text-field: ["get", "name"]
+      text-font: ["Noto Sans Regular"]
+      text-size: 12
+    paint:
+      text-color: "#7c2d12"
+      text-halo-color: "#ffffff"
+      text-halo-width: 1.5
+```
+
+## Heatmap Layer
+
+Turns many points into a density surface.
+Spec: [`heatmap`](https://maplibre.org/maplibre-style-spec/layers/#heatmap).
+
+```yaml
+type: map
+id: quake-heat
+config:
+  center: [-120, 37]
+  zoom: 3
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: quakes-heat
+    type: heatmap
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      heatmap-weight: ["interpolate", ["linear"], ["get", "mag"], 0, 0, 6, 1]
+      heatmap-radius: 20
+      heatmap-opacity: 0.8
+```
+
+## Hillshade Layer
+
+Shades terrain from a `raster-dem` (elevation) source.
+Spec: [`hillshade`](https://maplibre.org/maplibre-style-spec/layers/#hillshade).
+
+```yaml
+type: map
+id: rainier
+config:
+  center: [-121.76, 46.85]
+  zoom: 10
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: hills
+    type: hillshade
+    source:
+      type: raster-dem
+      tiles:
+        - "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+      encoding: terrarium
+      tileSize: 256
+      maxzoom: 14
+      attribution: "Terrain tiles: Mapzen/AWS Open Data"
+    paint:
+      hillshade-exaggeration: 0.6
+      hillshade-shadow-color: "#2a3d4f"
+```
+
+## Raster Layer
+
+Shows image tiles: satellite imagery, scanned maps, other providers' basemaps.
+Spec: [`raster`](https://maplibre.org/maplibre-style-spec/layers/#raster).
+
+```yaml
+type: map
+id: satellite
+config:
+  center: [12.5, 41.9]
+  zoom: 9
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: imagery
+    type: raster
+    source:
+      type: raster
+      tiles:
+        - "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"
+      tileSize: 256
+      attribution: "Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2020)"
+    paint:
+      raster-opacity: 0.85
+```
+
+## Background Layer
+
+A single colour (or pattern) over the whole map. It has no `source`. Placed in
+`layers:`, it draws above the basemap, so keep it translucent.
+Spec: [`background`](https://maplibre.org/maplibre-style-spec/layers/#background).
+
+```yaml
+type: map
+id: tinted
+config:
+  center: [-74.006, 40.7128]
+  zoom: 11
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: wash
+    type: background
+    paint:
+      background-color: "#1d3557"
+      background-opacity: 0.25
+```
 
 ---
 
@@ -325,6 +538,7 @@ id: relief
 config:
   center: [11.45, 47.2]
   zoom: 10
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: relief
     type: color-relief
@@ -349,3 +563,132 @@ On a runtime below 5.6, `<ml-map>` skips color-relief layers with one console
 warning (a declared absence), and the rest of the document renders normally.
 On export the layer compiles through verbatim. `mlym emit --target` below 5.6
 reports it as lossy. See the [gallery example](/examples/gallery/add-a-color-relief-layer/).
+
+---
+
+## Popups
+
+A layer's `interactive.click.popup` (and `interactive.hover.popup`, a preview
+shown while the pointer is over a feature) describes the popup's content. See
+[Layer Interactivity](/schema/interactivity/#layer-interactivity) for the rest
+of the `interactive:` block.
+
+This complete document shows the parts you will use most. Click a city to
+open its popup:
+
+```yaml
+type: map
+id: popup-demo
+config:
+  center: [-82, 41]
+  zoom: 4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties:
+              name: "New York"
+              population: 8336817
+              nickname: "The Big Apple"
+          - type: Feature
+            geometry: { type: Point, coordinates: [-87.623, 41.881] }
+            properties:
+              name: "Chicago"
+              population: 2693976
+    paint:
+      circle-radius: 10
+      circle-color: "#ef4444"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - str: "Population: "
+              - property: population
+                format: ",.0f"
+          - p:
+              - str: "Nickname: "
+              - property: nickname
+                else: "none recorded"
+          - p:
+              - href: "https://en.wikipedia.org/wiki/List_of_United_States_cities_by_population"
+                text: "Largest US cities"
+```
+
+New York's popup reads "Population: 8,336,817" and "Nickname: The Big Apple".
+Chicago has no `nickname`, so its popup shows "Nickname: none recorded".
+
+### Structure
+
+The popup is a list. Each entry is one HTML element: the key is the tag, and
+the value is a list of **items** whose output is joined inside that element.
+`- h3: [{ property: name }]` becomes `<h3>New York</h3>`.
+
+**Tags:** `h1`–`h6`, `p`, `span`, `div`, `strong`, `em`, `code`, `pre`, `a`,
+`img`, `ul`, `ol`, `li`, `blockquote`, `hr`, `br`. Any other key is skipped
+with a console warning. Elements do not nest: a `ul:` entry cannot contain
+`li:` entries.
+
+### Items
+
+Each item is one of these:
+
+| Item | Output |
+|------|--------|
+| `str: "Population: "` | The text as written |
+| `property: population` | The feature's `population` property |
+| `property: …` plus `else: "n/a"` | `else` is shown when the property is missing or `null` (without `else`, nothing is shown) |
+| `property: …` plus `format: ",.0f"` | Formats a number. `,` adds thousands separators and `.Nf` keeps N decimal places: `",.0f"` gives `8,336,817`, `".2f"` gives `0.12`. Text values are shown unchanged |
+| `href: "https://…"` plus `text: "Read more"` | A link. It opens in a new tab (with `rel="noopener noreferrer"`). Without `text`, the URL is the link text |
+| `src: "https://…/photo.jpg"` plus `alt: "…"` | An image |
+
+Put links and images inside `p:` (or `div:`):
+
+```yaml
+popup:
+  - p:
+      - href: "https://en.wikipedia.org/wiki/New_York_City"
+        text: "New York on Wikipedia"
+  - p:
+      - src: "https://maplibre.org/img/maplibre-logo-big.svg"
+        alt: "MapLibre logo"
+```
+
+Wrapping them in `a:` or `img:` instead also displays them, but the page then
+contains an extra empty `<a>` or `<img>` element.
+
+<Aside type="caution" title="Two link forms that do not work as expected">
+- **`str` with `href` is not a link.** `- p: [{ str: "Wikipedia", href: "https://…" }]`
+  shows the text "Wikipedia" and silently drops the URL, because `str` wins.
+  Use `text:` for the link text.
+- **`target:`** chooses where a link opens: `_blank` (the default), `_self`,
+  `_parent` or `_top`. It works, but in 0.7 validation also logs
+  `Unknown key "target"`. That warning is wrong and harmless. Omit `target`
+  to keep the default new tab.
+</Aside>
+
+The link URL is fixed text. An item cannot build a URL from a feature
+property.
+
+### Escaping and `!html`
+
+Feature property values and `str` text are always HTML-escaped. A property
+containing `<b>bold</b>` shows those characters literally, so data cannot
+inject markup into your page.
+
+A `str` tagged `!html` (`- str: !html "<em>styled</em>"`) asks for raw
+markup. It is rendered as markup only under a **trusted** capability policy.
+`<ml-map>` is untrusted by default, so there the value is shown as escaped
+text and the console logs a warning.

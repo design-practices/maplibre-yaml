@@ -5,14 +5,39 @@ description: Complete command reference for maplibre-yaml CLI
 
 Complete reference for all maplibre-yaml CLI commands, options, and arguments.
 
-## Global Options
+## Running the CLI
 
-Available for all commands:
+Every example on this page uses `npx @maplibre-yaml/cli`, which works with no
+install: npx downloads the CLI on first use (and uses your project's copy if
+you installed one).
+
+```bash
+npx @maplibre-yaml/cli validate map.yaml
+```
+
+Installing the CLI gives you two shorter command names, `mlym` and
+`maplibre-yaml`, for the same program:
+
+```bash
+# in a project: then run it as `npx mlym …` or from package.json scripts
+npm install --save-dev @maplibre-yaml/cli
+npx mlym validate map.yaml
+
+# or globally: then `mlym …` works in any folder
+npm install -g @maplibre-yaml/cli
+mlym validate map.yaml
+```
+
+Without an install, `npx mlym` and a bare `maplibre-yaml …` do not work: the
+short names exist only once `@maplibre-yaml/cli` is installed. Wherever this
+page says `npx @maplibre-yaml/cli`, an installed `mlym` does the same.
+
+## Global Options
 
 | Option      | Alias | Description           |
 | ----------- | ----- | --------------------- |
-| `--help`    | `-h`  | Show help for command |
-| `--version` | `-v`  | Show CLI version      |
+| `--help`    | `-h`  | Show help for a command (`npx @maplibre-yaml/cli init --help`) |
+| `--version` |       | Show the CLI version  |
 
 ## Commands
 
@@ -21,7 +46,7 @@ Available for all commands:
 Validate YAML configuration files against the maplibre-yaml schema.
 
 ```bash
-maplibre-yaml validate <patterns> [options]
+npx @maplibre-yaml/cli validate <patterns> [options]
 ```
 
 #### Arguments
@@ -41,7 +66,8 @@ Patterns can be:
 | Option     | Alias | Type    | Default | Description                                       |
 | ---------- | ----- | ------- | ------- | ------------------------------------------------- |
 | `--format` | `-f`  | string  | `human` | Output format: `human`, `json`, `sarif`, `vscode` |
-| `--strict` |       | boolean | `false` | Treat warnings as errors                          |
+| `--strict` / `--no-strict` | | boolean | on in CI, off otherwise | Treat warnings as errors. Without either flag, strict mode is on when the `CI` environment variable is set (as CI services do) and off on your machine |
+| `--strict-deprecations` | | boolean | `false` | Also treat deprecation warnings as errors (`--strict` leaves them as warnings) |
 | `--watch`  | `-w`  | boolean | `false` | Watch for changes and re-validate                 |
 
 #### Output Formats
@@ -79,59 +105,58 @@ Patterns can be:
 | Code | Meaning                 |
 | ---- | ----------------------- |
 | `0`  | All files valid         |
-| `1`  | Validation errors found |
-| `2`  | File(s) not found       |
-| `3`  | Invalid YAML syntax     |
-| `4`  | Unknown error           |
+| `1`  | Errors found, including YAML syntax errors (reported with line and column) |
+| `2`  | No file matched the pattern(s) |
+| `4`  | Unexpected internal error |
 
 #### Examples
 
 Validate a single file:
 
 ```bash
-maplibre-yaml validate map.yaml
+npx @maplibre-yaml/cli validate map.yaml
 ```
 
 Validate with glob pattern:
 
 ```bash
-maplibre-yaml validate "configs/**/*.yaml"
+npx @maplibre-yaml/cli validate "configs/**/*.yaml"
 ```
 
 Validate multiple patterns:
 
 ```bash
-maplibre-yaml validate "src/**/*.map.yaml" "configs/*.yaml"
+npx @maplibre-yaml/cli validate "src/**/*.map.yaml" "configs/*.yaml"
 ```
 
 JSON output for CI/CD:
 
 ```bash
-maplibre-yaml validate "**/*.yaml" --format json
+npx @maplibre-yaml/cli validate "**/*.yaml" --format json
 ```
 
 SARIF for GitHub Code Scanning:
 
 ```bash
-maplibre-yaml validate "**/*.yaml" --format sarif > results.sarif
+npx @maplibre-yaml/cli validate "**/*.yaml" --format sarif > results.sarif
 ```
 
 Strict mode (warnings as errors):
 
 ```bash
-maplibre-yaml validate map.yaml --strict
+npx @maplibre-yaml/cli validate map.yaml --strict
 ```
 
 Watch mode for development:
 
 ```bash
-maplibre-yaml validate "configs/**/*.yaml" --watch
+npx @maplibre-yaml/cli validate "configs/**/*.yaml" --watch
 ```
 
 VSCode Problem Matcher format:
 
 ```bash
-maplibre-yaml validate config.yaml --format vscode
+npx @maplibre-yaml/cli validate config.yaml --format vscode
 ```
 
 ---
@@ -139,9 +164,11 @@ maplibre-yaml validate config.yaml --format vscode
 ### preview
 
 Start a local development server to preview your map with hot reload.
+`preview` renders the YAML document on a page of its own; to see the HTML page
+you wrote around it, serve your folder instead (for example `npx serve .`).
 
 ```bash
-maplibre-yaml preview <config> [options]
+npx @maplibre-yaml/cli preview <config> [options]
 ```
 
 #### Arguments
@@ -162,7 +189,7 @@ maplibre-yaml preview <config> [options]
 #### Features
 
 - **Hot Reload**: Automatically updates map when YAML file changes
-- **Error Overlay**: Shows validation errors with details
+- **Error Overlay**: Shows validation errors (field path and message)
 - **Status Bar**: Displays connection state and file path
 - **Live Validation**: Validates configuration on every change
 - **Debug Panel**: Optional JSON view of parsed configuration
@@ -172,69 +199,157 @@ maplibre-yaml preview <config> [options]
 Basic preview:
 
 ```bash
-maplibre-yaml preview map.yaml
+npx @maplibre-yaml/cli preview map.yaml
 ```
 
 Custom port:
 
 ```bash
-maplibre-yaml preview map.yaml --port 8080
+npx @maplibre-yaml/cli preview map.yaml --port 8080
 ```
 
 Don't open browser:
 
 ```bash
-maplibre-yaml preview map.yaml --no-open
+npx @maplibre-yaml/cli preview map.yaml --no-open
 ```
 
 Debug mode:
 
 ```bash
-maplibre-yaml preview map.yaml --debug
+npx @maplibre-yaml/cli preview map.yaml --debug
 ```
 
 ---
 
 ### init
 
-Initialize a new maplibre-yaml project with example configurations.
+Create a new project from a template.
 
 ```bash
-maplibre-yaml init [options]
+npx @maplibre-yaml/cli init [folder] [options]
 ```
+
+#### Arguments
+
+| Argument | Required | Default | Description |
+| -------- | -------- | ------- | ----------- |
+| `folder` | No | `./<name>` (`./my-map` for `basic`) | Folder to create. It must not exist yet, or be empty |
 
 #### Options
 
-| Option       | Type   | Default | Description                          |
-| ------------ | ------ | ------- | ------------------------------------ |
-| `--dir`      | string | `.`     | Directory to initialize project in   |
-| `--template` | string | `basic` | Template to use: `basic`, `advanced` |
+| Option | Alias | Type | Default | Description |
+| ------ | ----- | ---- | ------- | ----------- |
+| `--template` | `-t` | string | `basic` | `basic`, `story` or `astro` |
+| `--name` | `-n` | string | the folder's name | Project name, used for the page title and the map `id` |
+| `--list` | | boolean | | List the templates and exit |
 
-#### What it Creates
+An unknown template or option (for example `--dir`, which `init` does not
+have) prints an error and exits with code `1`, and nothing is created.
 
-- Sample YAML configuration files
-- `.maplibre-yaml.config.json` project configuration
-- Example layer configurations
-- README with getting started instructions
+#### Templates
+
+| Template | Creates | Run it with |
+| -------- | ------- | ----------- |
+| `basic` | `index.html` (CDN import map, `<ml-map>` with a height, viewport meta tag) and `map.yaml` (a street basemap and one clickable point) | `npx serve .` in the folder, then open the address it prints. Needs no install or build |
+| `story` | `index.html` and a scrollytelling `story.yaml` | `story.yaml` validates today. The page uses `<ml-scrollytelling>`, which is not part of `@maplibre-yaml/core` 0.7, so it stays blank until a core release that includes it |
+| `astro` | An Astro project that renders `public/configs/map.yaml` with `<ml-map>` | `npm install`, then `npm run dev` |
+
+Every YAML file the templates write starts with the
+[schema modeline](/guides/editor-setup/), so editors with the YAML extension
+complete and check it as you type. `init` prints the next steps for the
+template it used.
 
 #### Examples
 
-Initialize in current directory:
+Create `./my-map` from the basic template, then serve it:
 
 ```bash
-maplibre-yaml init
+npx @maplibre-yaml/cli init my-map
+cd my-map
+npx serve .
 ```
 
-Initialize in specific directory:
+An Astro project:
 
 ```bash
-maplibre-yaml init --dir my-maps
+npx @maplibre-yaml/cli init my-site --template astro
 ```
 
-Use advanced template:
+List the templates:
 
 ```bash
-maplibre-yaml init --template advanced
+npx @maplibre-yaml/cli init --list
+```
+
+---
+
+### emit
+
+Export a map document to a standalone MapLibre `style.json`: a file that
+opens in [Maputnik](https://maplibre.org/maputnik/) and renders in a plain
+`new maplibregl.Map({ style })`, with no maplibre-yaml on the page. Only
+`type: map` documents export. What happens to each construct (layers,
+markers, popups, live data, …) is listed in
+[Export classes](/guides/export-classes/).
+
+```bash
+npx @maplibre-yaml/cli emit <file> [options]
+```
+
+#### Arguments
+
+| Argument | Required | Description |
+| -------- | -------- | ----------- |
+| `file` | Yes | Path to a `type: map` YAML document |
+
+#### Options
+
+| Option | Alias | Type | Default | Description |
+| ------ | ----- | ---- | ------- | ----------- |
+| `--out` | `-o` | string | stdout | Write the style to this file. A folder (one that exists, or a path ending in `/`, like `dist/`) gets `style.json` inside it |
+| `--with-fallbacks` | | boolean | on | Export what has a style.json fallback (markers become a symbol layer with pin sprites, `fitTo` becomes a fixed camera) and print a warning for each loss |
+| `--strict` | | boolean | off | Refuse the export (exit `1`) if anything would change what the map shows. Cannot be combined with `--with-fallbacks` |
+| `--target` | | string | | The maplibre-gl version the style is for, e.g. `5.6.0`. Features that version lacks (such as `state:` below its minimum, or `color-relief` below 5.6) are reported |
+| `--trust` | | string | `untrusted` | `trusted` or `untrusted`: how far the document's author is trusted. `trusted` lets capability-gated content (raw `!html`, `emit` interactions) through; see [Interactions](/guides/interactions/) |
+| `--sprite-base` | | string | | Absolute URL where the folder holding the style will be served. Required, with `--out`, when the document generates sprite images (markers, `images:`), because MapLibre rejects relative sprite URLs |
+
+Warnings go to stderr, so `npx @maplibre-yaml/cli emit map.yaml > style.json`
+keeps the JSON clean.
+
+#### Exit codes
+
+| Code | Meaning |
+| ---- | ------- |
+| `0` | Style written (warnings, if any, on stderr) |
+| `1` | Not a valid map document, a `--strict` refusal, or bad arguments |
+| `2` | Input file not found |
+| `4` | Unexpected error (for example, the basemap or an image could not be fetched) |
+
+#### Examples
+
+Print the style:
+
+```bash
+npx @maplibre-yaml/cli emit map.yaml
+```
+
+Write `dist/style.json`:
+
+```bash
+npx @maplibre-yaml/cli emit map.yaml --out dist/
+```
+
+Fail instead of exporting with losses (for CI):
+
+```bash
+npx @maplibre-yaml/cli emit map.yaml --strict --out dist/style.json
+```
+
+A document with markers, exported with its generated pin sprites:
+
+```bash
+npx @maplibre-yaml/cli emit map.yaml --out dist/style.json --sprite-base https://maps.example.org/dist
 ```
 
 ---
@@ -246,7 +361,7 @@ Print the JSON Schema for a block, resolved from the installed
 enforces. Useful for offline editor integration and AI agents.
 
 ```bash
-maplibre-yaml schema [block] [options]
+npx @maplibre-yaml/cli schema [block] [options]
 ```
 
 #### Arguments
@@ -266,13 +381,13 @@ maplibre-yaml schema [block] [options]
 Print the map schema to stdout:
 
 ```bash
-maplibre-yaml schema map
+npx @maplibre-yaml/cli schema map
 ```
 
 Write the combined (`any`) schema to a file for offline use:
 
 ```bash
-maplibre-yaml schema any --out any.schema.json
+npx @maplibre-yaml/cli schema any --out any.schema.json
 ```
 
 Reference the written file from a config with a modeline:
@@ -295,7 +410,7 @@ rides on `*-pattern` images; `bake` derives them reproducibly instead of
 leaving them as unexplained binaries.
 
 ```bash
-maplibre-yaml bake [preset] --out <dir>
+npx @maplibre-yaml/cli bake [preset] --out <dir>
 ```
 
 | Preset | Writes | From |
@@ -307,15 +422,16 @@ With no preset, `bake` lists them. The docs gallery's committed images are
 exactly this output — a test pins them pixel for pixel:
 
 ```bash
-maplibre-yaml bake crosshatch --out docs/public/classics/crosshatch
-maplibre-yaml bake blueprint --out docs/public/classics/blueprint
+npx @maplibre-yaml/cli bake crosshatch --out docs/public/classics/crosshatch
+npx @maplibre-yaml/cli bake blueprint --out docs/public/classics/blueprint
 ```
 
 ---
 
 ## Configuration File
 
-Create `.maplibre-yaml.config.json` in your project root to set default options:
+Create `maplibre-yaml.config.json` in your project root to set default options
+(`.yaml`, `.yml`, `.js` and `.mjs` versions of the same name work too):
 
 ```json
 {
@@ -338,7 +454,7 @@ Create `.maplibre-yaml.config.json` in your project root to set default options:
 | Option           | Type     | Default | Description              |
 | ---------------- | -------- | ------- | ------------------------ |
 | `format`         | string   | `human` | Default output format    |
-| `strict`         | boolean  | `false` | Treat warnings as errors |
+| `strict`         | boolean  | on in CI | Treat warnings as errors |
 | `ignorePatterns` | string[] | `[]`    | Glob patterns to ignore  |
 
 #### preview
@@ -354,19 +470,9 @@ CLI arguments always take precedence over config file settings.
 
 ## Aliases
 
-The CLI provides a shorter alias for convenience:
-
-```bash
-# These are equivalent
-maplibre-yaml validate map.yaml
-mlym validate map.yaml
-```
-
-Use `mlym` as a shorthand for `maplibre-yaml` in all commands. Both are
-commands installed by `@maplibre-yaml/cli` (globally, or in your project with
-`npm install --save-dev @maplibre-yaml/cli`, then `npx mlym …`). Without an
-install, run `npx @maplibre-yaml/cli …`: `npx mlym` on its own looks for a
-package called `mlym`, which does not exist.
+`mlym` and `maplibre-yaml` are the two command names an installed
+`@maplibre-yaml/cli` provides; they are the same program. See
+[Running the CLI](#running-the-cli) for when each form works.
 
 ---
 
@@ -399,15 +505,14 @@ All commands use consistent exit codes:
 | Code | Meaning             | Commands          |
 | ---- | ------------------- | ----------------- |
 | `0`  | Success             | All               |
-| `1`  | Validation errors   | validate          |
-| `2`  | File not found      | validate, preview |
-| `3`  | Invalid YAML syntax | validate          |
-| `4`  | Unknown error       | All               |
+| `1`  | Invalid input: validation or YAML syntax errors, an unknown template or option, a non-empty `init` folder, a `--strict` emit refusal | validate, emit, init, schema, bake |
+| `2`  | File not found      | validate, preview, emit |
+| `4`  | Unexpected error    | All               |
 
 Use exit codes in scripts and CI/CD pipelines to detect failures:
 
 ```bash
-if maplibre-yaml validate "**/*.yaml"; then
+if npx @maplibre-yaml/cli validate "**/*.yaml"; then
   echo "All configurations valid"
 else
   echo "Validation failed with exit code $?"
@@ -424,7 +529,7 @@ fi
 Set to `production` to disable debug output:
 
 ```bash
-NODE_ENV=production maplibre-yaml validate "**/*.yaml"
+NODE_ENV=production npx @maplibre-yaml/cli validate "**/*.yaml"
 ```
 
 ### NO_COLOR
@@ -432,7 +537,7 @@ NODE_ENV=production maplibre-yaml validate "**/*.yaml"
 Disable colored output:
 
 ```bash
-NO_COLOR=1 maplibre-yaml validate map.yaml
+NO_COLOR=1 npx @maplibre-yaml/cli validate map.yaml
 ```
 
 ---
@@ -441,15 +546,16 @@ NO_COLOR=1 maplibre-yaml validate map.yaml
 
 ### npm Scripts
 
-Add to `package.json`:
+With the CLI installed in the project (`npm install --save-dev
+@maplibre-yaml/cli`), scripts can use the short name. Add to `package.json`:
 
 ```json
 {
   "scripts": {
-    "validate": "maplibre-yaml validate 'configs/**/*.yaml'",
-    "validate:watch": "maplibre-yaml validate 'configs/**/*.yaml' --watch",
-    "preview": "maplibre-yaml preview map.yaml",
-    "validate:ci": "maplibre-yaml validate '**/*.yaml' --format json --strict"
+    "validate": "mlym validate 'configs/**/*.yaml'",
+    "validate:watch": "mlym validate 'configs/**/*.yaml' --watch",
+    "preview": "mlym preview map.yaml",
+    "validate:ci": "mlym validate '**/*.yaml' --format json --strict"
   }
 }
 ```
@@ -493,7 +599,9 @@ Using [husky](https://typicode.github.io/husky/):
 
 ```bash
 #!/bin/sh
-npx @maplibre-yaml/cli validate "$(git diff --cached --name-only --diff-filter=ACM | grep '\.yaml$')"
+# Validate the YAML files staged for this commit (does nothing when there are none)
+git diff --cached --name-only --diff-filter=ACM -- '*.yaml' '*.yml' \
+  | xargs -r npx @maplibre-yaml/cli validate
 ```
 
 ---
@@ -502,11 +610,11 @@ npx @maplibre-yaml/cli validate "$(git diff --cached --name-only --diff-filter=A
 
 ### Command not found
 
-If `maplibre-yaml` command is not found:
+`mlym` and `maplibre-yaml` exist only after an install. Either:
 
-1. Install globally: `npm install -g @maplibre-yaml/cli`
-2. Use npx: `npx @maplibre-yaml/cli <command>`
-3. Check PATH includes npm global bin directory
+1. Run it through npx with the package name: `npx @maplibre-yaml/cli <command>`
+2. Install it in the project (`npm install --save-dev @maplibre-yaml/cli`) and run `npx mlym <command>`
+3. Install it globally (`npm install -g @maplibre-yaml/cli`) and check that your PATH includes npm's global bin folder
 
 ### Glob patterns not matching files
 

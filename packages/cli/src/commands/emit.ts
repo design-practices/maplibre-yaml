@@ -14,8 +14,8 @@
  */
 
 import { defineCommand } from 'citty';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import consola from 'consola';
 import {
   YAMLParser,
@@ -171,6 +171,19 @@ export function spriteAssetArgsError(
   return null;
 }
 
+/**
+ * Where `--out` writes the style. A path naming a folder — one that already
+ * exists, or one written with a trailing slash (`--out dist/`) — gets
+ * `style.json` inside it; anything else is the style file itself. Before
+ * this, `--out dist/` wrote a FILE called `dist`.
+ */
+export function resolveOutPath(out: string): string {
+  const path = resolve(out);
+  const namesFolder =
+    /[\\/]$/.test(out) || (existsSync(path) && statSync(path).isDirectory());
+  return namesFolder ? join(path, 'style.json') : path;
+}
+
 export const emitCommand = defineCommand({
   meta: {
     name: 'emit',
@@ -205,7 +218,7 @@ export const emitCommand = defineCommand({
     out: {
       type: 'string',
       alias: 'o',
-      description: 'Write the style to a file instead of stdout',
+      description: 'Write the style to this file (or to style.json in this folder) instead of stdout',
     },
     'sprite-base': {
       type: 'string',
@@ -301,7 +314,7 @@ export const emitCommand = defineCommand({
     const json = JSON.stringify(style, null, 2);
 
     if (args.out) {
-      const outPath = resolve(args.out as string);
+      const outPath = resolveOutPath(args.out as string);
 
       // Fetch + rasterize BEFORE any write: a fetch or sharp failure must
       // not leave a valid-looking style referencing sprite files that don't

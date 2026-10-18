@@ -4,7 +4,7 @@ id: cluster-demo
 config:
   center: [-120, 37]
   zoom: 3
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle
@@ -32,6 +32,7 @@ layers:
     filter: ["has", "point_count"]
     layout:
       text-field: "{point_count_abbreviated}"
+      text-font: ["Noto Sans Regular"] # a font the basemap's glyphs include
       text-size: 12
   - id: unclustered
     type: circle
