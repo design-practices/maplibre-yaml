@@ -43,8 +43,9 @@ export function createWatcher(options: WatchOptions): FSWatcher {
     options.onReady?.();
   });
 
-  watcher.on('error', (error) => {
-    options.onError?.(error);
+  // chokidar 4 types the error as unknown.
+  watcher.on('error', (error: unknown) => {
+    options.onError?.(error instanceof Error ? error : new Error(String(error)));
   });
 
   return watcher;

@@ -2,7 +2,9 @@
  * @file Glob pattern utilities
  */
 
-import fg from 'fast-glob';
+// tinyglobby (picomatch), not fast-glob: fast-glob -> micromatch -> braces
+// carries an advisory with no fixed release (ml-aot.56).
+import { glob, escapePath, isDynamicPattern } from 'tinyglobby';
 import { statSync } from 'node:fs';
 import { resolve as resolvePath, relative as relativePath } from 'pathe';
 
@@ -21,14 +23,18 @@ export async function resolveGlobPatterns(
   const cwd = options.cwd ?? process.cwd();
   const ignore = options.ignore ?? ['**/node_modules/**', '**/dist/**'];
 
-  const files = await fg(patterns, {
+  const files = await glob(patterns, {
     cwd,
     ignore,
     absolute: true,
     onlyFiles: true,
     dot: false,
+    // fast-glob semantics: a pattern naming a folder does not match its
+    // contents (resolveTargets expands folder arguments itself).
+    expandDirectories: false,
   });
 
+  // tinyglobby returns forward-slash absolute paths, as fast-glob did.
   return files.sort();
 }
 
@@ -85,7 +91,7 @@ export async function resolveTargets(
     if (stat?.isDirectory()) {
       // From the project folder, so ignore patterns (relative to it) line up.
       const rel = relativePath(cwd, literal);
-      const base = rel === '' ? '' : `${fg.escapePath(rel.startsWith('..') ? literal : rel)}/`;
+      const base = rel === '' ? '' : `${escapePath(rel.startsWith('..') ? literal : rel)}/`;
       const files = await resolveGlobPatterns([base + FOLDER_PATTERN], options);
       return files.length > 0 ? files : null;
     }
@@ -117,7 +123,7 @@ export async function resolveTargets(
 
 /** Whether an argument is a glob pattern rather than a plain path. */
 export function isGlobPattern(arg: string): boolean {
-  return fg.isDynamicPattern(arg);
+  return isDynamicPattern(arg);
 }
 
 /** Whether the project's ignore patterns exclude an existing file. */
@@ -126,7 +132,7 @@ async function isIgnored(file: string, cwd: string, ignore: string[] | undefined
   const rel = relativePath(cwd, file);
   // Outside the project folder: the patterns (relative to it) cannot apply.
   if (rel.startsWith('..')) return false;
-  const kept = await fg([fg.escapePath(rel)], { cwd, ignore, onlyFiles: true, dot: true });
+  const kept = await glob([escapePath(rel)], { cwd, ignore, onlyFiles: true, dot: true, expandDirectories: false });
   return kept.length === 0;
 }
 
