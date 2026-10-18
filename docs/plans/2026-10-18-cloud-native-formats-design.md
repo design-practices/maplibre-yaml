@@ -583,14 +583,13 @@ mapping them.
   whatever 0.9.x is newest *at chunk-fetch time*. A release between the two fetches gives a 404 on a
   hashed name. Options: (a) document pinned versions for jsDelivr; (b) **stable chunk names**
   (`chunks/format-pmtiles.js`, no hash) so a skewed fetch still finds a file. The chunk interface is
-  small and versioned, but skew is possible. (c) Both. Recommendation: (c). This is a **shared decision
-  with ml-7qa.5** ([§10](#10-coordination-with-ml-7qa5-lazy-loading)).
+  small and versioned, but skew is possible. (c) Both. **Agreed with ml-7qa.5 (#157 §2.5):** (c), plus a `VERSION` handshake in every chunk, so
+  skew shows a loud card instead of running silently wrong ([§10](#10-coordination-with-ml-7qa5-lazy-loading), C3).
 - **Core-path cost.** The prototype's entry grew 107.3 → 108.5 KB gz (+1.2 KB: detection, loader, the
-  parallel gate). Splitting also produced **two tiny shared chunks (0.5 + 0.6 KB gz) that a plain map
-  page now fetches**, because the format chunks and the entry both import `maplibre-interop` and
-  `detect`. Remedy: format chunks must not import modules the entry also imports. They receive what they
-  need (the maplibre module, `addProtocol`) as arguments from the loader. Then the entry has no static
-  chunk imports, so a plain page makes zero extra requests.
+  parallel gate). With esbuild splitting it also produced **two tiny shared chunks (0.5 + 0.6 KB gz) that a
+  plain map page then fetches**. ml-7qa.5 (#157) measured the same esbuild behaviour at full scale and
+  chose **Rollup for the browser build**, which keeps entry-shared code in the entry. Together with
+  dependency injection (C4), a plain page makes zero extra requests.
 - **Fallback if a chunk can't load:** per-format notice, sources skipped ([§4.1](#41-detection-and-when-decoders-load)).
   The escape hatch is the 0.7 page-JS path. A host that registers the protocol itself (from its own
   bundle) bypasses the chunk entirely (host wins, [§4.2](#42-protocol-registration-pmtiles-cog)). For
@@ -729,21 +728,23 @@ chunks to the core path; the existing emitter's GeoJSON `url:` bug.
 
 ## 10. Coordination with ml-7qa.5 (lazy loading)
 
-Format decoders are lazy chunks **on the same mechanism** as the rest of ml-7qa.5 (story engine, error
-catalogue, live data, …). The parallel spike's plan (`docs/plans/<date>-lazy-loading-plan.md`, branch
-`docs/plan-lazy-loading`) had not been pushed when this document was written. These are the points this
-design **proposes** for agreement; status is recorded here and in that PR once it exists:
+Format decoders are lazy chunks **on the same mechanism** as the rest of ml-7qa.5. That plan is PR
+#157 (`docs/plans/2026-10-18-lazy-loading-plan.md`; its §9 is the matching coordination section). It
+was pushed while this document was being finished. This table reconciles the two against that plan's
+seven proposed agreements:
 
-| # | Point | This design's position | Status |
-|---|---|---|---|
-| C1 | One loader for every optional feature: a feature id (`format:pmtiles`, `story`, `live-data`, …) → `() => import(…)`, detected from the parsed model, cached promise, rejected promise evicted | adopt theirs if equivalent; this design needs only `load(id)` + `detect(model) → ids` | proposed |
-| C2 | When: start at parse, await at first use, never block map construction | measured +461 → +255 ms ([§4.1](#41-detection-and-when-decoders-load)) | proposed |
-| C3 | Browser build `splitting: true`; chunks under `dist/chunks/` | required | proposed |
-| C4 | **Chunk naming vs CDN version aliases** (jsDelivr `@0.9` doesn't redirect; hashed names can 404 across a release) | stable names, plus pinned versions in docs | **open; needs a joint decision** |
-| C5 | **No shared chunks on the core path**: lazy modules get dependencies injected and never import modules the entry imports | measured: 2 extra requests per plain page otherwise | proposed |
-| C6 | Failure: per-feature notice, rest of the document renders, retry on `reload()` | required | proposed |
-| C7 | Per-chunk CI size budgets (ml-7qa.1) | ceilings in [§8](#8-d9--testing-plan) | proposed |
-| C8 | Bundler build: bare dynamic `import("pkg")` left for the consumer's bundler; dependencies listed | required | proposed |
+| # | Point | ml-7qa.5 (#157) | This design | Status |
+|---|---|---|---|---|
+| C1 | One loader: `src/lazy/features.ts`, `LazyFeature { name: "format:<x>", detect(model), load(), stage, required }`, memoized, literal `import()` paths, generation tokens | proposed | adopted; `formatsIn(model)` becomes the four `format:*` features' `detect` | **agreed** |
+| C2 | Build: Rollup for `register.browser` (no esbuild stub entry, flat lazy graph), tsup `splitting: true` for npm | proposed | adopted. Rollup also removes the two shared core-path chunks this prototype measured with esbuild splitting ([§6](#6-d5--plain-html--cdn-path)) | **agreed**; supersedes this doc's esbuild-based C3/C5 |
+| C3 | Chunk names: stable, unhashed (`chunks/format-pmtiles.js`, …) + `VERSION` handshake + docs recommend unpkg ranges / exact jsDelivr versions | proposed | same conclusion reached independently (jsDelivr alias hazard, [§6](#6-d5--plain-html--cdn-path)) | **agreed**; closes Q10 |
+| C4 | Install contract: decoder chunk exports `install(ctx: { maplibregl, addProtocol, signal })` and never imports maplibre-gl or `/maplibre` | proposed | adopted, plus a `read(url, { columns, bbox, signal })` export for the data formats (FGB/GeoParquet). The host-wins check ([§4.2](#42-protocol-registration-pmtiles-cog)) runs in the loader **before** `load()`, so a host-registered protocol costs zero bytes | **agreed + extended** |
+| C5 | Packaging: decoder libraries are regular `dependencies`, reached only via `import()`; the CDN build bundles each into its chunk | proposed | same (Q5 asks the maintainer to confirm the ~20 MB install cost) | **agreed** |
+| C6 | **Stage for protocol formats.** #157 says `before-map` (registered before `new Map()`, fetched in parallel with maplibre-gl) | `before-map` | Measured here: awaiting at `before-map` is +461 ms; awaiting at the `load` handler (`style-load`/`map-load`) is +255 ms, because document sources are only added in `load`. **Proposal:** protocol formats default to `style-load`. They are promoted to `before-map` **only when the basemap style itself** (an inline `mapStyle` object, or a v2 inline `basemap`) references `pmtiles://`/`cog://`, since MapLibre fetches those during style load. Remote basemap style URLs that use `pmtiles://` (Protomaps-style basemaps) cannot be detected statically: Q11. | **open; needs reconciling in #157** |
+| C7 | Data formats (FGB/GeoParquet) stage `data`: awaited by the layer manager before that source is added; other layers don't wait | proposed | same | **agreed** |
+| C8 | Failure: decoder failure is a *required-feature* failure **for that source only**: notice naming the source, or the plain-text card if no layer can render | proposed | same; rejected promise evicted so `reload()` retries | **agreed** |
+| C9 | Detection examples in #157 include `type: pmtiles` / `type: flatgeobuf` | — | D1 makes those spellings a validation **error** (Q1), so detection keys on URL scheme/extension + `format:` only | **#157 to adjust** (wording only) |
+| C10 | #157's open points for ml-cnv: library sizes; a GeoParquet size warning in `validate`; whether COG needs a worker | asked | sizes: [§3](#3-d3--libraries). `validate` is static and can't know file sizes, so the guards are runtime ([§4.4](#44-flatgeobuf-whole-file-vs-viewport)). COG: yes, geomatico decodes in a geotiff `Pool` of blob workers (CSP note, [§6](#6-d5--plain-html--cdn-path)). No WASM decoders chosen, so #157's WASM rule (6) does not apply | **answered** |
 
 ---
 
@@ -772,7 +773,8 @@ design **proposes** for agreement; status is recorded here and in that PR once i
 - **Q8. PMTiles `fitTo` from header bounds.** In scope for ml-cnv.1 (small, and closes a U14 gap) or later?
 - **Q9. Emit sidecar data.** Generalise `--sprite-base` to `--asset-base` for sidecar GeoJSON, or always inline
   (simpler, but a large style.json)?
-- **Q10. Chunk naming (C4).** Stable names vs hashed names plus pinned-version guidance, decided jointly with ml-7qa.5.
+- **Q10. Chunk naming.** *Resolved with ml-7qa.5 (#157):* stable names + `VERSION` handshake + pinned-version guidance (C3).
+- **Q11. PMTiles in a remote basemap style.** A `mapStyle:` URL whose style uses `pmtiles://` sources (Protomaps basemaps) needs the protocol before the style loads, but a static scan can't see inside a remote style. Options: (a) a document-level hint (e.g. `formats: [pmtiles]` under `config`/`runtime`) that promotes the protocol to `before-map`; (b) fetch and scan the basemap style ourselves (an extra fetch of a file MapLibre fetches anyway; maybe cached); (c) keep the 0.7 page-JS registration as the documented route for this case. Recommended: (c) for 0.9 with a clear notice when a basemap request hits an unregistered `pmtiles://`, and (a) if demand shows. Ties to C6.
 
 ---
 
@@ -807,4 +809,4 @@ browser twin.
   CDN serves it; zero chunks on a plain page); docs page "Cloud-native data" (when to use which format;
   hosting with range requests: GitHub Pages, Netlify, S3/R2/GCS CORS examples, `python -m http.server`
   warning; size guidance from [§4.6](#46-memory-and-file-size-guidance-docs-page-ml-cnv5); CSP note); gallery pages
-  for all four; per-chunk size budgets in CI; jsDelivr/unpkg version guidance (C4).
+  for all four; per-chunk size budgets in CI; jsDelivr/unpkg version guidance (C3).
