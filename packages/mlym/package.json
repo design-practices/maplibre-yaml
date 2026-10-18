@@ -1,6 +1,6 @@
 {
   "name": "mlym",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Alias for @maplibre-yaml/cli, so `npx mlym` runs the maplibre-yaml command line (validate, preview, init, schema, emit).",
   "type": "module",
   "bin": {

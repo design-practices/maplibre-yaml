@@ -1,5 +1,0 @@
----
-"@maplibre-yaml/cli": patch
----
-
-`mlym init` now scaffolds projects that work as soon as they are served. The `basic` template's page loads maplibre-gl 6 through an import map (before, it stayed blank with "Failed to resolve module specifier maplibre-gl"), pins `@maplibre-yaml/core@0.7`, has a viewport meta tag and an explicit map height, and its `map.yaml` uses a free street basemap with labels. The `story` and `astro` templates get the same fixes; the `astro` template now depends on `@maplibre-yaml/core` 0.7, maplibre-gl 6 and Astro 5, and sets up the maplibre-gl 6 worker in a bundled script. `init` defaults to the `basic` template, adds `--list`, and exits with code 1, creating nothing, on an unknown template or option such as `--dir` (it used to print the template list and exit 0). The printed next steps now say how to serve the folder and use `npx @maplibre-yaml/cli` instead of a bare `maplibre-yaml` command that only exists after an install. `mlym emit --out dist/` (or an existing folder) now writes `style.json` inside that folder instead of a file named `dist`.
