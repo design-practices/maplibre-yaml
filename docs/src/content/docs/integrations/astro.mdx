@@ -226,7 +226,7 @@ yarn add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
 
 | Astro | Supported | Notes |
 |-------|-----------|-------|
-| **7** | Yes, tested in CI | Needs Node 22.12 or newer (Astro's own requirement). |
+| **7** | Yes, tested in CI | Needs Node 22.22 or newer (Astro 7.4's own requirement, `engines.node >=22.22.0`). |
 | **6** | Yes, tested in CI | Build collection schemas with `z` from `astro/zod` (see below). |
 | **5** | Yes, tested in CI | |
 | **4** | Yes, tested in CI | Content-layer collections need three changes, listed below. |
@@ -993,8 +993,15 @@ site under the base, so open `http://localhost:4321/<repo>/`. Every map should
 show its data. A data file that doesn't load is listed in a notice on the map.
 
 <Aside type="note" title="&quot;Some chunks are larger than 500 kB&quot; is expected">
-  Every build of a site with a map prints a yellow `[WARN] [vite] Some chunks
-  are larger than 500 kB after minification`. That chunk is the map engine
+  Every build of a site with a map prints a yellow warning. On Astro 7.4 it
+  reads:
+
+  ```text
+  [WARN] [vite] [plugin builtin:vite-reporter]
+  (!) Some chunks are larger than 500 kB after minification.
+  ```
+
+  (older Astro versions print it on one line). That chunk is the map engine
   (maplibre-gl plus maplibre-yaml, about 1.5 MB before compression, loaded
   only by pages with a map); it is a size notice, not an error, and the
   build succeeded. To quiet it, raise Vite's limit in `astro.config.mjs`:

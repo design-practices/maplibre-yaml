@@ -71,12 +71,13 @@ function defaultFileSet() {
  * Handles fences indented inside components (e.g. Starlight <Steps>).
  * Returns [{ index, content, meta, line }]
  */
-function extractYamlFences(text) {
+function extractYamlFences(text, lang = /ya?ml/) {
   const lines = text.split("\n");
   const fences = [];
   let index = 0;
+  const openRe = new RegExp(`^(\\s*)(\`{3,})\\s*(?:${lang.source})\\b(.*)$`, "i");
   for (let i = 0; i < lines.length; i++) {
-    const open = lines[i].match(/^(\s*)(`{3,})\s*ya?ml\b(.*)$/i);
+    const open = lines[i].match(openRe);
     if (!open) continue;
     const [, indent, ticks, meta] = open;
     const closeRe = new RegExp(`^\\s*\`{${ticks.length},}\\s*$`);
@@ -114,7 +115,8 @@ const DEMOTILES_MAX_ZOOM = 6;
 /** The problem with a fence that zooms demotiles past its detail, or null. */
 function demotilesZoomProblem(content) {
   if (!/demotiles\.maplibre\.org\/style\.json/.test(content)) return null;
-  const zooms = [...content.matchAll(/^\s*-?\s*zoom:[ \t]*([\d.]+)/gm)].map((m) => Number(m[1]));
+  // `zoom: 12` (YAML, JS/TS object literals) and `"zoom": 12` (JSON).
+  const zooms = [...content.matchAll(/^\s*-?\s*["']?zoom["']?:[ \t]*([\d.]+)/gm)].map((m) => Number(m[1]));
   const max = Math.max(...zooms, -Infinity);
   if (max <= DEMOTILES_MAX_ZOOM) return null;
   return (
@@ -138,6 +140,16 @@ for (const file of files) {
   } catch (err) {
     failures.push({ file: rel, index: -1, line: 0, errors: [`cannot read file: ${err.message}`] });
     continue;
+  }
+
+  // The demotiles rule applies to code readers copy in any language: a
+  // TypeScript or JSON document object at street zoom is the same flat map
+  // (ml-aot.55).
+  for (const fence of extractYamlFences(text, /ts|typescript|js|javascript|jsx|tsx|json/)) {
+    const demoZoom = demotilesZoomProblem(fence.content);
+    if (demoZoom) {
+      failures.push({ file: rel, index: fence.index, line: fence.line, errors: [demoZoom] });
+    }
   }
 
   for (const fence of extractYamlFences(text)) {

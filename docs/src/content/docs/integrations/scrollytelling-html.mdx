@@ -329,13 +329,20 @@ npm install @maplibre-yaml/core maplibre-gl
 ```
 
 ```js
+// maplibre-gl 6 loads its worker from a separate file. Inside a bundle it
+// cannot find that file by itself, so tell it where it is (Vite shown).
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@maplibre-yaml/core/register";
+
+setWorkerUrl(workerUrl);
 ```
 
-The element is then available in your HTML or templates. On maplibre-gl 6, set
-the worker URL first, as [Installation](/getting-started/installation/#supported-maplibre-gl-versions)
-describes.
+The element is then available in your HTML or templates. On maplibre-gl 4 or
+5, delete the two worker lines and the `setWorkerUrl` call (there is no worker
+file to import). Other bundlers: see
+[Installation](/getting-started/installation/#supported-maplibre-gl-versions).
 
 ## Runnable example
 
