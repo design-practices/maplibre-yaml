@@ -69,6 +69,13 @@ export type MLMapProps = DetailedHTMLProps<HTMLAttributes<MLMap>, MLMap> & {
    * string only (`JSON.stringify(config)`).
    */
   config?: IsReact19Types extends true ? MapBlock | string : string;
+  /**
+   * Keep non-fatal notices ("part of this map didn't load", the zero-height
+   * hint) off the page. A boolean attribute: present means quiet, whatever
+   * its value. React 19 sets the `quiet` property; on React 18, `quiet=""`
+   * is the reliable spelling.
+   */
+  quiet?: boolean | "";
 } & (IsReact19Types extends true ? MLMapEventProps : unknown);
 
 declare module "react" {

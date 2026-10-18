@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zero-height map</title>
+  <!--
+    ml-aot.16 — an <ml-map> with no height and a slot child. PASS = a yellow
+    note "This map is invisible because the <ml-map> element has no height";
+    click the button and the map appears and the note goes away.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/zero-height.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; }
+    ml-map { display: block; height: 420px; margin-bottom: 16px; }
+    h2 { font-size: 14px; margin: 16px 0 6px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = a yellow "no height" note; the button gives the map a height and the note disappears.</header>
+  <main>
+    <button id="grow" type="button">Give the map a height</button>
+    <ml-map id="map" src="configs/ok.yaml" style="height: auto; margin-top: 8px;"><div slot="bottom-left" style="background:#fff;padding:4px 8px;border-radius:4px">Data: cities</div></ml-map>
+    <script>
+      document.getElementById("grow").addEventListener("click", () => {
+        document.getElementById("map").style.height = "400px";
+      });
+    </script>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

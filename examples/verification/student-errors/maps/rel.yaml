@@ -1,0 +1,27 @@
+# ml-zft: relative URLs resolve against the PAGE (student-errors/), not this
+# file (student-errors/maps/). Both data files sit next to this YAML.
+type: map
+id: relative-paths
+config:
+  center: [-96, 39]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  # Written relative to the page: loads.
+  - id: from-page
+    type: circle
+    source:
+      type: geojson
+      url: "maps/cities.geojson"
+    paint:
+      circle-radius: 12
+      circle-color: "#e63946"
+  # Written relative to this YAML file: the browser looks next to the page.
+  - id: from-yaml
+    type: circle
+    source:
+      type: geojson
+      url: "cities.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#1d3557"

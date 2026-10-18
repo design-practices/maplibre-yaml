@@ -1,0 +1,238 @@
+/**
+ * <ml-map> puts student mistakes on the page (ml-aot.13/14/15): the error
+ * card for a document that cannot render (a `src` that will not load, a
+ * basemap style that never loads), and the dismissible notice for parts of a
+ * working map that failed (a rejected layer, a data file that 404'd).
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+vi.mock("maplibre-gl", () => ({ default: {}, Map: vi.fn() }));
+
+/** The last renderer the element built: its options and event handlers. */
+interface FakeRenderer {
+  options: any;
+  handlers: Map<string, Array<(payload: any) => void>>;
+  emit(name: string, payload?: any): void;
+}
+const renderers: FakeRenderer[] = [];
+
+vi.mock("../../src/renderer/map-renderer", () => ({
+  MapRenderer: vi.fn().mockImplementation((_container, _config, _layers, options) => {
+    const handlers = new Map<string, Array<(payload: any) => void>>();
+    const fake: FakeRenderer & Record<string, unknown> = {
+      options,
+      handlers,
+      emit(name: string, payload?: any) {
+        for (const fn of handlers.get(name) ?? []) fn(payload);
+      },
+      getMap: vi.fn(() => ({ on: vi.fn(), off: vi.fn() })),
+      destroy: vi.fn(),
+      isMapLoaded: vi.fn(() => false),
+      on: vi.fn((name: string, fn: (payload: any) => void) => {
+        handlers.set(name, [...(handlers.get(name) ?? []), fn]);
+      }),
+    };
+    renderers.push(fake);
+    return fake;
+  }),
+}));
+
+import { MLMap } from "../../src/components/ml-map";
+
+const CONFIG = {
+  type: "map",
+  id: "m",
+  config: { center: [0, 0], zoom: 2, mapStyle: "https://example.com/styles.json" },
+  layers: [],
+};
+
+const tick = (ms = 10) => new Promise((r) => setTimeout(r, ms));
+
+async function mount(attrs: Record<string, string> = {}): Promise<MLMap> {
+  const el = document.createElement("ml-map") as MLMap;
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (!("src" in attrs)) el.setAttribute("config", JSON.stringify(CONFIG));
+  document.body.appendChild(el);
+  await tick();
+  return el;
+}
+
+const latest = () => renderers[renderers.length - 1]!;
+const cardText = (el: MLMap) => el.querySelector(".ml-map-error")?.textContent?.replace(/\s+/g, " ").trim();
+const noticeText = (el: MLMap) => el.querySelector(".ml-map-notice")?.textContent?.replace(/\s+/g, " ").trim();
+
+describe("<ml-map> on-page errors", () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+  const realFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    renderers.length = 0;
+    if (!customElements.get("ml-map")) customElements.define("ml-map", MLMap);
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
+    globalThis.fetch = realFetch;
+  });
+
+  describe("a basemap style that never loads (ml-aot.14)", () => {
+    it("replaces the map with a card naming the URL and the status, and mapReady() rejects", async () => {
+      const el = await mount();
+      const ready = el.mapReady();
+      const failure = Object.assign(new Error("AJAXError: Not Found (404): https://example.com/styles.json"), {
+        status: 404,
+        statusText: "Not Found",
+      });
+      latest().options.onError(failure, true, { kind: "style", url: "https://example.com/styles.json" });
+      await expect(ready).rejects.toThrow(/404/);
+      await tick();
+
+      expect(cardText(el)).toContain("The basemap style didn't load");
+      expect(cardText(el)).toContain(
+        'config.mapStyle: Could not load the basemap style "https://example.com/styles.json": 404 Not Found.'
+      );
+      expect(cardText(el)).toContain("How to fix it: Check config.mapStyle");
+      expect(el.querySelector(".ml-map-error")?.getAttribute("role")).toBe("alert");
+      // A late subscriber rejects too.
+      await expect(el.mapReady()).rejects.toThrow(/404/);
+    });
+
+    it("several validation errors from one style show as one card", async () => {
+      const el = await mount();
+      const { onError } = latest().options;
+      onError(new Error("version: missing required property"), true, { kind: "style", url: "https://example.com/styles.json" });
+      onError(new Error("sources: missing required property"), true, { kind: "style", url: "https://example.com/styles.json" });
+      await tick();
+      expect(el.querySelectorAll(".ml-map-error")).toHaveLength(1);
+      expect(cardText(el)).toContain("isn't a valid MapLibre style: version: missing required property (and 1 more problem)");
+    });
+  });
+
+  describe("non-fatal layer problems (ml-aot.15)", () => {
+    it("a rejected layer goes in the notice, not a card; the map stays", async () => {
+      const el = await mount();
+      latest().options.onError(
+        new Error('layers.cities.paint.circle-color: color expected, "bleu" found'),
+        false,
+        { kind: "layer", layerId: "cities" }
+      );
+      expect(el.querySelector(".ml-map-error")).toBeNull();
+      expect(el.querySelector(".ml-map-container")).not.toBeNull();
+      const notice = el.querySelector(".ml-map-notice")!;
+      expect(notice.getAttribute("role")).toBe("status");
+      expect(noticeText(el)).toContain("Part of this map didn't load");
+      expect(noticeText(el)).toContain(
+        'Layer cities didn\'t draw: paint.circle-color: color expected, "bleu" found. Did you mean "blue"?'
+      );
+      expect(notice.querySelector("code")?.textContent).toBe("cities");
+    });
+
+    it("a data file that 404'd is listed with the URL the browser tried, and logged", async () => {
+      const el = await mount();
+      const error = Object.assign(new Error("HTTP 404: Not Found for data/x.geojson"), { url: "data/x.geojson" });
+      latest().emit("layer:data-error", { layerId: "quakes", error });
+      expect(noticeText(el)).toContain("Data file data/x.geojson didn't load (404 Not Found), so layer quakes has no data.");
+      expect(noticeText(el)).toContain(`The browser looked for ${new URL("data/x.geojson", document.baseURI).href}`);
+      expect(errorSpy.mock.calls.some((c) => String(c[0]).includes('Data file "data/x.geojson"'))).toBe(true);
+    });
+
+    it("the same problem is listed once; dismissing hides the notice", async () => {
+      const el = await mount();
+      const report = () =>
+        latest().options.onError(new Error("layers.a.paint.x: bad"), false, { kind: "layer", layerId: "a" });
+      report();
+      report();
+      expect(el.querySelectorAll(".ml-map-notice li")).toHaveLength(1);
+      (el.querySelector(".ml-map-notice button") as HTMLButtonElement).click();
+      expect(el.querySelector(".ml-map-notice")).toBeNull();
+    });
+
+    it("errors that are not the document's (a basemap tile) stay off the page", async () => {
+      const el = await mount();
+      latest().options.onError(new Error("AJAXError: Not Found (404): https://tiles/1/2/3.pbf"), false, undefined);
+      expect(el.querySelector(".ml-map-notice")).toBeNull();
+    });
+
+    it("`quiet` keeps the notice off the page but still logs", async () => {
+      const el = await mount({ quiet: "" });
+      expect(el.quiet).toBe(true);
+      const error = Object.assign(new Error("HTTP 404: Not Found for d.geojson"), { url: "d.geojson" });
+      latest().emit("layer:data-error", { layerId: "l", error });
+      expect(el.querySelector(".ml-map-notice")).toBeNull();
+      expect(errorSpy).toHaveBeenCalled();
+    });
+
+    it("setting `quiet` later removes a notice already shown", async () => {
+      const el = await mount();
+      latest().options.onError(new Error("layers.a.paint.x: bad"), false, { kind: "layer", layerId: "a" });
+      expect(el.querySelector(".ml-map-notice")).not.toBeNull();
+      el.quiet = true;
+      expect(el.hasAttribute("quiet")).toBe(true);
+      expect(el.querySelector(".ml-map-notice")).toBeNull();
+    });
+  });
+
+  describe("src fetch failures (ml-aot.13)", () => {
+    it("a 404 shows the resolved URL", async () => {
+      globalThis.fetch = vi.fn(async () => ({ ok: false, status: 404, statusText: "Not Found" })) as any;
+      const el = await mount({ src: "maps/city.yaml" });
+      expect(cardText(el)).toContain("Map file not found");
+      expect(cardText(el)).toContain('Couldn\'t load src="maps/city.yaml": 404 Not Found.');
+      expect(cardText(el)).toContain(`The browser looked for it at ${new URL("maps/city.yaml", document.baseURI).href}`);
+    });
+
+    it("an HTML body (an SPA fallback) says the path is probably wrong — not a YAML syntax error", async () => {
+      globalThis.fetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "text/html" }),
+        text: async () => "<!doctype html><html><body></body></html>",
+      })) as any;
+      const el = await mount({ src: "nope.yaml" });
+      expect(cardText(el)).toContain('src="nope.yaml" points at an HTML page, not a YAML file');
+      expect(cardText(el)).not.toContain("YAML syntax error");
+    });
+
+    it("a network failure over http names the URL", async () => {
+      globalThis.fetch = vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }) as any;
+      const el = await mount({ src: "map.yaml" });
+      expect(cardText(el)).toContain("Couldn't load the map file");
+      expect(cardText(el)).toContain('Couldn\'t load src="map.yaml"');
+    });
+
+    it("dispatches ml-map:error with the structured errors", async () => {
+      globalThis.fetch = vi.fn(async () => ({ ok: false, status: 404, statusText: "Not Found" })) as any;
+      const el = document.createElement("ml-map") as MLMap;
+      el.setAttribute("src", "x.yaml");
+      const seen: unknown[] = [];
+      el.addEventListener("ml-map:error", (e) => seen.push(e.detail));
+      document.body.appendChild(el);
+      await tick();
+      expect(seen).toEqual([
+        {
+          errors: [
+            { path: "", message: 'Couldn\'t load src="x.yaml": 404 Not Found.' },
+            { path: "", message: `The browser looked for it at ${new URL("x.yaml", document.baseURI).href}` },
+          ],
+        },
+      ]);
+    });
+  });
+
+  describe("the error card", () => {
+    it("shows the YAML line of a validation error", async () => {
+      const el = document.createElement("ml-map") as MLMap;
+      const script = document.createElement("script");
+      script.type = "text/yaml";
+      script.textContent = "type: map\nid: m\nconfig:\n  centre: [0, 0]\n  zoom: 2\n  mapStyle: \"https://x/s.json\"\n";
+      el.appendChild(script);
+      document.body.appendChild(el);
+      await tick();
+      expect(cardText(el)).toContain('config.centre: Unknown key "centre" — did you mean "center"? ("center" is required here.) (line 4)');
+    });
+  });
+});

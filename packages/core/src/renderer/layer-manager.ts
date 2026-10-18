@@ -3,6 +3,7 @@
  * @module @maplibre-yaml/core/renderer
  */
 
+import { suggest } from "../utils/suggest";
 import { absolutizeTileTemplate, absolutizeVectorTiles } from "../utils/tile-url";
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { z } from "zod";
@@ -306,9 +307,19 @@ export class LayerManager {
           (this.sourceRefCounts.get(sourceId) ?? 0) + 1
         );
         if (!this.map.getSource(sourceId)) {
+          // Name the nearest source that does exist — the document's own or
+          // the basemap style's — since a typo is the usual cause (ml-aot.15).
+          let styleSources: string[] = [];
+          try {
+            styleSources = Object.keys(this.map.getStyle?.()?.sources ?? {});
+          } catch {
+            // No style to read (a test double, a torn-down map): no hint.
+          }
+          const hint = suggest(sourceId, [...this.namedSources.keys(), ...styleSources]);
           throw new Error(
-            `Source '${sourceId}' referenced by layer '${layer.id}' not found. ` +
-            `Ensure it is defined in the block-level 'sources' map.`
+            `Source "${sourceId}" doesn't exist.` +
+              (hint ? ` Did you mean "${hint}"?` : "") +
+              ` Declare it under sources:, or name a source from the basemap style.`
           );
         }
       } else {

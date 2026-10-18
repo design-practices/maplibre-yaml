@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Layer problems</title>
+  <!--
+    ml-aot.15 — a source-name typo, a data file that 404s and a colour
+    MapLibre can't parse. PASS = the map loads with the big red dots (the good
+    layer), and a notice at the top lists the three problems by layer name,
+    with a did-you-mean for the typo and the colour. The second map is the
+    same document with the `quiet` attribute: no notice. FAIL = no notice.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/layer-problems.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; }
+    ml-map { display: block; height: 420px; margin-bottom: 16px; }
+    h2 { font-size: 14px; margin: 16px 0 6px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = red dots + a notice listing typo-layer (did you mean cities), missing-data (404), bad-colour (did you mean blue). Second map: same, no notice.</header>
+  <main>
+    <h2>Default</h2>
+    <ml-map id="map" src="configs/layer-problems.yaml"></ml-map>
+    <h2>With <code>quiet</code></h2>
+    <ml-map id="quiet-map" src="configs/layer-problems.yaml" quiet></ml-map>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

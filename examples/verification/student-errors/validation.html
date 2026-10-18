@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Validation messages</title>
+  <!--
+    ml-okw / ml-aot.15 — the YAML mistakes students make most. PASS = each
+    card names the field and the fix: centre → did you mean "center"; an
+    unquoted #hex → colours starting with # must be quoted; "bleu" → did you
+    mean "blue"; curly quotes → retype as straight quotes; [lat, lng] → did you
+    mean [-98, 39]; "10px" → write a plain number.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/validation.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; }
+    ml-map { display: block; height: 420px; margin-bottom: 16px; }
+    h2 { font-size: 14px; margin: 16px 0 6px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = six cards, each naming the field and the fix.</header>
+  <main>
+    <h2>centre</h2>
+    <ml-map id="centre" style="height: 200px">
+      <script type="text/yaml">
+        type: map
+        id: v
+        config:
+          centre: [-98, 39]
+          zoom: 3
+          mapStyle: "/examples/verification/configs/local-style.json"
+        layers:
+          - id: cities
+            type: circle
+            source:
+              type: geojson
+              url: "data/cities.geojson"
+            paint:
+              circle-color: "#e63946"
+      </script>
+    </ml-map>
+    <h2>unquoted</h2>
+    <ml-map id="unquoted" style="height: 200px">
+      <script type="text/yaml">
+        type: map
+        id: v
+        config:
+          center: [-98, 39]
+          zoom: 3
+          mapStyle: "/examples/verification/configs/local-style.json"
+        layers:
+          - id: cities
+            type: circle
+            source:
+              type: geojson
+              url: "data/cities.geojson"
+            paint:
+              circle-color: #e63946
+      </script>
+    </ml-map>
+    <h2>bleu</h2>
+    <ml-map id="bleu" style="height: 200px">
+      <script type="text/yaml">
+        type: map
+        id: v
+        config:
+          center: [-98, 39]
+          zoom: 3
+          mapStyle: "/examples/verification/configs/local-style.json"
+        layers:
+          - id: cities
+            type: circle
+            source:
+              type: geojson
+              url: "data/cities.geojson"
+            paint:
+              circle-color: "bleu"
+      </script>
+    </ml-map>
+    <h2>smart</h2>
+    <ml-map id="smart" style="height: 200px">
+      <script type="text/yaml">
+        type: map
+        id: v
+        config:
+          center: [-98, 39]
+          zoom: 3
+          mapStyle: "/examples/verification/configs/local-style.json"
+        layers:
+          - id: cities
+            type: circle
+            source:
+              type: geojson
+              url: "data/cities.geojson"
+            paint:
+              circle-color: “#e63946”
+      </script>
+    </ml-map>
+    <h2>swapped</h2>
+    <ml-map id="swapped" style="height: 200px">
+      <script type="text/yaml">
+        type: map
+        id: v
+        config:
+          center: [39, -98]
+          zoom: 3
+          mapStyle: "/examples/verification/configs/local-style.json"
+        layers:
+          - id: cities
+            type: circle
+            source:
+              type: geojson
+              url: "data/cities.geojson"
+            paint:
+              circle-color: "#e63946"
+      </script>
+    </ml-map>
+    <h2>units</h2>
+    <ml-map id="units" style="height: 200px">
+      <script type="text/yaml">
+        type: map
+        id: v
+        config:
+          center: [-98, 39]
+          zoom: 3
+          mapStyle: "/examples/verification/configs/local-style.json"
+        layers:
+          - id: cities
+            type: circle
+            source:
+              type: geojson
+              url: "data/cities.geojson"
+            paint:
+              circle-radius: "10px"
+      </script>
+    </ml-map>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

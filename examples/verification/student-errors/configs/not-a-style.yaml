@@ -1,0 +1,8 @@
+# ml-aot.14: mapStyle points at a GeoJSON file, not a MapLibre style.
+type: map
+id: not-a-style
+config:
+  center: [-98, 39]
+  zoom: 3
+  mapStyle: "/examples/verification/student-errors/data/cities.geojson"
+layers: []

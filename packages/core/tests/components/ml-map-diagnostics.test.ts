@@ -90,30 +90,62 @@ describe("MLMap diagnostics", () => {
     return warnSpy.mock.calls.map((c) => String(c[0]));
   }
 
-  it("warns about a zero-height host element", async () => {
+  /** Give the element's map container a measured height (jsdom has no layout). */
+  function sizeMap(el: MLMap, height: number): void {
+    const container = el.querySelector<HTMLElement>(".ml-map-container")!;
+    container.getBoundingClientRect = () => ({ height, width: 400 } as DOMRect);
+  }
+
+  it("warns about a zero-height map once it has loaded, and says so on the page", async () => {
     // jsdom reports getBoundingClientRect().height === 0 by default; mark the
     // element as laid out so the visibility-gated warning can fire.
     const el = makeElement();
     markLaidOut(el);
     document.body.appendChild(el);
     await new Promise((r) => setTimeout(r, 10));
+    // Not at construction: slot children and late stylesheets settle first.
+    expect(warnings().some((m) => m.includes("zero height"))).toBe(false);
 
-    expect(
-      warnings().some((m) => m.includes("zero height"))
-    ).toBe(true);
+    await fireMapLoad();
+    expect(warnings().some((m) => m.includes("zero height"))).toBe(true);
+    const hint = el.querySelector(".ml-map-height-hint");
+    expect(hint?.getAttribute("role")).toBe("status");
+    expect(hint?.textContent).toContain("This map is invisible because the <ml-map> element has no height");
+    expect(hint?.textContent).toContain('<ml-map style="display:block; height:400px">');
   });
 
-  it("does not warn about height when the host has a measurable height", async () => {
+  it("warns when slot children give the HOST height but the map has none (ml-aot.16)", async () => {
+    // A <div slot="bottom-left"> in normal flow made the host ~20px tall
+    // when the check ran, so a map with no height of its own never warned.
+    const el = makeElement();
+    const caption = document.createElement("div");
+    caption.setAttribute("slot", "bottom-left");
+    caption.textContent = "Data: city";
+    el.appendChild(caption);
+    markLaidOut(el);
+    el.getBoundingClientRect = () => ({ height: 20, width: 400 } as DOMRect);
+    document.body.appendChild(el);
+    await new Promise((r) => setTimeout(r, 10));
+    await fireMapLoad();
+
+    expect(warnings().some((m) => m.includes("zero height"))).toBe(true);
+    expect(el.querySelector(".ml-map-height-hint")).not.toBeNull();
+  });
+
+  it("does not warn about height when the map has a measurable height", async () => {
     const el = makeElement();
     markLaidOut(el);
     el.getBoundingClientRect = () =>
       ({ height: 400, width: 400 } as DOMRect);
     document.body.appendChild(el);
     await new Promise((r) => setTimeout(r, 10));
+    sizeMap(el, 400);
+    await fireMapLoad();
 
     expect(
       warnings().some((m) => m.includes("zero height"))
     ).toBe(false);
+    expect(el.querySelector(".ml-map-height-hint")).toBeNull();
   });
 
   it("does not warn about zero height when the element is not laid out", async () => {
@@ -122,10 +154,23 @@ describe("MLMap diagnostics", () => {
     const el = makeElement();
     document.body.appendChild(el);
     await new Promise((r) => setTimeout(r, 10));
+    await fireMapLoad();
 
     expect(
       warnings().some((m) => m.includes("zero height"))
     ).toBe(false);
+  });
+
+  it("`quiet` keeps the zero-height hint off the page but still warns", async () => {
+    const el = makeElement();
+    el.setAttribute("quiet", "");
+    markLaidOut(el);
+    document.body.appendChild(el);
+    await new Promise((r) => setTimeout(r, 10));
+    await fireMapLoad();
+
+    expect(warnings().some((m) => m.includes("zero height"))).toBe(true);
+    expect(el.querySelector(".ml-map-height-hint")).toBeNull();
   });
 
   it("runs the environment diagnostics at most once across re-renders", async () => {
@@ -133,13 +178,15 @@ describe("MLMap diagnostics", () => {
     markLaidOut(el);
     document.body.appendChild(el);
     await new Promise((r) => setTimeout(r, 10));
+    await fireMapLoad();
     expect(
       warnings().filter((m) => m.includes("zero height")).length
     ).toBe(1);
 
     // A second render (config update / reload) must not re-spam diagnostics.
-    el.config = VALID_CONFIG as unknown as typeof el.config;
+    el.config = { ...VALID_CONFIG, id: "again" } as unknown as typeof el.config;
     await new Promise((r) => setTimeout(r, 10));
+    await fireMapLoad();
     expect(
       warnings().filter((m) => m.includes("zero height")).length
     ).toBe(1);
