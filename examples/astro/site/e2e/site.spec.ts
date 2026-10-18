@@ -330,4 +330,65 @@ test.describe("content collections", () => {
     await expect(page.locator('[data-map-entry="andes"] figcaption')).toContainText("The Andean arc");
     expect(errors).toEqual([]);
   });
+
+  test("getCollectionItemWithLocationSchema entries become typed pages with a point map", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto("/field-notes/krakatau-1883/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("h1")).toHaveText("Krakatau, August 1883");
+    await expect(page.locator('[data-testid="note-meta"]')).toContainText("Krakatau · 2024-08-27");
+    const map = '[data-testid="note-map"] ml-map';
+    await mapReady(page, map);
+    await expectCameraNear(page, map, [105.42, -6.1], 8, 0.2);
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe("view transitions: <ClientRouter /> soft navigation (ml-aot.22)", () => {
+  const FULL = ".ml-fullpage-map ml-map";
+  const INLINE = '[data-testid="vt-inline-map"] ml-map';
+
+  /** MapLibre's stylesheet is applied: its control corners are positioned. */
+  const maplibreCss = (page: Page) =>
+    page.evaluate(() => {
+      const corner = document.querySelector(".maplibregl-ctrl-bottom-right");
+      return corner ? getComputedStyle(corner).position : "no corner";
+    });
+
+  async function zoomInWorks(page: Page): Promise<void> {
+    await mapReady(page, FULL);
+    const before = (await camera(page, FULL)).zoom;
+    await page.click('[data-action="zoom-in"]');
+    await expect
+      .poll(async () => (await camera(page, FULL)).zoom, { message: "zoom-in moved the camera" })
+      .toBeCloseTo(before + 1, 1);
+  }
+
+  test("maps, FullPageMap buttons and MapLibre CSS survive soft navigations @dev", async ({ page }) => {
+    const errors = await guard(page);
+    // <ml-map>'s CSS probe (ml-aot.10) warns, not errors; here it is a failure.
+    page.on("console", (m) => {
+      if (/CSS does not appear to be loaded/.test(m.text())) errors.push(`css probe: ${m.text()}`);
+    });
+    await page.goto("/transitions/", { waitUntil: "domcontentloaded" });
+    // Marks the document: it survives soft navigations, not full loads.
+    await page.evaluate(() => ((window as any).__softNav = true));
+    await zoomInWorks(page);
+    expect(await maplibreCss(page)).toBe("absolute");
+
+    for (let visit = 0; visit < 2; visit++) {
+      await page.click('[data-testid="vt-to-inline"]');
+      await expect(page).toHaveURL(/\/transitions\/inline\/?$/);
+      await mapReady(page, INLINE);
+      expect(await maplibreCss(page), "MapLibre CSS after a soft navigation").toBe("absolute");
+
+      await page.click('[data-testid="vt-to-full"]');
+      await expect(page).toHaveURL(/\/transitions\/?$/);
+      // Before ml-aot.22 the buttons were bound to the first visit's elements.
+      await zoomInWorks(page);
+      expect(await maplibreCss(page)).toBe("absolute");
+    }
+
+    expect(await page.evaluate(() => (window as any).__softNav), "navigations were soft").toBe(true);
+    expect(errors).toEqual([]);
+  });
 });

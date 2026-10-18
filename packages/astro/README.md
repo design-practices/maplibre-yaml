@@ -603,6 +603,19 @@ const feature = findFeature(fc, { source: "...", featureId: "poa-1.1" });
 > as `src="/configs/map.yaml"`. (`src` on `Map`/`FullPageMap` needs a release
 > newer than 0.4.1, and `Scrollytelling` `src` is not working yet: `ml-euv`.)
 
+> **Deploying under a base path** (a GitHub Pages project site, `base: '/repo'`):
+> `Map`/`FullPageMap` add the base to a root-relative `src` for you (0.6+).
+> URLs *inside* your YAML (`url: "/repo/data/x.geojson"`) must include the
+> base. See the docs' *Deploying to GitHub Pages* section.
+
+> **Optional dev integration.** `import maplibreYaml from
+> "@maplibre-yaml/astro/integration"` and add `maplibreYaml()` to
+> `integrations` to have `astro dev` reload the page when a file read by
+> `loadMapConfig` / `loadGlobalMapConfig` / `feature_ref`, or map data under
+> `public/`, changes, and to pre-bundle maplibre-gl and core so the first map
+> page does not trigger a dependency re-optimization. Without it, `loadGlobalMapConfig` edits need a
+> dev-server restart.
+
 > **`astro dev` with `@maplibre-yaml/core` 0.6.0 or earlier** fails every map
 > with *Map is not a constructor* (builds are fine). Add
 > `vite: { optimizeDeps: { include: ["maplibre-gl"] } }` to `astro.config.mjs`,

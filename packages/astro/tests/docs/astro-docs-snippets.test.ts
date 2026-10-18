@@ -88,6 +88,21 @@ describe("documented imports resolve to real exports", () => {
   );
 });
 
+describe("the documented integration import resolves (ml-aot.24)", () => {
+  it("`import maplibreYaml from \"@maplibre-yaml/astro/integration\"` is a real default export", async () => {
+    const importRe = /import\s+(\w+)\s+from\s*["']@maplibre-yaml\/astro\/integration["']/;
+    const documented = ALL.filter((f) => importRe.test(f.body));
+    expect(documented.length).toBeGreaterThan(0);
+
+    const pkg = JSON.parse(readFileSync(join(REPO, "packages/astro/package.json"), "utf8"));
+    const target = pkg.exports["./integration"]?.default;
+    expect(target, "package.json exports ./integration").toBe("./src/integration.mjs");
+    const mod = await import("../../src/integration.mjs");
+    expect(typeof mod.default).toBe("function");
+    expect(mod.default().name).toBe("@maplibre-yaml/astro");
+  });
+});
+
 describe("documented YAML documents validate", () => {
   const maps = ALL.filter((f) => f.lang === "yaml" && /^type: map$/m.test(f.body));
   const stories = ALL.filter(

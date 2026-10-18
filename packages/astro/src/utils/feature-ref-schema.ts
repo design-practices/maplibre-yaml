@@ -286,7 +286,8 @@ export function assertValidFeatureRef(ref: FeatureRef): void {
  * `getCollectionItemSchema` or rolling their own collection shape.
  */
 function applyMutualExclusivityRefinement<T extends z.ZodTypeAny>(schema: T) {
-  return schema.superRefine((data: Record<string, unknown>, ctx) => {
+  return schema.superRefine((output, ctx) => {
+    const data = output as Record<string, unknown>;
     if (data.feature_ref === undefined) return;
 
     const conflicts: string[] = [];
@@ -308,9 +309,11 @@ function applyMutualExclusivityRefinement<T extends z.ZodTypeAny>(schema: T) {
   });
 }
 
-export function getCollectionItemWithFeatureRefSchema(
-  customFields?: z.ZodRawShape,
-) {
+export function getCollectionItemWithFeatureRefSchema<
+  // Generic (not the bare `z.ZodRawShape`) so the custom fields reach the
+  // inferred type -- on zod 4 (Astro 6/7) they were missing (ml-aot.23).
+  T extends z.ZodRawShape = Record<never, never>,
+>(customFields?: T) {
   const baseShape = {
     feature_ref: FeatureRefSchema.optional().describe(
       "Reference to a feature in an external GeoJSON file",
@@ -328,9 +331,7 @@ export function getCollectionItemWithFeatureRefSchema(
     route: RouteLineSchema.optional().describe("Inline route line"),
   };
 
-  const inner = customFields
-    ? z.object({ ...baseShape, ...customFields })
-    : z.object(baseShape);
+  const inner = z.object(baseShape).extend((customFields ?? {}) as T);
 
   return applyMutualExclusivityRefinement(inner);
 }

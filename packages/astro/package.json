@@ -6,7 +6,11 @@
   "exports": {
     ".": "./src/index.ts",
     "./components": "./src/components/index.ts",
-    "./utils": "./src/utils/index.ts"
+    "./utils": "./src/utils/index.ts",
+    "./integration": {
+      "types": "./src/integration.d.ts",
+      "default": "./src/integration.mjs"
+    }
   },
   "files": [
     "src"
