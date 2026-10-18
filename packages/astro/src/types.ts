@@ -56,6 +56,15 @@ export interface MapProps {
   class?: string;
   /** Inline styles */
   style?: string;
+  /**
+   * Where the paths in the map document start (`<ml-map base>`). Defaults to
+   * the site's `import.meta.env.BASE_URL`, so `url: "/data/x.geojson"` and
+   * `url: "data/x.geojson"` both load `public/data/x.geojson` on every page,
+   * with or without a `base` in `astro.config`. Pass a path to override it,
+   * or `false` to have relative paths resolve against the page instead (the
+   * behaviour before `@maplibre-yaml/astro` 0.6).
+   */
+  base?: string | false;
 }
 
 /**

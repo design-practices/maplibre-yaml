@@ -17,6 +17,7 @@ import type { ParseError } from "../parser/yaml-parser.js";
 import { suggestColorName } from "../schemas/css-colors.js";
 import { SPEC_LAYOUT_KEYS, SPEC_PAINT_KEYS } from "../parser/spec-keys.generated.js";
 import { suggest } from "../utils/suggest.js";
+import { normalizeDocumentBase } from "../utils/document-base.js";
 
 /** What the error card shows: a title, the errors, and how to fix them. */
 export interface ErrorCardContent {
@@ -53,6 +54,38 @@ export function resolveUrl(url: string, base: string | undefined): string {
 /** Whether a reference resolves relative to something (no scheme, no leading `/`). */
 function isRelativeReference(url: string): boolean {
   return !/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(url) && !url.startsWith("/");
+}
+
+/**
+ * For a root-relative path (`/data/x.geojson`) that failed on a page served
+ * from a subpath (`/my-repo/…`, a GitHub Pages project site) while `<ml-map>`
+ * has no `base`: the sentence suggesting one (ml-aot.30). `undefined` when
+ * that is not the likely cause.
+ */
+export function subpathBaseHint(
+  url: string,
+  pageUrl: string | undefined,
+  base: string | null | undefined
+): string | undefined {
+  if (normalizeDocumentBase(base) !== null) return undefined;
+  if (!url.startsWith("/") || url.startsWith("//") || !pageUrl) return undefined;
+  let pathname: string;
+  try {
+    const page = new URL(pageUrl);
+    if (page.protocol !== "http:" && page.protocol !== "https:") return undefined;
+    pathname = page.pathname;
+  } catch {
+    return undefined;
+  }
+  // The page's first folder: "/my-repo/" for /my-repo/ or /my-repo/a/b.html.
+  const first = /^\/([^/]+)\//.exec(pathname)?.[1];
+  if (!first) return undefined;
+  const prefix = `/${first}/`;
+  if (url.startsWith(prefix)) return undefined;
+  return (
+    `If this site is published under ${prefix} (a GitHub Pages project site, for ` +
+    `example), add base="${prefix}" to <ml-map> so paths starting with "/" start there.`
+  );
 }
 
 /**
@@ -111,9 +144,11 @@ export function srcHttpErrorCard(
   src: string,
   resolved: string,
   status: number,
-  statusText: string
+  statusText: string,
+  context: { pageUrl?: string; base?: string | null } = {}
 ): ErrorCardContent {
   const reason = statusText.trim() || STATUS_TEXT[status] || "";
+  const baseHint = status === 404 ? subpathBaseHint(src, context.pageUrl, context.base) : undefined;
   return {
     title: status === 404 ? "Map file not found" : "Couldn't load the map file",
     errors: [
@@ -123,12 +158,17 @@ export function srcHttpErrorCard(
       },
       { path: "", message: `The browser looked for it at ${resolved}` },
     ],
-    hint: PATH_HINT,
+    hint: baseHint ? `${PATH_HINT} ${baseHint}` : PATH_HINT,
   };
 }
 
 /** `src` answered 200 with a web page — almost always a wrong path. */
-export function srcHtmlCard(src: string, resolved: string): ErrorCardContent {
+export function srcHtmlCard(
+  src: string,
+  resolved: string,
+  context: { pageUrl?: string; base?: string | null } = {}
+): ErrorCardContent {
+  const baseHint = subpathBaseHint(src, context.pageUrl, context.base);
   return {
     title: "Map file not found",
     errors: [
@@ -142,7 +182,8 @@ export function srcHtmlCard(src: string, resolved: string): ErrorCardContent {
     ],
     hint:
       `${PATH_HINT} Many servers answer a missing file with the site's main ` +
-      "page instead of a 404, which is why this is an HTML page.",
+      "page instead of a 404, which is why this is an HTML page." +
+      (baseHint ? ` ${baseHint}` : ""),
   };
 }
 
@@ -277,7 +318,13 @@ export function describeSourceProblem(sourceId: string, message: string): string
 export function describeDataProblem(
   layerId: string,
   error: Error & { url?: string },
-  context: { pageUrl?: string; documentUrl?: string; filePage: boolean }
+  context: {
+    pageUrl?: string;
+    documentUrl?: string;
+    filePage: boolean;
+    /** `<ml-map>`'s `base`, when set (the URL is then already resolved). */
+    base?: string | null;
+  }
 ): string {
   const url = error.url;
   const what = url ? `Data file \`${url}\`` : `The data for layer \`${layerId}\``;
@@ -317,6 +364,8 @@ export function describeDataProblem(
     } else if (resolved !== url) {
       text += ".";
     }
+    const baseHint = http ? subpathBaseHint(url, context.pageUrl, context.base) : undefined;
+    if (baseHint) text += ` ${baseHint}`;
   }
   if (context.filePage) text += ` ${FILE_PAGE_HINT}`;
   return text;

@@ -62,6 +62,48 @@ describe("src under a base path (ml-aot.21)", () => {
   }
 });
 
+const baseAttr = (html: string) => html.match(/<ml-map[^>]*\sbase="([^"]*)"/)?.[1];
+
+describe("paths inside the document under the site's base (ml-aot.30)", () => {
+  const config = {
+    type: "map",
+    id: "m",
+    config: { center: [0, 0], zoom: 2, mapStyle: "https://example.com/style.json" },
+    layers: [],
+  };
+
+  for (const [name, Component] of [
+    ["Map", Map],
+    ["FullPageMap", FullPageMap],
+  ] as const) {
+    for (const props of [{ src: "/configs/hero-map.yaml" }, { config }]) {
+      const kind = "src" in props ? "src" : "config";
+      it(`${name} (${kind}): <ml-map> gets base = BASE_URL`, async () => {
+        vi.stubEnv("BASE_URL", "/my-repo");
+        const html = await container.renderToString(Component as any, { props });
+        expect(baseAttr(html)).toBe("/my-repo");
+      });
+
+      it(`${name} (${kind}): the default "/" is passed too, so paths are site-root paths on nested pages`, async () => {
+        vi.stubEnv("BASE_URL", "/");
+        const html = await container.renderToString(Component as any, { props });
+        expect(baseAttr(html)).toBe("/");
+      });
+    }
+
+    it(`${name}: a base prop overrides BASE_URL, and base={false} leaves it unset`, async () => {
+      vi.stubEnv("BASE_URL", "/my-repo/");
+      const custom = await container.renderToString(Component as any, {
+        props: { config, base: "/other/" },
+      });
+      expect(baseAttr(custom)).toBe("/other/");
+      const off = await container.renderToString(Component as any, { props: { config, base: false } });
+      expect(off).toMatch(/<ml-map\b/);
+      expect(baseAttr(off)).toBeUndefined();
+    });
+  }
+});
+
 /** A component's source split into frontmatter and its client <script>. */
 function parts(file: string): { frontmatter: string; script: string } {
   const source = readFileSync(
