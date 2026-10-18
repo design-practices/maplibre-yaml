@@ -254,6 +254,16 @@ export class DataFetcher {
       return result;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
+      // Carry the requested URL on every failure (a network error's own
+      // message has none), so a host can say WHICH file did not load.
+      const tagged = err as Error & { url?: string };
+      if (tagged.url === undefined) {
+        try {
+          tagged.url = url;
+        } catch {
+          // A frozen error: the message still says what failed.
+        }
+      }
       options.onError?.(err);
       throw err;
     }

@@ -50,7 +50,24 @@ import {
   denormalizeOptions,
 } from "../model/index.js";
 import type { MapModel } from "../model/types.js";
-import { escapeHtml } from "../utils/html.js";
+import { createErrorCard, ERROR_CARD_CLASS } from "./error-card.js";
+import { MapNotice } from "./map-notice.js";
+import {
+  describeDataProblem,
+  describeImageProblem,
+  describeLayerProblem,
+  describeMarkerIconProblem,
+  describeSourceProblem,
+  filePageWorkerCard,
+  isFilePage,
+  looksLikeHtml,
+  resolveUrl,
+  srcFetchFailedCard,
+  srcHtmlCard,
+  srcHttpErrorCard,
+  styleFailureCard,
+  type ErrorCardContent,
+} from "./student-messages.js";
 import {
   getEffectsHost,
   onEffectsHost,
@@ -60,6 +77,12 @@ import {
 } from "../effects-host.js";
 import type { ChromeMount, MapRendererEvents } from "../renderer/map-renderer.js";
 import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
+import {
+  applyDocumentBase,
+  applyDocumentBaseToLayer,
+  normalizeDocumentBase,
+  resolveDocumentUrl,
+} from "../utils/document-base.js";
 
 /**
  * Named slots v1 (KTD9): the four chrome corners plus `legend`, which
@@ -250,10 +273,90 @@ export class MLMap extends HTMLElement {
   private cssCheckPending = false;
 
   /**
+   * Whether the zero-height diagnostic is still owed. Like the CSS check it
+   * runs once the map has loaded, not at construction (ml-aot.16): by then
+   * slot children have moved into their corners — while they were still in
+   * normal flow they gave the host a height the map itself never had — and
+   * a stylesheet that sizes the element has had time to apply.
+   */
+  private heightCheckPending = false;
+
+  /** The on-page "this map has no height" hint, while it is shown. */
+  private heightHint: HTMLElement | null = null;
+
+  /** Removes {@link heightHint} once the map gets a height. */
+  private heightObserver: ResizeObserver | null = null;
+
+  /**
+   * The non-fatal "part of this map didn't load" notice (ml-aot.15), created
+   * on the first layer/source/data problem of the current render.
+   */
+  private notice: MapNotice | null = null;
+
+  /**
+   * Resolved URL of the YAML file the current document came from (`src`),
+   * or `null` for inline/JSON/property documents. Only used to explain how
+   * relative data paths resolve when one fails to load.
+   */
+  private documentUrl: string | null = null;
+
+  /**
+   * Basemap-style errors collected within one task, so a style that fails
+   * validation several times over shows one card (ml-aot.14).
+   */
+  private pendingStyleErrors: Error[] | null = null;
+
+  /**
    * Observed attributes that trigger attributeChangedCallback
    */
   static get observedAttributes(): string[] {
-    return ["src", "config"];
+    return ["src", "config", "quiet", "base"];
+  }
+
+  /**
+   * Where the site paths in this map start: the path a site is deployed
+   * under, such as `"/my-repo/"` for a GitHub Pages project site. Reflects the
+   * `base` attribute; `null` when unset.
+   *
+   * @remarks
+   * With a base, every path to a file of your own — the `src` attribute and,
+   * inside the document, source `url`/`tiles`/`data`, `images:`, marker
+   * `icon:`, `mapStyle` and popup links — resolves against it:
+   * `/data/x.geojson` and `data/x.geojson` both load
+   * `/my-repo/data/x.geojson`, on every page of the site. A path that already
+   * starts with the base is used as written, and full URLs (`https://…`,
+   * `//cdn…`, `blob:`, `data:`) are never changed. Without a base, relative
+   * paths resolve against the page and `/…` against the domain root, as
+   * before. The Astro components set it from `import.meta.env.BASE_URL`.
+   * Changing it re-renders the map.
+   */
+  get base(): string | null {
+    return this.getAttribute("base");
+  }
+
+  set base(value: string | null) {
+    if (value === null || value === undefined) this.removeAttribute("base");
+    else this.setAttribute("base", String(value));
+  }
+
+  /**
+   * Whether on-page notices for NON-fatal problems are suppressed — the
+   * "part of this map didn't load" notice and the zero-height hint. Reflects
+   * the boolean `quiet` attribute.
+   *
+   * @remarks
+   * For a production page that would rather fail quietly than show authors'
+   * diagnostics to visitors. The problems are still logged to the console
+   * and still dispatched as events. The error card for a document that
+   * cannot render at all is never suppressed — it replaces a map that is not
+   * there.
+   */
+  get quiet(): boolean {
+    return this.hasAttribute("quiet");
+  }
+
+  set quiet(value: boolean) {
+    this.toggleAttribute("quiet", Boolean(value));
   }
 
   /**
@@ -325,6 +428,7 @@ export class MLMap extends HTMLElement {
     key: string | null = configKey(candidate)
   ): void {
     this.appliedConfigKey = key;
+    this.documentUrl = null;
     const result = YAMLParser.safeParseMapBlockValue(candidate);
 
     // Advisory, never in the error card (decision D11) — same as YAML.
@@ -346,6 +450,7 @@ export class MLMap extends HTMLElement {
     // element class was registered) is an own data property that shadows the
     // accessor and would be silently ignored. Re-route it through the setter
     // (the standard custom-element `_upgradeProperty` pattern).
+    this.upgradeProperty("base");
     this.upgradeProperty("config");
 
     // Create internal map container
@@ -364,7 +469,7 @@ export class MLMap extends HTMLElement {
    * Re-apply an own property set on the element before it was upgraded, so
    * it reaches the class accessor instead of shadowing it.
    */
-  private upgradeProperty(name: "config"): void {
+  private upgradeProperty(name: "config" | "base"): void {
     if (Object.prototype.hasOwnProperty.call(this, name)) {
       const self = this as unknown as Record<string, unknown>;
       const value = self[name];
@@ -391,8 +496,26 @@ export class MLMap extends HTMLElement {
     // Skip if value hasn't actually changed
     if (oldValue === newValue) return;
 
+    if (name === "quiet") {
+      if (newValue !== null) {
+        this.notice?.clear();
+        this.removeHeightHint();
+      }
+      return;
+    }
+
     // Only process changes after initialization
     if (!this.initialized) return;
+
+    if (name === "base") {
+      // Every URL in the document may move: re-fetch `src` (its own path
+      // depends on the base) or re-render the document already loaded.
+      if (normalizeDocumentBase(oldValue) === normalizeDocumentBase(newValue)) return;
+      const src = this.getAttribute("src");
+      if (src) void this.loadFromURL(src);
+      else if (this._config && this.renderer) this.renderMap(this._config);
+      return;
+    }
 
     if (name === "src" && newValue) {
       this.loadFromURL(newValue);
@@ -503,6 +626,7 @@ export class MLMap extends HTMLElement {
   private loadFromScriptTag(yamlContent: string): void {
     this.cancelEmptyConfigCheck();
     this.appliedConfigKey = null;
+    this.documentUrl = null;
     const result = YAMLParser.safeParseMapBlock(yamlContent);
 
     // Warnings are advisory (unknown keys, deprecations, expression hints):
@@ -518,7 +642,15 @@ export class MLMap extends HTMLElement {
   }
 
   /**
-   * Load and parse YAML from an external URL
+   * Load and parse YAML from an external URL.
+   *
+   * @remarks
+   * Each way a fetch fails gets its own actionable card (ml-aot.13): a page
+   * opened from disk (`file://`, where browsers refuse the request) says to
+   * serve the folder; an HTTP error and an HTML page (what an SPA-fallback
+   * server returns for a wrong path, with status 200) both show the URL the
+   * browser actually requested, since a path resolved against the wrong
+   * folder is the usual cause.
    */
   private async loadFromURL(url: string): Promise<void> {
     this.cancelEmptyConfigCheck();
@@ -532,33 +664,45 @@ export class MLMap extends HTMLElement {
       })
     );
 
+    const doc = this.ownerDocument;
+    // With a `base`, `src` is a site path like every path inside the document.
+    const target = resolveDocumentUrl(url, this.base);
+    const resolved = resolveUrl(target, doc.baseURI);
+    const filePage = isFilePage(doc);
+
+    let response: Response;
+    let yamlContent: string;
     try {
-      const response = await fetch(url);
-
+      response = await fetch(target);
       if (!response.ok) {
-        throw new Error(
-          `Failed to fetch ${url}: ${response.status} ${response.statusText}`
+        this.showFailure(
+          srcHttpErrorCard(url, resolved, response.status, response.statusText, {
+            pageUrl: doc.baseURI,
+            base: this.base,
+          })
         );
+        return;
       }
-
-      const yamlContent = await response.text();
-      const result = YAMLParser.safeParseMapBlock(yamlContent);
-
-      this.logWarnings(result.warnings);
-
-      if (result.success && result.data) {
-        this._config = result.data;
-        this.renderMap(result.data);
-      } else {
-        this.handleError(result.errors);
-      }
+      yamlContent = await response.text();
     } catch (error) {
-      this.handleError([
-        {
-          path: "",
-          message: error instanceof Error ? error.message : String(error),
-        },
-      ]);
+      this.showFailure(srcFetchFailedCard(url, resolved, error, filePage));
+      return;
+    }
+
+    if (looksLikeHtml(yamlContent, response.headers?.get?.("content-type") ?? null)) {
+      this.showFailure(srcHtmlCard(url, resolved, { pageUrl: doc.baseURI, base: this.base }));
+      return;
+    }
+
+    const result = YAMLParser.safeParseMapBlock(yamlContent);
+    this.logWarnings(result.warnings);
+
+    if (result.success && result.data) {
+      this._config = result.data;
+      this.documentUrl = resolved;
+      this.renderMap(result.data);
+    } else {
+      this.handleError(result.errors);
     }
   }
 
@@ -668,6 +812,7 @@ export class MLMap extends HTMLElement {
   private constructRenderer(mapBlock: MapBlock): void {
     if (!this.mapContainer) return;
     const slots = this.collectSlots();
+    const isV2 = (mapBlock as { version?: number }).version === 2;
 
     try {
       // Normalize the v1 document into the v2 internal model, then render from
@@ -675,7 +820,9 @@ export class MLMap extends HTMLElement {
       // production path through it here is what proves the normalization loses
       // nothing — every component and renderer test now exercises the round
       // trip, so a dropped or invented key fails the suite rather than shipping.
-      const model = toModel(mapBlock as never);
+      // `base` (GitHub Pages project sites) resolves every URL in the
+      // document in one pass, before anything fetches (ml-aot.30).
+      const model = applyDocumentBase(toModel(mapBlock as never), this.base);
 
       const renderer: MapRenderer = new MapRenderer(
         this.mapContainer,
@@ -688,7 +835,7 @@ export class MLMap extends HTMLElement {
         onLoad: () => {
           // Load event is also emitted via the event system
         },
-        onError: (error, fatal) => {
+        onError: (error, fatal, context) => {
           // Loud by default: with no `ml-map:error` listener attached, a
           // dispatched event is invisible and the document fails silently
           // (ml-tfd.8 contract audit). Hosts still get the event.
@@ -711,13 +858,32 @@ export class MLMap extends HTMLElement {
           );
           if (workerFailure) {
             // Out of MapLibre's event dispatch before tearing its map down;
-            // once only, however many workers in the pool report it.
+            // once only, however many workers in the pool report it. A page
+            // opened from disk is the classroom cause, and the bundler
+            // advice in the message would send a student the wrong way
+            // (ml-aot.13).
             queueMicrotask(() => {
               if (this.renderer !== renderer) return;
-              this.showErrorCard([{ path: "", message: error.message }], {
-                title: "Map Error",
-              });
+              if (isFilePage(this.ownerDocument)) {
+                this.showContentCard(filePageWorkerCard());
+              } else {
+                this.showErrorCard([{ path: "", message: error.message }], {
+                  title: "Map Error",
+                });
+              }
             });
+            return;
+          }
+          if (context?.kind === "style") {
+            this.queueStyleFailure(renderer, error, context.url, isV2);
+            return;
+          }
+          // Part of the document failed but the map keeps working: say so
+          // on the map, not only on the console (ml-aot.15).
+          if (!terminal && context?.kind === "layer" && context.layerId) {
+            this.reportProblem(describeLayerProblem(context.layerId, error.message));
+          } else if (!terminal && context?.kind === "source" && context.sourceId) {
+            this.reportProblem(describeSourceProblem(context.sourceId, error.message));
           }
         },
         },
@@ -768,11 +934,11 @@ export class MLMap extends HTMLElement {
   }
 
   /**
-   * Detect the two classic silent-blank-map failures and warn (console-only,
-   * no on-map badge per decision D11):
+   * Arm the two classic silent-blank-map checks, which run once the map has
+   * loaded:
    *
-   * 1. The host element has zero height, so the map is invisible.
-   * 2. A map was created but MapLibre's CSS is not loaded.
+   * 1. The map has zero height, so it is invisible ({@link checkHeight}).
+   * 2. MapLibre's CSS is not loaded ({@link warnIfMapLibreCssMissing}).
    */
   private checkEnvironment(): void {
     if (typeof window === "undefined") return;
@@ -782,27 +948,125 @@ export class MLMap extends HTMLElement {
     if (this.diagnosticsRun) return;
     this.diagnosticsRun = true;
 
-    // (a) Zero-height host: the single most common "blank map" cause. Only
-    // flag it when the element is actually laid out and visible — a hidden or
-    // not-yet-mounted map (`offsetParent === null`, e.g. an ancestor is
-    // `display: none`) legitimately has zero height and must not warn.
-    const isLaidOut = this.offsetParent !== null;
-    const rect = this.getBoundingClientRect();
-    if (isLaidOut && rect.height === 0) {
-      console.warn(
-        "[ml-map] The <ml-map> host element has zero height, so the map will " +
-          "not be visible. Give it a height, for example: `ml-map { height: 400px; }`."
-      );
+    // Both checks run on the first load (see setupEventForwarding). Not at
+    // construction: under Vite dev the stylesheet that sizes the element or
+    // loads MapLibre's CSS may apply after the element upgrades (ml-aot.10,
+    // ml-ohh.13), and slot children still in normal flow give the host a
+    // height the map does not have (ml-aot.16).
+    if (this.renderer) {
+      this.cssCheckPending = true;
+      this.heightCheckPending = true;
     }
+  }
 
-    // (b) A map was created but MapLibre's stylesheet is missing. Checked
-    // once the map has LOADED, not at construction (ml-aot.10, ml-ohh.13):
-    // under Vite dev the stylesheet is injected by a module that may run
-    // after the element upgrades, and an async stylesheet (`media="print"`
-    // swap, a late `<link>`) is not applied yet either. Both warned on every
-    // map although the CSS was there a moment later.
-    // The forwarding `load` handler runs it (see setupEventForwarding).
-    if (this.renderer) this.cssCheckPending = true;
+  /**
+   * Warn, and show a hint on the page, when the map has zero height — the
+   * single most common "blank map" cause.
+   *
+   * @remarks
+   * Measures the map container, not the host: the container is what MapLibre
+   * draws into, and a host can have height (slot children in its flow, an
+   * in-flow sibling) while the container's `height: 100%` of an auto-height
+   * host is 0. Only flagged when the element is laid out — a hidden map
+   * (`offsetParent === null`, an ancestor with `display: none`) legitimately
+   * has zero height. The on-page hint (not under `quiet`) sits in the
+   * element's own flow, so it is visible exactly when the map is not, and it
+   * removes itself once the map gets a height.
+   */
+  private checkHeight(): void {
+    const container = this.mapContainer;
+    if (!container || !container.isConnected) return;
+    if (this.offsetParent === null) return;
+    if (container.getBoundingClientRect().height > 0) return;
+
+    console.warn(
+      "[ml-map] The <ml-map> element has zero height, so the map will " +
+        "not be visible. Give it a height, for example: `ml-map { height: 400px; }`."
+    );
+    if (!this.quiet) this.showHeightHint();
+  }
+
+  private showHeightHint(): void {
+    if (this.heightHint || !this.mapContainer) return;
+    const doc = this.ownerDocument;
+    const hint = doc.createElement("div");
+    hint.className = "ml-map-height-hint";
+    hint.setAttribute("role", "status");
+    hint.style.cssText =
+      "box-sizing: border-box; margin: 4px 0; padding: 10px 12px; background: #fffbeb; " +
+      "color: #78350f; border: 1px solid #f59e0b; border-radius: 6px; " +
+      "font: 14px/1.5 system-ui, -apple-system, sans-serif;";
+    const code = (text: string) => {
+      const el = doc.createElement("code");
+      el.textContent = text;
+      el.style.cssText = "font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;";
+      return el;
+    };
+    hint.append(
+      doc.createTextNode("This map is invisible because the "),
+      code("<ml-map>"),
+      doc.createTextNode(" element has no height. Give it one, for example "),
+      code('<ml-map style="display:block; height:400px">'),
+      doc.createTextNode(" — or in your CSS: "),
+      code("ml-map { display: block; height: 400px; }")
+    );
+    this.appendChild(hint);
+    this.heightHint = hint;
+
+    if (typeof ResizeObserver === "function") {
+      const container = this.mapContainer;
+      this.heightObserver = new ResizeObserver(() => {
+        if (container.getBoundingClientRect().height > 0) this.removeHeightHint();
+      });
+      this.heightObserver.observe(container);
+    }
+  }
+
+  private removeHeightHint(): void {
+    this.heightObserver?.disconnect();
+    this.heightObserver = null;
+    this.heightHint?.remove();
+    this.heightHint = null;
+  }
+
+  /**
+   * Put one non-fatal document problem on the page (unless `quiet`).
+   *
+   * @param options.log - also `console.error` it; for problems nothing else
+   *   logs (a data file that 404'd). MapLibre errors are already logged by the
+   *   renderer's `onError` handler.
+   */
+  private reportProblem(message: string, options: { log?: boolean } = {}): void {
+    if (options.log) console.error(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+    if (this.quiet || !this.mapContainer) return;
+    this.notice ??= new MapNotice(this.mapContainer);
+    this.notice.add(message);
+  }
+
+  /**
+   * Collect basemap-style errors fired within one task and show them as one
+   * card: a style that fails validation fires one error per problem.
+   */
+  private queueStyleFailure(
+    renderer: MapRenderer,
+    error: Error,
+    url: string | undefined,
+    isV2: boolean
+  ): void {
+    if (this.pendingStyleErrors) {
+      this.pendingStyleErrors.push(error);
+      return;
+    }
+    this.pendingStyleErrors = [error];
+    // Out of MapLibre's event dispatch before tearing its map down.
+    setTimeout(() => {
+      const errors = this.pendingStyleErrors;
+      this.pendingStyleErrors = null;
+      if (!errors || this.renderer !== renderer) return;
+      this.showContentCard(
+        styleFailureCard(errors, { url, isV2, filePage: isFilePage(this.ownerDocument) })
+      );
+    }, 0);
   }
 
   /**
@@ -892,6 +1156,10 @@ export class MLMap extends HTMLElement {
         this.cssCheckPending = false;
         void this.warnIfMapLibreCssMissing();
       }
+      if (this.heightCheckPending) {
+        this.heightCheckPending = false;
+        this.checkHeight();
+      }
       this.dispatchEvent(
         new CustomEvent("ml-map:load", {
           bubbles: true,
@@ -940,8 +1208,18 @@ export class MLMap extends HTMLElement {
       );
     });
 
-    // Layer data error
+    // Layer data error — also on the page: the layer is silently empty
+    // otherwise, and nothing reached the console either (ml-aot.15).
     this.renderer.on("layer:data-error", ({ layerId, error }) => {
+      this.reportProblem(
+        describeDataProblem(layerId, error, {
+          pageUrl: this.ownerDocument.baseURI,
+          documentUrl: this.documentUrl ?? undefined,
+          filePage: isFilePage(this.ownerDocument),
+          base: this.base,
+        }),
+        { log: true }
+      );
       this.dispatchEvent(
         new CustomEvent("ml-map:layer-data-error", {
           bubbles: true,
@@ -988,6 +1266,7 @@ export class MLMap extends HTMLElement {
       );
     });
     this.renderer.on("marker:icon-error", ({ index, icon }) => {
+      this.reportProblem(describeMarkerIconProblem(index, icon));
       this.dispatchEvent(
         new CustomEvent("ml-map:marker-icon-error", {
           bubbles: true,
@@ -1008,6 +1287,7 @@ export class MLMap extends HTMLElement {
 
     // Declared images (U6): a failed entry — the document keeps rendering
     this.renderer.on("image:error", ({ name, url }) => {
+      this.reportProblem(describeImageProblem(name, url));
       this.dispatchEvent(
         new CustomEvent("ml-map:image-error", {
           bubbles: true,
@@ -1103,6 +1383,10 @@ export class MLMap extends HTMLElement {
   private teardownRenderer(): void {
     this.cancelDeferredRender?.();
     this.teardownEffects();
+    this.notice?.clear();
+    this.notice = null;
+    this.pendingStyleErrors = null;
+    this.removeHeightHint();
     this.parkSlots();
     if (this.renderer) {
       this.renderer.destroy();
@@ -1112,11 +1396,25 @@ export class MLMap extends HTMLElement {
 
   private removeErrorCards(): void {
     for (const el of Array.from(this.children)) {
-      if (el.classList.contains("ml-map-error")) el.remove();
+      if (el.classList.contains(ERROR_CARD_CLASS)) el.remove();
     }
   }
 
-  private handleError(errors: ParseError[], showHelp = false): void {
+  /** Dispatch `ml-map:error` and show the card for a prepared failure. */
+  private showFailure(content: ErrorCardContent): void {
+    this.handleError(content.errors, { title: content.title, hint: content.hint });
+  }
+
+  /** Show the card for a prepared failure (no event; see {@link showErrorCard}). */
+  private showContentCard(content: ErrorCardContent): void {
+    this.showErrorCard(content.errors, { title: content.title, hint: content.hint });
+  }
+
+  private handleError(
+    errors: ParseError[],
+    options: boolean | { showHelp?: boolean; title?: string; hint?: string } = {}
+  ): void {
+    const cardOptions = typeof options === "boolean" ? { showHelp: options } : options;
     // Persist the failure so a mapReady() call arriving after this event
     // rejects with the structured errors instead of waiting forever.
     this.lastError = Object.assign(
@@ -1136,63 +1434,22 @@ export class MLMap extends HTMLElement {
       })
     );
 
-    this.showErrorCard(errors, { showHelp });
+    this.showErrorCard(errors, cardOptions);
   }
 
   /**
    * Replace the map with the on-page error card (no event; callers dispatch
-   * their own `ml-map:error`).
+   * their own `ml-map:error`). The card itself is built by
+   * {@link createErrorCard}.
    */
   private showErrorCard(
     errors: ParseError[],
-    { showHelp = false, title = "Configuration Error" }: { showHelp?: boolean; title?: string } = {}
+    {
+      showHelp = false,
+      title = "Configuration Error",
+      hint,
+    }: { showHelp?: boolean; title?: string; hint?: string } = {}
   ): void {
-    // Build error UI
-    const helpSection = showHelp
-      ? `
-        <div style="margin-top: 16px; padding: 16px; background: #fef3c7; border-radius: 6px; color: #92400e;">
-          <strong style="display: block; margin-bottom: 8px;">How to configure:</strong>
-          <div style="font-family: monospace; font-size: 12px; line-height: 1.6;">
-            <div style="margin-bottom: 8px;">
-              <strong>1. External file (recommended):</strong><br>
-              &lt;ml-map src="/path/to/config.yaml"&gt;&lt;/ml-map&gt;
-            </div>
-            <div style="margin-bottom: 8px;">
-              <strong>2. Inline YAML:</strong><br>
-              &lt;ml-map&gt;<br>
-              &nbsp;&nbsp;&lt;script type="text/yaml"&gt;<br>
-              &nbsp;&nbsp;type: map<br>
-              &nbsp;&nbsp;id: my-map<br>
-              &nbsp;&nbsp;...<br>
-              &nbsp;&nbsp;&lt;/script&gt;<br>
-              &lt;/ml-map&gt;
-            </div>
-            <div>
-              <strong>3. JSON attribute:</strong><br>
-              &lt;ml-map config='{"type":"map",...}'&gt;&lt;/ml-map&gt;
-            </div>
-          </div>
-        </div>
-      `
-      : "";
-
-    const errorItems = errors
-      .map(
-        (err) => `
-          <div style="margin-bottom: 8px; padding: 8px; background: #fee2e2; border-radius: 4px;">
-            ${
-              err.path
-                ? `<strong style="color: #991b1b;">${escapeHtml(
-                    err.path
-                  )}</strong>: `
-                : ""
-            }
-            ${escapeHtml(err.message)}
-          </div>
-        `
-      )
-      .join("");
-
     // Targeted replacement (KTD9): the error card takes the map container's
     // place; author children (inline YAML, parked slot children) survive so
     // a fixed document can reload() into the same element.
@@ -1200,35 +1457,10 @@ export class MLMap extends HTMLElement {
     this.removeErrorCards();
     this.mapContainer?.remove();
 
-    const template = document.createElement("template");
-    template.innerHTML = `
-      <div class="ml-map-error" style="
-        padding: 20px;
-        background: #fef2f2;
-        border: 1px solid #fecaca;
-        border-radius: 8px;
-        color: #dc2626;
-        font-family: system-ui, -apple-system, sans-serif;
-        height: 100%;
-        box-sizing: border-box;
-        overflow: auto;
-      ">
-        <div style="font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-          </svg>
-          ${escapeHtml(title)}
-        </div>
-        <div style="font-size: 14px;">
-          ${errorItems}
-        </div>
-        ${helpSection}
-      </div>
-    `;
-    const card = template.content.firstElementChild;
-    if (card) this.appendChild(card);
+    this.appendChild(
+      createErrorCard(this.ownerDocument, { title, errors, hint, showHelp })
+    );
   }
-
 
   /**
    * Attach the document's experimental effects once the map has loaded.
@@ -1446,7 +1678,7 @@ export class MLMap extends HTMLElement {
    * ```
    */
   async addLayer(layer: any): Promise<void> {
-    await this.renderer?.addLayer(layer);
+    await this.renderer?.addLayer(applyDocumentBaseToLayer(layer, this.base));
   }
 
   /**

@@ -23,6 +23,7 @@ import {
 import { LayerSourceSchema } from "./source.schema";
 import { markOpenSchema } from "../parser/validation-utils";
 import { getEffectsHost, type EffectBlock } from "../effects-host";
+import { LINK_TARGET_VALUES } from "../utils/html";
 
 /**
  * Reference to a root-level named source.
@@ -61,6 +62,51 @@ export const SourceReferenceSchema = z
 export type SourceReference = z.infer<typeof SourceReferenceSchema>;
 
 /**
+ * True for a popup link `href` the builder can render: an absolute URL, or a
+ * relative reference (`/about`, `./notes.html`, `notes.html`, `#top`).
+ *
+ * @remarks
+ * `z.string().url()` rejected relative paths although the builder renders
+ * them. A string with whitespace that does not parse as a URL is still
+ * rejected, so prose pasted into `href` is caught. Scheme safety is not
+ * decided here: the builder's `safeUrl` renders a `javascript:` link as text.
+ */
+function isPopupLinkHref(value: string): boolean {
+  const v = value.trim();
+  if (v === "") return false;
+  try {
+    new URL(v);
+    return true;
+  } catch {
+    // Relative: no whitespace, and nothing scheme-like before the first / ? #
+    return !/\s/.test(v) && !/^[^/?#]*:/.test(v);
+  }
+}
+
+const PopupLinkHrefSchema = z.string().refine(isPopupLinkHref, {
+  message:
+    'Expected a URL ("https://...", "mailto:...") or a relative path ("/page", "./page.html", "#section")',
+});
+
+/**
+ * A popup link's `target`: one of {@link LINK_TARGET_VALUES}.
+ *
+ * @remarks
+ * The enum carries the allowed values into the JSON Schema (editor
+ * completion). The refine branch exists for the error message: an enum
+ * mismatch aborts its branch, and inside the layer-or-reference union an
+ * aborted branch collapses to "Value does not match any of the expected
+ * formats" on the whole layer. A failed refine is non-fatal, so the union
+ * reports it here, at `...popup.N.p.M.target`, naming the allowed values.
+ */
+const PopupLinkTargetSchema = z.union([
+  z.enum(LINK_TARGET_VALUES),
+  z.string().refine(() => false, {
+    message: `target must be one of: ${LINK_TARGET_VALUES.join(", ")}`,
+  }),
+]);
+
+/**
  * Content item for popup or dynamic text rendering.
  *
  * @remarks
@@ -71,9 +117,13 @@ export type SourceReference = z.infer<typeof SourceReferenceSchema>;
  * - `property` - Feature property name to interpolate
  * - `else` - Fallback value if property is missing
  * - `format` - Number format string (e.g., ",.0f" for thousands separator)
- * - `href` - Link URL (for anchor tags)
- * - `text` - Link text
- * - `src` - Image/iframe source URL
+ * - `href` - Link URL: absolute (`https:`, `http:`, `mailto:`, `tel:`) or a
+ *   relative path (`/about`, `./notes.html`, `#top`). Other schemes, such as
+ *   `javascript:`, render as plain text.
+ * - `text` - Link text (falls back to `str`, then to the URL itself)
+ * - `target` - Where the link opens: `_blank` (default, with
+ *   `rel="noopener noreferrer"`), `_self`, `_parent` or `_top`
+ * - `src` - Image source URL
  * - `alt` - Image alt text
  *
  * @example Static Text
@@ -92,6 +142,13 @@ export type SourceReference = z.infer<typeof SourceReferenceSchema>;
  * - property: population
  *   format: ",.0f"
  * ```
+ *
+ * @example Link (`str` or `text` is the link text)
+ * ```yaml
+ * - str: "Wikipedia"
+ *   href: "https://en.wikipedia.org/wiki/Chicago"
+ *   target: _self
+ * ```
  */
 // Annotated: the `str` union pushes the inferred PopupContentItem type into the
 // LayerSchema discriminated union, whose serialized type then exceeds TS's
@@ -103,6 +160,8 @@ export const PopupContentItemSchema: z.ZodType<{
   format?: string;
   href?: string;
   text?: string;
+  /** Validated against LINK_TARGET_VALUES; typed as the input it accepts. */
+  target?: string;
   src?: string;
   alt?: string;
   [key: string]: unknown;
@@ -118,9 +177,17 @@ export const PopupContentItemSchema: z.ZodType<{
       .string()
       .optional()
       .describe('Number format string (e.g., ",.0f")'),
-    href: z.string().url().optional().describe("Link URL"),
-    text: z.string().optional().describe("Link text"),
-    src: z.string().url().optional().describe("Image/iframe source"),
+    href: PopupLinkHrefSchema.optional().describe(
+      "Link URL: absolute (https:, mailto:, ...) or a relative path"
+    ),
+    text: z
+      .string()
+      .optional()
+      .describe("Link text (falls back to `str`, then to the URL)"),
+    target: PopupLinkTargetSchema.optional().describe(
+      "Where the link opens: _blank (default), _self, _parent or _top"
+    ),
+    src: z.string().url().optional().describe("Image source"),
     alt: z.string().optional().describe("Image alt text"),
   })
   .passthrough()
@@ -138,7 +205,10 @@ export type PopupContentItem = z.infer<typeof PopupContentItemSchema>;
  *
  * **Supported Tags:**
  * h1, h2, h3, h4, h5, h6, p, span, div, strong, em, code, pre,
- * a, img, iframe, ul, ol, li, blockquote, hr, br
+ * a, img, ul, ol, li, blockquote, hr, br
+ *
+ * A link or image item is usually placed in `p:`/`div:`. Under `a:` or `img:`
+ * it is emitted as-is (one element, not one wrapped in an empty tag).
  *
  * @example
  * ```yaml
@@ -150,16 +220,16 @@ export type PopupContentItem = z.infer<typeof PopupContentItemSchema>;
  *       - str: "Population: "
  *       - property: population
  *         format: ",.0f"
- *   - a:
- *       - href: "https://example.com"
- *         text: "Learn more"
+ *   - p:
+ *       - str: "Learn more"
+ *         href: "https://example.com"
  * ```
  *
  * **Output for `{ name: "NYC", population: 8336817 }`:**
  * ```html
  * <h3>NYC</h3>
  * <p>Population: 8,336,817</p>
- * <a href="https://example.com">Learn more</a>
+ * <p><a href="https://example.com" target="_blank" rel="noopener noreferrer">Learn more</a></p>
  * ```
  */
 export const PopupContentSchema = z

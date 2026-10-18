@@ -5,8 +5,12 @@ description: Real-time positions with merge updates
 
 import { Aside } from '@astrojs/starlight/components';
 
-<Aside>
-This example shows the configuration pattern. Connect to your fleet API for real data.
+<Aside title="Placeholder endpoint">
+This example shows the configuration pattern. `https://api.example.com/vehicles`
+is a placeholder with no data behind it, so as printed the map shows only the
+basemap. Point `url:` at your fleet API: it must return a GeoJSON
+`FeatureCollection` of points with `vehicleId`, `vehicleName`, `status` and
+`speed` properties, and allow cross-origin requests.
 </Aside>
 
 ## Configuration Pattern
@@ -19,7 +23,7 @@ id: vehicle-tracker
 config:
   center: [-122.4, 37.8]
   zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 
 layers:
   - id: vehicles

@@ -10,9 +10,14 @@
  *
  * Covered:
  *  - quick-start.mdx step 1 HTML + step 2 YAML (`<ml-map src>` via the CDN
- *    import-map pattern), and the "Add interactivity" YAML (click → popup);
+ *    import-map pattern), and the "Add interactivity" YAML (click → popup),
+ *    also on a phone-sized viewport (the viewport meta tag);
+ *  - first-map.mdx host page + "Putting it together" YAML (formatted popup);
  *  - vanilla-js.mdx "JavaScript API" quick start (esm.sh `?external=maplibre-gl`
- *    + `MapRenderer.fromModel(toModel(...))`).
+ *    + `MapRenderer.fromModel(toModel(...))`);
+ *  - web-components.mdx Quick Start steps and the Slots example;
+ *  - the page `mlym init --template basic` scaffolds (the CLI's own output,
+ *    which the getting-started path hands to students).
  *
  * Hermetic like the rest of the suite: every external URL a snippet names must
  * appear in the CDN table below, which maps it onto the local build (unpkg core
@@ -23,7 +28,9 @@
  * another) is not in the table.
  */
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const DOCS = join(__dirname, "..", "docs/src/content/docs");
@@ -100,9 +107,13 @@ function cdnTable(baseURL: string): Record<string, string | { js: string } | obj
   return {
     "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css": `${baseURL}/vendor/maplibre-gl.css`,
     "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs": { js: trackingMaplibre(baseURL) },
-    "https://unpkg.com/@maplibre-yaml/core/register.js": `${baseURL}/packages/core/register.js`,
-    "https://unpkg.com/@maplibre-yaml/core/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
-    "https://esm.sh/@maplibre-yaml/core?external=maplibre-gl": `${baseURL}/packages/core/dist/index.browser.js`,
+    // Core is pinned to the 0.7 line in every beginner snippet (and the CLI's
+    // basic template); an unpinned `@maplibre-yaml/core/register.js` is not here.
+    "https://unpkg.com/@maplibre-yaml/core@0.7/register.js": `${baseURL}/packages/core/register.js`,
+    "https://unpkg.com/@maplibre-yaml/core@0.7/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
+    "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl": `${baseURL}/packages/core/dist/index.browser.js`,
+    // The beginner basemap (streets + labels, no key) and the world-map one.
+    "https://tiles.openfreemap.org/styles/liberty": `${baseURL}/examples/verification/configs/local-style.json`,
     "https://demotiles.maplibre.org/style.json": `${baseURL}/examples/verification/configs/local-style.json`,
     "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson": QUAKES,
   };
@@ -279,5 +290,148 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     const zoom = await page.evaluate(() => (globalThis as any).__docMaps[0].getZoom());
     expect(zoom).toBeCloseTo(12, 3);
     expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("quick start on a phone: the viewport meta tag lays the page out at device width", async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({
+      baseURL,
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    const [html] = fences("getting-started/quick-start.mdx", "html");
+    const [yaml] = fences("getting-started/quick-start.mdx", "yaml");
+    const errors = await serveSnippet(page, baseURL!, "quick-start-mobile", {
+      "index.html": html,
+      "earthquake-map.yaml": yaml,
+    });
+    await page.goto(`/__docs/quick-start-mobile/`, { waitUntil: "domcontentloaded" });
+    await orReport(waitForRenderedLayer(page, "earthquakes"), errors);
+    // Without <meta name="viewport"> a mobile browser lays the page out at
+    // 980px and scales it down, so the map and its controls end up tiny.
+    const layout = await page.evaluate(() => ({
+      width: document.documentElement.clientWidth,
+      map: (document.querySelector("ml-map") as HTMLElement).getBoundingClientRect().width,
+    }));
+    expect(layout.width).toBe(390);
+    expect(layout.map).toBe(390);
+    expect(errors, errors.join("\n")).toEqual([]);
+    await context.close();
+  });
+
+  test("first map: host page + 'Putting it together' YAML render, popup formats the population", async ({
+    page,
+    baseURL,
+  }) => {
+    const [html] = fences("getting-started/first-map.mdx", "html");
+    const yaml = fences("getting-started/first-map.mdx", "yaml").find((y) =>
+      y.includes("id: complete-example")
+    )!;
+    expect(html).toContain('src="./my-map.yaml"');
+    expectKnownUrls(baseURL!, html, yaml);
+
+    const errors = await serveSnippet(page, baseURL!, "first-map", {
+      "index.html": html,
+      "my-map.yaml": yaml,
+    });
+    await page.goto(`/__docs/first-map/`, { waitUntil: "domcontentloaded" });
+    await orReport(waitForRenderedLayer(page, "cities"), errors);
+
+    await page.evaluate(() => {
+      const map = (document.querySelector("ml-map") as any).getMap();
+      const at = { lng: -74.006, lat: 40.7128 };
+      map.fire("click", { lngLat: at, point: map.project(at) });
+    });
+    const popup = page.locator(".maplibregl-popup-content");
+    await expect(popup.locator("h3")).toHaveText("New York");
+    await expect(popup.locator("p")).toHaveText("Population: 8,336,817");
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("web components: the Quick Start steps assemble into a working page", async ({
+    page,
+    baseURL,
+  }) => {
+    const html = fences("integrations/web-components.mdx", "html");
+    const [head, element] = html;
+    expect(head).toContain("<head>");
+    expect(element).toContain("<ml-map");
+    const [yaml] = fences("integrations/web-components.mdx", "yaml");
+    expectKnownUrls(baseURL!, head, element, yaml);
+
+    const errors = await serveSnippet(page, baseURL!, "wc-quick", {
+      "index.html": `<!DOCTYPE html>\n<html lang="en">\n${head}<body>\n${element}</body>\n</html>\n`,
+      "map.yaml": yaml,
+    });
+    await page.goto(`/__docs/wc-quick/`, { waitUntil: "domcontentloaded" });
+    await orReport(waitForRenderedLayer(page, "marker"), errors);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("web components: the Slots example has a height and mounts its corner chrome", async ({
+    page,
+    baseURL,
+  }) => {
+    const html = fences("integrations/web-components.mdx", "html");
+    const [head] = html;
+    const slots = html.find((h) => h.includes('slot="top-right"'))!;
+    const [yaml] = fences("integrations/web-components.mdx", "yaml");
+    expectKnownUrls(baseURL!, head, slots, yaml);
+
+    const errors = await serveSnippet(page, baseURL!, "wc-slots", {
+      "index.html": `<!DOCTYPE html>\n<html lang="en">\n${head}<body>\n${slots}</body>\n</html>\n`,
+      "map.yaml": yaml,
+    });
+    await page.goto(`/__docs/wc-slots/`, { waitUntil: "domcontentloaded" });
+    await orReport(waitForRenderedLayer(page, "marker"), errors);
+
+    // As printed before this fix the element had no height: blank page.
+    const box = await page.locator("ml-map").boundingBox();
+    expect(box!.height).toBe(400);
+    await expect(page.locator(".my-controls")).toBeVisible();
+    await expect(page.getByText("Data: city open data portal")).toBeVisible();
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("CLI: the page `init --template basic` scaffolds renders, served as static files", async ({
+    page,
+    baseURL,
+  }) => {
+    const dir = mkdtempSync(join(tmpdir(), "mlym-e2e-init-"));
+    try {
+      const cli = join(__dirname, "..", "packages/cli/dist/cli.js");
+      execFileSync(process.execPath, [cli, "init", "my-map", "--template", "basic"], {
+        cwd: dir,
+        stdio: "pipe",
+      });
+      const html = readFileSync(join(dir, "my-map", "index.html"), "utf8");
+      const yaml = readFileSync(join(dir, "my-map", "map.yaml"), "utf8");
+      // The modeline's schema URL is for editors, never fetched by the page.
+      expectKnownUrls(baseURL!, html, yaml.replace(/^#.*$/gm, ""));
+
+      const errors = await serveSnippet(page, baseURL!, "cli-basic", {
+        "index.html": html,
+        "map.yaml": yaml,
+      });
+      await page.goto(`/__docs/cli-basic/`, { waitUntil: "domcontentloaded" });
+      await orReport(waitForRenderedLayer(page, "marker"), errors);
+      const box = await page.locator("ml-map").boundingBox();
+      expect(box!.height).toBeGreaterThan(300);
+
+      await page.evaluate(() => {
+        const map = (document.querySelector("ml-map") as any).getMap();
+        const at = map.getCenter();
+        map.fire("click", { lngLat: at, point: map.project(at) });
+      });
+      await expect(page.locator(".maplibregl-popup-content h3")).toHaveText("my-map");
+      expect(errors, errors.join("\n")).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -9,6 +9,13 @@ This guide explains the fields and shows them in use. For every key — type, de
 
 Data sources provide the data for map layers. maplibre-yaml supports all MapLibre GL JS source types with enhanced features for dynamic data loading, real-time updates, and streaming.
 
+:::note[Placeholder URLs]
+Snippets on this page that show a single `source:` use placeholder URLs such
+as `https://example.com/…` and `api.example.com` — swap in your own data.
+Complete documents (the ones starting with `type: map`) use real, public data
+and run as printed.
+:::
+
 ## Source Types
 
 | Type | Description | Use Case |
@@ -60,6 +67,48 @@ source:
   type: geojson
   url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
 ```
+
+#### Files on your own site (relative paths)
+
+`url:` also takes a path to a file served by your own site. All of these work:
+
+```yaml
+source:
+  type: geojson
+  url: "data/cities.geojson"      # relative to the page
+  # url: "./data/cities.geojson"  # the same thing
+  # url: "/data/cities.geojson"   # from the site root
+```
+
+**Relative paths resolve against the web page, not the YAML file.** The
+browser fetches them exactly as it would a link on that page. With this
+layout:
+
+```text
+index.html          <ml-map src="maps/city.yaml">
+maps/city.yaml
+maps/cities.geojson
+```
+
+`url: "cities.geojson"` inside `maps/city.yaml` loads `/cities.geojson` (next
+to `index.html`) and fails. Write `url: "maps/cities.geojson"`, or use a
+root-relative `/maps/cities.geojson`. If a data file doesn't load, the map
+shows a notice naming the file and the full address the browser tried, and,
+for a YAML file in another folder, the path to write instead.
+
+The same rule applies to every URL in a document: other source `url:` and
+`tiles:` entries, `images:`, marker icons, `mapStyle`, and scrollytelling
+chapter `image:`/`video:`. (Older releases rejected a bare relative path
+like `data/x.geojson` and required `./` or `/` in front of it.)
+
+**On a site published under a subpath** (a GitHub Pages project site at
+`https://<user>.github.io/<repo>/`), give `<ml-map>` a `base`:
+`<ml-map src="maps/city.yaml" base="/<repo>/">`. Then `/data/cities.geojson`
+and `data/cities.geojson` both load `/<repo>/data/cities.geojson`, on every
+page, without writing the repo name into the YAML. The Astro `Map` and
+`FullPageMap` components set it for you. See
+[Sites under a subpath](/integrations/web-components/#sites-under-a-subpath-github-pages)
+for the full list of fields it applies to.
 
 #### Inline Data
 
@@ -175,7 +224,7 @@ id: sugar-tour
 config:
   center: [-73.98, 40.75]
   zoom: 11
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 sources:
   site:
     type: geojson
@@ -594,16 +643,14 @@ id: terrain
 config:
   center: [-121.7, 46.85]
   zoom: 11
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: hills
     type: hillshade
     source:
       type: raster-dem
-      tiles:
-        - "https://example.com/dem/{z}/{x}/{y}.png"
+      url: "https://tiles.mapterhorn.com/tilejson.json"
       encoding: terrarium
-      tileSize: 256
     paint:
       hillshade-exaggeration: 0.6
 ```
@@ -621,7 +668,7 @@ config:
   center: [11.39, 47.27]
   zoom: 12
   pitch: 70
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 sources:
   terrainSource:
     type: raster-dem
@@ -743,37 +790,38 @@ The recommended approach for most use cases. Define sources directly on a map bl
 type: map
 id: neighborhood-map
 config:
-  center: [-73.985, 40.674]
-  zoom: 14
+  center: [-74.025, 40.72]
+  zoom: 13.5
   mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
 
 sources:
-  boundary:
+  states:
     type: geojson
-    url: "https://example.com/data/boundary.geojson"
-  parcels:
+    url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
+  omt:
     type: vector
-    url: "https://example.com/tiles.json"
+    url: "https://tiles.openfreemap.org/planet"
 
 layers:
-  - id: boundary-fill
+  - id: state-fill
     type: fill
-    source: boundary
+    source: states
+    filter: ["==", ["get", "STATE_NAME"], "New Jersey"]
     paint:
       fill-color: "#3388ff"
-      fill-opacity: 0.2
-  - id: boundary-outline
+      fill-opacity: 0.15
+  - id: state-outline
     type: line
-    source: boundary
+    source: states
     paint:
       line-color: "#3388ff"
       line-width: 2
-  - id: parcels-fill
+  - id: buildings
     type: fill
-    source: parcels
-    source-layer: parcels
+    source: omt
+    source-layer: building
     paint:
-      fill-color: "#ccc"
+      fill-color: "#9ca3af"
 ```
 
 ### Live Refresh on a Named Source
@@ -861,7 +909,7 @@ pages:
         config:
           center: [0, 0]
           zoom: 2
-          mapStyle: "https://demotiles.maplibre.org/style.json"
+          mapStyle: "https://tiles.openfreemap.org/styles/liberty"
         layers:
           - $ref: "#/layers/quakes"
 ```

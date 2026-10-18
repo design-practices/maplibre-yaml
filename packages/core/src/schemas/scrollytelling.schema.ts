@@ -21,10 +21,10 @@ import { STORY_MAP_KEYS } from "../scrollytelling/keys";
 export { STORY_MAP_KEYS };
 
 /**
- * A chapter's `image`/`video`: an http(s) URL, or a path that resolves
- * against the page — root-relative (`/images/fuji.jpg`, a file in an Astro or
- * Vite `public/` folder), protocol-relative, or explicitly relative
- * (`./clip.mp4`).
+ * A chapter's `image`/`video`: an http(s) URL, or a path to a file on the
+ * site — root-relative (`/images/fuji.jpg`, a file in an Astro or Vite
+ * `public/` folder), protocol-relative, explicitly relative (`./clip.mp4`) or
+ * bare relative (`images/fuji.jpg`).
  *
  * @remarks
  * This used to be `z.string().url()`, which rejected the root-relative path
@@ -35,13 +35,15 @@ export { STORY_MAP_KEYS };
  * `source.schema.ts` — a regex, so it stays a `ZodString` and emits a
  * `pattern` into the JSON Schema — but scheme-restricted to http(s): a media
  * element has no use for other schemes, and the trust model keeps
- * `javascript:`/`data:` out of author-supplied media. Bare relative paths
- * (`images/x.jpg`) stay rejected, as for sources: they resolve against the
- * page's own folder, which is rarely what was meant.
+ * `javascript:`/`data:` out of author-supplied media. A bare relative path is
+ * accepted (ml-zft) only when nothing before its first `/`, `?` or `#`
+ * contains a `:`, so `javascript:x` and `data:image/png,...` stay rejected.
+ * Relative paths resolve against the page, not the YAML file.
  */
 // Spelled case-insensitively without the `i` flag, which JSON Schema
 // `pattern` cannot carry: editors and zod must agree.
-const MEDIA_REFERENCE = /^(?:[hH][tT][tT][pP][sS]?:\/\/|\/|\.\.?\/)/;
+const MEDIA_REFERENCE =
+  /^(?:[hH][tT][tT][pP][sS]?:\/\/|\/|\.\.?\/|[^\s:/?#][^:/?#]*(?:[/?#]|$))/;
 
 const MediaURLSchema = (what: "image" | "video") =>
   z
@@ -49,8 +51,8 @@ const MediaURLSchema = (what: "image" | "video") =>
     .regex(
       MEDIA_REFERENCE,
       `Must be an http(s) URL (https://example.com/${what === "image" ? "photo.jpg" : "clip.mp4"}) ` +
-        `or a path to a file on your site (/${what === "image" ? "images/photo.jpg" : "videos/clip.mp4"}, ` +
-        "for a file in public/)"
+        `or a path to a file on your site (${what === "image" ? "images/photo.jpg" : "videos/clip.mp4"}, ` +
+        `or /${what === "image" ? "images/photo.jpg" : "videos/clip.mp4"} for a file in public/)`
     );
 
 /**

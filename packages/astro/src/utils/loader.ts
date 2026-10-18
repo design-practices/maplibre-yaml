@@ -37,6 +37,7 @@
  * ```
  */
 
+import { existsSync } from "fs";
 import { readFile } from "fs/promises";
 import { resolve as resolvePath } from "path";
 import { parse as parseYAML } from "yaml";
@@ -48,6 +49,7 @@ import { parse as parseYAML } from "yaml";
 // dropped `!html` to a bare string here while core resolved it to `{ $html }`.
 // Importing the single source of truth makes that drift structurally impossible.
 import { YAMLParser, YAML_PARSE_OPTIONS } from "@maplibre-yaml/core";
+import { trackFile } from "./dev-watch";
 import type { MapBlock, ScrollytellingBlock, ParseError } from "@maplibre-yaml/core";
 
 /**
@@ -207,6 +209,34 @@ function validationError(
 }
 
 /**
+ * Extra advice for a file that is not there (ENOENT).
+ *
+ * @remarks
+ * The loaders read the file when the page RENDERS. In a static build that is
+ * `astro build`, inside the project. With `output: 'server'` (or a page with
+ * `prerender = false`) it is every request, on the deployed server -- which
+ * usually has the built `dist/` and no `src/`, so a path that worked in
+ * `astro dev` fails with a bare ENOENT and a 500 (ml-aot.27). When the
+ * working directory has no `src/` at all, say what is going on.
+ */
+function missingFileHint(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code !== "ENOENT") return "";
+  const cwd = process.cwd();
+  const deployed = !existsSync(resolvePath(cwd, "src"));
+  if (!deployed) {
+    return `. The path is resolved from the project root (${cwd}); check the spelling.`;
+  }
+  return (
+    `. This server's working directory (${cwd}) has no src/ folder, so this looks like a ` +
+    `deployed server rendering the page on request (output: 'server'). The map loaders read ` +
+    `files when the page renders: add \`export const prerender = true;\` to pages that call ` +
+    `them so they are read once at build time, or import the YAML instead ` +
+    `(\`import raw from '../maps/map.yaml?raw'\`) or use a content collection.`
+  );
+}
+
+/**
  * Load and parse a YAML file with optional schema validation.
  *
  * @param path - Absolute or relative path to YAML file
@@ -254,6 +284,8 @@ export async function loadYAML<T = unknown>(
   path: string,
   schema?: { parse: (data: unknown) => T }
 ): Promise<T> {
+  // For the dev-reload integration (ml-aot.24): Vite never sees this read.
+  trackFile(path);
   try {
     // Read file contents
     const contents = await readFile(path, "utf-8");
@@ -294,7 +326,7 @@ export async function loadYAML<T = unknown>(
 
     // Wrap other errors
     throw new YAMLLoadError(
-      `Failed to load ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      `Failed to load ${path}: ${error instanceof Error ? error.message : String(error)}${missingFileHint(error)}`,
       path,
       [],
       { cause: error },
@@ -350,6 +382,7 @@ export async function loadYAML<T = unknown>(
  * ```
  */
 export async function loadMapConfig(path: string): Promise<MapBlock> {
+  trackFile(path);
   try {
     // Read file contents
     const contents = await readFile(path, "utf-8");
@@ -372,7 +405,7 @@ export async function loadMapConfig(path: string): Promise<MapBlock> {
     throw new YAMLLoadError(
       `Failed to load map config from ${path}: ${
         error instanceof Error ? error.message : String(error)
-      }`,
+      }${missingFileHint(error)}`,
       path,
       [],
       { cause: error },
@@ -425,6 +458,7 @@ export async function loadMapConfig(path: string): Promise<MapBlock> {
 export async function loadScrollytellingConfig(
   path: string
 ): Promise<ScrollytellingBlock> {
+  trackFile(path);
   try {
     // Read file contents
     const contents = await readFile(path, "utf-8");
@@ -447,7 +481,7 @@ export async function loadScrollytellingConfig(
     throw new YAMLLoadError(
       `Failed to load scrollytelling config from ${path}: ${
         error instanceof Error ? error.message : String(error)
-      }`,
+      }${missingFileHint(error)}`,
       path,
       [],
       { cause: error },

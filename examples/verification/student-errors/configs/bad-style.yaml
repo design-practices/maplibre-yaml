@@ -1,0 +1,9 @@
+# ml-aot.14: a mapStyle URL with a typo (styles.json for style.json). Before,
+# a blank box that never loaded and a mapReady() that never settled.
+type: map
+id: bad-style
+config:
+  center: [-98, 39]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-styles.json"
+layers: []

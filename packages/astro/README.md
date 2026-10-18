@@ -610,6 +610,22 @@ const feature = findFeature(fc, { source: "...", featureId: "poa-1.1" });
 > as `src="/configs/map.yaml"`. (`src` on `Map`/`FullPageMap` needs a release
 > newer than 0.4.1, and `Scrollytelling` `src` needs 0.5.0 or later.)
 
+> **Deploying under a base path** (a GitHub Pages project site, `base: '/repo'`):
+> `Map`/`FullPageMap` (0.6+, with core 0.8+) pass the site's base to
+> `<ml-map base>`, so `src` and the paths *inside* your YAML
+> (`url: "/data/x.geojson"`, `images:`, marker `icon:`) load from under it
+> with no change to the YAML. Relative paths (`data/x.geojson`) mean "from
+> `public/`" on every page, with or without a base; `base={false}` restores
+> page-relative resolution. See the docs' *Deploying to GitHub Pages* section.
+
+> **Optional dev integration.** `import maplibreYaml from
+> "@maplibre-yaml/astro/integration"` and add `maplibreYaml()` to
+> `integrations` to have `astro dev` reload the page when a file read by
+> `loadMapConfig` / `loadGlobalMapConfig` / `feature_ref`, or map data under
+> `public/`, changes, and to pre-bundle maplibre-gl and core so the first map
+> page does not trigger a dependency re-optimization. Without it, `loadGlobalMapConfig` edits need a
+> dev-server restart.
+
 > **`astro dev` with `@maplibre-yaml/core` 0.6.0 or earlier** fails every map
 > with *Map is not a constructor* (builds are fine). Add
 > `vite: { optimizeDeps: { include: ["maplibre-gl"] } }` to `astro.config.mjs`,

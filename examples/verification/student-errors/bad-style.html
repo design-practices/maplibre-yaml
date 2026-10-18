@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bad mapStyle URL</title>
+  <!--
+    ml-aot.14 — a mapStyle URL that 404s. PASS = a card titled "The basemap
+    style didn't load" naming the URL and "404 Not Found", with a "How to fix
+    it" hint; mapReady() rejects. FAIL = an empty box that never loads.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/bad-style.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; }
+    ml-map { display: block; height: 420px; margin-bottom: 16px; }
+    h2 { font-size: 14px; margin: 16px 0 6px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = card "The basemap style didn't load" naming the style URL and 404. FAIL = blank box.</header>
+  <main>
+    <ml-map id="map" src="configs/bad-style.yaml"></ml-map>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

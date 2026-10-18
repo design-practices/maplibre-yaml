@@ -57,6 +57,13 @@
  */
 
 import type { FullPageMapProps } from "../types";
+import { withBase } from "../utils/base-url";
+// MapLibre's stylesheet as PAGE css, imported here rather than in the
+// client script: Astro then links it in the page head in dev and build alike.
+// From the script, astro dev injected it with JS as a <style> the server
+// never rendered, and <ClientRouter />'s head swap dropped it after the first
+// soft navigation -- controls and attribution fell out of the map (ml-aot.22).
+import "maplibre-gl/dist/maplibre-gl.css";
 
 interface Props extends FullPageMapProps {}
 
@@ -68,6 +75,7 @@ const {
   legendPosition = "top-right",
   class: className,
   style,
+  base,
 } = Astro.props;
 
 // Validate that either src or config is provided
@@ -132,6 +140,17 @@ const mapId = `fullmap-${Math.random().toString(36).substring(2, 11)}`;
 
 // Serialize config for client-side if provided
 const serializedConfig = effectiveConfig ? JSON.stringify(effectiveConfig) : null;
+
+// `/configs/map.yaml` lives at `/<base>/configs/map.yaml` on a site deployed
+// under a subpath (GitHub Pages project sites) -- see utils/base-url.ts.
+const resolvedSrc = withBase(src, import.meta.env.BASE_URL);
+
+// Every path INSIDE the document -- source urls, images, marker icons --
+// resolves against the site's base too, so YAML written for `public/`
+// (`/data/x.geojson` or `data/x.geojson`) works on every page and under a
+// GitHub Pages subpath (ml-aot.30). Always set, "/" included: files in
+// public/ are site paths, never page-relative. `base={false}` opts out.
+const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_URL);
 ---
 
 <div
@@ -148,7 +167,8 @@ const serializedConfig = effectiveConfig ? JSON.stringify(effectiveConfig) : nul
   <ml-map
     id={mapId}
     config={serializedConfig ?? undefined}
-    src={serializedConfig ? undefined : src}
+    src={serializedConfig ? undefined : resolvedSrc}
+    base={documentBase}
   >
     {
       showControls && (
@@ -259,43 +279,54 @@ const serializedConfig = effectiveConfig ? JSON.stringify(effectiveConfig) : nul
   // first: maplibre-gl 6 needs its worker URL before any map is built
   import "../client/maplibre-worker";
   import "@maplibre-yaml/core/register";
-  import "maplibre-gl/dist/maplibre-gl.css";
   import type { MLMap } from "@maplibre-yaml/core/components";
 
-  // One hoisted script wires every FullPageMap on the page. The buttons live
-  // inside <ml-map> (slot="top-right"), so they are found there even after
-  // the element adopts them into its corner container.
-  for (const root of document.querySelectorAll<HTMLElement>(".ml-fullpage-map")) {
-    const mapEl = root.querySelector<MLMap>("ml-map");
-    const controls = root.querySelector<HTMLElement>(".ml-map-controls");
-    if (!mapEl || !controls) continue;
+  // Event delegation, not per-element wiring: Astro runs this module ONCE per
+  // full page load, and with <ClientRouter /> a soft navigation swaps in new
+  // .ml-fullpage-map elements without re-running it. Listeners bound to the
+  // first page's buttons left zoom/reset dead on every later visit
+  // (ml-aot.22). `document` survives the swap, so listening there serves
+  // whichever FullPageMap is on the page now, however it got there. The
+  // buttons live inside <ml-map> (slot="top-right"), so `closest()` finds
+  // their map even after the element adopts them into its corner container.
+  type Camera = { center: any; zoom: number; bearing: number; pitch: number };
+  type ControlsState = { homes: WeakMap<Element, Camera> };
 
+  const KEY = "__mlYamlFullPageControls";
+  const win = window as unknown as Record<string, ControlsState | undefined>;
+  const firstRun = !win[KEY];
+  const state: ControlsState = (win[KEY] ??= { homes: new WeakMap() });
+
+  const captureHome = (mapEl: MLMap) => {
+    const map = mapEl.getMap();
+    if (!map) return;
+    state.homes.set(mapEl, {
+      center: map.getCenter(),
+      zoom: map.getZoom(),
+      bearing: map.getBearing(),
+      pitch: map.getPitch(),
+    });
+  };
+  const mapOf = (node: Element): MLMap | null =>
+    node.closest(".ml-fullpage-map")?.querySelector<MLMap>("ml-map") ?? null;
+
+  if (firstRun) {
     // The reset target is the document's own initial view, re-captured on
     // every (re)load so reload() or a new config resets to the new camera.
-    let home: { center: any; zoom: number; bearing: number; pitch: number } | null =
-      null;
-    const captureHome = () => {
-      const map = mapEl.getMap();
-      if (!map) return;
-      home = {
-        center: map.getCenter(),
-        zoom: map.getZoom(),
-        bearing: map.getBearing(),
-        pitch: map.getPitch(),
-      };
-    };
-    mapEl.addEventListener("ml-map:load", captureHome);
-    customElements
-      .whenDefined("ml-map")
-      .then(() => mapEl.mapReady())
-      .then(captureHome)
-      // A failed document shows <ml-map>'s own error card; nothing to wire.
-      .catch(() => {});
+    // `ml-map:load` bubbles, so this also sees maps on pages swapped in later.
+    document.addEventListener("ml-map:load", (event) => {
+      const target = event.target;
+      if (target instanceof Element && mapOf(target) === target) {
+        captureHome(target as MLMap);
+      }
+    });
 
-    controls.addEventListener("click", (event) => {
-      const button = (event.target as Element).closest<HTMLElement>("[data-action]");
-      const map = mapEl.getMap();
-      if (!button || !map) return;
+    document.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const button = target?.closest<HTMLElement>(".ml-map-controls [data-action]");
+      const mapEl = button ? mapOf(button) : null;
+      const map = mapEl?.getMap();
+      if (!button || !mapEl || !map) return;
       switch (button.dataset.action) {
         case "zoom-in":
           map.zoomIn();
@@ -303,11 +334,26 @@ const serializedConfig = effectiveConfig ? JSON.stringify(effectiveConfig) : nul
         case "zoom-out":
           map.zoomOut();
           break;
-        case "reset":
+        case "reset": {
+          const home = state.homes.get(mapEl);
           if (home) map.flyTo(home);
           break;
+        }
       }
     });
+  }
+
+  // A map that finished loading before this module ran (possible on a soft
+  // navigation into the first page with a FullPageMap) still gets its home.
+  for (const mapEl of document.querySelectorAll<MLMap>(".ml-fullpage-map ml-map")) {
+    customElements
+      .whenDefined("ml-map")
+      .then(() => mapEl.mapReady())
+      .then(() => {
+        if (!state.homes.has(mapEl)) captureHome(mapEl);
+      })
+      // A failed document shows <ml-map>'s own error card; nothing to wire.
+      .catch(() => {});
   }
 </script>
 

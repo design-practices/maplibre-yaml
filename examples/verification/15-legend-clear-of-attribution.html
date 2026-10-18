@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bottom-left legend vs compact attribution</title>
+  <!--
+    ml-aot.26 — on a phone-width map MapLibre opens its compact attribution
+    EXPANDED until the first drag; it wraps across the whole bottom edge and
+    covered a bottom-left legend (only the title peeked out).
+    PASS (open at ~390px wide) = the legend's entries are readable and the
+    attribution is the small (i) button. FAIL = the attribution text covers
+    the legend. Serve from the repo root (pnpm verify:serve), then open
+    /examples/verification/15-legend-clear-of-attribution.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    ml-map { display: block; width: 100vw; height: 100vh; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: legend-clear-of-attribution
+config:
+  center: [0, 20]
+  zoom: 1.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+controls:
+  attribution:
+    position: bottom-right
+    customAttribution: "Data © Example Volcano Survey contributors, basemap © a long list of map makers that wraps on a phone"
+legend:
+  position: bottom-left
+  title: Volcanoes
+layers:
+  - id: active
+    type: circle
+    legend: { label: Active, color: "#d62828" }
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [10, 20] }
+            properties: {}
+    paint: { circle-radius: 6, circle-color: "#d62828" }
+  - id: dormant
+    type: circle
+    legend: { label: Dormant, color: "#f77f00" }
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-10, 20] }
+            properties: {}
+    paint: { circle-radius: 6, circle-color: "#f77f00" }
+    </script>
+  </ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

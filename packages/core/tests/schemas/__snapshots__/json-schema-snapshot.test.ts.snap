@@ -296,7 +296,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "type": "string",
-                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                         "description": "URL to fetch GeoJSON data"
                       },
                       "data": {
@@ -815,7 +815,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "type": "string",
-                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                        "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                         "description": "Image URL"
                       },
                       "coordinates": {
@@ -1080,17 +1080,33 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                             },
                                             "href": {
                                               "type": "string",
-                                              "format": "uri",
-                                              "description": "Link URL"
+                                              "description": "Link URL: absolute (https:, mailto:, ...) or a relative path"
                                             },
                                             "text": {
                                               "type": "string",
-                                              "description": "Link text"
+                                              "description": "Link text (falls back to \`str\`, then to the URL)"
+                                            },
+                                            "target": {
+                                              "anyOf": [
+                                                {
+                                                  "type": "string",
+                                                  "enum": [
+                                                    "_blank",
+                                                    "_self",
+                                                    "_parent",
+                                                    "_top"
+                                                  ]
+                                                },
+                                                {
+                                                  "type": "string"
+                                                }
+                                              ],
+                                              "description": "Where the link opens: _blank (default), _self, _parent or _top"
                                             },
                                             "src": {
                                               "type": "string",
                                               "format": "uri",
-                                              "description": "Image/iframe source"
+                                              "description": "Image source"
                                             },
                                             "alt": {
                                               "type": "string",
@@ -3301,12 +3317,12 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   },
                   "image": {
                     "type": "string",
-                    "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                    "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                     "description": "Hero image: an http(s) URL or a site path such as /images/photo.jpg"
                   },
                   "video": {
                     "type": "string",
-                    "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                    "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                     "description": "Video: an http(s) URL or a site path such as /videos/clip.mp4"
                   },
                   "pitch": {
@@ -4278,7 +4294,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "type": "string",
-                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                     "description": "URL to fetch GeoJSON data"
                   },
                   "data": {
@@ -4797,7 +4813,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "type": "string",
-                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                     "description": "Image URL"
                   },
                   "coordinates": {
@@ -5062,17 +5078,33 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                         },
                                         "href": {
                                           "type": "string",
-                                          "format": "uri",
-                                          "description": "Link URL"
+                                          "description": "Link URL: absolute (https:, mailto:, ...) or a relative path"
                                         },
                                         "text": {
                                           "type": "string",
-                                          "description": "Link text"
+                                          "description": "Link text (falls back to \`str\`, then to the URL)"
+                                        },
+                                        "target": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "_blank",
+                                                "_self",
+                                                "_parent",
+                                                "_top"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string"
+                                            }
+                                          ],
+                                          "description": "Where the link opens: _blank (default), _self, _parent or _top"
                                         },
                                         "src": {
                                           "type": "string",
                                           "format": "uri",
-                                          "description": "Image/iframe source"
+                                          "description": "Image source"
                                         },
                                         "alt": {
                                           "type": "string",
@@ -7331,7 +7363,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "type": "string",
-                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                 "description": "URL to fetch GeoJSON data"
                               },
                               "data": {
@@ -7850,7 +7882,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "type": "string",
-                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                                "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                 "description": "Image URL"
                               },
                               "coordinates": {
@@ -8082,17 +8114,33 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                     },
                                     "href": {
                                       "type": "string",
-                                      "format": "uri",
-                                      "description": "Link URL"
+                                      "description": "Link URL: absolute (https:, mailto:, ...) or a relative path"
                                     },
                                     "text": {
                                       "type": "string",
-                                      "description": "Link text"
+                                      "description": "Link text (falls back to \`str\`, then to the URL)"
+                                    },
+                                    "target": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "_blank",
+                                            "_self",
+                                            "_parent",
+                                            "_top"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string"
+                                        }
+                                      ],
+                                      "description": "Where the link opens: _blank (default), _self, _parent or _top"
                                     },
                                     "src": {
                                       "type": "string",
                                       "format": "uri",
-                                      "description": "Image/iframe source"
+                                      "description": "Image source"
                                     },
                                     "alt": {
                                       "type": "string",
@@ -10846,12 +10894,12 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "image": {
                                 "type": "string",
-                                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                 "description": "Hero image: an http(s) URL or a site path such as /images/photo.jpg"
                               },
                               "video": {
                                 "type": "string",
-                                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                 "description": "Video: an http(s) URL or a site path such as /videos/clip.mp4"
                               },
                               "pitch": {
@@ -11499,7 +11547,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "type": "string",
-                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                     "description": "URL to fetch GeoJSON data"
                                   },
                                   "data": {
@@ -12018,7 +12066,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "type": "string",
-                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/)",
+                                    "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                                     "description": "Image URL"
                                   },
                                   "coordinates": {
@@ -12259,17 +12307,33 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                         },
                                         "href": {
                                           "type": "string",
-                                          "format": "uri",
-                                          "description": "Link URL"
+                                          "description": "Link URL: absolute (https:, mailto:, ...) or a relative path"
                                         },
                                         "text": {
                                           "type": "string",
-                                          "description": "Link text"
+                                          "description": "Link text (falls back to \`str\`, then to the URL)"
+                                        },
+                                        "target": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "enum": [
+                                                "_blank",
+                                                "_self",
+                                                "_parent",
+                                                "_top"
+                                              ]
+                                            },
+                                            {
+                                              "type": "string"
+                                            }
+                                          ],
+                                          "description": "Where the link opens: _blank (default), _self, _parent or _top"
                                         },
                                         "src": {
                                           "type": "string",
                                           "format": "uri",
-                                          "description": "Image/iframe source"
+                                          "description": "Image source"
                                         },
                                         "alt": {
                                           "type": "string",
@@ -13912,12 +13976,12 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
               },
               "image": {
                 "type": "string",
-                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                 "description": "Hero image: an http(s) URL or a site path such as /images/photo.jpg"
               },
               "video": {
                 "type": "string",
-                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/)",
+                "pattern": "^(?:[hH][tT][tT][pP][sS]?:\\\\/\\\\/|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
                 "description": "Video: an http(s) URL or a site path such as /videos/clip.mp4"
               },
               "pitch": {

@@ -24,8 +24,10 @@ The fastest way to get started - no JavaScript code needed!
 
    ```html
    <!DOCTYPE html>
-   <html>
+   <html lang="en">
      <head>
+       <meta charset="utf-8" />
+       <meta name="viewport" content="width=device-width, initial-scale=1" />
        <title>My Map</title>
        <link
          href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
@@ -38,21 +40,22 @@ The fastest way to get started - no JavaScript code needed!
        <!-- Register the <ml-map> web component -->
        <script
          type="module"
-         src="https://unpkg.com/@maplibre-yaml/core/register.js"
+         src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
        ></script>
        <style>
          body {
            margin: 0;
          }
+         /* <ml-map> has no size of its own: without a height the map is invisible */
          ml-map {
            display: block;
-           width: 100vw;
+           width: 100%;
            height: 100vh;
          }
        </style>
      </head>
      <body>
-       <ml-map src="map.yaml"></ml-map>
+       <ml-map src="./map.yaml"></ml-map>
      </body>
    </html>
    ```
@@ -67,7 +70,7 @@ The fastest way to get started - no JavaScript code needed!
    config:
      center: [-74.006, 40.7128]
      zoom: 12
-     mapStyle: "https://demotiles.maplibre.org/style.json"
+     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
    layers:
      - id: points
        type: circle
@@ -93,7 +96,8 @@ The fastest way to get started - no JavaScript code needed!
    npx serve .
    ```
 
-   Open http://localhost:3000
+   Open the address it prints (usually http://localhost:3000). Opening the
+   HTML file directly does not work: a `file://` page cannot fetch `map.yaml`.
 
 </Steps>
 
@@ -112,8 +116,10 @@ For cases where you need programmatic control or want to use the lower-level API
 
    ```html
    <!DOCTYPE html>
-   <html>
+   <html lang="en">
      <head>
+       <meta charset="utf-8" />
+       <meta name="viewport" content="width=device-width, initial-scale=1" />
        <title>My Map</title>
        <link
          href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
@@ -128,7 +134,7 @@ For cases where you need programmatic control or want to use the lower-level API
            margin: 0;
          }
          #map {
-           width: 100vw;
+           width: 100%;
            height: 100vh;
          }
        </style>
@@ -153,7 +159,7 @@ For cases where you need programmatic control or want to use the lower-level API
      YAMLParser,
      MapRenderer,
      toModel,
-   } from "https://esm.sh/@maplibre-yaml/core?external=maplibre-gl";
+   } from "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl";
 
    // Fetch and parse YAML configuration
    const response = await fetch("map.yaml");
@@ -189,7 +195,8 @@ For cases where you need programmatic control or want to use the lower-level API
    npx serve .
    ```
 
-   Open http://localhost:3000
+   Open the address it prints (usually http://localhost:3000). Opening the
+   HTML file directly does not work: a `file://` page cannot fetch `map.yaml`.
 
 </Steps>
 
@@ -224,7 +231,7 @@ For quick prototypes or simple projects. To use the web component, provide `mapl
 </script>
 <script
   type="module"
-  src="https://unpkg.com/@maplibre-yaml/core/register.js"
+  src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
 ></script>
 ```
 
@@ -239,7 +246,7 @@ To use the JavaScript API, import the package from esm.sh, which resolves `yaml`
     YAMLParser,
     MapRenderer,
     toModel,
-  } from "https://esm.sh/@maplibre-yaml/core?external=maplibre-gl";
+  } from "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl";
   // Your code here
 </script>
 ```
@@ -280,10 +287,41 @@ yarn add @maplibre-yaml/core maplibre-gl@^6
 </TabItem>
 </Tabs>
 
+In your entry file, point maplibre-gl 6 at its worker before you render a
+map. Inside a bundle maplibre-gl cannot find its worker file by itself, and
+without these lines every map fails with *"Worker failed to load"*. With Vite:
+
 ```javascript
-import { YAMLParser, MapRenderer, toModel } from '@maplibre-yaml/core';
-import 'maplibre-gl/dist/maplibre-gl.css';
+// src/main.js
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import { YAMLParser, MapRenderer, toModel } from "@maplibre-yaml/core";
+import "maplibre-gl/dist/maplibre-gl.css";
+
+setWorkerUrl(workerUrl);
+
+const response = await fetch("./map.yaml");
+const result = YAMLParser.safeParseMapBlock(await response.text());
+if (result.success) {
+  MapRenderer.fromModel(document.getElementById("map"), toModel(result.data));
+} else {
+  console.error("Configuration errors:", result.errors);
+}
 ```
+
+```html
+<!-- index.html: the map container needs a height -->
+<body>
+  <div id="map" style="height: 100vh;"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+```
+
+Put `map.yaml` and the data files it loads in Vite's **`public/`** folder.
+A file next to `index.html` loads in `npm run dev` but is not copied by
+`npm run build`. On maplibre-gl 4 or 5, leave out the worker lines. The
+step-by-step Vite setup, for both `<ml-map>` and the API, is in
+[Installation → Using a bundler](/getting-started/installation/#using-a-bundler-vite).
 
 ## Loading YAML Configuration
 
@@ -316,7 +354,7 @@ id: inline-map
 config:
   center: [-74.006, 40.7128]
   zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers: []`;
 
 const result = YAMLParser.safeParseMapBlock(yamlConfig);
@@ -432,7 +470,7 @@ id: live-map
 config:
   center: [-120, 37]
   zoom: 5
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle
@@ -513,8 +551,10 @@ Here's a complete example showing a map with live data and UI controls:
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Earthquake Dashboard</title>
     <link
       href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
@@ -530,7 +570,7 @@ Here's a complete example showing a map with live data and UI controls:
         font-family: system-ui, sans-serif;
       }
       #map {
-        width: 100vw;
+        width: 100%;
         height: 100vh;
       }
       .controls {
@@ -584,7 +624,7 @@ id: earthquake-dashboard
 config:
   center: [-120, 40]
   zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle
@@ -633,7 +673,7 @@ import {
   YAMLParser,
   MapRenderer,
   toModel,
-} from "https://esm.sh/@maplibre-yaml/core?external=maplibre-gl";
+} from "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl";
 
 // State
 let visible = true;
@@ -761,6 +801,18 @@ renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
 });
 ```
 
+4. **The site is published under a subpath** (a GitHub Pages project site,
+   `https://<user>.github.io/<repo>/`) and the paths in the YAML start with
+   `/` (`/data/x.geojson`), so they point at the domain root. With
+   `<ml-map>`, add `base="/<repo>/"`
+   ([details](/integrations/web-components/#sites-under-a-subpath-github-pages)).
+   With `MapRenderer`, resolve the paths before rendering, as the element
+   does: `const model = applyDocumentBase(toModel(block), "/<repo>/")`, then
+   build the renderer from `denormalizeConfig(model)`,
+   `denormalizeLayers(model)`, `denormalizeOptions(model)` and
+   `denormalizeSources(model)` (all exported by `@maplibre-yaml/core`). For a
+   single URL, `resolveDocumentUrl(url, "/<repo>/")`.
+
 ### YAML Parsing Errors
 
 **Symptoms:** `safeParseMapBlock` returns `success: false` with errors.
@@ -837,10 +889,14 @@ id: my-map
 config:
   center: [-74, 40]
   zoom: 10
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers: []
 `;
 ```
+
+The same applies to inline YAML in a `<script type="text/yaml">` tag: start
+the YAML on the line after the opening tag, not on the same line, and keep
+every line at the same depth relative to the first.
 
 Indent with spaces only: YAML rejects tab indentation.
 

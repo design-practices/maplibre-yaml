@@ -4,7 +4,7 @@ id: controls-demo
 config:
   center: [-98, 39]
   zoom: 3
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers: []
 controls:
   navigation: true

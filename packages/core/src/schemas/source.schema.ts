@@ -18,7 +18,7 @@ import { markOpenSchema } from "../parser/validation-utils";
 
 /**
  * Something a browser can actually fetch: an absolute URL (any scheme), a
- * root-relative path, or an explicitly-relative path.
+ * root-relative path, an explicitly-relative path, or a bare relative path.
  *
  * @remarks
  * This replaces `z.string().url()` on every source URL field. `.url()` demands
@@ -26,6 +26,16 @@ import { markOpenSchema } from "../parser/validation-utils";
  * data alongside the page, an ordinary setup that works at runtime, since the
  * data layer passes the string straight to `fetch()` and MapLibre resolves
  * source URLs relative to the document (GH #39).
+ *
+ * Bare relative paths (`data/points.geojson`, `points.geojson`) are accepted
+ * too (ml-zft): `fetch()` and MapLibre resolve them exactly like
+ * `./data/points.geojson`, and rejecting them was the top trap for students
+ * writing a plain-HTML page. Every relative form resolves against the PAGE
+ * (`document.baseURI`), not against the YAML file that contains it.
+ *
+ * The bare-path branch only matches when nothing before the first `/`, `?`
+ * or `#` contains a `:`, so it never widens what counts as a scheme; scheme
+ * URLs are matched by the first branch exactly as before.
  *
  * A regex rather than a `new URL()` refinement, for two reasons. It keeps the
  * field a `ZodString`: a `.refine()` yields a `ZodEffects` whose larger type,
@@ -38,11 +48,13 @@ import { markOpenSchema } from "../parser/validation-utils";
  * `javascript:` too, since `new URL()` considers it well-formed. Scheme safety
  * is enforced where it matters, at the render sinks, by `safeUrl`.
  */
-const FETCHABLE_REFERENCE = /^(?:[a-zA-Z][a-zA-Z\d+\-.]*:|\/|\.\.?\/)/;
+const FETCHABLE_REFERENCE =
+  /^(?:[a-zA-Z][a-zA-Z\d+\-.]*:|\/|\.\.?\/|[^\s:/?#][^:/?#]*(?:[/?#]|$))/;
 
 const FETCHABLE_REFERENCE_MESSAGE =
   "Must be an absolute URL (https://example.com/data.geojson) or a path " +
-  "that resolves against the page (/data/data.geojson)";
+  "to a file on your site (data/data.geojson, ./data.geojson or " +
+  "/data/data.geojson). Relative paths resolve against the page, not the YAML file";
 
 const ResourceURLSchema = z
   .string()

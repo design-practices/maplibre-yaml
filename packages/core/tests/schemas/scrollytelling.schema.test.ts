@@ -252,6 +252,10 @@ describe("ChapterSchema", () => {
       ["image", "../shared/fuji.jpg"],
       ["image", "//cdn.example.com/fuji.jpg"],
       ["image", "http://example.com/fuji.jpg"],
+      // ml-zft: a bare relative path resolves against the page like ./x
+      ["image", "images/fuji.jpg"],
+      ["image", "fuji.jpg"],
+      ["video", "videos/clip.mp4"],
       ["video", "/videos/clip.mp4"],
       ["video", "HTTPS://example.com/clip.mp4"],
     ])("accepts %s %s (absolute http(s) or a site path)", (field, value) => {
@@ -267,7 +271,8 @@ describe("ChapterSchema", () => {
       ["video", "data:video/mp4;base64,AAAA"],
       ["image", "vbscript:msgbox(1)"],
       ["image", "file:///etc/passwd"],
-      ["image", "images/fuji.jpg"],
+      ["image", "mailto:a@example.com"],
+      ["image", " images/fuji.jpg"],
       ["image", ""],
     ])("rejects %s %j", (field, value) => {
       const chapter = { id: "t", title: "T", center: [0, 0], zoom: 3, [field]: value };

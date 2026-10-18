@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { colorProblem } from "./css-colors";
 
 /**
  * Longitude value in degrees.
@@ -146,28 +147,13 @@ export type LngLatBounds = z.infer<typeof LngLatBoundsSchema>;
  */
 export const ColorSchema = z
   .string()
-  .refine(
-    (val) => {
-      // Hex color (#rgb, #rrggbb, #rrggbbaa)
-      if (val.startsWith("#")) {
-        return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(val);
-      }
-      // rgb/rgba
-      if (val.startsWith("rgb")) {
-        return /^rgba?\s*\([^)]+\)$/.test(val);
-      }
-      // hsl/hsla
-      if (val.startsWith("hsl")) {
-        return /^hsla?\s*\([^)]+\)$/.test(val);
-      }
-      // Named colors (accept any other string, browser will validate)
-      return true;
-    },
-    {
-      message:
-        "Invalid color format. Use hex (#rgb, #rrggbb), rgb(), rgba(), hsl(), hsla(), or named colors.",
-    }
-  )
+  .superRefine((val, ctx) => {
+    // Hex, rgb()/hsl() shapes, and — since a bare word maplibre-gl does not
+    // know drops the whole layer at runtime — real CSS colour names only,
+    // with a did-you-mean (`bleu` → `blue`) and a curly-quote check.
+    const problem = colorProblem(val);
+    if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+  })
   .describe("CSS color value");
 
 /** Inferred type for color values. */

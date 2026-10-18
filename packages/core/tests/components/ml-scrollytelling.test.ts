@@ -271,13 +271,13 @@ chapters:
     expect(cards).toHaveLength(1);
     const card = cards[0] as HTMLElement;
     expect(card.getAttribute("role")).toBe("alert");
-    expect(card.textContent).toContain("chapters.0.center");
+    expect(card.textContent).toContain("chapters.0.centre");
     expect(card.textContent).toMatch(/line \d+/);
     expect(card.textContent).toMatch(/centre[\s\S]*center/); // the did-you-mean hint
     expect(card.textContent).not.toContain("No configuration provided");
     expect(el.querySelector("ml-map")).toBeNull();
     expect(errors).toHaveLength(1);
-    await expect(el.mapReady()).rejects.toThrow(/chapters\.0\.center/);
+    await expect(el.mapReady()).rejects.toThrow(/chapters\.0\.centre/);
   });
 
   it("src: no <ml-map> exists (so none can complain) until the story has arrived", async () => {

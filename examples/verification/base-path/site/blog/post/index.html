@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Base path: nested page</title>
+  <!--
+    ml-aot.30 — a page two folders deep (/my-repo/blog/post/). With base, the
+    bare relative paths in the document (styles/basemap.json,
+    data/route.geojson) and src="configs/map.yaml" itself resolve against the
+    base, not this page's folder, so the same YAML works here unchanged.
+    PASS = the same map as /my-repo/: city dots, route, peak icons, icon marker, no notice.
+    Open: http://localhost:4174/my-repo/blog/post/
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 480px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>/my-repo/blog/post/ with base="/my-repo" — PASS = same map as /my-repo/, no notice.</header>
+  <ml-map id="map" src="configs/map.yaml" base="/my-repo"></ml-map>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

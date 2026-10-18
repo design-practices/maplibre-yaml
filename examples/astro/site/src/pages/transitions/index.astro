@@ -1,0 +1,14 @@
+---
+import Transitions from "../../layouts/Transitions.astro";
+import { FullPageMap } from "@maplibre-yaml/astro";
+---
+
+<Transitions title="View transitions">
+  <!-- Leave and come back with soft navigations: the zoom/reset buttons work on every visit. -->
+  <FullPageMap src="/maps/japan-arc.yaml">
+    <nav slot="top-left" class="caption" data-testid="vt-nav">
+      <strong>View transitions</strong>
+      <a href="/transitions/inline/" data-testid="vt-to-inline">Inline map &rarr;</a>
+    </nav>
+  </FullPageMap>
+</Transitions>

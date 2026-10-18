@@ -408,7 +408,7 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await expect(page.locator("ml-map")).toHaveCount(0);
     await expect(card).toHaveAttribute("role", "alert");
     await expect(card).toContainText("story.yaml");
-    await expect(card).toContainText("chapters.1.center");
+    await expect(card).toContainText("chapters.1.centre");
     await expect(card).toContainText(/line \d+/);
     await expect(card).toContainText(/centre[\s\S]*center/);
     // The failure is logged once, as an error, naming the file.

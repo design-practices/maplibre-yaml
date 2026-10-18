@@ -1,0 +1,14 @@
+---
+import Transitions from "../../layouts/Transitions.astro";
+import { Map } from "@maplibre-yaml/astro";
+---
+
+<Transitions title="View transitions: inline map">
+  <main>
+    <h1>An inline map after a soft navigation</h1>
+    <p><a href="/transitions/" data-testid="vt-to-full">&larr; Back to the full-page map</a></p>
+    <div class="map-frame" data-testid="vt-inline-map">
+      <Map src="/maps/japan-arc.yaml" height="360px" />
+    </div>
+  </main>
+</Transitions>

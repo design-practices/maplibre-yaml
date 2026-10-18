@@ -14,8 +14,11 @@ Create a new file called `index.html`:
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8" />
+    <!-- Without this line, phones lay the page out at desktop width and the map looks tiny -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>My First Map</title>
     <link
       href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
@@ -28,28 +31,29 @@ Create a new file called `index.html`:
     <!-- Register the <ml-map> web component -->
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
     ></script>
     <style>
       body {
         margin: 0;
       }
+      /* <ml-map> has no size of its own: without a height the map is invisible */
       ml-map {
         display: block;
-        width: 100vw;
+        width: 100%;
         height: 100vh;
       }
     </style>
   </head>
   <body>
-    <ml-map src="earthquake-map.yaml"></ml-map>
+    <ml-map src="./earthquake-map.yaml"></ml-map>
   </body>
 </html>
 ```
 
 ## 2. Create your YAML configuration
 
-Create a file called `earthquake-map.yaml`:
+Create a file called `earthquake-map.yaml` in the same folder:
 
 ```yaml
 type: map
@@ -57,7 +61,7 @@ id: earthquake-map
 config:
   center: [-120, 37]
   zoom: 5
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle
@@ -71,13 +75,21 @@ layers:
       circle-stroke-color: "#ffffff"
 ```
 
+Two YAML rules that trip up almost everyone the first time: indent with
+spaces (never tabs), and put colours in quotes. `circle-color: #e74c3c`
+without quotes is a comment, because `#` starts a comment in YAML.
+
 ## 3. Run a local server
+
+In the folder that holds both files, run:
 
 ```bash
 npx serve .
 ```
 
-Open http://localhost:3000 in your browser.
+Open the address it prints (usually http://localhost:3000) in your browser.
+Double-clicking `index.html` instead does not work: a page opened from a
+`file://` address is not allowed to fetch `earthquake-map.yaml`.
 
 ## Result
 
@@ -99,7 +111,7 @@ id: earthquake-map           # Unique identifier
 config:
   center: [-120, 37]         # [longitude, latitude]
   zoom: 5                    # Initial zoom level
-  mapStyle: "https://..."    # Base map style URL`}
+  mapStyle: "https://..."    # Basemap style URL`}
 </YAMLBlock>
 
 <YAMLBlock highlight={[1, 2, 3, 4, 5, 6]} caption="Layer configuration">
@@ -129,7 +141,7 @@ id: earthquake-map
 config:
   center: [-120, 37]
   zoom: 5
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle

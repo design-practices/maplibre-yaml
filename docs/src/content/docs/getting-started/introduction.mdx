@@ -30,23 +30,23 @@ Instead of this JavaScript:
 ```javascript
 const map = new maplibregl.Map({
   container: "map",
-  style: "https://demotiles.maplibre.org/style.json",
-  center: [-74.006, 40.7128],
-  zoom: 12,
+  style: "https://tiles.openfreemap.org/styles/liberty",
+  center: [-90, 38],
+  zoom: 3.5,
 });
 
 map.on("load", () => {
-  map.addSource("bikes", {
+  map.addSource("rivers", {
     type: "geojson",
-    data: "https://example.com/bikes.geojson",
+    data: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines.geojson",
   });
 
   map.addLayer({
-    id: "bike-lanes",
+    id: "rivers",
     type: "line",
-    source: "bikes",
+    source: "rivers",
     paint: {
-      "line-color": "#00ff00",
+      "line-color": "#2563eb",
       "line-width": 2,
     },
   });
@@ -59,17 +59,17 @@ You write this YAML:
 type: map
 id: my-map
 config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  center: [-90, 38]
+  zoom: 3.5
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
-  - id: bike-lanes
+  - id: rivers
     type: line
     source:
       type: geojson
-      url: "https://example.com/bikes.geojson"
+      url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines.geojson"
     paint:
-      line-color: "#00ff00"
+      line-color: "#2563eb"
       line-width: 2
 ```
 

@@ -113,6 +113,37 @@ export class ChromeLayout {
     this.corner(corner).appendChild(el);
   }
 
+  /**
+   * Keep MapLibre's compact attribution from covering bottom-left chrome.
+   *
+   * @remarks
+   * On a narrow map (MapLibre's threshold is 640px) the attribution control
+   * goes compact and starts EXPANDED until the first drag. Expanded, it wraps
+   * across the map's whole bottom edge from the bottom-right corner, above
+   * the chrome (z-index 2 vs 1) -- a bottom-left legend on a phone showed only
+   * its title (ml-aot.26). The bottom-left corner cannot reserve space for it
+   * (the attribution lives in the other corner and shrinks to an (i) button a
+   * moment later), so while bottom-left chrome is mounted the attribution
+   * starts collapsed, exactly as MapLibre leaves it after a drag. The (i)
+   * button still expands it on demand. Same-corner placement past MapLibre's
+   * own controls is unchanged.
+   *
+   * @returns Whether an expanded attribution was collapsed.
+   */
+  collapseCompactAttribution(): boolean {
+    const bottomLeft = this.corners.get("bottom-left");
+    if (!bottomLeft || bottomLeft.childElementCount === 0) return false;
+    let collapsed = false;
+    for (const attribution of this.host.querySelectorAll<HTMLElement>(
+      ".maplibregl-ctrl-attrib.maplibregl-compact.maplibregl-compact-show"
+    )) {
+      attribution.classList.remove("maplibregl-compact-show");
+      attribution.removeAttribute("open");
+      collapsed = true;
+    }
+    return collapsed;
+  }
+
   /** Remove every corner container (renderer destroy). */
   destroy(): void {
     for (const el of this.corners.values()) el.remove();

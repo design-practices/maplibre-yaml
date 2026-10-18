@@ -6,5 +6,5 @@ config:
   zoom: 14
   pitch: 45
   bearing: -17
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers: []

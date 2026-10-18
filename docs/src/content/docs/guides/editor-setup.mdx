@@ -28,8 +28,20 @@ Each block type has a stable, versioned schema URL:
 | `root` (pages)   | `https://docs.maplibre-yaml.org/schema/latest/root.schema.json`            |
 | any of the above | `https://docs.maplibre-yaml.org/schema/latest/any.schema.json`             |
 
-`latest/` always tracks the newest release. Version-pinned copies live at
-`https://docs.maplibre-yaml.org/schema/v<major.minor>/<block>.schema.json`.
+`latest/` always tracks the newest release, and is what the files `mlym init`
+creates use.
+
+To pin a version, use the copy that ships inside the npm package, served by a
+CDN. It exists for every release from 0.4 on and never moves:
+
+```text
+https://cdn.jsdelivr.net/npm/@maplibre-yaml/core@0.7/schemas/map.schema.json
+```
+
+Change `0.7` to the version you use (`@0.7` is the newest 0.7.x; `@0.7.1` is
+exactly that release). The docs site also serves the current release under
+`https://docs.maplibre-yaml.org/schema/v0.7/<block>.schema.json`; addresses
+for older versions there (such as `/schema/v0.6/`) redirect to the CDN copy.
 
 ## Option 1: The modeline (recommended)
 
@@ -44,7 +56,7 @@ id: my-map
 config:
   center: [-74.006, 40.7128]
   zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
 Use the schema that matches the file's block type:
@@ -98,9 +110,19 @@ glob default and override per-file with a modeline.
 
 ## Offline / air-gapped
 
-The same schemas ship inside the `@maplibre-yaml/core` npm package (under
-`@maplibre-yaml/core/schemas/json/`). Point at a local copy, or write one out
-with the CLI:
+The same schemas ship inside the `@maplibre-yaml/core` npm package, as
+`node_modules/@maplibre-yaml/core/schemas/<block>.schema.json` once core is
+installed. A modeline can point straight at that file, relative to the YAML
+file:
+
+```yaml no-validate
+# yaml-language-server: $schema=./node_modules/@maplibre-yaml/core/schemas/map.schema.json
+type: map
+```
+
+(`@maplibre-yaml/core/schemas/json/<block>.schema.json` is the same file as a
+package export, for tools that resolve imports, not for a modeline.) Or write
+a copy next to your files with the CLI:
 
 ```bash
 npx @maplibre-yaml/cli schema map --out map.schema.json

@@ -9,7 +9,7 @@ The `<ml-map>` web component is the simplest way to add maps to any HTML page. N
 
 ## Quick Start
 
-Get a map on your page in 3 steps.
+Get a map on your page in 4 steps.
 
 <Steps>
 
@@ -17,6 +17,10 @@ Get a map on your page in 3 steps.
 
    ```html
    <head>
+     <meta charset="utf-8" />
+     <!-- Without this line, phones lay the page out at desktop width and the map looks tiny -->
+     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
      <!-- MapLibre GL CSS -->
      <link
        href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
@@ -30,14 +34,14 @@ Get a map on your page in 3 steps.
      <!-- Register the web component -->
      <script
        type="module"
-       src="https://unpkg.com/@maplibre-yaml/core/register.js"
+       src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
      ></script>
    </head>
    ```
 
 2. **Create a YAML configuration file**
 
-   Create `map.yaml` in your project:
+   Create `map.yaml` next to your HTML file:
 
    ```yaml
    type: map
@@ -45,7 +49,7 @@ Get a map on your page in 3 steps.
    config:
      center: [-74.006, 40.7128]
      zoom: 12
-     mapStyle: "https://demotiles.maplibre.org/style.json"
+     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
    layers:
      - id: marker
        type: circle
@@ -68,19 +72,21 @@ Get a map on your page in 3 steps.
 3. **Add the map component**
 
    ```html
-   <ml-map src="map.yaml" style="width: 100%; height: 400px; display: block;">
+   <ml-map src="./map.yaml" style="width: 100%; height: 400px; display: block;">
    </ml-map>
    ```
 
 4. **View in browser**
 
-   Serve your files with any web server (e.g., `npx serve .`) and open in browser!
+   Serve the folder with any web server (for example `npx serve .`) and open
+   the address it prints. Opening the HTML file directly does not work: a
+   `file://` page cannot fetch `map.yaml`.
 
 </Steps>
 
 <Aside type="tip">
-  The `display: block` style is important - custom elements are inline by
-  default, which can cause sizing issues.
+  Give every `<ml-map>` `display: block` and a height. Custom elements are
+  inline and zero-height by default, so without them the map is invisible.
 </Aside>
 
 ## Installation Options
@@ -95,7 +101,7 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 </script>
 <script
   type="module"
-  src="https://unpkg.com/@maplibre-yaml/core/register.js"
+  src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
 ></script>
 ```
 
@@ -114,11 +120,33 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 npm install @maplibre-yaml/core maplibre-gl@^6
 ```
 
+Your JavaScript entry point registers the element, loads MapLibre's CSS and,
+on maplibre-gl 6, tells MapLibre where its worker file is. Inside a bundle
+maplibre-gl cannot find that file by itself: leave the worker lines out and
+the map shows *Worker failed to load* instead of rendering. With Vite:
+
 ```javascript
-// In your JavaScript entry point
+// src/main.js
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "@maplibre-yaml/core/register";
 import "maplibre-gl/dist/maplibre-gl.css";
+
+setWorkerUrl(workerUrl);
 ```
+
+```html
+<!-- index.html -->
+<ml-map src="./map.yaml" style="display: block; height: 400px;"></ml-map>
+<script type="module" src="/src/main.js"></script>
+```
+
+Put `map.yaml`, and every data file it loads, in Vite's **`public/`** folder.
+A YAML file next to `index.html` loads in `npm run dev`, but `npm run build`
+does not copy it, so the built site shows *YAML syntax error … `<!doctype
+html>`*. On maplibre-gl 4 or 5, leave out the worker lines. The full
+walkthrough is in
+[Installation → Using a bundler](/getting-started/installation/#using-a-bundler-vite).
 
 ## Configuration Methods
 
@@ -156,28 +184,34 @@ There are three ways to configure `<ml-map>`, each suited for different use case
 The simplest and cleanest approach - keep your configuration in a separate YAML file:
 
 ```html
-<ml-map src="/maps/my-map.yaml" style="height: 400px; display: block;"></ml-map>
+<ml-map src="./maps/my-map.yaml" style="height: 400px; display: block;"></ml-map>
 ```
 
-**my-map.yaml:**
+**maps/my-map.yaml:**
 
 ```yaml
 type: map
 id: my-map
 config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: points
     type: circle
     source:
       type: geojson
-      url: "https://example.com/data.geojson"
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     paint:
-      circle-radius: 8
+      circle-radius: 5
       circle-color: "#3b82f6"
 ```
+
+Relative paths inside the YAML (`url: "data/points.geojson"`) resolve against
+the **page**, not the YAML file. See
+[Files on your own site](/schema/sources/#files-on-your-own-site-relative-paths).
+Publishing under a subpath, such as a GitHub Pages project site? Add a
+[`base`](#sites-under-a-subpath-github-pages).
 
 **Why this is best:**
 
@@ -200,7 +234,7 @@ id: inline-map
 config:
   center: [-74.006, 40.7128]
   zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: marker
     type: circle
@@ -225,7 +259,10 @@ layers:
 **Why this works:**
 
 - Browser doesn't process `<script type="text/yaml">` content
-- Whitespace and indentation are preserved exactly
+- Whitespace and indentation are preserved exactly. Start the YAML on the line
+  after `<script type="text/yaml">`, not on the same line, and keep every line
+  at the same depth relative to the first one (indenting the whole block to
+  match your HTML is fine)
 - Works in plain HTML, Astro, MDX and Svelte templates; in React, pass the
   YAML as a string child (`<script type="text/yaml">{yaml}</script>`)
 - **Not in Vue templates:** Vue's compiler rejects `<script>` tags in a
@@ -247,7 +284,7 @@ For dynamic or generated configurations:
   { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
 </script>
 <script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core/register.js";
+  import "https://unpkg.com/@maplibre-yaml/core@0.7/register.js";
 
   const config = {
     type: "map",
@@ -255,7 +292,7 @@ For dynamic or generated configurations:
     config: {
       center: [-74.006, 40.7128],
       zoom: 12,
-      mapStyle: "https://demotiles.maplibre.org/style.json",
+      mapStyle: "https://tiles.openfreemap.org/styles/liberty",
     },
     layers: [],
   };
@@ -284,6 +321,57 @@ For dynamic or generated configurations:
   waits for it. A `config` assigned *before* `register.js` loads is picked up
   when the element upgrades. On 0.6, the error card flashed in both cases.
 </Aside>
+
+## Sites under a subpath (GitHub Pages)
+
+A GitHub Pages *project* site is published at
+`https://<user>.github.io/<repo>/`, so your files live under `/<repo>/`:
+`data/cities.geojson` in the repository is
+`https://<user>.github.io/<repo>/data/cities.geojson`. Paths in your YAML that
+start with `/` (`/data/cities.geojson`) then point at the domain root and 404,
+and relative paths only work on pages at the top of the site.
+
+Add the `base` attribute with the subpath, and leave the YAML as it is:
+
+```html
+<ml-map src="maps/city.yaml" base="/<repo>/"></ml-map>
+```
+
+With a base, every path to a file of your own resolves against it, whichever
+page the map is on:
+
+| Written in the document | Loads (with `base="/my-repo/"`) |
+| --- | --- |
+| `/data/cities.geojson` | `/my-repo/data/cities.geojson` |
+| `data/cities.geojson` or `./data/cities.geojson` | `/my-repo/data/cities.geojson` |
+| `/my-repo/data/cities.geojson` | used as written (the base is never doubled) |
+| `https://…`, `//cdn…`, `blob:`, `data:` | used as written |
+
+It applies to the `src` attribute and to these fields of the document:
+`mapStyle` (v2: `style.basemap`) when it is a path, and the `sprite`, `glyphs`
+and source URLs of an inline style object; source `url`, `tiles` and video
+`urls`, a GeoJSON `data` written as a path, and `stream.url`, in `sources:`
+and in a layer's own `source:`; `images:`; marker `icon:`; and `href` links in
+popups (layer, marker and standalone `popups:`). URLs inside a style JSON or
+GeoJSON file you load are not rewritten.
+
+`base="/<repo>"` and `base="<repo>"` mean the same thing. Without `base`,
+nothing changes: relative paths resolve against the page and `/…` against the
+domain root. Setting the `base` property (`map.base = "/my-repo/"`) re-renders
+the map. A user site (`<user>.github.io`) or a custom domain is served from the
+root and needs no base. If a `/…` path 404s on a page that sits under a
+subpath, the notice on the map suggests the `base` to add.
+
+**Why not `<base href>`?** A `<base href="/<repo>/">` in the page's `<head>`
+makes the browser resolve every *relative* URL on the page against it, the
+map's included, so `data/cities.geojson` loads from `/<repo>/data/`. It does
+not change paths that start with `/`, and it also changes every other relative
+link and image on the page. The `base` attribute covers both kinds of path and
+only affects the map.
+
+On Astro, the `Map` and `FullPageMap` components set `base` from your site's
+`base` setting for you: see
+[Deploying to GitHub Pages](/integrations/astro/#deploying-to-github-pages-or-any-subpath).
 
 ## Component Lifecycle
 
@@ -340,7 +428,7 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 |-------|--------|------------|
 | `ml-map:loading` | `{ url }` | A `src` document fetch begins |
 | `ml-map:load` | `{}` | The document is fully loaded — basemap and every layer |
-| `ml-map:error` | `{ error, fatal }` or `{ errors }` | Initialization or runtime failure (`fatal: true` aborts the document); a document that fails to parse or validate carries `errors` — the structured `{ path, message }[]` the error card shows — instead |
+| `ml-map:error` | `{ error, fatal }` or `{ errors }` | Initialization or runtime failure. `fatal: true` aborts the document (a basemap style that won't load, a worker that can't start); `fatal: false` is a problem the map survives (a rejected layer, a tile that 404'd). A document that can't be fetched, parsed or validated carries `errors` — the structured `{ path, message }[]` the error card shows — instead |
 | `ml-map:layer-added` | `{ layerId }` | A layer was added to the map |
 | `ml-map:layer-removed` | `{ layerId }` | A layer was removed |
 | `ml-map:layer-data-loading` | `{ layerId }` | A layer's data fetch begins |
@@ -356,6 +444,34 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 | `ml-map:layer-visibility` | `{ layerId, visible }` | A params-panel checkbox toggled a layer |
 | `ml-map:camera-fit` | `{ source, bounds }` | The `fitTo` camera framed its source's data (once, on the first data load for fetched sources) |
 
+### When something goes wrong
+
+`<ml-map>` shows problems on the page, not only in the browser console:
+
+- **Error card** (replaces the map) — the document can't render at all: a
+  YAML syntax error, a validation error (with its line number and, for a typo,
+  a "did you mean"), a `src` file that isn't found (with the full address the
+  browser requested; a wrong path that returns a web page is recognised as
+  one), a page opened from a file (`file://`, which browsers block; the card
+  says to start a local server), or a basemap style that won't load.
+  `mapReady()` rejects.
+- **Notice** (over the map, dismissible) — the map works but part of the
+  document didn't load: a layer MapLibre rejected (for example a bad colour
+  inside an expression), a layer whose `source:` names a source that doesn't
+  exist, a data file that didn't load, or an `images:` entry or marker icon
+  that failed. Each line names the layer or file. The map still fires
+  `ml-map:load` and `mapReady()` resolves.
+- **Height hint** — a map with no height is invisible, so the element shows a
+  short note saying to give it one, and removes it once the map has a height.
+
+Add the `quiet` attribute to keep the notice and the height hint off the page
+(for a production site that would rather fail quietly). The problems are still
+logged to the console and dispatched as events. The error card is always shown.
+
+```html
+<ml-map src="/maps/city.yaml" quiet></ml-map>
+```
+
 ## Slots: your own chrome over the map
 
 Author markup placed inside `<ml-map>` with a `slot` attribute rides the
@@ -364,7 +480,7 @@ so page chrome (buttons, captions, a custom legend) sits over the map without
 hand-rolled absolute positioning:
 
 ```html
-<ml-map src="/configs/map.yaml">
+<ml-map src="./map.yaml" style="display: block; height: 400px;">
   <div slot="top-right" class="my-controls">
     <button data-action="zoom-in">+</button>
     <button data-action="reset">⟲</button>
@@ -523,8 +639,10 @@ This example demonstrates a complete implementation using the `src` attribute wi
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Earthquake Monitor</title>
     <link
       href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
@@ -535,7 +653,7 @@ This example demonstrates a complete implementation using the `src` attribute wi
     </script>
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"
     ></script>
     <style>
       * {
@@ -595,7 +713,7 @@ This example demonstrates a complete implementation using the `src` attribute wi
         <div class="status" id="status">Initializing...</div>
       </header>
 
-      <ml-map id="earthquake-map" src="earthquake-config.yaml"></ml-map>
+      <ml-map id="earthquake-map" src="./earthquake-config.yaml"></ml-map>
     </div>
 
     <script type="module">
@@ -644,7 +762,7 @@ id: earthquake-monitor
 config:
   center: [-120, 40]
   zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle
@@ -705,35 +823,30 @@ Each `<ml-map>` is independent:
 
 ```html
 <div
-  style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 100vh;"
+  style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 400px;"
 >
-  <ml-map id="map-1" style="display: block;"></ml-map>
-  <ml-map id="map-2" style="display: block;"></ml-map>
+  <ml-map src="./map-1.yaml" style="display: block; height: 100%;"></ml-map>
+  <ml-map src="./map-2.yaml" style="display: block; height: 100%;"></ml-map>
 </div>
-
-<script type="importmap">
-  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-</script>
-<script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core/register.js";
-
-  // Configure each map independently
-  document.getElementById("map-1").config = {
-    /* config 1 */
-  };
-  document.getElementById("map-2").config = {
-    /* config 2 */
-  };
-</script>
 ```
+
+Each element loads its own document (`map-1.yaml`, `map-2.yaml`), and the
+page needs the import map and `register.js` only once. A map built in
+JavaScript can take its document through the `config` property instead (see
+[Method 3](#method-3-json-attribute-programmatic)).
 
 ## Framework Compatibility
 
 `<ml-map>` is a standard custom element, so any framework can render it. Import
 `@maplibre-yaml/core/register` once (it defines the element) and import
-`maplibre-gl/dist/maplibre-gl.css` in your entry point. Three things differ
-from framework to framework: how `config` reaches the element, how you listen
-for `ml-map:*` events, and TypeScript.
+`maplibre-gl/dist/maplibre-gl.css` in your entry point. On maplibre-gl 6, the
+same entry point also calls `setWorkerUrl()` with your bundler's URL for the
+worker, exactly as in [npm (With Build Tools)](#npm-with-build-tools); every
+framework below bundles your code, so every one needs it. Files that `src=`
+and YAML `url:`s point at go in the framework's static folder (`public/` in
+Vite and Next.js, `static/` in SvelteKit). Three things differ from framework
+to framework: how `config` reaches the element, how you listen for `ml-map:*`
+events, and TypeScript.
 
 | Framework | `config` object | `ml-map:*` events | TypeScript |
 |-----------|-----------------|-------------------|------------|
@@ -1161,6 +1274,11 @@ mapEl.addEventListener("ml-map:error", (event) => {
 
 **Symptoms:** Base map shows, but data layers don't appear.
 
+First read the notice at the top of the map, if there is one: it names each
+layer that didn't draw and each data file that didn't load, with the address
+the browser tried. Relative data paths resolve against the page, not the YAML
+file.
+
 **Debug steps:**
 
 1. **Check layer loading events**
@@ -1191,12 +1309,16 @@ mapEl.addEventListener("ml-map:error", (event) => {
 | --------- | ----------- | ------------------------------------------ |
 | `src`     | string      | URL to external YAML configuration file    |
 | `config`  | JSON string | Map configuration as stringified JSON      |
+| `quiet`   | boolean     | Keep non-fatal notices and the zero-height hint off the page ([details](#when-something-goes-wrong)) |
+| `base`    | string      | Where the paths in `src` and in the document start, for a site under a subpath (`"/my-repo/"`) ([details](#sites-under-a-subpath-github-pages)) |
 
 ### Properties
 
 | Property | Type               | Description                        |
 | -------- | ------------------ | ---------------------------------- |
 | `config` | Object or string   | Map configuration object (set/get) |
+| `quiet`  | boolean            | Reflects the `quiet` attribute     |
+| `base`   | string or `null`   | Reflects the `base` attribute; setting it re-renders the map |
 
 ### Methods
 

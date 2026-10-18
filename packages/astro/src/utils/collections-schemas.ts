@@ -157,6 +157,22 @@ export const RouteLineSchema = z.object({
 export type RouteLine = z.infer<typeof RouteLineSchema>;
 
 /**
+ * The default for the helpers' `customFields` type parameter: none.
+ *
+ * @remarks
+ * Each helper always `.extend()`s -- with `{}` when no fields are given -- so
+ * it has ONE return type, `ZodObject<Base & T>`. They used to return
+ * `customFields ? base.extend(customFields) : base` with `customFields` typed
+ * as the bare `z.ZodRawShape`: a union whose extended arm has an
+ * index-signature shape. zod 3 dropped the custom fields from the inferred
+ * type; zod 4 (Astro 6/7's `astro/zod`) collapsed EVERY field to `unknown`,
+ * so `astro check` failed on `post.data.title` (ml-aot.23).
+ *
+ * @internal
+ */
+type NoCustomFields = Record<never, never>;
+
+/**
  * Creates a schema for collection items with optional single location.
  *
  * @param customFields - Additional fields to include in the schema
@@ -208,9 +224,9 @@ export type RouteLine = z.infer<typeof RouteLineSchema>;
  * });
  * ```
  */
-export function getCollectionItemWithLocationSchema(
-  customFields?: z.ZodRawShape,
-) {
+export function getCollectionItemWithLocationSchema<
+  T extends z.ZodRawShape = NoCustomFields,
+>(customFields?: T) {
   const baseSchema = z.object({
     title: z.string().describe("Post title"),
     description: z.string().optional().describe("Post description/excerpt"),
@@ -221,11 +237,7 @@ export function getCollectionItemWithLocationSchema(
     ),
   });
 
-  if (customFields) {
-    return baseSchema.extend(customFields);
-  }
-
-  return baseSchema;
+  return baseSchema.extend((customFields ?? {}) as T);
 }
 
 /**
@@ -253,9 +265,9 @@ export function getCollectionItemWithLocationSchema(
  * ---
  * ```
  */
-export function getCollectionItemWithLocationsSchema(
-  customFields?: z.ZodRawShape,
-) {
+export function getCollectionItemWithLocationsSchema<
+  T extends z.ZodRawShape = NoCustomFields,
+>(customFields?: T) {
   const baseSchema = z.object({
     title: z.string().describe("Post title"),
     description: z.string().optional().describe("Post description/excerpt"),
@@ -267,11 +279,7 @@ export function getCollectionItemWithLocationsSchema(
       .describe("Multiple locations for this post"),
   });
 
-  if (customFields) {
-    return baseSchema.extend(customFields);
-  }
-
-  return baseSchema;
+  return baseSchema.extend((customFields ?? {}) as T);
 }
 
 /**
@@ -297,9 +305,9 @@ export function getCollectionItemWithLocationsSchema(
  * ---
  * ```
  */
-export function getCollectionItemWithRegionSchema(
-  customFields?: z.ZodRawShape,
-) {
+export function getCollectionItemWithRegionSchema<
+  T extends z.ZodRawShape = NoCustomFields,
+>(customFields?: T) {
   const baseSchema = z.object({
     title: z.string().describe("Post title"),
     description: z.string().optional().describe("Post description/excerpt"),
@@ -310,11 +318,7 @@ export function getCollectionItemWithRegionSchema(
     ),
   });
 
-  if (customFields) {
-    return baseSchema.extend(customFields);
-  }
-
-  return baseSchema;
+  return baseSchema.extend((customFields ?? {}) as T);
 }
 
 /**
@@ -343,7 +347,9 @@ export function getCollectionItemWithRegionSchema(
  * ---
  * ```
  */
-export function getCollectionItemWithRouteSchema(customFields?: z.ZodRawShape) {
+export function getCollectionItemWithRouteSchema<
+  T extends z.ZodRawShape = NoCustomFields,
+>(customFields?: T) {
   const baseSchema = z.object({
     title: z.string().describe("Post title"),
     description: z.string().optional().describe("Post description/excerpt"),
@@ -352,11 +358,7 @@ export function getCollectionItemWithRouteSchema(customFields?: z.ZodRawShape) {
     route: RouteLineSchema.optional().describe("Route/trail for this post"),
   });
 
-  if (customFields) {
-    return baseSchema.extend(customFields);
-  }
-
-  return baseSchema;
+  return baseSchema.extend((customFields ?? {}) as T);
 }
 
 /**
@@ -385,7 +387,9 @@ export function getCollectionItemWithRouteSchema(customFields?: z.ZodRawShape) {
  * };
  * ```
  */
-export function getCollectionItemWithGeoSchema(customFields?: z.ZodRawShape) {
+export function getCollectionItemWithGeoSchema<
+  T extends z.ZodRawShape = NoCustomFields,
+>(customFields?: T) {
   const baseSchema = z.object({
     title: z.string().describe("Post title"),
     description: z.string().optional().describe("Post description/excerpt"),
@@ -406,9 +410,5 @@ export function getCollectionItemWithGeoSchema(customFields?: z.ZodRawShape) {
     ),
   });
 
-  if (customFields) {
-    return baseSchema.extend(customFields);
-  }
-
-  return baseSchema;
+  return baseSchema.extend((customFields ?? {}) as T);
 }

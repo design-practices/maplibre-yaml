@@ -16,6 +16,7 @@ import { readFile, realpath, stat } from "fs/promises";
 import { isAbsolute, relative, resolve } from "path";
 import type { Feature, FeatureCollection } from "geojson";
 import type { FeatureRef } from "./feature-ref-schema";
+import { trackFile } from "./dev-watch";
 
 /**
  * Threshold below which the per-property index is not built. Linear scans
@@ -309,6 +310,8 @@ export async function loadFeatureFile(
   options?: FeatureLoadOptions,
 ): Promise<FeatureCollection> {
   const absPath = await resolveSourcePath(srcPath, options);
+  // For the dev-reload integration (ml-aot.24, ml-7jc.3): Vite never sees this read.
+  trackFile(absPath);
 
   // In-flight dedupe: parallel calls for the same path share a single read.
   // Without this, parallel page builds can both miss the cache and double-parse

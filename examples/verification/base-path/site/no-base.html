@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Base path: without base</title>
+  <!--
+    ml-aot.30 — the same document as index.html, on the same /my-repo/ site,
+    WITHOUT base. Relative paths still resolve against this page (which sits
+    at the site root), but the root-relative ones (/data/cities.geojson,
+    /images/tri.png, /images/pin.png) go to the domain root and 404.
+    PASS = route line and the dot-relative peaks layer draw without icons;
+    a notice lists the city data, the tri image and the marker icon, and
+    suggests base="/my-repo/".
+    Open: http://localhost:4174/my-repo/no-base.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 480px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>/my-repo/ WITHOUT base — PASS = a notice naming /data/cities.geojson and suggesting base="/my-repo/".</header>
+  <ml-map id="map" src="configs/map.yaml"></ml-map>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

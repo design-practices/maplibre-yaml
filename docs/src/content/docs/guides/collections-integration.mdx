@@ -80,7 +80,6 @@ We arrived in Paris on a crisp spring morning...
 // src/pages/posts/[...slug].astro
 import { getCollection, render } from 'astro:content';
 import { Map, buildPointMapConfig } from '@maplibre-yaml/astro';
-import BaseLayout from '../../layouts/BaseLayout.astro';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts');
@@ -97,22 +96,29 @@ const { Content } = await render(post);
 const mapConfig = post.data.location
   ? buildPointMapConfig({
       location: post.data.location,
-      mapStyle: 'https://demotiles.maplibre.org/style.json'
+      mapStyle: 'https://tiles.openfreemap.org/styles/liberty'
     })
   : null;
 ---
 
-<BaseLayout title={post.data.title}>
-  <article>
-    <h1>{post.data.title}</h1>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{post.data.title}</title>
+  </head>
+  <body>
+    <article>
+      <h1>{post.data.title}</h1>
 
-    {mapConfig && (
-      <Map config={mapConfig} height="300px" />
-    )}
+      {mapConfig && (
+        <Map config={mapConfig} height="300px" />
+      )}
 
-    <Content />
-  </article>
-</BaseLayout>
+      <Content />
+    </article>
+  </body>
+</html>
 ```
 
 ## Schema Options
@@ -262,7 +268,7 @@ const config = buildPointMapConfig({
     name: "New York City",
     description: "The Big Apple",
   },
-  mapStyle: "https://demotiles.maplibre.org/style.json",
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
   zoom: 12, // optional, defaults to location.zoom or 12
   interactive: true, // optional, defaults to true
 });
@@ -281,7 +287,7 @@ const config = buildMultiPointMapConfig({
     { coordinates: [-118.2437, 34.0522], name: "LA" },
     { coordinates: [-87.6298, 41.8781], name: "Chicago" },
   ],
-  mapStyle: "https://demotiles.maplibre.org/style.json",
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
   padding: 50, // pixels of padding around bounds
 });
 ```
@@ -308,7 +314,7 @@ const config = buildPolygonMapConfig({
     fillColor: "#ff6b6b",
     fillOpacity: 0.4,
   },
-  mapStyle: "https://demotiles.maplibre.org/style.json",
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
 });
 ```
 
@@ -330,7 +336,7 @@ const config = buildRouteMapConfig({
     color: "#e74c3c",
     width: 4,
   },
-  mapStyle: "https://demotiles.maplibre.org/style.json",
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
 });
 ```
 
@@ -345,7 +351,7 @@ A plain object works too:
 ```typescript
 // src/lib/map-config.ts
 export const globalMapConfig = {
-  mapStyle: "https://api.maptiler.com/maps/streets/style.json?key=YOUR_KEY",
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
   // Add any other defaults you want to share
 };
 ```
@@ -371,11 +377,11 @@ const mapConfig = location
 ```
 
 <Aside type="note">
-  When you omit `mapStyle` from map builder functions, the resulting
-  configuration will have `mapStyle: undefined`. This works with the schema
-  (which allows optional `mapStyle`), but you'll need to ensure the style is
-  resolved before rendering. The global configuration pattern above is the
-  recommended approach.
+  Every map needs a basemap style. If you omit `mapStyle` from a builder call
+  and pass no global config with a `defaultMapStyle` as its second argument,
+  the builder throws a `ConfigResolutionError` (*missing required fields:
+  mapStyle*) and the build stops at that page. Pass `mapStyle`, or a global
+  config as shown above.
 </Aside>
 
 ## Complete Blog Template Example
@@ -393,7 +399,6 @@ import {
   buildPolygonMapConfig,
   buildRouteMapConfig
 } from '@maplibre-yaml/astro';
-import BaseLayout from '../../layouts/BaseLayout.astro';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts');
@@ -407,7 +412,7 @@ const { post } = Astro.props;
 const { Content } = await render(post);
 const { location, locations, region, route } = post.data;
 
-const MAP_STYLE = 'https://demotiles.maplibre.org/style.json';
+const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
 // Build appropriate map config based on available data
 function getMapConfig() {
@@ -429,26 +434,33 @@ function getMapConfig() {
 const mapConfig = getMapConfig();
 ---
 
-<BaseLayout title={post.data.title}>
-  <article class="post">
-    <header>
-      <h1>{post.data.title}</h1>
-      <time datetime={post.data.pubDate.toISOString()}>
-        {post.data.pubDate.toLocaleDateString()}
-      </time>
-    </header>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{post.data.title}</title>
+  </head>
+  <body>
+    <article class="post">
+      <header>
+        <h1>{post.data.title}</h1>
+        <time datetime={post.data.pubDate.toISOString()}>
+          {post.data.pubDate.toLocaleDateString()}
+        </time>
+      </header>
 
-    {mapConfig && (
-      <div class="post-map">
-        <Map config={mapConfig} height="350px" />
+      {mapConfig && (
+        <div class="post-map">
+          <Map config={mapConfig} height="350px" />
+        </div>
+      )}
+
+      <div class="post-content">
+        <Content />
       </div>
-    )}
-
-    <div class="post-content">
-      <Content />
-    </div>
-  </article>
-</BaseLayout>
+    </article>
+  </body>
+</html>
 
 <style>
   .post-map {
@@ -513,18 +525,6 @@ const config = buildPointMapConfig({
   mapStyle: MAP_STYLE,
   interactive: false,
 });
-```
-
-### Lazy Load Maps Below the Fold
-
-If your map isn't immediately visible, consider lazy loading:
-
-```astro
-{mapConfig && (
-  <div class="post-map" data-map-config={JSON.stringify(mapConfig)}>
-    <!-- Placeholder, hydrate with JS when visible -->
-  </div>
-)}
 ```
 
 ## Next Steps

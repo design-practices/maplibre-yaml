@@ -134,13 +134,17 @@ export const POPUP_TAGS: ReadonlySet<string> = new Set([
   "br",
 ]);
 
-/** Values legal in a link `target`; anything else has the attribute dropped. */
-export const LINK_TARGETS: ReadonlySet<string> = new Set([
-  "_blank",
-  "_self",
-  "_parent",
-  "_top",
-]);
+/**
+ * Values legal in a popup link's `target`, in schema order (the popup item
+ * schema validates against this list, so the two cannot drift).
+ */
+export const LINK_TARGET_VALUES = ["_blank", "_self", "_parent", "_top"] as const;
+
+/**
+ * Values legal in a link `target`. The builder renders anything else (which
+ * validation already rejects) as the default `_blank`.
+ */
+export const LINK_TARGETS: ReadonlySet<string> = new Set(LINK_TARGET_VALUES);
 
 /**
  * A string the author explicitly marked as raw HTML.

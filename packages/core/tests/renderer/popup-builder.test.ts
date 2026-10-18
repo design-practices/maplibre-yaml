@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { PopupBuilder } from "../../src/renderer/popup-builder";
 
 describe("PopupBuilder", () => {
@@ -309,6 +309,91 @@ describe("PopupBuilder", () => {
       );
       expect(html).toContain('target="_self"');
       expect(html).not.toContain("rel=");
+    });
+  });
+
+  // ml-aot.29: `str` + `href` is the shape the content-block docs show, so
+  // authors write it in popups too -- it used to render the text and drop the
+  // URL with no warning, because the `str` branch returned first.
+  describe("link items", () => {
+    it("renders str + href as a link with str as its text", () => {
+      const html = builder.build(
+        [{ p: [{ str: "Wikipedia", href: "https://en.wikipedia.org/wiki/Chicago" }] }],
+        {}
+      );
+      expect(html).toBe(
+        '<p><a href="https://en.wikipedia.org/wiki/Chicago" target="_blank" rel="noopener noreferrer">Wikipedia</a></p>'
+      );
+    });
+
+    it("prefers text over str for the link text", () => {
+      const html = builder.build(
+        [{ p: [{ str: "ignored", text: "Read more", href: "https://example.com" }] }],
+        {}
+      );
+      expect(html).toContain(">Read more</a>");
+      expect(html).not.toContain("ignored");
+    });
+
+    it("escapes str link text", () => {
+      const html = builder.build(
+        [{ p: [{ str: "<b>x</b>", href: "https://example.com" }] }],
+        {}
+      );
+      expect(html).toContain(">&lt;b&gt;x&lt;/b&gt;</a>");
+    });
+
+    it("keeps an !html str link text escaped under the untrusted policy", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const html = builder.build(
+        [{ p: [{ str: { $html: "<em>styled</em>" }, href: "https://example.com" }] }],
+        {}
+      );
+      expect(html).toContain('<a href="https://example.com"');
+      expect(html).toContain(">&lt;em&gt;styled&lt;/em&gt;</a>");
+      warn.mockRestore();
+    });
+
+    it("honours target on a str + href link", () => {
+      const html = builder.build(
+        [{ p: [{ str: "Home", href: "/", target: "_self" }] }],
+        {}
+      );
+      expect(html).toBe('<p><a href="/" target="_self">Home</a></p>');
+    });
+
+    it("drops an unsafe str + href URL but keeps the text", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const html = builder.build(
+        [{ p: [{ str: "Click me", href: "javascript:alert(1)" }] }],
+        {}
+      );
+      expect(html).toBe("<p>Click me</p>");
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("unsafe URL scheme"));
+      warn.mockRestore();
+    });
+
+    it("emits a single anchor when a link item is wrapped in a:", () => {
+      const html = builder.build(
+        [{ a: [{ href: "https://example.com", text: "x" }] }],
+        {}
+      );
+      expect(html).toBe(
+        '<a href="https://example.com" target="_blank" rel="noopener noreferrer">x</a>'
+      );
+    });
+
+    it("emits a single image when an image item is wrapped in img:", () => {
+      const html = builder.build(
+        [{ img: [{ src: "https://example.com/a.png", alt: "A" }] }],
+        {}
+      );
+      expect(html).toBe('<img src="https://example.com/a.png" alt="A" />');
+    });
+
+    it("still wraps text items in a: (no href, so no link)", () => {
+      const html = builder.build([{ a: [{ str: "plain" }] }], {});
+      expect(html).toBe("<a>plain</a>");
     });
   });
 });

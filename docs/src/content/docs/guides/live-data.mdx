@@ -8,6 +8,15 @@ import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 maplibre-yaml makes it easy to keep your map data fresh with automatic polling, Server-Sent Events (SSE), and WebSocket streaming.
 
+<Aside title="Placeholder endpoints">
+  Live feeds are specific to your data, so the endpoints on this page
+  (`api.example.com`, `stream.example.com`) are placeholders: swap in your
+  own polling URL, SSE stream or WebSocket. For a real feed to try polling
+  with, the USGS earthquake feeds
+  (`https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson`)
+  allow cross-origin requests.
+</Aside>
+
 ## Polling (auto-refresh)
 
 The simplest way to keep data current is polling - fetching data at regular intervals:
@@ -194,7 +203,11 @@ renderer.on("layer:retry", ({ layerId, attempt, delay }) => {
 
 ## Complete example
 
-Here's a complete live tracking example:
+Here's a complete live tracking example. `https://api.example.com/vehicles` is
+a **placeholder**: there is no public vehicle feed behind it, so as printed the
+map shows only the basemap. Point `url:` at your own endpoint that returns a
+GeoJSON `FeatureCollection` of points with `vehicleId`, `vehicleName`,
+`status` and `lastUpdate` properties (and allows cross-origin requests).
 
 ```yaml
 type: map
@@ -202,7 +215,7 @@ id: vehicle-tracker
 config:
   center: [-122.4, 37.8]
   zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 
 layers:
   - id: vehicles
