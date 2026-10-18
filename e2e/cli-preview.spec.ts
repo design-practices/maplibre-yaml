@@ -153,28 +153,77 @@ test("preview renders the map on the locally installed maplibre-gl 6", async ({ 
   expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
 });
 
-test("preview renders a scrollytelling story (ml-aot.41)", async ({ page }, testInfo) => {
+/** Start a second preview server on `file` (in the temp copy); resolves once it listens. */
+async function startPreview(file: string): Promise<{ url: string; stop: () => void }> {
   const port = await freePort();
-  const storyUrl = `http://localhost:${port}/`;
-  const story = spawn(
-    process.execPath,
-    [CLI, "preview", join(dir, "story.yaml"), "--port", String(port), "--no-open"],
-    { cwd: dir, stdio: ["ignore", "pipe", "pipe"] }
-  );
+  const proc = spawn(process.execPath, [CLI, "preview", join(dir, file), "--port", String(port), "--no-open"], {
+    cwd: dir,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`preview did not start:\n${output}`)), 30_000);
+    const onData = (chunk: Buffer) => {
+      output += chunk.toString();
+      if (output.includes("Preview server running")) {
+        clearTimeout(timer);
+        resolve();
+      }
+    };
+    proc.stdout!.on("data", onData);
+    proc.stderr!.on("data", onData);
+  });
+  return { url: `http://localhost:${port}/`, stop: () => proc.kill() };
+}
+
+/**
+ * Whether MapLibre's attribution is fully above the preview's status bar and
+ * is the topmost element at its own centre.
+ */
+const attributionClear = (page: Page) =>
+  page.evaluate(() => {
+    const attrib = document.querySelector<HTMLElement>(".maplibregl-ctrl-attrib")!;
+    const bar = document.querySelector<HTMLElement>(".status-bar")!;
+    const a = attrib.getBoundingClientRect();
+    const b = bar.getBoundingClientRect();
+    const top = document.elementFromPoint(a.left + a.width / 2, a.top + a.height / 2);
+    return {
+      above: a.bottom <= b.top,
+      onTop: !!top && attrib.contains(top),
+      attrib: [a.top, a.bottom].map(Math.round),
+      bar: [b.top, b.bottom].map(Math.round),
+    };
+  });
+
+test("the status bar leaves MapLibre's attribution visible, for maps and stories (ml-aot.54)", async ({ browser }) => {
+  const story = await startPreview("story.yaml");
   try {
-    let output = "";
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`preview did not start:\n${output}`)), 30_000);
-      const onData = (chunk: Buffer) => {
-        output += chunk.toString();
-        if (output.includes("Preview server running")) {
-          clearTimeout(timer);
-          resolve();
-        }
-      };
-      story.stdout!.on("data", onData);
-      story.stderr!.on("data", onData);
-    });
+    for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+      for (const [kind, target] of [["map", url], ["story", story.url]] as const) {
+        const page = await browser.newPage({ viewport });
+        const { errors } = await guard(page);
+        await page.goto(target, { waitUntil: "domcontentloaded" });
+        await page.evaluate(() =>
+          (document.querySelector("ml-scrollytelling") ?? (document.querySelector("ml-map") as any)).mapReady()
+        );
+        await page.waitForSelector(".maplibregl-ctrl-attrib");
+        const state = await attributionClear(page);
+        expect(state.above, `${kind} at ${viewport.width}px: ${JSON.stringify(state)}`).toBe(true);
+        expect(state.onTop, `${kind} at ${viewport.width}px: attribution covered`).toBe(true);
+        expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+        await page.close();
+      }
+    }
+  } finally {
+    story.stop();
+  }
+});
+
+test("preview renders a scrollytelling story (ml-aot.41)", async ({ page }, testInfo) => {
+  const preview = await startPreview("story.yaml");
+  const storyUrl = preview.url;
+  const story = { kill: preview.stop };
+  try {
     const { errors } = await guard(page);
     await page.goto(storyUrl, { waitUntil: "domcontentloaded" });
     await expect(page.locator(".error-overlay")).toHaveCount(0);

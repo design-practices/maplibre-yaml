@@ -246,14 +246,20 @@ export function createPreviewHTML(input: PreviewPageInput): string {
     ? 'const el = document.createElement(\'ml-scrollytelling\');el.config = config;document.getElementById(\'story\').appendChild(el);el.addEventListener(\'ml-scrollytelling:error\', (e) => console.error(\'[preview] Story error:\', e.detail));el.mapReady().then(() => console.log(\'[preview] Story loaded\'), () => {});'
     : 'const mapEl = document.createElement(\'ml-map\');mapEl.style.cssText = \'width: 100%; height: 100%;\';mapEl.config = config;document.getElementById(\'map\').appendChild(mapEl);mapEl.addEventListener(\'ml-map:load\', () => console.log(\'[preview] Map loaded\'));mapEl.addEventListener(\'ml-map:error\', (e) => console.error(\'[preview] Map error:\', e.detail));';
   const container = story ? '<div id="story"></div>' : '<div id="map"></div>';
-  const storyCSS = story ? '#story { padding-bottom: 34px; }' : '';
+  // The status bar (32px, fixed at the bottom) sits BELOW the map rather
+  // than over it, so MapLibre's attribution and bottom controls stay visible
+  // (ml-aot.54): #map is the viewport minus the bar, and so is a story's
+  // sticky map.
+  const storyCSS = story
+    ? '#story { padding-bottom: 32px; }#story ml-scrollytelling { --ml-scrolly-map-height: calc(100vh - 32px); }'
+    : '';
 
   const importMap = inlineJson({ imports: { '@maplibre-yaml/core/register': coreUrl, 'maplibre-gl': maplibre.moduleUrl } });
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>maplibre-yaml preview</title>'
     + '<link href="' + escapeHtml(maplibre.cssUrl) + '" rel="stylesheet" />'
     + '<script type="importmap">' + importMap + '</script>'
-    + '<style>* { margin: 0; padding: 0; box-sizing: border-box; }body { font-family: system-ui, -apple-system, sans-serif; }#map { width: 100vw; height: 100vh; }.error-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }.error-box { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 24px; max-width: 600px; max-height: 80vh; overflow: auto; }.error-title { color: #dc2626; font-weight: 600; font-size: 18px; margin-bottom: 12px; }.error-message { color: #991b1b; font-family: monospace; font-size: 14px; white-space: pre-wrap; }.status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1f2937; color: white; padding: 8px 16px; font-size: 12px; display: flex; justify-content: space-between; z-index: 999; }.status-indicator { display: flex; align-items: center; gap: 8px; }.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }.status-dot.error { background: #ef4444; }' + storyCSS + debugCSS + '</style></head>'
+    + '<style>* { margin: 0; padding: 0; box-sizing: border-box; }body { font-family: system-ui, -apple-system, sans-serif; }#map { width: 100vw; height: calc(100vh - 32px); }.error-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }.error-box { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 24px; max-width: 600px; max-height: 80vh; overflow: auto; }.error-title { color: #dc2626; font-weight: 600; font-size: 18px; margin-bottom: 12px; }.error-message { color: #991b1b; font-family: monospace; font-size: 14px; white-space: pre-wrap; }.status-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 32px; background: #1f2937; color: white; padding: 0 16px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; z-index: 999; }.status-indicator { display: flex; align-items: center; gap: 8px; }.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }.status-dot.error { background: #ef4444; }' + storyCSS + debugCSS + '</style></head>'
     + '<body>' + container + errorOverlay + debugPanel
     + '<div class="status-bar"><div class="status-indicator"><div class="status-dot ' + statusDotClass + '"></div><span>' + statusText + '</span></div><div><span>' + escapeHtml(configPath) + '</span></div></div>'
     + '<script type="module">import \'@maplibre-yaml/core/register\';const config = ' + inlineJson(config ?? null) + ';if (config) {' + render + '}</script>'
