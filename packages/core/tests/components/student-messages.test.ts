@@ -161,6 +161,20 @@ describe("runtime layer and data problems (ml-aot.15)", () => {
     );
   });
 
+  it("JSON that isn't GeoJSON, and CSV, are each named for what they are (ml-aot.47, ml-aot.51)", () => {
+    const notGeo = Object.assign(new Error("Response from d.json is not valid GeoJSON"), { url: "d.json" });
+    expect(describeDataProblem("l", notGeo, { pageUrl: "http://h/", filePage: false })).toContain(
+      'it is JSON but not GeoJSON (expected "type": "FeatureCollection")'
+    );
+    const csv = Object.assign(new Error("CSV data from data/places.csv is not supported"), {
+      url: "data/places.csv",
+    });
+    const text = describeDataProblem("l", csv, { pageUrl: "http://h/", filePage: false });
+    expect(text).toContain("CSV files aren't supported — convert it to GeoJSON (e.g. geojson.io or QGIS)");
+    expect(text).toContain("https://docs.maplibre-yaml.org/guides/data-sources/#csv-and-spreadsheets");
+    expect(text).not.toContain("isn't JSON");
+  });
+
   it("an HTML response and a file:// page are explained", () => {
     const html = Object.assign(new Error("Invalid JSON response from d.geojson"), { url: "d.geojson" });
     expect(describeDataProblem("l", html, { pageUrl: "http://h/", filePage: false })).toContain(

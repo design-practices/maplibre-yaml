@@ -112,6 +112,44 @@ export interface FetchResult {
   duration: number;
 }
 
+const GEOMETRY_TYPES = new Set([
+  "Point",
+  "MultiPoint",
+  "LineString",
+  "MultiLineString",
+  "Polygon",
+  "MultiPolygon",
+  "GeometryCollection",
+]);
+
+/**
+ * A single GeoJSON Feature or bare Geometry as a one-feature
+ * FeatureCollection (ml-aot.47); anything else unchanged.
+ */
+export function toFeatureCollection(data: unknown): unknown {
+  if (typeof data !== "object" || data === null) return data;
+  const obj = data as Record<string, unknown>;
+  if (obj.type === "Feature") return { type: "FeatureCollection", features: [obj] };
+  if (typeof obj.type === "string" && GEOMETRY_TYPES.has(obj.type)) {
+    return { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: obj }] };
+  }
+  return data;
+}
+
+/**
+ * Whether a body that failed to parse as JSON is CSV: a `.csv` path, a
+ * spreadsheet export URL (`output=csv`, `format=csv`), a CSV content type, or
+ * a first line of comma-separated column names (ml-aot.51).
+ */
+export function looksLikeCsv(url: string, contentType: string | null, body: string): boolean {
+  if (/\.csv(?:$|[?#])/i.test(url) || /[?&](?:output|format|tqx=out:)=?csv\b/i.test(url)) return true;
+  if (/text\/csv|application\/csv/i.test(contentType ?? "")) return true;
+  const firstLine = body.trimStart().split(/\r?\n/, 1)[0] ?? "";
+  if (/^[<{[]/.test(firstLine)) return false;
+  const columns = firstLine.split(",");
+  return columns.length >= 2 && columns.every((c) => c.trim().length > 0 && c.length < 80);
+}
+
 /**
  * HTTP data fetcher with caching and retry support.
  *
@@ -420,13 +458,32 @@ export class DataFetcher {
         );
       }
 
-      // Parse JSON
+      // Parse JSON. Read as text when possible, so a CSV file (a published
+      // spreadsheet, data/places.csv) can be named for what it is rather
+      // than reported as broken JSON (ml-aot.51).
       let data: unknown;
-      try {
-        data = await response.json();
-      } catch (error) {
-        throw new Error(`Invalid JSON response from ${url}`);
+      const contentType = response.headers?.get?.("content-type") ?? null;
+      if (typeof (response as Partial<Response>).text === "function") {
+        const body = await response.text();
+        try {
+          data = JSON.parse(body);
+        } catch {
+          if (looksLikeCsv(url, contentType, body)) {
+            throw new Error(`CSV data from ${url} is not supported`);
+          }
+          throw new Error(`Invalid JSON response from ${url}`);
+        }
+      } else {
+        try {
+          data = await response.json();
+        } catch (error) {
+          throw new Error(`Invalid JSON response from ${url}`);
+        }
       }
+
+      // A single Feature or a bare Geometry is valid GeoJSON, and MapLibre
+      // accepts it; normalise to a FeatureCollection (ml-aot.47).
+      data = toFeatureCollection(data);
 
       // Validate GeoJSON
       if (!this.isValidGeoJSON(data)) {
@@ -475,6 +532,7 @@ export class DataFetcher {
     // Don't retry on invalid JSON or GeoJSON
     if (
       message.includes("invalid json") ||
+      message.includes("csv data") ||
       message.includes("not valid geojson")
     ) {
       return false;

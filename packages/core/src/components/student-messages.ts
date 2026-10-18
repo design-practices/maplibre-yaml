@@ -407,10 +407,14 @@ export function describeDataProblem(
   if (http) {
     const text = http[2] || STATUS_TEXT[Number(http[1])] || "";
     reason = `${http[1]}${text ? ` ${text}` : ""}`;
+  } else if (/^CSV data from /.test(error.message)) {
+    reason =
+      "CSV files aren't supported — convert it to GeoJSON (e.g. geojson.io or QGIS); " +
+      "see https://docs.maplibre-yaml.org/guides/data-sources/#csv-and-spreadsheets";
   } else if (/^Invalid JSON/i.test(error.message)) {
     reason = "it isn't JSON — a wrong path often returns a web page instead";
   } else if (/not valid GeoJSON/i.test(error.message)) {
-    reason = "it isn't GeoJSON";
+    reason = 'it is JSON but not GeoJSON (expected "type": "FeatureCollection")';
   } else if (context.filePage && /fetch|network|load failed/i.test(error.message)) {
     reason = "pages opened from a file (file://) can't load data files";
   } else {
