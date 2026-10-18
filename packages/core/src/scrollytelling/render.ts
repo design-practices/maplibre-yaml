@@ -11,6 +11,7 @@
 
 import type { Chapter, ScrollytellingBlock } from "../schemas/scrollytelling.schema";
 import { escapeHtml } from "../utils/html";
+import { displayPath } from "../parser/validation-utils";
 import { resolveDocumentUrl } from "../utils/document-base";
 
 export { escapeHtml };
@@ -175,7 +176,9 @@ function problemLine(problem: StoryProblem): string {
           problem.column !== undefined ? `, column ${problem.column}` : ""
         })</span>`
       : "";
-  const path = problem.path ? `<code>${escapeHtml(problem.path)}</code>: ` : "";
+  // Not "chapters.3.center" next to a message that already says "Chapter 4".
+  const shown = displayPath(problem);
+  const path = shown ? `<code>${escapeHtml(shown)}</code>: ` : "";
   return `<li>${path}${escapeHtml(problem.message)}${where}</li>`;
 }
 

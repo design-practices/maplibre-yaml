@@ -15,6 +15,7 @@ import {
   runChapterAction,
   createStoryController,
   storyMapDocument,
+  errorCardHTML,
   safeMediaSrc,
   escapeHtml,
   ACTION_EVENT,
@@ -297,6 +298,18 @@ describe("createStoryController", () => {
     controller.activate("b");
     expect(el.querySelector('[data-chapter-id="b"]')!.getAttribute("aria-current")).toBe("step");
     expect(el.querySelector('[data-chapter-id="a"]')!.hasAttribute("aria-current")).toBe(false);
+  });
+});
+
+describe("the story error card names chapters once (ml-aot.62)", () => {
+  it("drops the 0-based path when the message already names the chapter; keeps it otherwise", () => {
+    const html = errorCardHTML([
+      { path: "chapters.3.center", message: 'Chapter 4 ("brooklyn-bridge"): center needs square brackets' },
+      { path: "config.zoom", message: "Expected number" },
+    ]);
+    expect(html).not.toContain("chapters.3.center");
+    expect(html).toContain('Chapter 4 (&quot;brooklyn-bridge&quot;)');
+    expect(html).toContain("<code>config.zoom</code>");
   });
 });
 
