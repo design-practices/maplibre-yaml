@@ -188,9 +188,13 @@ test.describe("explore: <FullPageMap> with the 0.7 surface", () => {
     await page.waitForTimeout(300);
     const opened = await camera(page, MAP);
 
+    // One click at a time: a second zoom-in during the first one's animation
+    // adds 1 to the in-between zoom (the production build clicks fast enough
+    // to hit that).
     await page.click('[data-action="zoom-in"]');
+    await expect.poll(async () => (await camera(page, MAP)).zoom).toBeCloseTo(opened.zoom + 1, 1);
     await page.click('[data-action="zoom-in"]');
-    await expect.poll(async () => (await camera(page, MAP)).zoom).toBeGreaterThan(opened.zoom + 1.5);
+    await expect.poll(async () => (await camera(page, MAP)).zoom).toBeCloseTo(opened.zoom + 2, 1);
     await page.click('[data-action="reset"]');
     await expectCameraNear(page, MAP, [opened.lng, opened.lat], opened.zoom, 0.5);
     expect(errors).toEqual([]);
