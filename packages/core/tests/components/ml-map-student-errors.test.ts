@@ -138,6 +138,18 @@ describe("<ml-map> on-page errors", () => {
       expect(errorSpy.mock.calls.some((c) => String(c[0]).includes('Data file "data/x.geojson"'))).toBe(true);
     });
 
+    it("a fitTo.source typo shows a notice with the did-you-mean, not only a console line (ml-aot.51)", async () => {
+      const el = await mount();
+      latest().options.onError(new Error('fitTo.source "place" names no entry in `sources:`'), false, {
+        kind: "fit",
+        sourceId: "place",
+        suggestion: "places",
+      });
+      expect(noticeText(el)).toContain(
+        'fitTo.source "place" names no source in sources: — did you mean "places"? The map keeps its own center and zoom.'
+      );
+    });
+
     it("the same problem is listed once; dismissing hides the notice", async () => {
       const el = await mount();
       const report = () =>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Data kinds</title>
+  <!--
+    ml-aot.47 / ml-aot.51 — data a student gets from geojson.io or a
+    spreadsheet, and a fitTo typo.
+    PASS = the blue square (data/drawn.geojson holds ONE Feature, not a
+    FeatureCollection) draws; the notice says data/places.csv is CSV and
+    isn't supported (convert to GeoJSON), and that fitTo.source "place" names
+    no source (did you mean "places"?). FAIL = "it isn't GeoJSON" / "it isn't
+    JSON", or no fitTo line.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/data-kinds.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = blue square; notice: CSV isn't supported, fitTo "place" did you mean "places".</header>
+  <main>
+    <ml-map id="map">
+      <script type="text/yaml">
+type: map
+id: data-kinds
+config:
+  center: [-73.98, 40.73]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo:
+    source: place
+sources:
+  places:
+    type: geojson
+    url: "data/places.csv"
+  drawn:
+    type: geojson
+    url: "data/drawn.geojson"
+layers:
+  - id: drawn
+    type: fill
+    source: drawn
+    paint:
+      fill-color: "#1d4ed8"
+      fill-opacity: 0.6
+  - id: places
+    type: circle
+    source: places
+    paint:
+      circle-color: "#e63946"
+      circle-radius: 8
+      </script>
+    </ml-map>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

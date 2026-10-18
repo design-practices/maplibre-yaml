@@ -451,6 +451,15 @@ export function describeDataProblem(
   return text;
 }
 
+/** `config.fitTo.source` names no source (ml-aot.51). */
+export function describeFitToProblem(source: string, suggestion?: string): string {
+  return (
+    `fitTo.source "${source}" names no source in sources:` +
+    (suggestion ? ` — did you mean "${suggestion}"?` : ".") +
+    " The map keeps its own center and zoom."
+  );
+}
+
 /** A declared `images:` entry failed. */
 export function describeImageProblem(name: string, url: string): string {
   return `Image \`${name}\` (${url}) didn't load, so layers using it draw without it.`;

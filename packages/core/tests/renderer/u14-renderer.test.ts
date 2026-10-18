@@ -139,6 +139,23 @@ describe("fitTo (U14)", () => {
     new MapRenderer(document.createElement("div"), { ...BASE, fitTo: { source: "nope" } } as any);
     expect(String(warn.mock.calls[0]![0])).toMatch(/names no entry in `sources:`/);
   });
+
+  it("a fitTo.source typo is reported to the host on load, with the did-you-mean (ml-aot.51)", () => {
+    const onError = vi.fn();
+    const renderer = new MapRenderer(
+      document.createElement("div"),
+      { ...BASE, fitTo: { source: "place" } } as any,
+      [],
+      { onError },
+      { places: { type: "geojson", url: "/data/places.geojson" } } as any
+    );
+    expect(String(warn.mock.calls[0]![0])).toContain('did you mean "places"?');
+    (renderer.getMap() as any).emit("load");
+    const fit = onError.mock.calls.find((c) => c[2]?.kind === "fit");
+    expect(fit).toBeDefined();
+    expect(fit![1]).toBe(false);
+    expect(fit![2]).toEqual({ kind: "fit", sourceId: "place", suggestion: "places" });
+  });
 });
 
 describe("PopupsManager (U14)", () => {

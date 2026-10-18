@@ -8,6 +8,7 @@ import { Map as MapLibreMap, AttributionControl, runtimeVersion, withWorkerUrlHi
 import { installAttributionGuard, type AttributionGuard } from './attribution-guard';
 import { sanitizeCustomAttribution, sanitizeSourcesAttribution } from '../utils/attribution';
 import { createImageRefs, noteImageValue, noteLayerImageRefs } from '../utils/image-refs';
+import { suggest } from '../utils/suggest';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
@@ -76,7 +77,7 @@ function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
 type FitResolution =
   | { kind: 'bounds'; bounds: Bounds }
   | { kind: 'deferred' }
-  | { kind: 'unsupported'; reason: string };
+  | { kind: 'unsupported'; reason: string; missing?: { suggestion?: string } };
 
 function resolveFitTo(
   fitTo: FitToConfig,
@@ -85,11 +86,14 @@ function resolveFitTo(
   const keep = 'keeping the authored center/zoom.';
   const source = sources?.[fitTo.source] as Record<string, unknown> | undefined;
   if (!source || typeof source !== 'object') {
+    const suggestion = suggest(fitTo.source, Object.keys(sources ?? {}));
     return {
       kind: 'unsupported',
       reason:
-        `fitTo.source "${fitTo.source}" names no entry in \`sources:\` ` +
-        `(inline layer sources cannot be named — move it to \`sources:\`); ${keep}`,
+        `fitTo.source "${fitTo.source}" names no entry in \`sources:\`` +
+        (suggestion ? ` — did you mean "${suggestion}"?` : '') +
+        ` (inline layer sources cannot be named — move it to \`sources:\`); ${keep}`,
+      missing: { suggestion },
     };
   }
   if (source['type'] !== 'geojson') {
@@ -133,11 +137,14 @@ function resolveFitTo(
  * Errors with no context (a basemap tile, a glyph) are not the document's.
  */
 export interface MapErrorContext {
-  kind: 'style' | 'layer' | 'source';
+  /** `fit`: `config.fitTo.source` names no source; the map keeps its authored camera. */
+  kind: 'style' | 'layer' | 'source' | 'fit';
   /** The document layer, for `layer` errors. */
   layerId?: string;
-  /** The document source, for `source` errors. */
+  /** The document source, for `source` errors; the name `fitTo.source` gave, for `fit`. */
   sourceId?: string;
+  /** For `fit`: the closest source name, when one is close. */
+  suggestion?: string;
   /** The style URL, for `style` errors when the style was given as a URL. */
   url?: string;
 }
@@ -411,6 +418,22 @@ export class MapRenderer {
     } as any);
     if (fitTo && fit && fit.kind === 'bounds') {
       this.mapReadyFit = { source: fitTo.source, bounds: fit.bounds };
+    }
+    // A fitTo.source typo leaves the map on its authored camera with only a
+    // console line; tell the host too, so <ml-map> can say so on the page
+    // (ml-aot.51). On load, when the host's notice has a map to sit on.
+    if (fitTo && fit && fit.kind === 'unsupported' && fit.missing) {
+      const missing = fit.missing;
+      let reported = false;
+      this.map.on('load', () => {
+        if (reported || this.destroyed) return;
+        reported = true;
+        options.onError?.(new Error(fit.reason), false, {
+          kind: 'fit',
+          sourceId: fitTo.source,
+          ...(missing.suggestion ? { suggestion: missing.suggestion } : {}),
+        });
+      });
     }
 
     this.attributionGuard = installAttributionGuard(this.map);

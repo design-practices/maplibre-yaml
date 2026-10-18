@@ -58,6 +58,7 @@ import {
   describeLayerProblem,
   describeMarkerIconProblem,
   describeSourceProblem,
+  describeFitToProblem,
   filePageWorkerCard,
   isFilePage,
   looksLikeHtml,
@@ -836,6 +837,12 @@ export class MLMap extends HTMLElement {
           // Load event is also emitted via the event system
         },
         onError: (error, fatal, context) => {
+          // A fitTo.source typo (ml-aot.51): the renderer already warned on
+          // the console; put it on the map too. Not a map error.
+          if (context?.kind === "fit" && context.sourceId) {
+            this.reportProblem(describeFitToProblem(context.sourceId, context.suggestion));
+            return;
+          }
           // Loud by default: with no `ml-map:error` listener attached, a
           // dispatched event is invisible and the document fails silently
           // (ml-tfd.8 contract audit). Hosts still get the event.
