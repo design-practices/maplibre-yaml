@@ -566,6 +566,49 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await context.close();
   });
 
+  test("a legend that grows without a scroll (expanded by the reader) moves clear of the card (ml-aot.50)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce", isMobile: true, hasTouch: true });
+    const page = await context.newPage();
+    const errors = await guard(page, baseURL!);
+    await page.goto("/examples/verification/story-layout/index.html?doc=chrome", { waitUntil: "domcontentloaded" });
+    await storyReady(page, "pts");
+    await page.waitForSelector(".ml-map-legend details");
+    // Collapse the legend: only its title is left at the bottom-left.
+    await page.click(".ml-map-legend summary");
+    await page.waitForFunction(() => !document.querySelector<HTMLDetailsElement>(".ml-map-legend details")!.open);
+    // Scroll so the intro card's bottom sits just above the collapsed
+    // legend's home, but within where the open legend reaches.
+    // Where the collapsed legend's top sits at home (its corner's own inset
+    // above the map's bottom edge).
+    const homeTop = await page.evaluate(() => {
+      const corner = document.querySelector(".ml-map-legend")!.closest<HTMLElement>(".ml-map-chrome")!;
+      const map = document.querySelector(".scrolly-map-container")!.getBoundingClientRect();
+      const inset = parseFloat(corner.style.getPropertyValue("--ml-chrome-inset")) || 10;
+      return map.bottom - inset - corner.getBoundingClientRect().height;
+    });
+    await page.evaluate((target) => {
+      const card = document.querySelector('.scrolly-chapter[data-chapter-id="intro"] .chapter-content')!;
+      scrollBy(0, card.getBoundingClientRect().bottom - (target - 12));
+    }, homeTop);
+    await settle(page);
+    await page.waitForTimeout(400);
+    const collapsed = await chromeState(page);
+    expect(collapsed.underCard, "fixture: the collapsed legend fits under the card").toEqual([]);
+    // Open it again -- no scroll happens.
+    await page.click(".ml-map-legend summary");
+    await page.waitForFunction(() => document.querySelector<HTMLDetailsElement>(".ml-map-legend details")!.open);
+    await settle(page);
+    await page.waitForTimeout(200);
+    const s = await chromeState(page);
+    expect(s.underCard, `legend ${s.legend} under ${s.underCard.join(",")}`).toEqual([]);
+    expect(s.onControl).toBe(false);
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+
   test("a full-width card's photo never fills the map, and its subject shows (ml-aot.50)", async ({ browser, baseURL }) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     const page = await context.newPage();
@@ -843,6 +886,12 @@ test.describe("docs: Scrollytelling in plain HTML, run verbatim", () => {
   }) => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const page = await context.newPage();
+    // A slow CPU, as on CI: the card's activation transition then ends well
+    // after the last scroll event, which is when a stale legend placement
+    // showed (it failed on CI only before the chrome re-placed on
+    // transitionend).
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
     const [html] = fences(PAGE, "html");
     const [yaml] = fences(PAGE, "yaml");
     // A legend with a few entries and chapter text long enough to fill the
@@ -869,6 +918,9 @@ test.describe("docs: Scrollytelling in plain HTML, run verbatim", () => {
       }, id);
       await expect.poll(() => active(page)).toBe(id);
       await settled(page);
+      // The card finishes its activation transition (0.3s) after the scroll;
+      // the chrome is re-placed when it does.
+      await page.waitForTimeout(400);
       const hit = await page.evaluate((chapterId) => {
         const legend = document.querySelector<HTMLElement>(".ml-map-legend")!;
         const card = document

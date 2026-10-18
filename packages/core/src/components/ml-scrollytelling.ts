@@ -194,6 +194,20 @@ export class MLScrollytelling extends HTMLElement {
     }
   }
 
+  /** Re-places the chrome when a corner it watches changes size. */
+  private chromeResize: ResizeObserver | null = null;
+  private watchedCorners = new WeakSet<Element>();
+
+  private watchChromeSize(corner: HTMLElement): void {
+    if (typeof ResizeObserver !== "function" || this.watchedCorners.has(corner)) return;
+    this.chromeResize ??= new ResizeObserver(() => {
+      const view = this.ownerDocument.defaultView;
+      view?.requestAnimationFrame(() => this.placeChrome());
+    });
+    this.watchedCorners.add(corner);
+    this.chromeResize.observe(corner);
+  }
+
   /** Validation warnings to repeat on the map once it exists (ml-aot.48). */
   private pageWarnings: string[] = [];
 
@@ -707,9 +721,16 @@ export class MLScrollytelling extends HTMLElement {
     };
     view?.addEventListener("scroll", onScroll, { passive: true, capture: true });
     view?.addEventListener("resize", onScroll, { passive: true });
+    // Cards also move without a scroll: the active card's scale transition
+    // ends, a chapter photo loads and makes its card taller. Re-place the
+    // chrome then too, or a legend could stay where a card now is.
+    this.addEventListener("transitionend", onScroll);
+    this.addEventListener("load", onScroll, true);
     this.stopScrollSync = () => {
       view?.removeEventListener("scroll", onScroll, { capture: true });
       view?.removeEventListener("resize", onScroll);
+      this.removeEventListener("transitionend", onScroll);
+      this.removeEventListener("load", onScroll, true);
       if (frame) view?.cancelAnimationFrame(frame);
       frame = 0;
     };
@@ -803,6 +824,9 @@ export class MLScrollytelling extends HTMLElement {
   private stopEngine(): void {
     this.stopScrollSync?.();
     this.stopScrollSync = null;
+    this.chromeResize?.disconnect();
+    this.chromeResize = null;
+    this.watchedCorners = new WeakSet();
     this.observer?.disconnect();
     this.observer = null;
     this.controller?.destroy();
@@ -948,6 +972,9 @@ export class MLScrollytelling extends HTMLElement {
       else el.style.removeProperty(name);
     };
     for (const corner of Array.from(container.querySelectorAll<HTMLElement>(".ml-map-chrome"))) {
+      // A corner that changes size later (a legend filled in after the map
+      // loaded, or collapsed/expanded by the reader) is placed again then.
+      this.watchChromeSize(corner);
       const bottom = /-bottom-/.test(corner.className);
       const left = /-left\b/.test(corner.className);
       const yVar = bottom ? "--ml-scrolly-chrome-bottom" : "--ml-scrolly-chrome-top";
