@@ -1,0 +1,22 @@
+type: map
+id: new-operators
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+layers:
+  - id: joined
+    type: symbol
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [] }
+    layout:
+      text-field: ["join", ["split", ["get", "name"], " "], ", "]
+      symbol-sort-key: ["elevation"]
+  - id: semi
+    type: symbol
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [] }
+    layout:
+      text-field: ["semiliteral", "x"]

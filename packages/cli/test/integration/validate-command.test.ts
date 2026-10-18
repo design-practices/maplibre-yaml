@@ -28,6 +28,14 @@ describe('validate command (integration)', () => {
     expect(stdout).toContain('valid-basic.yaml');
   });
 
+  it('newer MapLibre expression operators (split, join, elevation, semiliteral) pass strict CI validation', async () => {
+    const { stdout } = await execRaw(`node "${CLI}" validate "test/fixtures/valid-new-operators.yaml"`, {
+      env: { ...process.env, CI: 'true', NO_COLOR: '1' },
+    });
+    expect(stdout).toContain('1 file(s) valid');
+    expect(stdout).not.toContain('Unknown expression operator');
+  });
+
   it('exits with 1 for invalid config', async () => {
     await expect(
       execAsync(`node "${CLI}" validate "test/fixtures/invalid-missing-config.yaml"`)
