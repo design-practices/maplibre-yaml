@@ -141,6 +141,18 @@ export class MLScrollytelling extends HTMLElement {
   private hasRendered = false;
   private controller: StoryController | null = null;
   private observer: IntersectionObserver | null = null;
+  /** Sections within a screen of the viewport (review N1). */
+  private near = new Set<Element>();
+  /** The chapter sections, cached per render (they don't change in between). */
+  private sections: HTMLElement[] | null = null;
+  private sectionList(): HTMLElement[] {
+    const column = this.querySelector(":scope > .scrolly-chapters");
+    if (!this.sections || this.sections.some((s) => s.parentElement !== column)) {
+      this.sections = Array.from(this.querySelectorAll<HTMLElement>(":scope > .scrolly-chapters > .scrolly-chapter"));
+    }
+    return this.sections;
+  }
+  private nearObserver: IntersectionObserver | null = null;
   /** Removes the scroll/resize listeners that keep the active chapter in sync. */
   private stopScrollSync: (() => void) | null = null;
   private cancelEmptyCheck: (() => void) | null = null;
@@ -869,6 +881,23 @@ export class MLScrollytelling extends HTMLElement {
         observer.observe(section)
       );
       this.observer = observer;
+
+      // The sections within a screen of the viewport: the only ones the
+      // per-frame work measures (review N1).
+      const nearObserver = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) this.near.add(entry.target);
+            else this.near.delete(entry.target);
+          }
+          onScroll();
+        },
+        { root: null, rootMargin: "100% 0px 100% 0px", threshold: 0 }
+      );
+      this.querySelectorAll(":scope > .scrolly-chapters > .scrolly-chapter").forEach((section) =>
+        nearObserver.observe(section)
+      );
+      this.nearObserver = nearObserver;
     }
 
     const mapEl = this.mapElement;
@@ -912,10 +941,11 @@ export class MLScrollytelling extends HTMLElement {
    */
   private chapterInView(): string | null {
     const h = this.ownerDocument.defaultView?.innerHeight ?? 0;
-    const sections = Array.from(
-      this.querySelectorAll<HTMLElement>(":scope > .scrolly-chapters > .scrolly-chapter")
-    );
-    if (h === 0) return sections[0]?.dataset.chapterId ?? null;
+    const all = this.sectionList();
+    if (h === 0) return all[0]?.dataset.chapterId ?? null;
+    // Measure only the sections within a screen of the viewport (review N1:
+    // measuring every section each frame cost ~1-2 ms with 200 chapters).
+    const sections = this.near.size > 0 ? all.filter((s) => this.near.has(s)) : all;
     const boxes = sections.map((section) => ({
       id: section.dataset.chapterId ?? null,
       section: section.getBoundingClientRect(),
@@ -946,6 +976,10 @@ export class MLScrollytelling extends HTMLElement {
     this.stopScrollSync = null;
     this.chromeResize?.disconnect();
     this.chromeResize = null;
+    this.nearObserver?.disconnect();
+    this.nearObserver = null;
+    this.near.clear();
+    this.sections = null;
     this.watchedCorners = new WeakSet();
     this.observer?.disconnect();
     this.observer = null;
@@ -1080,9 +1114,13 @@ export class MLScrollytelling extends HTMLElement {
     if (!container) return;
     const mapBox = container.getBoundingClientRect();
     if (mapBox.height === 0) return;
-    const cards = Array.from(
-      this.querySelectorAll<HTMLElement>(":scope > .scrolly-chapters .chapter-content, :scope > .scrolly-chapters > .scrolly-footer")
-    )
+    // Only cards near the viewport can cover the map (review N1).
+    const near = this.near.size > 0 ? this.sectionList().filter((s) => this.near.has(s)) : this.sectionList();
+    const footer = this.querySelector<HTMLElement>(":scope > .scrolly-chapters > .scrolly-footer");
+    const cards = [
+      ...near.map((s) => s.querySelector<HTMLElement>(":scope > .chapter-content")).filter((c): c is HTMLElement => c !== null),
+      ...(footer ? [footer] : []),
+    ]
       .map((card) => card.getBoundingClientRect())
       .filter((r) => r.height > 0 && r.bottom > mapBox.top && r.top < mapBox.bottom);
     const set = (el: HTMLElement, name: string, px: number | null) => {
