@@ -203,6 +203,8 @@ const hasSlot = {
 <script>
   // first: maplibre-gl 6 needs its worker URL before any map is built
   import "../client/maplibre-worker";
+  // astro dev only: a page with no viewport meta (tiny map on phones)
+  import "../client/dev-hints";
   // registers <ml-map> and <ml-scrollytelling> -- the whole story runtime.
   // No per-page init: the element sets itself up when it connects and tears
   // down when it leaves, so <ClientRouter /> soft navigations re-create the

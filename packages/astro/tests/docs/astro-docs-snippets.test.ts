@@ -188,6 +188,47 @@ describe("the documented story renders through <Scrollytelling config>", () => {
   });
 });
 
+describe("full-page snippets work on a phone (ml-aot.33)", () => {
+  // Without <meta name="viewport"> a phone lays the page out ~980px wide and
+  // shrinks it: a FullPageMap or story map comes out tiny, its controls and
+  // chapter text unreadable. Every complete page the docs show must carry one,
+  // and the FullPageMap / Scrollytelling "Basic Usage" snippets — the ones
+  // readers copy first — must be complete pages.
+  const astroDoc = readFileSync(join(REPO, "docs/src/content/docs/integrations/astro.mdx"), "utf8");
+  const pages = ALL.filter((f) => f.lang === "astro" && /<html[\s>]/.test(f.body));
+
+  it("finds the full-page snippets", () => {
+    expect(pages.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(pages.map((f, i) => [`${f.file} page #${i + 1}`, f]))("%s has a viewport meta", (_l, f) => {
+    expect((f as Fence).body).toMatch(/<meta\s+name="viewport"\s+content="width=device-width/);
+  });
+
+  /** The astro fences in `### Basic Usage` under the given `## …` section. */
+  function basicUsage(section: string): string[] {
+    const start = astroDoc.indexOf(`## ${section}`);
+    const from = astroDoc.indexOf("### Basic Usage", start);
+    const to = astroDoc.indexOf("\n### ", from + 1);
+    const slice = astroDoc.slice(from, to);
+    return [...slice.matchAll(/```astro[^\n]*\n([\s\S]*?)```/g)].map((m) => m[1]);
+  }
+
+  it.each([["FullPageMap Component"], ["Scrollytelling Component"]])(
+    "%s: Basic Usage is a complete page with a viewport meta and no body margin",
+    (section) => {
+      const snippets = basicUsage(section).filter((s) => /<(FullPageMap|Scrollytelling)\b/.test(s));
+      expect(snippets.length).toBeGreaterThan(0);
+      const complete = snippets.filter((s) => /<html[\s>]/.test(s));
+      expect(complete.length).toBeGreaterThan(0);
+      for (const s of complete) {
+        expect(s).toMatch(/<meta\s+name="viewport"/);
+        expect(s).toMatch(/margin:\s*0/);
+      }
+    }
+  );
+});
+
 describe("snippets titled with an example-site file are copied from it", () => {
   // A fence like ```astro title="examples/astro/site/src/pages/index.astro"
   // claims to come from the example site, which CI builds and drives in a

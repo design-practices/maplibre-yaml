@@ -278,6 +278,8 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
 <script>
   // first: maplibre-gl 6 needs its worker URL before any map is built
   import "../client/maplibre-worker";
+  // astro dev only: a page with no viewport meta (tiny map on phones)
+  import "../client/dev-hints";
   import "@maplibre-yaml/core/register";
   import type { MLMap } from "@maplibre-yaml/core/components";
 

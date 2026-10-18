@@ -1133,13 +1133,24 @@ The `FullPageMap` component creates a full-viewport map with built-in controls a
 
 ### Basic Usage
 
+A whole page, e.g. `src/pages/map.astro`:
+
 <Tabs>
   <TabItem label="Runtime Loading">
 ```astro
 ---
 import { FullPageMap } from '@maplibre-yaml/astro';
 ---
-<FullPageMap src="/configs/world-map.yaml" />
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>World map</title>
+  </head>
+  <body style="margin: 0;">
+    <FullPageMap src="/configs/world-map.yaml" />
+  </body>
+</html>
 ```
   </TabItem>
   <TabItem label="Build-time Loading">
@@ -1148,10 +1159,29 @@ import { FullPageMap } from '@maplibre-yaml/astro';
 import { FullPageMap, loadMapConfig } from '@maplibre-yaml/astro';
 const config = await loadMapConfig('./src/configs/world-map.yaml');
 ---
-<FullPageMap config={config} />
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>World map</title>
+  </head>
+  <body style="margin: 0;">
+    <FullPageMap config={config} />
+  </body>
+</html>
 ```
   </TabItem>
 </Tabs>
+
+<Aside type="caution" title="Keep the viewport meta">
+  Without `<meta name="viewport" content="width=device-width, initial-scale=1">`
+  in the page's `<head>`, phones lay the page out about 980px wide and shrink
+  it: the map, its buttons and legend come out tiny. The shorter snippets
+  below show only the component; put them on a page (or in a
+  [layout](https://docs.astro.build/en/basics/layouts/)) like this one. In
+  `astro dev`, the components warn in the browser console when the meta is
+  missing.
+</Aside>
 
 ### Component API
 
@@ -1185,8 +1215,10 @@ interface FullPageMapProps {
 import { FullPageMap } from '@maplibre-yaml/astro';
 ---
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Interactive Map Dashboard</title>
   </head>
   <body style="margin: 0; padding: 0;">
@@ -1467,15 +1499,31 @@ interface ScrollytellingProps {
 
 ### Basic Usage
 
-Load the story at build time and pass it as `config`:
+Load the story at build time and pass it as `config`. A whole page, e.g.
+`src/pages/story.astro`:
 
 ```astro
 ---
 import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
 const story = await loadScrollytellingConfig('./src/stories/climate-change.yaml');
 ---
-<Scrollytelling config={story} />
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Climate change</title>
+  </head>
+  <body style="margin: 0;">
+    <Scrollytelling config={story} />
+  </body>
+</html>
 ```
+
+The viewport meta makes phones lay the story out at their own width (without
+it, the map and chapter text come out tiny), and `margin: 0` lets the map
+reach the edges. The other snippets in this section show only the component:
+put them on a page like this one, or in a
+[layout](https://docs.astro.build/en/basics/layouts/).
 
 Or load it in the browser from `public/`. The component fetches, validates
 and renders the story there, and a validation failure shows the errors in
@@ -1504,7 +1552,7 @@ markerColor: "#3FB1CE"        # Custom marker color
 
 # Base map configuration
 config:
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   center: [-118.2437, 34.0522]
   zoom: 9
   pitch: 0
