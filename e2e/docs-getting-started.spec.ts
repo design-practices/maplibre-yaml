@@ -379,6 +379,40 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
+  test("first map 'Putting it together' on a phone shows all three cities (ml-aot.42)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({
+      baseURL,
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    const [html] = fences("getting-started/first-map.mdx", "html");
+    const yaml = fences("getting-started/first-map.mdx", "yaml").find((y) =>
+      y.includes("id: complete-example")
+    )!;
+    const errors = await serveSnippet(page, baseURL!, "first-map-mobile", {
+      "index.html": html,
+      "my-map.yaml": yaml,
+    });
+    await page.goto(`/__docs/first-map-mobile/`, { waitUntil: "domcontentloaded" });
+    await orReport(waitForRenderedLayer(page, "cities"), errors);
+    // At center [-98, 39] zoom 4 a 390px-wide map spans ~34° of longitude:
+    // New York and Los Angeles were off-screen, so a phone showed one dot.
+    const names = await page.evaluate(() => {
+      const map = (document.querySelector("ml-map") as any).getMap();
+      return [...new Set(map.queryRenderedFeatures({ layers: ["cities"] }).map((f: any) => f.properties.name))].sort();
+    });
+    expect(names).toEqual(["Chicago", "Los Angeles", "New York"]);
+    await page.screenshot({ path: "e2e/results/first-map-mobile.png" });
+    expect(errors, errors.join("\n")).toEqual([]);
+    await context.close();
+  });
+
   test("web components: the Quick Start steps assemble into a working page", async ({
     page,
     baseURL,
