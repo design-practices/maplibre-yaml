@@ -39,7 +39,7 @@ takes, see [Scrollytelling](/schema/scrollytelling/).
        <!-- Registers <ml-scrollytelling> (and <ml-map>) -->
        <script
          type="module"
-         src="https://unpkg.com/@maplibre-yaml/core/register.js"
+         src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"
        ></script>
        <style>
          body {
@@ -213,6 +213,22 @@ is sticky only while the story's chapters are on screen:
   chapters, look for one of those on a wrapper around the element.
 </Aside>
 
+## Sites under a subpath (GitHub Pages)
+
+A GitHub Pages *project* site lives at `https://<user>.github.io/<repo>/`, so
+a path written for the site, like `/images/photo.jpg` or
+`/data/places.geojson`, would load from the domain root and 404. Add `base`
+with the subpath and leave the YAML alone:
+
+```html
+<ml-scrollytelling src="story.yaml" base="/my-repo/"></ml-scrollytelling>
+```
+
+The story's `src`, every path in its map document (data, images, marker icons,
+a site-hosted style) and chapter `image` / `video` paths then resolve under
+`/my-repo/`. Full `https://` URLs are never changed. It works exactly like
+[`<ml-map base>`](/integrations/web-components/#sites-under-a-subpath-github-pages).
+
 ## Corner slots
 
 Children with a `slot` attribute are handed to the story's map, exactly as on
@@ -258,6 +274,7 @@ The element dispatches bubbling events and carries the active chapter's id in
 | Property / method | What it does |
 |-------------------|--------------|
 | `src` attribute | URL of the story's YAML |
+| `base` attribute / property | Where the story's own paths start, for a site under a subpath ([above](#sites-under-a-subpath-github-pages)) |
 | `story` (alias `config`) property | Set the story as an object (or JSON string) instead |
 | `debug` attribute | Outline each chapter (green when active) |
 | `story` getter | The validated story, or `null` |

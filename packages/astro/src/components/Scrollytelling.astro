@@ -60,17 +60,29 @@ import {
 // The element injects these rules itself; importing the file too styles a
 // server-rendered story from the first paint.
 import "@maplibre-yaml/core/scrollytelling.css";
+// MapLibre's stylesheet as PAGE css (not from the client script): Astro links
+// it in the page head in dev and build alike, so it survives <ClientRouter />
+// soft navigations in astro dev (ml-aot.22), as on Map/FullPageMap.
+import "maplibre-gl/dist/maplibre-gl.css";
 import type { ScrollytellingProps } from "../types";
+import { withBase } from "../utils/base-url";
 
 interface Props extends ScrollytellingProps {}
 
-const { src, config, class: className, debug = false } = Astro.props;
+const { src, config, class: className, debug = false, base } = Astro.props;
 
 if (!src && !config) {
   throw new Error("Scrollytelling component requires either 'src' or 'config' prop");
 }
 
 const theme = config?.theme ?? "light";
+
+// A site under a subpath (GitHub Pages): `/stories/x.yaml` lives at
+// `/<base>/stories/x.yaml`, and every path in the story -- its map document
+// and chapter media -- resolves against the base too. Always set, "/"
+// included, as on Map; `base={false}` opts out.
+const resolvedSrc = withBase(src, import.meta.env.BASE_URL);
+const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_URL);
 
 // Generate unique ID for this instance
 const storyId = `scrolly-${Math.random().toString(36).substring(2, 11)}`;
@@ -80,7 +92,7 @@ const storyId = `scrolly-${Math.random().toString(36).substring(2, 11)}`;
 // starts loading before the element upgrades.
 const serializedConfig = config ? JSON.stringify(config) : undefined;
 const mapDocument = config ? JSON.stringify(storyMapDocument(config)) : undefined;
-const chapterMarkup = config ? chaptersHTML(config) + footerHTML(config) : "";
+const chapterMarkup = config ? chaptersHTML(config, { base: documentBase }) + footerHTML(config) : "";
 const railMarkup = config ? railHTML(config) : "";
 
 const hasSlot = {
@@ -102,8 +114,9 @@ const hasSlot = {
   ]}
   style={config?.style}
   id={storyId}
-  src={config ? undefined : src}
+  src={config ? undefined : resolvedSrc}
   config={serializedConfig}
+  base={documentBase}
 >
   {/*
     Corner slots (ml-l4y.3). Astro reads a child's `slot="top-left"` as a
@@ -116,7 +129,7 @@ const hasSlot = {
   */}
   {config ? (
     <div class="scrolly-map-container">
-      <ml-map id={`${storyId}-map`} config={mapDocument}>
+      <ml-map id={`${storyId}-map`} config={mapDocument} base={documentBase}>
         {hasSlot["top-left"] && (
           <div {...{ slot: "top-left" }} class="ml-astro-slot" data-ml-slot="top-left">
             <slot name="top-left" />
@@ -190,7 +203,9 @@ const hasSlot = {
 <script>
   // first: maplibre-gl 6 needs its worker URL before any map is built
   import "../client/maplibre-worker";
-  // registers <ml-map> and <ml-scrollytelling> -- the whole story runtime
+  // registers <ml-map> and <ml-scrollytelling> -- the whole story runtime.
+  // No per-page init: the element sets itself up when it connects and tears
+  // down when it leaves, so <ClientRouter /> soft navigations re-create the
+  // story (and its map) on every visit and dispose of the old one.
   import "@maplibre-yaml/core/register";
-  import "maplibre-gl/dist/maplibre-gl.css";
 </script>

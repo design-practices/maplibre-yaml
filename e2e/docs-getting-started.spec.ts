@@ -110,6 +110,9 @@ function cdnTable(baseURL: string): Record<string, string | { js: string } | obj
     // Core is pinned to the 0.7 line in every beginner snippet (and the CLI's
     // basic template); an unpinned `@maplibre-yaml/core/register.js` is not here.
     "https://unpkg.com/@maplibre-yaml/core@0.7/register.js": `${baseURL}/packages/core/register.js`,
+    // The CLI templates pin the release that ships <ml-scrollytelling> and base.
+    "https://unpkg.com/@maplibre-yaml/core@0.8/register.js": `${baseURL}/packages/core/register.js`,
+    "https://unpkg.com/@maplibre-yaml/core@0.8/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
     "https://unpkg.com/@maplibre-yaml/core@0.7/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
     "https://esm.sh/@maplibre-yaml/core@0.7?external=maplibre-gl": `${baseURL}/packages/core/dist/index.browser.js`,
     // The beginner basemap (streets + labels, no key) and the world-map one.
@@ -429,6 +432,53 @@ test.describe("docs: getting-started snippets render verbatim", () => {
         map.fire("click", { lngLat: at, point: map.project(at) });
       });
       await expect(page.locator(".maplibregl-popup-content h3")).toHaveText("my-map");
+      expect(errors, errors.join("\n")).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("CLI: the page `init --template story` scaffolds is a working story, served as static files", async ({
+    page,
+    baseURL,
+  }) => {
+    const dir = mkdtempSync(join(tmpdir(), "mlym-e2e-init-"));
+    try {
+      const cli = join(__dirname, "..", "packages/cli/dist/cli.js");
+      execFileSync(process.execPath, [cli, "init", "my-story", "--template", "story"], {
+        cwd: dir,
+        stdio: "pipe",
+      });
+      const html = readFileSync(join(dir, "my-story", "index.html"), "utf8");
+      const yaml = readFileSync(join(dir, "my-story", "story.yaml"), "utf8");
+      expectKnownUrls(baseURL!, html, yaml.replace(/^#.*$/gm, ""));
+
+      const errors = await serveSnippet(page, baseURL!, "cli-story", {
+        "index.html": html,
+        "story.yaml": yaml,
+      });
+      await page.goto(`/__docs/cli-story/`, { waitUntil: "domcontentloaded" });
+      await orReport(
+        page.evaluate(() => (document.querySelector("ml-scrollytelling") as any).mapReady().then(() => null)),
+        errors
+      );
+      await expect(page.locator(".scrolly-chapter")).toHaveCount(2);
+      await expect(page.locator(".scrolly-chapter").first()).toContainText("Introduction");
+      // Scroll the second chapter's card to the middle: it activates and the camera goes there.
+      await page.evaluate(() => {
+        const card = document.querySelector('.scrolly-chapter[data-chapter-id="chapter-1"] .chapter-content')!;
+        const r = card.getBoundingClientRect();
+        scrollBy(0, r.top + r.height / 2 - innerHeight / 2);
+      });
+      await expect(page.locator("ml-scrollytelling")).toHaveAttribute("data-active-chapter", "chapter-1");
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const c = (document.querySelector("ml-scrollytelling") as any).getMap().getCenter();
+            return Math.abs(c.lng + 118.2437) < 0.5 && Math.abs(c.lat - 34.0522) < 0.5;
+          })
+        )
+        .toBe(true);
       expect(errors, errors.join("\n")).toEqual([]);
     } finally {
       rmSync(dir, { recursive: true, force: true });

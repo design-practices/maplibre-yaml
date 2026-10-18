@@ -11,6 +11,7 @@
 
 import type { Chapter, ScrollytellingBlock } from "../schemas/scrollytelling.schema";
 import { escapeHtml } from "../utils/html";
+import { resolveDocumentUrl } from "../utils/document-base";
 
 export { escapeHtml };
 
@@ -43,6 +44,12 @@ export function safeCssColor(value: unknown, fallback = "#3FB1CE"): string {
 export interface ChapterHTMLOptions {
   theme?: string;
   isActive?: boolean;
+  /**
+   * The site's base path (`<ml-scrollytelling base>`): `image` / `video`
+   * paths resolve against it, as every path in the story's map document
+   * does, so `/images/x.jpg` works on a site under a subpath (GitHub Pages).
+   */
+  base?: string | null;
 }
 
 /**
@@ -72,13 +79,13 @@ export function chapterHTML(chapter: Chapter, opts: ChapterHTMLOptions = {}): st
   }
 
   let content = "";
-  const image = chapter.image ? safeMediaSrc(chapter.image) : null;
+  const image = chapter.image ? safeMediaSrc(resolveDocumentUrl(chapter.image, opts.base)) : null;
   if (image !== null) {
     content += `<div class="chapter-media"><img src="${escapeHtml(image)}" alt="${escapeHtml(
       chapter.title
     )}" loading="lazy" decoding="async"></div>`;
   }
-  const video = chapter.video ? safeMediaSrc(chapter.video) : null;
+  const video = chapter.video ? safeMediaSrc(resolveDocumentUrl(chapter.video, opts.base)) : null;
   if (video !== null) {
     content += `<div class="chapter-media"><video src="${escapeHtml(
       video
@@ -95,11 +102,13 @@ export function chapterHTML(chapter: Chapter, opts: ChapterHTMLOptions = {}): st
   );
 }
 
-/** Every chapter section, the first one active. */
-export function chaptersHTML(story: ScrollytellingBlock): string {
+/** Every chapter section, the first one active; media resolved against `base`. */
+export function chaptersHTML(story: ScrollytellingBlock, opts: { base?: string | null } = {}): string {
   const theme = story.theme ?? "light";
   return (story.chapters ?? [])
-    .map((chapter: Chapter, index: number) => chapterHTML(chapter, { theme, isActive: index === 0 }))
+    .map((chapter: Chapter, index: number) =>
+      chapterHTML(chapter, { theme, isActive: index === 0, base: opts.base })
+    )
     .join("");
 }
 
@@ -152,6 +161,11 @@ export interface ErrorCardOptions {
   warnings?: StoryProblem[];
   /** Show how to give the element a story (for "no story provided"). */
   showHelp?: boolean;
+  /**
+   * What to do next, one short paragraph -- the same field `<ml-map>`'s card
+   * (`createErrorCard`) takes, so the two share failure messages.
+   */
+  hint?: string;
 }
 
 function problemLine(problem: StoryProblem): string {
@@ -181,6 +195,9 @@ export function errorCardHTML(errors: StoryProblem[], opts: ErrorCardOptions = {
           .map(problemLine)
           .join("")}</ul>`
       : "";
+  const fix = opts.hint
+    ? `<p class="scrolly-error-hint"><strong>How to fix it:</strong> ${escapeHtml(opts.hint)}</p>`
+    : "";
   const help = opts.showHelp
     ? `<div class="scrolly-error-help"><strong>Give the story a document in one of these ways:</strong>` +
       `<pre>&lt;ml-scrollytelling src="story.yaml"&gt;&lt;/ml-scrollytelling&gt;</pre>` +
@@ -189,6 +206,6 @@ export function errorCardHTML(errors: StoryProblem[], opts: ErrorCardOptions = {
     : "";
   return (
     `<div class="scrolly-error" role="alert"><h2>${escapeHtml(title)}</h2>${source}` +
-    `<ul class="scrolly-error-list">${errors.map(problemLine).join("")}</ul>${hints}${help}</div>`
+    `<ul class="scrolly-error-list">${errors.map(problemLine).join("")}</ul>${hints}${fix}${help}</div>`
   );
 }

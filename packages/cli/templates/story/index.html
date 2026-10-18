@@ -2,30 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <!-- Without this line, phones lay the page out at desktop width and the story looks tiny. -->
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{title}}</title>
 
   <!-- MapLibre's stylesheet. Keep it on the same major version (6) as the import map below. -->
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css">
 
-  <!-- Tells the browser where "maplibre-gl" lives. -->
+  <!-- Tells the browser where "maplibre-gl" lives. The story's map needs it. -->
   <script type="importmap">
     { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
   </script>
 
-  <!--
-    Registers the maplibre-yaml elements. Note: <ml-scrollytelling> is not part
-    of @maplibre-yaml/core 0.7 yet, so this page stays blank until a core release
-    that includes it. story.yaml already validates:
-      npx @maplibre-yaml/cli validate story.yaml
-  -->
-  <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"></script>
+  <!-- Registers the <ml-scrollytelling> element. "@0.8" means the newest 0.8.x release. -->
+  <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"></script>
 
   <style>
-    body { margin: 0; }
+    body { margin: 0; font-family: system-ui, sans-serif; }
   </style>
 </head>
 <body>
-  <ml-scrollytelling src="./story.yaml"></ml-scrollytelling>
+  <!--
+    The story is described in story.yaml: one chapter per section, each with
+    its own camera. Edit it and reload the page.
+
+    Publishing on GitHub Pages as a project site (you.github.io/my-repo/)?
+    Add base="/my-repo/" here so paths in story.yaml that start with "/" start
+    there. Docs: Integrations > Web Components > "Sites under a subpath".
+  -->
+  <ml-scrollytelling src="story.yaml"></ml-scrollytelling>
 </body>
 </html>

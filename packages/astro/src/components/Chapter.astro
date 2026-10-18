@@ -46,12 +46,17 @@ const {
   alignment = "center",
   hidden = false,
   theme = "light",
-  isActive = false,
+  // Standalone, nothing activates the chapter: show it as read (ml-aot.28).
+  isActive = true,
+  base,
 } = Astro.props;
+
+// Media paths resolve against the site's base, as in a story (`false` opts out).
+const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_URL);
 
 const markup = chapterHTML(
   { id, title, description, image, video, alignment, hidden } as unknown as ChapterType,
-  { theme, isActive }
+  { theme, isActive, base: documentBase }
 );
 ---
 

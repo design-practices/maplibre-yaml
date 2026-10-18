@@ -5,8 +5,10 @@
 # - Put colours in quotes: "#3b82f6". Without quotes, YAML reads everything
 #   after # as a comment and the colour disappears.
 # - Coordinates are [longitude, latitude].
-# - Paths to your own files start with ./ and are relative to index.html,
-#   not to this file: url: "./data/places.geojson".
+# - Paths to your own files are relative to index.html, not to this file
+#   (url: "data/places.geojson"), or start at the site root with "/"
+#   (url: "/data/places.geojson"). On GitHub Pages, see the base note in
+#   index.html.
 type: map
 id: {{projectName}}
 config:

@@ -29,6 +29,11 @@
  * Children with `slot="top-left|top-right|bottom-left|bottom-right|legend"`
  * are handed to the story's map, as on `<ml-map>`.
  *
+ * `base="/my-repo/"` (same meaning as `<ml-map base>`) makes the story work on
+ * a site published under a subpath, such as a GitHub Pages project site: the
+ * `src` URL, every path in the story's map document, and chapter
+ * `image`/`video` paths resolve against it.
+ *
  * Light DOM (no shadow root): the chapters are ordinary page content -- page
  * CSS styles them, links and images in a chapter work, and find-in-page and
  * screen readers see them.
@@ -63,7 +68,17 @@ import {
   type StoryProblem,
 } from "../scrollytelling/render";
 import { injectScrollytellingStyles } from "../scrollytelling/styles";
+import { normalizeDocumentBase, resolveDocumentUrl } from "../utils/document-base.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
+import {
+  isFilePage,
+  looksLikeHtml,
+  resolveUrl,
+  srcFetchFailedCard,
+  srcHtmlCard,
+  srcHttpErrorCard,
+  type ErrorCardContent,
+} from "./student-messages.js";
 
 /** The layout breakpoint the stylesheet switches to stacked cards at. */
 const NARROW_QUERY = "(max-width: 768px)";
@@ -109,7 +124,7 @@ interface Waiter {
  */
 export class MLScrollytelling extends HTMLElement {
   static get observedAttributes(): string[] {
-    return ["src", "config"];
+    return ["src", "config", "base"];
   }
 
   /** The validated story being shown, or `null`. */
@@ -132,6 +147,8 @@ export class MLScrollytelling extends HTMLElement {
   private waiters: Waiter[] = [];
   private lastError: Error | null = null;
   private appliedClasses: string[] = [];
+  /** The story came from the property, inline YAML or `config`, not `src`. */
+  private storyFromElsewhere = false;
 
   constructor() {
     super();
@@ -142,6 +159,22 @@ export class MLScrollytelling extends HTMLElement {
   // ------------------------------------------------------------------
   // Properties
   // ------------------------------------------------------------------
+
+  /**
+   * Where the story's own paths start: reflects the `base` attribute; `null`
+   * when unset. Same semantics as `<ml-map base>`: with a base, `src`, every
+   * path in the story's map document (sources, images, marker icons, style)
+   * and chapter `image`/`video` paths resolve against it; full URLs are never
+   * changed. Handed to the story's `<ml-map>`.
+   */
+  get base(): string | null {
+    return this.getAttribute("base");
+  }
+
+  set base(value: string | null) {
+    if (value === null || value === undefined) this.removeAttribute("base");
+    else this.setAttribute("base", String(value));
+  }
 
   /** The validated story, or `null` before one loads (or after it failed). */
   get story(): ScrollytellingBlock | null {
@@ -230,6 +263,7 @@ export class MLScrollytelling extends HTMLElement {
 
   connectedCallback(): void {
     injectScrollytellingStyles(this.ownerDocument);
+    this.upgradeProperty("base");
     this.upgradeProperty("story");
     this.upgradeProperty("config");
     // The container class the Astro component always carried: page CSS and
@@ -252,12 +286,22 @@ export class MLScrollytelling extends HTMLElement {
   }
 
   attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null): void {
-    if (oldValue === newValue || !this.initialized || newValue === null) return;
+    if (oldValue === newValue || !this.initialized) return;
+    if (name === "base") {
+      // Every path in the story may move: re-fetch `src` (its own path
+      // depends on the base), or re-render the story already shown.
+      if (normalizeDocumentBase(oldValue) === normalizeDocumentBase(newValue)) return;
+      const src = this.getAttribute("src");
+      if (src && !this.storyFromElsewhere) void this.loadFromURL(src);
+      else if (this._story) this.render(this._story);
+      return;
+    }
+    if (newValue === null) return;
     if (name === "src") void this.loadFromURL(newValue);
     else if (name === "config") this.applyValue(newValue);
   }
 
-  private upgradeProperty(name: "story" | "config"): void {
+  private upgradeProperty(name: "story" | "config" | "base"): void {
     if (Object.prototype.hasOwnProperty.call(this, name)) {
       const self = this as unknown as Record<string, unknown>;
       const value = self[name];
@@ -278,6 +322,7 @@ export class MLScrollytelling extends HTMLElement {
       ':scope > script[type="text/yaml"], :scope > script[type="application/yaml"]'
     );
     if (script?.textContent?.trim()) {
+      this.storyFromElsewhere = true;
       this.applyResult(YAMLParser.safeParseScrollytellingBlock(script.textContent), null);
       return;
     }
@@ -350,6 +395,7 @@ export class MLScrollytelling extends HTMLElement {
   /** An object or JSON string from the property or the `config` attribute. */
   private applyValue(value: unknown): void {
     this.cancelEmptyCheck?.();
+    this.storyFromElsewhere = true;
     let parsed: unknown = value;
     if (typeof value === "string") {
       try {
@@ -382,24 +428,48 @@ export class MLScrollytelling extends HTMLElement {
   private async loadFromURL(url: string): Promise<void> {
     this.cancelEmptyCheck?.();
     this.appliedKey = null;
+    this.storyFromElsewhere = false;
     const generation = ++this.generation;
     this.showLoading();
+
+    // Same path rules and the same failure messages as `<ml-map src>`: with a
+    // base, `src` is a site path like every path inside the story.
+    const doc = this.ownerDocument;
+    const target = resolveDocumentUrl(url, this.base);
+    const resolved = resolveUrl(target, doc.baseURI);
+    const context = { pageUrl: doc.baseURI, base: this.base };
+    const stale = () => generation !== this.generation || !this.initialized;
+
+    let response: Response;
     let text: string;
     try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`.trim());
+      response = await fetch(target);
+      if (stale()) return;
+      if (!response.ok) {
+        this.failWith(srcHttpErrorCard(url, resolved, response.status, response.statusText, context), url);
+        return;
+      }
       text = await response.text();
     } catch (error) {
-      if (generation !== this.generation) return;
-      this.fail(
-        [{ path: "", message: error instanceof Error ? error.message : String(error) }],
-        [],
-        { title: "Could not load the story", source: url }
-      );
+      if (stale()) return;
+      this.failWith(srcFetchFailedCard(url, resolved, error, isFilePage(doc)), url);
       return;
     }
-    if (generation !== this.generation || !this.initialized) return;
+    if (stale()) return;
+    if (looksLikeHtml(text, response.headers?.get?.("content-type") ?? null)) {
+      this.failWith(srcHtmlCard(url, resolved, context), url);
+      return;
+    }
     this.applyResult(YAMLParser.safeParseScrollytellingBlock(text), url);
+  }
+
+  /** A prepared failure from the shared `<ml-map>` messages, worded for a story. */
+  private failWith(content: ErrorCardContent, source: string): void {
+    this.fail(content.errors, [], {
+      title: content.title.replace(/([Mm])ap file/, (_m, m: string) => (m === "M" ? "Story file" : "story file")),
+      source,
+      hint: content.hint,
+    });
   }
 
   private applyResult(result: ParseResult<ScrollytellingBlock>, source: string | null): void {
@@ -480,10 +550,13 @@ export class MLScrollytelling extends HTMLElement {
       // element, so it re-renders if the story is moved in the DOM. Set
       // before the map connects, so it never reports "No configuration
       // provided" (ml-4al).
+      this.syncMapBase(mapEl);
       mapEl.setAttribute("config", mapDocument);
       mapContainer.prepend(mapEl);
     } else {
       this.adoptSlots(mapEl);
+      // A server render puts the base on <ml-map> itself; keep them in step.
+      this.syncMapBase(mapEl);
       if (!hydrating || !(mapEl.hasAttribute("config") || mapEl.hasAttribute("src"))) {
         mapEl.setAttribute("config", mapDocument);
       }
@@ -516,10 +589,17 @@ export class MLScrollytelling extends HTMLElement {
         column.insertAdjacentHTML("beforeend", footerHTML(story));
       }
     } else {
-      column.innerHTML = chaptersHTML(story) + footerHTML(story);
+      column.innerHTML = chaptersHTML(story, { base: this.base }) + footerHTML(story);
     }
 
     this.startEngine(story, generation);
+  }
+
+  /** The story's map resolves its document's paths against the story's base. */
+  private syncMapBase(mapEl: MLMap): void {
+    const base = this.base;
+    if (base === null) mapEl.removeAttribute("base");
+    else if (mapEl.getAttribute("base") !== base) mapEl.setAttribute("base", base);
   }
 
   /** Hand `slot="…"` children of the story to its map. */
@@ -551,8 +631,16 @@ export class MLScrollytelling extends HTMLElement {
     if (typeof IntersectionObserver === "function") {
       const observer = new IntersectionObserver(
         (entries) => {
+          // Entries are queued, not live: one computed before an instant
+          // jump (reduced motion, a rail click right after load) can arrive
+          // after it. Act only on sections that are in the band NOW.
+          const band = (section: Element): boolean => {
+            const r = section.getBoundingClientRect();
+            const h = this.ownerDocument.defaultView?.innerHeight ?? 0;
+            return h === 0 || (r.top <= h * 0.6 && r.bottom >= h * 0.4);
+          };
           const entering = entries
-            .filter((entry) => entry.isIntersecting)
+            .filter((entry) => entry.isIntersecting && band(entry.target))
             .map((entry) => (entry.target as HTMLElement).dataset.chapterId)
             .filter((id): id is string => Boolean(id));
           // A rail jump skips the chapters it scrolls past -- including one
@@ -615,7 +703,7 @@ export class MLScrollytelling extends HTMLElement {
   private fail(
     errors: ParseError[],
     warnings: ValidationWarning[],
-    opts: { title?: string; source?: string | null; showHelp?: boolean } = {}
+    opts: { title?: string; source?: string | null; showHelp?: boolean; hint?: string } = {}
   ): void {
     ++this.generation;
     this.stopEngine();
@@ -634,6 +722,7 @@ export class MLScrollytelling extends HTMLElement {
         source: source ?? undefined,
         warnings: warnings as StoryProblem[],
         showHelp: opts.showHelp,
+        hint: opts.hint,
       })
     );
 

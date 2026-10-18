@@ -923,7 +923,7 @@ export default defineConfig({
 needs no `base`.) Then, everything under `public/` is served under the base:
 `public/configs/hero-map.yaml` is at `/<repo>/configs/hero-map.yaml`.
 
-- **`Map` and `FullPageMap`: nothing to change.** Keep writing
+- **`Map`, `FullPageMap`, `Scrollytelling` and `Chapter`: nothing to change.** Keep writing
   `src="/configs/hero-map.yaml"`, and keep the paths *inside* your YAML as
   they are. The components hand the site's base to `<ml-map>` (its
   [`base` attribute](/integrations/web-components/#sites-under-a-subpath-github-pages)),
@@ -956,10 +956,13 @@ needs no `base`.) Then, everything under `public/` is served under the base:
   ></ml-map>
   ```
 
-- **`Scrollytelling` does not take the base yet.** In a story, write the
-  base into the paths to your own files (data `url:`s, chapter
-  `image:`/`video:`) and into its `src`:
-  `image: "/<repo>/images/photo.jpg"`.
+- **Stories too.** `<Scrollytelling src="/stories/tour.yaml">` and
+  `<Scrollytelling config>` pass the base to `<ml-scrollytelling>`, so the
+  story's `src`, every path in its map document, and chapter `image:` /
+  `video:` (`/images/photo.jpg` for `public/images/photo.jpg`) load under it.
+  A standalone `Chapter`'s media does the same. `base={false}` opts out on
+  any of them. (Needs `@maplibre-yaml/astro` 0.6 and `@maplibre-yaml/core`
+  0.8.)
 - **Links and images in your own pages** need the base too, as in any Astro
   site (see Astro's
   [`base` docs](https://docs.astro.build/en/reference/configuration-reference/#base)).
@@ -1290,7 +1293,8 @@ interface ChapterProps {
   video?: string;                              // Video URL (absolute or relative)
   alignment?: 'left' | 'right' | 'center' | 'full';  // Content position (default: 'center')
   hidden?: boolean;                            // Hide content for map-only chapters
-  isActive?: boolean;                          // Active state (controlled by parent)
+  isActive?: boolean;                          // Full opacity (default: true)
+  base?: string | false;                       // Base for image/video paths (default: BASE_URL)
   theme?: 'light' | 'dark';                    // Visual theme (default: 'light')
 }
 ```
@@ -1387,7 +1391,7 @@ The `isActive` prop controls visual emphasis:
 - Active chapters: Full opacity (1.0), normal scale
 - Inactive chapters: Reduced opacity (0.4), slightly scaled down (0.98)
 
-Inside a story, `<ml-scrollytelling>` sets `is-active` from the scroll position; a standalone `Chapter` shows whatever `isActive` you pass.
+A standalone `Chapter` is active by default (full opacity): nothing on the page would activate it. Pass `isActive={false}` for the dimmed look. Inside a story, `<ml-scrollytelling>` sets `is-active` from the scroll position.
 
 ### Accessibility Features
 

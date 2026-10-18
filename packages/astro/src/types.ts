@@ -136,6 +136,14 @@ export interface ScrollytellingProps {
   class?: string;
   /** Debug mode - shows chapter boundaries */
   debug?: boolean;
+  /**
+   * Where the story's paths start (`<ml-scrollytelling base>`): `src`, every
+   * path in the story's map document, and chapter `image`/`video`. Defaults to
+   * the site's `import.meta.env.BASE_URL`, as on `Map`, so `/images/x.jpg`
+   * and `/data/x.geojson` load from `public/` on a site under a subpath
+   * (GitHub Pages). Pass a path to override it, or `false` to opt out.
+   */
+  base?: string | false;
 }
 
 /**
@@ -181,8 +189,19 @@ export interface ChapterProps {
   alignment?: "left" | "right" | "center" | "full";
   /** Hide chapter content (map-only chapter) */
   hidden?: boolean;
-  /** Whether this chapter is currently active */
+  /**
+   * Whether this chapter shows as the active one (full opacity). Defaults to
+   * `true`: a standalone `Chapter` is not inside a story that would activate
+   * it, so it renders as if it were being read. Pass `false` for the dimmed,
+   * inactive look.
+   */
   isActive?: boolean;
   /** Visual theme */
   theme?: "light" | "dark";
+  /**
+   * Where `image` / `video` paths start. Defaults to the site's
+   * `import.meta.env.BASE_URL` (see `ScrollytellingProps.base`); `false`
+   * opts out.
+   */
+  base?: string | false;
 }

@@ -541,4 +541,72 @@ test.describe("view transitions: <ClientRouter /> soft navigation (ml-aot.22)", 
     expect(await page.evaluate(() => (window as any).__softNav), "navigations were soft").toBe(true);
     expect(errors).toEqual([]);
   });
+
+  test("a story survives soft navigations: its CSS, a fresh map per visit, the rail on a revisit @dev", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    page.on("console", (m) => {
+      if (/CSS does not appear to be loaded/.test(m.text())) errors.push(`css probe: ${m.text()}`);
+    });
+    const STORY = "ml-scrollytelling ml-map";
+    // Start ON the story (a full load: whatever its scripts inject is in the
+    // head), then leave and come back twice with soft navigations.
+    await page.goto("/transitions/story/", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      (window as any).__softNav = true;
+      (window as any).__storyMaps = [];
+    });
+
+    for (let visit = 0; visit < 3; visit++) {
+      if (visit > 0) {
+        await page.click('[data-testid="vt-to-story"]');
+        await expect(page).toHaveURL(/\/transitions\/story\/?$/);
+      }
+      await mapReady(page, STORY);
+      await page.evaluate(() =>
+        (window as any).__storyMaps.push((document.querySelector("ml-scrollytelling") as any).getMap())
+      );
+      // The story's own CSS and MapLibre's both applied after the head swap.
+      const styles = await page.evaluate(() => ({
+        sticky: getComputedStyle(document.querySelector(".scrolly-map-container")!).position,
+        corner: getComputedStyle(document.querySelector(".maplibregl-ctrl-bottom-right")!).position,
+      }));
+      expect(styles, `visit ${visit + 1}`).toEqual({ sticky: "sticky", corner: "absolute" });
+      // One story, one map on the page.
+      expect(await page.locator("ml-scrollytelling").count()).toBe(1);
+      expect(await page.locator(".maplibregl-map").count()).toBe(1);
+
+      // The rail works on every visit (a real mouse click) -- once the view
+      // transition's snapshot overlay, which takes every click while it
+      // animates, has gone and the dot is the element under the pointer.
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const b = document.querySelector('.chapter-marker[data-chapter-id="cascades"]')!;
+            const r = b.getBoundingClientRect();
+            return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === b;
+          })
+        )
+        .toBe(true);
+      const dot = (await page.locator('.chapter-marker[data-chapter-id="cascades"]').boundingBox())!;
+      await page.mouse.click(dot.x + dot.width / 2, dot.y + dot.height / 2);
+      await expect(page.locator("ml-scrollytelling")).toHaveAttribute("data-active-chapter", "cascades");
+      await expectCameraNear(page, STORY, [-122, 46.5], 6.3);
+
+      // Leave through the link in the map's corner slot.
+      await page.locator('[data-testid="vt-story-to-inline"]').click();
+      await expect(page).toHaveURL(/\/transitions\/inline\/?$/);
+      await mapReady(page, '[data-testid="vt-inline-map"] ml-map');
+      // The story's map went with its page: removed, not leaked.
+      expect(
+        await page.evaluate((i) => (window as any).__storyMaps[i]._removed === true, visit),
+        `visit ${visit + 1}: the story's map was removed`
+      ).toBe(true);
+    }
+
+    expect(await page.evaluate(() => (window as any).__storyMaps[0] !== (window as any).__storyMaps[1])).toBe(true);
+    expect(await page.evaluate(() => (window as any).__softNav), "navigations were soft").toBe(true);
+    expect(errors).toEqual([]);
+  });
 });

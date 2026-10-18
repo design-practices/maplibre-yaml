@@ -142,3 +142,45 @@ test.describe("a site under /my-repo/ (GitHub Pages project site)", () => {
     expect(errors).toEqual([]);
   });
 });
+
+test.describe("a story under /my-repo/ (<ml-scrollytelling base>)", () => {
+  test("src, the story's map document and the chapter image all load under the base", async ({ page }) => {
+    const { errors, notFound } = await guard(page);
+    await page.goto("/my-repo/story.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("story") as any).mapReady());
+    await expect(page.locator(".scrolly-chapter")).toHaveCount(2);
+    await page.waitForFunction(
+      () => {
+        const map = (document.getElementById("story") as any).getMap();
+        return map.querySourceFeatures("cities").length > 0 && map.querySourceFeatures("route-source").length > 0;
+      },
+      undefined,
+      { timeout: 30_000 }
+    );
+    await page.waitForTimeout(1500);
+    const state = await page.evaluate(() => {
+      const el = document.getElementById("story") as any;
+      const map = el.getMap();
+      const chapterImg = el.querySelector(".chapter-media img") as HTMLImageElement;
+      const marker = el.querySelector("img.maplibregl-marker") as HTMLImageElement | null;
+      return {
+        mapBase: el.querySelector("ml-map").getAttribute("base"),
+        chapterImage: { src: new URL(chapterImg.src).pathname, loaded: chapterImg.complete && chapterImg.naturalWidth > 0 },
+        markerIcon: marker ? new URL(marker.src).pathname : null,
+        tri: map.hasImage("tri"),
+        cards: document.querySelectorAll(".scrolly-error, .ml-map-error").length,
+        notice: el.querySelector(".ml-map-notice")?.textContent ?? null,
+      };
+    });
+    expect(state).toEqual({
+      mapBase: "/my-repo/",
+      chapterImage: { src: "/my-repo/images/tri.png", loaded: true },
+      markerIcon: "/my-repo/images/pin.png",
+      tri: true,
+      cards: 0,
+      notice: null,
+    });
+    expect(notFound).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+});

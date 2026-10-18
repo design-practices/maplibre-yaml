@@ -46,12 +46,14 @@ describe('init command (integration)', () => {
       expect(html).toContain('<script type="importmap">');
       expect(html).toContain('"maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs"');
       expect(html).toContain('href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"');
-      expect(html).toContain('src="https://unpkg.com/@maplibre-yaml/core@0.7/register.js"');
+      expect(html).toContain('src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"');
       // The import map must come before the module that needs it.
       expect(html.indexOf('type="importmap"')).toBeLessThan(html.indexOf('register.js'));
       expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
       expect(html).toMatch(/ml-map\s*\{[^}]*display:\s*block;[^}]*height:\s*100vh/);
-      expect(html).toContain('<ml-map src="./map.yaml"></ml-map>');
+      expect(html).toContain('<ml-map src="map.yaml"></ml-map>');
+      // ml-3fd: how to publish under a subpath, as a comment the reader can act on.
+      expect(html).toContain('base="/my-repo/"');
       expect(html).toContain('<title>my-map</title>');
     });
 
@@ -62,6 +64,8 @@ describe('init command (integration)', () => {
       expect(yaml).toContain('mapStyle: "https://tiles.openfreemap.org/styles/liberty"');
       expect(yaml).not.toMatch(/color:\s*#/);
       expect(yaml).toContain('id: my-map');
+      // ml-3fd: bare relative paths work (#147); the "./" advice is gone.
+      expect(yaml).not.toContain('start with ./');
 
       const validate = await run(`validate "${join(dir, 'my-map', 'map.yaml')}"`, dir);
       expect(validate.code).toBe(0);
@@ -134,16 +138,26 @@ describe('init command (integration)', () => {
   });
 
   describe('story template', () => {
-    it('has the import map and pinned CDN head, and says the element is not in core 0.7 yet', async () => {
+    it('scaffolds a story page that runs from the CDN: import map, core 0.8 (has <ml-scrollytelling>), viewport', async () => {
       const dir = await mkdir();
       const result = await run('init my-story --template story', dir);
       expect(result.code).toBe(0);
       const html = await readFile(join(dir, 'my-story', 'index.html'), 'utf-8');
       expect(html).toContain('"maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs"');
       expect(html).toContain('href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"');
-      expect(html).toContain('<meta name="viewport"');
-      expect(result.stdout).toMatch(/not part of\s+@maplibre-yaml\/core 0\.7 yet/);
+      expect(html).toContain('src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"');
+      expect(html.indexOf('type="importmap"')).toBeLessThan(html.indexOf('register.js'));
+      expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
+      expect(html).toContain('<ml-scrollytelling src="story.yaml"></ml-scrollytelling>');
+      expect(html).toContain('base="/my-repo/"');
+      expect(html).not.toMatch(/0\.7/);
+      // The "element is not in core 0.7 yet" note is gone; serve-and-open steps instead.
+      expect(result.stdout).not.toMatch(/not part of|0\.7 yet/);
+      expect(result.stdout).toContain('npx serve .');
       expect(result.stdout).toContain('npx @maplibre-yaml/cli validate story.yaml');
+
+      const validate = await run(`validate "${join(dir, 'my-story', 'story.yaml')}"`, dir);
+      expect(validate.code).toBe(0);
     });
   });
 

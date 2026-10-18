@@ -214,6 +214,14 @@ ml-scrollytelling .scrolly-error-hints-title {
   font-weight: 600;
 }
 
+ml-scrollytelling .scrolly-error-hint {
+  margin: 12px 0 0;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+
 ml-scrollytelling .scrolly-error-help {
   margin-top: 12px;
   padding: 12px 16px;

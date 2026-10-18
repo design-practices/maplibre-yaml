@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Base path: a story</title>
+  <!--
+    ml-aot.1 + ml-aot.30 — <ml-scrollytelling> on a site published under a
+    subpath. The e2e server mounts this folder at /my-repo/. src, the story's
+    map document (data, images, marker icon, basemap) and the chapter image
+    say /..., data/... with no "my-repo"; base="/my-repo/" makes them load.
+    PASS = the first chapter card shows the red triangle image; red city dots
+    joined by a dark route line; a blue-dot icon marker; no error card.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/my-repo/story.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>/my-repo/ story with base="/my-repo/" — PASS = chapter image, city dots, route, icon marker, no error card.</header>
+  <ml-scrollytelling id="story" src="/stories/story.yaml" base="/my-repo/"></ml-scrollytelling>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

@@ -313,7 +313,7 @@ chapters:
     expect(document.querySelector(".ml-map-error")).toBeNull();
   });
 
-  it("src that 404s: one 'Could not load' card naming the URL", async () => {
+  it("src that 404s: one 'Story file not found' card naming the URL, with <ml-map>'s advice", async () => {
     mute("error");
     vi.stubGlobal(
       "fetch",
@@ -325,7 +325,8 @@ chapters:
     await settle();
     const cards = document.querySelectorAll(".scrolly-error, .ml-map-error");
     expect(cards).toHaveLength(1);
-    expect(cards[0]!.textContent).toContain("Could not load the story");
+    expect(cards[0]!.textContent).toContain("Story file not found");
+    expect(cards[0]!.textContent).toContain("How to fix it");
     expect(cards[0]!.textContent).toContain("/missing.yaml");
     expect(cards[0]!.textContent).toContain("404");
   });
@@ -349,6 +350,68 @@ chapters:
     el.story = storyObject() as never;
     expect(el.querySelector(".scrolly-error")).toBeNull();
     expect(el.querySelectorAll(".scrolly-chapter")).toHaveLength(2);
+  });
+});
+
+describe("base: a story on a site under a subpath (GitHub Pages)", () => {
+  const BASE_STORY = `type: scrollytelling
+id: based
+config: { center: [0, 0], zoom: 2, mapStyle: "/styles/basemap.json" }
+layers:
+  - id: pts
+    type: circle
+    source: { type: geojson, url: "/data/cities.geojson" }
+chapters:
+  - id: a
+    title: A
+    image: "/images/a.png"
+    video: "./clips/a.mp4"
+    center: [0, 0]
+    zoom: 3
+  - { id: b, title: B, image: "https://example.com/b.png", center: [1, 1], zoom: 4 }
+`;
+
+  it("src, chapter media and the inner <ml-map> all use the base", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: { get: () => "text/yaml" },
+        text: () => Promise.resolve(BASE_STORY),
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const el = document.createElement("ml-scrollytelling");
+    el.setAttribute("base", "/my-repo/");
+    el.setAttribute("src", "/stories/story.yaml");
+    document.body.appendChild(el);
+    await settle();
+
+    expect(fetchMock).toHaveBeenCalledWith("/my-repo/stories/story.yaml");
+    const imgs = [...el.querySelectorAll<HTMLImageElement>(".chapter-media img")].map((i) => i.getAttribute("src"));
+    expect(imgs).toEqual(["/my-repo/images/a.png", "https://example.com/b.png"]);
+    expect(el.querySelector("video")!.getAttribute("src")).toBe("/my-repo/clips/a.mp4");
+    // The map document's own paths are <ml-map base>'s job: it gets the base.
+    expect(el.querySelector("ml-map")!.getAttribute("base")).toBe("/my-repo/");
+  });
+
+  it("the base property, and changing it re-resolves the media", () => {
+    const el = inline(BASE_STORY);
+    document.body.appendChild(el);
+    expect(el.querySelector(".chapter-media img")!.getAttribute("src")).toBe("/images/a.png");
+    expect(el.querySelector("ml-map")!.hasAttribute("base")).toBe(false);
+    el.base = "/my-repo";
+    expect(el.getAttribute("base")).toBe("/my-repo");
+    expect(el.querySelector(".chapter-media img")!.getAttribute("src")).toBe("/my-repo/images/a.png");
+    expect(el.querySelector("ml-map")!.getAttribute("base")).toBe("/my-repo");
+  });
+
+  it("a path already under the base is not doubled", () => {
+    const el = inline(BASE_STORY.replace('"/images/a.png"', '"/my-repo/images/a.png"'));
+    el.setAttribute("base", "/my-repo/");
+    document.body.appendChild(el);
+    expect(el.querySelector(".chapter-media img")!.getAttribute("src")).toBe("/my-repo/images/a.png");
   });
 });
 
