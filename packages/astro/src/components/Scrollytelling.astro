@@ -69,7 +69,7 @@ import { withBase } from "../utils/base-url";
 
 interface Props extends ScrollytellingProps {}
 
-const { src, config, class: className, debug = false, base } = Astro.props;
+const { src, config, class: className, debug = false, base, quiet = false } = Astro.props;
 
 if (!src && !config) {
   throw new Error("Scrollytelling component requires either 'src' or 'config' prop");
@@ -117,6 +117,7 @@ const hasSlot = {
   src={config ? undefined : resolvedSrc}
   config={serializedConfig}
   base={documentBase}
+  quiet={quiet ? "" : undefined}
 >
   {/*
     Corner slots (ml-l4y.3). Astro reads a child's `slot="top-left"` as a
@@ -129,7 +130,7 @@ const hasSlot = {
   */}
   {config ? (
     <div class="scrolly-map-container">
-      <ml-map id={`${storyId}-map`} config={mapDocument} base={documentBase}>
+      <ml-map id={`${storyId}-map`} config={mapDocument} base={documentBase} quiet={quiet ? "" : undefined}>
         {hasSlot["top-left"] && (
           <div {...{ slot: "top-left" }} class="ml-astro-slot" data-ml-slot="top-left">
             <slot name="top-left" />

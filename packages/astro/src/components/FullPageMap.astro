@@ -76,6 +76,7 @@ const {
   class: className,
   style,
   base,
+  quiet = false,
 } = Astro.props;
 
 // Validate that either src or config is provided
@@ -169,6 +170,7 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
     config={serializedConfig ?? undefined}
     src={serializedConfig ? undefined : resolvedSrc}
     base={documentBase}
+    quiet={quiet ? "" : undefined}
   >
     {
       showControls && (

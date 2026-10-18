@@ -65,6 +65,15 @@ export interface MapProps {
    * behaviour before `@maplibre-yaml/astro` 0.6).
    */
   base?: string | false;
+  /**
+   * Hide the on-page notices for non-fatal problems (`<ml-map quiet>`): the
+   * "Part of this map couldn't load" notice (a data file that 404'd, a layer
+   * that failed) and the zero-height hint. The problems are still logged to
+   * the browser console, and a fatal problem (a document that doesn't
+   * validate, a basemap that never loads) still shows its error card. For a
+   * finished site whose visitors shouldn't see author-facing details.
+   */
+  quiet?: boolean;
 }
 
 /**
@@ -144,6 +153,13 @@ export interface ScrollytellingProps {
    * (GitHub Pages). Pass a path to override it, or `false` to opt out.
    */
   base?: string | false;
+  /**
+   * Hide the on-page notices for non-fatal problems on the story's map
+   * (`<ml-scrollytelling quiet>`), as `quiet` on `Map` does. Problems are
+   * still logged to the console; a story that fails to load or validate
+   * still shows its error card.
+   */
+  quiet?: boolean;
 }
 
 /**

@@ -417,3 +417,40 @@ describe("builder output renders (regression: ml-qxt smoke find)", () => {
     expect(html).not.toContain("&quot;source&quot;:&quot;region-fill&quot;");
   });
 });
+
+describe("quiet reaches the element (ml-aot.64)", () => {
+  // A finished site had no way to hide the non-fatal notice: none of the
+  // three components passed `quiet` on.
+  const STORY = {
+    type: "scrollytelling",
+    id: "q-story",
+    config: { center: [0, 0] as [number, number], zoom: 2, mapStyle: "https://demotiles.maplibre.org/style.json" },
+    layers: [],
+    chapters: [{ id: "c1", title: "One", center: [0, 0] as [number, number], zoom: 3 }],
+  };
+
+  it("Map: quiet sets <ml-map quiet>; without it, no attribute", async () => {
+    const on = await container.renderToString(Map as any, { props: { config: MAP_CONFIG, quiet: true } });
+    expect(openTag(on, "ml-map")).toHaveProperty("quiet");
+    const off = await container.renderToString(Map as any, { props: { config: MAP_CONFIG } });
+    expect(openTag(off, "ml-map")).not.toHaveProperty("quiet");
+  });
+
+  it("FullPageMap: quiet sets <ml-map quiet>", async () => {
+    const on = await container.renderToString(FullPageMap as any, { props: { src: "/configs/x.yaml", quiet: true } });
+    expect(openTag(on, "ml-map")).toHaveProperty("quiet");
+    const off = await container.renderToString(FullPageMap as any, { props: { src: "/configs/x.yaml" } });
+    expect(openTag(off, "ml-map")).not.toHaveProperty("quiet");
+  });
+
+  it("Scrollytelling: quiet sets <ml-scrollytelling quiet> and the server-rendered story map's quiet", async () => {
+    const on = await container.renderToString(Scrollytelling as any, { props: { config: STORY, quiet: true } });
+    expect(openTag(on, "ml-scrollytelling")).toHaveProperty("quiet");
+    expect(openTag(on, "ml-map")).toHaveProperty("quiet");
+    const src = await container.renderToString(Scrollytelling as any, { props: { src: "/stories/x.yaml", quiet: true } });
+    expect(openTag(src, "ml-scrollytelling")).toHaveProperty("quiet");
+    const off = await container.renderToString(Scrollytelling as any, { props: { config: STORY } });
+    expect(openTag(off, "ml-scrollytelling")).not.toHaveProperty("quiet");
+    expect(openTag(off, "ml-map")).not.toHaveProperty("quiet");
+  });
+});

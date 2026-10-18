@@ -455,10 +455,20 @@ interface MapProps {
   // Where the paths in the document start (default: your site's base,
   // import.meta.env.BASE_URL). false = resolve relative paths against the page.
   base?: string | false;
+
+  // Hide on-page notices for non-fatal problems (default: false)
+  quiet?: boolean;
 }
 ```
 
 If you pass both, `config` wins and the component warns at build time.
+
+`quiet` hides the "Part of this map couldn't load" notice (a data file that
+404'd, a layer that failed) and the zero-height hint, for a finished site
+whose visitors shouldn't see author-facing details. The problems are still
+logged to the browser console, and a fatal problem (a document that doesn't
+validate, a basemap that never loads) still shows its error card.
+`FullPageMap` and `Scrollytelling` take the same prop.
 
 ### Corner slots
 
@@ -1256,6 +1266,9 @@ interface FullPageMapProps {
 
   // Where the paths in the document start (default: import.meta.env.BASE_URL)
   base?: string | false;
+
+  // Hide on-page notices for non-fatal problems (default: false; see Map)
+  quiet?: boolean;
 }
 ```
 
@@ -1552,6 +1565,9 @@ interface ScrollytellingProps {
   // Where the story's paths start (default: import.meta.env.BASE_URL).
   // false = resolve relative paths against the page.
   base?: string | false;
+  // Hide on-page notices for non-fatal problems on the story's map,
+  // as on Map (default: false). Load/validation errors still show.
+  quiet?: boolean;
 }
 ```
 
