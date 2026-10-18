@@ -37,6 +37,16 @@ function installedMaplibreVersion(): string {
   return JSON.parse(readFileSync(req.resolve("maplibre-gl/package.json"), "utf-8")).version;
 }
 
+// The page serves maplibre-gl from the local install only on v6 (the first
+// line with an ES module build); on the CI matrix's 4.x/5.x legs preview
+// falls back to unpkg, which this hermetic suite forbids. The fallback is
+// covered by the CLI's preview-server integration test.
+const MAPLIBRE_MAJOR = Number(installedMaplibreVersion().split(".")[0]);
+test.skip(
+  MAPLIBRE_MAJOR < 6,
+  `preview serves maplibre-gl locally only from v6 (installed: ${installedMaplibreVersion()}); older lines use the CDN fallback`
+);
+
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer();
