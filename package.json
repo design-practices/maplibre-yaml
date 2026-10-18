@@ -1,5 +1,5 @@
 {
-  "name": "maplibre-yaml",
+  "name": "maplibre-yaml-monorepo",
   "version": "0.1.0",
   "private": true,
   "description": "Declarative Maplibre web maps with YAML configuration",
