@@ -94,9 +94,6 @@ export class ChromeLayout {
     const inset = 10 + controlsExtent;
     el.style.maxHeight = `calc(100% - ${inset + 10}px)`;
     el.style[corner.startsWith("top") ? "top" : "bottom"] = `${inset}px`;
-    // Hosts that move chrome out of the way (a story's cards) must never
-    // place it closer to the edge than this: it clears MapLibre's controls.
-    el.style.setProperty("--ml-chrome-inset", `${inset}px`);
     el.style[corner.endsWith("left") ? "left" : "right"] = "10px";
     el.style.alignItems = corner.endsWith("left") ? "flex-start" : "flex-end";
 

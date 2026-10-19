@@ -21,8 +21,9 @@
  *   story in the browser; until then a loading state shows, and a story that
  *   fails shows one error card with line numbers.
  *
- * Corner slots (`slot="top-left|top-right|bottom-left|bottom-right|legend"`)
- * reach the story's `<ml-map>` either way.
+ * Corner slots (`slot="top-left|top-right|bottom-left|bottom-right"`) reach
+ * the story's `<ml-map>` either way; `slot="legend"` fills the story's pinned
+ * legend panel (above the chapter cards) instead of the built-in entries.
  *
  * Events: `ml-scrollytelling:chapter`, `ml-scrollytelling:action` and
  * `ml-scrollytelling:error`, dispatched on the story element (which keeps
@@ -126,7 +127,8 @@ const hasSlot = {
     compiler strips a literal `slot="…"` inside an expression, and slot names
     are spelled out because <slot name> must be static. With `config` they go
     straight into the server-rendered <ml-map>; with `src` they sit on
-    <ml-scrollytelling>, which hands them to the map it creates.
+    <ml-scrollytelling>, which hands them to the map it creates. (The legend
+    slot is the exception, below.)
   */}
   {config ? (
     <div class="scrolly-map-container">
@@ -149,11 +151,6 @@ const hasSlot = {
         {hasSlot["bottom-right"] && (
           <div {...{ slot: "bottom-right" }} class="ml-astro-slot" data-ml-slot="bottom-right">
             <slot name="bottom-right" />
-          </div>
-        )}
-        {hasSlot.legend && (
-          <div {...{ slot: "legend" }} class="ml-astro-slot" data-ml-slot="legend">
-            <slot name="legend" />
           </div>
         )}
       </ml-map>
@@ -181,12 +178,17 @@ const hasSlot = {
           <slot name="bottom-right" />
         </div>
       )}
-      {hasSlot.legend && (
-        <div {...{ slot: "legend" }} class="ml-astro-slot" data-ml-slot="legend">
-          <slot name="legend" />
-        </div>
-      )}
     </Fragment>
+  )}
+
+  {/*
+    The legend slot stays on <ml-scrollytelling> either way: the story pins
+    its legend above the chapter cards itself, not inside the map.
+  */}
+  {hasSlot.legend && (
+    <div {...{ slot: "legend" }} class="ml-astro-slot" data-ml-slot="legend">
+      <slot name="legend" />
+    </div>
   )}
 
   <div class="scrolly-chapters">

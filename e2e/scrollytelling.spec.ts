@@ -458,70 +458,295 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await context.close();
   });
 
-  /** Map chrome vs the cards and MapLibre's own bottom controls, now. */
-  const chromeState = (page: Page) =>
+  // ---------------------------------------------------------------------
+  // The story's legend: pinned above the cards, a button on phones (0.8.1
+  // maintainer decision: nothing on the map moves with the scroll).
+  // ---------------------------------------------------------------------
+
+  const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
+  const PHONE_SIDE = { viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true };
+  const DESK = { viewport: { width: 1280, height: 800 } };
+  const LAPTOP = { viewport: { width: 1366, height: 768 } };
+
+  /** The legend's toggle and panel, and what the screen shows at their centres. */
+  const legendState = (page: Page) =>
     page.evaluate(() => {
       const el = document.querySelector("ml-scrollytelling") as HTMLElement;
-      const legend = el.querySelector<HTMLElement>(".ml-map-legend")!.getBoundingClientRect();
+      const root = el.querySelector<HTMLElement>(".scrolly-legend")!;
+      const toggle = root.querySelector<HTMLButtonElement>(".scrolly-legend-toggle")!;
+      const panel = root.querySelector<HTMLElement>(".scrolly-legend-panel")!;
+      const t = toggle.getBoundingClientRect();
+      const p = panel.getBoundingClientRect();
       const map = el.querySelector(".scrolly-map-container")!.getBoundingClientRect();
+      const topAt = (r: DOMRect) => document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const open = !panel.hidden;
       const hit = (a: DOMRect, b: DOMRect) =>
         a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
-      const cards = [...el.querySelectorAll<HTMLElement>(".chapter-content")]
-        .map((c) => ({ id: c.closest<HTMLElement>(".scrolly-chapter")!.dataset.chapterId, r: c.getBoundingClientRect() }))
-        .filter((c) => c.r.height > 0);
-      const controls = [...el.querySelectorAll<HTMLElement>(".maplibregl-ctrl-scale, .maplibregl-ctrl-attrib")].map((c) =>
-        c.getBoundingClientRect()
-      );
+      const cardsUnderPanel = open
+        ? [...el.querySelectorAll<HTMLElement>(".chapter-content")]
+            .filter((c) => c.getBoundingClientRect().height > 0 && hit(c.getBoundingClientRect(), p))
+            .map((c) => c.closest<HTMLElement>(".scrolly-chapter")!.dataset.chapterId)
+        : [];
       return {
-        underCard: cards.filter((c) => hit(c.r, legend)).map((c) => c.id),
-        onControl: controls.some((c) => c.height > 0 && hit(c, legend)),
-        inside: legend.top >= map.top - 1 && legend.bottom <= map.bottom + 1,
-        legend: [legend.left, legend.top, legend.right, legend.bottom].map(Math.round),
+        corner: root.dataset.corner,
+        open,
+        expanded: toggle.getAttribute("aria-expanded"),
+        controls: toggle.getAttribute("aria-controls"),
+        panelId: panel.id,
+        toggle: [t.left, t.top, t.width, t.height].map((v) => Math.round(v)),
+        mapTop: Math.round(map.top),
+        toggleOnTop: root.contains(topAt(t)),
+        panelOnTop: open ? root.contains(topAt(p)) : null,
+        cardsUnderPanel,
+        animation: getComputedStyle(panel).animationName,
         scrollY: Math.round(scrollY),
       };
     });
 
-  for (const [doc, viewport] of [
-    ["chrome", { width: 390, height: 844 }],
-    ["chrome", { width: 1280, height: 800 }],
-    ["chrome-top", { width: 844, height: 390 }],
-    ["chrome", { width: 844, height: 390 }],
+  /** The story-layout fixture `doc`, optionally with its YAML edited. */
+  async function openLayout(page: Page, doc: string, edit?: (yaml: string) => string): Promise<void> {
+    if (edit) {
+      const file = join(ROOT, `examples/verification/story-layout/${doc}.yaml`);
+      await page.route(`**/story-layout/${doc}.yaml`, (route) =>
+        route.fulfill({ body: edit(readFileSync(file, "utf8")), contentType: "text/yaml" })
+      );
+    }
+    await page.goto(`/examples/verification/story-layout/index.html?doc=${doc}`, { waitUntil: "domcontentloaded" });
+    await storyReady(page, "pts");
+    await page.waitForSelector(".scrolly-legend");
+  }
+
+  for (const [label, options, corner, open] of [
+    ["phone", PHONE, "top-left", false],
+    ["phone on its side", PHONE_SIDE, "top-right", false],
+    ["desktop", DESK, "top-left", true],
+    ["laptop", LAPTOP, "top-left", true],
   ] as const) {
-    test(`story chrome stays visible while reading: ${doc}, ${viewport.width}x${viewport.height} (ml-aot.50, review A2)`, async ({
+    test(`the legend is pinned through the whole story, never under a card: ${label} (0.8.1 review)`, async ({
       browser,
       baseURL,
     }) => {
-      const mobile = viewport.width < 900 && viewport.height < 900 && (viewport.width < 768 || viewport.height < 500);
-      const context = await browser.newContext({ viewport, reducedMotion: "reduce", isMobile: mobile, hasTouch: mobile });
+      const context = await browser.newContext({ ...options, reducedMotion: "reduce" });
       const page = await context.newPage();
       const errors = await guard(page, baseURL!);
-      await page.goto(`/examples/verification/story-layout/index.html?doc=${doc}`, { waitUntil: "domcontentloaded" });
-      await storyReady(page, "pts");
-      await page.waitForSelector(".ml-map-legend");
-      const top = await page.evaluate(() => document.querySelector("ml-scrollytelling")!.getBoundingClientRect().top + scrollY);
-      const end = await page.evaluate(
-        () => document.documentElement.scrollHeight - innerHeight
+      await openLayout(page, "legend");
+      const ids = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>(".scrolly-chapter")].map((s) => s.dataset.chapterId!)
       );
+      const first = await legendState(page);
+      expect(first.corner).toBe(corner);
+      expect(first.open, "open by default only where no card passes the corner").toBe(open);
+      const h = options.viewport.height;
+      const top = await page.evaluate(() => document.querySelector("ml-scrollytelling")!.getBoundingClientRect().top + scrollY);
+      const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      const seen = new Set<string>();
       const bad: string[] = [];
-      for (let y = top; y <= end; y += Math.round(viewport.height / 7)) {
+      let home: number[] | null = null;
+      for (let y = top; y <= end; y += Math.round(h / 6)) {
         await page.evaluate((to) => scrollTo(0, to), y);
         await settle(page);
-        const s = await chromeState(page);
-        if (s.underCard.length || s.onControl || !s.inside) {
-          bad.push(`at ${s.scrollY}: legend ${s.legend} under ${s.underCard.join(",") || "-"}${s.onControl ? " on scale/attribution" : ""}${s.inside ? "" : " outside the map"}`);
-        }
+        const s = await legendState(page);
+        const id = await active(page);
+        if (id) seen.add(id);
+        if (s.mapTop !== 0) continue; // the map itself has scrolled away (story end)
+        home ??= s.toggle;
+        if (s.toggle.join() !== home.join()) bad.push(`at ${s.scrollY}: legend at ${s.toggle} (was ${home})`);
+        if (!s.toggleOnTop) bad.push(`at ${s.scrollY}: something covers the legend button`);
+        if (s.open && !s.panelOnTop) bad.push(`at ${s.scrollY}: something covers the open legend`);
+        if (s.cardsUnderPanel.length) bad.push(`at ${s.scrollY}: the open legend covers ${s.cardsUnderPanel.join(",")}`);
       }
-      await page.screenshot({ path: `e2e/results/story-chrome-${doc}-${viewport.width}x${viewport.height}.png` });
       expect(bad, bad.join("\n")).toEqual([]);
-      // No transition on the chrome under reduced motion.
-      const transition = await page.evaluate(
-        () => getComputedStyle(document.querySelector(".ml-map-legend")!.closest<HTMLElement>("[class*=ml-map-chrome-]")!).transitionDuration
-      );
-      expect(transition.split(",").every((d) => parseFloat(d) === 0)).toBe(true);
+      expect([...seen].sort(), "the walk reached every chapter").toEqual([...ids].sort());
+      await page.screenshot({ path: `e2e/results/story-legend-${options.viewport.width}x${options.viewport.height}.png` });
       expect(errors).toEqual([]);
       await context.close();
     });
   }
+
+  test("the legend's default corner and state follow the layout; the author's settings win (0.8.1 review)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const state = async (options: object, doc: string, edit?: (y: string) => string) => {
+      const context = await browser.newContext({ ...options, reducedMotion: "reduce" });
+      const page = await context.newPage();
+      await guard(page, baseURL!);
+      await openLayout(page, doc, edit);
+      const s = await legendState(page);
+      await context.close();
+      return `${s.corner} ${s.open ? "open" : "collapsed"}`;
+    };
+    // Cards all on the left: a wide screen puts the legend top-right, open.
+    expect(await state(DESK, "legend-left")).toBe("top-right open");
+    // Cards on both sides (and full-width): collapsed, so it never sits on a card.
+    expect(await state(DESK, "chrome", (y) => y.replace("  position: bottom-left\n", ""))).toBe("top-left collapsed");
+    // The author's position and collapsed win.
+    expect(await state(DESK, "chrome")).toBe("bottom-left collapsed");
+    expect(await state(PHONE, "legend", (y) => y.replace("  title: Places\n", "  title: Places\n  collapsed: false\n"))).toBe(
+      "top-left open"
+    );
+    expect(await state(DESK, "legend", (y) => y.replace("  title: Places\n", "  title: Places\n  collapsed: true\n"))).toBe(
+      "top-left collapsed"
+    );
+    expect(
+      await state(DESK, "legend", (y) => y.replace("  title: Places\n", "  title: Places\n  position: bottom-right\n"))
+    ).toBe("bottom-right open");
+  });
+
+  test("the legend button: Enter and Space open it, Escape closes it and returns focus; a tap outside closes it on a phone (0.8.1 review)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ ...PHONE, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    const errors = await guard(page, baseURL!);
+    await openLayout(page, "legend");
+    await scrollToChapter(page, "first");
+    const toggle = page.locator(".scrolly-legend-toggle");
+    const panel = page.locator(".scrolly-legend-panel");
+    // A real button that names the panel it controls.
+    expect(await toggle.evaluate((b) => b.tagName)).toBe("BUTTON");
+    const s0 = await legendState(page);
+    expect(s0.controls).toBe(s0.panelId);
+    expect(s0.expanded).toBe("false");
+    await expect(panel).toBeHidden();
+
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(panel).toBeVisible();
+    expect((await legendState(page)).expanded).toBe("true");
+    await expect(panel).toContainText("Volcano");
+    // The open panel is above the card that is passing under it.
+    await page.evaluate(() => {
+      const card = document.querySelector('.scrolly-chapter[data-chapter-id="first"] .chapter-content')!;
+      scrollBy(0, card.getBoundingClientRect().top - 20);
+    });
+    await settle(page);
+    const over = await legendState(page);
+    expect(over.panelOnTop, "elementFromPoint at the panel's centre is the panel").toBe(true);
+    // Not modal: focus can leave it (Tab moves on), and Escape closes it.
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    expect(await page.evaluate(() => document.activeElement?.className)).toContain("scrolly-legend-toggle");
+
+    await page.keyboard.press("Space");
+    await expect(panel).toBeVisible();
+    // A tap on the map, outside the legend, closes it.
+    await page.touchscreen.tap(200, 500);
+    await expect(panel).toBeHidden();
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+
+  test("on a wide screen an open-by-default legend stays open on outside clicks; Escape inside it closes it (0.8.1 review)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ ...DESK, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    await guard(page, baseURL!);
+    await openLayout(page, "legend");
+    const panel = page.locator(".scrolly-legend-panel");
+    await expect(panel).toBeVisible();
+    await page.mouse.click(700, 400);
+    await page.keyboard.press("Escape");
+    await expect(panel, "an outside click or a stray Escape leaves it open").toBeVisible();
+    await page.locator(".scrolly-legend-toggle").focus();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await page.locator(".scrolly-legend-toggle").click();
+    await expect(panel).toBeVisible();
+    await context.close();
+  });
+
+  test("the legend panel animates only without reduced motion (0.8.1 review)", async ({ browser, baseURL }) => {
+    for (const [reducedMotion, expected] of [
+      ["reduce", "none"],
+      ["no-preference", "ml-scrolly-legend-in"],
+    ] as const) {
+      const context = await browser.newContext({ ...DESK, reducedMotion });
+      const page = await context.newPage();
+      await guard(page, baseURL!);
+      await openLayout(page, "legend");
+      expect((await legendState(page)).animation, reducedMotion).toBe(expected);
+      await context.close();
+    }
+  });
+
+  // The rail's dots: neutral two-tone by default, visible on any basemap.
+  const railState = (page: Page) =>
+    page.evaluate(() => {
+      const dots = [...document.querySelectorAll<HTMLElement>(".chapter-marker")];
+      const style = (el: HTMLElement) => {
+        const s = getComputedStyle(el, "::before");
+        return { fill: s.backgroundColor, outline: s.borderTopColor, width: parseFloat(s.width) };
+      };
+      return {
+        active: style(dots.find((d) => d.classList.contains("active"))!),
+        inactive: style(dots.find((d) => !d.classList.contains("active"))!),
+      };
+    });
+
+  /** WCAG contrast ratio of two `rgb(...)` colors. */
+  function contrast(a: string, b: string): number {
+    const lum = (c: string) => {
+      const [r, g, bl] = (c.match(/[\d.]+/g) ?? []).slice(0, 3).map((v) => {
+        const x = Number(v) / 255;
+        return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * bl!;
+    };
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi! + 0.05) / (lo! + 0.05);
+  }
+
+  test("the rail's dots are two-tone, stand out on light and dark maps, and the current one differs by more than colour (0.8.1 review)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ ...DESK, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    const errors = await guard(page, baseURL!);
+    await openLayout(page, "legend");
+    const s = await railState(page);
+    expect(s.inactive.fill).toBe("rgb(255, 255, 255)");
+    expect(s.inactive.outline).toBe("rgb(31, 41, 55)");
+    expect(s.active.fill).toBe("rgb(31, 41, 55)");
+    // Bigger, not just another colour (WCAG 1.4.1).
+    expect(s.active.width).toBeGreaterThan(s.inactive.width + 4);
+    // At least 3:1 against the map behind it (WCAG 1.4.11): one of the dot's
+    // two tones always is, on light, dark, water, park and brand-teal maps.
+    for (const background of ["rgb(255, 255, 255)", "rgb(0, 0, 0)", "rgb(170, 211, 223)", "rgb(200, 230, 201)", "rgb(63, 177, 206)", "rgb(31, 41, 55)", "rgb(128, 128, 128)"]) {
+      for (const dot of [s.inactive, s.active]) {
+        const best = Math.max(contrast(dot.fill, background), contrast(dot.outline, background));
+        expect(best, `dot ${dot.fill}/${dot.outline} on ${background}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+    // Screenshots on a light and a dark map.
+    for (const [name, color] of [
+      ["light", "#f2efe9"],
+      ["dark", "#1b1f24"],
+    ]) {
+      await page.evaluate((c) => (document.querySelector("ml-scrollytelling") as any).getMap().setPaintProperty("background", "background-color", c), color);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `e2e/results/story-rail-${name}.png`, clip: { x: 1180, y: 300, width: 100, height: 200 } });
+    }
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+
+  test("markerColor still fills the dots, keeping the dark outline (0.8.1 review)", async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ ...DESK, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    await guard(page, baseURL!);
+    await openLayout(page, "legend", (y) => y.replace("showMarkers: true\n", 'showMarkers: true\nmarkerColor: "#e63946"\n'));
+    const s = await railState(page);
+    expect(s.inactive.fill).toBe("rgb(230, 57, 70)");
+    expect(s.active.fill).toBe("rgb(230, 57, 70)");
+    expect(s.inactive.outline).toBe("rgb(31, 41, 55)");
+    expect(s.active.width).toBeGreaterThan(s.inactive.width + 4);
+    await context.close();
+  });
 
   test("phone on its side: every chapter's subject is beside its card, not under it (ml-aot.50)", async ({
     browser,
@@ -566,86 +791,7 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await context.close();
   });
 
-  test("a legend that grows without a scroll (expanded by the reader) moves clear of the card (ml-aot.50)", async ({
-    browser,
-    baseURL,
-  }) => {
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce", isMobile: true, hasTouch: true });
-    const page = await context.newPage();
-    const errors = await guard(page, baseURL!);
-    await page.goto("/examples/verification/story-layout/index.html?doc=chrome", { waitUntil: "domcontentloaded" });
-    await storyReady(page, "pts");
-    await page.waitForSelector(".ml-map-legend details");
-    // Collapse the legend: only its title is left at the bottom-left.
-    await page.click(".ml-map-legend summary");
-    await page.waitForFunction(() => !document.querySelector<HTMLDetailsElement>(".ml-map-legend details")!.open);
-    // Scroll so the intro card's bottom sits just above the collapsed
-    // legend's home, but within where the open legend reaches.
-    // Where the collapsed legend's top sits at home (its corner's own inset
-    // above the map's bottom edge).
-    const homeTop = await page.evaluate(() => {
-      const corner = document.querySelector(".ml-map-legend")!.closest<HTMLElement>(".ml-map-chrome")!;
-      const map = document.querySelector(".scrolly-map-container")!.getBoundingClientRect();
-      const inset = parseFloat(corner.style.getPropertyValue("--ml-chrome-inset")) || 10;
-      return map.bottom - inset - corner.getBoundingClientRect().height;
-    });
-    await page.evaluate((target) => {
-      const card = document.querySelector('.scrolly-chapter[data-chapter-id="intro"] .chapter-content')!;
-      scrollBy(0, card.getBoundingClientRect().bottom - (target - 12));
-    }, homeTop);
-    await settle(page);
-    await page.waitForTimeout(400);
-    const collapsed = await chromeState(page);
-    expect(collapsed.underCard, "fixture: the collapsed legend fits under the card").toEqual([]);
-    // Open it again -- no scroll happens.
-    await page.click(".ml-map-legend summary");
-    await page.waitForFunction(() => document.querySelector<HTMLDetailsElement>(".ml-map-legend details")!.open);
-    await settle(page);
-    await page.waitForTimeout(200);
-    const s = await chromeState(page);
-    expect(s.underCard, `legend ${s.legend} under ${s.underCard.join(",")}`).toEqual([]);
-    expect(s.onControl).toBe(false);
-    expect(errors).toEqual([]);
-    await context.close();
-  });
-
-  for (const viewport of [
-    { width: 390, height: 844 },
-    { width: 1280, height: 800 },
-  ]) {
-    test(`a legend moved out of a card's way never lands on top-corner controls or the notice, ${viewport.width}x${viewport.height} (review N3)`, async ({
-      browser,
-      baseURL,
-    }) => {
-      const mobile = viewport.width < 768;
-      const context = await browser.newContext({ viewport, reducedMotion: "reduce", isMobile: mobile, hasTouch: mobile });
-      const page = await context.newPage();
-      await guard(page, baseURL!);
-      await page.goto("/examples/verification/story-layout/index.html?doc=obstacles", { waitUntil: "domcontentloaded" });
-      await storyReady(page, "pts");
-      await expect(page.locator(".ml-map-notice")).toBeVisible({ timeout: 30_000 });
-      const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
-      const bad: string[] = [];
-      for (let y = 0; y <= end; y += Math.round(viewport.height / 9)) {
-        await page.evaluate((to) => scrollTo(0, to), y);
-        await settle(page);
-        const hit = await page.evaluate(() => {
-          const legend = document.querySelector(".ml-map-legend")!.getBoundingClientRect();
-          const overlaps = (r: DOMRect) =>
-            r.height > 0 && legend.left < r.right - 1 && r.left < legend.right - 1 && legend.top < r.bottom - 1 && r.top < legend.bottom - 1;
-          const others = [
-            ...document.querySelectorAll<HTMLElement>(".maplibregl-ctrl-top-left > *, .maplibregl-ctrl-top-right > *, .ml-map-notice"),
-          ];
-          return others.filter((o) => overlaps(o.getBoundingClientRect())).map((o) => o.className.split(" ")[0]);
-        });
-        if (hit.length) bad.push(`at ${y}: legend on ${hit.join(", ")}`);
-      }
-      expect(bad, bad.join("\n")).toEqual([]);
-      await context.close();
-    });
-  }
-
-  test("opt-outs: cameraOffset: false, moveChrome: false, and a chapter's own padding (review N4)", async ({ browser, baseURL }) => {
+  test("opt-outs: cameraOffset: false, and a chapter's own padding (review N4)", async ({ browser, baseURL }) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     const page = await context.newPage();
     const errors = await guard(page, baseURL!);
@@ -658,13 +804,7 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
         const chapter = el.story.chapters.find((c: any) => c.id === chapterId);
         const box = el.querySelector(".scrolly-map-container").getBoundingClientRect();
         const p = map.project(chapter.center);
-        const corner = document.querySelector(".ml-map-legend")!.closest<HTMLElement>(".ml-map-chrome")!;
-        return {
-          x: p.x / box.width,
-          y: p.y / box.height,
-          padding: map.getPadding(),
-          chromeMoved: corner.style.getPropertyValue("--ml-scrolly-chrome-bottom") !== "" || corner.style.getPropertyValue("--ml-scrolly-chrome-x") !== "",
-        };
+        return { x: p.x / box.width, y: p.y / box.height, padding: map.getPadding() };
       }, id);
     // cameraOffset: false -- a left card's chapter is at the map's centre.
     await scrollToChapter(page, "intro");
@@ -677,13 +817,6 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await settled(page);
     const right = await at("right");
     expect(right.padding).toEqual({ top: 0, right: 0, bottom: 0, left: 300 });
-    // moveChrome: false -- the legend never moves, at any scroll position.
-    const end = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
-    for (let y = 0; y <= end; y += 200) {
-      await page.evaluate((to) => scrollTo(0, to), y);
-      await settle(page);
-      expect((await at("intro")).chromeMoved, `legend moved at ${y}`).toBe(false);
-    }
     expect(errors).toEqual([]);
     await context.close();
   });
@@ -1370,11 +1503,11 @@ test.describe("docs: Scrollytelling in plain HTML, run verbatim", () => {
       }, id);
       await expect.poll(() => active(page)).toBe(id);
       await settled(page);
-      // The card finishes its activation transition (0.3s) after the scroll;
-      // the chrome is re-placed when it does.
+      // The card finishes its activation transition (0.3s) after the scroll.
       await page.waitForTimeout(400);
       const hit = await page.evaluate((chapterId) => {
-        const legend = document.querySelector<HTMLElement>(".ml-map-legend")!;
+        // On a phone the legend is a pinned button above the cards (0.8.1).
+        const legend = document.querySelector<HTMLElement>(".scrolly-legend-toggle")!;
         const card = document
           .querySelector(`.scrolly-chapter[data-chapter-id="${chapterId}"] .chapter-content`)!
           .getBoundingClientRect();

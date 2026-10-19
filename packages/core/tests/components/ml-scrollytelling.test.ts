@@ -235,7 +235,21 @@ chapters:
     expect(el.querySelector(".scrolly-error")).toBeNull();
     expect(warn.mock.calls.map((c) => String(c[0])).filter((m) => /Unknown key/.test(m))).toEqual([]);
     const doc = JSON.parse(el.querySelector("ml-map")!.getAttribute("config")!);
-    expect(Object.keys(doc)).toEqual(expect.arrayContaining(["sources", "markers", "legend"]));
+    expect(Object.keys(doc)).toEqual(expect.arrayContaining(["sources", "markers"]));
+    // The legend is the story's own, pinned above the cards (0.8.1 review).
+    expect(doc).not.toHaveProperty("legend");
+    expect(el.querySelector(":scope > .scrolly-legend-layer .scrolly-legend-toggle")).not.toBeNull();
+  });
+
+  it("a slot=\"legend\" child fills the story's pinned legend, not the map's corner (0.8.1 review)", () => {
+    const el = inline(STORY_YAML);
+    const key = document.createElement("div");
+    key.slot = "legend";
+    key.textContent = "My key";
+    el.appendChild(key);
+    document.body.appendChild(el);
+    expect(key.closest(".scrolly-legend-panel")).not.toBeNull();
+    expect(key.closest("ml-map")).toBeNull();
   });
 
   it("slot children are handed to the story's map", () => {

@@ -126,14 +126,19 @@ export function footerHTML(story: ScrollytellingBlock): string {
  * Wrapped by the caller in `<nav class="chapter-markers">`.
  */
 export function railButtonsHTML(story: ScrollytellingBlock): string {
-  const color = escapeHtml(safeCssColor(story.markerColor));
+  // No `markerColor`: the stylesheet's neutral two-tone dots (white with a
+  // dark outline; the current one larger and dark), which stand out on any
+  // basemap. A color, when set, fills the dots; the outline stays.
+  const style = story.markerColor
+    ? ` style="--ml-marker-color: ${escapeHtml(safeCssColor(story.markerColor))}"`
+    : "";
   return (story.chapters ?? [])
     .map(
       (chapter: Chapter, index: number) =>
         `<button type="button" class="chapter-marker${index === 0 ? " active" : ""}" ` +
         `data-chapter-id="${escapeHtml(chapter.id)}" ` +
         `aria-label="Go to chapter ${index + 1}: ${escapeHtml(chapter.title)}"` +
-        `${index === 0 ? ' aria-current="step"' : ""} style="--ml-marker-color: ${color}"></button>`
+        `${index === 0 ? ' aria-current="step"' : ""}${style}></button>`
     )
     .join("");
 }

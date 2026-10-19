@@ -122,32 +122,43 @@ ml-scrollytelling .chapter-marker {
   cursor: pointer;
 }
 
+/* The dots are two-tone, so they stand out on any basemap -- light, dark,
+   water, parks (WCAG 1.4.11: at least 3:1 against what is behind them; one
+   of white and the dark outline always is). The current chapter's dot is
+   bigger and filled dark with a white ring, so it differs by more than
+   colour (WCAG 1.4.1). \`markerColor\` fills the dots instead; the outline
+   stays. */
 ml-scrollytelling .chapter-marker::before {
   content: "";
   display: block;
   width: 12px;
   height: 12px;
   box-sizing: border-box;
-  border: 2px solid #fff;
+  border: 2px solid var(--ml-marker-outline, #1f2937);
   border-radius: 50%;
-  background: var(--ml-marker-color, #3fb1ce);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: var(--ml-marker-color, #ffffff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: width 0.15s ease, height 0.15s ease;
 }
 
 ml-scrollytelling .chapter-marker:hover::before {
-  transform: scale(1.3);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+  width: 14px;
+  height: 14px;
 }
 
 ml-scrollytelling .chapter-marker.active::before {
-  transform: scale(1.5);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  width: 18px;
+  height: 18px;
+  border: 3px solid #ffffff;
+  background: var(--ml-marker-color, var(--ml-marker-outline, #1f2937));
+  box-shadow: 0 0 0 2px var(--ml-marker-outline, #1f2937), 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
+/* Keyboard focus: a dark ring with a white halo, visible on any basemap. */
 ml-scrollytelling .chapter-marker:focus-visible {
-  outline: 2px solid var(--ml-marker-color, #3fb1ce);
-  outline-offset: 1px;
+  outline: 3px solid var(--ml-marker-outline, #1f2937);
+  outline-offset: 0;
+  box-shadow: 0 0 0 5px #ffffff;
 }
 
 /* Footer */
@@ -369,30 +380,113 @@ ml-scrollytelling[debug] .scrolly-chapter.is-active {
   background: #000;
 }
 
-/* Map chrome (legend, slots, params panel) stays out from under the cards:
-   the element sets --ml-scrolly-chrome-bottom / -top on a corner a card
-   would cover (ml-aot.39, ml-aot.50), and the corner never comes closer to
-   the edge than ChromeLayout's own inset (--ml-chrome-inset), which clears
-   MapLibre's scale bar and attribution. !important: ChromeLayout's offset is
-   an inline style. No transition: the chrome moves with the scroll. */
-ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-left,
-ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
-  bottom: max(var(--ml-chrome-inset, 10px), var(--ml-scrolly-chrome-bottom, 0px)) !important;
+/* The story's legend (scrollytelling/story-legend): a layer of its own,
+   pinned over the map and ABOVE the chapter column, so it is never covered
+   by a card and never moves while the story scrolls. The layer has the
+   map's sticky box (same top, same height, pulled up over it), so the two
+   stick and unstick together; it takes no pointer events itself. */
+ml-scrollytelling > .scrolly-legend-layer {
+  position: sticky;
+  top: var(--ml-scrolly-map-top, 0px);
+  height: var(--ml-scrolly-map-height, 100vh);
+  margin-top: calc(-1 * var(--ml-scrolly-map-height, 100vh));
+  z-index: 2;
+  pointer-events: none;
 }
 
-ml-scrollytelling > .scrolly-map-container .ml-map-chrome-top-left,
-ml-scrollytelling > .scrolly-map-container .ml-map-chrome-top-right {
-  top: max(var(--ml-chrome-inset, 10px), var(--ml-scrolly-chrome-top, 0px)) !important;
+ml-scrollytelling .scrolly-legend {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: min(300px, calc(100% - 20px));
+  pointer-events: auto;
+  font: 12px/1.5 system-ui, -apple-system, sans-serif;
 }
 
-ml-scrollytelling > .scrolly-map-container .ml-map-chrome-top-left,
-ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-left {
-  left: max(10px, var(--ml-scrolly-chrome-x, 0px)) !important;
+ml-scrollytelling .scrolly-legend[data-corner$="right"] {
+  align-items: flex-end;
 }
 
-ml-scrollytelling > .scrolly-map-container .ml-map-chrome-top-right,
-ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
-  right: max(10px, var(--ml-scrolly-chrome-x, 0px)) !important;
+ml-scrollytelling .scrolly-legend[data-corner^="bottom"] {
+  flex-direction: column-reverse;
+}
+
+ml-scrollytelling .scrolly-legend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(31, 41, 55, 0.35);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #1f2937;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  font: 600 13px/1.2 system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+}
+
+ml-scrollytelling .scrolly-legend-toggle::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+ml-scrollytelling .scrolly-legend.is-open .scrolly-legend-toggle::after {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+ml-scrollytelling .scrolly-legend-toggle:focus-visible {
+  outline: 3px solid #1f2937;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px #ffffff;
+}
+
+ml-scrollytelling .scrolly-legend-panel {
+  box-sizing: border-box;
+  min-width: 140px;
+  max-width: 100%;
+  max-height: calc(var(--ml-scrolly-map-height, 100vh) - 32px - 4px - var(--ml-story-legend-offset, 20px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #333333;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+ml-scrollytelling .scrolly-legend-panel[hidden] {
+  display: none;
+}
+
+ml-scrollytelling .scrolly-legend-panel .legend-item:first-child {
+  margin-top: 0 !important;
+}
+
+ml-scrollytelling.theme-dark .scrolly-legend-toggle,
+ml-scrollytelling.theme-dark .scrolly-legend-panel {
+  background: rgba(31, 41, 55, 0.97);
+  color: #f9fafb;
+  border-color: rgba(249, 250, 251, 0.35);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  ml-scrollytelling .scrolly-legend.is-open .scrolly-legend-panel {
+    animation: ml-scrolly-legend-in 0.12s ease-out;
+  }
+}
+
+@keyframes ml-scrolly-legend-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* A chapter photo or video never fills the map (ml-aot.50): a full-width

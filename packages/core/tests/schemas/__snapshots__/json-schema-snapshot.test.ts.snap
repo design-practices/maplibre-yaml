@@ -3269,18 +3269,12 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
             },
             "markerColor": {
               "type": "string",
-              "default": "#3FB1CE",
-              "description": "Chapter marker color"
+              "description": "Fill color of the chapter rail's dots. Default: white dots with a dark outline, the current one larger and filled dark, which stand out on any basemap"
             },
             "cameraOffset": {
               "type": "boolean",
               "default": true,
               "description": "Offset the camera so each chapter's \`center\` is not under its card (false: centre it in the whole map)"
-            },
-            "moveChrome": {
-              "type": "boolean",
-              "default": true,
-              "description": "Move the legend and corner slots out of a card's way as it scrolls past (false: they stay in their corners)"
             },
             "layers": {
               "type": "array",
@@ -3569,7 +3563,37 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               "$ref": "#/$defs/any/oneOf/0/properties/controls"
             },
             "legend": {
-              "$ref": "#/$defs/any/oneOf/0/properties/legend"
+              "type": "object",
+              "properties": {
+                "position": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/logoPosition",
+                  "description": "Legend corner. Default: top-left, or top-right on a wide screen whose cards are all on the left"
+                },
+                "title": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/legend/properties/title"
+                },
+                "collapsed": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "const": "auto"
+                    }
+                  ],
+                  "default": "auto",
+                  "description": "Start collapsed to a Legend button (true), open (false), or auto: collapsed on phones and where cards pass the legend's corner, open elsewhere"
+                },
+                "items": {
+                  "$ref": "#/$defs/any/oneOf/0/properties/legend/properties/items"
+                }
+              },
+              "additionalProperties": false,
+              "description": "The story's legend: pinned in one corner, above the chapter cards",
+              "patternProperties": {
+                "^x-": {}
+              }
             },
             "state": {
               "$ref": "#/$defs/any/oneOf/0/properties/state"
@@ -10898,18 +10922,12 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         },
                         "markerColor": {
                           "type": "string",
-                          "default": "#3FB1CE",
-                          "description": "Chapter marker color"
+                          "description": "Fill color of the chapter rail's dots. Default: white dots with a dark outline, the current one larger and filled dark, which stand out on any basemap"
                         },
                         "cameraOffset": {
                           "type": "boolean",
                           "default": true,
                           "description": "Offset the camera so each chapter's \`center\` is not under its card (false: centre it in the whole map)"
-                        },
-                        "moveChrome": {
-                          "type": "boolean",
-                          "default": true,
-                          "description": "Move the legend and corner slots out of a card's way as it scrolls past (false: they stay in their corners)"
                         },
                         "layers": {
                           "type": "array",
@@ -11198,7 +11216,37 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/controls"
                         },
                         "legend": {
-                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend"
+                          "type": "object",
+                          "properties": {
+                            "position": {
+                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/logoPosition",
+                              "description": "Legend corner. Default: top-left, or top-right on a wide screen whose cards are all on the left"
+                            },
+                            "title": {
+                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend/properties/title"
+                            },
+                            "collapsed": {
+                              "anyOf": [
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "auto"
+                                }
+                              ],
+                              "default": "auto",
+                              "description": "Start collapsed to a Legend button (true), open (false), or auto: collapsed on phones and where cards pass the legend's corner, open elsewhere"
+                            },
+                            "items": {
+                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend/properties/items"
+                            }
+                          },
+                          "additionalProperties": false,
+                          "description": "The story's legend: pinned in one corner, above the chapter cards",
+                          "patternProperties": {
+                            "^x-": {}
+                          }
                         },
                         "state": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/state"
@@ -11617,18 +11665,12 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
         },
         "markerColor": {
           "type": "string",
-          "default": "#3FB1CE",
-          "description": "Chapter marker color"
+          "description": "Fill color of the chapter rail's dots. Default: white dots with a dark outline, the current one larger and filled dark, which stand out on any basemap"
         },
         "cameraOffset": {
           "type": "boolean",
           "default": true,
           "description": "Offset the camera so each chapter's \`center\` is not under its card (false: centre it in the whole map)"
-        },
-        "moveChrome": {
-          "type": "boolean",
-          "default": true,
-          "description": "Move the legend and corner slots out of a card's way as it scrolls past (false: they stay in their corners)"
         },
         "layers": {
           "type": "array",
@@ -14438,17 +14480,24 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
           "properties": {
             "position": {
               "$ref": "#/$defs/scrollytelling/properties/config/properties/logoPosition",
-              "default": "top-left",
-              "description": "Legend position"
+              "description": "Legend corner. Default: top-left, or top-right on a wide screen whose cards are all on the left"
             },
             "title": {
               "type": "string",
               "description": "Legend title"
             },
             "collapsed": {
-              "type": "boolean",
-              "default": false,
-              "description": "Start collapsed"
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "const": "auto"
+                }
+              ],
+              "default": "auto",
+              "description": "Start collapsed to a Legend button (true), open (false), or auto: collapsed on phones and where cards pass the legend's corner, open elsewhere"
             },
             "items": {
               "type": "array",
@@ -14492,7 +14541,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
             }
           },
           "additionalProperties": false,
-          "description": "Legend configuration",
+          "description": "The story's legend: pinned in one corner, above the chapter cards",
           "patternProperties": {
             "^x-": {}
           }

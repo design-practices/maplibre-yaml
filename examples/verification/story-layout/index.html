@@ -12,8 +12,16 @@
                       "Map cannot fit within canvas").
       chrome.yaml     scale bar + bottom-left legend + a hidden chapter, left /
                       centre / full cards with a large photo. PASS = the
-                      legend and scale bar stay visible (never under a card,
-                      never on top of each other), photos never fill the map.
+                      legend is a button pinned above the cards (cards pass
+                      its corner), each chapter's subject is clear of its
+                      card, photos never fill the map.
+      legend.yaml     centred cards and a legend with no position. PASS =
+                      the legend never moves while the story scrolls: top-left
+                      and open on a wide screen (no card passes it), a
+                      "Legend" button on a phone that opens above the cards.
+      legend-left.yaml  left cards only. PASS = on a wide screen the legend
+                      is top-right, open, and never on a card.
+      optouts.yaml    cameraOffset: false and a chapter's own padding.
       ambient.yaml    a rotateAnimation chapter and a spinGlobe chapter.
                       PASS = resizing the window or rotating the phone while
                       one is read keeps the page responsive and the map

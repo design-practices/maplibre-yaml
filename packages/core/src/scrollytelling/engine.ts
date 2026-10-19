@@ -110,6 +110,9 @@ export function storyMapDocument(story: ScrollytellingBlock): Record<string, unk
   for (const key of misplacedRootKeys("scrollytelling")) delete config[key];
   const source = story as Record<string, unknown>;
   for (const key of STORY_MAP_KEYS) {
+    // The story pins its own legend above the cards (it is not map chrome
+    // under them), so the map does not build one.
+    if (key === "legend") continue;
     if (source[key] !== undefined) doc[key] = source[key];
   }
   return doc;

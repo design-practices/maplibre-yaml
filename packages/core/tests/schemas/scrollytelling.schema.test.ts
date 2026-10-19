@@ -493,7 +493,14 @@ describe("ScrollytellingBlockSchema", () => {
       const result = ScrollytellingBlockSchema.parse(block);
       expect(result.theme).toBe("light");
       expect(result.showMarkers).toBe(false);
-      expect(result.markerColor).toBe("#3FB1CE");
+      // No default color: the rail's dots are neutral two-tone unless the
+      // author picks one (0.8.1 review).
+      expect(result.markerColor).toBeUndefined();
+      // A story's legend collapses automatically unless told otherwise.
+      expect(ScrollytellingBlockSchema.parse({ ...block, legend: { title: "Key" } }).legend).toMatchObject({
+        collapsed: "auto",
+      });
+      expect(ScrollytellingBlockSchema.parse({ ...block, legend: { title: "Key" } }).legend?.position).toBeUndefined();
     });
   });
 

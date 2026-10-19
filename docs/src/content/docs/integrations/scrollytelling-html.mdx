@@ -169,9 +169,10 @@ chapters:
   centred or full-width one. On phones the card sits in the lower part of
   the screen and the map's subject shows above it; on a phone on its side
   every card is a narrow one on the left, with the subject beside it.
-  The map's legend and slots move out of a card's way as it scrolls past, so
-  they stay visible, and a chapter photo is never taller than 40% of the
-  screen.
+  Nothing on the map moves with the scroll: the legend is pinned in one
+  corner above the cards (a "Legend" button on phones that opens above
+  them; see [The legend](/schema/scrollytelling/#the-legend)), and a chapter
+  photo is never taller than 40% of the screen.
 - **Camera moves** per chapter: `center`, `zoom`, `pitch`, `bearing`, and
   `animation: flyTo | easeTo | jumpTo` (with `speed`, `curve`).
 - **Layers and actions:** `layers.show` / `layers.hide`, and
@@ -245,7 +246,9 @@ rename it to `my-repo`).
 
 Children with a `slot` attribute are handed to the story's map, exactly as on
 [`<ml-map>`](/integrations/web-components/): `top-left`, `top-right`,
-`bottom-left`, `bottom-right`, and `legend` (replaces the built-in legend).
+`bottom-left` and `bottom-right`. They stay in their corner, under the cards.
+A `slot="legend"` child fills the story's pinned legend panel instead of the
+built-in entries.
 
 ```html
 <ml-scrollytelling src="story.yaml">

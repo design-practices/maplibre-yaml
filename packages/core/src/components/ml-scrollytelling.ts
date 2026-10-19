@@ -26,8 +26,17 @@
  * to load or validate shows ONE error card -- the errors with their line
  * numbers and did-you-mean hints -- and no map.
  *
- * Children with `slot="top-left|top-right|bottom-left|bottom-right|legend"`
- * are handed to the story's map, as on `<ml-map>`.
+ * Children with `slot="top-left|top-right|bottom-left|bottom-right"` are
+ * handed to the story's map, as on `<ml-map>`. The legend (`legend:` or a
+ * `slot="legend"` child) is the story's own: pinned in one corner above the
+ * chapter cards, never moved by the scroll, a "Legend" button on phones
+ * (see scrollytelling/story-legend).
+ *
+ * Nothing on the map moves with the scroll. MapLibre's controls (scale bar,
+ * attribution, navigation), corner slots, the params panel and the notice
+ * stay in their corners in the map's layer, under the cards: a card passes
+ * over a corner while it scrolls by and comes to rest clear of the bottom
+ * ones. On phones the attribution stays a compact (i).
  *
  * `base="/my-repo/"` (same meaning as `<ml-map base>`) makes the story work on
  * a site published under a subpath, such as a GitHub Pages project site: the
@@ -73,6 +82,7 @@ import { displayPath } from "../parser/validation-utils.js";
 import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
 import { isLocalPage } from "./map-notice.js";
+import { StoryLegend, STORY_NARROW_QUERY, STORY_LANDSCAPE_QUERY } from "../scrollytelling/story-legend.js";
 import {
   isFilePage,
   looksLikeHtml,
@@ -231,20 +241,6 @@ export class MLScrollytelling extends HTMLElement {
         if (img.isConnected) this.onMediaError({ target: img } as unknown as Event);
       });
     }
-  }
-
-  /** Re-places the chrome when a corner it watches changes size. */
-  private chromeResize: ResizeObserver | null = null;
-  private watchedCorners = new WeakSet<Element>();
-
-  private watchChromeSize(corner: HTMLElement): void {
-    if (typeof ResizeObserver !== "function" || this.watchedCorners.has(corner)) return;
-    this.chromeResize ??= new ResizeObserver(() => {
-      const view = this.ownerDocument.defaultView;
-      view?.requestAnimationFrame(() => this.placeChrome());
-    });
-    this.watchedCorners.add(corner);
-    this.chromeResize.observe(corner);
   }
 
   /** Validation warnings to repeat on the map once it exists (ml-aot.48). */
@@ -680,6 +676,9 @@ export class MLScrollytelling extends HTMLElement {
       rail?.remove();
     }
 
+    // The legend: pinned above the cards, in a layer of its own.
+    this.mountLegend(story, mapContainer);
+
     // The chapters: keep server-rendered sections when they are this story's.
     const column = this.ensureColumn();
     const rendered = Array.from(
@@ -708,11 +707,64 @@ export class MLScrollytelling extends HTMLElement {
     mapEl.toggleAttribute("quiet", this.hasAttribute("quiet"));
   }
 
-  /** Hand `slot="…"` children of the story to its map. */
+  /**
+   * Hand `slot="…"` children of the story to its map -- all but the legend,
+   * which the story pins above its cards itself.
+   */
   private adoptSlots(mapEl: MLMap): void {
     for (const child of Array.from(this.children)) {
       const name = child.getAttribute("slot");
-      if (name !== null && ML_MAP_SLOTS.includes(name)) mapEl.appendChild(child);
+      if (name !== null && name !== "legend" && ML_MAP_SLOTS.includes(name)) mapEl.appendChild(child);
+    }
+  }
+
+  /** The story's pinned legend (see scrollytelling/story-legend). */
+  private legend: StoryLegend | null = null;
+
+  /**
+   * Build the legend layer for a story: its `legend:` entries, or the
+   * author's `slot="legend"` markup (on the story, or inside a
+   * server-rendered map). Nothing when the story has neither.
+   */
+  private mountLegend(story: ScrollytellingBlock, mapContainer: HTMLElement): void {
+    const slot =
+      this.querySelector<HTMLElement>(':scope > [slot="legend"]') ??
+      mapContainer.querySelector<HTMLElement>('ml-map [slot="legend"]') ??
+      this.legend?.element.querySelector<HTMLElement>('[slot="legend"]') ??
+      null;
+    // Take the slot element before the old layer goes (destroy() would put
+    // it back on the element).
+    if (slot) this.appendChild(slot);
+    this.legend?.destroy();
+    this.legend = null;
+    if (!story.legend && !slot) return;
+    const legend = new StoryLegend(this, story, slot);
+    mapContainer.after(legend.layer);
+    legend.layout();
+    this.legend = legend;
+  }
+
+  /**
+   * Lay out the pinned chrome for the screen as it is (first render, map
+   * load, resize, rotation) -- never on scroll. The legend picks its corner
+   * and state; on phones MapLibre's attribution stays a compact (i).
+   */
+  private layoutChrome(): void {
+    const slot = this.legend?.element.querySelector('[slot="legend"]');
+    // A server-rendered map may have mounted the legend slot itself.
+    if (this.legend && !slot) {
+      const stray = this.querySelector<HTMLElement>(':scope > .scrolly-map-container [slot="legend"]');
+      if (stray) this.legend.element.querySelector(".scrolly-legend-panel")?.appendChild(stray);
+    }
+    this.legend?.layout();
+    const view = this.ownerDocument.defaultView;
+    const small = Boolean(view?.matchMedia?.(STORY_NARROW_QUERY).matches || view?.matchMedia?.(STORY_LANDSCAPE_QUERY).matches);
+    if (!small) return;
+    for (const attribution of Array.from(
+      this.querySelectorAll<HTMLElement>(".maplibregl-ctrl-attrib.maplibregl-compact.maplibregl-compact-show")
+    )) {
+      attribution.classList.remove("maplibregl-compact-show");
+      attribution.removeAttribute("open");
     }
   }
 
@@ -801,10 +853,10 @@ export class MLScrollytelling extends HTMLElement {
           realignTimer = 0;
           if (this.controller !== controller || controller.activeChapterId !== before) return;
           controller.realign();
-          this.placeChrome();
         }, REALIGN_DELAY_MS);
       }
-      this.placeChrome();
+      // The pinned chrome is laid out for the new screen (never on scroll).
+      this.layoutChrome();
       remember();
     };
     let frame = 0;
@@ -820,7 +872,6 @@ export class MLScrollytelling extends HTMLElement {
           return;
         }
         sync();
-        this.placeChrome();
         remember();
       });
     };
@@ -938,8 +989,8 @@ export class MLScrollytelling extends HTMLElement {
     view?.addEventListener("scroll", onScroll, { passive: true, capture: true });
     view?.addEventListener("resize", onResize, { passive: true });
     // Cards also move without a scroll: the active card's scale transition
-    // ends, a chapter photo loads and makes its card taller. Re-place the
-    // chrome then too, or a legend could stay where a card now is.
+    // ends, a chapter photo loads and makes its card taller. The active
+    // chapter is worked out again then too.
     this.addEventListener("transitionend", onScroll);
     this.addEventListener("load", onScroll, true);
     this.stopScrollSync = () => {
@@ -1000,7 +1051,8 @@ export class MLScrollytelling extends HTMLElement {
           noteStoryImageRefs(mapEl.getRenderer(), story);
           for (const message of this.pageWarnings) mapEl._reportNotice(message);
           controller.setMap(map as unknown as StoryMap);
-          // The legend and slots mount as the map loads: place them now.
+          // MapLibre's controls exist now: lay the legend out clear of them.
+          this.layoutChrome();
           onScroll();
         }
       },
@@ -1062,13 +1114,10 @@ export class MLScrollytelling extends HTMLElement {
   private stopEngine(): void {
     this.stopScrollSync?.();
     this.stopScrollSync = null;
-    this.chromeResize?.disconnect();
-    this.chromeResize = null;
     this.nearObserver?.disconnect();
     this.nearObserver = null;
     this.near.clear();
     this.sections = null;
-    this.watchedCorners = new WeakSet();
     this.observer?.disconnect();
     this.observer = null;
     this.controller?.destroy();
@@ -1088,6 +1137,8 @@ export class MLScrollytelling extends HTMLElement {
     ++this.generation;
     this.stopEngine();
     this._story = null;
+    this.legend?.destroy();
+    this.legend = null;
     this.querySelector(":scope > .scrolly-map-container")?.remove();
     this.querySelector(":scope > .scrolly-chapters")?.remove();
     this.querySelectorAll(":scope > .scrolly-error").forEach((el) => el.remove());
@@ -1189,94 +1240,6 @@ export class MLScrollytelling extends HTMLElement {
     // sees of the map, so this one may take up to 75%.
     const bottom = mapBox.height / 2 + box.height / 2 + 16;
     return { ...zero, bottom: Math.round(Math.max(0, Math.min(bottom, mapBox.height * 0.75))) };
-  }
-
-  /**
-   * Keep the map's corner chrome (legend, slots, params panel) out from
-   * under the chapter cards (ml-aot.39, ml-aot.50). The cards scroll over
-   * the map above its chrome, so a legend in any corner was covered by
-   * every card passing through it -- on phones for most of each chapter.
-   * Each frame, every corner the cards overlap sideways is moved
-   * vertically to the nearest spot no card covers, never closer to the
-   * edge than its own inset (which clears MapLibre's scale bar and
-   * attribution) and never off the map. With no free spot it stays home.
-   * The offset is a CSS variable the stylesheet reads, so it composes with
-   * ChromeLayout's own placement instead of overriding it.
-   */
-  private placeChrome(): void {
-    const container = this.querySelector<HTMLElement>(":scope > .scrolly-map-container");
-    if (!container) return;
-    // `moveChrome: false`: the legend and slots stay in their corners (N4).
-    if ((this._story as { moveChrome?: boolean } | null)?.moveChrome === false) return;
-    const mapBox = container.getBoundingClientRect();
-    if (mapBox.height === 0) return;
-    // Only cards near the viewport can cover the map (review N1).
-    const near = this.near.size > 0 ? this.sectionList().filter((s) => this.near.has(s)) : this.sectionList();
-    const footer = this.querySelector<HTMLElement>(":scope > .scrolly-chapters > .scrolly-footer");
-    const cards = [
-      ...near.map((s) => s.querySelector<HTMLElement>(":scope > .chapter-content")).filter((c): c is HTMLElement => c !== null),
-      ...(footer ? [footer] : []),
-    ]
-      .map((card) => card.getBoundingClientRect())
-      .filter((r) => r.height > 0 && r.bottom > mapBox.top && r.top < mapBox.bottom);
-    const set = (el: HTMLElement, name: string, px: number | null) => {
-      const value = px === null ? "" : `${Math.round(px)}px`;
-      if (el.style.getPropertyValue(name) === value) return;
-      if (value) el.style.setProperty(name, value);
-      else el.style.removeProperty(name);
-    };
-    // What the moved chrome must not land on besides the cards (review N3):
-    // MapLibre's own controls in every corner, the on-map notice, and the
-    // other chrome corners.
-    const fixed = Array.from(
-      container.querySelectorAll<HTMLElement>(
-        ".maplibregl-ctrl-top-left > *, .maplibregl-ctrl-top-right > *, .maplibregl-ctrl-bottom-left > *, .maplibregl-ctrl-bottom-right > *, .ml-map-notice"
-      )
-    )
-      .map((el) => el.getBoundingClientRect())
-      .filter((r) => r.height > 0 && r.width > 0);
-    const corners = Array.from(container.querySelectorAll<HTMLElement>(".ml-map-chrome"));
-    for (const corner of corners) {
-      // A corner that changes size later (a legend filled in after the map
-      // loaded, or collapsed/expanded by the reader) is placed again then.
-      this.watchChromeSize(corner);
-      const bottom = /-bottom-/.test(corner.className);
-      const left = /-left\b/.test(corner.className);
-      const yVar = bottom ? "--ml-scrolly-chrome-bottom" : "--ml-scrolly-chrome-top";
-      const insetY = parseFloat(corner.style.getPropertyValue("--ml-chrome-inset")) || 10;
-      const insetX = 10;
-      const { width, height } = corner.getBoundingClientRect();
-      if (height === 0 || width === 0) continue;
-      const others = corners
-        .filter((c) => c !== corner)
-        .map((c) => c.getBoundingClientRect())
-        .filter((r) => r.height > 0 && r.width > 0);
-      const obstacles = [...cards, ...fixed, ...others];
-      // Offsets from the corner's own edges: home, then just past each
-      // obstacle (vertically: above/below it; sideways: beside it).
-      const ys = [
-        insetY,
-        ...obstacles.map((r) => (bottom ? mapBox.bottom - r.top + 10 : r.bottom - mapBox.top + 10)),
-      ].filter((o) => o >= insetY && o + height <= mapBox.height - 10);
-      const xs = [
-        insetX,
-        ...obstacles.map((r) => (left ? r.right - mapBox.left + 10 : mapBox.right - r.left + 10)),
-      ].filter((o) => o >= insetX && o + width <= mapBox.width - 10);
-      let best: { x: number; y: number; cost: number } | null = null;
-      for (const x of xs) {
-        for (const y of ys) {
-          const l = left ? mapBox.left + x : mapBox.right - x - width;
-          const t = bottom ? mapBox.bottom - y - height : mapBox.top + y;
-          const covered = obstacles.some((r) => r.left < l + width && l < r.right && r.top < t + height && t < r.bottom);
-          if (covered) continue;
-          // Prefer the smallest move, and up/down over sideways.
-          const cost = (y - insetY) + 2 * (x - insetX);
-          if (!best || cost < best.cost) best = { x, y, cost };
-        }
-      }
-      set(corner, yVar, best && best.y !== insetY ? best.y : null);
-      set(corner, "--ml-scrolly-chrome-x", best && best.x !== insetX ? best.x : null);
-    }
   }
 
   // ------------------------------------------------------------------

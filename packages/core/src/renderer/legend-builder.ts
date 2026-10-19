@@ -72,6 +72,22 @@ export class LegendBuilder {
   }
 
   /**
+   * The legend's entries: the block's own `items:`, else every layer's
+   * `legend:` field. Empty when there is nothing to show.
+   */
+  entries(layers: Layer[], config?: Partial<LegendConfig>): LegendItem[] {
+    return config?.items || this.extractItems(layers);
+  }
+
+  /**
+   * The entries' markup (swatch + label each), without the box or a title:
+   * for a host that puts them in its own panel (a story's pinned legend).
+   */
+  itemsHTML(items: LegendItem[]): string {
+    return `<div class="legend-items">${items.map((item) => this.renderItem(item)).join('')}</div>`;
+  }
+
+  /**
    * Render a single legend item
    */
   private renderItem(item: LegendItem): string {

@@ -1,7 +1,6 @@
 type: scrollytelling
 id: story-optouts
 cameraOffset: false
-moveChrome: false
 showMarkers: true
 config:
   mapStyle: "/examples/verification/configs/local-style.json"

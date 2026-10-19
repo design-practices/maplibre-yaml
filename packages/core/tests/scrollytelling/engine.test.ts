@@ -355,9 +355,11 @@ describe("storyMapDocument", () => {
       footer: "<p>not map</p>",
     } as never);
     expect(Object.keys(doc)).toEqual(
-      expect.arrayContaining(["sources", "markers", "legend", "state", "parameters"])
+      expect.arrayContaining(["sources", "markers", "state", "parameters"])
     );
     expect(doc).not.toHaveProperty("footer");
+    // The story pins its own legend above the cards (0.8.1 review).
+    expect(doc).not.toHaveProperty("legend");
   });
 });
 

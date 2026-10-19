@@ -334,8 +334,12 @@ describe("corner slots reach <ml-map> (ml-l4y.3)", () => {
     const html = await container.renderToString(component as any, { props, slots: SLOTS });
     const body = inner(html);
     for (const [name, markup] of Object.entries(SLOTS)) {
-      expect(body).toMatch(new RegExp(`<div\\sslot="${name}"[^>]*>\\s*${markup}\\s*</div>`));
+      // A story pins its own legend above the cards (0.8.1 review): the
+      // legend slot stays on <ml-scrollytelling>, outside the map.
+      const where = _name === "Scrollytelling" && name === "legend" ? html.slice(html.indexOf("</ml-map>")) : body;
+      expect(where).toMatch(new RegExp(`<div\\sslot="${name}"[^>]*>\\s*${markup}\\s*</div>`));
     }
+    if (_name === "Scrollytelling") expect(body).not.toContain('slot="legend"');
     // Unused corners emit nothing (no empty corner boxes).
     expect(body).not.toContain('data-ml-slot="top-right"');
     expect(body).not.toContain('data-ml-slot="bottom-left"');
