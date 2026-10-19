@@ -95,7 +95,10 @@ describe("StoryLegend", () => {
     legend.layout();
     const toggle = legend.element.querySelector("button")!;
     const panel = legend.element.querySelector<HTMLElement>(".scrolly-legend-panel")!;
-    expect(toggle.textContent).toBe("Key");
+    // The button always reads "Legend"; the author's title heads the panel.
+    expect(toggle.textContent).toBe("Legend");
+    expect(panel.querySelector(".scrolly-legend-heading")?.textContent).toBe("Key");
+    expect(panel.getAttribute("aria-label")).toBe("Key");
     expect(toggle.getAttribute("aria-controls")).toBe(panel.id);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(panel.hidden).toBe(true);
@@ -113,3 +116,26 @@ describe("StoryLegend", () => {
     expect(host.querySelector(".scrolly-legend-layer")).toBeNull();
   });
 });
+
+describe("story legend toggle label", () => {
+  it('reads "Legend" and adds no duplicate heading when the title is "Legend" or absent', () => {
+    for (const legendConfig of [{ title: "Legend" }, {}]) {
+      const host = document.createElement("div");
+      document.body.appendChild(host);
+      const story = ScrollytellingBlockSchema.parse({
+        type: "scrollytelling",
+        id: "s2",
+        config: { center: [0, 0], zoom: 1, mapStyle: "https://x/style.json" },
+        legend: { ...legendConfig, collapsed: true, items: [{ color: "#f00", label: "Red" }] },
+        chapters: [{ id: "a", title: "A", center: [0, 0], zoom: 1 }],
+      });
+      const legend = new StoryLegend(host, story, null);
+      host.appendChild(legend.layer);
+      legend.layout();
+      expect(legend.element.querySelector("button")!.textContent).toBe("Legend");
+      expect(legend.element.querySelector(".scrolly-legend-heading")).toBeNull();
+      host.remove();
+    }
+  });
+});
+

@@ -466,6 +466,12 @@ ml-scrollytelling .scrolly-legend-panel[hidden] {
   display: none;
 }
 
+ml-scrollytelling .scrolly-legend-heading {
+  margin: 0 0 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
 ml-scrollytelling .scrolly-legend-panel .legend-item:first-child {
   margin-top: 0 !important;
 }

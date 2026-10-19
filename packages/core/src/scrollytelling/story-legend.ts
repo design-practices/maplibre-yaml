@@ -126,7 +126,11 @@ export class StoryLegend {
     this.toggle.type = "button";
     this.toggle.className = "scrolly-legend-toggle";
     this.toggle.setAttribute("aria-controls", `${id}-panel`);
-    this.toggle.innerHTML = `<span class="scrolly-legend-title">${escapeHtml(title)}</span>`;
+    // The button always says what it is ("Legend"), whatever the legend's
+    // title: a reader scanning the map — or a screen reader announcing
+    // "Legend, button, collapsed" — knows what it opens. The author's title
+    // heads the panel instead.
+    this.toggle.innerHTML = `<span class="scrolly-legend-label">Legend</span>`;
     this.panel = doc.createElement("div");
     this.panel.className = "scrolly-legend-panel";
     this.panel.id = `${id}-panel`;
@@ -140,7 +144,11 @@ export class StoryLegend {
     } else {
       const builder = new LegendBuilder();
       const items = builder.entries((story.layers ?? []) as never[], story.legend as never);
-      this.panel.innerHTML = builder.itemsHTML(items);
+      const heading =
+        title.trim().toLowerCase() === "legend"
+          ? ""
+          : `<div class="scrolly-legend-heading">${escapeHtml(title)}</div>`;
+      this.panel.innerHTML = heading + builder.itemsHTML(items);
     }
     this.root.append(this.toggle, this.panel);
     this.layer.appendChild(this.root);
