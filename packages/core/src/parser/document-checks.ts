@@ -21,6 +21,7 @@
 import type { Document, LineCounter } from "yaml";
 import { positionForKey, positionForPath, type ValidationWarning } from "./validation-utils";
 import { suggest, spellingVariantOf } from "../utils/suggest";
+import { boundsOfPoints, swappedCenter as swappedPair } from "../utils/swapped-center";
 import { MapBlockSchema, MapConfigSchema } from "../schemas/map.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
 
@@ -263,26 +264,14 @@ function referencePoints(value: Record<string, unknown>): Point[] {
   return points.filter(([x, y]) => Math.abs(x) <= 180 && Math.abs(y) <= 90);
 }
 
-/** Whether `p` lies in the box around `points`, padded so a nearby view counts. */
-function near(p: Point, points: Point[]): boolean {
-  let [w, s, e, n] = [Infinity, Infinity, -Infinity, -Infinity];
-  for (const [x, y] of points) {
-    w = Math.min(w, x);
-    e = Math.max(e, x);
-    s = Math.min(s, y);
-    n = Math.max(n, y);
-  }
-  const padX = Math.max(2, (e - w) * 0.5);
-  const padY = Math.max(2, (n - s) * 0.5);
-  return p[0] >= w - padX && p[0] <= e + padX && p[1] >= s - padY && p[1] <= n + padY;
-}
-
 /**
  * A center written [latitude, longitude] -- the order map sites show -- puts
  * the map thousands of kilometres from its data, with nothing to say why
- * (ml-aot.65). Flag it when the swapped pair lands among the document's own
- * places and the written one doesn't; and flag a latitude past what a web map
- * shows (±85), which can only be a mistake.
+ * (ml-aot.65). Flag it when the swapped pair lands on the document's own
+ * places and the written one is far off them (the shared rule in
+ * utils/swapped-center: chapters merely far apart never count, ml-aot.71);
+ * and flag a latitude past what a web map shows (±85), which can only be a
+ * mistake.
  */
 function swappedCenter(
   center: unknown,
@@ -293,8 +282,7 @@ function swappedCenter(
   const [lng, lat] = center;
   const written = `[${lng}, ${lat}]`;
   if (references.length > 0) {
-    const swapped: Point = [lat, lng];
-    if (Math.abs(lng) <= 90 && !near([lng, lat], references) && near(swapped, references)) {
+    if (swappedPair(center, boundsOfPoints(references), references)) {
       return (
         `${owner} is ${written} — coordinates are [longitude, latitude]; ` +
         `did you mean [${lat}, ${lng}]?`

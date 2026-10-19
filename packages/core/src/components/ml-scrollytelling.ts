@@ -72,6 +72,7 @@ import { normalizeDocumentBase, resolveDocumentUrl } from "../utils/document-bas
 import { displayPath } from "../parser/validation-utils.js";
 import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
+import { isLocalPage } from "./map-notice.js";
 import {
   isFilePage,
   looksLikeHtml,
@@ -190,13 +191,28 @@ export class MLScrollytelling extends HTMLElement {
     media.style.display = "none";
     // `quiet`: no note on the card (the console line above stays).
     if (this.hasAttribute("quiet")) return;
-    const note = this.ownerDocument.createElement("p");
+    // Two readers, as on the map's notice (ml-aot.70): a visitor gets one
+    // plain line; the fix sits under "Details for the site's author", open
+    // while the page is served from this computer, closed on a published site.
+    const doc = this.ownerDocument;
+    const kind = media instanceof HTMLVideoElement ? "video" : "image";
+    const note = doc.createElement("div");
     note.className = "chapter-media-missing";
     note.setAttribute("role", "status");
-    note.textContent =
-      `${media instanceof HTMLVideoElement ? "Video" : "Image"} "${written}" didn't load. ` +
+    const lead = doc.createElement("p");
+    lead.className = "chapter-media-missing-lead";
+    lead.textContent = `This chapter's ${kind} couldn't load.`;
+    const details = doc.createElement("details");
+    details.open = isLocalPage(doc);
+    const summary = doc.createElement("summary");
+    summary.textContent = "Details for the site's author";
+    const fix = doc.createElement("p");
+    fix.textContent =
+      `${kind === "video" ? "Video" : "Image"} "${written}" didn't load. ` +
       `Check the file name and folder — capital letters count (Photo.JPG and photo.jpg are ` +
       `different files on most web servers).`;
+    details.append(summary, fix);
+    note.append(lead, details);
     holder.appendChild(note);
   }
 

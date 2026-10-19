@@ -88,6 +88,20 @@ describe("a center written [lat, lng] (ml-aot.65)", () => {
     expect(await load({ center: [40.75, -73.98], bounds: [-74.1, 40.6, -73.9, 40.9] })).toEqual([]);
   });
 
+  it("a world view over data on several continents is not a swap (ml-aot.71)", async () => {
+    const world = {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [point(3.38, 6.52), point(-77.04, -12.05), point(106.85, -6.21)] },
+    };
+    layers[0].source = world;
+    try {
+      expect(await load({ center: [0, 20], zoom: 2 })).toEqual([]);
+      expect(await load({ center: [20, 0], zoom: 2 })).toEqual([]);
+    } finally {
+      layers[0].source = NYC;
+    }
+  });
+
   it("words it for the page", () => {
     expect(describeSwappedCenter([40.75, -73.98], [-73.98, 40.75])).toBe(
       "`center` is [40.75, -73.98], but this map's data is around [-73.98, 40.75]. Coordinates are [longitude, latitude]: did you mean center: [-73.98, 40.75]?"

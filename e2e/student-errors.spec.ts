@@ -232,6 +232,42 @@ test.describe("src fetch failures (ml-aot.13)", () => {
     await expect(note).not.toContainText("GitHub Pages");
   });
 
+  test("a chapter's missing photo: a plain line for visitors, the fix under the author's details (ml-aot.70)", async ({
+    page,
+    baseURL,
+  }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    // The same page as a published site: served from a real host name.
+    const site = "https://published.example";
+    await page.route(`${site}/**`, async (route) =>
+      route.fulfill({ response: await page.request.fetch(`${baseURL}${new URL(route.request().url()).pathname}`) })
+    );
+    await page.route(/^https?:\/\/(?!published\.example|localhost|127\.0\.0\.1)/, (route) => route.abort());
+    await page.goto(`${site}${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
+    const note = page.locator('.scrolly-chapter[data-chapter-id="start"] .chapter-media-missing');
+    await expect(note).toBeVisible({ timeout: 15_000 });
+    // What a visitor reads: one plain line, no file names or instructions.
+    await expect(note.locator(".chapter-media-missing-lead")).toHaveText("This chapter's image couldn't load.");
+    await expect(note.locator("summary")).toHaveText("Details for the site's author");
+    expect(await note.locator("details").evaluate((d) => (d as HTMLDetailsElement).open)).toBe(false);
+    const visible = await note.innerText();
+    expect(visible).not.toContain("Volcano.SVG");
+    expect(visible).not.toContain("capital letters");
+    // One click away for the author.
+    await note.locator("summary").click();
+    await expect(note.locator("details")).toContainText("Volcano.SVG");
+    await expect(note.locator("details")).toContainText("capital letters count");
+
+    // On this computer (localhost) the author's details start open.
+    await page.goto(`${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
+    const local = page.locator('.scrolly-chapter[data-chapter-id="start"] .chapter-media-missing');
+    await expect(local).toBeVisible({ timeout: 15_000 });
+    expect(await local.locator("details").evaluate((d) => (d as HTMLDetailsElement).open)).toBe(true);
+    expect(await local.innerText()).toContain("Volcano.SVG");
+    expect(errors).toEqual([]);
+  });
+
   test("a chapter action naming a missing layer is on the page, with a did-you-mean (ml-aot.51)", async ({ page }) => {
     const errors = await guard(page);
     await page.goto(`${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });

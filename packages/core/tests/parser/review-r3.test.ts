@@ -203,4 +203,42 @@ describe("ml-aot.65: swapped coordinates", () => {
     const r = YAMLParser.safeParseMapBlock(map(pins));
     expect(r.warnings.filter((w) => w.path === "config.center")).toEqual([]);
   });
+
+  // ml-aot.71: chapters far apart are not a swap.
+  const at = (id: string, center: string) => `  - id: ${id}
+    title: ${id}
+    center: ${center}
+    zoom: 6
+`;
+  const cityData = (points: string[]) => `layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+${points.map((p) => `          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: ${p} } }`).join("\n")}
+`;
+
+  it("a world tour opening on [0, 20] is not flagged, with or without the cities as data (the docs story)", () => {
+    const tour = at("lagos", "[3.38, 6.52]") + at("lima", "[-77.04, -12.05]") + at("jakarta", "[106.85, -6.21]");
+    for (const top of ["", cityData(["[3.38, 6.52]", "[-77.04, -12.05]", "[106.85, -6.21]"])]) {
+      const r = YAMLParser.safeParseScrollytellingBlock(
+        story(tour, top).replace("center: [-73.98, 40.75]\n  zoom: 11", "center: [0, 20]\n  zoom: 2")
+      );
+      expect(r.success).toBe(true);
+      expect(r.warnings.filter((w) => /center/.test(w.path)), JSON.stringify(r.warnings)).toEqual([]);
+    }
+  });
+
+  it("one chapter on another continent is not flagged", () => {
+    const europe = at("lisbon", "[-9.14, 38.72]") + at("paris", "[2.35, 48.86]") + at("berlin", "[13.4, 52.52]");
+    for (const far of ["[36.82, -1.29]", "[-58.38, -34.6]", "[151.2, -33.87]", "[-43.2, -22.9]"]) {
+      const r = YAMLParser.safeParseScrollytellingBlock(
+        story(europe + at("far", far)).replace("center: [-73.98, 40.75]\n  zoom: 11", "center: [10, 48]\n  zoom: 4")
+      );
+      expect(r.warnings.filter((w) => /center/.test(w.path)), `${far}: ${JSON.stringify(r.warnings)}`).toEqual([]);
+    }
+  });
 });

@@ -419,6 +419,19 @@ ml-scrollytelling > .scrolly-map-container .ml-map-chrome-bottom-right {
   opacity: 0.85;
 }
 
+.scrolly-chapter .chapter-media-missing p {
+  margin: 0;
+}
+
+.scrolly-chapter .chapter-media-missing details {
+  margin-top: 4px;
+  font-size: 0.8125rem;
+}
+
+.scrolly-chapter .chapter-media-missing summary {
+  cursor: pointer;
+}
+
 /* Phones. (A phone on its side has its own block below.) */
 @media (max-width: 768px) {
   /* Cards sit low in their chapter; the camera is offset to match, so the
