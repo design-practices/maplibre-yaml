@@ -1,0 +1,47 @@
+type: scrollytelling
+id: story-tall
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [0, 20]
+  zoom: 2
+layers:
+  - id: pts
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [10, 40] } }
+    paint: { circle-radius: 8, circle-color: "#d62828" }
+footer: "<p>After the story: the page carries on.</p>"
+chapters:
+  - id: short-1
+    title: Short first chapter
+    description: "<p>A short chapter.</p>"
+    center: [10,40]
+    zoom: 3
+    alignment: left
+  - id: long-1
+    title: A very long chapter
+    description: "<p>A very long chapter, paragraph 1. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 2. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 3. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 4. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 5. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 6. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 7. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 8. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 9. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 10. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 11. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 12. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 13. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A very long chapter, paragraph 14. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>"
+    center: [-20,10]
+    zoom: 4
+    alignment: left
+  - id: short-2
+    title: Short middle chapter
+    description: "<p>A short chapter.</p>"
+    center: [60,-10]
+    zoom: 3
+    alignment: right
+  - id: long-2
+    title: A long centred chapter
+    description: "<p>A long centred chapter, paragraph 1. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A long centred chapter, paragraph 2. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A long centred chapter, paragraph 3. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A long centred chapter, paragraph 4. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A long centred chapter, paragraph 5. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A long centred chapter, paragraph 6. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A long centred chapter, paragraph 7. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>A long centred chapter, paragraph 8. A long chapter, the way a written essay reads: it is taller than the screen, so the page keys read it a screen at a time before moving to the next chapter. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>"
+    center: [10,40]
+    zoom: 4
+  - id: short-3
+    title: Short last chapter
+    description: "<p>A short chapter.</p>"
+    center: [-20,10]
+    zoom: 3
+    alignment: right

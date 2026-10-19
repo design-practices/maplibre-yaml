@@ -14,6 +14,13 @@
                       centre / full cards with a large photo. PASS = the
                       legend and scale bar stay visible (never under a card,
                       never on top of each other), photos never fill the map.
+      ambient.yaml    a rotateAnimation chapter and a spinGlobe chapter.
+                      PASS = resizing the window or rotating the phone while
+                      one is read keeps the page responsive and the map
+                      turning (one ambient loop, never a pile of them).
+      tall.yaml       chapters taller than the screen. PASS = PageDown /
+                      Space read each long card a screen at a time, then
+                      move on; every chapter in order, the page never stalls.
     Serve from the repo root (pnpm verify:serve), then open
     /examples/verification/story-layout/index.html?doc=chrome
   -->

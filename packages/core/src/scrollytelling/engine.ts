@@ -48,6 +48,8 @@ export interface StoryMap {
   setPaintProperty(layer: string, property: string, value: unknown): unknown;
   setLayoutProperty(layer: string, property: string, value: unknown): unknown;
   once(type: string, listener: () => void): unknown;
+  /** Remove a listener added with `once` (MapLibre's `Map#off`). */
+  off?(type: string, listener: () => void): unknown;
 }
 
 /** Camera padding in pixels, MapLibre's `PaddingOptions`. */
@@ -362,21 +364,48 @@ export function createStoryController(
   let appliedId: string | null = null;
   let destroyed = false;
 
+  // The one ambient loop (rotateAnimation / spinGlobe). Never more than
+  // one: each loop re-arms itself on moveend, and every camera call stops
+  // the running animation, which fires moveend -- so a second loop started
+  // beside the first (a resize re-framing the chapter) woke on the first
+  // one's steps and vice versa, and a few resizes later the tab froze.
+  // `ambientRun` numbers the loops; a step from an older loop does nothing.
+  let ambientRun = 0;
+  let ambientChapter: string | null = null;
+  let ambientStep: (() => void) | null = null;
+  /** The loop has taken its first step (it is past the chapter's transition). */
+  let ambientMoving = false;
+  const stopAmbient = () => {
+    ambientRun += 1;
+    if (ambientStep && map?.off) map.off("moveend", ambientStep);
+    ambientStep = null;
+    ambientChapter = null;
+    ambientMoving = false;
+  };
   const startAmbient = (chapter: Chapter, jumped: boolean) => {
+    stopAmbient();
     if (!map) return;
     if (!chapter.rotateAnimation && !chapter.spinGlobe) return;
     if (reduced()) return;
     const m = map;
+    const run = ambientRun;
     const step = () => {
-      if (destroyed || activeId !== chapter.id) return; // a later chapter took over
+      if (run !== ambientRun) return; // a later loop (or none) took over
+      if (destroyed || activeId !== chapter.id) {
+        stopAmbient(); // a later chapter took over
+        return;
+      }
+      ambientMoving = true;
       if (chapter.rotateAnimation) {
         m.rotateTo(m.getBearing() + 90, { duration: AMBIENT_STEP_MS, easing: (t: number) => t });
       } else {
         const c = m.getCenter();
         m.easeTo({ center: [c.lng - 20, c.lat], duration: AMBIENT_STEP_MS, easing: (t: number) => t });
       }
-      m.once("moveend", step);
+      if (run === ambientRun) m.once("moveend", step);
     };
+    ambientChapter = chapter.id;
+    ambientStep = step;
     // After the chapter's own transition. jumpTo has already fired its
     // moveend synchronously, so there is nothing to wait for.
     if (jumped) step();
@@ -402,6 +431,7 @@ export function createStoryController(
     const previousId = appliedId;
     appliedId = chapter.id;
     const reduce = reduced();
+    stopAmbient(); // before the camera moves: that move's moveend is not a step
 
     const previous = chapters.find((c) => c.id === previousId);
     for (const action of previous?.onChapterExit ?? []) {
@@ -519,6 +549,23 @@ export function createStoryController(
     const chapter = chapters[index];
     if (!chapter) return;
     const padding = options.padding?.(chapter);
+    if (ambientChapter === chapter.id) {
+      // The chapter's ambient loop is running: only re-pad, keeping the
+      // bearing it has turned to (rotateAnimation) or the centre it has spun
+      // to (spinGlobe), then carry on with ONE loop from there. Stopped
+      // first, so the jump's moveend can't wake it.
+      const moving = ambientMoving;
+      stopAmbient();
+      map.jumpTo({
+        center: moving && !chapter.rotateAnimation ? map.getCenter() : chapter.center,
+        zoom: chapter.zoom,
+        pitch: chapter.pitch ?? 0,
+        bearing: moving && chapter.rotateAnimation ? map.getBearing() : (chapter.bearing ?? 0),
+        ...(padding ? { padding } : {}),
+      });
+      startAmbient(chapter, true);
+      return;
+    }
     map.jumpTo({
       center: chapter.center,
       zoom: chapter.zoom,
@@ -549,6 +596,7 @@ export function createStoryController(
     realign,
     destroy() {
       destroyed = true;
+      stopAmbient();
     },
     get activeChapterId() {
       return activeId;

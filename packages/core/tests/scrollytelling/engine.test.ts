@@ -373,3 +373,131 @@ describe("helpers", () => {
     expect(escapeHtml(`<a href="x">'&'</a>`)).toBe("&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
   });
 });
+
+/**
+ * A map that behaves like MapLibre where the ambient loop cares: an animated
+ * camera call first ends the running move (firing moveend), jumpTo fires its
+ * own moveend synchronously, and `finish()` completes the running move.
+ */
+function eventedMap() {
+  let listeners: Array<() => void> = [];
+  let moving = false;
+  let bearing = 0;
+  let cameraCalls = 0;
+  const rotations: number[] = [];
+  const jumps: Array<Record<string, unknown>> = [];
+  const fire = () => {
+    const now = listeners;
+    listeners = [];
+    for (const f of now) f();
+  };
+  const end = () => {
+    if (!moving) return;
+    moving = false;
+    fire();
+  };
+  const count = () => {
+    if (++cameraCalls > 2000) throw new Error("runaway ambient loop");
+  };
+  const animate = () => {
+    count();
+    end();
+    moving = true;
+  };
+  const map: StoryMap = {
+    flyTo: animate,
+    easeTo: animate,
+    jumpTo: (o: Record<string, unknown>) => {
+      count();
+      jumps.push(o);
+      end();
+      if (typeof o.bearing === "number") bearing = o.bearing;
+      fire();
+    },
+    fitBounds: animate,
+    rotateTo: (b: number) => {
+      animate();
+      bearing = b;
+      rotations.push(b);
+    },
+    getBearing: () => bearing,
+    getCenter: () => ({ lng: 0, lat: 0 }),
+    getLayer: () => undefined,
+    setFilter: () => undefined,
+    setPaintProperty: () => undefined,
+    setLayoutProperty: () => undefined,
+    once: (_type: string, f: () => void) => {
+      listeners.push(f);
+    },
+    off: (_type: string, f: () => void) => {
+      listeners = listeners.filter((l) => l !== f);
+    },
+  };
+  return { map, rotations, jumps, listeners: () => listeners.length, finish: end };
+}
+
+describe("ambient animation is one loop (review: resize freeze)", () => {
+  const spinning = (extra: Record<string, unknown>) =>
+    ScrollytellingBlockSchema.parse({
+      type: "scrollytelling",
+      id: "s",
+      config: { center: [0, 0], zoom: 1, mapStyle: "https://x/style.json" },
+      chapters: [
+        { id: "a", title: "A", center: [10, 20], zoom: 4, bearing: 30, ...extra },
+        { id: "b", title: "B", center: [30, 40], zoom: 6 },
+      ],
+    });
+
+  for (const extra of [{ rotateAnimation: true }, { spinGlobe: true }]) {
+    it(`${Object.keys(extra)[0]}: 30 realigns leave one moveend listener, and it keeps going`, () => {
+      const fake = eventedMap();
+      const controller = createStoryController(container(), spinning(extra), fake.map, { reducedMotion: () => false });
+      controller.activate("a");
+      fake.finish(); // the chapter's flyTo lands; the loop's first step starts
+      expect(fake.listeners()).toBe(1);
+      for (let i = 0; i < 30; i++) controller.realign();
+      expect(fake.listeners()).toBe(1);
+      // Each finished step starts exactly one more.
+      const before = fake.rotations.length;
+      fake.finish();
+      fake.finish();
+      fake.finish();
+      if ("rotateAnimation" in extra) expect(fake.rotations.length - before).toBe(3);
+      expect(fake.listeners()).toBe(1);
+    });
+  }
+
+  it("realign keeps the bearing the rotation has reached and only re-pads", () => {
+    const fake = eventedMap();
+    let pad = 100;
+    const controller = createStoryController(container(), spinning({ rotateAnimation: true }), fake.map, {
+      reducedMotion: () => false,
+      padding: () => ({ top: 0, right: 0, bottom: pad, left: 0 }),
+    });
+    controller.activate("a");
+    fake.finish();
+    fake.finish(); // two steps in
+    const reached = fake.map.getBearing();
+    expect(reached).not.toBe(30);
+    pad = 200;
+    fake.jumps.length = 0;
+    controller.realign();
+    expect(fake.jumps).toHaveLength(1);
+    expect(fake.jumps[0]).toMatchObject({ center: [10, 20], bearing: reached, padding: { bottom: 200 } });
+  });
+
+  it("leaving the chapter stops the loop", () => {
+    const fake = eventedMap();
+    const controller = createStoryController(container(), spinning({ rotateAnimation: true }), fake.map, {
+      reducedMotion: () => false,
+    });
+    controller.activate("a");
+    fake.finish();
+    controller.activate("b");
+    fake.finish();
+    const count = fake.rotations.length;
+    fake.finish();
+    expect(fake.rotations.length).toBe(count);
+    expect(fake.listeners()).toBe(0);
+  });
+});

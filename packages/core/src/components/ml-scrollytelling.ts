@@ -85,6 +85,9 @@ import {
 /** The layout breakpoint the stylesheet switches to stacked cards at. */
 const NARROW_QUERY = "(max-width: 768px)";
 
+/** After a resize, how long the layout must hold still before the chapter is re-framed. */
+const REALIGN_DELAY_MS = 120;
+
 /**
  * Every event `<ml-scrollytelling>` dispatches, typed with its `detail`. All
  * bubble.
@@ -760,6 +763,7 @@ export class MLScrollytelling extends HTMLElement {
     // card back, resize the map NOW (its own ResizeObserver runs later, so a
     // chapter camera computed first was framed for the old canvas), and
     // only then pick the chapter and re-frame it with the new padding.
+    let realignTimer = 0;
     const resized = () => {
       if (!view) return;
       size = { w: view.innerWidth, h: view.innerHeight };
@@ -773,7 +777,17 @@ export class MLScrollytelling extends HTMLElement {
       (this.mapElement?.getMap() as { resize?: () => void } | null | undefined)?.resize?.();
       const before = controller.activeChapterId;
       sync();
-      if (controller.activeChapterId === before) controller.realign();
+      // Re-frame once the layout stops changing: a window dragged wider
+      // fires dozens of resizes, and each re-frame is a camera jump.
+      if (controller.activeChapterId === before) {
+        if (realignTimer) view.clearTimeout(realignTimer);
+        realignTimer = view.setTimeout(() => {
+          realignTimer = 0;
+          if (this.controller !== controller || controller.activeChapterId !== before) return;
+          controller.realign();
+          this.placeChrome();
+        }, REALIGN_DELAY_MS);
+      }
       this.placeChrome();
       remember();
     };
@@ -805,7 +819,15 @@ export class MLScrollytelling extends HTMLElement {
     // Only while the story is on screen, with focus on the page or in the
     // story (not a field, button or link), and only between chapters: before
     // the first and after the last, the key scrolls the page as usual.
-    let keyTarget: number | null = null;
+    //
+    // Where the last press is taking the page (ml-aot.68): a press during the
+    // smooth scroll of the one before builds on that destination, so quick
+    // presses (or a slow page) step one chapter each, never re-aim at the
+    // same card.
+    let pending: { top: number; at: number } | null = null;
+    const onScrollEnd = () => {
+      if (pending && view && Math.abs(view.scrollY - pending.top) > 2) pending = null; // interrupted
+    };
     const onKey = (event: KeyboardEvent) => {
       if (!view || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
       const space = event.key === " " || event.key === "Spacebar";
@@ -818,55 +840,84 @@ export class MLScrollytelling extends HTMLElement {
       if (target?.closest("input, textarea, select, button, a[href], summary, [contenteditable], [role=button], [role=textbox]")) {
         return;
       }
-      const story = this.getBoundingClientRect();
+      // The layout as it will be where the page is heading: rectangles are
+      // measured now and moved by the distance still to scroll.
+      const now = Date.now();
+      if (pending && (Math.abs(view.scrollY - pending.top) <= 2 || now - pending.at > 2000)) pending = null;
+      const from = pending ? pending.top : view.scrollY;
+      const ahead = from - view.scrollY;
       const h = view.innerHeight;
-      if (story.bottom <= 0 || story.top >= h) return;
+      const story = this.getBoundingClientRect();
+      if (story.bottom - ahead <= 0 || story.top - ahead >= h) return;
       const sections = Array.from(
         this.querySelectorAll<HTMLElement>(":scope > .scrolly-chapters > .scrolly-chapter")
       );
-      const box = (i: number) =>
-        (sections[i]?.querySelector<HTMLElement>(".chapter-content") ?? sections[i])?.getBoundingClientRect();
+      const box = (i: number) => {
+        const r = (sections[i]?.querySelector<HTMLElement>(".chapter-content") ?? sections[i])?.getBoundingClientRect();
+        return r && r.height > 0 ? { top: r.top - ahead, bottom: r.bottom - ahead, height: r.height } : undefined;
+      };
+      type Box = NonNullable<ReturnType<typeof box>>;
       const mid = h / 2;
-      const centre = (r: DOMRect) => r.top + r.height / 2;
-      // Where the reader is: a chapter still being scrolled to by an
-      // earlier press, else the card nearest the middle of the screen.
+      const centre = (r: Box) => r.top + r.height / 2;
+      // A card taller than the screen is read a page at a time: from its top
+      // going forward, from its end going back.
+      const tall = (r: Box) => r.height > h - 32;
+      /** How far to scroll to put a card in reading position. */
+      const place = (r: Box) => (!tall(r) ? centre(r) - mid : forward ? r.top - 16 : r.bottom - (h - 16));
+      // The card being read: the one across the middle of the screen, else
+      // the one on screen nearest it.
       let base = -1;
-      if (keyTarget !== null && box(keyTarget) && Math.abs(centre(box(keyTarget)!) - mid) > 4) base = keyTarget;
-      else {
-        let best = Infinity;
-        sections.forEach((_, i) => {
-          const r = box(i);
-          if (!r || r.height === 0 || r.bottom <= 0 || r.top >= h) return;
-          const d = Math.abs(centre(r) - mid);
-          if (d < best) {
-            best = d;
-            base = i;
-          }
-        });
+      let best = Infinity;
+      sections.forEach((_, i) => {
+        const r = box(i);
+        if (!r || r.bottom <= 0 || r.top >= h) return;
+        const d = r.top <= mid && r.bottom >= mid ? 0 : Math.abs(centre(r) - mid);
+        if (d < best) {
+          best = d;
+          base = i;
+        }
+      });
+      let shift: number | null = null;
+      const current = base === -1 ? undefined : box(base);
+      if (current && tall(current)) {
+        // Inside a tall card: page through it (a screen less a few lines,
+        // so a line carries over) until its end is on screen (review).
+        if (forward && current.bottom > h - 16 + 1) shift = Math.min(h - 64, current.bottom - (h - 16));
+        if (back && current.top < 16 - 1) shift = -Math.min(h - 64, 16 - current.top);
       }
-      let next = -1;
-      if (base === -1) {
-        // No card on screen (before the first, after the last, or between
-        // tall sections): the next card ahead of the middle, or behind it.
-        sections.forEach((_, i) => {
-          const c = box(i);
-          if (!c || c.height === 0) return;
-          if (forward && next === -1 && centre(c) > mid + 4) next = i;
-          if (back && centre(c) < mid - 4) next = i;
-        });
-      } else if (forward) next = centre(box(base)!) > mid + 4 ? base : base + 1;
-      else next = centre(box(base)!) < mid - 4 ? base : base - 1;
-      const r = next >= 0 ? box(next) : undefined;
-      if (!r) {
-        keyTarget = null;
+      if (shift === null) {
+        let next = -1;
+        if (!current) {
+          // No card on screen (before the first, after the last, or between
+          // tall sections): the next card ahead of the middle, or behind it.
+          sections.forEach((_, i) => {
+            const c = box(i);
+            if (!c) return;
+            if (forward && next === -1 && centre(c) > mid + 4) next = i;
+            if (back && centre(c) < mid - 4) next = i;
+          });
+        } else if (tall(current)) next = forward ? base + 1 : base - 1;
+        else if (forward) next = place(current) > 4 ? base : base + 1;
+        else next = place(current) < -4 ? base : base - 1;
+        // Step over anything with no height (a section not laid out yet).
+        while (next >= 0 && next < sections.length && !box(next)) next += forward ? 1 : -1;
+        const target = next >= 0 ? box(next) : undefined;
+        if (target) shift = place(target);
+      }
+      // Nothing to do, or nothing the right way (the end of the page, a card
+      // already in place): the key does what it always does.
+      const max = Math.max(0, (this.ownerDocument.scrollingElement ?? this.ownerDocument.documentElement).scrollHeight - h);
+      const top = shift === null ? from : Math.max(0, Math.min(max, from + shift));
+      if ((forward && top <= from + 1) || (back && top >= from - 1)) {
+        pending = null;
         return;
       }
       event.preventDefault();
-      keyTarget = next;
-      const shift = r.height > h - 32 ? r.top - 16 : centre(r) - mid;
-      view.scrollTo({ top: view.scrollY + shift, behavior: prefersReducedMotion() ? ("instant" as ScrollBehavior) : "smooth" });
+      pending = { top, at: now };
+      view.scrollTo({ top, behavior: prefersReducedMotion() ? ("instant" as ScrollBehavior) : "smooth" });
     };
     this.ownerDocument.addEventListener("keydown", onKey);
+    view?.addEventListener("scrollend", onScrollEnd);
 
     view?.addEventListener("scroll", onScroll, { passive: true, capture: true });
     view?.addEventListener("resize", onResize, { passive: true });
@@ -879,10 +930,13 @@ export class MLScrollytelling extends HTMLElement {
       view?.removeEventListener("scroll", onScroll, { capture: true });
       view?.removeEventListener("resize", onResize);
       this.ownerDocument.removeEventListener("keydown", onKey);
+      view?.removeEventListener("scrollend", onScrollEnd);
       this.removeEventListener("transitionend", onScroll);
       this.removeEventListener("load", onScroll, true);
       if (frame) view?.cancelAnimationFrame(frame);
       frame = 0;
+      if (realignTimer) view?.clearTimeout(realignTimer);
+      realignTimer = 0;
     };
 
     if (typeof IntersectionObserver === "function") {

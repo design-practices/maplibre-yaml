@@ -774,6 +774,113 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     });
   }
 
+  // Review: once a card taller than the screen was at the top, each press
+  // aimed at that same top again -- preventDefault() and a scroll of 0, so
+  // the page stuck on it for good.
+  for (const viewport of [
+    { width: 1366, height: 768 },
+    { width: 1280, height: 800 },
+  ]) {
+    for (const [key, dir] of [
+      ["PageDown", 1],
+      ["PageUp", -1],
+    ] as const) {
+      test(`${key} through chapters taller than the screen at ${viewport.width}x${viewport.height}: never stalls, every chapter in order (review)`, async ({
+        browser,
+        baseURL,
+      }) => {
+        const context = await browser.newContext({ viewport, reducedMotion: "reduce" });
+        const page = await context.newPage();
+        const errors = await guard(page, baseURL!);
+        await page.goto("/examples/verification/story-layout/index.html?doc=tall", { waitUntil: "domcontentloaded" });
+        await storyReady(page, "pts");
+        const ids = await page.evaluate(() =>
+          [...document.querySelectorAll<HTMLElement>(".scrolly-chapter")].map((s) => s.dataset.chapterId!)
+        );
+        const tallest = await page.evaluate(() =>
+          Math.max(...[...document.querySelectorAll(".chapter-content")].map((c) => c.getBoundingClientRect().height))
+        );
+        expect(tallest, "the fixture has a card taller than the screen").toBeGreaterThan(viewport.height * 1.5);
+        await page.evaluate((d) => scrollTo(0, d > 0 ? 0 : document.documentElement.scrollHeight), dir);
+        await page.mouse.click(5, 5);
+        const state = () =>
+          page.evaluate(() => ({
+            y: scrollY,
+            max: document.documentElement.scrollHeight - innerHeight,
+            id: (document.querySelector("ml-scrollytelling") as HTMLElement).dataset.activeChapter ?? null,
+          }));
+        // Each card's extent on the page, to check no text was skipped.
+        const cards = await page.evaluate(() =>
+          [...document.querySelectorAll<HTMLElement>(".scrolly-chapter")].map((s) => {
+            const r = (s.querySelector(".chapter-content") ?? s).getBoundingClientRect();
+            return { id: s.dataset.chapterId!, top: r.top + scrollY, bottom: r.bottom + scrollY };
+          })
+        );
+        const seen: string[] = [];
+        const problems: string[] = [];
+        const windows: Array<[number, number]> = [];
+        let last = await state();
+        windows.push([last.y, last.y + viewport.height]);
+        if (last.id && (dir > 0 ? last.id === ids[0] : last.id === ids[ids.length - 1])) seen.push(last.id);
+        for (let i = 0; i < 80; i++) {
+          await page.keyboard.press(key);
+          await page.waitForTimeout(150);
+          const s = await state();
+          if (s.id && seen[seen.length - 1] !== s.id) seen.push(s.id);
+          if ((s.y - last.y) * dir <= 0) problems.push(`press ${i + 1}: stuck at ${s.y} (${s.id})`);
+          windows.push([s.y, s.y + viewport.height]);
+          last = s;
+          if (dir > 0 ? s.y >= s.max - 1 : s.y <= 1) break;
+        }
+        // Every line of every card was on screen at one of the stops: the
+        // screens seen, merged, cover each card from top to bottom.
+        const merged: Array<[number, number]> = [];
+        for (const [a, b] of [...windows].sort((p, q) => p[0] - q[0])) {
+          const tail = merged[merged.length - 1];
+          if (tail && a <= tail[1]) tail[1] = Math.max(tail[1], b);
+          else merged.push([a, b]);
+        }
+        for (const card of cards) {
+          if (!merged.some(([a, b]) => a <= card.top + 1 && b >= card.bottom - 1)) {
+            problems.push(`${card.id}: part of the card was never on screen`);
+          }
+        }
+        expect(problems, problems.join("\n")).toEqual([]);
+        expect(dir > 0 ? last.y : -last.y, "reached the end of the page").toBeGreaterThanOrEqual(dir > 0 ? last.max - 1 : -1);
+        expect(seen, "every chapter, in order").toEqual(dir > 0 ? ids : [...ids].reverse());
+        expect(errors).toEqual([]);
+        await context.close();
+      });
+    }
+  }
+
+  test("quick PageDown presses step one chapter each, even mid-scroll (ml-aot.68)", async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    const errors = await guard(page, baseURL!);
+    await page.goto(EXAMPLE, { waitUntil: "domcontentloaded" });
+    await storyReady(page);
+    const ids = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>(".scrolly-chapter")].map((s) => s.dataset.chapterId!)
+    );
+    expect(ids.length).toBeGreaterThanOrEqual(4);
+    await scrollToChapter(page, ids[0]!);
+    await page.mouse.click(5, 5);
+    // Three presses before the first smooth scroll has gone anywhere.
+    await page.keyboard.press("PageDown");
+    await page.keyboard.press("PageDown");
+    await page.keyboard.press("PageDown");
+    await expect.poll(() => active(page), { message: "three presses, three chapters on" }).toBe(ids[3]);
+    await page.waitForTimeout(1200);
+    const off = await page.evaluate((id) => {
+      const c = document.querySelector(`.scrolly-chapter[data-chapter-id="${id}"] .chapter-content`)!.getBoundingClientRect();
+      return Math.abs(c.top + c.height / 2 - innerHeight / 2);
+    }, ids[3]!);
+    expect(off, "the third chapter's card is centred").toBeLessThan(8);
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+
   test("PageDown in a text field is left alone (ml-aot.67)", async ({ browser, baseURL }) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
     const page = await context.newPage();
@@ -843,6 +950,75 @@ test.describe("<ml-scrollytelling src> in a plain page", () => {
     await expect(page.getByText("No configuration provided")).toHaveCount(0);
     expect(errors).toEqual([]);
   });
+
+  // Review blocker on 0.8.1: every resize re-framed an ambient chapter by
+  // starting ANOTHER rotation loop beside the running one. Each loop's camera
+  // call ended the others' moves, so the loops woke each other, and after
+  // ~10 resize steps (a desktop drag) or ~8 rotations the tab froze.
+  for (const [label, viewport, mobile, steps] of [
+    ["a desktop window dragged narrower 24 times", { width: 1280, height: 800 }, false, 24],
+    ["a phone rotated 12 times", { width: 390, height: 844 }, true, 12],
+  ] as const) {
+    test(`ambient chapters survive ${label}: one loop, still turning, page responsive (review blocker)`, async ({
+      browser,
+      baseURL,
+    }) => {
+      const context = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile });
+      const page = await context.newPage();
+      const errors = await guard(page, baseURL!);
+      await page.goto("/examples/verification/story-layout/index.html?doc=ambient", { waitUntil: "domcontentloaded" });
+      await storyReady(page, "pts");
+      const within = <T>(p: Promise<T>, ms: number) =>
+        Promise.race([p, new Promise<"TIMEOUT">((r) => setTimeout(() => r("TIMEOUT"), ms))]);
+      const probe = () =>
+        within(
+          onMap<{ bearing: number; lng: number; listeners: number }>(
+            page,
+            `({ bearing: map.getBearing(), lng: map.getCenter().lng,
+                listeners: (map._listeners?.moveend?.length ?? 0) + (map._oneTimeListeners?.moveend?.length ?? 0) })`
+          ),
+          3000
+        );
+      for (const [id, moving] of [
+        ["turning", "bearing"],
+        ["spinning", "lng"],
+      ] as const) {
+        await scrollToChapter(page, id);
+        // Past the chapter's flight, into the ambient loop.
+        await page.waitForTimeout(3500);
+        const before = await probe();
+        expect(before, `${id}: page answers before resizing`).not.toBe("TIMEOUT");
+        for (let i = 0; i < steps; i++) {
+          const size = mobile
+            ? i % 2 === 0
+              ? { width: viewport.height, height: viewport.width }
+              : viewport
+            : { width: viewport.width - i * 15, height: viewport.height };
+          const done = await within(page.setViewportSize(size).then(() => "ok"), 5000);
+          expect(done, `${id}: resize ${i + 1} of ${steps} returns`).toBe("ok");
+          await page.waitForTimeout(mobile ? 300 : 60);
+        }
+        await page.setViewportSize(viewport);
+        await page.waitForTimeout(1500);
+        const after = await probe();
+        expect(after, `${id}: page answers after ${steps} resizes`).not.toBe("TIMEOUT");
+        if (before === "TIMEOUT" || after === "TIMEOUT") return;
+        expect(after.listeners, `${id}: moveend listeners ${before.listeners} -> ${after.listeners}`).toBe(
+          before.listeners
+        );
+        expect(await active(page)).toBe(id);
+        // Still turning (spinning) a second later.
+        await page.waitForTimeout(1000);
+        const later = await probe();
+        expect(later).not.toBe("TIMEOUT");
+        if (later !== "TIMEOUT") {
+          expect(Math.abs(later[moving] - after[moving]), `${id}: ${moving} still changing`).toBeGreaterThan(0.5);
+        }
+      }
+      expect(errors, errors.join("\n")).toEqual([]);
+      await context.close();
+    });
+  }
 
   test("a broken story shows one error card, with line numbers and the did-you-mean (ml-aot.7)", async ({
     page,
@@ -975,9 +1151,28 @@ test.describe("docs: Scrollytelling in plain HTML, run verbatim", () => {
       const el = document.querySelector("ml-scrollytelling") as any;
       const id = el.dataset.activeChapter;
       const chapter = el.story.chapters.find((c: any) => c.id === id);
-      const c = el.getMap().getCenter();
+      const map = el.getMap();
+      const c = map.getCenter();
       const [lng, lat] = chapter.center;
-      return { id, off: Math.max(Math.abs(c.lng - lng), Math.abs(c.lat - lat)), zoom: el.getMap().getZoom() };
+      // The camera's padding, and what the layout on screen now asks for
+      // (ml-aot.69): a rotation must re-frame for the new layout.
+      const padding = map.getPadding();
+      const want = el.cameraPadding(chapter);
+      const padOff = Math.max(...(["top", "right", "bottom", "left"] as const).map((k) => Math.abs(padding[k] - want[k])));
+      // Where the chapter's centre lands, against the middle of the part of
+      // the map the card leaves free.
+      const p = map.project(chapter.center);
+      const canvas = map.getCanvas().getBoundingClientRect();
+      const freeX = padding.left + (canvas.width - padding.left - padding.right) / 2;
+      const freeY = padding.top + (canvas.height - padding.top - padding.bottom) / 2;
+      return {
+        id,
+        off: Math.max(Math.abs(c.lng - lng), Math.abs(c.lat - lat)),
+        zoom: map.getZoom(),
+        padding,
+        padOff,
+        framed: Math.max(Math.abs(p.x - freeX), Math.abs(p.y - freeY)),
+      };
     });
 
   /** Rotate the phone: resize the viewport, then wait for the camera to settle. */
@@ -1014,6 +1209,18 @@ test.describe("docs: Scrollytelling in plain HTML, run verbatim", () => {
         // The same chapter (ml-aot.59), and the camera on it (ml-aot.58).
         if (s.id !== id) log.push(`reading ${id}, after ${w}x${h}: ${s.id} active`);
         if (s.off > 0.05) log.push(`reading ${id}, after ${w}x${h}: camera ${s.off.toFixed(2)}° off ${s.id}`);
+        // Framed for the NEW layout (ml-aot.69): the padding the cards on
+        // screen now ask for, and the centre in the middle of the free part.
+        const where = `reading ${id}, after ${w}x${h}`;
+        if (s.padOff > 2) log.push(`${where}: padding ${JSON.stringify(s.padding)} is the old layout's`);
+        if (s.framed > 3) log.push(`${where}: chapter centre ${s.framed.toFixed(0)}px from the free area's middle`);
+        // On its side the cards sit beside the map; upright, below it.
+        const landscape = w > h;
+        const side = id === "jakarta" ? s.padding.right : s.padding.left;
+        if (landscape && (s.padding.bottom > 0 || side < 150)) log.push(`${where}: landscape padding ${JSON.stringify(s.padding)}`);
+        if (!landscape && (s.padding.bottom < 100 || s.padding.left > 0 || s.padding.right > 0)) {
+          log.push(`${where}: portrait padding ${JSON.stringify(s.padding)}`);
+        }
       }
     }
     expect(log, log.join("\n")).toEqual([]);
@@ -1045,6 +1252,10 @@ test.describe("docs: Scrollytelling in plain HTML, run verbatim", () => {
     await settled(page);
     const s = await cameraVsActive(page);
     expect(s.off, `camera ${s.off.toFixed(2)}° off active chapter ${s.id}`).toBeLessThan(0.05);
+    // ...framed for the upright layout, not the one on its side (ml-aot.69).
+    expect(s.padOff, `padding ${JSON.stringify(s.padding)} is not the upright layout's`).toBeLessThan(3);
+    expect(s.padding.bottom).toBeGreaterThan(100);
+    expect(s.framed, "chapter centre in the middle of the free area").toBeLessThan(4);
     expect(errors, errors.join("\n")).toEqual([]);
     await context.close();
   });
