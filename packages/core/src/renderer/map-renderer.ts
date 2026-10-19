@@ -7,6 +7,8 @@ import type { LngLat } from 'maplibre-gl';
 import { Map as MapLibreMap, AttributionControl, runtimeVersion, withWorkerUrlHint } from './maplibre-interop';
 import { installAttributionGuard, type AttributionGuard } from './attribution-guard';
 import { sanitizeCustomAttribution, sanitizeSourcesAttribution } from '../utils/attribution';
+import { createImageRefs, noteImageValue, noteLayerImageRefs } from '../utils/image-refs';
+import { suggest } from '../utils/suggest';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
 import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
@@ -17,6 +19,7 @@ import { ControlsManager } from './controls-manager';
 import { MarkersManager } from './markers-manager';
 import { PopupsManager } from './popups-manager';
 import { geojsonBounds, type Bounds } from '../interactions/geometry-bounds';
+import { swappedCenter } from '../utils/swapped-center';
 import { COLOR_RELIEF_RUNTIME_FLOOR, meetsVersion } from '../capabilities';
 import { loadDocumentImages } from './images-loader';
 import { ChromeLayout, type ChromeCorner } from './chrome-layout';
@@ -75,7 +78,7 @@ function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
 type FitResolution =
   | { kind: 'bounds'; bounds: Bounds }
   | { kind: 'deferred' }
-  | { kind: 'unsupported'; reason: string };
+  | { kind: 'unsupported'; reason: string; missing?: { suggestion?: string } };
 
 function resolveFitTo(
   fitTo: FitToConfig,
@@ -84,11 +87,14 @@ function resolveFitTo(
   const keep = 'keeping the authored center/zoom.';
   const source = sources?.[fitTo.source] as Record<string, unknown> | undefined;
   if (!source || typeof source !== 'object') {
+    const suggestion = suggest(fitTo.source, Object.keys(sources ?? {}));
     return {
       kind: 'unsupported',
       reason:
-        `fitTo.source "${fitTo.source}" names no entry in \`sources:\` ` +
-        `(inline layer sources cannot be named — move it to \`sources:\`); ${keep}`,
+        `fitTo.source "${fitTo.source}" names no entry in \`sources:\`` +
+        (suggestion ? ` — did you mean "${suggestion}"?` : '') +
+        ` (inline layer sources cannot be named — move it to \`sources:\`); ${keep}`,
+      missing: { suggestion },
     };
   }
   if (source['type'] !== 'geojson') {
@@ -132,11 +138,22 @@ function resolveFitTo(
  * Errors with no context (a basemap tile, a glyph) are not the document's.
  */
 export interface MapErrorContext {
-  kind: 'style' | 'layer' | 'source';
+  /**
+   * `fit`: `config.fitTo.source` names no source; the map keeps its authored
+   * camera. `center`: `config.center` looks written [latitude, longitude] —
+   * far from the document's data, while the swapped pair lands on it.
+   */
+  kind: 'style' | 'layer' | 'source' | 'fit' | 'center';
+  /** For `center`: the center as written. */
+  center?: [number, number];
   /** The document layer, for `layer` errors. */
   layerId?: string;
-  /** The document source, for `source` errors. */
+  /** The document source, for `source` errors; the name `fitTo.source` gave, for `fit`. */
   sourceId?: string;
+  /** For `fit`: the closest source name, when one is close. */
+  suggestion?: string;
+  /** For `center`: the swapped pair, [longitude, latitude]. */
+  swapped?: [number, number];
   /** The style URL, for `style` errors when the style was given as a URL. */
   url?: string;
 }
@@ -266,6 +283,10 @@ export class MapRenderer {
   private popupsManager: PopupsManager | null = null;
   /** Layer types this runtime cannot render, warned once each (U14). */
   private warnedUnsupportedTypes = new Set<string>();
+  /** A label layer had no text-font and the basemap named none (ml-aot.53). */
+  private warnedNoTextFont = false;
+  /** Image names the document's own layers can ask for (ml-aot.37). */
+  private imageRefs = createImageRefs();
   private controlsManager: ControlsManager;
   private attributionGuard: AttributionGuard;
   private eventListeners: Map<string, Set<Function>>;
@@ -285,6 +306,8 @@ export class MapRenderer {
   private mapReadyFit: { source: string; bounds: Bounds } | null = null;
   /** `fitTo` (U14): set once the camera framed its source — never re-fit. */
   private fitApplied = false;
+  /** ml-aot.65: check `config.center` against the document's inline data, on load. */
+  private checkInlineCenter: (() => void) | null = null;
   private autoLegendContainer: HTMLElement | null;
 
 
@@ -409,6 +432,22 @@ export class MapRenderer {
     if (fitTo && fit && fit.kind === 'bounds') {
       this.mapReadyFit = { source: fitTo.source, bounds: fit.bounds };
     }
+    // A fitTo.source typo leaves the map on its authored camera with only a
+    // console line; tell the host too, so <ml-map> can say so on the page
+    // (ml-aot.51). On load, when the host's notice has a map to sit on.
+    if (fitTo && fit && fit.kind === 'unsupported' && fit.missing) {
+      const missing = fit.missing;
+      let reported = false;
+      this.map.on('load', () => {
+        if (reported || this.destroyed) return;
+        reported = true;
+        options.onError?.(new Error(fit.reason), false, {
+          kind: 'fit',
+          sourceId: fitTo.source,
+          ...(missing.suggestion ? { suggestion: missing.suggestion } : {}),
+        });
+      });
+    }
 
     this.attributionGuard = installAttributionGuard(this.map);
 
@@ -445,6 +484,51 @@ export class MapRenderer {
     }
 
     // Initialize managers
+    // `center: [lat, lng]` (ml-aot.65): once the document's data is known,
+    // a center far from it whose swapped pair lands on it is reported (once).
+    // Not when fitTo or bounds frame the camera: the center is not used then.
+    let dataBounds: Bounds | null = null;
+    let centerChecked = Boolean(fitTo) || (config as { bounds?: unknown }).bounds !== undefined;
+    const unionBounds = (add: Bounds | null) => {
+      if (!add) return;
+      dataBounds = dataBounds
+        ? [
+            [Math.min(dataBounds[0][0], add[0][0]), Math.min(dataBounds[0][1], add[0][1])],
+            [Math.max(dataBounds[1][0], add[1][0]), Math.max(dataBounds[1][1], add[1][1])],
+          ]
+        : add;
+    };
+    const inlineData = (source: unknown): unknown => {
+      if (!source || typeof source !== 'object') return undefined;
+      const s = source as Record<string, unknown>;
+      return s['data'] && typeof s['data'] === 'object' ? s['data'] : s['prefetchedData'];
+    };
+    const checkCenter = () => {
+      if (centerChecked || this.destroyed || !dataBounds) return;
+      const swapped = swappedCenter(config.center, dataBounds);
+      if (!swapped) return;
+      centerChecked = true;
+      const center = config.center as [number, number];
+      console.warn(
+        `[maplibre-yaml] config.center [${center[0]}, ${center[1]}] is far from this map's data, ` +
+          `but [${swapped[0]}, ${swapped[1]}] is on it. Coordinates are [longitude, latitude].`
+      );
+      options.onError?.(new Error('config.center looks like [latitude, longitude]'), false, {
+        kind: 'center',
+        center: [center[0], center[1]],
+        swapped,
+      });
+    };
+    const checkInlineCenter = () => {
+      for (const source of Object.values(sources ?? {})) unionBounds(geojsonBounds(inlineData(source) ?? null));
+      for (const layer of layers) {
+        const source = (layer as { source?: unknown }).source;
+        if (source && typeof source === 'object') unionBounds(geojsonBounds(inlineData(source) ?? null));
+      }
+      checkCenter();
+    };
+    this.checkInlineCenter = checkInlineCenter;
+
     const layerCallbacks: LayerManagerCallbacks = {
       onDataLoading: (layerId) => this.emit('layer:data-loading', { layerId }),
       onDataLoaded: (layerId, featureCount) => {
@@ -468,6 +552,17 @@ export class MapRenderer {
         // feature now holds it — a different one. Drop it; the next mousemove
         // re-applies the highlight under the cursor.
         this.eventHandler.resetFeatureState(layerId);
+        if (!centerChecked) {
+          // Advisory only: never let it get in the way of the data load.
+          try {
+            const sourceId = this.layerManager.getSourceIdForLayer?.(layerId);
+            const data = sourceId ? this.layerManager.getSourceData?.(sourceId) : undefined;
+            unionBounds(data ? geojsonBounds(data) : null);
+            checkCenter();
+          } catch {
+            /* the center check is a hint; skip it */
+          }
+        }
         this.emit('layer:data-loaded', { layerId, featureCount });
       },
       onDataError: (layerId, error) => this.emit('layer:data-error', { layerId, error }),
@@ -591,12 +686,12 @@ export class MapRenderer {
       }
 
       // A narrow map opens MapLibre's compact attribution expanded, across
-      // a bottom-left legend/slot (ml-aot.26): start it collapsed instead,
-      // and again if a resize (phone rotation) re-expands it.
-      if (this.chrome) {
-        this.chrome.collapseCompactAttribution();
-        this.map.on('resize', () => this.chrome?.collapseCompactAttribution());
-      }
+      // a bottom-left legend/slot (ml-aot.26) or scale bar (ml-aot.38):
+      // start it collapsed instead, and again if a resize (phone rotation)
+      // re-expands it. (Constructing the layout touches no DOM.)
+      const chrome = this.chromeLayout();
+      chrome.collapseCompactAttribution();
+      this.map.on('resize', () => this.chrome?.collapseCompactAttribution());
 
       // Standalone markers: DOM pins with the document's popup content run
       // through the same trust gate as every popup sink (U5).
@@ -672,6 +767,7 @@ export class MapRenderer {
               }
             }
             this.pendingVisibility.clear();
+            this.checkInlineCenter?.();
             this.emit('load', undefined);
             options.onLoad?.();
           });
@@ -687,6 +783,7 @@ export class MapRenderer {
     // is bounded because data-driven icon-image makes the id space
     // feature-data-sized — past the cap, one final note and silence.
     const MISSING_WARN_CAP = 100;
+    for (const layer of layers) noteLayerImageRefs(this.imageRefs, layer);
     const missingWarned = new Set<string>();
     const warnMissing = (id: string) => {
       if (missingWarned.has(id) || missingWarned.size > MISSING_WARN_CAP) return;
@@ -698,10 +795,21 @@ export class MapRenderer {
         );
         return;
       }
-      console.warn(
-        `[maplibre-yaml] layer references image "${id}" but no images: entry, ` +
-          'sprite, or addImage call supplies it.'
-      );
+      // MapLibre does not say which layer asked; only blame the document for
+      // a name its own layers can produce (ml-aot.37). A basemap icon the
+      // basemap's sprite lacks is MapLibre's own console warning already.
+      if (this.imageRefs.names.has(id)) {
+        console.warn(
+          `[maplibre-yaml] layer references image "${id}" but no images: entry, ` +
+            'sprite, or addImage call supplies it.'
+        );
+      } else if (this.imageRefs.dynamic) {
+        console.warn(
+          `[maplibre-yaml] image "${id}" is missing. If one of your layers builds ` +
+            'its icon name from feature data, add this image under images:; if it ' +
+            "is a basemap icon, the basemap's sprite lacks it and you can ignore this."
+        );
+      }
     };
     this.map.on('styleimagemissing', (e: { id: string }) => {
       if (missingWarned.has(e.id) || missingWarned.size > MISSING_WARN_CAP) return;
@@ -791,6 +899,19 @@ export class MapRenderer {
   }
 
   /**
+   * Record an image property value the document sets at runtime (a story's
+   * `setLayoutProperty` action, for example), so a missing image it names is
+   * reported as the document's, not dismissed as a basemap sprite gap.
+   * Values of non-image properties are ignored.
+   *
+   * @param property - The layout/paint property (`icon-image`, `fill-pattern`, …).
+   * @param value - Its value: a name, a `{token}` string, or an expression.
+   */
+  noteImageReference(property: string, value: unknown): void {
+    noteImageValue(this.imageRefs, property, value);
+  }
+
+  /**
    * Check if map is loaded
    */
   isMapLoaded(): boolean {
@@ -815,9 +936,73 @@ export class MapRenderer {
       }
       return;
     }
+    noteLayerImageRefs(this.imageRefs, layer);
+    layer = this.withBasemapTextFont(layer);
     await this.layerManager.addLayer(layer);
     this.eventHandler.attachEvents(layer);
     this.emit('layer:added', { layerId: layer.id });
+  }
+
+  /**
+   * A label layer with no `text-font` gets the basemap's own font stack
+   * (ml-aot.53). MapLibre's default ("Open Sans Regular, Arial Unicode MS
+   * Regular") is missing from most basemaps' glyphs (OpenFreeMap serves Noto
+   * Sans), which floods the console with glyph 404s and one warning per
+   * character. When the basemap names no font, warn once with the fix.
+   */
+  private withBasemapTextFont(layer: Layer): Layer {
+    if (layer.type !== 'symbol') return layer;
+    const layout = (layer as { layout?: Record<string, unknown> }).layout;
+    if (!layout || layout['text-field'] === undefined || layout['text-font'] !== undefined) return layer;
+    const font = this.basemapTextFont();
+    if (font) return { ...layer, layout: { ...layout, 'text-font': font } } as Layer;
+    if (!this.warnedNoTextFont) {
+      this.warnedNoTextFont = true;
+      console.warn(
+        `[maplibre-yaml] layer "${layer.id}" shows text but has no text-font, and the ` +
+          `basemap names no font to borrow, so MapLibre asks the glyphs server for its ` +
+          `default font. Add text-font: ["<a font your glyphs: URL serves>"] to the ` +
+          `layer's layout (OpenFreeMap: "Noto Sans Regular").`
+      );
+    }
+    return layer;
+  }
+
+  /**
+   * The basemap font stack to borrow: the first plain stack that is all
+   * "Regular" faces, else the stack its labels use most (ml-aot.61). Not
+   * simply the first: OpenFreeMap Liberty's first label layer is a water
+   * label in Noto Sans Italic, which made every borrowed label italic.
+   */
+  private basemapTextFont(): string[] | undefined {
+    let layers: Array<{ layout?: Record<string, unknown> }> = [];
+    try {
+      layers = ((this.map as unknown as { getStyle?: () => { layers?: unknown[] } })
+        .getStyle?.()?.layers ?? []) as typeof layers;
+    } catch {
+      return undefined;
+    }
+    const stacks: string[][] = [];
+    for (const styleLayer of layers) {
+      let font = styleLayer?.layout?.['text-font'];
+      if (Array.isArray(font) && font[0] === 'literal') font = font[1];
+      if (Array.isArray(font) && font.length > 0 && font.every((f) => typeof f === 'string')) {
+        stacks.push([...(font as string[])]);
+      }
+    }
+    if (stacks.length === 0) return undefined;
+    const regular = stacks.find((stack) => stack.every((f) => /regular/i.test(f)));
+    if (regular) return regular;
+    const counts = new Map<string, { stack: string[]; n: number }>();
+    for (const stack of stacks) {
+      const key = stack.join('\u0000');
+      const entry = counts.get(key) ?? { stack, n: 0 };
+      entry.n += 1;
+      counts.set(key, entry);
+    }
+    let best: { stack: string[]; n: number } | undefined;
+    for (const entry of counts.values()) if (!best || entry.n > best.n) best = entry;
+    return best?.stack;
   }
 
   /** The running maplibre-gl version, as best the runtime reports it. */

@@ -62,7 +62,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 interface Props extends MapProps {}
 
-const { src, config, height = "400px", class: className, style, base } = Astro.props;
+const { src, config, height = "400px", class: className, style, base, quiet = false } = Astro.props;
 
 // Validate that either src or config is provided
 if (!src && !config) {
@@ -111,6 +111,7 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
     config={serializedConfig ?? undefined}
     src={serializedConfig ? undefined : resolvedSrc}
     base={documentBase}
+    quiet={quiet ? "" : undefined}
   >
     {/*
       Corner slots (ml-l4y.3). Astro reads a child's `slot="top-left"` as a
@@ -150,6 +151,8 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
 <script>
   // first: maplibre-gl 6 needs its worker URL before any map is built
   import "../client/maplibre-worker";
+  // astro dev only: a page with no viewport meta (tiny map on phones)
+  import "../client/dev-hints";
   import "@maplibre-yaml/core/register";
 </script>
 

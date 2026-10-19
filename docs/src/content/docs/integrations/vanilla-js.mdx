@@ -879,8 +879,8 @@ renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
 
 **Cause:** A template literal keeps the indentation of your source code, so
 the first line and the lines after it can end up at different depths. The
-parser reports a `yaml-syntax` error such as "Nested mappings are not allowed
-in compact mappings".
+parser reports a `yaml-syntax` error such as "YAML indentation error: Line 2
+is indented differently from line 1 above it".
 
 ```javascript
 // ❌ WRONG - first line starts at column 0, the rest are indented with the code

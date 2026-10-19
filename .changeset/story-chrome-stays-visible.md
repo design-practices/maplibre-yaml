@@ -1,0 +1,8 @@
+---
+"@maplibre-yaml/core": patch
+"@maplibre-yaml/astro": patch
+---
+
+A story's legend is now pinned above the chapter cards and never moves while the story scrolls. Before, cards passing over a corner covered the legend, on phones for most of each chapter. The legend sits top-left by default, opposite the chapter rail, or top-right on a wide screen whose cards are all `alignment: left`; a `legend.position` you set still wins. With the new `legend.collapsed: auto` (the story default) it is a compact button labelled "Legend" (the legend's own title heads the open panel) on phones and wherever cards pass its corner, and open everywhere else; `true` and `false` fix it either way. The button is a real button: it opens the legend as a panel above the cards, Escape closes it and returns focus to the button, a tap outside closes it on a phone, and focus is never trapped, so the map stays usable. A long legend scrolls inside the panel, and the panel does not animate under reduced motion. A `slot="legend"` child (also from Astro's `Scrollytelling`) fills the same panel. The rest of the map's chrome (scale bar, attribution, zoom buttons, corner slots, the params panel, the on-map notice) also stays put in its corner, under the cards; on phones the attribution stays a compact (i) button. Plain `<ml-map>` legends are unchanged.
+
+On a phone on its side (a short landscape screen), cards are narrow and short and sit on the left, with the chapter's subject beside them. Before, desktop cards were taller than the screen and a centred one covered the subject. Chapter photos and videos are capped at 40% of the screen height, so a full-width card's photo no longer fills the map, and full-width cards keep the chapter's `center` above them as centred cards do.

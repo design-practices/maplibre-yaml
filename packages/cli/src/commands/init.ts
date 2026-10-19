@@ -14,6 +14,7 @@ import {
   listTemplates,
 } from '../lib/template-engine.js';
 import { logger } from '../lib/logger.js';
+import { CORE_VERSION, ASTRO_VERSION, caretRange } from '../lib/package-versions.js';
 import { EXIT_CODES } from '../types.js';
 
 // Get templates directory (bundled with CLI)
@@ -88,13 +89,14 @@ export function initArgsError(rawArgs: readonly string[]): string | null {
  * @remarks
  * Written for someone who ran the CLI through `npx`: a bare `maplibre-yaml` or
  * `mlym` only exists after an install, so every CLI command is spelled
- * `npx @maplibre-yaml/cli …`, which works either way.
+ * `npx maplibre-yaml …` (the alias package; works with or without an
+ * install), the spelling the starters and docs use (ml-aot.54).
  *
  * @param template - the template that was scaffolded
  * @param cdPath - the folder to `cd` into, or null when it is the current one
  */
 export function nextSteps(template: string, cdPath: string | null): string[] {
-  const cli = 'npx @maplibre-yaml/cli';
+  const cli = 'npx maplibre-yaml';
   const lines: string[] = [];
   if (cdPath) lines.push(`  ${pc.cyan('cd')} ${cdPath}`);
 
@@ -102,7 +104,11 @@ export function nextSteps(template: string, cdPath: string | null): string[] {
     lines.push(`  ${pc.cyan('npm install')}`);
     lines.push(`  ${pc.cyan('npm run dev')}`);
     lines.push('');
-    lines.push(`  ${pc.dim('Edit public/configs/map.yaml to change the map.')}`);
+    lines.push('  Then open the http://localhost address it prints (usually http://localhost:4321).');
+    lines.push(`  ${pc.dim('Edit public/configs/map.yaml and save: the page reloads.')}`);
+    lines.push('');
+    lines.push(`  ${pc.dim('Publishing on GitHub Pages? Set site and base in astro.config.mjs')}`);
+    lines.push(`  ${pc.dim('(base: "/<your-repo>") and push: .github/workflows/deploy.yml builds it.')}`);
   } else {
     // basic and story: a static page that fetches its YAML file.
     const file = template === 'story' ? 'story.yaml' : 'map.yaml';
@@ -151,8 +157,8 @@ export const initCommand = defineCommand({
       const argsError = initArgsError(rawArgs);
       if (argsError) {
         logger.error(argsError);
-        console.log(`\nUsage: ${pc.cyan('npx @maplibre-yaml/cli init [folder] --template <template>')}`);
-        console.log(`Run ${pc.cyan('npx @maplibre-yaml/cli init --help')} for all options.\n`);
+        console.log(`\nUsage: ${pc.cyan('npx maplibre-yaml init [folder] --template <template>')}`);
+        console.log(`Run ${pc.cyan('npx maplibre-yaml init --help')} for all options.\n`);
         process.exit(EXIT_CODES.VALIDATION_ERROR);
       }
 
@@ -163,7 +169,7 @@ export const initCommand = defineCommand({
         for (const t of templates) {
           console.log(`  ${pc.cyan(t.name.padEnd(10))} ${t.description}`);
         }
-        console.log(`\nUsage: ${pc.cyan('npx @maplibre-yaml/cli init [folder] --template <template>')}\n`);
+        console.log(`\nUsage: ${pc.cyan('npx maplibre-yaml init [folder] --template <template>')}\n`);
         return;
       }
 
@@ -206,9 +212,12 @@ export const initCommand = defineCommand({
         }
       }
 
-      // Gather variables
+      // Gather variables. The package ranges are the ones this CLI was built
+      // with, so a scaffold never depends on an older core/astro line.
       const variables: Record<string, string> = {
         projectName,
+        coreRange: caretRange(CORE_VERSION),
+        astroRange: caretRange(ASTRO_VERSION),
       };
 
       // Apply defaults for any missing variables

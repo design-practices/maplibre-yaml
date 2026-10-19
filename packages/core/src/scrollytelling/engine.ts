@@ -28,6 +28,8 @@ import type {
   ScrollytellingBlock,
 } from "../schemas/scrollytelling.schema";
 import { STORY_MAP_KEYS } from "./keys";
+import { suggest } from "../utils/suggest";
+import { misplacedRootKeys } from "../parser/document-checks";
 
 /** The slice of a maplibre `Map` the engine drives. */
 export interface StoryMap {
@@ -46,6 +48,8 @@ export interface StoryMap {
   setPaintProperty(layer: string, property: string, value: unknown): unknown;
   setLayoutProperty(layer: string, property: string, value: unknown): unknown;
   once(type: string, listener: () => void): unknown;
+  /** Remove a listener added with `once` (MapLibre's `Map#off`). */
+  off?(type: string, listener: () => void): unknown;
 }
 
 /** Camera padding in pixels, MapLibre's `PaddingOptions`. */
@@ -98,8 +102,17 @@ export function storyMapDocument(story: ScrollytellingBlock): Record<string, unk
     config: { ...STORY_GESTURE_DEFAULTS, ...(story.config ?? {}) },
     layers: story.layers ?? [],
   };
+  // A story-root key written under config: (theme, markers, legend…) does
+  // nothing there. The story already reports it, with its line; passing it
+  // on made the story's map report it again as an unknown map option
+  // (ml-aot.63).
+  const config = doc.config as Record<string, unknown>;
+  for (const key of misplacedRootKeys("scrollytelling")) delete config[key];
   const source = story as Record<string, unknown>;
   for (const key of STORY_MAP_KEYS) {
+    // The story pins its own legend above the cards (it is not map chrome
+    // under them), so the map does not build one.
+    if (key === "legend") continue;
     if (source[key] !== undefined) doc[key] = source[key];
   }
   return doc;
@@ -131,6 +144,47 @@ export interface ActionContext {
    * `fitBounds` frames its bounds inside it.
    */
   padding?: CameraPadding;
+  /** The map's size in CSS pixels, so padding never exceeds it. */
+  mapSize?: { width: number; height: number };
+  /** Report a problem the reader should see (a layer the map doesn't have). */
+  onProblem?: (message: string) => void;
+  /** The document's layer ids, for a did-you-mean. */
+  layerIds?: string[];
+}
+
+/**
+ * The card padding a `fitBounds` action may keep. MapLibre adds the map's
+ * padding to the action's own, and refuses ("Map cannot fit within canvas")
+ * when the two leave no room: a centred card's bottom padding (up to 75%)
+ * plus `padding: 100` did exactly that, and the camera never moved. Shrink
+ * the card padding on each axis so at least a fifth of the map is left for
+ * the bounds after both paddings.
+ */
+function fitWithin(
+  card: CameraPadding,
+  own: unknown,
+  size: { width: number; height: number } | undefined
+): CameraPadding {
+  if (!size || size.width <= 0 || size.height <= 0) return card;
+  const fit =
+    typeof own === "number"
+      ? { top: own, right: own, bottom: own, left: own }
+      : own && typeof own === "object"
+        ? (own as Partial<CameraPadding>)
+        : {};
+  const axis = (a: number, b: number, fitA: number, fitB: number, length: number): number => {
+    const room = Math.max(0, length * 0.8 - fitA - fitB);
+    return a + b <= room ? 1 : a + b === 0 ? 1 : room / (a + b);
+  };
+  const v = axis(card.top, card.bottom, fit.top ?? 0, fit.bottom ?? 0, size.height);
+  const h = axis(card.left, card.right, fit.left ?? 0, fit.right ?? 0, size.width);
+  if (v === 1 && h === 1) return card;
+  return {
+    top: Math.floor(card.top * v),
+    bottom: Math.floor(card.bottom * v),
+    left: Math.floor(card.left * h),
+    right: Math.floor(card.right * h),
+  };
 }
 
 /**
@@ -169,6 +223,11 @@ export function runChapterAction(
     if (action.layer && map.getLayer(action.layer)) return true;
     console.warn(
       `[ml-scrollytelling] ${action.action} in chapter "${ctx.chapterId}": no layer "${action.layer ?? ""}" on the map`
+    );
+    const near = action.layer ? suggest(action.layer, ctx.layerIds ?? [], 3) : undefined;
+    ctx.onProblem?.(
+      `Chapter \`${ctx.chapterId}\`: its ${action.action} action names layer \`${action.layer ?? ""}\`, but the map has no layer by that name, so it did nothing.` +
+        (near ? ` Did you mean \`${near}\`?` : "")
     );
     return false;
   };
@@ -211,7 +270,7 @@ export function runChapterAction(
       // The action interrupts the chapter's camera move mid-flight, padding
       // included: settle the padding first, so the bounds are framed in the
       // part of the map the chapter's card leaves visible.
-      if (ctx.padding) map.jumpTo({ padding: ctx.padding });
+      if (ctx.padding) map.jumpTo({ padding: fitWithin(ctx.padding, options.padding, ctx.mapSize) });
       map.fitBounds(
         [
           [west, south],
@@ -240,6 +299,14 @@ export interface StoryControllerOptions {
    * every activation, so it can follow the layout. Default: none.
    */
   padding?: (chapter: Chapter) => CameraPadding | undefined;
+  /** The map's size, so a `fitBounds` action's padding fits in it. */
+  mapSize?: () => { width: number; height: number } | undefined;
+  /**
+   * A problem the reader should see on the page: a chapter showing, hiding
+   * or acting on a layer the map doesn't have (ml-aot.51). Reported once
+   * per message.
+   */
+  onProblem?: (message: string) => void;
   /** Whether camera moves should be instant. Default: the OS setting. */
   reducedMotion?: () => boolean;
 }
@@ -254,6 +321,11 @@ export interface StoryController {
    * as failed: chapters keep activating and announcing, with `map: null`.
    */
   setMap(map: StoryMap | null): void;
+  /**
+   * Re-apply the active chapter's camera, instantly, for a changed layout
+   * (window resize, rotation): new padding, same chapter.
+   */
+  realign(): void;
   /** Stop ambient animation and ignore later calls. */
   destroy(): void;
   readonly activeChapterId: string | null;
@@ -280,6 +352,13 @@ export function createStoryController(
 ): StoryController {
   const chapters: Chapter[] = story.chapters ?? [];
   const reduced = options.reducedMotion ?? prefersReducedMotion;
+  const layerIds = ((story.layers ?? []) as Array<{ id: string }>).map((l) => l.id);
+  const reported = new Set<string>();
+  const problem = (message: string) => {
+    if (reported.has(message)) return;
+    reported.add(message);
+    options.onProblem?.(message);
+  };
   let map: StoryMap | null = initialMap;
   /** The map is settled: loaded (`map` set) or failed (`map` null). */
   let mapSettled = initialMap !== null;
@@ -288,21 +367,48 @@ export function createStoryController(
   let appliedId: string | null = null;
   let destroyed = false;
 
+  // The one ambient loop (rotateAnimation / spinGlobe). Never more than
+  // one: each loop re-arms itself on moveend, and every camera call stops
+  // the running animation, which fires moveend -- so a second loop started
+  // beside the first (a resize re-framing the chapter) woke on the first
+  // one's steps and vice versa, and a few resizes later the tab froze.
+  // `ambientRun` numbers the loops; a step from an older loop does nothing.
+  let ambientRun = 0;
+  let ambientChapter: string | null = null;
+  let ambientStep: (() => void) | null = null;
+  /** The loop has taken its first step (it is past the chapter's transition). */
+  let ambientMoving = false;
+  const stopAmbient = () => {
+    ambientRun += 1;
+    if (ambientStep && map?.off) map.off("moveend", ambientStep);
+    ambientStep = null;
+    ambientChapter = null;
+    ambientMoving = false;
+  };
   const startAmbient = (chapter: Chapter, jumped: boolean) => {
+    stopAmbient();
     if (!map) return;
     if (!chapter.rotateAnimation && !chapter.spinGlobe) return;
     if (reduced()) return;
     const m = map;
+    const run = ambientRun;
     const step = () => {
-      if (destroyed || activeId !== chapter.id) return; // a later chapter took over
+      if (run !== ambientRun) return; // a later loop (or none) took over
+      if (destroyed || activeId !== chapter.id) {
+        stopAmbient(); // a later chapter took over
+        return;
+      }
+      ambientMoving = true;
       if (chapter.rotateAnimation) {
         m.rotateTo(m.getBearing() + 90, { duration: AMBIENT_STEP_MS, easing: (t: number) => t });
       } else {
         const c = m.getCenter();
         m.easeTo({ center: [c.lng - 20, c.lat], duration: AMBIENT_STEP_MS, easing: (t: number) => t });
       }
-      m.once("moveend", step);
+      if (run === ambientRun) m.once("moveend", step);
     };
+    ambientChapter = chapter.id;
+    ambientStep = step;
     // After the chapter's own transition. jumpTo has already fired its
     // moveend synchronously, so there is nothing to wait for.
     if (jumped) step();
@@ -328,6 +434,7 @@ export function createStoryController(
     const previousId = appliedId;
     appliedId = chapter.id;
     const reduce = reduced();
+    stopAmbient(); // before the camera moves: that move's moveend is not a step
 
     const previous = chapters.find((c) => c.id === previousId);
     for (const action of previous?.onChapterExit ?? []) {
@@ -337,6 +444,8 @@ export function createStoryController(
         phase: "exit",
         chapter: previous,
         reducedMotion: reduce,
+        onProblem: problem,
+        layerIds,
       });
     }
 
@@ -359,11 +468,23 @@ export function createStoryController(
       else if (animation === "easeTo") map.easeTo(camera);
       else map.flyTo({ ...camera, speed: chapter.speed ?? 0.6, curve: chapter.curve ?? 1 });
 
-      for (const id of chapter.layers?.show ?? []) {
-        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
-      }
-      for (const id of chapter.layers?.hide ?? []) {
-        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+      for (const [verb, visibility] of [
+        ["show", "visible"],
+        ["hide", "none"],
+      ] as const) {
+        for (const id of chapter.layers?.[verb] ?? []) {
+          if (map.getLayer(id)) {
+            map.setLayoutProperty(id, "visibility", visibility);
+            continue;
+          }
+          // Silently skipped before (ml-aot.51): the route never appeared and
+          // nothing said why.
+          const near = suggest(id, layerIds, 3);
+          problem(
+            `Chapter \`${chapter.id}\` ${verb === "show" ? "shows" : "hides"} layer \`${id}\`, but the map has no layer by that name.` +
+              (near ? ` Did you mean \`${near}\`?` : "")
+          );
+        }
       }
     }
 
@@ -375,6 +496,9 @@ export function createStoryController(
         chapter,
         reducedMotion: reduce || instant,
         padding,
+        mapSize: options.mapSize?.(),
+        onProblem: problem,
+        layerIds,
       });
     }
 
@@ -416,11 +540,66 @@ export function createStoryController(
     if (chapter) applyChapter(chapter, index, true);
   }
 
+  /**
+   * Put the camera back on the active chapter after the layout changed (a
+   * window resize, a phone rotated): the chapter's camera with the padding
+   * the new layout gives, and its camera actions, all instant. Layer
+   * toggles and other actions are not re-run (ml-aot.58).
+   */
+  function realign(): void {
+    if (destroyed || !map || activeId === null || appliedId !== activeId) return;
+    const index = chapters.findIndex((c) => c.id === activeId);
+    const chapter = chapters[index];
+    if (!chapter) return;
+    const padding = options.padding?.(chapter);
+    if (ambientChapter === chapter.id) {
+      // The chapter's ambient loop is running: only re-pad, keeping the
+      // bearing it has turned to (rotateAnimation) or the centre it has spun
+      // to (spinGlobe), then carry on with ONE loop from there. Stopped
+      // first, so the jump's moveend can't wake it.
+      const moving = ambientMoving;
+      stopAmbient();
+      map.jumpTo({
+        center: moving && !chapter.rotateAnimation ? map.getCenter() : chapter.center,
+        zoom: chapter.zoom,
+        pitch: chapter.pitch ?? 0,
+        bearing: moving && chapter.rotateAnimation ? map.getBearing() : (chapter.bearing ?? 0),
+        ...(padding ? { padding } : {}),
+      });
+      startAmbient(chapter, true);
+      return;
+    }
+    map.jumpTo({
+      center: chapter.center,
+      zoom: chapter.zoom,
+      pitch: chapter.pitch ?? 0,
+      bearing: chapter.bearing ?? 0,
+      ...(padding ? { padding } : {}),
+    });
+    for (const action of chapter.onChapterEnter ?? []) {
+      if (action.action !== "flyTo" && action.action !== "easeTo" && action.action !== "fitBounds") continue;
+      runChapterAction(map, action, {
+        container,
+        chapterId: chapter.id,
+        phase: "enter",
+        chapter,
+        reducedMotion: true,
+        padding,
+        mapSize: options.mapSize?.(),
+        onProblem: problem,
+        layerIds,
+      });
+    }
+    startAmbient(chapter, true);
+  }
+
   return {
     activate,
     setMap,
+    realign,
     destroy() {
       destroyed = true;
+      stopAmbient();
     },
     get activeChapterId() {
       return activeId;

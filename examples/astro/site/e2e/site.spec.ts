@@ -172,6 +172,52 @@ test.describe("explore: <FullPageMap> with the 0.7 surface", () => {
     expect(errors).toEqual([]);
   });
 
+  test("Reset view returns to the fitTo framing the page opened with, not the YAML camera (ml-aot.60) @dev", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto("/explore-fit/", { waitUntil: "domcontentloaded" });
+    await mapReady(page, MAP);
+    await layerLoaded(page, MAP, "volcanoes");
+    // The fit is applied once the data file loads (after the map's load):
+    // wait until the camera has left the YAML's [0, 0] z4 (the volcanoes
+    // span the Pacific, so the fit zooms out).
+    await expect
+      .poll(async () => (await camera(page, MAP)).zoom, { message: "fitTo framed the data" })
+      .toBeLessThan(3);
+    await page.waitForTimeout(300);
+    const opened = await camera(page, MAP);
+
+    // One click at a time: a second zoom-in during the first one's animation
+    // adds 1 to the in-between zoom (the production build clicks fast enough
+    // to hit that).
+    await page.click('[data-action="zoom-in"]');
+    await expect.poll(async () => (await camera(page, MAP)).zoom).toBeCloseTo(opened.zoom + 1, 1);
+    await page.click('[data-action="zoom-in"]');
+    await expect.poll(async () => (await camera(page, MAP)).zoom).toBeCloseTo(opened.zoom + 2, 1);
+    await page.click('[data-action="reset"]');
+    await expectCameraNear(page, MAP, [opened.lng, opened.lat], opened.zoom, 0.5);
+    expect(errors).toEqual([]);
+  });
+
+  test("a document with its own navigation control gets one set of zoom buttons (ml-aot.40) @dev", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto("/explore-controls/", { waitUntil: "domcontentloaded" });
+    await mapReady(page, MAP);
+    // MapLibre's +/− from the document, and FullPageMap's reset beside them.
+    await expect(page.locator(`${MAP} .maplibregl-ctrl-zoom-in`)).toBeVisible();
+    await expect(page.locator(`${MAP} [data-action="reset"]`)).toBeVisible();
+    await expect(page.locator(`${MAP} [data-action="zoom-in"]`)).toBeHidden();
+    await expect(page.locator(`${MAP} [data-action="zoom-out"]`)).toBeHidden();
+    // The /explore/ document has no navigation control: all three stay.
+    await page.goto("/explore/", { waitUntil: "domcontentloaded" });
+    await mapReady(page, MAP);
+    await expect(page.locator(`${MAP} [data-action="zoom-in"]`)).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test("legend, markers, params panel, hover popup and the slotted caption", async ({ page }) => {
     const errors = await guard(page);
     await page.goto("/explore/", { waitUntil: "domcontentloaded" });
@@ -415,7 +461,9 @@ test.describe("story: the shared <ml-scrollytelling> engine (ml-aot.1)", () => {
     await page.goto("/story-broken/", { waitUntil: "domcontentloaded" });
     const card = page.locator(".scrolly-error");
     await expect(card).toBeVisible();
-    await expect(card).toContainText("chapters.1.centre");
+    // The message names the chapter, so the 0-based path is not repeated (ml-aot.62).
+    await expect(card).toContainText(/Chapter 2 \("rainier"\)/);
+    await expect(card).not.toContainText("chapters.1.");
     await expect(card).toContainText(/line \d+/);
     await expect(card).toContainText(/centre[\s\S]*center/);
     await page.waitForTimeout(1000); // a ghost card would be up by now

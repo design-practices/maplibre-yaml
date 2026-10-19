@@ -28,7 +28,9 @@ export const previewCommand = defineCommand({
     open: {
       type: 'boolean',
       default: true,
-      description: 'Open browser automatically',
+      // citty lists a default-true flag only as `--no-open`, next to this
+      // text, so it describes the negative (ml-aot.54).
+      description: "Don't open the browser (by default preview opens it)",
     },
     debug: {
       type: 'boolean',

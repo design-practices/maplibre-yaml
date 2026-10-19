@@ -368,6 +368,15 @@ the map. A user site (`<user>.github.io`) or a custom domain is served from the
 root and needs no base. If a `/…` path 404s on a page that sits under a
 subpath, the notice on the map suggests the `base` to add.
 
+**Previewing locally.** With `base="/my-repo/"`, files are looked up under
+`/my-repo/` on your computer too. `npx serve .` run *inside* the repository
+folder puts the page at `http://localhost:3000/`, outside `/my-repo/`, so
+every file 404s (the error card says so). Run `npx serve` from the folder
+*above* the repository instead and open `http://localhost:3000/my-repo/`, or
+leave `base` off until you publish. The repository folder must be named
+exactly like the base: a GitHub **Download ZIP** unpacks to `my-repo-main`,
+which is served at `/my-repo-main/`, so rename it to `my-repo` first.
+
 **Why not `<base href>`?** A `<base href="/<repo>/">` in the page's `<head>`
 makes the browser resolve every *relative* URL on the page against it, the
 map's included, so `data/cities.geojson` loads from `/<repo>/data/`. It does
@@ -466,7 +475,12 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
   inside an expression), a layer whose `source:` names a source that doesn't
   exist, a data file that didn't load, or an `images:` entry or marker icon
   that failed. Each line names the layer or file. The map still fires
-  `ml-map:load` and `mapReady()` resolves.
+  `ml-map:load` and `mapReady()` resolves. The notice is written for two
+  readers: it leads with "Part of this map couldn't load" for anyone visiting
+  the site, and keeps the fix in a "Details for the site's author" section
+  below it. That section starts open while the page is served from your own
+  computer (`localhost`, `127.0.0.1`, a `file://` page) and closed on a
+  published site, where a click opens it.
 - **Height hint** — a map with no height is invisible, so the element shows a
   short note saying to give it one, and removes it once the map has a height.
 
@@ -1230,7 +1244,7 @@ that attribute names should not contain `:`, so use `bind:this` as shown.
 ### "Configuration Error" Card
 
 **Symptoms:** The element shows a red "Configuration Error" card listing
-field paths and messages (for example `id: Expected string, got undefined`).
+field paths and messages (for example `id: The document is missing id: — add id: a-short-name.`).
 
 **Cause:** The configuration failed to fetch, parse, or validate against the
 schema.

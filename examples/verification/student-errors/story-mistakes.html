@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Story mistakes with no other hint</title>
+  <!--
+    ml-aot.48 / ml-aot.51 — story mistakes that used to show nothing on the
+    page: theme under config: (ignored), a chapter layers.show naming a layer
+    that does not exist ("walking" for "walk"), and a chapter image whose file
+    name is wrong (capital letters). PASS = the map's notice names the first
+    two; the first card says its image didn't load. FAIL = a silent page.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/story-mistakes.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>body { margin: 0; font-family: system-ui, sans-serif; }</style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-scrollytelling id="story">
+    <script type="text/yaml">
+type: scrollytelling
+id: story-mistakes
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [0, 20]
+  zoom: 2
+  theme: dark
+layers:
+  - id: walk
+    type: line
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: LineString, coordinates: [[0, 20], [10, 30]] } }
+    layout: { visibility: none }
+    paint: { line-color: "#7c3aed", line-width: 4 }
+chapters:
+  - id: start
+    title: A chapter with a misnamed photo
+    image: "../../scrollytelling/Volcano.SVG"
+    description: "<p>The file is volcano.svg, not Volcano.SVG.</p>"
+    center: [0, 20]
+    zoom: 3
+  - id: route
+    title: Show the route
+    description: "<p>layers.show names walking, but the layer is walk.</p>"
+    center: [5, 25]
+    zoom: 4
+    layers:
+      show: [walking]
+  - id: filter
+    title: Filter the route
+    description: "<p>The action names wlak, but the layer is walk.</p>"
+    center: [5, 25]
+    zoom: 4
+    onChapterEnter:
+      - action: setFilter
+        layer: wlak
+        filter: ["==", ["geometry-type"], "LineString"]
+    </script>
+  </ml-scrollytelling>
+  <script>
+    // ?quiet: the same story with quiet set (review F1) — no notice, no
+    // card note; the console keeps every message.
+    if (new URLSearchParams(location.search).has("quiet")) document.getElementById("story").setAttribute("quiet", "");
+  </script>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

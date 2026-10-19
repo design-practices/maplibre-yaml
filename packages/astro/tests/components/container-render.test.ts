@@ -334,8 +334,12 @@ describe("corner slots reach <ml-map> (ml-l4y.3)", () => {
     const html = await container.renderToString(component as any, { props, slots: SLOTS });
     const body = inner(html);
     for (const [name, markup] of Object.entries(SLOTS)) {
-      expect(body).toMatch(new RegExp(`<div\\sslot="${name}"[^>]*>\\s*${markup}\\s*</div>`));
+      // A story pins its own legend above the cards (0.8.1 review): the
+      // legend slot stays on <ml-scrollytelling>, outside the map.
+      const where = _name === "Scrollytelling" && name === "legend" ? html.slice(html.indexOf("</ml-map>")) : body;
+      expect(where).toMatch(new RegExp(`<div\\sslot="${name}"[^>]*>\\s*${markup}\\s*</div>`));
     }
+    if (_name === "Scrollytelling") expect(body).not.toContain('slot="legend"');
     // Unused corners emit nothing (no empty corner boxes).
     expect(body).not.toContain('data-ml-slot="top-right"');
     expect(body).not.toContain('data-ml-slot="bottom-left"');
@@ -415,5 +419,42 @@ describe("builder output renders (regression: ml-qxt smoke find)", () => {
     });
     expect(html).toContain("region-outline");
     expect(html).not.toContain("&quot;source&quot;:&quot;region-fill&quot;");
+  });
+});
+
+describe("quiet reaches the element (ml-aot.64)", () => {
+  // A finished site had no way to hide the non-fatal notice: none of the
+  // three components passed `quiet` on.
+  const STORY = {
+    type: "scrollytelling",
+    id: "q-story",
+    config: { center: [0, 0] as [number, number], zoom: 2, mapStyle: "https://demotiles.maplibre.org/style.json" },
+    layers: [],
+    chapters: [{ id: "c1", title: "One", center: [0, 0] as [number, number], zoom: 3 }],
+  };
+
+  it("Map: quiet sets <ml-map quiet>; without it, no attribute", async () => {
+    const on = await container.renderToString(Map as any, { props: { config: MAP_CONFIG, quiet: true } });
+    expect(openTag(on, "ml-map")).toHaveProperty("quiet");
+    const off = await container.renderToString(Map as any, { props: { config: MAP_CONFIG } });
+    expect(openTag(off, "ml-map")).not.toHaveProperty("quiet");
+  });
+
+  it("FullPageMap: quiet sets <ml-map quiet>", async () => {
+    const on = await container.renderToString(FullPageMap as any, { props: { src: "/configs/x.yaml", quiet: true } });
+    expect(openTag(on, "ml-map")).toHaveProperty("quiet");
+    const off = await container.renderToString(FullPageMap as any, { props: { src: "/configs/x.yaml" } });
+    expect(openTag(off, "ml-map")).not.toHaveProperty("quiet");
+  });
+
+  it("Scrollytelling: quiet sets <ml-scrollytelling quiet> and the server-rendered story map's quiet", async () => {
+    const on = await container.renderToString(Scrollytelling as any, { props: { config: STORY, quiet: true } });
+    expect(openTag(on, "ml-scrollytelling")).toHaveProperty("quiet");
+    expect(openTag(on, "ml-map")).toHaveProperty("quiet");
+    const src = await container.renderToString(Scrollytelling as any, { props: { src: "/stories/x.yaml", quiet: true } });
+    expect(openTag(src, "ml-scrollytelling")).toHaveProperty("quiet");
+    const off = await container.renderToString(Scrollytelling as any, { props: { config: STORY } });
+    expect(openTag(off, "ml-scrollytelling")).not.toHaveProperty("quiet");
+    expect(openTag(off, "ml-map")).not.toHaveProperty("quiet");
   });
 });

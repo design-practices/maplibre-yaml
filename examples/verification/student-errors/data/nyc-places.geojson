@@ -1,0 +1,8 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "properties": { "name": "Central Park" }, "geometry": { "type": "Point", "coordinates": [-73.9654, 40.7829] } },
+    { "type": "Feature", "properties": { "name": "Brooklyn Bridge" }, "geometry": { "type": "Point", "coordinates": [-73.9969, 40.7061] } },
+    { "type": "Feature", "properties": { "name": "Prospect Park" }, "geometry": { "type": "Point", "coordinates": [-73.9690, 40.6602] } }
+  ]
+}

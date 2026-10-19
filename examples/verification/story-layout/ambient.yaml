@@ -1,0 +1,43 @@
+type: scrollytelling
+id: story-ambient
+showMarkers: true
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [0, 20]
+  zoom: 2
+layers:
+  - id: pts
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [106.85, -6.2] } }
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [-77.04, -12.05] } }
+    paint: { circle-radius: 8, circle-color: "#d62828" }
+chapters:
+  - id: intro
+    title: Before the turning chapter
+    description: "<p>Scroll on: the next chapter turns the map slowly.</p>"
+    center: [0, 20]
+    zoom: 2
+  - id: turning
+    title: A chapter that turns (rotateAnimation)
+    description: "<p>Resize the window or rotate the phone while this card is read. The map keeps turning and the page stays responsive.</p>"
+    center: [106.85, -6.2]
+    zoom: 9
+    alignment: left
+    rotateAnimation: true
+  - id: spinning
+    title: A chapter that spins the globe (spinGlobe)
+    description: "<p>The same, for a spinning globe.</p>"
+    center: [-77.04, -12.05]
+    zoom: 3
+    alignment: right
+    spinGlobe: true
+  - id: outro
+    title: After
+    description: "<p>The end.</p>"
+    center: [0, 20]
+    zoom: 2

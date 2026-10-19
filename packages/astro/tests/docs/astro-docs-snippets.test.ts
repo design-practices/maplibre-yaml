@@ -188,6 +188,108 @@ describe("the documented story renders through <Scrollytelling config>", () => {
   });
 });
 
+describe("full-page snippets work on a phone (ml-aot.33)", () => {
+  // Without <meta name="viewport"> a phone lays the page out ~980px wide and
+  // shrinks it: a FullPageMap or story map comes out tiny, its controls and
+  // chapter text unreadable. Every complete page the docs show must carry one,
+  // and the FullPageMap / Scrollytelling "Basic Usage" snippets — the ones
+  // readers copy first — must be complete pages.
+  const astroDoc = readFileSync(join(REPO, "docs/src/content/docs/integrations/astro.mdx"), "utf8");
+  const pages = ALL.filter((f) => f.lang === "astro" && /<html[\s>]/.test(f.body));
+
+  it("finds the full-page snippets", () => {
+    expect(pages.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(pages.map((f, i) => [`${f.file} page #${i + 1}`, f]))("%s has a viewport meta", (_l, f) => {
+    expect((f as Fence).body).toMatch(/<meta\s+name="viewport"\s+content="width=device-width/);
+  });
+
+  /** The astro fences in `### Basic Usage` under the given `## …` section. */
+  function basicUsage(section: string): string[] {
+    const start = astroDoc.indexOf(`## ${section}`);
+    const from = astroDoc.indexOf("### Basic Usage", start);
+    const to = astroDoc.indexOf("\n### ", from + 1);
+    const slice = astroDoc.slice(from, to);
+    return [...slice.matchAll(/```astro[^\n]*\n([\s\S]*?)```/g)].map((m) => m[1]);
+  }
+
+  it.each([["FullPageMap Component"], ["Scrollytelling Component"]])(
+    "%s: Basic Usage is a complete page with a viewport meta and no body margin",
+    (section) => {
+      const snippets = basicUsage(section).filter((s) => /<(FullPageMap|Scrollytelling)\b/.test(s));
+      expect(snippets.length).toBeGreaterThan(0);
+      const complete = snippets.filter((s) => /<html[\s>]/.test(s));
+      expect(complete.length).toBeGreaterThan(0);
+      for (const s of complete) {
+        expect(s).toMatch(/<meta\s+name="viewport"/);
+        expect(s).toMatch(/margin:\s*0/);
+      }
+    }
+  );
+});
+
+describe("entry-point snippets only name files the page provides (ml-aot.49)", () => {
+  // A reader copies the FullPageMap / Scrollytelling "Basic Usage", the
+  // story under "YAML Configuration" and the "Full Example Story" first.
+  // Every file those load (`src`, `loadMapConfig`, `loadScrollytellingConfig`)
+  // and every local `url:` / `image:` / `video:` in them must be on the page
+  // as a fence titled with its path — otherwise the reader's first page 404s.
+  const FILE = "docs/src/content/docs/integrations/astro.mdx";
+  const doc = readFileSync(join(REPO, FILE), "utf8");
+  const SECTIONS: Array<[string, string]> = [
+    ["FullPageMap Component", "Basic Usage"],
+    ["Scrollytelling Component", "Basic Usage"],
+    ["Scrollytelling Component", "YAML Configuration"],
+    ["Scrollytelling Component", "Full Example Story"],
+  ];
+
+  /** `./src/stories/x.yaml`, `/stories/x.yaml`, `public/stories/x.yaml` → `stories/x.yaml`. */
+  const normalize = (p: string) => p.replace(/^\.\//, "").replace(/^\//, "").replace(/^(public|src)\//, "");
+
+  const provided = new Set(
+    ALL.filter((f) => f.file === FILE)
+      .map((f) => f.meta.match(/title="([^"]+)"/)?.[1])
+      .filter((t): t is string => !!t)
+      .map(normalize)
+  );
+
+  function section(top: string, sub: string): string {
+    const start = doc.indexOf(`## ${top}`);
+    expect(start, top).toBeGreaterThanOrEqual(0);
+    const from = doc.indexOf(`### ${sub}`, start);
+    expect(from, `${top} > ${sub}`).toBeGreaterThan(start);
+    const ends = [doc.indexOf("\n### ", from + 1), doc.indexOf("\n## ", from + 1)].filter((i) => i > 0);
+    return doc.slice(from, Math.min(...ends));
+  }
+
+  const referenced: Array<{ where: string; path: string }> = [];
+  for (const [top, sub] of SECTIONS) {
+    const where = `${top} > ${sub}`;
+    for (const m of section(top, sub).matchAll(/```(\w+)([^\n]*)\n([\s\S]*?)```/g)) {
+      const [, lang, meta, body] = m;
+      if (/title="examples\/astro\/site\//.test(meta)) continue; // the example site has its files
+      if (lang === "astro") {
+        for (const r of body.matchAll(/load(?:Map|Scrollytelling)Config\(\s*['"]([^'"]+)['"]/g)) referenced.push({ where, path: r[1] });
+        for (const r of body.matchAll(/\ssrc="([^"]+)"/g)) referenced.push({ where, path: r[1] });
+      }
+      if (lang === "yaml") {
+        for (const r of body.matchAll(/^\s*(?:url|image|video):\s*["']?([^"'\s#]+)/gm)) referenced.push({ where, path: r[1] });
+      }
+    }
+  }
+  const local = referenced.filter((r) => !/^[a-z][a-z\d+.-]*:/i.test(r.path));
+
+  it("finds the entry-point references", () => {
+    expect(local.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(local.map((r) => [`${r.where}: ${r.path}`, r]))("%s is provided on the page", (_l, r) => {
+    const ref = r as { where: string; path: string };
+    expect([...provided], `no fence titled with ${ref.path}`).toContain(normalize(ref.path));
+  });
+});
+
 describe("snippets titled with an example-site file are copied from it", () => {
   // A fence like ```astro title="examples/astro/site/src/pages/index.astro"
   // claims to come from the example site, which CI builds and drives in a

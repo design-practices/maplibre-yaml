@@ -15,7 +15,7 @@ standalone MapLibre `style.json`.
 No install needed:
 
 ```bash
-npx @maplibre-yaml/cli validate map.yaml
+npx maplibre-yaml validate map.yaml
 npx maplibre-yaml validate map.yaml   # the same, shorter
 ```
 
@@ -39,7 +39,7 @@ one-off runs.
 ## Quick start
 
 ```bash
-npx @maplibre-yaml/cli init my-map
+npx maplibre-yaml init my-map
 cd my-map
 npx serve .
 ```
@@ -74,13 +74,13 @@ reload the page.
 
 What `emit` keeps, replaces with a fallback, or drops is listed in
 [Export classes](https://docs.maplibre-yaml.org/guides/export-classes/).
-Warnings go to stderr, so `npx @maplibre-yaml/cli emit map.yaml > style.json`
+Warnings go to stderr, so `npx maplibre-yaml emit map.yaml > style.json`
 keeps the JSON clean.
 
 ## In CI
 
 ```yaml
-- run: npx @maplibre-yaml/cli validate "**/*.yaml" --format json --strict
+- run: npx maplibre-yaml validate "**/*.yaml" --format json --strict
 ```
 
 `--format sarif` feeds GitHub code scanning; see
@@ -88,7 +88,9 @@ keeps the JSON clean.
 
 ## Compatibility
 
-Node.js `^18.17.0 || ^20.3.0 || >=21.0.0`. The CLI validates with the
+Node.js 20.9 or later (22 or 24 LTS recommended); on an older Node the CLI
+stops with a message saying so. (The map engine itself, `@maplibre-yaml/core`,
+and the Astro components still support Node 18.) The CLI validates with the
 `@maplibre-yaml/core` it depends on, so its results match what `<ml-map>` of
 the same version accepts.
 

@@ -189,10 +189,37 @@ layers:
       circle-color: "#e63946"
 ```
 
+`data/places.geojson` is a GeoJSON file, for example one you drew on
+[geojson.io](https://geojson.io) and saved. To try the snippet first, save
+this as `data/places.geojson`:
+
+```json title="data/places.geojson"
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "City Hall" },
+      "geometry": { "type": "Point", "coordinates": [-74.006, 40.7128] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "One World Trade Center" },
+      "geometry": { "type": "Point", "coordinates": [-74.0134, 40.7127] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Brooklyn Bridge" },
+      "geometry": { "type": "Point", "coordinates": [-73.9969, 40.7061] }
+    }
+  ]
+}
+```
+
 Two rules for local paths:
 
-- Start them with `./` (or `/` for the site root). A bare
-  `data/places.geojson` is rejected by validation.
+- `data/places.geojson` and `./data/places.geojson` mean the same thing: a
+  path relative to the page. One that starts with `/` starts at the site root.
 - They are resolved against the **page** (`index.html`), not against the YAML
   file. With `index.html` and `my-map.yaml` side by side and the data in a
   `data/` folder next to them, `./data/places.geojson` is right.
@@ -229,6 +256,9 @@ id: complete-example
 config:
   center: [-98, 39]
   zoom: 4
+  # [west, south, east, north]: frames all three cities on any screen,
+  # a phone included (it wins over center/zoom)
+  bounds: [-122, 32, -70, 44]
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   minZoom: 2
   maxZoom: 18

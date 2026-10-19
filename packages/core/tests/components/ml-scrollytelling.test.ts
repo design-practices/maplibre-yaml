@@ -235,7 +235,21 @@ chapters:
     expect(el.querySelector(".scrolly-error")).toBeNull();
     expect(warn.mock.calls.map((c) => String(c[0])).filter((m) => /Unknown key/.test(m))).toEqual([]);
     const doc = JSON.parse(el.querySelector("ml-map")!.getAttribute("config")!);
-    expect(Object.keys(doc)).toEqual(expect.arrayContaining(["sources", "markers", "legend"]));
+    expect(Object.keys(doc)).toEqual(expect.arrayContaining(["sources", "markers"]));
+    // The legend is the story's own, pinned above the cards (0.8.1 review).
+    expect(doc).not.toHaveProperty("legend");
+    expect(el.querySelector(":scope > .scrolly-legend-layer .scrolly-legend-toggle")).not.toBeNull();
+  });
+
+  it("a slot=\"legend\" child fills the story's pinned legend, not the map's corner (0.8.1 review)", () => {
+    const el = inline(STORY_YAML);
+    const key = document.createElement("div");
+    key.slot = "legend";
+    key.textContent = "My key";
+    el.appendChild(key);
+    document.body.appendChild(el);
+    expect(key.closest(".scrolly-legend-panel")).not.toBeNull();
+    expect(key.closest("ml-map")).toBeNull();
   });
 
   it("slot children are handed to the story's map", () => {
@@ -271,13 +285,14 @@ chapters:
     expect(cards).toHaveLength(1);
     const card = cards[0] as HTMLElement;
     expect(card.getAttribute("role")).toBe("alert");
-    expect(card.textContent).toContain("chapters.0.centre");
+    expect(card.textContent).toMatch(/Chapter 1 \("a"\).*centre/);
+    expect(card.textContent).not.toContain("chapters.0.centre");
     expect(card.textContent).toMatch(/line \d+/);
     expect(card.textContent).toMatch(/centre[\s\S]*center/); // the did-you-mean hint
     expect(card.textContent).not.toContain("No configuration provided");
     expect(el.querySelector("ml-map")).toBeNull();
     expect(errors).toHaveLength(1);
-    await expect(el.mapReady()).rejects.toThrow(/chapters\.0\.centre/);
+    await expect(el.mapReady()).rejects.toThrow(/Chapter 1 \("a"\).*centre/);
   });
 
   it("src: no <ml-map> exists (so none can complain) until the story has arrived", async () => {
@@ -329,6 +344,24 @@ chapters:
     expect(cards[0]!.textContent).toContain("How to fix it");
     expect(cards[0]!.textContent).toContain("/missing.yaml");
     expect(cards[0]!.textContent).toContain("404");
+  });
+
+  it("src that 404s under base while the page is outside it: the card names base and the local-preview fix (ml-aot.36)", async () => {
+    mute("error");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 404, statusText: "Not Found", text: () => Promise.resolve("") }))
+    );
+    const el = document.createElement("ml-scrollytelling");
+    el.setAttribute("base", "/my-repo/");
+    el.setAttribute("src", "story.yaml");
+    document.body.appendChild(el);
+    await settle();
+    const text = document.querySelector(".scrolly-error, .ml-map-error")!.textContent!;
+    expect(text).toContain("Story file not found");
+    expect(text).toContain('base="/my-repo/"');
+    expect(text).toContain("previewing locally");
+    expect(text).not.toContain("relative to this page's folder");
   });
 
   it("no story at all: one card that says how to give it one", async () => {
@@ -430,6 +463,41 @@ describe("hydrating server-rendered markup (Astro <Scrollytelling config>)", () 
     expect(el.querySelector(".chapter-content")!.textContent).toBe("A");
     expect(el.querySelector("ml-map")!.getAttribute("config")).toContain('"id":"ssr"');
     expect(el.querySelectorAll("ml-map")).toHaveLength(1);
+  });
+});
+
+describe("chapter media that settled before the element listened (review N5)", () => {
+  /** A server-rendered chapter image that has already finished, as given. */
+  function settledImage(decodes: boolean): HTMLImageElement {
+    const img = document.createElement("img");
+    img.setAttribute("src", decodes ? "icon.svg" : "Missing.JPG");
+    Object.defineProperty(img, "complete", { value: true });
+    // An SVG with no width/height reports 0 on some browsers although it
+    // drew fine; only decode() tells a failure apart.
+    Object.defineProperty(img, "naturalWidth", { value: 0 });
+    img.decode = decodes ? () => Promise.resolve() : () => Promise.reject(new Error("broken"));
+    return img;
+  }
+
+  it("a good image without an intrinsic size gets no 'didn't load' note; a broken one does", async () => {
+    mute("warn");
+    const story = storyObject();
+    document.body.innerHTML = `<ml-scrollytelling config='${JSON.stringify(story)}'></ml-scrollytelling>`;
+    const el = document.querySelector("ml-scrollytelling")! as any;
+    await settle();
+    const media = (img: HTMLImageElement) => {
+      const holder = document.createElement("div");
+      holder.className = "chapter-media";
+      holder.appendChild(img);
+      el.querySelector(".chapter-content")!.prepend(holder);
+      return holder;
+    };
+    const good = media(settledImage(true));
+    const bad = media(settledImage(false));
+    el.checkMediaLoaded();
+    await settle();
+    expect(good.querySelector(".chapter-media-missing")).toBeNull();
+    expect(bad.querySelector(".chapter-media-missing")?.textContent).toContain("Missing.JPG");
   });
 });
 

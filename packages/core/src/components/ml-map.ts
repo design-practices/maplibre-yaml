@@ -22,7 +22,7 @@
  * config:
  *   center: [-74.006, 40.7128]
  *   zoom: 12
- *   mapStyle: "https://demotiles.maplibre.org/style.json"
+ *   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * layers: []
  *   </script>
  * </ml-map>
@@ -58,6 +58,8 @@ import {
   describeLayerProblem,
   describeMarkerIconProblem,
   describeSourceProblem,
+  describeFitToProblem,
+  describeSwappedCenter,
   filePageWorkerCard,
   isFilePage,
   looksLikeHtml,
@@ -77,6 +79,7 @@ import {
 } from "../effects-host.js";
 import type { ChromeMount, MapRendererEvents } from "../renderer/map-renderer.js";
 import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
+import { displayPath } from "../parser/validation-utils.js";
 import {
   applyDocumentBase,
   applyDocumentBaseToLayer,
@@ -288,10 +291,12 @@ export class MLMap extends HTMLElement {
   private heightObserver: ResizeObserver | null = null;
 
   /**
-   * The non-fatal "part of this map didn't load" notice (ml-aot.15), created
+   * The non-fatal "part of this map couldn't load" notice (ml-aot.15), created
    * on the first layer/source/data problem of the current render.
    */
   private notice: MapNotice | null = null;
+  /** The current document's `onPage` warnings, shown once its map renders. */
+  private documentNotices: string[] = [];
 
   /**
    * Resolved URL of the YAML file the current document came from (`src`),
@@ -341,7 +346,7 @@ export class MLMap extends HTMLElement {
 
   /**
    * Whether on-page notices for NON-fatal problems are suppressed — the
-   * "part of this map didn't load" notice and the zero-height hint. Reflects
+   * "part of this map couldn't load" notice and the zero-height hint. Reflects
    * the boolean `quiet` attribute.
    *
    * @remarks
@@ -763,6 +768,9 @@ export class MLMap extends HTMLElement {
     // Destroy existing renderer (slot children parked first — the renderer
     // only borrows them, and its teardown removes their corner containers).
     this.teardownRenderer();
+    // The teardown cleared the notice; this document's on-page warnings
+    // (logged as it was parsed, just before) go back on it.
+    for (const message of this.documentNotices) this.reportProblem(message);
 
     // A fresh render resets the readiness state a pending or future
     // mapReady() reads.
@@ -836,6 +844,17 @@ export class MLMap extends HTMLElement {
           // Load event is also emitted via the event system
         },
         onError: (error, fatal, context) => {
+          // A fitTo.source typo (ml-aot.51): the renderer already warned on
+          // the console; put it on the map too. Not a map error.
+          if (context?.kind === "fit" && context.sourceId) {
+            this.reportProblem(describeFitToProblem(context.sourceId, context.suggestion));
+            return;
+          }
+          // `center: [lat, lng]` (ml-aot.65): the renderer warned; show it.
+          if (context?.kind === "center" && context.center && context.swapped) {
+            this.reportProblem(describeSwappedCenter(context.center, context.swapped));
+            return;
+          }
           // Loud by default: with no `ml-map:error` listener attached, a
           // dispatched event is invisible and the document fails silently
           // (ml-tfd.8 contract audit). Hosts still get the event.
@@ -920,6 +939,7 @@ export class MLMap extends HTMLElement {
    * card, which is reserved for hard failures.
    */
   private logWarnings(warnings: ValidationWarning[] | undefined): void {
+    this.documentNotices = [];
     if (!warnings || warnings.length === 0) return;
     for (const warning of warnings) {
       const location =
@@ -928,9 +948,24 @@ export class MLMap extends HTMLElement {
               warning.column !== undefined ? `, column ${warning.column}` : ""
             })`
           : "";
-      const path = warning.path ? `${warning.path}: ` : "";
+      const path = displayPath(warning) ? `${displayPath(warning)}: ` : "";
       console.warn(`[ml-map] ${path}${warning.message}${location}`);
+      // A valid document where part of it silently does nothing (a root key
+      // nested under config:): also say so on the page (ml-aot.48). Still
+      // the non-fatal notice, never the error card.
+      if (warning.onPage) this.documentNotices.push(`${warning.message}${location}`);
     }
+  }
+
+  /**
+   * Put one line in this map's non-fatal notice ("part of this map didn't
+   * load"). For `<ml-scrollytelling>`, which reports its own document's
+   * problems on its map (ml-aot.48, ml-aot.51). Respects `quiet`.
+   *
+   * @internal
+   */
+  _reportNotice(message: string): void {
+    this.reportProblem(message);
   }
 
   /**
@@ -1420,7 +1455,7 @@ export class MLMap extends HTMLElement {
     this.lastError = Object.assign(
       new Error(
         `[ml-map] ${errors
-          .map((e) => (e.path ? `${e.path}: ${e.message}` : e.message))
+          .map((e) => (displayPath(e) ? `${displayPath(e)}: ${e.message}` : e.message))
           .join("; ")}`
       ),
       { errors }
@@ -1620,7 +1655,7 @@ export class MLMap extends HTMLElement {
               new Error(
                 `[ml-map] ${detail.errors
                   .map((e: { path?: string; message: string }) =>
-                    e.path ? `${e.path}: ${e.message}` : e.message
+                    displayPath(e) ? `${displayPath(e)}: ${e.message}` : e.message
                   )
                   .join("; ")}`
               ),

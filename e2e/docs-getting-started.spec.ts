@@ -169,7 +169,13 @@ async function serveSnippet(
     if (url.startsWith(prefix)) {
       const file = url.slice(prefix.length) || "index.html";
       if (!(file in files)) return route.fulfill({ status: 404, body: "not found" });
-      const type = file.endsWith(".html") ? "text/html" : file.endsWith(".js") ? "text/javascript" : "text/yaml";
+      const type = file.endsWith(".html")
+        ? "text/html"
+        : file.endsWith(".js")
+          ? "text/javascript"
+          : file.endsWith(".geojson") || file.endsWith(".json")
+            ? "application/geo+json"
+            : "text/yaml";
       return route.fulfill({ body: files[file], contentType: `${type}; charset=utf-8` });
     }
     if (url in table) {
@@ -244,6 +250,44 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     expect(view.center[0]).toBeCloseTo(-120, 3);
     expect(view.center[1]).toBeCloseTo(37, 3);
     expect(view.zoom).toBeCloseTo(5, 3);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("installation: the CDN page and the map.yaml it loads are both on the page (ml-aot.49)", async ({
+    page,
+    baseURL,
+  }) => {
+    const html = fences("getting-started/installation.mdx", "html").find((h) => h.includes('src="./map.yaml"'))!;
+    expect(html, "CDN host page").toBeDefined();
+    const yaml = fences("getting-started/installation.mdx", "yaml").find((y) => /^type: map$/m.test(y));
+    expect(yaml, "installation.mdx shows no map.yaml for the CDN page").toBeDefined();
+    expectKnownUrls(baseURL!, html, yaml!);
+    const errors = await serveSnippet(page, baseURL!, "install-cdn", { "index.html": html, "map.yaml": yaml! });
+    await page.goto(`/__docs/install-cdn/`, { waitUntil: "domcontentloaded" });
+    await orReport(waitForRenderedLayer(page, "marker"), errors);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("first map: 'Using your own data file' ships the places.geojson it loads (ml-aot.49)", async ({
+    page,
+    baseURL,
+  }) => {
+    const [html] = fences("getting-started/first-map.mdx", "html");
+    const [structure] = fences("getting-started/first-map.mdx", "yaml");
+    const fragment = fences("getting-started/first-map.mdx", "yaml").find((y) => y.includes("./data/places.geojson"))!;
+    const [geojson] = fences("getting-started/first-map.mdx", "json");
+    expect(geojson, "first-map.mdx shows no data/places.geojson").toBeDefined();
+    // The page's own recipe: the layer snippet replaces `layers: []`.
+    const yaml = structure.replace(/^layers: \[\].*$/m, fragment.trimEnd());
+    expect(yaml).toContain("id: my-places");
+    const errors = await serveSnippet(page, baseURL!, "first-map-data", {
+      "index.html": html,
+      "my-map.yaml": yaml,
+      "data/places.geojson": geojson,
+    });
+    await page.goto(`/__docs/first-map-data/`, { waitUntil: "domcontentloaded" });
+    await orReport(waitForRenderedLayer(page, "my-places"), errors);
+    expect(await page.locator(".ml-map-notice").count()).toBe(0);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
@@ -377,6 +421,40 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     await expect(popup.locator("h3")).toHaveText("New York");
     await expect(popup.locator("p")).toHaveText("Population: 8,336,817");
     expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("first map 'Putting it together' on a phone shows all three cities (ml-aot.42)", async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({
+      baseURL,
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    const [html] = fences("getting-started/first-map.mdx", "html");
+    const yaml = fences("getting-started/first-map.mdx", "yaml").find((y) =>
+      y.includes("id: complete-example")
+    )!;
+    const errors = await serveSnippet(page, baseURL!, "first-map-mobile", {
+      "index.html": html,
+      "my-map.yaml": yaml,
+    });
+    await page.goto(`/__docs/first-map-mobile/`, { waitUntil: "domcontentloaded" });
+    await orReport(waitForRenderedLayer(page, "cities"), errors);
+    // At center [-98, 39] zoom 4 a 390px-wide map spans ~34° of longitude:
+    // New York and Los Angeles were off-screen, so a phone showed one dot.
+    const names = await page.evaluate(() => {
+      const map = (document.querySelector("ml-map") as any).getMap();
+      return [...new Set(map.queryRenderedFeatures({ layers: ["cities"] }).map((f: any) => f.properties.name))].sort();
+    });
+    expect(names).toEqual(["Chicago", "Los Angeles", "New York"]);
+    await page.screenshot({ path: "e2e/results/first-map-mobile.png" });
+    expect(errors, errors.join("\n")).toEqual([]);
+    await context.close();
   });
 
   test("web components: the Quick Start steps assemble into a working page", async ({

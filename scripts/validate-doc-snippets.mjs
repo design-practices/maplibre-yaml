@@ -71,12 +71,13 @@ function defaultFileSet() {
  * Handles fences indented inside components (e.g. Starlight <Steps>).
  * Returns [{ index, content, meta, line }]
  */
-function extractYamlFences(text) {
+function extractYamlFences(text, lang = /ya?ml/) {
   const lines = text.split("\n");
   const fences = [];
   let index = 0;
+  const openRe = new RegExp(`^(\\s*)(\`{3,})\\s*(?:${lang.source})\\b(.*)$`, "i");
   for (let i = 0; i < lines.length; i++) {
-    const open = lines[i].match(/^(\s*)(`{3,})\s*ya?ml\b(.*)$/i);
+    const open = lines[i].match(openRe);
     if (!open) continue;
     const [, indent, ticks, meta] = open;
     const closeRe = new RegExp(`^\\s*\`{${ticks.length},}\\s*$`);
@@ -108,6 +109,22 @@ function topLevelType(content) {
   return m ? m[1] : null;
 }
 
+/** Highest zoom demotiles is useful at (it has country shapes only). */
+const DEMOTILES_MAX_ZOOM = 6;
+
+/** The problem with a fence that zooms demotiles past its detail, or null. */
+function demotilesZoomProblem(content) {
+  if (!/demotiles\.maplibre\.org\/style\.json/.test(content)) return null;
+  // `zoom: 12` (YAML, JS/TS object literals) and `"zoom": 12` (JSON).
+  const zooms = [...content.matchAll(/^\s*-?\s*["']?zoom["']?:[ \t]*([\d.]+)/gm)].map((m) => Number(m[1]));
+  const max = Math.max(...zooms, -Infinity);
+  if (max <= DEMOTILES_MAX_ZOOM) return null;
+  return (
+    `uses demotiles at zoom ${max}: demotiles has country shapes only, so past zoom ` +
+    `${DEMOTILES_MAX_ZOOM} the map is a flat fill. Use "https://tiles.openfreemap.org/styles/liberty".`
+  );
+}
+
 const args = process.argv.slice(2);
 const files = args.length > 0 ? args.map((f) => join(process.cwd(), f)) : defaultFileSet();
 
@@ -125,7 +142,26 @@ for (const file of files) {
     continue;
   }
 
+  // The demotiles rule applies to code readers copy in any language: a
+  // TypeScript or JSON document object at street zoom is the same flat map
+  // (ml-aot.55).
+  for (const fence of extractYamlFences(text, /ts|typescript|js|javascript|jsx|tsx|json/)) {
+    const demoZoom = demotilesZoomProblem(fence.content);
+    if (demoZoom) {
+      failures.push({ file: rel, index: fence.index, line: fence.line, errors: [demoZoom] });
+    }
+  }
+
   for (const fence of extractYamlFences(text)) {
+    // demotiles has country polygons only: past zoom ~6 a map or story on it
+    // is a flat green field with no coastline, roads or labels, which a
+    // reader takes for a broken map (ml-aot.34). Checked on every fence,
+    // fragments included, since readers copy those too.
+    const demoZoom = demotilesZoomProblem(fence.content);
+    if (demoZoom) {
+      failures.push({ file: rel, index: fence.index, line: fence.line, errors: [demoZoom] });
+    }
+
     if (/\bno-validate\b/.test(fence.meta)) {
       skipped++;
       continue;

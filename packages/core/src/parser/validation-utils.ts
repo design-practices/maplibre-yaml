@@ -23,7 +23,7 @@ import type { Document, LineCounter } from "yaml";
 import { isMap } from "yaml";
 import { ExpressionSchema } from "../schemas/base.schema";
 import { GeoJSONSchema } from "../schemas/geojson.schema";
-import { SPEC_PAINT_KEYS, SPEC_LAYOUT_KEYS } from "./spec-keys.generated";
+import { SPEC_PAINT_KEYS, SPEC_LAYOUT_KEYS, SPEC_EXPRESSION_OPERATORS, SPEC_ZERO_ARG_OPERATORS } from "./spec-keys.generated";
 import { getEffectsHost } from "../effects-host";
 import { suggest, spellingVariantOf } from "../utils/suggest";
 
@@ -54,6 +54,30 @@ export interface ValidationWarning {
    * unknown-key and expression warnings, which promote as before.
    */
   kind?: "deprecation" | "unimplemented";
+  /**
+   * Also shown on the page, in the map's "part of this map didn't load"
+   * notice, not only the console: the document is valid but part of it
+   * silently does nothing (a root key nested under `config:`, a chapter
+   * naming a layer the document doesn't have). ml-aot.48 / ml-aot.51.
+   */
+  onPage?: boolean;
+}
+
+/**
+ * The path to show a reader in front of a message, or `""` for none.
+ *
+ * @remarks
+ * Chapter problems are worded from the author's side: `Chapter 4
+ * ("brooklyn-bridge") is missing center: …`, counted from 1. Their `path`
+ * stays the 0-based `chapters.3.center` for tools (JSON/SARIF output, editor
+ * integrations), but printing it in front of the message read as two
+ * different chapters (ml-aot.62). Show the path for everything else.
+ */
+export function displayPath(problem: { path?: string; message: string }): string {
+  if (!problem.path) return "";
+  const chapter = /^chapters\.(\d+)(?:\.|$)/.exec(problem.path);
+  if (chapter && problem.message.startsWith(`Chapter ${Number(chapter[1]) + 1}`)) return "";
+  return problem.path;
 }
 
 /** Valid MapLibre layer `type` values, in the order surfaced to users. */
@@ -89,43 +113,17 @@ export const BLOCK_TYPES = ["map", "scrollytelling"] as const;
  * @remarks
  * Bounded on purpose — full expression type-checking is MapLibre's job. This
  * list only powers first-element (operator) validation with did-you-mean.
+ * Generated from the style spec's expression registry
+ * (spec-keys.generated.ts): a hand-written list lagged MapLibre, and
+ * operators it gained (`split`, `join`, `elevation`, `semiliteral`) warned as
+ * unknown — which `mlym validate` promotes to errors under CI. Plus the
+ * legacy filter operators, which MapLibre still accepts in `filter` but which
+ * the expression registry doesn't list.
  * @see {@link https://maplibre.org/maplibre-style-spec/expressions/}
  */
-export const EXPRESSION_OPERATORS = new Set<string>([
-  // Types
-  "array", "boolean", "collator", "format", "image", "literal", "number",
-  "number-format", "object", "string", "to-boolean", "to-color", "to-number",
-  "to-string", "typeof",
-  // Feature data
-  "accumulated", "feature-state", "geometry-type", "id", "line-progress",
-  "properties",
-  // Document state (style-spec 21+). Reads a value from the document's `state:`
-  // block. Registered alongside `state:` becoming authorable — without it the
-  // first document to use the feature warns on every expression, and `mlym
-  // validate` promotes warnings to errors under CI, so adopting `state:` would
-  // break the adopter's own build.
-  "global-state",
-  // Lookup
-  "at", "get", "has", "in", "index-of", "length", "slice",
-  // Decision
-  "!", "!=", "<", "<=", "==", ">", ">=", "all", "any", "case", "coalesce",
-  "match", "within",
-  // Legacy filter operators (still supported by MapLibre for filters)
+export const EXPRESSION_OPERATORS: ReadonlySet<string> = new Set<string>([
+  ...SPEC_EXPRESSION_OPERATORS,
   "!in", "!has", "none",
-  // Ramps, scales, curves
-  "interpolate", "interpolate-hcl", "interpolate-lab", "step",
-  // Variable binding
-  "let", "var",
-  // String
-  "concat", "downcase", "is-supported-script", "resolved-locale", "upcase",
-  // Color
-  "rgb", "rgba", "to-rgba",
-  // Math
-  "-", "*", "/", "%", "^", "+", "abs", "acos", "asin", "atan", "ceil", "cos",
-  "distance", "e", "floor", "ln", "ln2", "log10", "log2", "max", "min", "pi",
-  "round", "sin", "sqrt", "tan",
-  // Zoom / heatmap
-  "zoom", "heatmap-density",
 ]);
 
 /**
@@ -135,9 +133,11 @@ export const EXPRESSION_OPERATORS = new Set<string>([
  * Any other *known* operator invoked as a one-element array (just the operator,
  * no operands) is flagged as a probable arity-zero mistake.
  */
-export const ZERO_ARG_OPERATORS = new Set<string>([
-  "zoom", "pi", "e", "ln2", "geometry-type", "id", "properties", "accumulated",
-  "heatmap-density", "line-progress", "resolved-locale",
+export const ZERO_ARG_OPERATORS: ReadonlySet<string> = new Set<string>([
+  // From the spec (operators with a zero-argument overload, e.g. "elevation")
+  ...SPEC_ZERO_ARG_OPERATORS,
+  // Kept from the earlier hand list so nothing newly warns.
+  "resolved-locale",
 ]);
 
 // The did-you-mean primitives live in utils/suggest so the schemas can use

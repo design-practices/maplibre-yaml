@@ -274,14 +274,14 @@ export type FitToConfig = z.infer<typeof FitToSchema>;
  * config:
  *   center: [-74.006, 40.7128]
  *   zoom: 12
- *   mapStyle: "https://demotiles.maplibre.org/style.json"
+ *   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * ```
  *
  * @example Map with Global Style Inheritance
  * ```yaml
  * # Root config sets default style
  * config:
- *   defaultMapStyle: "https://demotiles.maplibre.org/style.json"
+ *   defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *
  * pages:
  *   - blocks:
@@ -300,7 +300,7 @@ export type FitToConfig = z.infer<typeof FitToSchema>;
  *   zoom: 15
  *   pitch: 60
  *   bearing: 30
- *   mapStyle: "https://demotiles.maplibre.org/style.json"
+ *   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * ```
  *
  * @example Constrained Map
@@ -311,7 +311,7 @@ export type FitToConfig = z.infer<typeof FitToSchema>;
  *   minZoom: 8
  *   maxZoom: 18
  *   maxBounds: [-74.3, 40.5, -73.7, 40.9]
- *   mapStyle: "https://demotiles.maplibre.org/style.json"
+ *   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * ```
  *
  * @example Non-Interactive Map
@@ -320,7 +320,7 @@ export type FitToConfig = z.infer<typeof FitToSchema>;
  *   center: [-74.006, 40.7128]
  *   zoom: 12
  *   interactive: false
- *   mapStyle: "https://demotiles.maplibre.org/style.json"
+ *   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * ```
  *
  * @see {@link https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/ | MapLibre Map Options}
@@ -825,7 +825,7 @@ export type Parameters = z.infer<typeof ParametersSchema>;
  *   config:
  *     center: [-74.006, 40.7128]
  *     zoom: 12
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   layers:
  *     - id: points
  *       type: circle
@@ -844,7 +844,7 @@ export type Parameters = z.infer<typeof ParametersSchema>;
  *   config:
  *     center: [-74.006, 40.7128]
  *     zoom: 12
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   layers:
  *     - $ref: "#/layers/bikeLayer"
  *     - $ref: "#/layers/parkLayer"
@@ -865,7 +865,7 @@ export type Parameters = z.infer<typeof ParametersSchema>;
  *   config:
  *     center: [0, 0]
  *     zoom: 2
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  * ```
  */
 export const MapBlockSchema: z.ZodObject<any> = z
@@ -934,7 +934,7 @@ export type MapBlock = z.infer<typeof MapBlockSchema>;
  *     center: [-122.4194, 37.7749]
  *     zoom: 13
  *     pitch: 45
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   layers:
  *     - id: buildings
  *       type: fill-extrusion

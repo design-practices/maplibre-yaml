@@ -89,6 +89,77 @@ export function subpathBaseHint(
 }
 
 /**
+ * With a `base` set, a file that 404'd was looked up under the base, not next
+ * to the page — so the usual page-relative advice is wrong (ml-aot.36). When
+ * the page itself is outside the base (a GitHub Pages site previewed locally
+ * with `npx serve .` inside the repo folder, so the page is at `/` while
+ * files are fetched from `/my-repo/…`), say how to preview it properly.
+ *
+ * @param resolved - The URL the browser requested (already resolved under the base).
+ * @returns The hint, or `undefined` without a base or when `resolved` is not under it
+ *   (an absolute URL to another site).
+ */
+export function baseLookupHint(
+  resolved: string,
+  pageUrl: string | undefined,
+  base: string | null | undefined
+): string | undefined {
+  const normalized = normalizeDocumentBase(base);
+  if (normalized === null || !pageUrl) return undefined;
+  let page: URL;
+  let baseUrl: URL;
+  let target: URL;
+  try {
+    page = new URL(pageUrl);
+    baseUrl = new URL(normalized, page);
+    target = new URL(resolved, page);
+  } catch {
+    return undefined;
+  }
+  if (page.protocol !== "http:" && page.protocol !== "https:") return undefined;
+  const basePath = baseUrl.pathname;
+  if (target.origin !== baseUrl.origin || !target.pathname.startsWith(basePath)) return undefined;
+
+  // A base on another site (a CDN): the page's own location says nothing
+  // about it, so no local-preview advice (A1).
+  if (baseUrl.origin !== page.origin) {
+    return (
+      `This map's base is "${normalized}", so its files are loaded from there. Check the ` +
+      `file name and that the file exists at that address.`
+    );
+  }
+
+  // base "/" is what Astro passes on a site at the root: the author never
+  // set a base, so talk about the site root, not `base="/"` (A1, ml-aot.51).
+  if (basePath === "/") {
+    return (
+      `Paths in this map start at the site root (for an Astro site, the public/ folder), ` +
+      `with or without a leading "/", not next to this page. Check the file name and ` +
+      `that the file is in that folder.`
+    );
+  }
+
+  // `astro dev` and `npx serve` serve the base itself as /my-repo, with no
+  // trailing slash: that page is at the base, not outside it (A1).
+  const pageUnderBase = page.pathname.startsWith(basePath) || page.pathname + "/" === basePath;
+  if (!pageUnderBase) {
+    const folder = basePath.split("/").filter(Boolean).pop() ?? "";
+    return (
+      `This page sets base="${normalized}", so files are looked up under ${basePath} — ` +
+      `but the page itself is at ${page.pathname}, outside ${basePath}. If you're ` +
+      `previewing locally, either remove base while developing, or serve the folder one ` +
+      `level up and open ${basePath}. That folder must be named "${folder}" (a GitHub ` +
+      `"Download ZIP" folder is called "${folder}-main": rename it).`
+    );
+  }
+  return (
+    `This page sets base="${normalized}", so every path (with or without a leading "/") ` +
+    `is looked up under ${basePath}, not next to this page. Check the file name and ` +
+    `that the file is in that folder.`
+  );
+}
+
+/**
  * Whether a fetched `src` body is a web page rather than YAML — what a dev
  * server or host with an SPA fallback returns (status 200) for a path that
  * does not exist.
@@ -149,6 +220,7 @@ export function srcHttpErrorCard(
 ): ErrorCardContent {
   const reason = statusText.trim() || STATUS_TEXT[status] || "";
   const baseHint = status === 404 ? subpathBaseHint(src, context.pageUrl, context.base) : undefined;
+  const underBase = status === 404 ? baseLookupHint(resolved, context.pageUrl, context.base) : undefined;
   return {
     title: status === 404 ? "Map file not found" : "Couldn't load the map file",
     errors: [
@@ -158,7 +230,7 @@ export function srcHttpErrorCard(
       },
       { path: "", message: `The browser looked for it at ${resolved}` },
     ],
-    hint: baseHint ? `${PATH_HINT} ${baseHint}` : PATH_HINT,
+    hint: underBase ?? (baseHint ? `${PATH_HINT} ${baseHint}` : PATH_HINT),
   };
 }
 
@@ -169,6 +241,7 @@ export function srcHtmlCard(
   context: { pageUrl?: string; base?: string | null } = {}
 ): ErrorCardContent {
   const baseHint = subpathBaseHint(src, context.pageUrl, context.base);
+  const underBase = baseLookupHint(resolved, context.pageUrl, context.base);
   return {
     title: "Map file not found",
     errors: [
@@ -181,7 +254,7 @@ export function srcHtmlCard(
       { path: "", message: `The browser looked for it at ${resolved}` },
     ],
     hint:
-      `${PATH_HINT} Many servers answer a missing file with the site's main ` +
+      `${underBase ?? PATH_HINT} Many servers answer a missing file with the site's main ` +
       "page instead of a 404, which is why this is an HTML page." +
       (baseHint ? ` ${baseHint}` : ""),
   };
@@ -334,10 +407,14 @@ export function describeDataProblem(
   if (http) {
     const text = http[2] || STATUS_TEXT[Number(http[1])] || "";
     reason = `${http[1]}${text ? ` ${text}` : ""}`;
+  } else if (/^CSV data from /.test(error.message)) {
+    reason =
+      "CSV files aren't supported — convert it to GeoJSON (e.g. geojson.io or QGIS); " +
+      "see https://docs.maplibre-yaml.org/guides/data-sources/#csv-and-spreadsheets";
   } else if (/^Invalid JSON/i.test(error.message)) {
     reason = "it isn't JSON — a wrong path often returns a web page instead";
   } else if (/not valid GeoJSON/i.test(error.message)) {
-    reason = "it isn't GeoJSON";
+    reason = 'it is JSON but not GeoJSON (expected "type": "FeatureCollection")';
   } else if (context.filePage && /fetch|network|load failed/i.test(error.message)) {
     reason = "pages opened from a file (file://) can't load data files";
   } else {
@@ -364,11 +441,32 @@ export function describeDataProblem(
     } else if (resolved !== url) {
       text += ".";
     }
-    const baseHint = http ? subpathBaseHint(url, context.pageUrl, context.base) : undefined;
+    const baseHint = http
+      ? (baseLookupHint(resolved, context.pageUrl, context.base) ??
+        subpathBaseHint(url, context.pageUrl, context.base))
+      : undefined;
     if (baseHint) text += ` ${baseHint}`;
   }
   if (context.filePage) text += ` ${FILE_PAGE_HINT}`;
   return text;
+}
+
+/** `config.fitTo.source` names no source (ml-aot.51). */
+export function describeFitToProblem(source: string, suggestion?: string): string {
+  return (
+    `fitTo.source "${source}" names no source in sources:` +
+    (suggestion ? ` — did you mean "${suggestion}"?` : ".") +
+    " The map keeps its own center and zoom."
+  );
+}
+
+/** `config.center` written [latitude, longitude] (ml-aot.65). */
+export function describeSwappedCenter(center: [number, number], suggestion: [number, number]): string {
+  const pair = (p: [number, number]) => `[${p[0]}, ${p[1]}]`;
+  return (
+    `\`center\` is ${pair(center)}, but this map's data is around ${pair(suggestion)}. ` +
+    `Coordinates are [longitude, latitude]: did you mean center: ${pair(suggestion)}?`
+  );
 }
 
 /** A declared `images:` entry failed. */

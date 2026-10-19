@@ -8,14 +8,15 @@
 # - Paths to your own files (an image, a data file) are relative to
 #   index.html (images/photo.jpg), or start at the site root with "/"
 #   (/images/photo.jpg). On GitHub Pages, see the base note in index.html.
-# - Check this file for mistakes: npx @maplibre-yaml/cli validate story.yaml
+# - Check this file for mistakes: npx maplibre-yaml validate story.yaml
 type: scrollytelling
 id: {{projectName}}
+# Card colours: "light" or "dark". A story-level setting, next to config:.
+theme: "light"
 config:
   center: [-74.006, 40.7128]
   zoom: 10
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-  theme: "light"
 chapters:
   - id: intro
     title: "Introduction"

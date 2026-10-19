@@ -18,5 +18,8 @@ export { YAMLParser, parseYAMLConfig, safeParseYAMLConfig, safeParseAny } from '
 // The canonical parse options + `!html` tag — the single source of truth a
 // consumer parsing YAML itself imports rather than re-declaring (which drifts).
 export { YAML_PARSE_OPTIONS, htmlTag } from './yaml-parser';
+// The path to show a reader before a message (chapter problems name the
+// chapter in the message instead): for error cards, CLIs, editors.
+export { displayPath } from './validation-utils';
 export type { ParseError, ParseErrorCode, ParseResult, SafeParseAnyResult } from './yaml-parser';
 // Note: RootConfig, MapBlock, ScrollytellingBlock types are exported from ./schemas

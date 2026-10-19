@@ -41,14 +41,14 @@ const story = await loadScrollytellingConfig('./src/stories/my-story.yaml');
 Both show the same thing for the same file: a sticky map with the chapters
 scrolling over it, the camera moves, layer changes and actions below, the
 chapter rail, themes, and reduced-motion handling. Check a story without a
-browser with `npx @maplibre-yaml/cli validate story.yaml`.
+browser with `npx maplibre-yaml validate story.yaml`.
 
 ## Scrollytelling Block Structure
 
 A story file is a standalone YAML document with `type: scrollytelling` at the
 top level. That is what `<ml-scrollytelling src>`, `loadScrollytellingConfig`,
 `<Scrollytelling src>`, a stories content collection and
-`npx @maplibre-yaml/cli validate` all read, and
+`npx maplibre-yaml validate` all read, and
 every full example on this page is written that way, ready to paste into a
 file of its own. (Only inside a site file's `pages:` → `blocks:` list is a
 story a list item, `- type: scrollytelling`; see
@@ -80,10 +80,12 @@ footer: "..."        # Optional footer HTML
 | `chapters` | array | Yes | - | Story chapters (min: 1) |
 | `theme` | `"light"` \| `"dark"` | No | `"light"` | Visual theme |
 | `showMarkers` | boolean | No | `false` | Show a navigation rail: one dot per chapter at the right edge of the page, which readers can click to jump to a chapter. It does not put markers on the map |
-| `markerColor` | string | No | `"#3FB1CE"` | Color of the rail's dots |
+| `markerColor` | string | No | - | Fill color of the rail's dots. Unset, the dots are white with a dark outline and the current one is larger and dark, which stand out on any basemap |
+| `cameraOffset` | boolean | No | `true` | Offset the camera so each chapter's `center` isn't under its card (beside a left/right card, above a centred one, above the card on a phone). `false` centres it in the whole map. A chapter's own `padding` always wins |
 | `layers` | array | No | `[]` | Persistent layers |
 | `footer` | string | No | - | Footer HTML content |
-| `sources`, `markers`, `legend`, `state`, `parameters`, `popups`, `images`, `controls`, `terrain`, `sky`, `projection`, `light` | - | No | - | The story's map takes every map-level key a [`type: map` document](/schema/map-config/) does, with the same schema (see [Map-level keys](#map-level-keys)) |
+| `legend` | object | No | - | The story's legend, pinned above the cards (see [The legend](#the-legend)): the map legend's `title` and `items`, an optional `position`, and `collapsed: auto` (default), `true` or `false` |
+| `sources`, `markers`, `state`, `parameters`, `popups`, `images`, `controls`, `terrain`, `sky`, `projection`, `light` | - | No | - | The story's map takes every map-level key a [`type: map` document](/schema/map-config/) does, with the same schema (see [Map-level keys](#map-level-keys)) |
 
 ## Chapters
 
@@ -113,6 +115,14 @@ chapters:
 | `center` | [number, number] | Map center [longitude, latitude] |
 | `zoom` | number | Zoom level (0-24) |
 
+Each chapter needs its own `id`: copying a chapter and keeping its `id` is a
+validation error naming both lines (`Two chapters have id "the-met" (lines 96
+and 144)`). Give layers their own ids too: a repeated layer id warns, and the
+map draws the first layer with that id and skips the repeat. A chapter's `layers.show` /
+`layers.hide` or action `layer:` that is a near miss of one of the story's
+layers (`walking` for `walk`) gets a did-you-mean warning; a name unlike any
+of them is taken to be a basemap layer and is not flagged.
+
 ### Optional Chapter Properties
 
 #### Content
@@ -141,6 +151,7 @@ chapters:
 |----------|------|---------|-------------|
 | `alignment` | string | `"center"` | Content position: `left`, `right`, `center`, `full` |
 | `hidden` | boolean | `false` | Hide chapter content (map-only) |
+| `padding` | number or `{ top, right, bottom, left }` | — | Camera padding in pixels for this chapter, used as written instead of the automatic offset that keeps `center` clear of the card |
 
 ## Basic Example
 
@@ -454,8 +465,12 @@ chapters:
 of the map, one per chapter. The active chapter's dot is highlighted, and
 clicking a dot (or focusing it and pressing Enter) scrolls to that chapter; the
 arrow keys, Home and End move along the rail.
-`markerColor` sets the dots' color. Despite the name, nothing is drawn on the
-map itself; to mark chapter locations on the map, add a layer.
+The dots are white with a dark outline, and the current chapter's dot is
+larger and filled dark with a white ring, so the rail stands out on light and
+dark basemaps alike and the current chapter is marked by size and fill, not
+colour alone. `markerColor` fills the dots with a color of your own; the dark
+outline stays. Despite the name, nothing is drawn on the map itself; to mark
+chapter locations on the map, add a layer.
 
 ```yaml
 type: scrollytelling
@@ -516,7 +531,7 @@ chapters:
 A story's map is an ordinary map document, so everything a
 [`type: map` document](/schema/map-config/) takes at its top level works in a
 story too: named `sources:` shared by several layers, standalone `markers:`
-with popups, a `legend:`, the params panel (`state:` + `parameters:`),
+with popups, a `legend:` (pinned above the cards, see [The legend](#the-legend)), the params panel (`state:` + `parameters:`),
 `images:`, `controls:`, and the 3D and globe keys. They are validated with the
 same schema, and a story layer's source takes the
 [GeoJSON sugar](/schema/sources/#geojson-sugar) shorthands (`location:`,
@@ -528,7 +543,7 @@ id: harbour-tour
 config:
   center: [-74.01, 40.70]
   zoom: 12
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 sources:
   piers:
     type: geojson
@@ -569,6 +584,43 @@ The story map's own pan and zoom gestures start off, so the reader's wheel and
 finger scroll the story. Markers, popups, the legend and the params panel stay
 clickable. To let readers move the map, set the gesture in `config:`
 (`scrollZoom: true`, `dragPan: true`, ...), as on any map.
+
+## The legend
+
+A story's legend is pinned: it stays in one corner, above the chapter cards,
+and never moves while the story scrolls.
+
+- **Corner.** `position:` if you set one. Otherwise top-left (opposite the
+  chapter rail), or top-right on a wide screen whose cards are all
+  `alignment: left`.
+- **Open or a button.** With `collapsed: auto` (the default) the legend is a
+  compact button labelled "Legend" (its `title` heads the open panel) on phones,
+  upright or on their side, and on wide screens where cards pass its corner
+  (cards on both sides, or full-width). It is open everywhere else, where no
+  card ever reaches it. `collapsed: true` always starts it as a button;
+  `collapsed: false` always starts it open.
+- **Opening it.** The button opens the legend as a panel above the cards. It
+  is not a dialog: the map and the page stay usable, Escape closes it and puts
+  focus back on the button, and on a phone a tap outside closes it. A long
+  legend scrolls inside the panel.
+
+```yaml
+legend:
+  title: Harbour tour
+  collapsed: auto        # true | false | auto
+  # position: top-right  # optional; the default follows the cards
+  items:
+    - { color: "#0ea5e9", label: Pier, shape: circle }
+```
+
+A `slot="legend"` child of the story fills the same panel with your own markup
+instead of the entries.
+
+Everything else on the map stays put too. MapLibre's controls (scale bar,
+attribution, zoom buttons), corner slots, the params panel and the on-map
+notice sit in their corners under the cards: a card passes over a corner while
+it scrolls by and rests clear of the bottom corners. On phones the attribution
+stays a compact (i) button.
 
 ## Footer
 
@@ -636,7 +688,7 @@ markerColor: "#e74c3c"
 config:
   center: [-120, 35]
   zoom: 4
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle
@@ -856,7 +908,7 @@ const scrollytelling: ScrollytellingBlock = {
   config: {
     center: [0, 0],
     zoom: 2,
-    mapStyle: "https://demotiles.maplibre.org/style.json"
+    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   },
   chapters: [chapter],
   theme: "light",

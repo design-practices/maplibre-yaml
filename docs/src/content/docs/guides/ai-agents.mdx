@@ -22,7 +22,7 @@ generate  →  mlym validate -f json  →  repair  →  repeat until valid
 4. **Repeat** until `valid: true`.
 
 ```bash
-npx @maplibre-yaml/cli validate my-map.yaml -f json
+npx maplibre-yaml validate my-map.yaml -f json
 ```
 
 <Aside type="note">
@@ -95,8 +95,8 @@ Prefer the schema for the version you target. `mlym schema <block>` prints the
 schema bundled with the installed core package:
 
 ```bash
-npx @maplibre-yaml/cli schema map            # print to stdout
-npx @maplibre-yaml/cli schema any --out any.schema.json
+npx maplibre-yaml schema map            # print to stdout
+npx maplibre-yaml schema any --out any.schema.json
 ```
 
 ## Three things agents get wrong
@@ -170,5 +170,5 @@ The same JSON/SARIF output doubles as CI documentation — fail the build on
 invalid configs and surface findings as annotations:
 
 ```bash
-npx @maplibre-yaml/cli validate "configs/**/*.yaml" -f sarif > results.sarif
+npx maplibre-yaml validate "configs/**/*.yaml" -f sarif > results.sarif
 ```

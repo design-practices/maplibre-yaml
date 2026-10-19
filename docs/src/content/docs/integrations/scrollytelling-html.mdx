@@ -165,8 +165,14 @@ chapters:
 - **A sticky map and a chapter column.** The map fills the screen and stays put
   while the story scrolls; each chapter is a card. `alignment: left | right |
   center | full` places the card, and the camera is offset so the chapter's
-  `center` is not hidden behind it. On phones the card sits in the lower part
-  of the screen and the map's subject shows above it.
+  `center` is not hidden behind it: beside a left or right card, above a
+  centred or full-width one. On phones the card sits in the lower part of
+  the screen and the map's subject shows above it; on a phone on its side
+  every card is a narrow one on the left, with the subject beside it.
+  Nothing on the map moves with the scroll: the legend is pinned in one
+  corner above the cards (a "Legend" button on phones that opens above
+  them; see [The legend](/schema/scrollytelling/#the-legend)), and a chapter
+  photo is never taller than 40% of the screen.
 - **Camera moves** per chapter: `center`, `zoom`, `pitch`, `bearing`, and
   `animation: flyTo | easeTo | jumpTo` (with `speed`, `curve`).
 - **Layers and actions:** `layers.show` / `layers.hide`, and
@@ -229,11 +235,20 @@ a site-hosted style) and chapter `image` / `video` paths then resolve under
 `/my-repo/`. Full `https://` URLs are never changed. It works exactly like
 [`<ml-map base>`](/integrations/web-components/#sites-under-a-subpath-github-pages).
 
+To preview it locally, serve the folder *above* the repository (so the page
+opens at `http://localhost:3000/my-repo/`), or leave `base` off while you
+work: `npx serve .` inside the repository puts the page at `/`, outside
+`/my-repo/`, and the story's files 404. The repository folder must be named
+exactly like the base (a GitHub **Download ZIP** unpacks to `my-repo-main`:
+rename it to `my-repo`).
+
 ## Corner slots
 
 Children with a `slot` attribute are handed to the story's map, exactly as on
 [`<ml-map>`](/integrations/web-components/): `top-left`, `top-right`,
-`bottom-left`, `bottom-right`, and `legend` (replaces the built-in legend).
+`bottom-left` and `bottom-right`. They stay in their corner, under the cards.
+A `slot="legend"` child fills the story's pinned legend panel instead of the
+built-in entries.
 
 ```html
 <ml-scrollytelling src="story.yaml">
@@ -277,6 +292,7 @@ The element dispatches bubbling events and carries the active chapter's id in
 | `base` attribute / property | Where the story's own paths start, for a site under a subpath ([above](#sites-under-a-subpath-github-pages)) |
 | `story` (alias `config`) property | Set the story as an object (or JSON string) instead |
 | `debug` attribute | Outline each chapter (green when active) |
+| `quiet` attribute | Hide the on-page notes for a finished site: the map's "Part of this map couldn't load" notice and a chapter's "image didn't load" note. Every message stays in the browser console; a story that can't load at all still shows its error card. Passed on to the story's map. |
 | `story` getter | The validated story, or `null` |
 | `activeChapterId` | The active chapter's `id` |
 | `mapReady()` | Promise of the MapLibre map once it has loaded |
@@ -322,13 +338,20 @@ npm install @maplibre-yaml/core maplibre-gl
 ```
 
 ```js
+// maplibre-gl 6 loads its worker from a separate file. Inside a bundle it
+// cannot find that file by itself, so tell it where it is (Vite shown).
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@maplibre-yaml/core/register";
+
+setWorkerUrl(workerUrl);
 ```
 
-The element is then available in your HTML or templates. On maplibre-gl 6, set
-the worker URL first, as [Installation](/getting-started/installation/#supported-maplibre-gl-versions)
-describes.
+The element is then available in your HTML or templates. On maplibre-gl 4 or
+5, delete the two worker lines and the `setWorkerUrl` call (there is no worker
+file to import). Other bundlers: see
+[Installation](/getting-started/installation/#supported-maplibre-gl-versions).
 
 ## Runnable example
 

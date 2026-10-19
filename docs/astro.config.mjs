@@ -9,6 +9,7 @@ import { OptionDefaults } from "typedoc";
 import { generateAgentAssets } from "./scripts/generate-agent-assets.mjs";
 import { generateClassicsExport } from "./scripts/classics-export.mjs";
 import rehypeHeadingAnchors from "./scripts/rehype-heading-anchors.mjs";
+import { emailOff } from "./scripts/email-off.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -95,6 +96,8 @@ export default defineConfig({
     agentAssets,
     classicsExport,
     yamlReference,
+    // Cloudflare must not rewrite `core@0.8` as an email address (ml-aot.35).
+    emailOff,
     starlight({
       title: "maplibre-yaml",
       plugins: [

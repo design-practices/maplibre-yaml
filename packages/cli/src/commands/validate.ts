@@ -15,7 +15,8 @@ import { formatVSCode } from '../lib/formatter-vscode.js';
 import { createWatcher, formatWatchEvent } from '../lib/watcher.js';
 import { loadProjectConfig, mergeConfig } from '../lib/config-loader.js';
 import { logger } from '../lib/logger.js';
-import { resolveGlobPatterns } from '../lib/glob.js';
+import { resolveTargets, isGlobPattern } from '../lib/glob.js';
+import { relative } from 'pathe';
 import { createProgress } from '../lib/progress.js';
 import { validateWithCache, clearCache } from '../lib/cache.js';
 import { EXIT_CODES } from '../types.js';
@@ -53,7 +54,7 @@ export const validateCommand = defineCommand({
     patterns: {
       type: 'positional',
       required: true,
-      description: 'File path(s) or glob pattern(s)',
+      description: 'One or more file paths or glob patterns (all are validated)',
     },
     format: {
       type: 'string',
@@ -105,24 +106,46 @@ export const validateCommand = defineCommand({
           ? false
           : isRunningInCI();
 
-    // Parse patterns (space-separated or single)
-    const patternList = patterns.includes(' ')
-      ? patterns.split(/\s+/).filter(Boolean)
-      : [patterns];
+    // Every positional argument is a target (ml-aot.31). citty binds only the
+    // first to `patterns`; the full list — including what an unquoted shell
+    // glob expands to — is in `args._`.
+    const positionals: Array<string | number> =
+      Array.isArray(args._) && args._.length > 0 ? args._ : [patterns];
 
-    // Resolve glob patterns to files
+    // Resolve each file/folder/glob to files, remembering any that matched
+    // nothing and any the project's ignorePatterns excluded
     let files: string[];
+    let unmatched: string[];
+    let ignored: string[];
     try {
-      files = await resolveGlobPatterns(patternList, {
+      ({ files, unmatched, ignored } = await resolveTargets(positionals, {
         ignore: projectConfig?.validate?.ignorePatterns,
-      });
+      }));
     } catch (error) {
       consola.error('Failed to resolve patterns:', error);
       process.exit(EXIT_CODES.FILE_NOT_FOUND);
     }
 
+    // Machine-readable formats keep stdout parseable; notices go to stderr.
+    const machineFormat = format === 'json' || format === 'sarif';
+    const say = machineFormat ? console.error : console.log;
+    function reportUnmatched() {
+      for (const u of unmatched) {
+        // A plain path (no * ? [ { ) is a file that isn't there; a pattern
+        // is one that found nothing (ml-aot.54).
+        say(
+          isGlobPattern(u)
+            ? pc.red(`✗ No files match ${JSON.stringify(u)}`) + pc.dim(' (check the pattern)')
+            : pc.red(`✗ File not found: ${u}`) + pc.dim(' (check the path and spelling)')
+        );
+      }
+      for (const i of ignored) {
+        say(pc.dim(`- Skipped ${i}: excluded by validate.ignorePatterns in your maplibre-yaml config`));
+      }
+    }
+
     if (files.length === 0) {
-      console.log(pc.yellow('No files found matching pattern(s):'), patternList.join(', '));
+      reportUnmatched();
       process.exit(EXIT_CODES.FILE_NOT_FOUND);
     }
 
@@ -194,14 +217,28 @@ export const validateCommand = defineCommand({
             output = formatVSCode(results);
             break;
           default:
-            output = formatHuman(results);
+            // Paths relative to where the command ran, as the docs show
+            // (`✓ my-map.yaml`), unless the file is outside that folder.
+            output = formatHuman(
+              results.map((r) => {
+                const rel = relative(process.cwd(), r.file);
+                return { ...r, file: rel.startsWith('..') ? r.file : rel };
+              })
+            );
         }
         console.log(output);
+        reportUnmatched();
 
         // In watch mode, don't exit
         if (!watchMode) {
           const hasErrors = results.some(r => !r.valid);
-          process.exit(hasErrors ? EXIT_CODES.VALIDATION_ERROR : EXIT_CODES.SUCCESS);
+          process.exit(
+            hasErrors
+              ? EXIT_CODES.VALIDATION_ERROR
+              : unmatched.length > 0
+                ? EXIT_CODES.FILE_NOT_FOUND
+                : EXIT_CODES.SUCCESS
+          );
         }
       } catch (error) {
         if (watchMode) {

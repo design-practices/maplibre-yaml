@@ -21,8 +21,9 @@
  *   story in the browser; until then a loading state shows, and a story that
  *   fails shows one error card with line numbers.
  *
- * Corner slots (`slot="top-left|top-right|bottom-left|bottom-right|legend"`)
- * reach the story's `<ml-map>` either way.
+ * Corner slots (`slot="top-left|top-right|bottom-left|bottom-right"`) reach
+ * the story's `<ml-map>` either way; `slot="legend"` fills the story's pinned
+ * legend panel (above the chapter cards) instead of the built-in entries.
  *
  * Events: `ml-scrollytelling:chapter`, `ml-scrollytelling:action` and
  * `ml-scrollytelling:error`, dispatched on the story element (which keeps
@@ -69,7 +70,7 @@ import { withBase } from "../utils/base-url";
 
 interface Props extends ScrollytellingProps {}
 
-const { src, config, class: className, debug = false, base } = Astro.props;
+const { src, config, class: className, debug = false, base, quiet = false } = Astro.props;
 
 if (!src && !config) {
   throw new Error("Scrollytelling component requires either 'src' or 'config' prop");
@@ -117,6 +118,7 @@ const hasSlot = {
   src={config ? undefined : resolvedSrc}
   config={serializedConfig}
   base={documentBase}
+  quiet={quiet ? "" : undefined}
 >
   {/*
     Corner slots (ml-l4y.3). Astro reads a child's `slot="top-left"` as a
@@ -125,11 +127,12 @@ const hasSlot = {
     compiler strips a literal `slot="…"` inside an expression, and slot names
     are spelled out because <slot name> must be static. With `config` they go
     straight into the server-rendered <ml-map>; with `src` they sit on
-    <ml-scrollytelling>, which hands them to the map it creates.
+    <ml-scrollytelling>, which hands them to the map it creates. (The legend
+    slot is the exception, below.)
   */}
   {config ? (
     <div class="scrolly-map-container">
-      <ml-map id={`${storyId}-map`} config={mapDocument} base={documentBase}>
+      <ml-map id={`${storyId}-map`} config={mapDocument} base={documentBase} quiet={quiet ? "" : undefined}>
         {hasSlot["top-left"] && (
           <div {...{ slot: "top-left" }} class="ml-astro-slot" data-ml-slot="top-left">
             <slot name="top-left" />
@@ -148,11 +151,6 @@ const hasSlot = {
         {hasSlot["bottom-right"] && (
           <div {...{ slot: "bottom-right" }} class="ml-astro-slot" data-ml-slot="bottom-right">
             <slot name="bottom-right" />
-          </div>
-        )}
-        {hasSlot.legend && (
-          <div {...{ slot: "legend" }} class="ml-astro-slot" data-ml-slot="legend">
-            <slot name="legend" />
           </div>
         )}
       </ml-map>
@@ -180,12 +178,17 @@ const hasSlot = {
           <slot name="bottom-right" />
         </div>
       )}
-      {hasSlot.legend && (
-        <div {...{ slot: "legend" }} class="ml-astro-slot" data-ml-slot="legend">
-          <slot name="legend" />
-        </div>
-      )}
     </Fragment>
+  )}
+
+  {/*
+    The legend slot stays on <ml-scrollytelling> either way: the story pins
+    its legend above the chapter cards itself, not inside the map.
+  */}
+  {hasSlot.legend && (
+    <div {...{ slot: "legend" }} class="ml-astro-slot" data-ml-slot="legend">
+      <slot name="legend" />
+    </div>
   )}
 
   <div class="scrolly-chapters">
@@ -203,6 +206,8 @@ const hasSlot = {
 <script>
   // first: maplibre-gl 6 needs its worker URL before any map is built
   import "../client/maplibre-worker";
+  // astro dev only: a page with no viewport meta (tiny map on phones)
+  import "../client/dev-hints";
   // registers <ml-map> and <ml-scrollytelling> -- the whole story runtime.
   // No per-page init: the element sets itself up when it connects and tears
   // down when it leaves, so <ClientRouter /> soft navigations re-create the

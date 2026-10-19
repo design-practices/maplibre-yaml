@@ -202,3 +202,23 @@ describe('resolveMaplibre', () => {
     expect(resolveMaplibre([undefined, v5, v6]).version).toBe('6.4.1');
   });
 });
+
+describe('preview --help (ml-aot.54)', () => {
+  it('describes --no-open as what it does: not opening the browser', async () => {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    // citty prints help through consola, which goes silent when it detects a
+    // test runner (VITEST / TEST / NODE_ENV=test): run the CLI as a user would.
+    const env = { ...process.env };
+    for (const key of ['VITEST', 'VITEST_POOL_ID', 'VITEST_WORKER_ID', 'TEST', 'NODE_ENV']) delete env[key];
+    const { stdout } = await promisify(execFile)(
+      process.execPath,
+      [join(process.cwd(), 'dist/cli.js'), 'preview', '--help'],
+      { env }
+    );
+    const line = stdout.split('\n').find((l) => l.includes('--no-open'));
+    expect(line, stdout).toBeDefined();
+    expect(line).toMatch(/Don't open|Do not open/);
+    expect(line).not.toMatch(/\bOpen browser automatically\b/);
+  });
+});

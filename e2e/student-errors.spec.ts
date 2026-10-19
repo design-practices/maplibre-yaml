@@ -88,7 +88,11 @@ test.describe("layer problems keep the map working (ml-aot.15)", () => {
     await expect(notice).toContainText("bad-colour");
     expect(await notice.getAttribute("role")).toBe("status");
     const shown = await text(page, "#map .ml-map-notice");
-    expect(shown).toContain("Part of this map didn't load");
+    expect(shown).toContain("Part of this map couldn't load");
+    // The author's fix sits under "Details for the site's author": open on
+    // this local page, closed (one click away) on a published site.
+    expect(await page.locator("#map .ml-map-notice summary").innerText()).toBe("Details for the site's author");
+    expect(await page.locator("#map .ml-map-notice details").evaluate((d) => (d as HTMLDetailsElement).open)).toBe(true);
     expect(shown).toContain('Layer typo-layer didn\'t draw: Source "citeis" doesn\'t exist. Did you mean "cities"?');
     expect(shown).toContain("Data file data/citys.geojson didn't load (404 Not Found), so layer missing-data has no data.");
     expect(shown).toMatch(/The browser looked for http:\/\/localhost:\d+\/examples\/verification\/student-errors\/data\/citys\.geojson/);
@@ -122,6 +126,170 @@ test.describe("src fetch failures (ml-aot.13)", () => {
     expect(shown).toContain("Map file not found");
     expect(shown).toContain('Couldn\'t load src="configs/my-map.yaml": 404');
     expect(shown).toMatch(/The browser looked for it at http:\/\/localhost:\d+\/examples\/verification\/student-errors\/configs\/my-map\.yaml/);
+  });
+
+  test("base set but the page previewed outside it: both cards name base and the local-preview fix (ml-aot.36)", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/base-preview.html`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#map .ml-map-error")).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("#story .scrolly-error, #story .ml-map-error").first()).toBeVisible({ timeout: 30_000 });
+    for (const [selector, title, file] of [
+      ["#map .ml-map-error", "Map file not found", "map.yaml"],
+      ["#story .scrolly-error, #story .ml-map-error", "Story file not found", "story.yaml"],
+    ] as const) {
+      const shown = await text(page, selector);
+      expect(shown).toContain(title);
+      expect(shown).toMatch(new RegExp(`The browser looked for it at http://localhost:\\d+/my-repo/${file.replace(".", "\\.")}`));
+      expect(shown).toContain('This page sets base="/my-repo/", so files are looked up under /my-repo/');
+      expect(shown).toContain(
+        "If you're previewing locally, either remove base while developing, or serve the folder one level up and open /my-repo/. " +
+          'That folder must be named "my-repo" (a GitHub "Download ZIP" folder is called "my-repo-main": rename it).'
+      );
+      expect(shown).not.toContain("relative to this page's folder");
+    }
+    await page.screenshot({ path: "e2e/results/base-preview-cards.png", fullPage: true });
+    expect(errors).toEqual([]);
+  });
+
+  test("two layers with one id: the map renders the first, the notice says the repeat was skipped (review F3)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/duplicate-layer.html`, { waitUntil: "domcontentloaded" });
+    const outcome = await page.evaluate(() =>
+      (document.getElementById("map") as any).mapReady().then(
+        () => "loaded",
+        (e: Error) => `failed: ${e.message}`
+      )
+    );
+    expect(outcome).toBe("loaded");
+    await expect(page.locator("#map .ml-map-error")).toHaveCount(0);
+    const layer = await page.evaluate(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      return { type: map.getLayer("walk")?.type, sources: Object.keys(map.getStyle().sources).filter((s) => s.startsWith("walk")) };
+    });
+    expect(layer).toEqual({ type: "line", sources: ["walk-source"] });
+    await expect(page.locator("#map .ml-map-notice")).toBeVisible({ timeout: 30_000 });
+    const shown = await text(page, "#map .ml-map-notice");
+    expect(shown).toContain('Another layer already has id "walk": the first one is drawn and this one is skipped.');
+    expect(errors).toEqual([]);
+  });
+
+  test("a root key nested under config: is named on the map, not just the console (ml-aot.48)", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/misplaced-keys.html`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#map .ml-map-notice")).toBeVisible({ timeout: 30_000 });
+    const shown = await text(page, "#map .ml-map-notice");
+    expect(shown).toContain('"markers" belongs at the top level');
+    expect(shown).toMatch(/line \d+/);
+    expect(errors).toEqual([]);
+  });
+
+  test("story mistakes show on the page: layers.show typo, theme under config, a missing chapter image (ml-aot.48/.51)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("story") as any).mapReady().then(() => null));
+    const notice = page.locator("#story .ml-map-notice");
+    await expect(notice).toBeVisible({ timeout: 30_000 });
+    await expect(notice).toContainText('"theme" belongs at the top level');
+    // The layers.show typo is found when its chapter runs, against the map's
+    // real layers (a basemap layer would be fine).
+    await page.evaluate(() => (document.getElementById("story") as any).goToChapter("route"));
+    await expect(notice).toContainText("route shows layer walking, but the map has no layer by that name. Did you mean walk?");
+    const missing = page.locator('.scrolly-chapter[data-chapter-id="start"] .chapter-media-missing');
+    await expect(missing).toBeVisible({ timeout: 15_000 });
+    await expect(missing).toContainText("Volcano.SVG");
+    await expect(missing).toContainText("capital letters");
+    await page.screenshot({ path: "e2e/results/story-mistakes.png" });
+    expect(errors).toEqual([]);
+  });
+
+  test("quiet on a story hides the notice and the card note; the console keeps them (review F1, ml-aot.64)", async ({ page }) => {
+    const errors = await guard(page);
+    const consoleLines: string[] = [];
+    page.on("console", (m) => consoleLines.push(m.text()));
+    await page.goto(`${DIR}/story-mistakes.html?quiet`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("story") as any).mapReady().then(() => null));
+    await page.evaluate(() => (document.getElementById("story") as any).goToChapter("route"));
+    await page.waitForTimeout(1500);
+    expect(await page.locator("#story ml-map").getAttribute("quiet")).toBe("");
+    await expect(page.locator("#story .ml-map-notice")).toHaveCount(0);
+    await expect(page.locator(".chapter-media-missing")).toHaveCount(0);
+    expect(consoleLines.some((l) => l.includes('"theme" belongs at the top level'))).toBe(true);
+    expect(consoleLines.some((l) => l.includes("Volcano.SVG"))).toBe(true);
+    // Turning quiet off later brings the notes back on the next problem.
+    expect(errors).toEqual([]);
+  });
+
+  test("a chapter's missing photo note is worded for any web server (review F4)", async ({ page }) => {
+    await guard(page);
+    await page.goto(`${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
+    const note = page.locator('.scrolly-chapter[data-chapter-id="start"] .chapter-media-missing');
+    await expect(note).toBeVisible({ timeout: 15_000 });
+    await expect(note).toContainText("on most web servers");
+    await expect(note).not.toContainText("GitHub Pages");
+  });
+
+  test("a chapter's missing photo: a plain line for visitors, the fix under the author's details (ml-aot.70)", async ({
+    page,
+    baseURL,
+  }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    // The same page as a published site: served from a real host name.
+    const site = "https://published.example";
+    await page.route(`${site}/**`, async (route) =>
+      route.fulfill({ response: await page.request.fetch(`${baseURL}${new URL(route.request().url()).pathname}`) })
+    );
+    await page.route(/^https?:\/\/(?!published\.example|localhost|127\.0\.0\.1)/, (route) => route.abort());
+    await page.goto(`${site}${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
+    const note = page.locator('.scrolly-chapter[data-chapter-id="start"] .chapter-media-missing');
+    await expect(note).toBeVisible({ timeout: 15_000 });
+    // What a visitor reads: one plain line, no file names or instructions.
+    await expect(note.locator(".chapter-media-missing-lead")).toHaveText("This chapter's image couldn't load.");
+    await expect(note.locator("summary")).toHaveText("Details for the site's author");
+    expect(await note.locator("details").evaluate((d) => (d as HTMLDetailsElement).open)).toBe(false);
+    const visible = await note.innerText();
+    expect(visible).not.toContain("Volcano.SVG");
+    expect(visible).not.toContain("capital letters");
+    // One click away for the author.
+    await note.locator("summary").click();
+    await expect(note.locator("details")).toContainText("Volcano.SVG");
+    await expect(note.locator("details")).toContainText("capital letters count");
+
+    // On this computer (localhost) the author's details start open.
+    await page.goto(`${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
+    const local = page.locator('.scrolly-chapter[data-chapter-id="start"] .chapter-media-missing');
+    await expect(local).toBeVisible({ timeout: 15_000 });
+    expect(await local.locator("details").evaluate((d) => (d as HTMLDetailsElement).open)).toBe(true);
+    expect(await local.innerText()).toContain("Volcano.SVG");
+    expect(errors).toEqual([]);
+  });
+
+  test("a chapter action naming a missing layer is on the page, with a did-you-mean (ml-aot.51)", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/story-mistakes.html`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("story") as any).mapReady().then(() => null));
+    await page.evaluate(() => (document.getElementById("story") as any).goToChapter("filter"));
+    await expect(page.locator("#story .ml-map-notice")).toContainText(
+      "Chapter filter: its setFilter action names layer wlak, but the map has no layer by that name, so it did nothing. Did you mean walk?"
+    );
+    expect(errors).toEqual([]);
+  });
+
+  test("center written [latitude, longitude] is named on the map with the fix (ml-aot.65)", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto(`${DIR}/swapped-center.html`, { waitUntil: "domcontentloaded" });
+    for (const id of ["inline", "fetched"]) {
+      const notice = page.locator(`#${id} .ml-map-notice`);
+      await expect(notice).toBeVisible({ timeout: 30_000 });
+      await expect(notice).toContainText(
+        "center is [40.75, -73.98], but this map's data is around [-73.98, 40.75]. Coordinates are [longitude, latitude]: did you mean center: [-73.98, 40.75]?"
+      );
+    }
+    expect(errors).toEqual([]);
   });
 
   test("a src that returns a web page says the path is probably wrong", async ({ page }) => {

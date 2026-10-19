@@ -1,18 +1,47 @@
 /**
- * @file The non-fatal on-map notice: "part of this map didn't load"
+ * @file The non-fatal on-map notice: "part of this map couldn't load"
  * @module @maplibre-yaml/core/components/map-notice
  *
  * @description
  * When the map renders but part of the document does not — a layer MapLibre
  * rejected, a data file that 404'd, a source name with a typo — the basemap
- * still shows and the student's layer is simply missing. The reason used to
- * reach only the console, which beginners rarely open (ml-aot.15). This small
+ * still shows and the author's layer is simply missing. The reason used to
+ * reach only the console, which few people open (ml-aot.15). This small
  * dismissible panel lists those problems on the map itself, while the map
  * keeps working. `<ml-map quiet>` turns it off.
+ *
+ * Two readers see it: the map's author, who needs the fix (paths, folders,
+ * did-you-mean), and a visitor to the published site, who only needs to
+ * know part of the map is missing. So it leads with one plain line and puts
+ * the author's detail in a "Details for the site's author" disclosure,
+ * open while the page is served from this computer (localhost, file://)
+ * and closed on a published site, where a click still opens it.
  */
 
 /** Class on the notice element. */
 export const NOTICE_CLASS = "ml-map-notice";
+
+/** The notice's lead line, for every reader. */
+export const NOTICE_TITLE = "Part of this map couldn't load";
+
+/** Whether a page is being served from this computer (an author working on it). */
+export function isLocalPage(doc: Document | undefined): boolean {
+  try {
+    const location = doc?.location;
+    if (!location) return false;
+    if (location.protocol === "file:") return true;
+    const host = location.hostname.replace(/^\[|\]$/g, "");
+    return host === "localhost" || host.endsWith(".localhost") || host === "::1" || /^127\./.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/** Options for {@link MapNotice}. */
+export interface MapNoticeOptions {
+  /** Start with the author's details open (default: on a local page). */
+  openDetails?: boolean;
+}
 
 /** More than this many items collapse into "and N more". */
 const MAX_ITEMS = 6;
@@ -52,8 +81,14 @@ export class MapNotice {
   private readonly seen = new Set<string>();
   private hidden = 0;
 
-  /** @param host - where the panel mounts (the map container) */
-  constructor(private readonly host: HTMLElement) {}
+  /**
+   * @param host - where the panel mounts (the map container)
+   * @param options - see {@link MapNoticeOptions}
+   */
+  constructor(
+    private readonly host: HTMLElement,
+    private readonly options: MapNoticeOptions = {}
+  ) {}
 
   /** Number of distinct problems reported so far. */
   get size(): number {
@@ -123,11 +158,19 @@ export class MapNotice {
     ].join("; ");
 
     const title = doc.createElement("strong");
-    title.textContent = "Part of this map didn't load";
+    title.textContent = NOTICE_TITLE;
     title.style.cssText = "display: block; margin-bottom: 2px;";
 
+    // The author's fix, one click away for a visitor (see the file header).
+    const details = doc.createElement("details");
+    details.open = this.options.openDetails ?? isLocalPage(doc);
+    details.style.cssText = "font-size: 12px; line-height: 1.4;";
+    const summary = doc.createElement("summary");
+    summary.textContent = "Details for the site's author";
+    summary.style.cssText = "cursor: pointer; opacity: 0.85;";
     const list = doc.createElement("ul");
-    list.style.cssText = "margin: 0; padding-left: 18px;";
+    list.style.cssText = "margin: 2px 0 0; padding-left: 18px;";
+    details.append(summary, list);
 
     const close = doc.createElement("button");
     close.type = "button";
@@ -150,7 +193,7 @@ export class MapNotice {
     // Dismissing hides what is listed; a NEW problem brings the panel back.
     close.addEventListener("click", () => root.remove());
 
-    root.append(title, list, close);
+    root.append(title, details, close);
     this.root = root;
     this.list = list;
   }

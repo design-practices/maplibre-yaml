@@ -295,6 +295,10 @@ import {
   type ValidationWarning,
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
+import { checkDocument, chapterLabel } from "./document-checks";
+import { explainIndentationError, explainQuoteError } from "./yaml-errors";
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export type { ValidationWarning } from "./validation-utils";
 
@@ -528,6 +532,24 @@ export class YAMLParser {
       // An unquoted `#ef4444` inside a flow map is a syntax error whose text
       // says nothing about colours or comments (ml-okw).
       const hint = hashSyntaxHint(yaml, start?.line);
+      // A quote inside a quoted value (ml-aot.62) and indentation slips
+      // (ml-aot.52) in plain words, at the line to fix.
+      const quoted = hint ? undefined : explainQuoteError(yaml, start?.line);
+      const indentation = hint || quoted ? undefined : explainIndentationError(yaml, err.code, start?.line);
+      const explained = quoted ?? indentation;
+      if (explained) {
+        return {
+          doc,
+          lineCounter,
+          syntaxError: {
+            path: "",
+            code: "yaml-syntax",
+            message: `${quoted ? "YAML quoting error" : "YAML indentation error"}: ${explained.message}`,
+            line: explained.line,
+            column: explained.column,
+          },
+        };
+      }
       return {
         doc,
         lineCounter,
@@ -881,6 +903,20 @@ export class YAMLParser {
   static safeParseMapBlock(
     yaml: string
   ): ParseResult<MapBlock | MapBlockV2> {
+    return this.parseMapBlockText(yaml, true);
+  }
+
+  /**
+   * {@link safeParseMapBlock}, with `positioned: false` for the value entry
+   * point: its YAML is a serialization the author never saw, so whole-document
+   * messages count items instead of quoting its line numbers.
+   *
+   * @internal
+   */
+  private static parseMapBlockText(
+    yaml: string,
+    positioned: boolean
+  ): ParseResult<MapBlock | MapBlockV2> {
     // One materialization feeds both version detection and validation, so the
     // fan-out DoS guard (in materialize → toJSSafe) runs before the version tag
     // is ever read — a hostile v2-tagged document is refused, not expanded.
@@ -937,15 +973,20 @@ export class YAMLParser {
     // flagship `<ml-map src>` path. Leaving it unresolved passed the raw
     // `{$ref}` object to the renderer, which saw no `type` and silently added
     // nothing — a config that validated and produced no layer.
-    return withSourceRefWarnings(
-      this.validateAgainst(
-        m.value,
-        m.doc,
-        m.lineCounter,
-        MapBlockSchema,
-        true,
-        remaps
-      )
+    return withDocumentChecks(
+      withSourceRefWarnings(
+        this.validateAgainst(
+          m.value,
+          m.doc,
+          m.lineCounter,
+          MapBlockSchema,
+          true,
+          remaps
+        )
+      ),
+      m.value,
+      "map",
+      positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
     );
   }
 
@@ -985,7 +1026,7 @@ export class YAMLParser {
       };
     }
 
-    const result = this.safeParseMapBlock(asYaml);
+    const result = this.parseMapBlockText(asYaml, false);
     const stripPosition = <T extends { line?: number; column?: number }>(
       entry: T
     ): T => {
@@ -1087,12 +1128,40 @@ export class YAMLParser {
   static safeParseScrollytellingBlock(
     yaml: string
   ): ParseResult<ScrollytellingBlock> {
-    return this.safeParseWithSchema(
-      yaml,
-      ScrollytellingBlockSchema,
-      false,
-      // ml-ddg: `location:`/`region:`/`route:` sugar on a story's sources.
-      expandSugarInScrollytellingBlock
+    return this.parseScrollytellingText(yaml, true);
+  }
+
+  /**
+   * {@link safeParseScrollytellingBlock}; `positioned` as in
+   * {@link parseMapBlockText}.
+   *
+   * @internal
+   */
+  private static parseScrollytellingText(
+    yaml: string,
+    positioned: boolean
+  ): ParseResult<ScrollytellingBlock> {
+    const m = this.materialize(yaml);
+    if ("error" in m) {
+      return { success: false, errors: [m.error], warnings: [] };
+    }
+    // ml-ddg: `location:`/`region:`/`route:` sugar on a story's sources.
+    const expansion = expandSugarInScrollytellingBlock(m.value);
+    if ("error" in expansion) {
+      return { success: false, errors: [expansion.error], warnings: [] };
+    }
+    return withDocumentChecks(
+      this.validateAgainst(
+        m.value,
+        m.doc,
+        m.lineCounter,
+        ScrollytellingBlockSchema,
+        false,
+        expansion.remaps
+      ),
+      m.value,
+      "scrollytelling",
+      positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
     );
   }
 
@@ -1128,7 +1197,7 @@ export class YAMLParser {
       };
     }
 
-    const result = this.safeParseScrollytellingBlock(asYaml);
+    const result = this.parseScrollytellingText(asYaml, false);
     const stripPosition = <T extends { line?: number; column?: number }>(
       entry: T
     ): T => {
@@ -1238,6 +1307,25 @@ export class YAMLParser {
 
     if (doc !== null && "pages" in doc) {
       return { blockType: "root", result: this.safeParse(yaml) };
+    }
+
+    // A block whose `type:` line was deleted (ml-aot.62): its shape says
+    // which one it was, so say what to add -- the same words the block
+    // parsers use, so `mlym validate` and the browser card agree.
+    if (doc !== null && ("chapters" in doc || "config" in doc || "layers" in doc)) {
+      return {
+        blockType: "unknown",
+        result: {
+          success: false,
+          errors: [
+            {
+              path: "type",
+              message: missingTypeMessage("chapters" in doc ? "scrollytelling" : "map"),
+            },
+          ],
+          warnings: [],
+        },
+      };
     }
 
     return {
@@ -1410,7 +1498,36 @@ export class YAMLParser {
       remaps?: SugarRemap[];
     }
   ): ParseError[] {
-    return error.errors.map((err) => this.formatIssue(err, ctx));
+    return error.errors.map((err) => {
+      const formatted = this.formatIssue(err, ctx);
+      // `chapters.3` is the fourth chapter: name it the way the author sees
+      // it, counted from 1 and by id (ml-aot.52). The path stays as is.
+      // A reader sees this message without the 0-based path in front of it
+      // (`displayPath`), so the field is named in the message itself unless
+      // the message already starts with it (`center needs square brackets…`).
+      const chapter = /^chapters\.(\d+)(?:\.(.*))?$/.exec(formatted.path);
+      if (chapter && ctx && !formatted.message.startsWith("Chapter ")) {
+        const label = chapterLabel(valueAtPath(ctx.value, ["chapters"]), Number(chapter[1]));
+        const rest = chapter[2];
+        const field = rest?.split(".").pop();
+        const named =
+          !rest ||
+          (field !== undefined &&
+            (new RegExp(`^${escapeRegExp(field)}[: ]`).test(formatted.message) ||
+              formatted.message.includes(`"${field}"`)));
+        return {
+          ...formatted,
+          message: named ? `${label}: ${formatted.message}` : `${label}, ${rest}: ${formatted.message}`,
+        };
+      }
+      // `config.theme: theme: "blue" is not one of …` -- the path already
+      // names the field; don't say it twice.
+      const last = formatted.path.split(".").pop();
+      if (last && formatted.message.startsWith(`${last}: `)) {
+        return { ...formatted, message: formatted.message.slice(last.length + 2) };
+      }
+      return formatted;
+    });
   }
 
   /**
@@ -1447,7 +1564,28 @@ export class YAMLParser {
             const misspelled = misspelledKeyError(err.path, ctx);
             if (misspelled) return misspelled;
           }
-          message = `Expected ${err.expected}, got ${err.received}`;
+          // A required key that is simply absent: say it is missing and show
+          // the line to add, not "Expected array, got undefined" (ml-aot.52).
+          message =
+            err.received === "undefined"
+              ? missingKeyMessage(err.path, String(err.expected), ctx?.value)
+              : (bracketlessPairMessage(err, ctx?.value) ??
+                `Expected ${err.expected}, got ${err.received}`);
+          break;
+        }
+
+        case "invalid_enum_value": {
+          // `alignment: middle`: name the field, list the values in plain
+          // words and suggest the likely one (ml-aot.62).
+          const key = String(err.path[err.path.length - 1] ?? "value");
+          const options = err.options.map(String);
+          const received = String(err.received);
+          const hint = enumHint(received, options);
+          // Named here; formatZodErrors drops the name again when the
+          // reported path already ends with it (`config.theme: "blue" …`).
+          message =
+            `${key}: "${received}" is not one of ${options.join(", ")}.` +
+            (hint ? ` Did you mean "${hint}"?` : "");
           break;
         }
 
@@ -1530,6 +1668,16 @@ export class YAMLParser {
           // `type: Map` — say what was expected AND that case matters.
           const expected = JSON.stringify(err.expected);
           const received = valueAtPath(ctx?.value, err.path);
+          // The `type:` line was deleted: say that, the same way every entry
+          // point does (see missingTypeMessage), with no line to point at.
+          if (
+            received === undefined &&
+            err.path.length === 1 &&
+            err.path[0] === "type" &&
+            typeof err.expected === "string"
+          ) {
+            return { path: "type", message: missingTypeMessage(err.expected) };
+          }
           message = `Expected ${expected}`;
           if (received !== undefined) message += `, got ${JSON.stringify(received)}`;
           if (
@@ -1637,8 +1785,10 @@ export class YAMLParser {
       }
       const match = findMatchingSourceBranch(err.unionErrors);
       if (match) {
-        const real = this.formatZodErrors(match)[0];
-        if (real) return real.message;
+        // The message is reported at the union's path (the source), not the
+        // field's, so keep the field's name in it (`encoding: "srtm" …`).
+        const issue = match.errors[0];
+        if (issue) return this.formatIssue(issue).message;
       }
     }
 
@@ -1647,6 +1797,69 @@ export class YAMLParser {
 }
 
 /** The generic message for a union no branch of which matched. */
+/** What to write for the required keys students leave out most. */
+const MISSING_KEY_EXAMPLES: Record<string, string> = {
+  center: "center: [longitude, latitude]",
+  zoom: "zoom: 12 (a number from 0 to 24)",
+  id: "id: a-short-name",
+  title: 'title: "…"',
+  type: "type: …",
+  config: "a config: block with center:, zoom: and mapStyle:",
+  chapters: "a chapters: list",
+  layers: "layers: [] (or a list of layers)",
+  source: "source: (a source name or an inline source)",
+};
+
+/**
+ * `Chapter 3 ("bridge") is missing center: — add center: [longitude, latitude].`
+ * The owner is named the way the author sees it: chapters counted from 1 and
+ * by id, a layer by id, otherwise the parent key.
+ */
+function missingKeyMessage(
+  path: (string | number)[],
+  expected: string,
+  value: unknown
+): string {
+  const key = String(path[path.length - 1]);
+  const parent = path.slice(0, -1);
+  let owner: string;
+  const chapterAt = parent.length === 2 && parent[0] === "chapters" && typeof parent[1] === "number";
+  const layerAt = parent.length >= 2 && parent[parent.length - 2] === "layers" && typeof parent[parent.length - 1] === "number";
+  if (chapterAt) {
+    owner = chapterLabel(valueAtPath(value, ["chapters"]), parent[1] as number);
+  } else if (layerAt) {
+    const layer = valueAtPath(value, parent) as Record<string, unknown> | undefined;
+    const id = layer && typeof layer["id"] === "string" ? layer["id"] : undefined;
+    owner = id ? `Layer "${id}"` : `Layer ${(parent[parent.length - 1] as number) + 1}`;
+  } else if (parent.length === 0) {
+    owner = "The document";
+  } else {
+    owner = String(parent[parent.length - 1]);
+  }
+  const example = MISSING_KEY_EXAMPLES[key];
+  return example
+    ? `${owner} is missing ${key}: — add ${example}.`
+    : `${owner} is missing ${key}: (required; expected ${expected === "object" ? "a block of keys" : `a${/^[aeiou]/.test(expected) ? "n" : ""} ${expected}`}).`;
+}
+
+/**
+ * Merge the whole-document checks ({@link checkDocument}) into a block's
+ * result: their warnings join the schema's, and a duplicate id fails the
+ * document (ml-aot.46/.48/.51).
+ */
+function withDocumentChecks<T>(
+  result: ParseResult<T>,
+  value: unknown,
+  kind: "map" | "scrollytelling",
+  positions: { doc: Document; lineCounter: LineCounter } | undefined
+): ParseResult<T> {
+  const checks = checkDocument(value, kind, positions, [...result.errors, ...result.warnings]);
+  if (checks.errors.length === 0 && checks.warnings.length === 0) return result;
+  const warnings = [...result.warnings, ...checks.warnings];
+  if (checks.errors.length === 0) return { ...result, warnings };
+  return { success: false, errors: [...result.errors, ...checks.errors], warnings };
+}
+
 const UNION_FALLBACK = "Value does not match any of the expected formats";
 
 /** Issue codes that only say "wrong type", as opposed to a refined check. */
@@ -1722,6 +1935,59 @@ function sameSpotTypeMessage(
  * A `[longitude, latitude]` pair whose latitude is out of range but which
  * reads correctly swapped (`[39, -98]`) gets the swapped suggestion.
  */
+/**
+ * `center: -73.982, 40.743` -- two numbers with no brackets, which YAML reads
+ * as the string "-73.982, 40.743" (ml-aot.62): show the bracketed line.
+ */
+function bracketlessPairMessage(
+  err: ZodIssue & { code: "invalid_type" },
+  root: unknown
+): string | undefined {
+  if (err.expected !== "array" || err.received !== "string") return undefined;
+  const raw = valueAtPath(root, err.path);
+  if (typeof raw !== "string") return undefined;
+  const numbers = raw.split(",").map((part) => part.trim());
+  if (numbers.length < 2 || numbers.length > 4) return undefined;
+  if (!numbers.every((n) => /^[-+]?\d+(\.\d+)?$/.test(n))) return undefined;
+  const key = String(err.path[err.path.length - 1]);
+  return `${key} needs square brackets: ${key}: [${numbers.join(", ")}]`;
+}
+
+/** Everyday words for an enum value an author is likely to type instead. */
+const ENUM_SYNONYMS: Record<string, string> = {
+  middle: "center",
+  mid: "center",
+  centre: "center",
+  centred: "center",
+  centered: "center",
+  wide: "full",
+  fullwidth: "full",
+  "full-width": "full",
+  "full width": "full",
+};
+
+/** A did-you-mean for an enum value: a synonym, a case slip, or a near spelling. */
+function enumHint(received: string, options: string[]): string | undefined {
+  const lower = received.trim().toLowerCase();
+  const synonym = ENUM_SYNONYMS[lower];
+  if (synonym && options.includes(synonym)) return synonym;
+  const sameCase = options.find((o) => o.toLowerCase() === lower);
+  if (sameCase) return sameCase;
+  return suggest(received, options);
+}
+
+/**
+ * The document has no `type:` line (ml-aot.62). One wording for the browser
+ * card and `mlym validate`, whichever entry point found it.
+ */
+export function missingTypeMessage(expected: string): string {
+  const other = expected === "scrollytelling" ? "map" : "scrollytelling";
+  return (
+    `The document is missing type: at the top — add type: ${expected} as its first ` +
+    `line (or type: ${other}, for a ${other === "map" ? "single map" : "story"}).`
+  );
+}
+
 function lngLatSwapHint(
   path: (string | number)[],
   root: unknown

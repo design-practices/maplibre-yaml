@@ -48,7 +48,7 @@ import { parse as parseYAML } from "yaml";
 // drifted from core: it carried `merge` but not the `!html` tag, so it silently
 // dropped `!html` to a bare string here while core resolved it to `{ $html }`.
 // Importing the single source of truth makes that drift structurally impossible.
-import { YAMLParser, YAML_PARSE_OPTIONS } from "@maplibre-yaml/core";
+import { YAMLParser, YAML_PARSE_OPTIONS, displayPath } from "@maplibre-yaml/core";
 import { trackFile } from "./dev-watch";
 import type { MapBlock, ScrollytellingBlock, ParseError } from "@maplibre-yaml/core";
 
@@ -134,7 +134,10 @@ function describeFinding(finding: Finding): string {
     finding.line !== undefined
       ? ` (line ${finding.line}${finding.column !== undefined ? `, column ${finding.column}` : ""})`
       : "";
-  return `${finding.path ? `${finding.path}: ` : ""}${finding.message}${where}`;
+  // Not "chapters.2.centre" next to a message that already says "Chapter 3",
+  // as `mlym validate` and the story's error card print it (ml-aot.62).
+  const path = displayPath(finding);
+  return `${path ? `${path}: ` : ""}${finding.message}${where}`;
 }
 
 /**

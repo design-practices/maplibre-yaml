@@ -77,7 +77,10 @@ export async function scaffoldProject(
 
     // Resolve variables in filename (e.g., {{projectName}}.yaml)
     const targetFile = resolveVariables(file, variables)
-      .replace(/\.template$/, ''); // Remove .template extension
+      .replace(/\.template$/, '') // Remove .template extension
+      // npm never publishes a file named .gitignore, so templates ship it as
+      // `gitignore` and it gets its dot back here.
+      .replace(/(^|\/)gitignore$/, '$1.gitignore');
     const targetPath = join(targetDir, targetFile);
 
     // Create directory if needed

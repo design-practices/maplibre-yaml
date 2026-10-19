@@ -5,6 +5,7 @@
 
 import type { ParseError } from "../parser/yaml-parser.js";
 import { escapeHtml } from "../utils/html.js";
+import { displayPath } from "../parser/validation-utils.js";
 
 /** Class on the card element; `<ml-map>` removes elements carrying it. */
 export const ERROR_CARD_CLASS = "ml-map-error";
@@ -75,8 +76,8 @@ export function createErrorCard(doc: Document, options: ErrorCardOptions): HTMLE
       const saysLine = err.line !== undefined && head.includes(`line ${err.line}`);
       return `
         <div style="margin-bottom: 8px; padding: 8px; background: #fee2e2; border-radius: 4px; overflow-wrap: anywhere;">${
-          err.path
-            ? `<strong style="color: #991b1b;">${escapeHtml(err.path)}</strong>: `
+          displayPath(err)
+            ? `<strong style="color: #991b1b;">${escapeHtml(displayPath(err))}</strong>: `
             : ""
         }${escapeHtml(head)}${saysLine ? "" : where}${
           excerpt

@@ -122,7 +122,7 @@ describe("<ml-map> on-page errors", () => {
       expect(el.querySelector(".ml-map-container")).not.toBeNull();
       const notice = el.querySelector(".ml-map-notice")!;
       expect(notice.getAttribute("role")).toBe("status");
-      expect(noticeText(el)).toContain("Part of this map didn't load");
+      expect(noticeText(el)).toContain("Part of this map couldn't load");
       expect(noticeText(el)).toContain(
         'Layer cities didn\'t draw: paint.circle-color: color expected, "bleu" found. Did you mean "blue"?'
       );
@@ -136,6 +136,18 @@ describe("<ml-map> on-page errors", () => {
       expect(noticeText(el)).toContain("Data file data/x.geojson didn't load (404 Not Found), so layer quakes has no data.");
       expect(noticeText(el)).toContain(`The browser looked for ${new URL("data/x.geojson", document.baseURI).href}`);
       expect(errorSpy.mock.calls.some((c) => String(c[0]).includes('Data file "data/x.geojson"'))).toBe(true);
+    });
+
+    it("a fitTo.source typo shows a notice with the did-you-mean, not only a console line (ml-aot.51)", async () => {
+      const el = await mount();
+      latest().options.onError(new Error('fitTo.source "place" names no entry in `sources:`'), false, {
+        kind: "fit",
+        sourceId: "place",
+        suggestion: "places",
+      });
+      expect(noticeText(el)).toContain(
+        'fitTo.source "place" names no source in sources: — did you mean "places"? The map keeps its own center and zoom.'
+      );
     });
 
     it("the same problem is listed once; dismissing hides the notice", async () => {
@@ -162,6 +174,23 @@ describe("<ml-map> on-page errors", () => {
       latest().emit("layer:data-error", { layerId: "l", error });
       expect(el.querySelector(".ml-map-notice")).toBeNull();
       expect(errorSpy).toHaveBeenCalled();
+    });
+
+    it("`quiet` also keeps document warnings shown on the page (a key under config:) off it", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const misplaced = { ...CONFIG, config: { ...CONFIG.config, markers: [{ at: [1, 1] }] } };
+      const loud = document.createElement("ml-map") as MLMap;
+      loud.setAttribute("config", JSON.stringify(misplaced));
+      document.body.appendChild(loud);
+      const hushed = document.createElement("ml-map") as MLMap;
+      hushed.setAttribute("quiet", "");
+      hushed.setAttribute("config", JSON.stringify(misplaced));
+      document.body.appendChild(hushed);
+      await tick();
+      expect(noticeText(loud)).toContain('"markers" belongs at the top level');
+      expect(hushed.querySelector(".ml-map-notice")).toBeNull();
+      expect(warn.mock.calls.some((c) => String(c[0]).includes('"markers" belongs at the top level'))).toBe(true);
+      warn.mockRestore();
     });
 
     it("setting `quiet` later removes a notice already shown", async () => {

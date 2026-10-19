@@ -7,6 +7,15 @@ import { defineCommand, runMain } from 'citty';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { nodeVersionProblem } from './lib/node-version.js';
+
+// Before anything else: on a Node.js the CLI can't run on, say so plainly
+// instead of failing later inside a dependency (sharp needs 20.9+).
+const tooOld = nodeVersionProblem(process.version);
+if (tooOld) {
+  console.error(tooOld);
+  process.exit(1);
+}
 
 // Get package.json path
 const __dirname = dirname(fileURLToPath(import.meta.url));

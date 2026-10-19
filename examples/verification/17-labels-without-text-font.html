@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Labels without text-font</title>
+  <!--
+    ml-aot.53 — a label layer with text-field and no text-font, on a basemap
+    whose glyph server only has "Noto Sans Regular" (as OpenFreeMap). MapLibre's
+    default font stack 404s there, once per glyph range, with one console
+    warning per character. maplibre-yaml now borrows the basemap's own font.
+    PASS (DevTools Network) = only ".../Noto Sans Regular/0-255.pbf" glyph
+    requests, no 404s. FAIL = "Open Sans Regular,Arial Unicode MS Regular" 404s.
+    Serve from the repo root (pnpm verify:serve), then open
+    /examples/verification/17-labels-without-text-font.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    ml-map { display: block; width: 100vw; height: 100vh; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: labels-without-text-font
+config:
+  center: [0, 0]
+  zoom: 4
+  mapStyle: "/examples/verification/configs/noto-only-style.json"
+sources:
+  places:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry: { type: Point, coordinates: [0, 0] }
+          properties: { name: "Central Park" }
+layers:
+  - id: names
+    type: symbol
+    source: places
+    layout:
+      text-field: ["get", "name"]
+    </script>
+  </ml-map>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

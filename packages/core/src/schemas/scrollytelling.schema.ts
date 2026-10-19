@@ -14,7 +14,7 @@
 
 import { z } from "zod";
 import { LngLatSchema, ExpressionSchema } from "./base.schema";
-import { MapConfigSchema, MapBlockSchema } from "./map.schema";
+import { MapConfigSchema, MapBlockSchema, LegendConfigSchema, ControlPositionSchema } from "./map.schema";
 import { LayerOrReferenceSchema } from "./layer.schema";
 import { STORY_MAP_KEYS } from "../scrollytelling/keys";
 
@@ -332,6 +332,20 @@ export const ChapterSchema = z
       .boolean()
       .default(false)
       .describe("Hide chapter content (map-only)"),
+    padding: z
+      .union([
+        z.number().min(0),
+        z.object({
+          top: z.number().min(0).default(0).describe("Pixels kept clear at the top"),
+          right: z.number().min(0).default(0).describe("Pixels kept clear on the right"),
+          bottom: z.number().min(0).default(0).describe("Pixels kept clear at the bottom"),
+          left: z.number().min(0).default(0).describe("Pixels kept clear on the left"),
+        }),
+      ])
+      .optional()
+      .describe(
+        "Camera padding in pixels for this chapter, used as written instead of the automatic offset that keeps `center` clear of the card"
+      ),
 
     // Layers
     layers: ChapterLayersSchema.optional().describe("Layer visibility control"),
@@ -355,6 +369,28 @@ export const ChapterSchema = z
 export type Chapter = z.infer<typeof ChapterSchema>;
 
 /** The schemas of {@link STORY_MAP_KEYS}, taken from `MapBlockSchema`. */
+/**
+ * A story's `legend:` -- the map legend's keys, with two story rules.
+ *
+ * @remarks
+ * The legend is pinned: it never moves while the story scrolls. Without a
+ * `position`, it goes top-left, or top-right on a wide screen whose cards
+ * are all on the left. `collapsed: auto` (the default) shows it as a compact
+ * "Legend" button on phones and wherever cards pass its corner, and open
+ * elsewhere; `true` / `false` fix it. Opened, it is a panel above the cards.
+ */
+export const StoryLegendSchema = LegendConfigSchema.extend({
+  position: ControlPositionSchema.optional().describe(
+    "Legend corner. Default: top-left, or top-right on a wide screen whose cards are all on the left"
+  ),
+  collapsed: z
+    .union([z.boolean(), z.literal("auto")])
+    .default("auto")
+    .describe(
+      "Start collapsed to a Legend button (true), open (false), or auto: collapsed on phones and where cards pass the legend's corner, open elsewhere"
+    ),
+}).describe("Story legend configuration");
+
 function storyMapKeysShape(): Record<(typeof STORY_MAP_KEYS)[number], z.ZodTypeAny> {
   const shape = MapBlockSchema.shape as Record<string, z.ZodTypeAny>;
   return Object.fromEntries(STORY_MAP_KEYS.map((key) => [key, shape[key]])) as Record<
@@ -392,7 +428,7 @@ function storyMapKeysShape(): Record<(typeof STORY_MAP_KEYS)[number], z.ZodTypeA
  *   config:
  *     center: [-74.006, 40.7128]
  *     zoom: 12
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   chapters:
  *     - id: intro
  *       title: "Introduction"
@@ -416,7 +452,7 @@ function storyMapKeysShape(): Record<(typeof STORY_MAP_KEYS)[number], z.ZodTypeA
  *   config:
  *     center: [0, 0]
  *     zoom: 2
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   chapters:
  *     - id: chapter1
  *       title: "Chapter 1"
@@ -431,7 +467,7 @@ function storyMapKeysShape(): Record<(typeof STORY_MAP_KEYS)[number], z.ZodTypeA
  *   config:
  *     center: [-120, 35]
  *     zoom: 5
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   layers:
  *     - id: base-layer
  *       type: circle
@@ -462,7 +498,7 @@ function storyMapKeysShape(): Record<(typeof STORY_MAP_KEYS)[number], z.ZodTypeA
  *   config:
  *     center: [0, 0]
  *     zoom: 2
- *     mapStyle: "https://demotiles.maplibre.org/style.json"
+ *     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *   chapters:
  *     - id: chapter1
  *       title: "Chapter 1"
@@ -493,7 +529,20 @@ export const ScrollytellingBlockSchema: z.ZodObject<any> = z
       .boolean()
       .default(false)
       .describe("Show chapter markers on map"),
-    markerColor: z.string().default("#3FB1CE").describe("Chapter marker color"),
+    markerColor: z
+      .string()
+      .optional()
+      .describe(
+        "Fill color of the chapter rail's dots. Default: white dots with a dark outline, the current one larger and filled dark, which stand out on any basemap"
+      ),
+
+    // Layout helpers (both on by default)
+    cameraOffset: z
+      .boolean()
+      .default(true)
+      .describe(
+        "Offset the camera so each chapter's `center` is not under its card (false: centre it in the whole map)"
+      ),
 
     // Layers (persistent across all chapters)
     layers: z
@@ -516,6 +565,11 @@ export const ScrollytellingBlockSchema: z.ZodObject<any> = z
     // `markers:`, `legend:`, the params panel (`state:` + `parameters:`),
     // `images:`, `controls:`, and the 3D/globe keys.
     ...storyMapKeysShape(),
+
+    // A story's legend is pinned above the cards (see StoryLegendSchema).
+    legend: StoryLegendSchema.optional().describe(
+      "The story's legend: pinned in one corner, above the chapter cards"
+    ),
   })
   .describe("Scrollytelling block for narrative map stories");
 

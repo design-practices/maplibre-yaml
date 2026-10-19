@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A root key nested under config</title>
+  <!--
+    ml-aot.48 — markers: written inside config: instead of next to it. It
+    validated and did nothing. PASS = the map's notice says "markers" belongs
+    at the top level, with its line. FAIL = a map with no marker and no hint.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/student-errors/misplaced-keys.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: misplaced
+config:
+  center: [0, 20]
+  zoom: 2
+  mapStyle: "/examples/verification/configs/local-style.json"
+  markers:
+    - at: [10, 20]
+      color: "#e63946"
+layers: []
+    </script>
+  </ml-map>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

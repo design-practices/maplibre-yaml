@@ -76,6 +76,7 @@ const {
   class: className,
   style,
   base,
+  quiet = false,
 } = Astro.props;
 
 // Validate that either src or config is provided
@@ -169,6 +170,7 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
     config={serializedConfig ?? undefined}
     src={serializedConfig ? undefined : resolvedSrc}
     base={documentBase}
+    quiet={quiet ? "" : undefined}
   >
     {
       showControls && (
@@ -278,6 +280,8 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
 <script>
   // first: maplibre-gl 6 needs its worker URL before any map is built
   import "../client/maplibre-worker";
+  // astro dev only: a page with no viewport meta (tiny map on phones)
+  import "../client/dev-hints";
   import "@maplibre-yaml/core/register";
   import type { MLMap } from "@maplibre-yaml/core/components";
 
@@ -310,11 +314,34 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
   const mapOf = (node: Element): MLMap | null =>
     node.closest(".ml-fullpage-map")?.querySelector<MLMap>("ml-map") ?? null;
 
+  // A document with its own navigation control (`controls: { navigation:
+  // true }`) already has MapLibre's +/− in the corner; a second stack of
+  // zoom buttons under it looks like a bug (ml-aot.40). Keep only reset.
+  // Re-checked on every load, since reload() or a new config may change it.
+  const syncZoomButtons = (mapEl: Element) => {
+    const buttons = mapEl.querySelector<HTMLElement>(".ml-map-controls");
+    if (!buttons) return;
+    const documentZoom = mapEl.querySelector(".maplibregl-ctrl-zoom-in") !== null;
+    buttons.toggleAttribute("data-document-zoom", documentZoom);
+  };
+
   if (firstRun) {
-    // The reset target is the document's own initial view, re-captured on
+    // The reset target is the view the page opened with, re-captured on
     // every (re)load so reload() or a new config resets to the new camera.
     // `ml-map:load` bubbles, so this also sees maps on pages swapped in later.
     document.addEventListener("ml-map:load", (event) => {
+      const target = event.target;
+      if (target instanceof Element && mapOf(target) === target) {
+        captureHome(target as MLMap);
+        syncZoomButtons(target);
+      }
+    });
+
+    // A `fitTo` on a fetched source frames the map AFTER load, once its data
+    // arrives: that framing is the view the page opened with, so it becomes
+    // the reset target, not the YAML's center/zoom (ml-aot.60). The fit is
+    // applied without animation before the event fires.
+    document.addEventListener("ml-map:camera-fit", (event) => {
       const target = event.target;
       if (target instanceof Element && mapOf(target) === target) {
         captureHome(target as MLMap);
@@ -351,6 +378,7 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
       .then(() => mapEl.mapReady())
       .then(() => {
         if (!state.homes.has(mapEl)) captureHome(mapEl);
+        syncZoomButtons(mapEl);
       })
       // A failed document shows <ml-map>'s own error card; nothing to wire.
       .catch(() => {});
@@ -378,6 +406,12 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  /* The document's own navigation control already zooms (ml-aot.40). */
+  .ml-map-controls[data-document-zoom] .ml-zoom-in,
+  .ml-map-controls[data-document-zoom] .ml-zoom-out {
+    display: none;
   }
 
   .ml-control-btn {

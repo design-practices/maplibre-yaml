@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Story layout checks</title>
+  <!--
+    Story layout fixtures for the 0.8.1 review (ml-aot.39/.50, review items
+    A2/A3). ?doc=<name> loads <name>.yaml from this folder:
+      fitbounds.yaml  a centred card + an onChapterEnter fitBounds with
+                      padding 100. PASS = the camera frames the bounds (no
+                      "Map cannot fit within canvas").
+      chrome.yaml     scale bar + bottom-left legend + a hidden chapter, left /
+                      centre / full cards with a large photo. PASS = the
+                      legend is a button pinned above the cards (cards pass
+                      its corner), each chapter's subject is clear of its
+                      card, photos never fill the map.
+      legend.yaml     centred cards and a legend with no position. PASS =
+                      the legend never moves while the story scrolls: top-left
+                      and open on a wide screen (no card passes it), a
+                      "Legend" button on a phone that opens above the cards.
+      legend-left.yaml  left cards only. PASS = on a wide screen the legend
+                      is top-right, open, and never on a card.
+      optouts.yaml    cameraOffset: false and a chapter's own padding.
+      ambient.yaml    a rotateAnimation chapter and a spinGlobe chapter.
+                      PASS = resizing the window or rotating the phone while
+                      one is read keeps the page responsive and the map
+                      turning (one ambient loop, never a pile of them).
+      tall.yaml       chapters taller than the screen. PASS = PageDown /
+                      Space read each long card a screen at a time, then
+                      move on; every chapter in order, the page never stalls.
+    Serve from the repo root (pnpm verify:serve), then open
+    /examples/verification/story-layout/index.html?doc=chrome
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <ml-scrollytelling id="story"></ml-scrollytelling>
+  <script>
+    const doc = new URLSearchParams(location.search).get("doc") || "chrome";
+    document.getElementById("story").setAttribute("src", doc.replace(/[^a-z0-9-]/gi, "") + ".yaml");
+  </script>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

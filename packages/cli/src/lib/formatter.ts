@@ -3,6 +3,7 @@
  */
 
 import pc from 'picocolors';
+import { displayPath } from '@maplibre-yaml/core';
 import type { ValidationResult, ValidationError } from '../types.js';
 
 /**
@@ -30,7 +31,7 @@ export function formatHuman(results: ValidationResult[]): string {
       for (const error of result.errors) {
         totalErrors++;
         const location = formatLocation(error);
-        const path = error.path ? pc.yellow(error.path) + ': ' : '';
+        const path = displayPath(error) ? pc.yellow(displayPath(error)) + ': ' : '';
         lines.push(`  ${pc.red('error')} ${path}${error.message}`);
         if (location) {
           lines.push(`    ${pc.dim(location)}`);
@@ -48,7 +49,7 @@ export function formatHuman(results: ValidationResult[]): string {
     for (const warning of result.warnings) {
       totalWarnings++;
       const location = formatLocation(warning);
-      const path = warning.path ? pc.yellow(warning.path) + ': ' : '';
+      const path = displayPath(warning) ? pc.yellow(displayPath(warning)) + ': ' : '';
       lines.push(`  ${pc.yellow('warning')} ${path}${warning.message}`);
       if (location) {
         lines.push(`    ${pc.dim(location)}`);
@@ -67,6 +68,9 @@ export function formatHuman(results: ValidationResult[]): string {
       pc.yellow(`⚠ ${filesWithWarnings} file(s) with warnings: ${totalWarnings} warning(s)`)
     );
   } else {
+    // A mixed run says how many passed too (ml-aot.54), as the docs show.
+    const validCount = results.length - filesWithErrors;
+    if (validCount > 0) lines.push(pc.green(`✓ ${validCount} file(s) valid`));
     const errorText = pc.red(`${totalErrors} error(s)`);
     const warningText = totalWarnings > 0 ? pc.yellow(`${totalWarnings} warning(s)`) : '';
     const separator = totalWarnings > 0 ? ', ' : '';

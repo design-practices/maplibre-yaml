@@ -279,8 +279,10 @@ chapters:
     // The typo itself is the error (core ml-okw), with its line; the
     // matching unknown-key warning is not repeated.
     expect(error.message).toMatch(
-      /chapters\.1\.centre: Unknown key "centre" — did you mean "center"\? \("center" is required here\.\) \(line \d+/
+      /error +Chapter 2 \("b"\): Unknown key "centre" — did you mean "center"\? \("center" is required here\.\) \(line \d+/
     );
+    // The message names the chapter, so the 0-based path is not repeated (ml-aot.62).
+    expect(error.message).not.toMatch(/chapters\.1\.centre: Chapter 2/);
     expect(error.message).not.toMatch(/warning +chapters\.1\.centre/);
 
     // What Astro's dev overlay actually renders: the FIRST entry — its
@@ -289,8 +291,9 @@ chapters:
     for (const shown of [first.message, first.text]) {
       expect(shown).toContain(yamlPath);
       expect(shown).toMatch(
-        /chapters\.1\.centre: Unknown key "centre" — did you mean "center"\? \("center" is required here\.\) \(line \d+, column \d+\)/
+        /Chapter 2 \("b"\): Unknown key "centre" — did you mean "center"\? \("center" is required here\.\) \(line \d+, column \d+\)/
       );
+      expect(shown).not.toContain("chapters.1.centre: ");
     }
     // ...framed at the YAML line of the typo.
     for (const where of [first.loc, first.location]) {
@@ -300,7 +303,7 @@ chapters:
 
     // Programmatic consumers keep the structured fields and core's reason.
     expect(first.path).toBe("chapters.1.centre");
-    expect(first.reason).toBe('Unknown key "centre" — did you mean "center"? ("center" is required here.)');
+    expect(first.reason).toBe('Chapter 2 ("b"): Unknown key "centre" — did you mean "center"? ("center" is required here.)');
   });
 
   it("loadMapConfig gets the same treatment", async () => {
@@ -336,7 +339,7 @@ layers:
       (yaml) => YAMLParserForGlob.safeParseScrollytellingBlock(yaml)
     ).catch((e) => e)) as YAMLLoadError & { errors: Array<{ text: string }> };
     expect(error.errors[0]!.text).toContain("/src/stories/bad.yaml");
-    expect(error.errors[0]!.text).toMatch(/chapters\.1\.centre: Unknown key "centre" — did you mean "center"\? .*\(line \d+/);
+    expect(error.errors[0]!.text).toMatch(/bad\.yaml: Chapter 2 \("b"\): Unknown key "centre" — did you mean "center"\? .*\(line \d+/);
   });
 });
 

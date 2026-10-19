@@ -226,7 +226,7 @@ yarn add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
 
 | Astro | Supported | Notes |
 |-------|-----------|-------|
-| **7** | Yes, tested in CI | Needs Node 22.12 or newer (Astro's own requirement). |
+| **7** | Yes, tested in CI | Needs Node 22.22 or newer (Astro 7.4's own requirement, `engines.node >=22.22.0`). |
 | **6** | Yes, tested in CI | Build collection schemas with `z` from `astro/zod` (see below). |
 | **5** | Yes, tested in CI | |
 | **4** | Yes, tested in CI | Content-layer collections need three changes, listed below. |
@@ -455,10 +455,20 @@ interface MapProps {
   // Where the paths in the document start (default: your site's base,
   // import.meta.env.BASE_URL). false = resolve relative paths against the page.
   base?: string | false;
+
+  // Hide on-page notices for non-fatal problems (default: false)
+  quiet?: boolean;
 }
 ```
 
 If you pass both, `config` wins and the component warns at build time.
+
+`quiet` hides the "Part of this map couldn't load" notice (a data file that
+404'd, a layer that failed) and the zero-height hint, for a finished site
+whose visitors shouldn't see author-facing details. The problems are still
+logged to the browser console, and a fatal problem (a document that doesn't
+validate, a basemap that never loads) still shows its error card.
+`FullPageMap` and `Scrollytelling` take the same prop.
 
 ### Corner slots
 
@@ -666,8 +676,7 @@ explain the error:
 
 ```
 Scrollytelling configuration validation failed for ./src/stories/trip.yaml:
-  error   chapters.2.center: Expected array, got undefined (line 78, column 5)
-  warning chapters.2.centre: Unknown key "centre". Did you mean "center"? (line 81, column 5)
+  error   Chapter 3 ("summit"): Unknown key "centre" — did you mean "center"? ("center" is required here.) (line 81, column 5)
 ```
 
 To handle them yourself:
@@ -992,6 +1001,22 @@ Check it before you push: `npm run build && npm run preview` serves the
 site under the base, so open `http://localhost:4321/<repo>/`. Every map should
 show its data. A data file that doesn't load is listed in a notice on the map.
 
+<Aside type="note" title="&quot;Some chunks are larger than 500 kB&quot; is expected">
+  Every build of a site with a map prints a yellow warning. On Astro 7.4 it
+  reads:
+
+  ```text
+  [WARN] [vite] [plugin builtin:vite-reporter]
+  (!) Some chunks are larger than 500 kB after minification.
+  ```
+
+  (older Astro versions print it on one line). That chunk is the map engine
+  (maplibre-gl plus maplibre-yaml, about 1.5 MB before compression, loaded
+  only by pages with a map); it is a size notice, not an error, and the
+  build succeeded. To quiet it, raise Vite's limit in `astro.config.mjs`:
+  `vite: { build: { chunkSizeWarningLimit: 2000 } }`.
+</Aside>
+
 **Relative paths mean "from `public/`", with or without a base.** The
 components pass the base even when it is the default `/`, so
 `url: "data/volcanoes.geojson"` loads `public/data/volcanoes.geojson` on every
@@ -1133,13 +1158,62 @@ The `FullPageMap` component creates a full-viewport map with built-in controls a
 
 ### Basic Usage
 
+The map document. For runtime loading (`src`), save it as
+`public/configs/world-map.yaml`; for build-time loading, as
+`src/configs/world-map.yaml`:
+
+```yaml title="public/configs/world-map.yaml"
+type: map
+id: world-map
+config:
+  center: [10, 25]
+  zoom: 1.5
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: capitals
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-77.04, 38.91] }
+            properties: { name: Washington }
+          - type: Feature
+            geometry: { type: Point, coordinates: [2.35, 48.86] }
+            properties: { name: Paris }
+          - type: Feature
+            geometry: { type: Point, coordinates: [139.69, 35.69] }
+            properties: { name: Tokyo }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-43.17, -22.91] }
+            properties: { name: Rio de Janeiro }
+    paint:
+      circle-radius: 8
+      circle-color: "#e63946"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+```
+
+A whole page, e.g. `src/pages/map.astro`:
+
 <Tabs>
   <TabItem label="Runtime Loading">
 ```astro
 ---
 import { FullPageMap } from '@maplibre-yaml/astro';
 ---
-<FullPageMap src="/configs/world-map.yaml" />
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>World map</title>
+  </head>
+  <body style="margin: 0;">
+    <FullPageMap src="/configs/world-map.yaml" />
+  </body>
+</html>
 ```
   </TabItem>
   <TabItem label="Build-time Loading">
@@ -1148,10 +1222,29 @@ import { FullPageMap } from '@maplibre-yaml/astro';
 import { FullPageMap, loadMapConfig } from '@maplibre-yaml/astro';
 const config = await loadMapConfig('./src/configs/world-map.yaml');
 ---
-<FullPageMap config={config} />
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>World map</title>
+  </head>
+  <body style="margin: 0;">
+    <FullPageMap config={config} />
+  </body>
+</html>
 ```
   </TabItem>
 </Tabs>
+
+<Aside type="caution" title="Keep the viewport meta">
+  Without `<meta name="viewport" content="width=device-width, initial-scale=1">`
+  in the page's `<head>`, phones lay the page out about 980px wide and shrink
+  it: the map, its buttons and legend come out tiny. The shorter snippets
+  below show only the component; put them on a page (or in a
+  [layout](https://docs.astro.build/en/basics/layouts/)) like this one. In
+  `astro dev`, the components warn in the browser console when the meta is
+  missing.
+</Aside>
 
 ### Component API
 
@@ -1173,6 +1266,9 @@ interface FullPageMapProps {
 
   // Where the paths in the document start (default: import.meta.env.BASE_URL)
   base?: string | false;
+
+  // Hide on-page notices for non-fatal problems (default: false; see Map)
+  quiet?: boolean;
 }
 ```
 
@@ -1185,8 +1281,10 @@ interface FullPageMapProps {
 import { FullPageMap } from '@maplibre-yaml/astro';
 ---
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Interactive Map Dashboard</title>
   </head>
   <body style="margin: 0; padding: 0;">
@@ -1271,12 +1369,17 @@ The built-in controls provide:
 
 - **Zoom In** (+): Increases zoom level by 1
 - **Zoom Out** (−): Decreases zoom level by 1
-- **Reset View** (↻): Returns to the document's initial center, zoom, bearing, and pitch (re-captured on every load)
+- **Reset View** (↻): Returns to the view the map opened with, including a `fitTo` framing of the data (re-captured on every load)
 
 Controls are accessible with ARIA labels and keyboard navigation. They share
 the top-right corner with anything else placed there (a top-right legend, the
 params panel, a navigation control) and stack below it instead of
 overlapping.
+
+When the document has its own zoom buttons (`controls: { navigation: true }`),
+`FullPageMap` shows only its reset button, so one YAML file can serve both
+`<Map>` and `<FullPageMap>` without two stacks of +/− in the corner.
+`showControls={false}` removes the reset button too.
 
 <Aside type="note" title="Before 0.7">
 Earlier versions drew their own buttons and legend over the map, wired to a
@@ -1462,20 +1565,41 @@ interface ScrollytellingProps {
   // Where the story's paths start (default: import.meta.env.BASE_URL).
   // false = resolve relative paths against the page.
   base?: string | false;
+  // Hide on-page notices for non-fatal problems on the story's map,
+  // as on Map (default: false). Load/validation errors still show.
+  quiet?: boolean;
 }
 ```
 
 ### Basic Usage
 
-Load the story at build time and pass it as `config`:
+Load the story at build time and pass it as `config`. Save the story from
+[YAML Configuration](#yaml-configuration) below as
+`src/stories/earthquakes.yaml` (it needs no other files), then make a whole
+page, e.g. `src/pages/story.astro`:
 
 ```astro
 ---
 import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
-const story = await loadScrollytellingConfig('./src/stories/climate-change.yaml');
+const story = await loadScrollytellingConfig('./src/stories/earthquakes.yaml');
 ---
-<Scrollytelling config={story} />
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Los Angeles earthquakes</title>
+  </head>
+  <body style="margin: 0;">
+    <Scrollytelling config={story} />
+  </body>
+</html>
 ```
+
+The viewport meta makes phones lay the story out at their own width (without
+it, the map and chapter text come out tiny), and `margin: 0` lets the map
+reach the edges. The other snippets in this section show only the component:
+put them on a page like this one, or in a
+[layout](https://docs.astro.build/en/basics/layouts/).
 
 Or load it in the browser from `public/`. The component fetches, validates
 and renders the story there, and a validation failure shows the errors in
@@ -1493,9 +1617,11 @@ place of the chapters:
 
 ### YAML Configuration
 
-A complete scrollytelling story includes base map configuration, layers, and chapters:
+A complete scrollytelling story includes base map configuration, layers, and
+chapters. This one is self-contained (its data is inline), so it works as
+soon as you save it as `src/stories/earthquakes.yaml`:
 
-```yaml
+```yaml title="src/stories/earthquakes.yaml"
 type: scrollytelling
 id: earthquake-story
 theme: dark                    # 'light' or 'dark'
@@ -1504,22 +1630,43 @@ markerColor: "#3FB1CE"        # Custom marker color
 
 # Base map configuration
 config:
-  mapStyle: "https://demotiles.maplibre.org/style.json"
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   center: [-118.2437, 34.0522]
   zoom: 9
   pitch: 0
   bearing: 0
 
-# Map layers (inline sources here; a `sources:` block works too, as on a map)
+# Map layers (inline sources here; a `sources:` block works too, as on a map).
+# For your own data, put a GeoJSON file in public/data/ and replace `data:`
+# with `url: "/data/earthquakes.geojson"`.
 layers:
   - id: earthquake-circles
     type: circle
     source:
       type: geojson
-      url: "/data/earthquakes.geojson"
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-118.537, 34.213] }
+            properties: { name: "Northridge, 1994", magnitude: 6.7 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-118.40, 34.42] }
+            properties: { name: "San Fernando, 1971", magnitude: 6.6 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-118.08, 34.06] }
+            properties: { name: "Whittier Narrows, 1987", magnitude: 5.9 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-118.00, 34.26] }
+            properties: { name: "Sierra Madre, 1991", magnitude: 5.6 }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-117.76, 33.95] }
+            properties: { name: "Chino Hills, 2008", magnitude: 5.4 }
     paint:
       circle-radius: 8
       circle-color: "#ff0000"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
 
 # Story chapters
 chapters:
@@ -1533,8 +1680,8 @@ chapters:
   - id: detail
     title: "Major Fault Lines"
     description: "<p>The San Andreas Fault runs through this region.</p>"
-    # A file in public/images/ (served at /images/...), or a full https:// URL.
-    image: "/images/fault-lines.jpg"
+    # To show a picture above the text, add a file in public/images/ and
+    # write `image: "/images/fault-lines.jpg"` (or use a full https:// URL).
     center: [-118.0, 34.0]
     zoom: 11
     pitch: 45
@@ -1757,9 +1904,12 @@ Enable `debug` prop to see:
 
 ### Scroll Behavior
 
-The component uses IntersectionObserver with these settings:
-- Trigger zone: Middle 20% of viewport (40% margin top/bottom)
-- Activates when chapter enters the trigger zone
+- The active chapter is the one whose card is on screen and nearest the
+  middle of it, recomputed as the page scrolls, so scrolling back and forth
+  always lands on the chapter you are reading. On phones the map moves on
+  once the next card is on screen, not before.
+- The story starts reacting once its first chapter reaches the middle 20%
+  of the screen (the trigger zone)
 - Smooth map transitions between chapters
 - Progressive chapter content fade in/out
 
@@ -1768,7 +1918,14 @@ and zoom gestures are off (set `scrollZoom: true` or `dragPan: true` in
 `config:` to turn one back on), so the mouse wheel and touch scroll the story
 rather than moving the map, while the rail, legend, markers, popups and slots
 on the map stay clickable. The camera is offset so a chapter's `center` is not
-under its card: beside a left or right card, and above the card on a phone.
+under its card: beside a left or right card, above a centred or full-width
+card, and above the card on a phone (on a phone on its side every card is a
+narrow one on the left, with the subject beside it). Nothing on the map moves
+with the scroll: the legend is pinned in one corner above the cards (a
+"Legend" button on phones that opens above them; see
+[The legend](/schema/scrollytelling/#the-legend)), the other chrome stays in its
+corner under the cards, and a chapter photo is never taller than 40% of the
+screen. A `slot="legend"` child fills the pinned legend's panel.
 The map opens on the story's `config` camera. As soon as it has loaded, the
 chapter sitting in the trigger zone is applied at once, without any scrolling.
 On a page that starts with the story that is the first chapter: its camera,

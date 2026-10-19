@@ -8,6 +8,7 @@
  */
 
 import type { ValidationResult } from '../types.js';
+import { displayPath } from '@maplibre-yaml/core';
 
 /**
  * Format validation results for VSCode Problem Matcher
@@ -26,7 +27,7 @@ export function formatVSCode(results: ValidationResult[]): string {
     for (const error of result.errors) {
       const line = error.line ?? 1;
       const column = error.column ?? 1;
-      const path = error.path ? `[${error.path}] ` : '';
+      const path = displayPath(error) ? `[${displayPath(error)}] ` : '';
 
       lines.push(
         `${result.file}:${line}:${column}: error: ${path}${error.message}`
@@ -37,7 +38,7 @@ export function formatVSCode(results: ValidationResult[]): string {
     for (const warning of result.warnings) {
       const line = warning.line ?? 1;
       const column = warning.column ?? 1;
-      const path = warning.path ? `[${warning.path}] ` : '';
+      const path = displayPath(warning) ? `[${displayPath(warning)}] ` : '';
 
       lines.push(
         `${result.file}:${line}:${column}: warning: ${path}${warning.message}`

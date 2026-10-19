@@ -765,4 +765,38 @@ describe("LayerManager", () => {
       expect(true).toBe(true);
     });
   });
+
+  describe("duplicate layer ids (review F3)", () => {
+    const inline = (id: string, type: "line" | "circle") => ({
+      id,
+      type,
+      visible: true,
+      toggleable: false,
+      source: { type: "geojson" as const, data: { type: "FeatureCollection" as const, features: [] } },
+    });
+
+    it("the first layer wins; the repeat is refused before it touches any source, with a plain message", async () => {
+      const first = manager.addLayer(inline("walk", "line") as any);
+      const second = manager.addLayer(inline("walk", "circle") as any);
+      await first;
+      await expect(second).rejects.toThrow(
+        'Another layer already has id "walk": the first one is drawn and this one is skipped. Give each layer its own id.'
+      );
+      expect(mockMap.addSource).toHaveBeenCalledTimes(1);
+      expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
+      expect(mockMap.addLayer.mock.calls[0][0]).toMatchObject({ id: "walk", type: "line" });
+    });
+
+    it("a layer that failed to add does not hold its id", async () => {
+      const bad = { id: "walk", type: "line", visible: true, toggleable: false, source: "nope" };
+      await expect(manager.addLayer(bad as any)).rejects.toThrow(/Source "nope" doesn't exist/);
+      await expect(manager.addLayer(inline("walk", "line") as any)).resolves.toBeUndefined();
+    });
+
+    it("a removed layer's id can be used again", async () => {
+      await manager.addLayer(inline("walk", "line") as any);
+      manager.removeLayer("walk");
+      await expect(manager.addLayer(inline("walk", "circle") as any)).resolves.toBeUndefined();
+    });
+  });
 });

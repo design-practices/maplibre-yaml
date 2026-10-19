@@ -1,7 +1,9 @@
 import { defineConfig } from 'tsup';
+import { packageVersionDefines } from './package-versions.config';
 
 export default defineConfig({
   entry: ['src/cli.ts'],
+  define: packageVersionDefines,
   format: ['esm'],
   dts: true,
   clean: true,

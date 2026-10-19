@@ -1,0 +1,39 @@
+type: scrollytelling
+id: fitbounds-under-centre-card
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [0, 20]
+  zoom: 2
+layers:
+  - id: pts
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [10, 40] } }
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [30, 50] } }
+    paint: { circle-radius: 8, circle-color: "#d62828" }
+chapters:
+  - id: start
+    title: Start
+    description: "<p>The first chapter.</p>"
+    center: [0, 20]
+    zoom: 2
+    alignment: left
+  - id: frame
+    title: A centred card with a fitBounds action
+    description: >-
+      <p>This card is centred (the default alignment) and tall, so the camera
+      pads its bottom to keep the chapter's subject above it. The chapter's
+      fitBounds action adds its own padding of 100 on every side.</p>
+      <p>Before the fix the two paddings together were taller than the map,
+      MapLibre refused with "Map cannot fit within canvas" and the camera
+      stayed where it was.</p>
+    center: [-100, 0]
+    zoom: 3
+    onChapterEnter:
+      - action: fitBounds
+        bounds: [10, 40, 30, 50]
+        options: { padding: 100 }

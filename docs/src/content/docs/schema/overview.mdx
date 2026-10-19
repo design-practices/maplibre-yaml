@@ -113,8 +113,8 @@ if (!result.success) {
 Example errors:
 
 ```
-pages[0].blocks[0].config.zoom: Expected number, got string
-pages[0].blocks[1].layers[0].type: Invalid enum value. Expected 'circle' | 'line' | 'fill' | 'symbol' | 'raster' | 'hillshade' | 'heatmap' | 'fill-extrusion' | 'background', received 'invalid'
+pages.0.blocks.0.config.zoom: Expected number, got string
+pages.0.blocks.1: Unknown layer type "invalid". Valid types: circle, line, fill, symbol, raster, fill-extrusion, heatmap, hillshade, color-relief, background.
 ```
 
 ### Custom Validation

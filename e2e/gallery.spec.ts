@@ -832,10 +832,12 @@ test.describe("images: declared images register before layers (U6)", () => {
     expect(warnings.filter((w) => w.includes("primary-icon")).length).toBe(0);
 
     // A hard-missing reference (no coalesce) DOES fire it — and the renderer
-    // warns once, not once per render.
+    // warns once, not once per render. The name is one the document itself
+    // uses: names only the basemap asks for are not the document's to warn
+    // about (ml-aot.37).
     await page.evaluate(() => {
       const map = (document.getElementById("map") as any).getMap();
-      map.setLayoutProperty("fallback", "icon-image", "definitely-missing");
+      map.setLayoutProperty("fallback", "icon-image", "primary-icon");
     });
     await page.waitForFunction(() =>
       (document.getElementById("map") as any).getMap().isStyleLoaded()
@@ -848,7 +850,41 @@ test.describe("images: declared images register before layers (U6)", () => {
       await new Promise((r) => setTimeout(r, 300));
     });
     expect(
-      warnings.filter((w) => w.includes('references image "definitely-missing"')).length
+      warnings.filter((w) => w.includes('references image "primary-icon"')).length
+    ).toBe(1);
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+
+  test("a genuinely missing image the YAML names warns exactly once, however often it renders", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const warnings: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "warning") warnings.push(message.text());
+    });
+    // The same twin, with its layer naming an image nothing supplies: no
+    // coalesce, no images: entry, not in the sprite.
+    await page.route("**/configs/use-a-fallback-image.yaml", async (route) => {
+      const original = await (await page.request.fetch(route.request())).text();
+      const body = original.replace(
+        /icon-image: \[.*\]/,
+        'icon-image: "definitely-missing"'
+      );
+      expect(body).toContain('icon-image: "definitely-missing"');
+      return route.fulfill({ body, contentType: "text/yaml" });
+    });
+    await openExample(page, "use-a-fallback-image", ["fallback"]);
+    await page.evaluate(async () => {
+      const map = (document.getElementById("map") as any).getMap();
+      for (let i = 0; i < 3; i++) {
+        map.panBy([30, 0], { duration: 0 });
+        map.panBy([-30, 0], { duration: 0 });
+        await new Promise((r) => setTimeout(r, 150));
+      }
+    });
+    expect(
+      warnings.filter((w) => w.includes('[maplibre-yaml] layer references image "definitely-missing"')).length
     ).toBe(1);
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });

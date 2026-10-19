@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
+import { packageVersionDefines } from './package-versions.config';
 
 export default defineConfig({
+  define: packageVersionDefines,
   test: {
     globals: true,
     environment: 'node',

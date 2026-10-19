@@ -5,6 +5,7 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
+import { parse as parseYAML } from 'yaml';
 import { initArgsError, nextSteps } from '../../src/commands/init';
 
 const execAsync = promisify(exec);
@@ -77,7 +78,7 @@ describe('init command (integration)', () => {
       const { stdout } = await run('init my-map --template basic', dir);
       expect(stdout).toContain('cd my-map');
       expect(stdout).toContain('npx serve .');
-      expect(stdout).toContain('npx @maplibre-yaml/cli validate map.yaml');
+      expect(stdout).toContain('npx maplibre-yaml validate map.yaml');
       // A bare `maplibre-yaml …` command only exists after an install.
       expect(stdout).not.toMatch(/^\s*(maplibre-yaml|mlym) /m);
     });
@@ -154,30 +155,106 @@ describe('init command (integration)', () => {
       // The "element is not in core 0.7 yet" note is gone; serve-and-open steps instead.
       expect(result.stdout).not.toMatch(/not part of|0\.7 yet/);
       expect(result.stdout).toContain('npx serve .');
-      expect(result.stdout).toContain('npx @maplibre-yaml/cli validate story.yaml');
+      expect(result.stdout).toContain('npx maplibre-yaml validate story.yaml');
 
       const validate = await run(`validate "${join(dir, 'my-story', 'story.yaml')}"`, dir);
       expect(validate.code).toBe(0);
     });
+
+    it('puts theme at the top level, where the engine reads it, and no document keys under config (ml-aot.48)', async () => {
+      const dir = await mkdir();
+      expect((await run('init my-story --template story', dir)).code).toBe(0);
+      const doc = parseYAML(await readFile(join(dir, 'my-story', 'story.yaml'), 'utf-8')) as Record<string, any>;
+      expect(doc.theme).toBe('light');
+      // Keys that belong next to config:, not inside it: the engine ignores them there.
+      const documentKeys = [
+        'theme', 'markers', 'legend', 'state', 'popups', 'layers', 'sources', 'controls',
+        'images', 'parameters', 'chapters', 'showMarkers', 'markerColor', 'footer',
+      ];
+      expect(Object.keys(doc.config).filter((k) => documentKeys.includes(k))).toEqual([]);
+    });
   });
 
-  describe('astro template', () => {
-    it('pins current majors and sets up the maplibre-gl 6 worker in a bundled script', async () => {
-      const dir = await mkdir();
+  describe('astro template (ml-aot.32)', () => {
+    /** Whether `version` satisfies a caret range like "^0.8.0" (no semver dep in the CLI). */
+    const satisfiesCaret = (range: string, version: string): boolean => {
+      const m = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(range);
+      if (!m) return false;
+      const [rMaj, rMin, rPat] = m.slice(1).map(Number) as [number, number, number];
+      const [vMaj, vMin, vPat] = version.split('-')[0]!.split('.').map(Number) as [number, number, number];
+      if (vMaj !== rMaj) return false;
+      if (rMaj === 0 && vMin !== rMin) return false; // ^0.x pins the minor
+      if (vMin !== rMin) return vMin > rMin;
+      return vPat >= rPat;
+    };
+    const workspaceVersion = async (pkg: string) =>
+      JSON.parse(await readFile(join(process.cwd(), '..', pkg, 'package.json'), 'utf-8')).version as string;
+
+    let dir: string;
+    const file = (...p: string[]) => readFile(join(dir, 'my-site', ...p), 'utf-8');
+
+    it('scaffolds with ranges that include the current core and astro packages', async () => {
+      dir = await mkdir();
       const result = await run('init my-site --template astro', dir);
       expect(result.code).toBe(0);
-      const pkg = JSON.parse(await readFile(join(dir, 'my-site', 'package.json'), 'utf-8'));
+      const pkg = JSON.parse(await file('package.json'));
       expect(pkg.name).toBe('my-site');
-      expect(pkg.dependencies['@maplibre-yaml/core']).toBe('^0.7.0');
-      expect(pkg.dependencies['maplibre-gl']).toBe('^6.4.1');
+      // The ranges follow the workspace packages, so they cannot fall a minor behind again.
+      const core = await workspaceVersion('core');
+      const astroPkg = await workspaceVersion('astro');
+      expect(satisfiesCaret(pkg.dependencies['@maplibre-yaml/core'], core)).toBe(true);
+      expect(satisfiesCaret(pkg.dependencies['@maplibre-yaml/astro'], astroPkg)).toBe(true);
+      expect(pkg.dependencies.astro).toMatch(/^\^7\./);
+      expect(pkg.dependencies['maplibre-gl']).toMatch(/^\^6\./);
+      expect(pkg.scripts.check).toBe('astro check');
+      expect(pkg.devDependencies['@astrojs/check']).toBeDefined();
+      expect(pkg.devDependencies.typescript).toBeDefined();
+    });
 
-      const page = await readFile(join(dir, 'my-site', 'src', 'pages', 'index.astro'), 'utf-8');
-      // A <script type="module"> is left unbundled by Astro, so a bare
-      // '@maplibre-yaml/core/register' import in it never resolves.
-      expect(page).not.toContain('<script type="module">');
-      expect(page).toContain("import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';");
-      expect(page).toContain('setWorkerUrl(workerUrl);');
-      expect(page).toContain("import '@maplibre-yaml/core/register';");
+    it('uses the @maplibre-yaml/astro components in a layout with the viewport meta', async () => {
+      const page = await file('src', 'pages', 'index.astro');
+      expect(page).toContain("import { Map } from '@maplibre-yaml/astro';");
+      expect(page).toContain('<Map src="/configs/map.yaml"');
+      // No hand-rolled element setup: the component does the worker and CSS.
+      expect(page).not.toContain('setWorkerUrl');
+      expect(page).not.toContain('<ml-map');
+      const layout = await file('src', 'layouts', 'Layout.astro');
+      expect(layout).toContain('<meta name="viewport" content="width=device-width, initial-scale=1" />');
+      expect(layout).toMatch(/body\s*\{[^}]*margin:\s*0/);
+    });
+
+    it('wires the integration and explains site/base for GitHub Pages', async () => {
+      const config = await file('astro.config.mjs');
+      expect(config).toContain('import maplibreYaml from "@maplibre-yaml/astro/integration";');
+      expect(config).toContain('integrations: [maplibreYaml()]');
+      expect(config).toContain('// base: "/<your-repo>",');
+      expect(config).toContain('// site: "https://<your-user>.github.io",');
+    });
+
+    it('ships a GitHub Pages workflow, a .gitignore and a tsconfig', async () => {
+      const workflow = await file('.github', 'workflows', 'deploy.yml');
+      expect(workflow).toContain('uses: withastro/action@');
+      expect(workflow).toContain('uses: actions/deploy-pages@');
+      // GitHub expression syntax survives the {{variable}} substitution.
+      expect(workflow).toContain('${{ steps.deployment.outputs.page_url }}');
+      const ignore = await file('.gitignore');
+      expect(ignore).toContain('node_modules/');
+      expect(ignore).toContain('dist/');
+      expect(existsSync(join(dir, 'my-site', 'gitignore'))).toBe(false);
+      expect(JSON.parse(await file('tsconfig.json')).extends).toBe('astro/tsconfigs/strict');
+    });
+
+    it('the map document validates', async () => {
+      const validate = await run(`validate "${join(dir, 'my-site', 'public', 'configs', 'map.yaml')}"`, dir);
+      expect(validate.code).toBe(0);
+    });
+
+    it('next steps mention npm run dev and base for GitHub Pages', () => {
+      const text = nextSteps('astro', 'my-site').join('\n');
+      expect(text).toContain('npm install');
+      expect(text).toContain('npm run dev');
+      expect(text).toContain('base');
+      expect(text).toContain('astro.config.mjs');
     });
   });
 });

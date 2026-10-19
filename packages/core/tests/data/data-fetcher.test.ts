@@ -63,6 +63,46 @@ describe("DataFetcher", () => {
       await expect(fetcher.fetch(testUrl)).rejects.toThrow("not valid GeoJSON");
     });
 
+    it("accepts a single Feature, wrapped in a one-feature FeatureCollection (ml-aot.47)", async () => {
+      const feature = {
+        type: "Feature",
+        properties: { name: "drawn" },
+        geometry: { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => feature, headers: new Headers() });
+      const result = await fetcher.fetch(testUrl);
+      expect(result.data).toEqual({ type: "FeatureCollection", features: [feature] });
+      expect(result.featureCount).toBe(1);
+    });
+
+    it("accepts a bare Geometry, wrapped as a feature with empty properties (ml-aot.47)", async () => {
+      const geometry = { type: "LineString", coordinates: [[0, 0], [1, 1]] };
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => geometry, headers: new Headers() });
+      const result = await fetcher.fetch(testUrl);
+      expect(result.data).toEqual({
+        type: "FeatureCollection",
+        features: [{ type: "Feature", properties: {}, geometry }],
+      });
+    });
+
+    it("a CSV file is reported as CSV, not as broken JSON (ml-aot.51)", async () => {
+      const csv = "name,lat,lon\nCentral Park,40.78,-73.96\n";
+      for (const [url, contentType] of [
+        ["data/places.csv", "text/plain"],
+        ["https://docs.google.com/spreadsheets/d/e/abc/pub?output=csv", "text/csv"],
+        ["data/places.geojson", "text/plain"],
+      ] as const) {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => csv,
+          json: async () => JSON.parse(csv),
+          headers: new Headers({ "content-type": contentType }),
+        });
+        await expect(fetcher.fetch(url)).rejects.toThrow(/^CSV data from .* is not supported/);
+      }
+    });
+
     it("throws on invalid JSON", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,

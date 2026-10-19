@@ -47,6 +47,18 @@ source:
   caption="Live earthquake data from USGS"
 />
 
+The file can hold a `FeatureCollection`, a single `Feature`, or a bare
+geometry (`{"type": "Polygon", …}`), as geojson.io or a copied feature gives
+you; a single feature or geometry is read as a one-feature collection.
+
+### CSV and spreadsheets
+
+CSV files (including a Google Sheet published as CSV) aren't supported: a
+layer whose `url` points at one shows "CSV files aren't supported" on the map.
+Convert the table to GeoJSON first, for example by opening it in
+[geojson.io](https://geojson.io) or QGIS and saving it as GeoJSON, then point
+`url` at the `.geojson` file.
+
 ### CORS considerations
 
 When loading from remote URLs, the server must allow cross-origin requests (CORS). If you see errors, the API may not support browser requests.

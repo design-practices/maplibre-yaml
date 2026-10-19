@@ -131,7 +131,7 @@ in a `<script>`).
 
 | | Supported |
 | --- | --- |
-| Astro | 4, 5, 6 and 7, each tested in CI (Astro 7 needs Node 22.12+) |
+| Astro | 4, 5, 6 and 7, each tested in CI (Astro 7 needs Node 22.22+) |
 | `@maplibre-yaml/core` | `>=0.8.0` (peer). Upgrade both packages together |
 | maplibre-gl | 4, 5 and 6 (`>= 6.4.1`, recommended) |
 

@@ -1,0 +1,20 @@
+---
+import Base from "../layouts/Base.astro";
+import { FullPageMap } from "@maplibre-yaml/astro";
+---
+
+<Base title="Explore (fitted view)" bleed>
+  <!--
+    The document opens framed on its data (fitTo). "Reset view" returns to
+    that framing, the view the page opened with, not the YAML's own
+    center/zoom (ml-aot.60).
+  -->
+  <FullPageMap src="/maps/volcanoes-fit.yaml" />
+</Base>
+
+<style is:global>
+  body.bleed .ml-fullpage-map {
+    top: var(--header-h);
+    height: calc(100vh - var(--header-h));
+  }
+</style>

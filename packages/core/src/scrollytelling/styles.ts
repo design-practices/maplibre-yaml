@@ -122,32 +122,43 @@ ml-scrollytelling .chapter-marker {
   cursor: pointer;
 }
 
+/* The dots are two-tone, so they stand out on any basemap -- light, dark,
+   water, parks (WCAG 1.4.11: at least 3:1 against what is behind them; one
+   of white and the dark outline always is). The current chapter's dot is
+   bigger and filled dark with a white ring, so it differs by more than
+   colour (WCAG 1.4.1). \`markerColor\` fills the dots instead; the outline
+   stays. */
 ml-scrollytelling .chapter-marker::before {
   content: "";
   display: block;
   width: 12px;
   height: 12px;
   box-sizing: border-box;
-  border: 2px solid #fff;
+  border: 2px solid var(--ml-marker-outline, #1f2937);
   border-radius: 50%;
-  background: var(--ml-marker-color, #3fb1ce);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: var(--ml-marker-color, #ffffff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: width 0.15s ease, height 0.15s ease;
 }
 
 ml-scrollytelling .chapter-marker:hover::before {
-  transform: scale(1.3);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+  width: 14px;
+  height: 14px;
 }
 
 ml-scrollytelling .chapter-marker.active::before {
-  transform: scale(1.5);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  width: 18px;
+  height: 18px;
+  border: 3px solid #ffffff;
+  background: var(--ml-marker-color, var(--ml-marker-outline, #1f2937));
+  box-shadow: 0 0 0 2px var(--ml-marker-outline, #1f2937), 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
+/* Keyboard focus: a dark ring with a white halo, visible on any basemap. */
 ml-scrollytelling .chapter-marker:focus-visible {
-  outline: 2px solid var(--ml-marker-color, #3fb1ce);
-  outline-offset: 1px;
+  outline: 3px solid var(--ml-marker-outline, #1f2937);
+  outline-offset: 0;
+  box-shadow: 0 0 0 5px #ffffff;
 }
 
 /* Footer */
@@ -369,6 +380,159 @@ ml-scrollytelling[debug] .scrolly-chapter.is-active {
   background: #000;
 }
 
+/* The story's legend (scrollytelling/story-legend): a layer of its own,
+   pinned over the map and ABOVE the chapter column, so it is never covered
+   by a card and never moves while the story scrolls. The layer has the
+   map's sticky box (same top, same height, pulled up over it), so the two
+   stick and unstick together; it takes no pointer events itself. */
+ml-scrollytelling > .scrolly-legend-layer {
+  position: sticky;
+  top: var(--ml-scrolly-map-top, 0px);
+  height: var(--ml-scrolly-map-height, 100vh);
+  margin-top: calc(-1 * var(--ml-scrolly-map-height, 100vh));
+  z-index: 2;
+  pointer-events: none;
+}
+
+ml-scrollytelling .scrolly-legend {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: min(300px, calc(100% - 20px));
+  pointer-events: auto;
+  font: 12px/1.5 system-ui, -apple-system, sans-serif;
+}
+
+ml-scrollytelling .scrolly-legend[data-corner$="right"] {
+  align-items: flex-end;
+}
+
+ml-scrollytelling .scrolly-legend[data-corner^="bottom"] {
+  flex-direction: column-reverse;
+}
+
+ml-scrollytelling .scrolly-legend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(31, 41, 55, 0.35);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #1f2937;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  font: 600 13px/1.2 system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+}
+
+ml-scrollytelling .scrolly-legend-toggle::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+ml-scrollytelling .scrolly-legend.is-open .scrolly-legend-toggle::after {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+ml-scrollytelling .scrolly-legend-toggle:focus-visible {
+  outline: 3px solid #1f2937;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px #ffffff;
+}
+
+ml-scrollytelling .scrolly-legend-panel {
+  box-sizing: border-box;
+  min-width: 140px;
+  max-width: 100%;
+  max-height: calc(var(--ml-scrolly-map-height, 100vh) - 32px - 4px - var(--ml-story-legend-offset, 20px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #333333;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+ml-scrollytelling .scrolly-legend-panel[hidden] {
+  display: none;
+}
+
+ml-scrollytelling .scrolly-legend-heading {
+  margin: 0 0 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+ml-scrollytelling .scrolly-legend-panel .legend-item:first-child {
+  margin-top: 0 !important;
+}
+
+ml-scrollytelling.theme-dark .scrolly-legend-toggle,
+ml-scrollytelling.theme-dark .scrolly-legend-panel {
+  background: rgba(31, 41, 55, 0.97);
+  color: #f9fafb;
+  border-color: rgba(249, 250, 251, 0.35);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  ml-scrollytelling .scrolly-legend.is-open .scrolly-legend-panel {
+    animation: ml-scrolly-legend-in 0.12s ease-out;
+  }
+}
+
+@keyframes ml-scrolly-legend-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A chapter photo or video never fills the map (ml-aot.50): a full-width
+   card scaled its photo to the whole width, taller than the screen. */
+.scrolly-chapter .chapter-media img {
+  width: auto;
+  max-width: 100%;
+  max-height: 40vh;
+  margin: 0 auto;
+}
+
+.scrolly-chapter .chapter-media video {
+  max-height: 40vh;
+}
+
+/* A chapter image or video that didn't load says so (ml-aot.51). */
+.scrolly-chapter .chapter-media-missing {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed currentColor;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+.scrolly-chapter .chapter-media-missing p {
+  margin: 0;
+}
+
+.scrolly-chapter .chapter-media-missing details {
+  margin-top: 4px;
+  font-size: 0.8125rem;
+}
+
+.scrolly-chapter .chapter-media-missing summary {
+  cursor: pointer;
+}
+
+/* Phones. (A phone on its side has its own block below.) */
 @media (max-width: 768px) {
   /* Cards sit low in their chapter; the camera is offset to match, so the
      chapter's subject shows above the card instead of under it. */
@@ -402,6 +566,48 @@ ml-scrollytelling[debug] .scrolly-chapter.is-active {
 
   ml-scrollytelling .chapter-markers {
     right: 8px;
+  }
+}
+
+/* A phone on its side (ml-aot.50; touch screens only -- a short desktop
+   window keeps the author's alignment): wider than 768px but only ~400px tall,
+   where desktop cards were taller than the screen and a centred one sat on
+   the chapter's subject. Cards stay beside the map's centre -- a narrow,
+   short card on one side (centred and full-width ones go left) -- so the
+   camera keeps the subject on the other side, and the photo is shorter. */
+@media (max-height: 500px) and (max-width: 1000px) and (min-width: 769px) and (pointer: coarse) {
+  .scrolly-chapter {
+    padding: 8vh 3vw;
+  }
+
+  .scrolly-chapter.align-center,
+  .scrolly-chapter.align-full {
+    justify-content: flex-start;
+  }
+
+  .scrolly-chapter .chapter-content,
+  .scrolly-chapter.align-full .chapter-content {
+    max-width: min(46%, 420px);
+    padding: 14px 18px;
+    text-align: left;
+  }
+
+  ml-scrollytelling.has-markers .scrolly-chapter {
+    padding-right: 44px;
+  }
+
+  .scrolly-chapter .chapter-media img,
+  .scrolly-chapter .chapter-media video {
+    max-height: 30vh;
+  }
+
+  .scrolly-chapter .chapter-media {
+    margin-bottom: 10px;
+  }
+
+  .scrolly-chapter .chapter-title {
+    font-size: 1.25rem;
+    margin-bottom: 8px;
   }
 }
 

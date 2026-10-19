@@ -153,6 +153,149 @@ test("preview renders the map on the locally installed maplibre-gl 6", async ({ 
   expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
 });
 
+/** Start a second preview server on `file` (in the temp copy); resolves once it listens. */
+async function startPreview(file: string, cwd: string = dir): Promise<{ url: string; stop: () => void }> {
+  const port = await freePort();
+  const proc = spawn(process.execPath, [CLI, "preview", join(dir, file), "--port", String(port), "--no-open"], {
+    cwd,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`preview did not start:\n${output}`)), 30_000);
+    const onData = (chunk: Buffer) => {
+      output += chunk.toString();
+      if (output.includes("Preview server running")) {
+        clearTimeout(timer);
+        resolve();
+      }
+    };
+    proc.stdout!.on("data", onData);
+    proc.stderr!.on("data", onData);
+  });
+  return { url: `http://localhost:${port}/`, stop: () => proc.kill() };
+}
+
+/**
+ * Whether MapLibre's attribution is fully above the preview's status bar and
+ * is the topmost element at its own centre.
+ */
+const attributionClear = (page: Page) =>
+  page.evaluate(() => {
+    const attrib = document.querySelector<HTMLElement>(".maplibregl-ctrl-attrib")!;
+    const bar = document.querySelector<HTMLElement>(".status-bar")!;
+    const a = attrib.getBoundingClientRect();
+    const b = bar.getBoundingClientRect();
+    const top = document.elementFromPoint(a.left + a.width / 2, a.top + a.height / 2);
+    return {
+      above: a.bottom <= b.top,
+      onTop: !!top && attrib.contains(top),
+      attrib: [a.top, a.bottom].map(Math.round),
+      bar: [b.top, b.bottom].map(Math.round),
+    };
+  });
+
+test("the status bar leaves MapLibre's attribution visible, for maps and stories (ml-aot.54)", async ({ browser }) => {
+  const story = await startPreview("story.yaml");
+  try {
+    for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+      for (const [kind, target] of [["map", url], ["story", story.url]] as const) {
+        const page = await browser.newPage({ viewport });
+        const { errors } = await guard(page);
+        await page.goto(target, { waitUntil: "domcontentloaded" });
+        await page.evaluate(() =>
+          (document.querySelector("ml-scrollytelling") ?? (document.querySelector("ml-map") as any)).mapReady()
+        );
+        await page.waitForSelector(".maplibregl-ctrl-attrib");
+        const state = await attributionClear(page);
+        expect(state.above, `${kind} at ${viewport.width}px: ${JSON.stringify(state)}`).toBe(true);
+        expect(state.onTop, `${kind} at ${viewport.width}px: attribution covered`).toBe(true);
+        expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+        await page.close();
+      }
+    }
+  } finally {
+    story.stop();
+  }
+});
+
+/** The status bar's two halves: one line each, side by side, not overlapping. */
+const statusBarLayout = (page: Page) =>
+  page.evaluate(() => {
+    const bar = document.querySelector<HTMLElement>(".status-bar")!;
+    const [left, right] = Array.from(bar.children) as HTMLElement[];
+    const l = left!.getBoundingClientRect();
+    const r = right!.getBoundingClientRect();
+    const b = bar.getBoundingClientRect();
+    const path = right!.querySelector<HTMLElement>("span") ?? right!;
+    const lineHeight = parseFloat(getComputedStyle(path).lineHeight) || 16;
+    return {
+      text: path.textContent ?? "",
+      title: path.getAttribute("title"),
+      gap: Math.round(r.left - l.right),
+      oneLine: path.getBoundingClientRect().height <= lineHeight * 1.5,
+      inside: r.right <= b.right + 0.5 && r.top >= b.top - 0.5 && r.bottom <= b.bottom + 0.5,
+    };
+  });
+
+test("on a phone the status bar keeps the file path on one line, clear of 'Connected' (ml-aot.66)", async ({
+  browser,
+}) => {
+  // Run from the YAML's own folder (the usual case): the bar shows the path
+  // relative to it. Then from another folder: the full path, truncated.
+  const outside = await startPreview("map.yaml", ROOT);
+  try {
+    for (const [label, target, expected] of [
+      ["inside cwd", url, "map.yaml"],
+      ["outside cwd", outside.url, join(dir, "map.yaml")],
+    ] as const) {
+      const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+      const { errors } = await guard(page);
+      await page.goto(target, { waitUntil: "domcontentloaded" });
+      await page.waitForSelector(".status-bar");
+      const s = await statusBarLayout(page);
+      expect(s.text, label).toBe(expected);
+      expect(s.title, `${label}: full path on hover`).toBe(join(dir, "map.yaml"));
+      expect(s.oneLine, `${label}: path on one line ${JSON.stringify(s)}`).toBe(true);
+      expect(s.gap, `${label}: gap after 'Connected'`).toBeGreaterThanOrEqual(8);
+      expect(s.inside, `${label}: path inside the bar`).toBe(true);
+      await page.screenshot({ path: `e2e/results/preview-status-bar-mob-${label.replace(/\s+/g, "-")}.png` });
+      expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+      await page.close();
+    }
+  } finally {
+    outside.stop();
+  }
+});
+
+test("preview renders a scrollytelling story (ml-aot.41)", async ({ page }, testInfo) => {
+  const preview = await startPreview("story.yaml");
+  const storyUrl = preview.url;
+  const story = { kill: preview.stop };
+  try {
+    const { errors } = await guard(page);
+    await page.goto(storyUrl, { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".error-overlay")).toHaveCount(0);
+    await expect(page.locator("ml-scrollytelling .scrolly-chapter")).toHaveCount(2);
+    await page.evaluate(() => (document.querySelector("ml-scrollytelling") as any).mapReady());
+    await expect
+      .poll(() => page.evaluate(() => (document.querySelector("ml-scrollytelling") as HTMLElement).dataset.activeChapter))
+      .toBe("new-york");
+    // Scroll on to the second chapter: the story drives the camera.
+    await page.evaluate(() => {
+      const s = document.querySelector('.scrolly-chapter[data-chapter-id="chicago"]')!;
+      scrollBy(0, s.getBoundingClientRect().top);
+    });
+    await expect
+      .poll(() => page.evaluate(() => (document.querySelector("ml-scrollytelling") as HTMLElement).dataset.activeChapter))
+      .toBe("chicago");
+    await testInfo.attach("story", { body: await page.screenshot(), contentType: "image/png" });
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  } finally {
+    story.kill();
+  }
+});
+
 test("editing the YAML live-reloads the preview; an invalid edit shows the error", async ({ page }, testInfo) => {
   const { errors } = await guard(page);
   await page.goto(url, { waitUntil: "domcontentloaded" });

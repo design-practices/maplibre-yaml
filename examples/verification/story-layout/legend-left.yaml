@@ -1,0 +1,46 @@
+type: scrollytelling
+id: story-legend-left
+showMarkers: true
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [0, 20]
+  zoom: 2
+controls:
+  scale: true
+legend:
+  title: Places
+  items:
+    - { label: Volcano, color: "#d62828", shape: circle }
+    - { label: Town, color: "#f77f00", shape: circle }
+    - { label: Port, color: "#3b82f6", shape: circle }
+layers:
+  - id: pts
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [10, 40] } }
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [-20, 10] } }
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [60, -10] } }
+    paint: { circle-radius: 8, circle-color: "#d62828" }
+chapters:
+  - id: first
+    title: A left card
+    description: "<p>A left card. The legend stays pinned in its corner while this card scrolls past; nothing on the map moves with the scroll.</p>"
+    center: [10, 40]
+    zoom: 3
+    alignment: left
+  - id: second
+    title: Another left card
+    description: "<p>Another left card. The legend stays pinned in its corner while this card scrolls past; nothing on the map moves with the scroll.</p>"
+    center: [-20, 10]
+    zoom: 3
+    alignment: left
+  - id: third
+    title: The last left card
+    description: "<p>The last left card. The legend stays pinned in its corner while this card scrolls past; nothing on the map moves with the scroll.</p>"
+    center: [60, -10]
+    zoom: 3
+    alignment: left

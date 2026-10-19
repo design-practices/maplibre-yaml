@@ -4,6 +4,8 @@ id: complete-example
 config:
   center: [-98, 39]
   zoom: 4
+  # [west, south, east, north]: frames all three cities on any screen
+  bounds: [-122, 32, -70, 44]
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: cities

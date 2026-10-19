@@ -161,6 +161,20 @@ describe("runtime layer and data problems (ml-aot.15)", () => {
     );
   });
 
+  it("JSON that isn't GeoJSON, and CSV, are each named for what they are (ml-aot.47, ml-aot.51)", () => {
+    const notGeo = Object.assign(new Error("Response from d.json is not valid GeoJSON"), { url: "d.json" });
+    expect(describeDataProblem("l", notGeo, { pageUrl: "http://h/", filePage: false })).toContain(
+      'it is JSON but not GeoJSON (expected "type": "FeatureCollection")'
+    );
+    const csv = Object.assign(new Error("CSV data from data/places.csv is not supported"), {
+      url: "data/places.csv",
+    });
+    const text = describeDataProblem("l", csv, { pageUrl: "http://h/", filePage: false });
+    expect(text).toContain("CSV files aren't supported — convert it to GeoJSON (e.g. geojson.io or QGIS)");
+    expect(text).toContain("https://docs.maplibre-yaml.org/guides/data-sources/#csv-and-spreadsheets");
+    expect(text).not.toContain("isn't JSON");
+  });
+
   it("an HTML response and a file:// page are explained", () => {
     const html = Object.assign(new Error("Invalid JSON response from d.geojson"), { url: "d.geojson" });
     expect(describeDataProblem("l", html, { pageUrl: "http://h/", filePage: false })).toContain(
@@ -211,6 +225,97 @@ describe("a site path that 404s on a page under a subpath suggests base (ml-aot.
     expect(subpathBaseHint("/x.geojson", "file:///home/s/site/index.html", undefined)).toBeUndefined();
     const card = srcHttpErrorCard("/x.yaml", "https://u.github.io/x.yaml", 500, "", {
       pageUrl: "https://u.github.io/my-repo/",
+    });
+    expect(card.hint).not.toContain("base=");
+  });
+});
+
+describe("with base set, a 404 explains where files are looked up (ml-aot.36)", () => {
+  it("page outside the base (local preview at /): names base and both fixes, drops the page-relative advice", () => {
+    const card = srcHttpErrorCard("map.yaml", "http://localhost:4446/my-repo/map.yaml", 404, "", {
+      pageUrl: "http://localhost:4446/",
+      base: "/my-repo/",
+    });
+    expect(card.title).toBe("Map file not found");
+    expect(card.hint).toBe(
+      'This page sets base="/my-repo/", so files are looked up under /my-repo/ — but the page ' +
+        "itself is at /, outside /my-repo/. If you're previewing locally, either remove base " +
+        "while developing, or serve the folder one level up and open /my-repo/. That folder " +
+        'must be named "my-repo" (a GitHub "Download ZIP" folder is called "my-repo-main": ' +
+        "rename it)."
+    );
+    expect(card.hint).not.toContain("relative to this page's folder");
+  });
+
+  it("a page AT the base without its trailing slash (astro dev, npx serve) counts as under it (A1)", () => {
+    const card = srcHttpErrorCard("configs/x.yaml", "http://localhost:4321/my-repo/configs/x.yaml", 404, "", {
+      pageUrl: "http://localhost:4321/my-repo",
+      base: "/my-repo/",
+    });
+    expect(card.hint).toContain("looked up under /my-repo/");
+    expect(card.hint).not.toContain("previewing locally");
+    expect(card.hint).not.toContain("remove base");
+  });
+
+  it('base "/" (what Astro always passes) talks about the site root, never base="/" (A1, ml-aot.51)', () => {
+    const card = srcHttpErrorCard("configs/x.yaml", "http://localhost:4321/configs/x.yaml", 404, "", {
+      pageUrl: "http://localhost:4321/blog/post/",
+      base: "/",
+    });
+    expect(card.hint).not.toContain('base="/"');
+    expect(card.hint).toContain("site root");
+    expect(card.hint).toContain("public/");
+    expect(card.hint).not.toContain("previewing locally");
+    const notice = describeDataProblem(
+      "pts",
+      Object.assign(new Error("HTTP 404: Not Found for /data/pts.geojson"), { url: "/data/pts.geojson" }),
+      { pageUrl: "http://localhost:4321/", filePage: false, base: "/" }
+    );
+    expect(notice).not.toContain('base="/"');
+    expect(notice).toContain("site root");
+  });
+
+  it("a cross-origin base gives no local-preview advice (A1)", () => {
+    const card = srcHttpErrorCard("map.yaml", "https://cdn.example.com/site/map.yaml", 404, "", {
+      pageUrl: "http://localhost:4446/",
+      base: "https://cdn.example.com/site/",
+    });
+    expect(card.hint).toContain("https://cdn.example.com/site/");
+    expect(card.hint).not.toContain("previewing locally");
+    expect(card.hint).not.toContain("remove base");
+  });
+
+  it("the same on the HTML-fallback card and the data notice", () => {
+    const html = srcHtmlCard("story.yaml", "http://localhost:4321/my-repo/story.yaml", {
+      pageUrl: "http://localhost:4321/index.html",
+      base: "/my-repo",
+    });
+    expect(html.hint).toContain('This page sets base="/my-repo/"');
+    expect(html.hint).toContain("previewing locally");
+    const notice = describeDataProblem(
+      "pts",
+      Object.assign(new Error("HTTP 404: Not Found for /my-repo/data/pts.geojson"), { url: "/my-repo/data/pts.geojson" }),
+      { pageUrl: "http://localhost:4446/", filePage: false, base: "/my-repo/" }
+    );
+    expect(notice).toContain('This page sets base="/my-repo/"');
+    expect(notice).toContain("previewing locally");
+  });
+
+  it("page under the base: says every path starts at the base, not next to the page", () => {
+    const card = srcHttpErrorCard("maps/x.yaml", "https://u.github.io/my-repo/maps/x.yaml", 404, "", {
+      pageUrl: "https://u.github.io/my-repo/blog/post/",
+      base: "/my-repo/",
+    });
+    expect(card.hint).toContain('base="/my-repo/"');
+    expect(card.hint).toContain("looked up under /my-repo/");
+    expect(card.hint).not.toContain("previewing locally");
+    expect(card.hint).not.toContain("relative to this page's folder");
+  });
+
+  it("an absolute src outside the base keeps the ordinary advice", () => {
+    const card = srcHttpErrorCard("https://cdn.test/x.yaml", "https://cdn.test/x.yaml", 404, "", {
+      pageUrl: "http://localhost:4446/",
+      base: "/my-repo/",
     });
     expect(card.hint).not.toContain("base=");
   });
