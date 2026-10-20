@@ -157,7 +157,7 @@ style:
     expect(parsed.errors).toEqual([]);
     const hint = parsed.warnings.find((w) => w.path === "legend.items");
     expect(hint?.onPage).toBe(true);
-    expect(hint?.message).toContain('layer "a" is classified');
+    expect(hint?.message).toMatch(/^Layer "a" is classified, and the legend block also lists items written by hand\./);
     expect(hint?.message).toContain("legend: false");
     expect(hint?.line).toBe(5);
 

@@ -406,10 +406,11 @@ export function checkClassifiedLegendItems(
     warnings.push({
       path: [...path, "items"].join("."),
       message:
-        `The legend lists its own items:, and layer${ids.length > 1 ? "s" : ""} ${names} ` +
-        `${ids.length > 1 ? "are" : "is"} classified: the legend shows these items, then the classes ` +
-        "classify generates. If the items describe the layer's earlier colours, remove them; to " +
-        "leave a layer's classes out of the legend, write legend: false on that layer.",
+        `Layer${ids.length > 1 ? "s" : ""} ${names} ${ids.length > 1 ? "are" : "is"} classified, and the ` +
+        "legend block also lists items written by hand. The legend shows those items first, then " +
+        "the classes that classify generates. If the items describe the colours the layer had " +
+        "before, remove them. To keep a layer's classes out of the legend, write legend: false " +
+        "on that layer.",
       ...(p ? { line: p.line, column: p.column } : {}),
       onPage: true,
     });
