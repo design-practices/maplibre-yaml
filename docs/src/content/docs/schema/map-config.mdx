@@ -465,7 +465,7 @@ Control the camera position and orientation.
 | `pitch` | number | `0` | 0-85 | Camera tilt angle in degrees |
 | `bearing` | number | `0` | -180 to 180 | Camera rotation in degrees |
 | `bounds` | array | - | - | Fit map to geographic bounds: `[west, south, east, north]` or `[[west, south], [east, north]]` |
-| `fitTo` | object | - | - | Fit the initial camera to a GeoJSON source's data (see below) |
+| `fitTo` | object \| string | - | - | Fit the initial camera to a GeoJSON source's data (see below); a source name is shorthand for `{ source: name }` |
 
 ### Examples
 
@@ -561,6 +561,8 @@ layers:
   fit applies.
 - **vector / raster / raster-dem**: not supported. Tiled sources have no
   client-side extent. The renderer warns once and keeps `center`/`zoom`.
+- `fitTo: countries` (just the source name) is shorthand for
+  `fitTo: { source: countries }`.
 - `fitTo` wins over `bounds` when both are set. In format v2 it lives at
   `runtime.fitTo`.
 

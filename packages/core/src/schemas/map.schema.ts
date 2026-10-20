@@ -219,11 +219,13 @@ export type LegendConfig = z.infer<typeof LegendConfigSchema>;
  * arrives, the camera when the fit cannot apply, and the fallback emit uses
  * when the data is not inline. `fitTo` wins over `bounds` when both are set.
  *
+ * `fitTo: tracts` is shorthand for `fitTo: { source: tracts }`.
+ *
  * On emit (`fallback` class) an inline source's bounds compile to a
  * concrete `center`/`zoom` computed for a 1024×768 reference viewport —
  * lossy, because a live map fits its own container.
  */
-export const FitToSchema = z
+const FitToObjectSchema = z
   .object({
     source: z
       .string()
@@ -239,6 +241,21 @@ export const FitToSchema = z
     ),
   })
   .describe("Fit the initial camera to a GeoJSON source's data");
+
+/**
+ * `fitTo:` — `{ source, padding?, maxZoom? }`, or just the source name
+ * (`fitTo: tracts`, the shorthand for `fitTo: { source: tracts }`).
+ */
+export const FitToSchema = z
+  .union([
+    z
+      .string()
+      .min(1)
+      .transform((source): z.output<typeof FitToObjectSchema> => ({ source }))
+      .describe("Name of a GeoJSON entry in `sources:` (shorthand for { source: name })"),
+    FitToObjectSchema,
+  ])
+  .describe("Fit the initial camera to a GeoJSON source's data: { source, padding, maxZoom }, or a source name");
 
 /** Inferred type for `fitTo`. */
 export type FitToConfig = z.infer<typeof FitToSchema>;

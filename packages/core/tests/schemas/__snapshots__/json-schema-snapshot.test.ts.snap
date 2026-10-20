@@ -157,40 +157,50 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
                 },
                 "fitTo": {
-                  "type": "object",
-                  "properties": {
-                    "source": {
+                  "anyOf": [
+                    {
                       "type": "string",
                       "minLength": 1,
-                      "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                      "description": "Name of a GeoJSON entry in \`sources:\` (shorthand for { source: name })"
                     },
-                    "padding": {
-                      "type": "number",
-                      "minimum": 0,
-                      "description": "Padding in pixels around the fitted bounds"
-                    },
-                    "maxZoom": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 24,
-                      "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                    {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                        },
+                        "padding": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "Padding in pixels around the fitted bounds"
+                        },
+                        "maxZoom": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 24,
+                          "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Fit the initial camera to a GeoJSON source's data",
+                      "patternProperties": {
+                        "^x-": {}
+                      }
                     }
-                  },
-                  "required": [
-                    "source"
                   ],
-                  "additionalProperties": false,
-                  "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
-                  "patternProperties": {
-                    "^x-": {}
-                  }
+                  "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)"
                 },
                 "minZoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                   "description": "Minimum zoom level"
                 },
                 "maxZoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                   "description": "Maximum zoom level"
                 },
                 "minPitch": {
@@ -1052,11 +1062,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "description": "Source layer name (for vector sources)"
                           },
                           "minzoom": {
-                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                             "description": "Minimum zoom level to show layer"
                           },
                           "maxzoom": {
-                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                             "description": "Maximum zoom level to show layer"
                           },
                           "filter": {
@@ -1295,7 +1305,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                         "description": "Target center [longitude, latitude]; defaults to the clicked point"
                                       },
                                       "zoom": {
-                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                         "description": "Target zoom level; MapLibre keeps the current zoom when unset"
                                       },
                                       "duration": {
@@ -1317,7 +1327,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                         "description": "Padding in pixels around the fitted bounds"
                                       },
                                       "maxZoom": {
-                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                         "description": "Maximum zoom level when fitting the feature's bounds"
                                       },
                                       "duration": {
@@ -4579,40 +4589,50 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
               "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
             },
             "fitTo": {
-              "type": "object",
-              "properties": {
-                "source": {
+              "anyOf": [
+                {
                   "type": "string",
                   "minLength": 1,
-                  "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                  "description": "Name of a GeoJSON entry in \`sources:\` (shorthand for { source: name })"
                 },
-                "padding": {
-                  "type": "number",
-                  "minimum": 0,
-                  "description": "Padding in pixels around the fitted bounds"
-                },
-                "maxZoom": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 24,
-                  "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                    },
+                    "padding": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Padding in pixels around the fitted bounds"
+                    },
+                    "maxZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 24,
+                      "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Fit the initial camera to a GeoJSON source's data",
+                  "patternProperties": {
+                    "^x-": {}
+                  }
                 }
-              },
-              "required": [
-                "source"
               ],
-              "additionalProperties": false,
-              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
-              "patternProperties": {
-                "^x-": {}
-              }
+              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)"
             },
             "minZoom": {
-              "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+              "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
               "description": "Minimum zoom level"
             },
             "maxZoom": {
-              "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+              "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
               "description": "Maximum zoom level"
             },
             "minPitch": {
@@ -5474,11 +5494,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         "description": "Source layer name (for vector sources)"
                       },
                       "minzoom": {
-                        "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+                        "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                         "description": "Minimum zoom level to show layer"
                       },
                       "maxzoom": {
-                        "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+                        "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                         "description": "Maximum zoom level to show layer"
                       },
                       "filter": {
@@ -5717,7 +5737,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                     "description": "Target center [longitude, latitude]; defaults to the clicked point"
                                   },
                                   "zoom": {
-                                    "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+                                    "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                     "description": "Target zoom level; MapLibre keeps the current zoom when unset"
                                   },
                                   "duration": {
@@ -5739,7 +5759,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                     "description": "Padding in pixels around the fitted bounds"
                                   },
                                   "maxZoom": {
-                                    "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+                                    "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                     "description": "Maximum zoom level when fitting the feature's bounds"
                                   },
                                   "duration": {
@@ -11050,31 +11070,41 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
                             },
                             "fitTo": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
+                              "anyOf": [
+                                {
                                   "type": "string",
                                   "minLength": 1,
-                                  "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                                  "description": "Name of a GeoJSON entry in \`sources:\` (shorthand for { source: name })"
                                 },
-                                "padding": {
-                                  "type": "number",
-                                  "minimum": 0,
-                                  "description": "Padding in pixels around the fitted bounds"
-                                },
-                                "maxZoom": {
-                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
-                                  "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                                    },
+                                    "padding": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "description": "Padding in pixels around the fitted bounds"
+                                    },
+                                    "maxZoom": {
+                                      "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
+                                      "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                                    }
+                                  },
+                                  "required": [
+                                    "source"
+                                  ],
+                                  "additionalProperties": false,
+                                  "description": "Fit the initial camera to a GeoJSON source's data",
+                                  "patternProperties": {
+                                    "^x-": {}
+                                  }
                                 }
-                              },
-                              "required": [
-                                "source"
                               ],
-                              "additionalProperties": false,
-                              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
-                              "patternProperties": {
-                                "^x-": {}
-                              }
+                              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)"
                             },
                             "minZoom": {
                               "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
@@ -12530,40 +12560,50 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
               "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
             },
             "fitTo": {
-              "type": "object",
-              "properties": {
-                "source": {
+              "anyOf": [
+                {
                   "type": "string",
                   "minLength": 1,
-                  "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                  "description": "Name of a GeoJSON entry in \`sources:\` (shorthand for { source: name })"
                 },
-                "padding": {
-                  "type": "number",
-                  "minimum": 0,
-                  "description": "Padding in pixels around the fitted bounds"
-                },
-                "maxZoom": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 24,
-                  "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                    },
+                    "padding": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Padding in pixels around the fitted bounds"
+                    },
+                    "maxZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 24,
+                      "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Fit the initial camera to a GeoJSON source's data",
+                  "patternProperties": {
+                    "^x-": {}
+                  }
                 }
-              },
-              "required": [
-                "source"
               ],
-              "additionalProperties": false,
-              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
-              "patternProperties": {
-                "^x-": {}
-              }
+              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)"
             },
             "minZoom": {
-              "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+              "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
               "description": "Minimum zoom level"
             },
             "maxZoom": {
-              "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+              "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
               "description": "Maximum zoom level"
             },
             "minPitch": {
@@ -13441,11 +13481,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                         "description": "Source layer name (for vector sources)"
                       },
                       "minzoom": {
-                        "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+                        "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                         "description": "Minimum zoom level to show layer"
                       },
                       "maxzoom": {
-                        "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+                        "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                         "description": "Maximum zoom level to show layer"
                       },
                       "filter": {
@@ -13684,7 +13724,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Target center [longitude, latitude]; defaults to the clicked point"
                                   },
                                   "zoom": {
-                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                     "description": "Target zoom level; MapLibre keeps the current zoom when unset"
                                   },
                                   "duration": {
@@ -13706,7 +13746,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Padding in pixels around the fitted bounds"
                                   },
                                   "maxZoom": {
-                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                     "description": "Maximum zoom level when fitting the feature's bounds"
                                   },
                                   "duration": {

@@ -406,9 +406,11 @@ export function checkDocument(
     warnings.push(...checkLocaleKeys(config["locale"], ["config", "locale"], positions));
 
     // ml-aot.51 — fitTo names a source the document does not declare.
+    // `fitTo: name` is shorthand for `fitTo: { source: name }`.
     const fitTo = config["fitTo"];
-    if (isObject(fitTo) && typeof fitTo["source"] === "string" && !sourceNames.includes(fitTo["source"])) {
-      const name = fitTo["source"];
+    const fitName = typeof fitTo === "string" ? fitTo : isObject(fitTo) ? fitTo["source"] : undefined;
+    if (typeof fitName === "string" && !sourceNames.includes(fitName)) {
+      const name = fitName;
       const hint = nearMiss(name, sourceNames);
       warnings.push({
         path: "config.fitTo.source",
@@ -417,7 +419,7 @@ export function checkDocument(
           (sourceNames.length > 0 ? ` (${sourceNames.join(", ")})` : " (there are none)") +
           `, so the map keeps its center and zoom.` +
           (hint ? ` Did you mean "${hint}"?` : ""),
-        ...at(positions, ["config", "fitTo", "source"]),
+        ...at(positions, typeof fitTo === "string" ? ["config", "fitTo"] : ["config", "fitTo", "source"]),
         ...(hint ? { suggestion: hint } : {}),
       });
     }
