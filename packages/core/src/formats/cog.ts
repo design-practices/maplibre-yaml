@@ -159,6 +159,9 @@ async function readMore(fileUrl: string, offset: number, length: number): Promis
   }
 }
 
+/** The preflight's bytes by file URL, until the reader's first request takes them. */
+const firstBlocks = new Map<string, { bytes: Uint8Array; contentRange: string | null }>();
+
 /** Preflight results by file URL: a header read once per file per page. */
 const preflights = new Map<string, Promise<CogHeader | undefined>>();
 
@@ -215,7 +218,8 @@ async function readHeader(fileUrl: string, report: CogHintReporter | undefined):
     throw new FormatError({ ...base, code: "no-range" });
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
-  // The header reader travels in the COG chunk (formats/lib/cog.ts).
+  // The reader asks for the same 64 KB first: it gets these (lib/cog-first-block).
+  firstBlocks.set(fileUrl, { bytes, contentRange: response.headers.get("content-range") });
   const { readCogHeaderParts, isCloudOptimized } = await getDecoder("cog");
   const parts: FilePart[] = [{ start: 0, bytes }];
   let header = readCogHeaderParts(parts);
@@ -261,11 +265,23 @@ export async function handle(
     throw new FormatError({ format: "cog", url: shown, code: "decoder", detail: WORKER_BLOCKED });
   }
   if (params.type === "json") await preflight(fileUrl, report);
+  let shared = false;
   try {
     // The library itself (`chunks/cog.js`), downloaded on demand; a failed
     // download is a FormatError ("chunk") that names the file.
-    const { cogProtocol } = await getDecoder("cog");
-    return (await cogProtocol(params as never)) as { data: unknown };
+    const lib = await getDecoder("cog");
+    // The file's first 64 KB, already read: the reader's first request gets them.
+    const block = params.type === "json" ? firstBlocks.get(fileUrl) : undefined;
+    if (block) {
+      firstBlocks.delete(fileUrl);
+      lib.shareFirstBlock(fileUrl, block);
+      shared = true;
+    }
+    try {
+      return (await lib.cogProtocol(params as never)) as { data: unknown };
+    } finally {
+      if (shared) lib.dropFirstBlock(fileUrl);
+    }
   } catch (error) {
     throw classifyCogError(error, shown);
   }

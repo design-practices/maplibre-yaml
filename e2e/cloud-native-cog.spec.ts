@@ -145,10 +145,9 @@ test.describe("COG with no page JavaScript", () => {
     expect(Math.abs(f.first.lat - 42.15), JSON.stringify(f.first)).toBeLessThan(0.05);
     expect(f.first.zoom).toBeGreaterThan(8);
     expect(f.moves).toBe(0);
-    // The cog:// handler reused the header read made ahead of the map: one
-    // 64 KB read of ours, plus geotiff.js's own first block — as on a map
-    // without fitTo.
-    expect(tif.filter((r) => r.range === "bytes=0-65535")).toHaveLength(2);
+    // One read of the file's first 64 KB: made ahead of the map, reused by
+    // the cog:// handler's checks and handed to geotiff.js as its first block.
+    expect(tif.filter((r) => r.range === "bytes=0-65535")).toHaveLength(1);
     await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
     expect(errors).toEqual([]);
   });

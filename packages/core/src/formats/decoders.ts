@@ -67,6 +67,8 @@ interface CogLibrary {
   readCogHeader: typeof import("./cog-header").readCogHeader;
   readCogHeaderParts: typeof import("./cog-header").readCogHeaderParts;
   isCloudOptimized: typeof import("./cog-header").isCloudOptimized;
+  shareFirstBlock: typeof import("./lib/cog-first-block").shareFirstBlock;
+  dropFirstBlock: typeof import("./lib/cog-first-block").dropFirstBlock;
 }
 
 /**

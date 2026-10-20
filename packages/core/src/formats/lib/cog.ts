@@ -12,3 +12,4 @@
 
 export { cogProtocol } from "@geomatico/maplibre-cog-protocol";
 export { isCloudOptimized, readCogHeader, readCogHeaderParts } from "../cog-header";
+export { dropFirstBlock, shareFirstBlock } from "./cog-first-block";
