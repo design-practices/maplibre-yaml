@@ -719,7 +719,7 @@ Each item is one of these:
 | `str: "Population: "` | The text as written |
 | `property: population` | The feature's `population` property |
 | `property: …` plus `else: "n/a"` | `else` is shown when the property is missing or `null` (without `else`, nothing is shown) |
-| `property: …` plus `format: { … }` | Formats a number in the reader's language, with MapLibre's `number-format` options. See [Number formats](#number-formats). Text values are shown unchanged |
+| `property: …` plus `format: { … }` | Formats a number in the reader's language, with MapLibre's `number-format` options. See [Number formats](#number-formats). Text that reads as a number (`"54000"`) is formatted as that number; other text is shown unchanged |
 | `href: "https://…"` plus `str: "Read more"` (or `text:`) | A link with that text. Without `str` or `text`, the URL is the link text. See [Links](#links) |
 | `src: "https://…/photo.jpg"` plus `alt: "…"` | An image |
 
@@ -774,7 +774,10 @@ popup:
 
 Numbers are grouped (`8,336,817`) and rounded to three decimals unless the
 options say otherwise. A property without `format:` is shown exactly as
-stored, so years and ids (`1999`, `10012`) are never grouped. A value
+stored, so years and ids (`1999`, `10012`) are never grouped. A number
+stored as text (`"54000"`, as a CSV or a text column written by `ogr2ogr`
+carries it) is formatted like the number, the way `classify:` reads it;
+text that isn't a number (`"n/a"`, `""`) is shown as stored. A value
 `Intl` cannot use (an unknown currency or unit) logs one console warning and
 the number is shown without it. The [Accessibility &
 languages](/guides/accessibility-languages/#number-formats) guide has more.

@@ -420,8 +420,19 @@ describe("PopupBuilder", () => {
       expect(german.build(popup({ locale: "en-US" }), { v: 1234.5 })).toBe("<p>1,234.5</p>");
     });
 
-    it("strings and missing values are not formatted", () => {
-      expect(builder.build(popup({ locale: "de-DE" }), { v: "1234.5" })).toBe("<p>1234.5</p>");
+    it("a numeric string is formatted as the number it reads as (as classify reads it); other text isn't", () => {
+      // ogr2ogr writes a mixed column ("54000", "n/a", 100700) as text.
+      expect(builder.build(popup({ locale: "de-DE" }), { v: "1234.5" })).toBe("<p>1.234,5</p>");
+      expect(builder.build(popup({ locale: "en-US", currency: "USD", "max-fraction-digits": 0 }), { v: "100700" })).toBe(
+        "<p>$100,700</p>"
+      );
+      expect(builder.build(popup(",.0f"), { v: " 2500 " })).toBe("<p>2,500</p>");
+      for (const text of ["n/a", "", "  ", "Infinity", "12 km"]) {
+        expect(builder.build(popup({ locale: "de-DE" }), { v: text })).toBe(`<p>${text}</p>`);
+      }
+    });
+
+    it("missing values are not formatted", () => {
       expect(builder.build([{ p: [{ property: "v", format: { locale: "de-DE" }, else: "n/a" }] }] as any, {})).toBe(
         "<p>n/a</p>"
       );
