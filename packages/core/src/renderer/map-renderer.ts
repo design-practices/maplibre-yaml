@@ -176,10 +176,14 @@ function resolveFitTo(
 
 /**
  * The reader's own plain-language failures (formats/errors), as they reach an
- * `error` event from a style's PMTiles source.
+ * `error` event from a style's PMTiles (or COG) source — the file's, and the
+ * reader's own: a reader file that couldn't be downloaded (`chunks/pmtiles.js`
+ * offline, blocked, or missing from a self-hosted copy) or set up. A tile
+ * error crosses MapLibre's worker boundary as a plain error, so the wording
+ * is what is matched.
  */
 const BASEMAP_FILE_FAILURE =
-  /^`[^`]+` (didn't load \(|was served without range-request support|isn't a |is compressed)|^The browser couldn't read `/;
+  /^`[^`]+` (didn't load \(|was served without range-request support|isn't a |is compressed|couldn't be read as )|^The browser couldn't read `|^The [^`]+? reader (\(`[^`]+`\) couldn't be downloaded|couldn't be set up)/;
 
 /** MapLibre's error for a style layer whose `source-layer` the Protomaps file lacks. */
 const MISSING_PROTOMAPS_LAYER = new RegExp(
@@ -1172,7 +1176,18 @@ export class MapRenderer {
     // a basemap style that never loaded (classified above).
     // maplibre-gl v6 types `e.error` as `{ message }` (ErrorLike), not
     // Error; normalise so onError's contract holds on every major.
+    // MapLibre fires `load` from a render frame in which every source has
+    // settled, and a source whose TileJSON request failed settles without
+    // asking for another frame. When the failure comes late — a basemap's
+    // `pmtiles://` source waiting on a reader file that then didn't download
+    // — no frame follows, `load` never fires and `mapReady()` would wait
+    // forever. One more frame after a pre-load error lets MapLibre see it.
+    let mapLoadFired = false;
+    this.map.on('load', () => {
+      mapLoadFired = true;
+    });
     this.map.on('error', (e) => {
+      if (!mapLoadFired && !this.destroyed) this.map.triggerRepaint?.();
       const raw = e.error as unknown;
       let error =
         raw instanceof Error

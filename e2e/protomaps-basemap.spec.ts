@@ -210,6 +210,27 @@ test.describe("a Protomaps basemap from a .pmtiles file, YAML only", () => {
     expect(errors).toEqual([]);
   });
 
+  test("the PMTiles reader blocked: the basemap notice, and mapReady() still resolves", async ({ page }) => {
+    const { errors } = await guard(page);
+    await page.route("**/chunks/pmtiles.js", (route) => route.abort("blockedbyclient"));
+    await page.goto(PAGE, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("self-hosted") as any)?.mapReady === "function");
+    const settled = await page.evaluate(() =>
+      Promise.race([
+        (document.getElementById("self-hosted") as any).mapReady().then(
+          () => "ready",
+          () => "rejected"
+        ),
+        new Promise((resolve) => setTimeout(() => resolve("TIMEOUT"), 20_000)),
+      ])
+    );
+    expect(settled).toBe("ready");
+    const notice = page.locator("#self-hosted .ml-map-notice");
+    await expect(notice).toContainText("The basemap didn't load: The PMTiles reader (");
+    await expect(notice).toContainText("couldn't be downloaded");
+    expect(errors).toEqual([]);
+  });
+
   test("a story on a Protomaps basemap: a chapter restyles a basemap layer by id", async ({ page }) => {
     const { errors } = await guard(page);
     await page.goto(STORY, { waitUntil: "domcontentloaded" });

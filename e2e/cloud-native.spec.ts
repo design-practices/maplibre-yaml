@@ -433,6 +433,77 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     expect(errors).toEqual([]);
   });
 
+  test("a basemap's reader that can't be downloaded: the basemap notice, and mapReady() still resolves", async ({
+    page,
+    baseURL,
+  }) => {
+    const errors = await guard(page);
+    await page.route("**/chunks/pmtiles.js", (route) => route.abort("blockedbyclient"));
+    await page.route("**/chunks/cog.js", (route) => route.abort("blockedbyclient"));
+    // A style whose imagery is a COG (cog://), the other protocol whose reader
+    // is a file of its own.
+    await page.route("**/cog-basemap/style.json", (route) =>
+      route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          version: 8,
+          sources: {
+            imagery: { type: "raster", tileSize: 256, url: `cog://${baseURL}/gallery-assets/cloud-native/imagery.cog.tif` },
+          },
+          layers: [
+            { id: "background", type: "background", paint: { "background-color": "#eeeeee" } },
+            { id: "imagery", type: "raster", source: "imagery" },
+          ],
+        }),
+      })
+    );
+    const html = `<!DOCTYPE html><html><head>
+      <link rel="stylesheet" href="${baseURL}/vendor/maplibre-gl.css" />
+      <script type="importmap">{ "imports": { "maplibre-gl": "${baseURL}/vendor/maplibre-gl.esm.js" } }</script>
+      </head><body>
+      <ml-map id="cog-basemap" style="display:block;height:300px">
+        <script type="text/yaml">
+type: map
+id: cog-basemap
+config: { center: [10.2, 42.15], zoom: 9.6, mapStyle: "${baseURL}/cog-basemap/style.json" }
+layers: []
+        </script>
+      </ml-map>
+      <script type="module" src="${baseURL}/packages/core/register.js"></script>
+      </body></html>`;
+    await page.route("**/cog-basemap/index.html", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    /** mapReady(), or "TIMEOUT" after 20 s: it must settle, never hang. */
+    const settles = (id: string) =>
+      page.evaluate(
+        (id) =>
+          Promise.race([
+            (document.getElementById(id) as any).mapReady().then(
+              () => "ready",
+              () => "rejected"
+            ),
+            new Promise((resolve) => setTimeout(() => resolve("TIMEOUT"), 20_000)),
+          ]),
+        id
+      );
+
+    // A self-hosted basemap (style URL, pmtiles:// source), its reader blocked.
+    await page.goto("/my-repo/blog/basemap.html", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("self-hosted") as any)?.mapReady === "function");
+    expect(await settles("self-hosted")).toBe("ready");
+    const notice = page.locator("#self-hosted .ml-map-notice");
+    await expect(notice).toContainText("The basemap didn't load: The PMTiles reader (");
+    await expect(notice).toContainText("chunks/pmtiles.js) couldn't be downloaded");
+
+    // A basemap style with a COG source, its reader blocked.
+    await page.goto("/cog-basemap/index.html", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("cog-basemap") as any)?.mapReady === "function");
+    expect(await settles("cog-basemap")).toBe("ready");
+    await expect(page.locator("#cog-basemap .ml-map-notice")).toContainText(
+      /The basemap didn't load: The Cloud Optimized GeoTIFF \(COG\) reader \(.*chunks\/cog\.js\) couldn't be downloaded/
+    );
+    expect(errors).toEqual([]);
+  });
+
   test("a basemap style with an absolute pmtiles://https://… source, no page JS", async ({ page, baseURL }) => {
     const errors = await guard(page);
     // A "remote" style (served here, so the suite stays hermetic) whose
