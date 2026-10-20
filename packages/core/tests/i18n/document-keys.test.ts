@@ -153,6 +153,8 @@ config:
     const w1 = v1.warnings.find((w) => w.path === "config.locale.maplibre-yaml.Legend.Titel");
     expect(w1?.message).toContain('Did you mean "maplibre-yaml.Legend.Title"?');
     expect(w1?.line).toBe(9);
+    // Also an author hint on the page (ml-aot.99), not only the console.
+    expect(w1?.onPage).toBe(true);
 
     const v2 = parse(`
 version: 2
@@ -169,6 +171,7 @@ runtime:
 `);
     const w2 = v2.warnings.find((w) => w.path === "runtime.map.locale.maplibre-yaml.Notice.Dismis");
     expect(w2?.message).toContain('Did you mean "maplibre-yaml.Notice.Dismiss"?');
+    expect(w2?.onPage).toBe(true);
 
     const story = YAMLParser.safeParseScrollytellingBlock(`
 type: scrollytelling

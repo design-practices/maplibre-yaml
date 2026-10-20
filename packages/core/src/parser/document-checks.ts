@@ -140,6 +140,9 @@ export function checkLocaleKeys(
         (hint ? ` Did you mean "${hint}"?` : " The docs list every key (Accessibility & languages)."),
       ...atKey(positions, path, key),
       ...(hint ? { suggestion: hint } : {}),
+      // The page shows the untranslated text with no reason otherwise: an
+      // author hint on the map too (dev-only), not only the console.
+      onPage: true,
     });
   }
   return warnings;
