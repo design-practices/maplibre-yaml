@@ -61,6 +61,7 @@ import {
   probeBasemapAssets,
   type BasemapAssets,
 } from './basemap-assets';
+import { fitToPadding, type FitPadding } from '../utils/fit-padding';
 import {
   basemapLanguage,
   fallbackBasemapStyle,
@@ -564,7 +565,11 @@ export class MapRenderer {
         ? {
             bounds: fit.bounds,
             fitBoundsOptions: {
-              ...(fitTo!.padding !== undefined ? { padding: fitTo!.padding } : {}),
+              // The author's padding, else a margin for the map's size (ml-aot.124).
+              padding: fitToPadding(fitTo!, {
+                width: this.containerEl?.clientWidth ?? 0,
+                height: this.containerEl?.clientHeight ?? 0,
+              }),
               ...(fitTo!.maxZoom !== undefined ? { maxZoom: fitTo!.maxZoom } : {}),
             },
           }
@@ -677,7 +682,7 @@ export class MapRenderer {
             const bounds: Bounds = [[b[0], b[1]], [b[2], b[3]]] as Bounds;
             this.fitApplied = true;
             this.map.fitBounds(bounds, {
-              ...(fitTo.padding !== undefined ? { padding: fitTo.padding } : {}),
+              padding: this.fitPadding(fitTo),
               ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
               animate: false,
             });
@@ -795,7 +800,7 @@ export class MapRenderer {
           if (bounds) {
             this.fitApplied = true;
             this.map.fitBounds(bounds, {
-              ...(fitTo.padding !== undefined ? { padding: fitTo.padding } : {}),
+              padding: this.fitPadding(fitTo),
               ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
               animate: false,
             });
@@ -1242,6 +1247,12 @@ export class MapRenderer {
     });
 
     if (protomaps) this.loadProtomapsBasemap(protomaps, options);
+  }
+
+  /** `fitTo`'s padding for the map as it is now: the author's, else the default for its size. */
+  private fitPadding(fitTo: FitToConfig): number | FitPadding {
+    const canvas = this.map?.getContainer?.();
+    return fitToPadding(fitTo, { width: canvas?.clientWidth ?? 0, height: canvas?.clientHeight ?? 0 });
   }
 
   /**

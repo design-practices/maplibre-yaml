@@ -236,7 +236,9 @@ const FitToObjectSchema = z
       .number()
       .min(0)
       .optional()
-      .describe("Padding in pixels around the fitted bounds"),
+      .describe(
+        "Padding in pixels around the fitted bounds. Default: 8% of the map's shorter side (12-48 px), plus room for the attribution at the bottom"
+      ),
     maxZoom: ZoomLevelSchema.optional().describe(
       "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
     ),

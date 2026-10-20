@@ -254,7 +254,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "padding": {
                           "type": "number",
                           "minimum": 0,
-                          "description": "Padding in pixels around the fitted bounds"
+                          "description": "Padding in pixels around the fitted bounds. Default: 8% of the map's shorter side (12-48 px), plus room for the attribution at the bottom"
                         },
                         "maxZoom": {
                           "type": "number",
@@ -4824,7 +4824,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "padding": {
                       "type": "number",
                       "minimum": 0,
-                      "description": "Padding in pixels around the fitted bounds"
+                      "description": "Padding in pixels around the fitted bounds. Default: 8% of the map's shorter side (12-48 px), plus room for the attribution at the bottom"
                     },
                     "maxZoom": {
                       "type": "number",
@@ -11502,7 +11502,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                     "padding": {
                                       "type": "number",
                                       "minimum": 0,
-                                      "description": "Padding in pixels around the fitted bounds"
+                                      "description": "Padding in pixels around the fitted bounds. Default: 8% of the map's shorter side (12-48 px), plus room for the attribution at the bottom"
                                     },
                                     "maxZoom": {
                                       "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
@@ -13072,7 +13072,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                     "padding": {
                       "type": "number",
                       "minimum": 0,
-                      "description": "Padding in pixels around the fitted bounds"
+                      "description": "Padding in pixels around the fitted bounds. Default: 8% of the map's shorter side (12-48 px), plus room for the attribution at the bottom"
                     },
                     "maxZoom": {
                       "type": "number",

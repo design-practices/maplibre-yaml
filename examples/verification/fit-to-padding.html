@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>fitTo keeps a margin around the data</title>
+  <!--
+    0.9 (ml-aot.124, ml-aot.112): fitTo without padding: frames the data with a
+    margin — 8% of the map's shorter side (12 to 48 px), plus room for
+    MapLibre's attribution at the bottom — so the outermost circles are whole
+    and not under the attribution, on a desktop window and on a phone. An
+    author's padding: is used as given.
+    PASS = all four dots whole, none under the attribution, at any window size.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/fit-to-padding.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; }
+    ml-map { display: block; height: 100vh; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: fit-padding
+config:
+  center: [0, 0]
+  zoom: 2
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo: places
+sources:
+  places:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - { type: Feature, properties: { name: Central Park }, geometry: { type: Point, coordinates: [-73.9654, 40.7829] } }
+        - { type: Feature, properties: { name: Prospect Park }, geometry: { type: Point, coordinates: [-73.9690, 40.6602] } }
+        - { type: Feature, properties: { name: Hudson Yards }, geometry: { type: Point, coordinates: [-74.0021, 40.7539] } }
+        - { type: Feature, properties: { name: Long Island City }, geometry: { type: Point, coordinates: [-73.9496, 40.7447] } }
+layers:
+  - id: places
+    type: circle
+    source: places
+    paint: { circle-radius: 9, circle-color: "#e63946", circle-stroke-color: "#ffffff", circle-stroke-width: 2 }
+    </script>
+  </ml-map>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

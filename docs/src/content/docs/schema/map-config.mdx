@@ -557,7 +557,7 @@ source holds.
 | Property | Type | Description |
 |----------|------|-------------|
 | `source` | string | Name of an entry in `sources:`: GeoJSON, FlatGeobuf, GeoParquet or COG (required) |
-| `padding` | number | Padding in pixels around the fitted bounds |
+| `padding` | number | Padding in pixels around the fitted bounds. Without it, a margin scaled to the map: 8% of its shorter side (12 to 48 px), plus room for the attribution at the bottom. `0` frames the data's exact extent. |
 | `maxZoom` | number | Upper zoom limit for the fit. Without it, a single point zooms all the way in. |
 
 ```yaml
@@ -603,8 +603,13 @@ layers:
 - **Other vector / raster / raster-dem sources** (tiles, PMTiles): not
   supported. Tiled sources have no client-side extent. The renderer warns
   once and keeps `center`/`zoom`.
+- **Padding.** Without `padding:`, the data keeps a margin so the features at
+  its edges are drawn whole: 8% of the map's shorter side, between 12 and
+  48 pixels (48 on a desktop window, about 30 on a phone), and at the bottom
+  room for MapLibre's attribution as well. `padding:` (pixels, every side)
+  replaces it; `padding: 0` frames the exact extent, as 0.8 did by default.
 - `fitTo: countries` (just the source name) is shorthand for
-  `fitTo: { source: countries }`.
+  `fitTo: { source: countries }`, with the default padding.
 - `fitTo` wins over `bounds` when both are set. In format v2 it lives at
   `runtime.fitTo`.
 
