@@ -155,7 +155,7 @@ describe("--strict means no lossy degradation, not no runtime content", () => {
           id: "m",
           config: { center: [0, 0], zoom: 5 },
           sources: {
-            s: { type: "geojson", url: "/live.geojson", refresh: { refreshInterval: 5000 } },
+            s: { type: "geojson", stream: { type: "websocket", url: "wss://example.com/live" } },
           },
           layers: [{ id: "a", type: "circle", source: "s" }],
         },
@@ -169,7 +169,7 @@ describe("--strict means no lossy degradation, not no runtime content", () => {
       id: "m",
       config: { center: [0, 0], zoom: 5 },
       sources: {
-        s: { type: "geojson", url: "/live.geojson", refresh: { refreshInterval: 5000 } },
+        s: { type: "geojson", stream: { type: "websocket", url: "wss://example.com/live" } },
       },
       layers: [{ id: "a", type: "circle", source: "s" }],
     });

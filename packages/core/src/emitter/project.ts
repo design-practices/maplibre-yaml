@@ -493,6 +493,11 @@ function pushSourceRuntimeWarnings(
   }
 }
 
+/** A GeoJSON source given by `url:` — emitted as `data: <url>`. */
+function hasGeoJSONUrl(spec: Record<string, unknown>): boolean {
+  return spec["type"] === "geojson" && typeof spec["url"] === "string";
+}
+
 export function projectStyle(
   model: MapModel,
   mode: EmitMode = "with-fallbacks"
@@ -512,7 +517,10 @@ export function projectStyle(
     }
     sources[name] = spec;
     if (Object.keys(source.runtime).length > 0) {
-      const hasData = isPlainObject(source.spec) && "data" in source.spec;
+      // A GeoJSON `url:` emits as `data: <url>` (lowerGeoJSONUrl): the style
+      // loads it, once.
+      const hasData =
+        isPlainObject(source.spec) && ("data" in source.spec || hasGeoJSONUrl(source.spec));
       pushSourceRuntimeWarnings(warnings, `sources.${name}`, source.runtime, hasData);
     }
   }
@@ -576,7 +584,8 @@ export function projectStyle(
 
     // Captured before the hoist below replaces the inline object with a
     // generated source name — the contract/lossy split needs it.
-    const inlineHasData = isPlainObject(spec["source"]) && "data" in spec["source"];
+    const inlineHasData =
+      isPlainObject(spec["source"]) && ("data" in spec["source"] || hasGeoJSONUrl(spec["source"]));
 
     // The style spec has no inline-source concept: `layer.source` must name an
     // entry in `sources:`. An inline source is hoisted into a generated one.

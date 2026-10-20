@@ -16,6 +16,9 @@
  *   the features (`contract`), or reports `lossy` when it can't.
  * - **GeoParquet** — not read by this version: emitted empty (`lossy`).
  * - **COG** — `cog://` URL, `contract` (needs a COG protocol plugin).
+ *
+ * Every other GeoJSON source given by `url:` emits it as `data: <url>`, the
+ * style spec's form (ml-xzx).
  */
 
 import { formatOfSource, stripScheme, typeReadsFormat } from "../formats/detect";
@@ -71,6 +74,18 @@ export function attachSourceData(
 }
 
 /**
+ * A GeoJSON source given by `url:` (our key: the renderer fetches it) in the
+ * style spec's own form. A MapLibre `geojson` source has no `url` — it takes
+ * the URL as its `data` — and maplibre-gl refuses the whole style over the
+ * unknown property (ml-xzx). Inline `data` wins; the URL is then dropped.
+ */
+function lowerGeoJSONUrl(spec: Obj): Obj {
+  if (spec["type"] !== "geojson" || typeof spec["url"] !== "string") return spec;
+  const { url, ...rest } = spec;
+  return "data" in rest && rest["data"] !== undefined ? rest : { ...rest, data: url };
+}
+
+/**
  * Lower one source whose URL names a cloud-native file.
  *
  * @param id - The emitted source id.
@@ -88,7 +103,7 @@ export function lowerSourceFormat(
   const format = formatOfSource({ ...spec, ...(runtime ?? {}) });
   const url = spec["url"];
   if (!format || typeof url !== "string" || !typeReadsFormat(spec["type"], format)) {
-    return { spec, warnings: [] };
+    return { spec: lowerGeoJSONUrl(spec), warnings: [] };
   }
   switch (format) {
     case "pmtiles": {
