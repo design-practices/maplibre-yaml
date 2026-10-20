@@ -13,15 +13,15 @@
  *   library becomes `dist/chunks/<name>.js`, fetched relative to the bundle's
  *   own URL — so it works from unpkg/jsDelivr, a copied `dist/` folder, or a
  *   GitHub Pages subpath. Self-hosting means copying the whole `dist/`.
- * - **npm / bundlers** (`dist/register.js`, `dist/index.js`): the same
- *   `dist/chunks/<name>.js`, which Vite, Astro and webpack turn into a lazy
- *   chunk of the consumer's build; Node (`mlym emit`, SSR) imports it the
- *   same way.
+ * - **npm / bundlers** (`dist/register.js`, `dist/index.js`):
+ *   `dist/formats/<name>.js` (code they share in `dist/shared/`), which Vite,
+ *   Astro and webpack turn into a lazy chunk of the consumer's build; Node
+ *   (`mlym emit`, SSR) imports it the same way.
  * - **`index.browser.js`** (one-file tooling build): inlined, as before.
  *
  * `tsup.config.ts` reads this table: every `name: () => import("spec")` line
- * becomes the chunk `chunks/<name>.js` in both builds (`tests/lazy-chunks`
- * asserts it). The modules that *use* a library — formats/pmtiles.ts,
+ * becomes `chunks/<name>.js` in the CDN build and `formats/<name>.js` in the
+ * npm build (`tests/lazy-chunks` asserts both). The modules that *use* a library — formats/pmtiles.ts,
  * formats/flatgeobuf.ts — stay in the main bundle, are small, and reach the
  * library only through {@link getDecoder}. That split is deliberate: a chunk
  * holding only third-party code shares nothing with the main bundle, so

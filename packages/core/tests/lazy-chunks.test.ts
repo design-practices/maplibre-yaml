@@ -93,6 +93,17 @@ describe("the seam", () => {
     // checks below cover all of them.
     expect(Object.keys(LIBRARY_MARKERS).sort()).toEqual([...SEAM_NAMES].sort());
   });
+
+  it("describes where each build puts the readers as tsup.config.ts does (ml-cnv.19)", () => {
+    const header = readFileSync(join(PKG_ROOT, "src/formats/decoders.ts"), "utf8").split("*/")[0]!;
+    const config = readFileSync(join(PKG_ROOT, "tsup.config.ts"), "utf8");
+    // The CDN build: chunks/<name>.js; the npm build: formats/<name>.js.
+    expect(config).toContain("`dist/chunks/<name>.js`");
+    expect(config).toContain("`dist/formats/<name>.js`");
+    expect(header).toMatch(/CDN[\s\S]*`dist\/chunks\/<name>\.js`/);
+    expect(header).toMatch(/npm \/ bundlers[\s\S]*`dist\/formats\/<name>\.js`/);
+    expect(header).not.toMatch(/npm \/ bundlers[^*]*\n \*   `dist\/chunks/);
+  });
 });
 
 describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
