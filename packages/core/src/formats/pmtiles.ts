@@ -15,11 +15,18 @@
  * neither replaces nor wraps it. Same rule as `setWorkerModuleUrl`.
  *
  * This module never imports maplibre-gl: the module is injected
- * ({@link install}), so it can become an on-demand chunk later without
- * pulling a second maplibre-gl into it.
+ * ({@link install}).
+ *
+ * **The reader is downloaded on demand** (`chunks/pmtiles.js`, see
+ * formats/decoders), but the protocol is still registered synchronously,
+ * before the map is constructed: {@link install} registers a thin handler
+ * at once, and the handler awaits the reader on the first TileJSON or tile
+ * request. MapLibre's protocol handlers are async, so a basemap style's first
+ * requests can never race the registration — they just wait for the reader.
  */
 
-import { Protocol } from "pmtiles";
+import type { Protocol } from "pmtiles";
+import { getDecoder } from "./decoders";
 import { classifyPmtilesError, FormatError } from "./errors";
 
 /** The slice of the maplibre-gl module this decoder needs (injected). */
@@ -86,11 +93,18 @@ export function install(host: ProtocolHost): InstallResult {
     });
   }
 
+  // One reader per registration, created when the first request arrives.
   // `metadata: true`: the TileJSON MapLibre receives carries the archive's
   // vector_layers, bounds, min/max zoom and attribution.
-  const protocol = new Protocol({ metadata: true });
+  // A reader that failed to download is dropped, so a later request retries.
+  let reader: Promise<Protocol> | undefined;
   const handler = async (params: { url: string }, abortController: AbortController) => {
+    const current = (reader ??= getDecoder("pmtiles").then((m) => new m.Protocol({ metadata: true })));
     try {
+      const protocol = await current.catch((error: unknown) => {
+        if (reader === current) reader = undefined;
+        throw error;
+      });
       return await protocol.tile(params as never, abortController);
     } catch (error) {
       throw classifyPmtilesError(error, displayUrl(archiveUrl(params.url)));

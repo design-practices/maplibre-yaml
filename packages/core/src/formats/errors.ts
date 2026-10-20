@@ -38,6 +38,12 @@ export type FormatFailureCode =
   | "unsupported"
   /** The reader itself couldn't be set up (e.g. maplibre-gl too old). */
   | "decoder"
+  /**
+   * The reader's file (`dist/chunks/<name>.js`, loaded on demand) couldn't be
+   * downloaded: offline, a content blocker or CSP, or a self-hosted copy of
+   * maplibre-yaml without its `chunks/` folder. `url` is that file.
+   */
+  | "chunk"
   /** Anything else the reader reported while decoding. */
   | "read";
 
@@ -53,7 +59,7 @@ export interface FormatFailure {
   size?: number;
   /** The CRS the file declares (`crs`), e.g. "EPSG:3857". */
   crs?: string;
-  /** The underlying library message (`read`, `decoder`). */
+  /** The underlying library message (`read`, `decoder`, `chunk`). */
   detail?: string;
 }
 

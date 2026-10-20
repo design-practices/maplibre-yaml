@@ -32,7 +32,8 @@ import {
   type CloudFormat,
   type LoadMode,
 } from "../formats/detect";
-import { getDecoder } from "../formats/decoders";
+import { prefetchDecoder } from "../formats/decoders";
+import * as fgb from "../formats/flatgeobuf";
 import type { FlatGeobufHeader } from "../formats/flatgeobuf";
 import { FormatError, isAbortError, isFormatError } from "../formats/errors";
 import { registerSourceDataLoader, type SourceDataLoader } from "../data/source-data";
@@ -165,7 +166,8 @@ export async function loadFlatGeobufWhole(
   url: string,
   options: { isCurrent?: () => boolean; onHeader?: (header: FlatGeobufHeader) => void } = {}
 ): Promise<FeatureCollection | null> {
-  const fgb = await getDecoder("flatgeobuf");
+  // The reader (an on-demand chunk) downloads while the file's GET starts.
+  prefetchDecoder("flatgeobuf");
   const opened = await fgb.openWhole(url);
   if (opened.size !== undefined && opened.size > WHOLE_FILE_MAX_BYTES) {
     fgb.discard(opened);
@@ -363,7 +365,7 @@ export class FlatGeobufLoader {
    *   missing index then means "too large", not "add an index for viewport".
    */
   private async startViewport(auto: boolean, size?: number): Promise<void> {
-    const fgb = await getDecoder("flatgeobuf");
+    prefetchDecoder("flatgeobuf");
     const probe = await fgb.probe(this.url);
     const total = probe.size ?? size;
     if (!probe.ranges) {
@@ -423,7 +425,6 @@ export class FlatGeobufLoader {
       }
       return;
     }
-    const fgb = await getDecoder("flatgeobuf");
     const data = await fgb.readBbox(this.url, viewBBox(this.map), {
       isCurrent: () => generation === this.generation && !this.destroyed,
       onHeader: (h) => (this.header = h),

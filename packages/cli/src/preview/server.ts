@@ -414,6 +414,10 @@ export async function createPreviewServer(
                   'register.js': coreRegister.localFile,
                   [basename(coreRegister.localFile) + '.map']: coreRegister.localFile + '.map',
                 };
+                // The format readers the bundle loads on demand (0.9):
+                // `./chunks/<name>.js`, relative to the bundle's URL.
+                const chunk = /^chunks\/([A-Za-z0-9][A-Za-z0-9_-]*\.js(?:\.map)?)$/.exec(requested);
+                if (chunk) files[requested] = join(dirname(coreRegister.localFile), 'chunks', chunk[1]!);
                 const filePath = files[requested];
                 if (filePath && existsSync(filePath)) {
                   res.setHeader('Content-Type', requested.endsWith('.map') ? 'application/json' : 'text/javascript');

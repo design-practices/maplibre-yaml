@@ -132,6 +132,21 @@ describe('preview server (integration)', () => {
     expect(await res.text()).toBe(await readFile(join(coreDir, 'dist/register.browser.js'), 'utf-8'));
   });
 
+  it("serves the core bundle's on-demand chunks next to it (0.9: chunks/pmtiles.js, …)", async () => {
+    const url = importMapOf(html)['@maplibre-yaml/core/register']!;
+    const dirUrl = url.slice(0, url.lastIndexOf('/') + 1);
+    const coreDir = await realpath(join(process.cwd(), 'node_modules/@maplibre-yaml/core'));
+    for (const name of ['pmtiles', 'flatgeobuf']) {
+      const res = await fetch(base + dirUrl + 'chunks/' + name + '.js');
+      expect(res.status, name).toBe(200);
+      expect(res.headers.get('content-type'), name).toMatch(/javascript/);
+      expect(await res.text(), name).toBe(await readFile(join(coreDir, 'dist/chunks', name + '.js'), 'utf-8'));
+    }
+    for (const probe of ['chunks/..%2Fregister.browser.js', 'chunks/%2E%2E/index.js', 'chunks/nope.js']) {
+      expect((await fetch(base + dirUrl + probe)).status, probe).not.toBe(200);
+    }
+  });
+
   it('does not serve files outside the maplibre-gl dist', async () => {
     const moduleUrl = importMapOf(html)['maplibre-gl']!;
     const dirUrl = moduleUrl.slice(0, moduleUrl.lastIndexOf('/') + 1);

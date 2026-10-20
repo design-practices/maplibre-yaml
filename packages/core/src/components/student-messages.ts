@@ -443,6 +443,7 @@ const FORMAT_LABELS: Record<string, string> = {
   flatgeobuf: "FlatGeobuf",
   geoparquet: "GeoParquet",
   cog: "Cloud Optimized GeoTIFF (COG)",
+  "protomaps-basemap": "Protomaps basemap",
 };
 
 /** The file name at the end of a URL, for command examples. */
@@ -526,6 +527,14 @@ export function describeFormatFailure(failure: FormatFailure): string {
       return (
         `The ${label} reader couldn't be set up${failure.detail ? ` (${failure.detail})` : ""}, ` +
         `so ${file} wasn't read. Other layers are unaffected.`
+      );
+    case "chunk":
+      return (
+        `The ${label} reader (${file}) couldn't be downloaded. maplibre-yaml loads its ` +
+        "file-format readers on demand from the folder its script came from: if you copied " +
+        "maplibre-yaml to your own site, copy the whole `dist/` folder (not just `register.js`), " +
+        "or load it from the CDN. Offline or a content blocker can also stop it. Other layers " +
+        "are unaffected."
       );
     case "compressed":
       return (

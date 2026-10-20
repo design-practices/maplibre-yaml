@@ -13,7 +13,8 @@
  */
 
 import { formatsIn, type CloudFormat } from "../formats/detect";
-import { bundledDecoder, getDecoder } from "../formats/decoders";
+import { getDecoder, hasDecoder, prefetchDecoder } from "../formats/decoders";
+import { install as installPmtiles } from "../formats/pmtiles";
 import { addProtocol, maplibregl, runtimeVersion } from "./maplibre-interop";
 
 type Obj = Record<string, unknown>;
@@ -47,16 +48,19 @@ export function pmtilesUnavailable(): Error | undefined {
  * always, not only for a document whose own sources use it: a basemap style
  * loaded from a URL (`mapStyle:` / `basemap:`, a Protomaps basemap or one
  * self-hosted beside the site) may use `pmtiles://`, and MapLibre loads it
- * before maplibre-yaml can see inside. The reader is bundled, so this costs
- * nothing, and it runs synchronously, before the map is constructed: the
- * style's first TileJSON and tile requests can never race it. A page's own
+ * before maplibre-yaml can see inside. Registration is synchronous, before
+ * the map is constructed, so the style's first TileJSON and tile requests can
+ * never race it; it costs nothing, because the handler downloads the reader
+ * (`chunks/pmtiles.js`) only when the first request arrives. A page's own
  * registration is left alone (host wins).
  *
  * @returns `undefined` when the document's own sources need no protocol;
- *   otherwise a settled promise of the formats whose reader could not be
- *   set up, with the error (awaited before the document's sources are
- *   added; their sources are reported and skipped). A failure that only a
- *   basemap would hit is kept for {@link pmtilesUnavailable}.
+ *   otherwise a promise (never rejecting) of the formats whose reader could
+ *   not be set up or downloaded, with the error — awaited before the
+ *   document's sources are added; their sources are reported and skipped.
+ *   The reader's download starts here, in parallel with the basemap. A
+ *   failure that only a basemap would hit is kept for
+ *   {@link pmtilesUnavailable}.
  */
 export function prepareProtocols(
   sources: unknown,
@@ -66,30 +70,30 @@ export function prepareProtocols(
   const needed = formatsIn(sources, layers);
   for (const f of formatsIn(inlineStyleSources(mapStyle), [])) needed.add(f);
   const failed = new Map<CloudFormat, Error>();
-  const install = (pmtiles: { install: (host: never) => unknown }) =>
-    pmtiles.install({
-      addProtocol: addProtocol as never,
-      config: (maplibregl as unknown as { config?: { REGISTERED_PROTOCOLS?: Obj } }).config,
-      version: runtimeVersion(),
-      module: maplibregl as unknown as object,
-    } as never);
-  const bundled = bundledDecoder("pmtiles");
-  if (bundled) {
-    try {
-      install(bundled);
-    } catch (error) {
-      pmtilesProblem = error instanceof Error ? error : new Error(String(error));
-      failed.set("pmtiles", pmtilesProblem);
-    }
-    return needed.has("pmtiles") ? Promise.resolve(failed) : undefined;
+  let installed = false;
+  try {
+    installed =
+      installPmtiles({
+        addProtocol: addProtocol as never,
+        config: (maplibregl as unknown as { config?: { REGISTERED_PROTOCOLS?: Obj } }).config,
+        version: runtimeVersion(),
+        module: maplibregl as unknown as object,
+      }) !== "host";
+  } catch (error) {
+    pmtilesProblem = error instanceof Error ? error : new Error(String(error));
+    failed.set("pmtiles", pmtilesProblem);
   }
-  // A reader moved to an on-demand chunk (not in 0.9): register when loaded.
-  const loading = getDecoder("pmtiles")
-    .then(install)
-    .catch((error: unknown) => {
-      pmtilesProblem = error instanceof Error ? error : new Error(String(error));
-      failed.set("pmtiles", pmtilesProblem);
-    })
-    .then(() => failed);
-  return needed.has("pmtiles") ? loading : undefined;
+  // Every on-demand reader the document's own sources need starts
+  // downloading now, in parallel with maplibre-gl's style and tiles (not
+  // pmtiles when the page's own handler serves it).
+  for (const format of needed) {
+    if (hasDecoder(format) && (format !== "pmtiles" || installed)) prefetchDecoder(format);
+  }
+  if (!needed.has("pmtiles")) return undefined;
+  // The page's own handler serves these sources: no reader of ours to wait on.
+  if (!installed) return Promise.resolve(failed);
+  return getDecoder("pmtiles").then(
+    () => failed,
+    (error: unknown) => failed.set("pmtiles", error instanceof Error ? error : new Error(String(error)))
+  );
 }

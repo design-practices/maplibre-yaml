@@ -21,13 +21,21 @@
  * advice).
  *
  * The library's own logging: its `dist/esm` build carries no `console.debug`
- * range chatter (the `lib/mjs` build does), which is why this imports the
+ * range chatter (the `lib/mjs` build does), which is why the seam imports the
  * `flatgeobuf/geojson` export.
+ *
+ * **The library is downloaded on demand** (`chunks/flatgeobuf.js`, through
+ * formats/decoders): this module stays in the main bundle and fetches it the
+ * first time a file is decoded. A download failure is a {@link FormatError}
+ * of code `"chunk"`.
  */
 
-import { deserialize } from "flatgeobuf/geojson";
 import type { Feature, FeatureCollection } from "geojson";
+import { getDecoder, type Decoders } from "./decoders";
 import { FormatError, isAbortError, isFormatError } from "./errors";
+
+/** The library's `deserialize` (`flatgeobuf/geojson`), loaded on demand. */
+type Deserialize = Decoders["flatgeobuf"]["deserialize"];
 
 /** What the file's header says, in the shape callers need. */
 export interface FlatGeobufHeader {
@@ -255,6 +263,13 @@ export async function decodeStream(
   url: string,
   options: { isCurrent?: () => boolean; onHeader?: (header: FlatGeobufHeader) => void } = {}
 ): Promise<FeatureCollection | null> {
+  let deserialize: Deserialize;
+  try {
+    ({ deserialize } = await getDecoder("flatgeobuf"));
+  } catch (error) {
+    discard(opened);
+    throw error;
+  }
   const body = opened.response.body;
   // The file's first bytes, kept to name a compressed file if decoding fails.
   let head: Uint8Array | undefined;
@@ -292,6 +307,7 @@ export async function decodeStream(
  */
 export async function decodeBytes(bytes: Uint8Array, url: string): Promise<FeatureCollection> {
   if (isZstd(bytes)) throw compressedFailure(url);
+  const { deserialize } = await getDecoder("flatgeobuf");
   try {
     const data = await collect(
       deserialize(bytes, { headerMetaFn: headerCheck(url) as never }),
@@ -360,6 +376,7 @@ export async function readBbox(
   options: { isCurrent?: () => boolean; onHeader?: (header: FlatGeobufHeader) => void } = {}
 ): Promise<FeatureCollection | null> {
   const [minX, minY, maxX, maxY] = bbox;
+  const { deserialize } = await getDecoder("flatgeobuf");
   try {
     return await collect(
       deserialize(url, {

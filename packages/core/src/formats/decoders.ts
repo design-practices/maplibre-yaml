@@ -1,60 +1,137 @@
 /**
- * @file The one seam every cloud-native decoder is reached through
+ * @file The one seam every on-demand format library is reached through
  * @module @maplibre-yaml/core/formats/decoders
  *
  * @description
- * In 0.9 the decoders are bundled into core (pmtiles ~7.4 KB gz, flatgeobuf
- * ~10 KB gz): no build-system change before the classroom starts. Lazy
- * loading (ml-7qa.5) is deferred, and this seam is what makes it a local
- * change later: every caller already awaits {@link getDecoder}, so each
- * entry below can become `() => import("./pmtiles")` — an on-demand chunk —
- * without touching a single call site, and a page that uses no
- * cloud-native format would then download none of it.
+ * The third-party readers behind the cloud-native formats (pmtiles,
+ * flatgeobuf, and those still to come) are **not** part of the main bundle.
+ * Each is one literal `import()` in {@link LOADERS}, and the build turns each
+ * into a file of its own that a page downloads only when a document uses
+ * that format:
  *
- * Decoders never import maplibre-gl: what they need from it is injected by
- * the caller (`install({ addProtocol, config, … })`), so a future chunk
- * cannot pull in a second maplibre-gl.
+ * - **CDN / plain HTML** (`register.js` → `dist/register.browser.js`): the
+ *   library becomes `dist/chunks/<name>.js`, fetched relative to the bundle's
+ *   own URL — so it works from unpkg/jsDelivr, a copied `dist/` folder, or a
+ *   GitHub Pages subpath. Self-hosting means copying the whole `dist/`.
+ * - **npm / bundlers** (`dist/register.js`, `dist/index.js`): the same
+ *   `dist/chunks/<name>.js`, which Vite, Astro and webpack turn into a lazy
+ *   chunk of the consumer's build; Node (`mlym emit`, SSR) imports it the
+ *   same way.
+ * - **`index.browser.js`** (one-file tooling build): inlined, as before.
+ *
+ * `tsup.config.ts` reads this table: every `name: () => import("spec")` line
+ * becomes the chunk `chunks/<name>.js` in both builds (`tests/lazy-chunks`
+ * asserts it). The modules that *use* a library — formats/pmtiles.ts,
+ * formats/flatgeobuf.ts — stay in the main bundle, are small, and reach the
+ * library only through {@link getDecoder}. That split is deliberate: a chunk
+ * holding only third-party code shares nothing with the main bundle, so
+ * esbuild emits no shared chunk and a page with no cloud-native source makes
+ * zero extra requests.
+ *
+ * ## Adding a format (geoparquet, cog, protomaps-basemap, …)
+ *
+ * 1. Add **one line** to {@link LOADERS}: `geoparquet: () => import("hyparquet"),`
+ *    — a literal specifier (bare package or a path), nothing computed. The
+ *    library may be a devDependency (bundled into the chunk, like pmtiles)
+ *    or a dependency (the CDN chunk bundles it; the npm build keeps the bare
+ *    `import()` for the consumer's bundler).
+ * 2. In your own module (e.g. `formats/geoparquet.ts`), get the library with
+ *    `const { parquetReadObjects } = await getDecoder("geoparquet");`. Import
+ *    only **types** from the library statically (`import type …`): a value
+ *    import would pull the library back into the main bundle.
+ * 3. Never import core modules from the library side, and never import
+ *    maplibre-gl there: what a reader needs from maplibre-gl is injected.
+ *    (A non-type import of core code from inside a chunk makes esbuild move
+ *    the shared code into a third file every page then downloads;
+ *    `tests/lazy-chunks.test.ts` fails on that.)
+ * 4. A failure to download the chunk rejects {@link getDecoder} with a
+ *    {@link FormatError} of code `"chunk"` whose message names the file and
+ *    says to copy the whole `dist/` folder or use the CDN. Report it on the
+ *    affected source only (the notice path), as pmtiles/flatgeobuf do.
+ *
+ * Anything that must happen synchronously (registering a URL protocol before
+ * `new Map()`) registers a thin handler at once and awaits the library inside
+ * it — see formats/pmtiles.ts.
  */
 
-import * as pmtiles from "./pmtiles";
-import * as flatgeobuf from "./flatgeobuf";
+import { FormatError } from "./errors";
 import type { CloudFormat } from "./detect";
 
-/** The decoder module for each format this version reads. */
-export interface Decoders {
-  pmtiles: typeof pmtiles;
-  flatgeobuf: typeof flatgeobuf;
-}
+/**
+ * The on-demand libraries, one literal `import()` each. The key is the
+ * chunk's name (`dist/chunks/<key>.js`) and the name {@link getDecoder}
+ * takes. Keep one `key: () => import("…")` per line: tsup.config.ts reads
+ * these lines.
+ */
+const LOADERS = {
+  pmtiles: () => import("pmtiles"),
+  flatgeobuf: () => import("./lib/flatgeobuf"),
+  // Reserved for the 0.9 work in flight — each adds one line shaped like the
+  // two above (see "Adding a format" at the top of this file):
+  //   geoparquet          the hyparquet library
+  //   cog                 the @geomatico/maplibre-cog-protocol library
+  //   "protomaps-basemap" the @protomaps/basemaps library
+} satisfies Record<string, () => Promise<unknown>>;
 
-/** The formats {@link getDecoder} can return a module for. */
+/** The library module behind each on-demand name. */
+export type Decoders = { [K in keyof typeof LOADERS]: Awaited<ReturnType<(typeof LOADERS)[K]>> };
+
+/** The names {@link getDecoder} can load. */
 export type DecodedFormat = keyof Decoders;
 
-const BUNDLED: Decoders = { pmtiles, flatgeobuf };
+/** In-flight or settled loads, one per name per page. A failure is evicted. */
+const loading = new Map<DecodedFormat, Promise<unknown>>();
 
 /**
- * The decoder module for `format`.
+ * The URL a failed dynamic import names, when the browser says (Chromium:
+ * "Failed to fetch dynamically imported module: <url>", Firefox: "error
+ * loading dynamically imported module: <url>"). Safari names none.
+ */
+function failedUrlOf(error: unknown): string | undefined {
+  for (let e = error, depth = 0; e && depth < 3; e = (e as { cause?: unknown }).cause, depth++) {
+    const message = String((e as { message?: unknown }).message ?? e);
+    const url = /\b(?:https?|file):\/\/\S+?\.m?js\b/.exec(message)?.[0];
+    if (url) return url;
+  }
+  return undefined;
+}
+
+/**
+ * The on-demand library for `name`, downloaded on first use and shared by
+ * every map on the page.
  *
- * @remarks
- * Always a promise, though it resolves at once in 0.9: callers written
- * against the promise keep working when the module behind it is fetched on
- * demand.
+ * @throws {FormatError} (code `"chunk"`) when its file can't be downloaded
+ *   (offline, a content blocker or CSP, or a self-hosted copy without the
+ *   `chunks/` folder). The rejection is not cached: the next call — a
+ *   `reload()`, a pan that asks for another tile — tries again.
  */
-export function getDecoder<F extends DecodedFormat>(format: F): Promise<Decoders[F]> {
-  return Promise.resolve(BUNDLED[format]);
+export function getDecoder<F extends DecodedFormat>(name: F): Promise<Decoders[F]> {
+  let pending = loading.get(name) as Promise<Decoders[F]> | undefined;
+  if (!pending) {
+    pending = (LOADERS[name]() as Promise<Decoders[F]>).catch((error: unknown) => {
+      loading.delete(name);
+      throw new FormatError({
+        code: "chunk",
+        format: name as CloudFormat,
+        url: failedUrlOf(error) ?? `chunks/${name}.js`,
+        detail: String((error as { message?: unknown } | null)?.message ?? error),
+      });
+    });
+    loading.set(name, pending);
+  }
+  return pending;
 }
 
 /**
- * The decoder module for `format`, synchronously, while the decoders are
- * bundled (0.9): what the renderer needs to register `pmtiles://` before it
- * constructs a map, so a basemap style's first requests cannot race the
- * registration. Becomes `undefined` for a format moved to an on-demand
- * chunk; callers then fall back to {@link getDecoder}.
+ * Start downloading `name`'s library without waiting for it (a document that
+ * will need it, seen at parse time). Never rejects: the caller that actually
+ * needs the library awaits {@link getDecoder} and reports the failure there.
  */
-export function bundledDecoder<F extends DecodedFormat>(format: F): Decoders[F] | undefined {
-  return BUNDLED[format];
+export function prefetchDecoder(name: DecodedFormat): void {
+  getDecoder(name).catch(() => undefined);
 }
 
-/** Whether this version has a decoder for `format`. */
-export function hasDecoder(format: CloudFormat): format is DecodedFormat {
-  return format === "pmtiles" || format === "flatgeobuf";
+/** Whether this version has a reader for `format`. */
+export function hasDecoder(format: CloudFormat): format is CloudFormat & DecodedFormat {
+  return Object.prototype.hasOwnProperty.call(LOADERS, format);
 }

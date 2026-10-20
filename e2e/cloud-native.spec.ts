@@ -354,7 +354,9 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     expect(errors).toEqual([]);
   });
 
-  test("plain HTML from the CDN build: only maplibre-gl in the import map, nothing extra downloaded", async ({ page }) => {
+  test("plain HTML from the CDN build: only maplibre-gl in the import map, readers fetched next to the bundle", async ({
+    page,
+  }) => {
     const errors = await guard(page);
     const scripts: string[] = [];
     page.on("request", (r) => {
@@ -365,10 +367,13 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     await waitForFeatures(page, "map", "districts");
     await waitForFeatures(page, "map", "outlines", "districts");
     await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
-    // The package's own downloads: the entry and the one browser bundle —
-    // no decoder chunks in 0.9.
+    // The package's own downloads: the entry, the browser bundle, and the
+    // two readers this document needs, on demand from dist/chunks/ next to
+    // the bundle (ml-7qa.5) — nothing else.
     const fromPackage = [...new Set(scripts.filter((p) => p.startsWith("/cdn/")))].sort();
     expect(fromPackage).toEqual([
+      "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/flatgeobuf.js",
+      "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/pmtiles.js",
       "/cdn/@maplibre-yaml/core@0.9.0/dist/register.browser.js",
       "/cdn/@maplibre-yaml/core@0.9.0/register.js",
     ]);
