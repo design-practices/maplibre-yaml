@@ -272,9 +272,11 @@ layers:
     await page.route("**/pq-page/index.html", (route) => route.fulfill({ contentType: "text/html", body: html }));
     await page.goto("/pq-page/index.html", { waitUntil: "domcontentloaded" });
     const notice = page.locator("#pq .ml-map-notice");
-    await expect(notice).toContainText("it is a Parquet file, but its name doesn't end in .parquet", { timeout: 30_000 });
-    await expect(notice).toContainText("add format: geoparquet to the source");
+    await expect(notice).toContainText("was read as JSON, but it is a Parquet file", { timeout: 30_000 });
+    await expect(notice).toContainText("Its name doesn't end in .parquet: rename it, or add format: geoparquet to the source.");
     await expect(notice).not.toContainText("isn't JSON");
+    // It loaded fine: no path advice (ml-aot.128).
+    await expect(notice).not.toContainText("looked for");
     expect(errors).toEqual([]);
   });
 });

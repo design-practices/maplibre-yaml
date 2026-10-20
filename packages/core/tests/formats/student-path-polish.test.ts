@@ -64,9 +64,14 @@ describe("a cloud-native file read as JSON", () => {
   it("names the format and the fix, not 'isn't JSON'", () => {
     const text = describeDataProblem("tracts", Object.assign(new Error("Parquet data from data/tracts.pq without a format"), { url: "data/tracts.pq" }), {
       filePage: false,
+      pageUrl: "http://localhost:3000/ed/index.html",
+      documentUrl: "http://localhost:3000/ed/maps/map.yaml",
     });
-    expect(text).toContain("it is a Parquet file, but its name doesn't end in .parquet");
-    expect(text).toContain("add format: geoparquet to the source");
-    expect(text).not.toContain("isn't JSON");
+    expect(text).toBe(
+      "Data file `data/tracts.pq` was read as JSON, but it is a Parquet file, so layer `tracts` has no data. " +
+        "Its name doesn't end in .parquet: rename it, or add `format: geoparquet` to the source."
+    );
+    // It loaded: no "didn't load", no path advice (ml-aot.128).
+    expect(text).not.toMatch(/didn't load|relative paths|looked for/);
   });
 });
