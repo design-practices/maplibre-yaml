@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { storyLegendPlacement, StoryLegend } from "../../src/scrollytelling/story-legend";
-import { storyMapDocument } from "../../src/scrollytelling";
+import { storyMapDocument, railHTML, chaptersHTML } from "../../src/scrollytelling";
 import { ScrollytellingBlockSchema } from "../../src/schemas";
 
 const chapters = (...alignments: Array<string | undefined>) =>
@@ -136,6 +136,77 @@ describe("story legend toggle label", () => {
       expect(legend.element.querySelector(".scrolly-legend-heading")).toBeNull();
       host.remove();
     }
+  });
+});
+
+describe("story strings follow config.locale (0.9)", () => {
+  const story = (locale: Record<string, string>, legendTitle?: string) =>
+    ScrollytellingBlockSchema.parse({
+      type: "scrollytelling",
+      id: "s3",
+      showMarkers: true,
+      config: { center: [0, 0], zoom: 1, mapStyle: "https://x/style.json", locale },
+      legend: { ...(legendTitle ? { title: legendTitle } : {}), collapsed: true, items: [{ color: "#f00", label: "Red" }] },
+      chapters: [
+        { id: "a", title: "El puente", center: [0, 0], zoom: 1, video: "/v.mp4" },
+        { id: "b", title: "La orilla", center: [0, 0], zoom: 1 },
+      ],
+    });
+
+  it("the legend button, the rail and its buttons, and the video fallback", () => {
+    const s = story(
+      {
+        "maplibre-yaml.Legend.Title": "Leyenda",
+        "maplibre-yaml.Story.Chapters": "Capítulos",
+        "maplibre-yaml.Story.GoToChapter": "Ir al capítulo {number}: {title}",
+        "maplibre-yaml.Story.VideoUnsupported": "Tu navegador no reproduce video.",
+      },
+      "Leyenda"
+    );
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const legend = new StoryLegend(host, s, null);
+    host.appendChild(legend.layer);
+    legend.layout();
+    expect(legend.element.querySelector("button")!.textContent).toBe("Leyenda");
+    // A title equal to the translated toggle is not repeated as a heading.
+    expect(legend.element.querySelector(".scrolly-legend-heading")).toBeNull();
+    legend.destroy();
+    host.remove();
+
+    const rail = document.createElement("div");
+    rail.innerHTML = railHTML(s);
+    expect(rail.querySelector("nav")!.getAttribute("aria-label")).toBe("Capítulos");
+    const buttons = rail.querySelectorAll("button");
+    expect(buttons[1]!.getAttribute("aria-label")).toBe("Ir al capítulo 2: La orilla");
+
+    const chapters = document.createElement("div");
+    chapters.innerHTML = chaptersHTML(s);
+    expect(chapters.querySelector("video")!.textContent).toBe("Tu navegador no reproduce video.");
+  });
+
+  it("English without a locale", () => {
+    const s = story({});
+    const rail = document.createElement("div");
+    rail.innerHTML = railHTML(s);
+    expect(rail.querySelector("nav")!.getAttribute("aria-label")).toBe("Story chapters");
+    expect(rail.querySelectorAll("button")[0]!.getAttribute("aria-label")).toBe("Go to chapter 1: El puente");
+  });
+
+  it("chapter titles in rail labels are escaped", () => {
+    const s = ScrollytellingBlockSchema.parse({
+      type: "scrollytelling",
+      id: "s4",
+      showMarkers: true,
+      config: { center: [0, 0], zoom: 1, mapStyle: "https://x/style.json" },
+      chapters: [{ id: "a", title: '"><img src=x onerror=alert(1)>', center: [0, 0], zoom: 1 }],
+    });
+    const rail = document.createElement("div");
+    rail.innerHTML = railHTML(s);
+    expect(rail.querySelector("img")).toBeNull();
+    expect(rail.querySelector("button")!.getAttribute("aria-label")).toBe(
+      'Go to chapter 1: "><img src=x onerror=alert(1)>'
+    );
   });
 });
 

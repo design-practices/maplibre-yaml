@@ -396,4 +396,35 @@ describe("PopupBuilder", () => {
       expect(html).toBe("<a>plain</a>");
     });
   });
+
+  // 0.9: numbers through Intl with MapLibre's number-format options, in the
+  // page's language unless the format names one.
+  describe("number formats (Intl, MapLibre number-format options)", () => {
+    const norm = (s: string) => s.replace(/[  ]/g, " ");
+    const popup = (format: unknown) => [{ p: [{ property: "v", format }] }] as any;
+
+    it("de-DE decimal comma, currency, fraction digits", () => {
+      expect(builder.build(popup({ locale: "de-DE", "max-fraction-digits": 1 }), { v: 1234567.891 })).toBe(
+        "<p>1.234.567,9</p>"
+      );
+      expect(norm(builder.build(popup({ locale: "de-DE", currency: "EUR" }), { v: 12.5 }))).toBe("<p>12,50 €</p>");
+      expect(builder.build(popup({ locale: "en-US", "min-fraction-digits": 2 }), { v: 3 })).toBe("<p>3.00</p>");
+    });
+
+    it("the page's language is the default locale", () => {
+      const german = new PopupBuilder(undefined, { language: () => "de-DE" });
+      expect(german.build(popup({ "max-fraction-digits": 2 }), { v: 1234.567 })).toBe("<p>1.234,57</p>");
+      // The older string form follows it too.
+      expect(german.build(popup(",.0f"), { v: 1234567.891 })).toBe("<p>1.234.568</p>");
+      // A format's own locale wins.
+      expect(german.build(popup({ locale: "en-US" }), { v: 1234.5 })).toBe("<p>1,234.5</p>");
+    });
+
+    it("strings and missing values are not formatted", () => {
+      expect(builder.build(popup({ locale: "de-DE" }), { v: "1234.5" })).toBe("<p>1234.5</p>");
+      expect(builder.build([{ p: [{ property: "v", format: { locale: "de-DE" }, else: "n/a" }] }] as any, {})).toBe(
+        "<p>n/a</p>"
+      );
+    });
+  });
 });

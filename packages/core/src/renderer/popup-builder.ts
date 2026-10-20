@@ -13,6 +13,23 @@ import {
   LINK_TARGETS,
 } from "../utils/html";
 import { allowsHtml, DEFAULT_POLICY, type CapabilityPolicy } from "../capabilities";
+import { formatNumber, type NumberFormat } from "../i18n/number-format";
+import { elementLanguage } from "../i18n/strings";
+
+/**
+ * The page's language at a map (its container's nearest `lang`), read
+ * lazily: the popup sinks hand this to {@link PopupBuilder}.
+ */
+export function mapLanguage(map: unknown): () => string | undefined {
+  return () => {
+    const getContainer = (map as { getContainer?: () => Element | undefined })?.getContainer;
+    try {
+      return typeof getContainer === "function" ? elementLanguage(getContainer.call(map)) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+}
 
 type PopupContent = z.infer<typeof PopupContentSchema>;
 type PopupContentItem = z.infer<typeof PopupContentItemSchema>;
@@ -38,9 +55,21 @@ function isSelfRendering(tag: string, items: PopupContentItem[]): boolean {
  */
 export class PopupBuilder {
   private readonly policy: CapabilityPolicy;
+  private readonly language: () => string | undefined;
 
-  constructor(policy: CapabilityPolicy = DEFAULT_POLICY) {
+  /**
+   * @param policy - the capability policy (see the class remarks).
+   * @param options.language - the locale numbers are formatted for when a
+   *   `format:` names none: usually the page's language at the map
+   *   (`elementLanguage(map.getContainer())`). Read on every build. Absent:
+   *   the browser's.
+   */
+  constructor(
+    policy: CapabilityPolicy = DEFAULT_POLICY,
+    options: { language?: () => string | undefined } = {}
+  ) {
     this.policy = policy;
+    this.language = options.language ?? (() => undefined);
   }
 
   /**
@@ -96,9 +125,11 @@ export class PopupBuilder {
     if (item.property) {
       const value = properties[item.property];
       if (value !== undefined && value !== null) {
-        // Apply format if specified
+        // A number with a `format:` (MapLibre number-format options, or the
+        // older ",.0f" string) goes through Intl, in the page's language
+        // unless the format names a locale. Text is escaped like any value.
         if (item.format && typeof value === "number") {
-          return this.formatNumber(value, item.format);
+          return escapeHtml(formatNumber(value, item.format as NumberFormat, this.language()));
         }
         return escapeHtml(String(value));
       }
@@ -170,36 +201,6 @@ export class PopupBuilder {
     return `<a href="${escapeHtml(href)}" target="${escapeHtml(
       target
     )}"${rel}>${textHtml}</a>`;
-  }
-
-  /**
-   * Format a number according to format string
-   */
-  private formatNumber(value: number, format: string): string {
-    // Simple number formatting
-    // Format strings like ",.0f" or ".2f"
-
-    // Check for thousands separator
-    const useThousands = format.includes(",");
-
-    // Extract decimal places
-    const decimalMatch = format.match(/\.(\d+)/);
-    const decimals =
-      decimalMatch && decimalMatch[1] ? parseInt(decimalMatch[1]) : 0;
-
-    // Format the number
-    let result = value.toFixed(decimals);
-
-    // Add thousands separators if requested
-    if (useThousands) {
-      const parts = result.split(".");
-      if (parts[0]) {
-        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-      }
-      result = parts.join(".");
-    }
-
-    return result;
   }
 
 }

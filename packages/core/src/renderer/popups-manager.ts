@@ -13,7 +13,7 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Popup } from "./maplibre-interop";
 import { liftPopup } from "./chrome-layout";
-import { PopupBuilder } from "./popup-builder";
+import { PopupBuilder, mapLanguage } from "./popup-builder";
 import type { CapabilityPolicy } from "../capabilities";
 import type { StandalonePopupConfig } from "../schemas/map.schema";
 
@@ -25,7 +25,7 @@ export class PopupsManager {
     private readonly map: MapLibreMap,
     policy?: CapabilityPolicy
   ) {
-    this.popupBuilder = new PopupBuilder(policy);
+    this.popupBuilder = new PopupBuilder(policy, { language: mapLanguage(map) });
   }
 
   /** Open every configured popup. */

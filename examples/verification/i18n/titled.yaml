@@ -1,0 +1,70 @@
+type: map
+id: calor
+title: Vulnerabilidad al calor en el Bronx
+description: >-
+  Distritos sombreados de amarillo pálido (bajo) a rojo oscuro (alto); los
+  valores más altos se concentran junto a la autopista Cross Bronx.
+config:
+  center: [-73.88, 40.84]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+  locale:
+    NavigationControl.ZoomIn: Acercar
+    NavigationControl.ZoomOut: Alejar
+    NavigationControl.ResetBearing: Restablecer la orientación
+    Popup.Close: Cerrar
+    maplibre-yaml.Legend.Title: Leyenda
+    maplibre-yaml.Notice.Title: Parte de este mapa no se pudo cargar
+    maplibre-yaml.Notice.AuthorDetails: Detalles para quien hizo el sitio
+    maplibre-yaml.Notice.Dismiss: Cerrar este aviso
+controls:
+  navigation: true
+legend:
+  title: Distritos
+  position: top-left
+  items:
+    - { color: "#fee08b", label: Bajo, shape: square }
+    - { color: "#d73027", label: Alto, shape: square }
+layers:
+  - id: tract
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-73.88, 40.84] }
+            properties: { name: Tract 1, residents: 1234567.891, rent: 12.5, share: 3.14159 }
+    paint:
+      circle-radius: 16
+      circle-color: "#d73027"
+      circle-stroke-width: 3
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - str: "Residents: "
+              - property: residents
+                format: { max-fraction-digits: 1 }
+          - p:
+              - str: "Rent: "
+              - property: rent
+                format: { currency: EUR }
+          - p:
+              - str: "Share: "
+              - property: share
+                format: { locale: en-US, max-fraction-digits: 2 }
+  # A data file that isn't there: the on-map notice, in Spanish.
+  - id: missing
+    type: circle
+    source:
+      type: geojson
+      url: "/examples/verification/i18n/no-such-file.geojson"
+    paint:
+      circle-color: "#333"

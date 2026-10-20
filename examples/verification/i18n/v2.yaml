@@ -1,0 +1,22 @@
+version: 2
+type: map
+id: calor-v2
+title: Hitzerisiko in der Bronx
+description: Bezirke von hellgelb (niedrig) bis dunkelrot (hoch).
+style:
+  basemap: "/examples/verification/configs/local-style.json"
+  center: [-73.88, 40.84]
+  zoom: 11
+runtime:
+  map:
+    locale:
+      NavigationControl.ZoomIn: Vergrößern
+      NavigationControl.ZoomOut: Verkleinern
+      maplibre-yaml.Legend.Title: Legende
+  controls:
+    navigation: true
+  legend:
+    title: Bezirke
+    items:
+      - { color: "#fee08b", label: Niedrig, shape: square }
+      - { color: "#d73027", label: Hoch, shape: square }

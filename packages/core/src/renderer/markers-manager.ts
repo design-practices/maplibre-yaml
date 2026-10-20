@@ -27,7 +27,7 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Marker, Popup } from "./maplibre-interop";
 import { liftPopup } from "./chrome-layout";
-import { PopupBuilder } from "./popup-builder";
+import { PopupBuilder, mapLanguage } from "./popup-builder";
 import { safeUrl } from "../utils/html";
 import { DEFAULT_PIN_WIDTH } from "../emitter/assets";
 import type { CapabilityPolicy } from "../capabilities";
@@ -51,7 +51,7 @@ export class MarkersManager {
     policy?: CapabilityPolicy,
     private readonly callbacks: MarkersManagerCallbacks = {}
   ) {
-    this.popupBuilder = new PopupBuilder(policy);
+    this.popupBuilder = new PopupBuilder(policy, { language: mapLanguage(map) });
   }
 
   /** Add every configured marker to the map. */

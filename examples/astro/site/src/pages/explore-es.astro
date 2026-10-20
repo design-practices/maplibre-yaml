@@ -1,0 +1,22 @@
+---
+import Base from "../layouts/Base.astro";
+import { FullPageMap, loadMapConfig } from "@maplibre-yaml/astro";
+
+const calor = await loadMapConfig("./public/maps/calor-es.yaml");
+---
+
+<Base title="Explorar (español)" bleed>
+  <!--
+    0.9: the document's `locale:` labels FullPageMap's zoom and reset
+    buttons at build time (MapLibre's NavigationControl.* keys and
+    maplibre-yaml.FullPageMap.ResetView), and its `title:` names the map.
+  -->
+  <FullPageMap config={calor} />
+</Base>
+
+<style is:global>
+  body.bleed .ml-fullpage-map {
+    top: var(--header-h);
+    height: calc(100vh - var(--header-h));
+  }
+</style>

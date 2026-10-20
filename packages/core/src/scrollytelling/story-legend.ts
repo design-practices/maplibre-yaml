@@ -26,8 +26,9 @@
 
 import type { Chapter, ScrollytellingBlock } from "../schemas/scrollytelling.schema";
 import type { ControlPosition } from "../schemas/map.schema";
-import { LegendBuilder } from "../renderer/legend-builder";
+import { LegendBuilder, legendHeadingText } from "../renderer/legend-builder";
 import { escapeHtml } from "../utils/html";
+import { createStrings } from "../i18n/strings";
 
 /** Phones held upright, and narrow windows: cards span the map's width. */
 export const STORY_NARROW_QUERY = "(max-width: 768px)";
@@ -116,7 +117,11 @@ export class StoryLegend {
     const doc = host.ownerDocument;
     const id = `ml-story-legend-${++nextId}`;
     const config = (story.legend ?? {}) as { title?: string; items?: unknown[] };
-    const title = config.title ?? "Legend";
+    // The story's UI strings: its `config.locale` (the table MapLibre reads).
+    const strings = createStrings(story.config?.locale);
+    const toggleText = strings("maplibre-yaml.Legend.Title");
+    const heading = legendHeadingText(config.title, strings);
+    const title = heading || toggleText;
 
     this.layer = doc.createElement("div");
     this.layer.className = "scrolly-legend-layer";
@@ -130,7 +135,7 @@ export class StoryLegend {
     // title: a reader scanning the map — or a screen reader announcing
     // "Legend, button, collapsed" — knows what it opens. The author's title
     // heads the panel instead.
-    this.toggle.innerHTML = `<span class="scrolly-legend-label">Legend</span>`;
+    this.toggle.innerHTML = `<span class="scrolly-legend-label">${escapeHtml(toggleText)}</span>`;
     this.panel = doc.createElement("div");
     this.panel.className = "scrolly-legend-panel";
     this.panel.id = `${id}-panel`;
@@ -142,13 +147,11 @@ export class StoryLegend {
       slotElement.removeAttribute("hidden");
       this.panel.appendChild(slotElement);
     } else {
-      const builder = new LegendBuilder();
+      const builder = new LegendBuilder({ strings });
       const items = builder.entries((story.layers ?? []) as never[], story.legend as never);
-      const heading =
-        title.trim().toLowerCase() === "legend"
-          ? ""
-          : `<div class="scrolly-legend-heading">${escapeHtml(title)}</div>`;
-      this.panel.innerHTML = heading + builder.itemsHTML(items);
+      this.panel.innerHTML =
+        (heading ? `<div class="scrolly-legend-heading">${escapeHtml(heading)}</div>` : "") +
+        builder.itemsHTML(items);
     }
     this.root.append(this.toggle, this.panel);
     this.layer.appendChild(this.root);

@@ -19,6 +19,13 @@ import { SPEC_LAYOUT_KEYS, SPEC_PAINT_KEYS } from "../parser/spec-keys.generated
 import { suggest } from "../utils/suggest.js";
 import { normalizeDocumentBase } from "../utils/document-base.js";
 import type { FormatFailure } from "../formats/errors.js";
+import { DEFAULT_STRINGS, defaultStrings, type Strings } from "../i18n/strings.js";
+
+// Titles and hints a reader can meet on a map whose document WAS read (the
+// basemap failed, the worker couldn't start) come from the UI string table,
+// so the document's `locale:` translates them. Messages shown before a
+// document is read (a `src` that didn't load) have no `locale:` to read and
+// stay English, like every author diagnostic in this file.
 
 /** What the error card shows: a title, the errors, and how to fix them. */
 export interface ErrorCardContent {
@@ -37,11 +44,8 @@ export function isFilePage(doc: Document | undefined): boolean {
   }
 }
 
-/** The fix for a page opened from disk. */
-export const FILE_PAGE_HINT =
-  "Start a local web server in this page's folder — for example, run " +
-  '"npx serve ." in a terminal there, or use VS Code\'s "Live Server" ' +
-  "extension — then open the http://localhost address it prints.";
+/** The fix for a page opened from disk (English; see the string table). */
+export const FILE_PAGE_HINT: string = DEFAULT_STRINGS["maplibre-yaml.ErrorCard.LocalServerHint"];
 
 /** `url` resolved against `base` (the page), or `url` itself if it will not parse. */
 export function resolveUrl(url: string, base: string | undefined): string {
@@ -262,9 +266,9 @@ export function srcHtmlCard(
 }
 
 /** The worker could not start because the page was opened from disk. */
-export function filePageWorkerCard(): ErrorCardContent {
+export function filePageWorkerCard(strings: Strings = defaultStrings): ErrorCardContent {
   return {
-    title: "Open this page through a local web server",
+    title: strings("maplibre-yaml.ErrorCard.LocalServer"),
     errors: [
       {
         path: "",
@@ -273,7 +277,7 @@ export function filePageWorkerCard(): ErrorCardContent {
           "the map's background worker for a page opened that way.",
       },
     ],
-    hint: FILE_PAGE_HINT,
+    hint: strings("maplibre-yaml.ErrorCard.LocalServerHint"),
   };
 }
 
@@ -305,8 +309,9 @@ function statusOf(error: Error): { status?: number; statusText?: string } {
  */
 export function styleFailureCard(
   errors: Error[],
-  options: { url?: string; isV2: boolean; filePage: boolean }
+  options: { url?: string; isV2: boolean; filePage: boolean; strings?: Strings }
 ): ErrorCardContent {
+  const t = options.strings ?? defaultStrings;
   const key = options.isV2 ? "style.basemap" : "config.mapStyle";
   const first = errors[0] ?? new Error("unknown error");
   const where = options.url ? `"${options.url}"` : "the inline style";
@@ -339,14 +344,11 @@ export function styleFailureCard(
   }
 
   return {
-    title: "The basemap style didn't load",
+    title: t("maplibre-yaml.ErrorCard.StyleNotLoaded"),
     errors: [{ path: key, message }],
     hint: options.filePage
-      ? FILE_PAGE_HINT
-      : `Check ${key}: open the URL in a new browser tab to see what it returns. A ` +
-        'MapLibre style is a JSON file with "version": 8, "sources" and "layers" — a ' +
-        "tile URL, a GeoJSON file or a web page won't work. To test quickly, use " +
-        '"https://demotiles.maplibre.org/style.json".',
+      ? t("maplibre-yaml.ErrorCard.LocalServerHint")
+      : t("maplibre-yaml.ErrorCard.StyleHint", { key }),
   };
 }
 

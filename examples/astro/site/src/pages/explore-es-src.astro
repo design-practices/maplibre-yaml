@@ -1,0 +1,19 @@
+---
+import Base from "../layouts/Base.astro";
+import { FullPageMap } from "@maplibre-yaml/astro";
+---
+
+<Base title="Explorar (español, src)" bleed>
+  <!--
+    0.9: the same Spanish document by `src`: it is read in the browser, so
+    FullPageMap relabels its buttons once the map loads (`uiString`).
+  -->
+  <FullPageMap src="/maps/calor-es.yaml" />
+</Base>
+
+<style is:global>
+  body.bleed .ml-fullpage-map {
+    top: var(--header-h);
+    height: calc(100vh - var(--header-h));
+  }
+</style>

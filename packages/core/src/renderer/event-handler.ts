@@ -6,7 +6,7 @@
 import type { Map as MapLibreMap, LngLat } from "maplibre-gl";
 import type { z } from "zod";
 import { LayerSchema, PopupContentSchema } from "../schemas";
-import { PopupBuilder } from "./popup-builder";
+import { PopupBuilder, mapLanguage } from "./popup-builder";
 import type { CapabilityPolicy } from "../capabilities";
 import {
   createInteractionRegistry,
@@ -85,7 +85,7 @@ export class EventHandler {
   ) {
     this.map = map;
     this.callbacks = callbacks || {};
-    this.popupSlot = new PopupSlot(map, new PopupBuilder(policy));
+    this.popupSlot = new PopupSlot(map, new PopupBuilder(policy, { language: mapLanguage(map) }));
     this.attachedLayers = new Set();
     this.boundHandlers = new Map();
     this.registry = createInteractionRegistry();

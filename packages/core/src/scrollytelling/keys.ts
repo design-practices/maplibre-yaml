@@ -18,6 +18,8 @@
  * never disagree about them.
  */
 export const STORY_MAP_KEYS = [
+  "title",
+  "description",
   "sources",
   "controls",
   "legend",

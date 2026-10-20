@@ -1,0 +1,34 @@
+type: scrollytelling
+id: puente
+title: Cruzando el puente de Brooklyn
+description: Un paseo de Manhattan a Brooklyn en dos capítulos.
+showMarkers: true
+config:
+  center: [-73.9969, 40.7061]
+  zoom: 14
+  mapStyle: "/examples/verification/configs/local-style.json"
+  locale:
+    NavigationControl.ZoomIn: Acercar
+    NavigationControl.ZoomOut: Alejar
+    maplibre-yaml.Legend.Title: Leyenda
+    maplibre-yaml.Story.Chapters: Capítulos
+    maplibre-yaml.Story.GoToChapter: "Ir al capítulo {number}: {title}"
+controls:
+  navigation: true
+legend:
+  title: Lugares
+  collapsed: true
+  items:
+    - { color: "#d62828", label: Ayuntamiento, shape: circle }
+    - { color: "#3b82f6", label: Puente, shape: circle }
+chapters:
+  - id: inicio
+    title: El parque del Ayuntamiento
+    description: "<p>Empezamos en Manhattan.</p>"
+    center: [-74.0055, 40.7128]
+    zoom: 15
+  - id: puente
+    title: El puente
+    description: "<p>Cruzamos el río.</p>"
+    center: [-73.9969, 40.7061]
+    zoom: 15

@@ -74,6 +74,7 @@ import {
   errorCardHTML,
   footerHTML,
   railButtonsHTML,
+  storyStrings,
   type StoryProblem,
 } from "../scrollytelling/render";
 import { injectScrollytellingStyles } from "../scrollytelling/styles";
@@ -81,6 +82,7 @@ import { normalizeDocumentBase, resolveDocumentUrl } from "../utils/document-bas
 import { displayPath } from "../parser/validation-utils.js";
 import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
+import { defaultStrings } from "../i18n/strings.js";
 import { showAuthorHints } from "./author-hints.js";
 import { StoryLegend, STORY_NARROW_QUERY, STORY_LANDSCAPE_QUERY } from "../scrollytelling/story-legend.js";
 import {
@@ -206,22 +208,22 @@ export class MLScrollytelling extends HTMLElement {
     // while the author is developing (or with `debug`), closed on a
     // published site (ml-aot.57).
     const doc = this.ownerDocument;
+    const t = this._story ? storyStrings(this._story) : defaultStrings;
     const kind = media instanceof HTMLVideoElement ? "video" : "image";
     const note = doc.createElement("div");
     note.className = "chapter-media-missing";
     note.setAttribute("role", "status");
     const lead = doc.createElement("p");
     lead.className = "chapter-media-missing-lead";
-    lead.textContent = `This chapter's ${kind} couldn't load.`;
+    lead.textContent = t(
+      kind === "video" ? "maplibre-yaml.Story.VideoMissing" : "maplibre-yaml.Story.ImageMissing"
+    );
     const details = doc.createElement("details");
     details.open = showAuthorHints(this);
     const summary = doc.createElement("summary");
-    summary.textContent = "Details for the site's author";
+    summary.textContent = t("maplibre-yaml.Notice.AuthorDetails");
     const fix = doc.createElement("p");
-    fix.textContent =
-      `${kind === "video" ? "Video" : "Image"} "${written}" didn't load. ` +
-      `Check the file name and folder — capital letters count (Photo.JPG and photo.jpg are ` +
-      `different files on most web servers).`;
+    fix.textContent = t("maplibre-yaml.Story.MediaMissingHint", { src: written });
     details.append(summary, fix);
     note.append(lead, details);
     holder.appendChild(note);
@@ -678,7 +680,8 @@ export class MLScrollytelling extends HTMLElement {
         rail.className = "chapter-markers";
         mapContainer.appendChild(rail);
       }
-      if (rail.tagName === "NAV") rail.setAttribute("aria-label", "Story chapters");
+      if (rail.tagName === "NAV")
+        rail.setAttribute("aria-label", storyStrings(story)("maplibre-yaml.Story.Chapters"));
       rail.innerHTML = railButtonsHTML(story);
     } else {
       rail?.remove();

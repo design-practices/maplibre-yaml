@@ -295,7 +295,7 @@ import {
   type ValidationWarning,
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
-import { checkDocument, chapterLabel } from "./document-checks";
+import { checkDocument, chapterLabel, checkLocaleKeys } from "./document-checks";
 import { checkSourceFormats } from "./format-checks";
 import { reservedPrefixWarnings } from "./reserved-prefix";
 import { boundsProblem } from "../utils/bounds";
@@ -962,7 +962,7 @@ export class YAMLParser {
       // toJSSafe — the v1 `{$ref}` JSON-pointer resolution is a v1 affordance.
       // Turning the validated block into a MapModel is U3's job (the `toModel`
       // v2 branch stays a stub).
-      return withFormatChecks(
+      const v2 = withFormatChecks(
         withSourceRefWarnings(
           this.validateAgainst(
             m.value,
@@ -977,6 +977,14 @@ export class YAMLParser {
         2,
         positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
       );
+      // A `maplibre-yaml.*` string key the library doesn't have (0.9).
+      const runtimeMap = (m.value as { runtime?: { map?: { locale?: unknown } } } | null)?.runtime?.map;
+      const localeWarnings = checkLocaleKeys(
+        runtimeMap?.locale,
+        ["runtime", "map", "locale"],
+        positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
+      );
+      return localeWarnings.length === 0 ? v2 : { ...v2, warnings: [...v2.warnings, ...localeWarnings] };
     }
 
     // Refs are resolved here too: a standalone block carries its own

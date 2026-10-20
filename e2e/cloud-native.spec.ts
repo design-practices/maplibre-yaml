@@ -158,6 +158,31 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     expect(errors).toEqual([]);
   });
 
+  test("fitTo on a FlatGeobuf file: the first frame is already framed, one request (ml-aot.75 seam)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    let requests = 0;
+    await page.route("**/gallery-assets/cloud-native/districts.fgb", async (route) => {
+      requests += 1;
+      await new Promise((resolve) => setTimeout(resolve, 400)); // slow, but inside the fitTo wait
+      await route.continue();
+    });
+    await page.goto("/examples/verification/cloud-native/fit-framed.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "districts");
+    await page.waitForFunction(() => !(document.getElementById("map") as any).getMap().isMoving());
+    const f = await page.evaluate(() => (window as any).__frames);
+    expect(f.first, "no first frame recorded").not.toBeNull();
+    // The document says [0, 0] z1; the first frame is already on the districts.
+    expect(Math.abs(f.first.lng - 10.2), JSON.stringify(f.first)).toBeLessThan(0.05);
+    expect(Math.abs(f.first.lat - 42.15), JSON.stringify(f.first)).toBeLessThan(0.05);
+    expect(f.first.zoom).toBeGreaterThan(9);
+    expect(f.moves).toBe(0);
+    expect(requests).toBe(1);
+    expect(errors).toEqual([]);
+  });
+
   test("a page that registered its own pmtiles protocol keeps it (host wins)", async ({ page }) => {
     const errors = await guard(page);
     const archive = recordRequests(page, /districts\.pmtiles/);
