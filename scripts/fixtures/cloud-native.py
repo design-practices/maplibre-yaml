@@ -8,6 +8,7 @@
 #   "mapbox-vector-tile>=2.1",
 #   "pmtiles>=3.4",
 #   "pillow>=10",
+#   "pyarrow>=16",
 # ]
 # ///
 """Generate the small, synthetic cloud-native fixtures (0.9, ml-cnv).
@@ -35,13 +36,30 @@ serves (gallery pages) and the e2e server serves at
     not-really.pmtiles      a web page saved under a .pmtiles name
     not-really.fgb          a web page saved under a .fgb name
 
-and copies districts.pmtiles and districts.fgb into the Astro example site
-(examples/astro/site/public/data/cloud-native/).
+GeoParquet (WKB geometry, the GeoParquet 1.1 `bbox` covering column):
+
+    districts.parquet       48 polygons, snappy, one row group
+    points.parquet          400 points, snappy, Hilbert-sorted into 8 row
+                            groups of 50 (viewport reads skip row groups)
+    points-zstd.parquet     the points, zstd
+    points-brotli.parquet   the points, brotli (the separately loaded codec)
+    points-geoarrow.parquet the points with GeoArrow-native geometry (refused)
+    districts-3857.parquet  the districts in Web Mercator (the wrong-CRS case)
+    districts-nobbox.parquet the districts without a bbox covering column
+    plain.parquet           a Parquet file with no GeoParquet metadata
+    not-really.parquet      a web page saved under a .parquet name
+
+and copies districts.pmtiles, districts.fgb and districts.parquet into the
+Astro example site (examples/astro/site/public/data/cloud-native/).
+
+`--geoparquet` writes only the GeoParquet files (same data, same seed), so
+the other fixtures stay byte-for-byte as committed.
 """
 import gzip
 import math
 import os
 import shutil
+import sys
 
 import numpy as np
 import geopandas as gpd
@@ -102,6 +120,40 @@ def write_fgb(gdf, name, index=True):
         os.remove(path)
     gdf.to_file(path, driver="FlatGeobuf", engine="pyogrio",
                 layer_options={"SPATIAL_INDEX": "YES" if index else "NO"})
+
+
+def write_parquet(gdf, name, **kwargs):
+    """GeoParquet 1.1 with WKB geometry and the `bbox` covering column."""
+    path = os.path.join(OUT, name)
+    if os.path.exists(path):
+        os.remove(path)
+    options = {"compression": "snappy", "write_covering_bbox": True, "schema_version": "1.1.0"}
+    options.update(kwargs)
+    gdf.to_parquet(path, index=False, **options)
+
+
+def write_geoparquet_fixtures(d, p):
+    # Spatially sorted (Hilbert) so row groups cover compact areas: what makes
+    # `load: viewport` skip most of the file.
+    order = p.geometry.hilbert_distance().sort_values(kind="stable").index
+    sorted_points = p.loc[order].reset_index(drop=True)
+    write_parquet(d, "districts.parquet")
+    write_parquet(sorted_points, "points.parquet", row_group_size=50)
+    write_parquet(sorted_points, "points-zstd.parquet", compression="zstd")
+    write_parquet(sorted_points, "points-brotli.parquet", compression="brotli")
+    write_parquet(sorted_points, "points-geoarrow.parquet", geometry_encoding="geoarrow")
+    write_parquet(d.to_crs("EPSG:3857"), "districts-3857.parquet")
+    write_parquet(d, "districts-nobbox.parquet", write_covering_bbox=False)
+    # A Parquet file with no `geo` metadata: the geometry as plain WKB bytes.
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    table = pa.table({
+        "name": d["name"].tolist(),
+        "wkb": [g.wkb for g in d.geometry],
+    })
+    pq.write_table(table, os.path.join(OUT, "plain.parquet"), compression="snappy")
+    with open(os.path.join(OUT, "not-really.parquet"), "w") as f:
+        f.write(NOT_A_FILE)
 
 
 def tile_bounds_merc(z, x, y):
@@ -221,19 +273,28 @@ NOT_A_FILE = (
 if __name__ == "__main__":
     d = districts()
     p = points(400)
+    if "--geoparquet" in sys.argv:
+        write_geoparquet_fixtures(d, p)
+        astro = os.path.join(ROOT, "examples", "astro", "site", "public", "data", "cloud-native")
+        shutil.copyfile(os.path.join(OUT, "districts.parquet"), os.path.join(astro, "districts.parquet"))
+        for name in sorted(os.listdir(OUT)):
+            if "parquet" in name:
+                print(f"{os.path.getsize(os.path.join(OUT, name)) / 1024:8.1f} KB  {name}")
+        sys.exit(0)
     write_fgb(d, "districts.fgb")
     write_fgb(p, "points.fgb")
     write_fgb(p, "points-noindex.fgb", index=False)
     write_fgb(d.to_crs("EPSG:3857"), "districts-3857.fgb")
     vector_pmtiles(os.path.join(OUT, "districts.pmtiles"), {"districts": d, "points": p}, maxzoom=11)
     raster_pmtiles(os.path.join(OUT, "imagery.pmtiles"), maxzoom=8)
+    write_geoparquet_fixtures(d, p)
     for name in ("not-really.pmtiles", "not-really.fgb"):
         with open(os.path.join(OUT, name), "w") as f:
             f.write(NOT_A_FILE)
     # The Astro example site serves its own copies (its public/ folder).
     astro = os.path.join(ROOT, "examples", "astro", "site", "public", "data", "cloud-native")
     os.makedirs(astro, exist_ok=True)
-    for name in ("districts.pmtiles", "districts.fgb"):
+    for name in ("districts.pmtiles", "districts.fgb", "districts.parquet"):
         shutil.copyfile(os.path.join(OUT, name), os.path.join(astro, name))
     total = 0
     for name in sorted(os.listdir(OUT)):
