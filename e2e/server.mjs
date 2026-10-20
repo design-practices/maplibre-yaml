@@ -43,9 +43,10 @@
  *                                  docs' fixture folders of those names
  *  - everything else               static from the repo root, with HTTP
  *                                  range requests (ml-cnv) — and the
- *                                  `/norange/`, `/nocors/`, `/oversize/<MB>/`
+ *                                  `/norange/`, `/nocors/`, `/oversize/<MB>/`,
+ *                                  `/suffix416/`, `/noexpose/`, `/fastly/`
  *                                  hosting variants described at
- *                                  HOSTING_PREFIX
+ *                                  HOSTING_SEGMENT
  */
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
@@ -324,17 +325,54 @@ function hillsTile(z, x, y) {
  *  - `/norange/oversize/<MB>/…`  both: a big file on a host without ranges
  *                         (ml-cnv.4: GeoParquet must refuse it before
  *                         downloading it, since its footer is at the end)
+ *  - `/suffix416/…`       a suffix range longer than the file (`bytes=-524288`
+ *                         on a 28 KB file) answers 416 with
+ *                         `Content-Range: bytes *\/<size>` instead of the
+ *                         whole file — what Fastly does (GitHub Pages,
+ *                         raw.githubusercontent.com, jsDelivr's Fastly leg);
+ *                         explicit ranges past the end are still clamped
+ *  - `/noexpose/…`        CORS open (`Access-Control-Allow-Origin: *`) but no
+ *                         `Access-Control-Expose-Headers`: a page on another
+ *                         origin can't read `Content-Range` (`Content-Length`
+ *                         is always readable), and a preflight is refused —
+ *                         what GitHub Pages and raw.githubusercontent.com send
+ *  - `/fastly/…`          both of the above: GitHub Pages as a page on
+ *                         another site sees it
+ *
+ * Prefixes combine in any order (`/norange/oversize/60/…`).
  */
-const HOSTING_PREFIX = /^\/(norange\/oversize\/(\d+)|norange|nocors|oversize\/(\d+))(\/.*)$/;
+const HOSTING_SEGMENT = /^\/(norange|nocors|oversize\/(\d+)|suffix416|noexpose|fastly)(?=\/)/;
 
-/** Parse a single `Range: bytes=a-b` / `bytes=a-` / `bytes=-n` against `size`. */
-function parseRange(header, size) {
+/** Strip the hosting prefixes off `path`; what they ask for. */
+function hostingOf(path) {
+  const hosting = { path, cors: true, expose: true, ranges: true, suffix416: false, padMb: 0 };
+  for (let m = HOSTING_SEGMENT.exec(hosting.path); m; m = HOSTING_SEGMENT.exec(hosting.path)) {
+    const [whole, name, mb] = m;
+    if (name === "norange") hosting.ranges = false;
+    else if (name === "nocors") hosting.cors = false;
+    else if (name === "suffix416") hosting.suffix416 = true;
+    else if (name === "noexpose") hosting.expose = false;
+    else if (name === "fastly") {
+      hosting.suffix416 = true;
+      hosting.expose = false;
+    } else hosting.padMb = Number(mb);
+    hosting.path = hosting.path.slice(whole.length);
+  }
+  return hosting;
+}
+
+/**
+ * Parse a single `Range: bytes=a-b` / `bytes=a-` / `bytes=-n` against `size`.
+ * `suffix416`: a suffix longer than the file is unsatisfiable (Fastly).
+ */
+function parseRange(header, size, suffix416 = false) {
   const m = /^bytes=(\d*)-(\d*)$/.exec(String(header).trim());
   if (!m || (m[1] === "" && m[2] === "")) return null;
   let start;
   let end;
   if (m[1] === "") {
     const suffix = Number(m[2]);
+    if (suffix416 && suffix > size) return { unsatisfiable: true };
     start = Math.max(0, size - suffix);
     end = size - 1;
   } else {
@@ -356,19 +394,25 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   let path = decodeURIComponent(url.pathname);
 
-  const hosting = HOSTING_PREFIX.exec(path);
-  const cors = !hosting || hosting[1] !== "nocors";
-  const ranges = !hosting || !hosting[1].startsWith("norange");
-  const padMb = hosting && (hosting[2] || hosting[3]) ? Number(hosting[2] || hosting[3]) : 0;
-  if (hosting) path = hosting[4];
+  const hosting = hostingOf(path);
+  const { cors, ranges, padMb, suffix416, expose } = hosting;
+  path = hosting.path;
 
   const corsHeaders = cors
     ? {
         "access-control-allow-origin": "*",
-        "access-control-expose-headers": "Content-Range, Content-Length, Accept-Ranges, ETag",
+        ...(expose
+          ? { "access-control-expose-headers": "Content-Range, Content-Length, Accept-Ranges, ETag" }
+          : {}),
       }
     : {};
 
+  if (req.method === "OPTIONS" && !expose) {
+    // GitHub Pages refuses a preflight (403/405): a reader must manage
+    // with what a simple request may send (one `Range:` is safelisted).
+    res.writeHead(405, corsHeaders);
+    return res.end();
+  }
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       ...corsHeaders,
@@ -399,7 +443,7 @@ const server = createServer(async (req, res) => {
       "cache-control": "no-store",
       ...(ranges ? { "accept-ranges": "bytes" } : {}),
     };
-    const range = ranges && req.headers.range ? parseRange(req.headers.range, size) : null;
+    const range = ranges && req.headers.range ? parseRange(req.headers.range, size, suffix416) : null;
     if (range && range.unsatisfiable) {
       res.writeHead(416, { ...headers, "content-range": `bytes */${size}` });
       return res.end();

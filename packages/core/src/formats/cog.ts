@@ -168,6 +168,12 @@ async function readHeader(fileUrl: string, report: CogHintReporter | undefined):
   } catch {
     throw new FormatError({ ...base, code: "cors" });
   }
+  if (response.status === 416) {
+    // The first 64 KB of a file can only be unsatisfiable when the file is
+    // empty (a shorter file gets its whole length back, from every host).
+    void response.body?.cancel().catch(() => undefined);
+    throw new FormatError({ ...base, code: "not-format" });
+  }
   if (!response.ok) {
     void response.body?.cancel().catch(() => undefined);
     throw new FormatError({

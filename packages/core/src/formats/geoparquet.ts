@@ -20,7 +20,9 @@
  *   small file is read in a single request and a large one never pays a
  *   `HEAD`. A server that ignores `Range` (`python -m http.server`) sends the
  *   whole file instead: it is kept in memory (if it fits the size guard)
- *   and every later read is served from it.
+ *   and every later read is served from it. A host that answers the suffix
+ *   with 416 (Fastly: GitHub Pages, jsDelivr) or hides `Content-Range` from
+ *   another origin costs one more request (formats/http `fetchTail`).
  * - **Column projection**: only the columns the caller names (the ones the
  *   document references) plus the geometry are read — the footer gives each
  *   column's compressed size, so the transfer is known before any data is.
@@ -47,6 +49,7 @@ import type { FeatureCollection } from "geojson";
 import { isLonLatCrs } from "./crs";
 import { getDecoder } from "./decoders";
 import { FormatError, isAbortError, isFormatError } from "./errors";
+import { BodyTooLarge, fetchTail, httpError, type Tail } from "./http";
 
 /** The first read: the file's last 512 KiB — the footer, and all of a small file. */
 export const TAIL_BYTES = 512 * 1024;
@@ -94,14 +97,6 @@ export type ColumnChoice = readonly string[] | "all";
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
-
-/** The GeoJSON fetcher's HTTP error shape, so the notice treats both alike. */
-function httpError(response: Response, url: string): Error {
-  return Object.assign(new Error(`HTTP ${response.status}: ${response.statusText} for ${url}`), {
-    url,
-    status: response.status,
-  });
-}
 
 /** The plain-language error for what `fetch` threw. */
 function fetchFailure(error: unknown, url: string): unknown {
@@ -176,69 +171,68 @@ function rangeReader(
 export interface OpenOptions {
   signal?: AbortSignal;
   /**
-   * The largest file accepted from a server that ignores `Range:` (it sends
-   * the whole file): larger ones are refused before their body is read.
+   * The largest file accepted when the whole file has to be read (a server
+   * that ignores `Range:`, or a host that hides the file size): larger ones
+   * are refused — before their body is read when the server says its size,
+   * else as soon as that many bytes have arrived.
    */
   maxWholeBytes?: number;
+  /** The first read's length (default {@link TAIL_BYTES}); tests pass a smaller one. */
+  tailBytes?: number;
 }
 
 /**
  * Open a GeoParquet file: read its footer (one suffix-range request), check
  * the file is GeoParquet this version reads (WKB geometry, longitude/latitude).
  *
+ * Works on hosts that answer an oversized suffix range with 416 (GitHub
+ * Pages, raw.githubusercontent.com, jsDelivr) and on cross-origin hosts that
+ * don't expose `Content-Range` — see formats/http `fetchTail`.
+ *
  * @throws The `HTTP <status>` shape for an error status; a {@link FormatError}
  *   for CORS/unreachable (`cors`), wrong bytes (`not-format`), plain Parquet
  *   (`not-geoparquet`), GeoArrow geometry (`encoding`), a projected CRS
- *   (`crs`), or a server without ranges and a file over `maxWholeBytes`
- *   (`no-range`).
+ *   (`crs`), or a file over `maxWholeBytes` that had to be read whole
+ *   (`no-range` from a server without ranges, `too-large` otherwise).
  */
 export async function open(url: string, options: OpenOptions = {}): Promise<GeoParquetFile> {
   const { signal } = options;
+  const tailBytes = options.tailBytes ?? TAIL_BYTES;
   // The reader downloads while the footer request is in flight.
   const library = getDecoder("geoparquet");
   library.catch(() => undefined);
-  let response: Response;
+  let tail: Tail;
   try {
-    response = await fetch(url, { headers: { Range: `bytes=-${TAIL_BYTES}` }, ...(signal ? { signal } : {}) });
+    tail = await fetchTail(url, tailBytes, {
+      ...(signal ? { signal } : {}),
+      ...(options.maxWholeBytes !== undefined ? { maxWholeBytes: options.maxWholeBytes } : {}),
+    });
   } catch (error) {
+    if (error instanceof BodyTooLarge) {
+      // A whole file over the guard: from a server without ranges, the
+      // hosting is what to fix; otherwise the file is simply too big to
+      // read whole (a host that hid its size from this page).
+      const code = error.ranges === false ? "no-range" : "too-large";
+      throw new FormatError({ code, format: "geoparquet", url, size: error.size });
+    }
+    if (typeof (error as { status?: unknown } | null)?.status === "number") throw error;
     throw fetchFailure(error, url);
   }
-  if (!response.ok) throw httpError(response, url);
 
-  let byteLength: number;
-  let held: { start: number; bytes: ArrayBuffer };
-  const ranges = response.status === 206;
-  if (ranges) {
-    const range = /bytes\s+(\d+)-(\d+)\/(\d+|\*)/i.exec(response.headers.get("content-range") ?? "");
-    const bytes = await response.arrayBuffer();
-    const start = range ? Number(range[1]) : 0;
-    byteLength = range && range[3] !== "*" ? Number(range[3]) : start + bytes.byteLength;
-    held = { start, bytes };
-  } else {
-    // The server ignored `Range:` and is sending the whole file.
-    const length = Number(response.headers.get("content-length"));
-    if (options.maxWholeBytes !== undefined && Number.isFinite(length) && length > options.maxWholeBytes) {
-      void response.body?.cancel().catch(() => undefined);
-      throw new FormatError({ code: "no-range", format: "geoparquet", url, size: length });
-    }
-    const bytes = await response.arrayBuffer();
-    byteLength = bytes.byteLength;
-    held = { start: 0, bytes };
-  }
-
-  const tail = new Uint8Array(held.bytes);
-  if (tail.length < 12 || !hasMagic(tail, tail.length - 4) || (held.start === 0 && !hasMagic(tail, 0))) {
+  const held = { start: tail.start, bytes: tail.bytes };
+  const bytes = new Uint8Array(held.bytes);
+  if (bytes.length < 12 || !hasMagic(bytes, bytes.length - 4) || (held.start === 0 && !hasMagic(bytes, 0))) {
     throw new FormatError({ code: "not-format", format: "geoparquet", url });
   }
-  const file = rangeReader(url, byteLength, held, ranges, signal);
+  const file = rangeReader(url, tail.size, held, tail.ranges, signal);
   const { parquetMetadataAsync } = await library;
   let metadata: FileMetaData;
   try {
-    metadata = await parquetMetadataAsync(file, { initialFetchSize: TAIL_BYTES });
+    metadata = await parquetMetadataAsync(file, { initialFetchSize: tailBytes });
   } catch (error) {
     throw readFailure(error, url);
   }
-  return { url, byteLength, ranges, metadata, info: geoInfo(metadata, url), file };
+  return { url, byteLength: tail.size, ranges: tail.ranges, metadata, info: geoInfo(metadata, url), file };
 }
 
 /**

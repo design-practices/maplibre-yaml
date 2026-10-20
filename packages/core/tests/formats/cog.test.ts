@@ -301,6 +301,15 @@ describe("the reader's preflight: one 64 KB read, every failure in plain words",
     expect(plugin.cogProtocol).not.toHaveBeenCalled();
   });
 
+  it("a host that hides Content-Range, or 416s an empty file: never called a server without ranges", async () => {
+    // GitHub Pages seen from another site: a 206 with no readable Content-Range.
+    fetchSpy.mockResolvedValueOnce(respond(head("imagery.cog.tif"), { status: 206 }));
+    expect(await failureOf("https://h.org/hidden.tif")).toBeUndefined();
+    // The first 64 KB of an empty file is unsatisfiable: a wrong file, not a 416 "didn't load".
+    fetchSpy.mockResolvedValueOnce(respond(null, { status: 416, headers: { "content-range": "bytes */0" } }));
+    expect(await failureOf("https://h.org/empty.tif")).toMatchObject({ code: "not-format" });
+  });
+
   it("a failed preflight is not kept: the next request asks again", async () => {
     fetchSpy.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     expect(await failureOf("https://h.org/retry.tif")).toMatchObject({ code: "cors" });

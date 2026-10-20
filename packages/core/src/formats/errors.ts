@@ -123,6 +123,19 @@ export function classifyPmtilesError(error: unknown, url: string): unknown {
   if (/content-length exceeding request|byte serving/i.test(message)) {
     return new FormatError({ ...base, code: "no-range" });
   }
+  // A server that refused the first range (16 KB from the start) of an
+  // archive shorter than that, and hid its `Content-Range` from this page:
+  // the reader can't learn the size to ask again. Ranges work; the file is
+  // fine — the host's CORS headers are what is missing.
+  if (/missing content-length on 416/i.test(message)) {
+    return new FormatError({
+      ...base,
+      code: "read",
+      detail:
+        "the server refused the first range request and didn't let this page read the file size " +
+        "(it needs to send `Access-Control-Expose-Headers: Content-Range`)",
+    });
+  }
   if (/wrong magic number/i.test(message) || /spec version/i.test(message)) {
     return new FormatError({ ...base, code: "not-format" });
   }

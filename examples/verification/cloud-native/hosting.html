@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cloud-native data on GitHub Pages and jsDelivr</title>
+  <!--
+    0.9: every cloud-native format, served the way GitHub Pages,
+    raw.githubusercontent.com and jsDelivr's Fastly leg serve files. Two habits
+    of those hosts used to make good files fail:
+      - a suffix range longer than the file (`Range: bytes=-524288` on a 13 KB
+        GeoParquet file) is answered 416, not with the whole file;
+      - a page on another site can't read `Content-Range` (no
+        Access-Control-Expose-Headers), so a 206 arrives without its offset or
+        the file size.
+    e2e/server.mjs imitates both under /fastly/ (and each alone under
+    /suffix416/ and /noexpose/).
+      - "same":  the files under /fastly/ from this page's own origin (the 416s)
+      - "cross": the same files from another origin (127.0.0.1 vs localhost):
+                 the 416s and the hidden Content-Range
+    Each map: PMTiles districts (outlines), FlatGeobuf districts read whole (fill),
+    FlatGeobuf points read by view, GeoParquet districts read whole (thick
+    outlines), GeoParquet points read by view, and a COG image.
+    PASS = both maps show the imagery, the outlined and filled districts, and two
+    kinds of points, with no notice. FAIL = a "didn't load (416)" or "isn't a
+    GeoParquet file" notice.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/hosting.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 380px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = imagery, outlined and filled districts, and two kinds of points on both maps, with no notice.</header>
+  <main>
+    <section>
+      <h2>Fastly-like host, same origin (416 on an oversized suffix range)</h2>
+      <ml-map id="same">
+        <script type="text/yaml">
+type: map
+id: hosting-same
+config:
+  center: [10.05, 42.04]
+  zoom: 11.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  imagery:
+    type: raster
+    url: "{{HOST}}/fastly/gallery-assets/cloud-native/imagery.cog.tif"
+  outlines:
+    type: vector
+    url: "{{HOST}}/fastly/gallery-assets/cloud-native/districts.pmtiles"
+  fgb:
+    type: geojson
+    url: "{{HOST}}/fastly/gallery-assets/cloud-native/districts.fgb"
+  fgbpoints:
+    type: geojson
+    url: "{{HOST}}/fastly/gallery-assets/cloud-native/points.fgb"
+    load: { mode: viewport, minzoom: 11 }
+  parquet:
+    type: geojson
+    url: "{{HOST}}/fastly/gallery-assets/cloud-native/districts.parquet"
+  parquetpoints:
+    type: geojson
+    url: "{{HOST}}/fastly/gallery-assets/cloud-native/points.parquet"
+    load: { mode: viewport, minzoom: 11 }
+layers:
+  - { id: imagery, type: raster, source: imagery, paint: { raster-opacity: 0.6 } }
+  - { id: fgb, type: fill, source: fgb, paint: { fill-color: "#e9c46a", fill-opacity: 0.35 } }
+  - { id: parquet, type: line, source: parquet, paint: { line-color: "#264653", line-width: 3 } }
+  - { id: outlines, type: line, source: outlines, source-layer: districts, paint: { line-color: "#e76f51", line-width: 1 } }
+  - { id: fgbpoints, type: circle, source: fgbpoints, paint: { circle-radius: 4, circle-color: "#1d3557" } }
+  - { id: parquetpoints, type: circle, source: parquetpoints, paint: { circle-radius: 2, circle-color: ["match", ["get", "kind"], "a", "#ffffff", "#ff006e"] } }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Fastly-like host, another origin (416s, and Content-Range hidden)</h2>
+      <ml-map id="cross">
+        <script type="text/yaml">
+type: map
+id: hosting-cross
+config:
+  center: [10.05, 42.04]
+  zoom: 11.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  imagery:
+    type: raster
+    url: "{{OTHER_ORIGIN}}/fastly/gallery-assets/cloud-native/imagery.cog.tif"
+  outlines:
+    type: vector
+    url: "{{OTHER_ORIGIN}}/fastly/gallery-assets/cloud-native/districts.pmtiles"
+  fgb:
+    type: geojson
+    url: "{{OTHER_ORIGIN}}/fastly/gallery-assets/cloud-native/districts.fgb"
+  fgbpoints:
+    type: geojson
+    url: "{{OTHER_ORIGIN}}/fastly/gallery-assets/cloud-native/points.fgb"
+    load: { mode: viewport, minzoom: 11 }
+  parquet:
+    type: geojson
+    url: "{{OTHER_ORIGIN}}/fastly/gallery-assets/cloud-native/districts.parquet"
+  parquetpoints:
+    type: geojson
+    url: "{{OTHER_ORIGIN}}/fastly/gallery-assets/cloud-native/points.parquet"
+    load: { mode: viewport, minzoom: 11 }
+layers:
+  - { id: imagery, type: raster, source: imagery, paint: { raster-opacity: 0.6 } }
+  - { id: fgb, type: fill, source: fgb, paint: { fill-color: "#e9c46a", fill-opacity: 0.35 } }
+  - { id: parquet, type: line, source: parquet, paint: { line-color: "#264653", line-width: 3 } }
+  - { id: outlines, type: line, source: outlines, source-layer: districts, paint: { line-color: "#e76f51", line-width: 1 } }
+  - { id: fgbpoints, type: circle, source: fgbpoints, paint: { circle-radius: 4, circle-color: "#1d3557" } }
+  - { id: parquetpoints, type: circle, source: parquetpoints, paint: { circle-radius: 2, circle-color: ["match", ["get", "kind"], "a", "#ffffff", "#ff006e"] } }
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script>
+    // The cross-origin map needs another origin: the same server, reached as
+    // 127.0.0.1 instead of localhost. Classic script, so it runs before the
+    // elements upgrade (register.js is a module, run after parsing).
+    for (const s of document.querySelectorAll('script[type="text/yaml"]')) {
+      s.textContent = s.textContent
+        .replaceAll("{{OTHER_ORIGIN}}", `http://127.0.0.1:${location.port}`)
+        .replaceAll("{{HOST}}", "");
+    }
+  </script>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

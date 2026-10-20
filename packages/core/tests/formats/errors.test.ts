@@ -32,6 +32,13 @@ describe("classifyPmtilesError", () => {
     expect(isFormatError(cors) && cors.failure.code).toBe("cors");
   });
 
+  it("a 416 on a tiny archive with Content-Range hidden is not called a missing or wrong file", () => {
+    const e = classifyPmtilesError(new Error("Missing content-length on 416 response"), URL);
+    expect(isFormatError(e) && e.failure.code).toBe("read");
+    expect((e as Error).message).toContain("Access-Control-Expose-Headers: Content-Range");
+    expect((e as Error).message).not.toMatch(/range-request support|isn't a PMTiles file|didn't load/);
+  });
+
   it("passes aborts and unknown errors through unchanged", () => {
     const abort = Object.assign(new Error("The user aborted a request."), { name: "AbortError" });
     expect(classifyPmtilesError(abort, URL)).toBe(abort);

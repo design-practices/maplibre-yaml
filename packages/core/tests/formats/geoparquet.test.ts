@@ -40,14 +40,28 @@ const FIXTURES = join(
 );
 const fixture = (name: string) => new Uint8Array(readFileSync(join(FIXTURES, name)));
 
-type Log = { url: string; range?: string; status: number; bytes: number }[];
+type Log = { url: string; range?: string; method?: string; status: number; bytes: number }[];
 
-/** A fetch over the fixtures: `/<file>`, `/norange/<file>`; 404 otherwise. Suffix ranges too. */
+/**
+ * A fetch over the fixtures, honouring HTTP ranges (suffix ranges too) like
+ * the e2e server, with its hosting prefixes:
+ *
+ * - `/norange/<file>`: `Range` ignored, 200 with the whole file;
+ * - `/suffix416/<file>`: a suffix longer than the file is 416 (Fastly);
+ * - `/noexpose/<file>`: `Content-Range` unreadable, as a page on another
+ *   origin sees GitHub Pages (`Content-Length` stays readable);
+ * - `/nolength/<file>`: no `Content-Length` (a chunked response).
+ *
+ * `HEAD` answers with the size. 404 for anything else.
+ */
 function fixtureFetch(log: Log = []) {
   return vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
-    const m = /^(?:https?:\/\/[^/]+)?(\/norange)?\/(.+)$/.exec(url)!;
-    const ranges = m[1] !== "/norange";
+    const m = /^(?:https?:\/\/[^/]+)?((?:\/(?:norange|suffix416|noexpose|nolength))*)\/(.+)$/.exec(url)!;
+    const ranges = !m[1]!.includes("/norange");
+    const suffix416 = m[1]!.includes("/suffix416");
+    const expose = !m[1]!.includes("/noexpose");
+    const length = !m[1]!.includes("/nolength");
     let bytes: Uint8Array;
     try {
       bytes = fixture(m[2]!);
@@ -56,8 +70,16 @@ function fixtureFetch(log: Log = []) {
       return new Response("not found", { status: 404, statusText: "Not Found" });
     }
     const size = bytes.length;
+    if (init?.method === "HEAD") {
+      log.push({ url, method: "HEAD", status: 200, bytes: 0 });
+      return new Response(null, { status: 200, headers: length ? { "content-length": String(size) } : {} });
+    }
     const range = new Headers(init?.headers ?? {}).get("Range");
     const r = range && ranges ? /bytes=(\d*)-(\d*)/.exec(range) : null;
+    if (r && suffix416 && r[1] === "" && Number(r[2]) > size) {
+      log.push({ url, range, status: 416, bytes: 0 });
+      return new Response(null, { status: 416, headers: expose ? { "content-range": `bytes */${size}` } : {} });
+    }
     if (r) {
       const start = r[1] === "" ? Math.max(0, size - Number(r[2])) : Number(r[1]);
       const end = r[1] === "" || r[2] === "" ? size - 1 : Math.min(Number(r[2]), size - 1);
@@ -65,10 +87,24 @@ function fixtureFetch(log: Log = []) {
       log.push({ url, range, status: 206, bytes: body.length });
       return new Response(body, {
         status: 206,
-        headers: { "content-range": `bytes ${start}-${end}/${size}`, "content-length": String(body.length) },
+        headers: {
+          ...(expose ? { "content-range": `bytes ${start}-${end}/${size}` } : {}),
+          ...(length ? { "content-length": String(body.length) } : {}),
+        },
       });
     }
     log.push({ url, status: 200, bytes: size });
+    if (!length) {
+      // Chunked: 4 KB at a time, so a reader can stop part-way.
+      let at = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (at >= size) return controller.close();
+          controller.enqueue(bytes.slice(at, (at += 4096)));
+        },
+      });
+      return new Response(body, { status: 200 });
+    }
     return new Response(bytes, { status: 200, headers: { "content-length": String(size) } });
   });
 }
@@ -210,6 +246,83 @@ describe("open: the footer in one suffix-range request", () => {
     const error = await open("/norange/points.parquet", { maxWholeBytes: 10_000 }).catch((e) => e);
     expect(failure(error)).toMatchObject({ code: "no-range", format: "geoparquet" });
     expect((error as Error).message).toContain("python -m http.server");
+  });
+
+  it("…or as soon as that many bytes have streamed, when the server sent no Content-Length", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const error = await open("/norange/nolength/points.parquet", { maxWholeBytes: 10_000 }).catch((e) => e);
+    expect(failure(error)).toMatchObject({ code: "no-range", format: "geoparquet" });
+    expect(failure(error)!.size).toBeGreaterThan(10_000);
+    expect(failure(error)!.size).toBeLessThan(fixture("points.parquet").length);
+  });
+
+  it("a host that answers an oversized suffix range with 416 (Fastly: GitHub Pages, jsDelivr): read whole", async () => {
+    const log: Log = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    const source = await open("/suffix416/districts.parquet");
+    expect(source.byteLength).toBe(fixture("districts.parquet").length);
+    expect((await readAll(source))!.features).toHaveLength(48);
+    // The 416, then the whole (small) file; nothing after.
+    expect(log.map((r) => [r.status, r.range ?? null])).toEqual([
+      [416, `bytes=-${TAIL_BYTES}`],
+      [200, null],
+    ]);
+  });
+
+  it("Content-Range hidden from this page (GitHub Pages, cross-origin): a small file is whole from one response", async () => {
+    const log: Log = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    const source = await open("/noexpose/districts.parquet");
+    expect(source.byteLength).toBe(fixture("districts.parquet").length);
+    expect((await readAll(source))!.features).toHaveLength(48);
+    expect(log).toHaveLength(1);
+  });
+
+  it("…a file bigger than the first read: its size from a HEAD, the rest read by range", async () => {
+    const log: Log = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    // A first read shorter than the file stands in for a file over 512 KB.
+    const source = await open("/noexpose/points.parquet", { tailBytes: 8192 });
+    expect(source.ranges).toBe(true);
+    expect(source.byteLength).toBe(fixture("points.parquet").length);
+    // The suffix read, the HEAD; then (this footer is over 8 KB) explicit ranges.
+    expect(log.slice(0, 2).map((r) => r.method ?? r.status)).toEqual([206, "HEAD"]);
+    const fc = await readAll(source, { columns: ["id"] });
+    expect(fc!.features).toHaveLength(400);
+    expect(log.slice(2).every((r) => r.status === 206 && !r.range!.startsWith("bytes=-"))).toBe(true);
+  });
+
+  it("…and with no size from HEAD either, the file is read whole (under the size guard)", async () => {
+    const log: Log = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    const source = await open("/noexpose/nolength/points.parquet", { tailBytes: 8192 });
+    expect(source.byteLength).toBe(fixture("points.parquet").length);
+    expect(log.map((r) => r.method ?? r.status)).toEqual([206, "HEAD", 200]);
+
+    expect((await readAll(source))!.features).toHaveLength(400);
+    const error = await open("/noexpose/nolength/points.parquet", { tailBytes: 8192, maxWholeBytes: 10_000 }).catch(
+      (e) => e
+    );
+    expect(failure(error)?.code).toBe("too-large");
+  });
+
+  it("a range applied to a compressed copy (jsDelivr's Cloudflare leg, Content-Encoding: br): the decoded body is the file", async () => {
+    // The browser decodes the brotli body to the whole file; Content-Range
+    // still describes the 5 KB compressed copy.
+    const file = fixture("districts.parquet");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(file, { status: 206, headers: { "content-range": "bytes 0-5630/5631" } }))
+    );
+    const source = await open("https://cdn.example/districts.parquet");
+    expect(source.byteLength).toBe(file.length);
+    expect((await readAll(source))!.features).toHaveLength(48);
+  });
+
+  it("an oversized suffix answered 416 on a host that also hides the size: still read whole", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/suffix416/noexpose/points.parquet");
+    expect((await readAll(source))!.features).toHaveLength(400);
   });
 
   it("a 404 is thrown in the GeoJSON fetcher's shape (same notice wording)", async () => {
