@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Base path: a self-hosted PMTiles basemap</title>
+  <!--
+    A basemap hosted beside the site, on a GitHub Pages project site
+    (/my-repo/), with no page JavaScript: basemap/style.json names its
+    PMTiles file (and glyphs) RELATIVE TO ITSELF — "pmtiles://region.pmtiles".
+    maplibre-yaml registers the pmtiles protocol before the map exists and
+    resolves the style's relative URLs against the style's URL; base applies
+    to the style URL itself.
+    PASS (left) = green districts with grey outlines, no notice.
+    Right = the same with a wrong file name in the style: a notice says the
+    file wasn't found, instead of a blank basemap.
+    Open: http://localhost:4174/my-repo/blog/basemap.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    ml-map { display: block; height: 400px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>Left PASS = the self-hosted basemap draws. Right = a wrong file name in the style gets a notice.</header>
+  <main>
+    <ml-map id="self-hosted" base="/my-repo/">
+      <script type="text/yaml">
+type: map
+id: self-hosted-basemap
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: basemap/style.json
+layers: []
+      </script>
+    </ml-map>
+    <ml-map id="broken" base="/my-repo/">
+      <script type="text/yaml">
+type: map
+id: self-hosted-basemap-broken
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: basemap/broken-style.json
+layers: []
+      </script>
+    </ml-map>
+  </main>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

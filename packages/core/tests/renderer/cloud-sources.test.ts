@@ -95,9 +95,11 @@ describe("prepareProtocols (on the interop-resolved module)", () => {
     if (registry()["pmtiles"]) removeProtocol("pmtiles");
   });
 
-  it("does nothing for a document without PMTiles", () => {
+  it("registers pmtiles synchronously for every document, so a basemap style can use it (ml-aot.87)", () => {
+    // Nothing for the document's own sources to wait on…
     expect(prepareProtocols({ a: { type: "geojson", url: "a.fgb" } }, [])).toBeUndefined();
-    expect(registry()["pmtiles"]).toBeUndefined();
+    // …and the protocol is already there, before any map is constructed.
+    expect(typeof registry()["pmtiles"]).toBe("function");
   });
 
   it("registers pmtiles for a named, inline, or inline-basemap source", async () => {
@@ -244,5 +246,49 @@ describe("LayerManager with cloud-native sources", () => {
     await vi.waitFor(() => expect(callbacks.onDataError).toHaveBeenCalled());
     expect(callbacks.onDataError.mock.calls[0][1].failure).toMatchObject({ code: "unsupported", format: "geoparquet" });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("a basemap style loaded from a URL: relative URLs resolve against the style", () => {
+  it("resolves pmtiles://<relative>, TileJSON, tiles, sprite and glyphs; leaves the rest", async () => {
+    const { basemapRequestTransformer } = await import("../../src/renderer/basemap-urls");
+    const t = basemapRequestTransformer("https://u.github.io/my-repo/basemap/style.json");
+    expect(t("pmtiles://nyc.pmtiles", "Source")).toEqual({ url: "pmtiles://https://u.github.io/my-repo/basemap/nyc.pmtiles" });
+    expect(t("pmtiles://./nyc.pmtiles", "Source")).toEqual({ url: "pmtiles://https://u.github.io/my-repo/basemap/nyc.pmtiles" });
+    expect(t("pmtiles://../data/a.pmtiles", "Source")).toEqual({ url: "pmtiles://https://u.github.io/my-repo/data/a.pmtiles" });
+    expect(t("tiles.json", "Source")).toEqual({ url: "https://u.github.io/my-repo/basemap/tiles.json" });
+    expect(t("t/{z}/{x}/{y}.pbf", "Tile")).toEqual({ url: "https://u.github.io/my-repo/basemap/t/{z}/{x}/{y}.pbf" });
+    expect(t("sprites/light.json", "SpriteJSON")).toEqual({ url: "https://u.github.io/my-repo/basemap/sprites/light.json" });
+    expect(t("fonts/Noto Sans/0-255.pbf", "Glyphs")?.url).toBe(
+      "https://u.github.io/my-repo/basemap/fonts/Noto%20Sans/0-255.pbf"
+    );
+    // Absolute URLs and other resource types are left to MapLibre.
+    expect(t("pmtiles://https://example.com/a.pmtiles", "Source")).toBeUndefined();
+    expect(t("https://example.com/tiles.json", "Source")).toBeUndefined();
+    expect(t("photo.png", "Image")).toBeUndefined();
+  });
+
+  it("a relative style URL resolves against the page first; a host transformRequest still runs", async () => {
+    const { basemapRequestTransformer } = await import("../../src/renderer/basemap-urls");
+    const host = vi.fn((url: string) => ({ url: `${url}?key=1` }));
+    const seen: string[] = [];
+    const t = basemapRequestTransformer("basemap/style.json", host, (u) => seen.push(u));
+    const expected = `pmtiles://${new URL("basemap/nyc.pmtiles", document.baseURI).href}`;
+    expect(t("pmtiles://nyc.pmtiles", "Source")).toEqual({ url: `${expected}?key=1` });
+    expect(seen).toEqual([expected]);
+  });
+
+  it("a document's own relative tile URLs are made absolute against the page first", async () => {
+    const { absolutizeSourceUrls } = await import("../../src/utils/tile-url");
+    expect(absolutizeSourceUrls({ type: "vector", url: "data/tiles.json" })).toEqual({
+      type: "vector",
+      url: new URL("data/tiles.json", document.baseURI).href,
+    });
+    expect(absolutizeSourceUrls({ type: "raster", tiles: ["r/{z}/{x}/{y}.png"] }).tiles).toEqual([
+      `${new URL("r/", document.baseURI).href}{z}/{x}/{y}.png`,
+    ]);
+    expect(absolutizeSourceUrls({ type: "vector", url: "pmtiles://https://h/a.pmtiles" }).url).toBe(
+      "pmtiles://https://h/a.pmtiles"
+    );
   });
 });

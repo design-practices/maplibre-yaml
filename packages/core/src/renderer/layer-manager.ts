@@ -4,7 +4,7 @@
  */
 
 import { suggest } from "../utils/suggest";
-import { absolutizeTileTemplate, absolutizeVectorTiles } from "../utils/tile-url";
+import { absolutizeSourceUrls, absolutizeTileTemplate, absolutizeVectorTiles } from "../utils/tile-url";
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { z } from "zod";
 import type { FeatureCollection } from "geojson";
@@ -275,7 +275,9 @@ export class LayerManager {
     }
     const resolved = toMapLibreTileSpec(spec, this.isProtocolRegistered);
     if (resolved.problem && sourceId) this.callbacks.onSourceError?.(sourceId, resolved.problem);
-    return resolved.spec;
+    // Absolute against the page: the worker fetches some of these, and a
+    // relative URL is reserved for a basemap style's own files (basemap-urls).
+    return absolutizeSourceUrls(resolved.spec);
   }
 
   /**

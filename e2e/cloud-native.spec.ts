@@ -396,4 +396,86 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     expect(consoleLines.filter((l) => /Failed to resolve module specifier|zstd-wasm/.test(l))).toEqual([]);
     expect(errors).toEqual([]);
   });
+
+  test("a self-hosted PMTiles basemap: a style URL under base, its file named relative to the style, no page JS", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const notFound: string[] = [];
+    page.on("response", (r) => {
+      if (r.status() === 404) notFound.push(new URL(r.url()).pathname);
+    });
+    await page.goto("/my-repo/blog/basemap.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("self-hosted") as any).mapReady());
+    await waitForFeatures(page, "self-hosted", "protomaps", "districts");
+    const source = await page.evaluate(
+      () => (document.getElementById("self-hosted") as any).getMap().getStyle().sources.protomaps
+    );
+    // The style said "pmtiles://region.pmtiles"; it was read next to the style.
+    expect(source.url).toBe("pmtiles://region.pmtiles");
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const map = (document.getElementById("self-hosted") as any).getMap();
+          return map.queryRenderedFeatures(undefined, { layers: ["landuse"] }).length;
+        })
+      )
+      .toBeGreaterThan(0);
+    await expect(page.locator("#self-hosted .ml-map-notice")).toHaveCount(0);
+    expect(
+      notFound.filter((p) => (p.startsWith("/my-repo/basemap/") || p.startsWith("/glyphs/")) && !p.includes("not-here"))
+    ).toEqual([]);
+
+    // The same style with a wrong file name: a notice on the map, not a
+    // silently blank basemap.
+    await expect(page.locator("#broken .ml-map-notice")).toContainText("not-here.pmtiles", { timeout: 30_000 });
+    await expect(page.locator("#broken .ml-map-notice")).toContainText("didn't load (404");
+    await page.screenshot({ path: "e2e/results/cnv_self_hosted_basemap.png" });
+    expect(errors).toEqual([]);
+  });
+
+  test("a basemap style with an absolute pmtiles://https://… source, no page JS", async ({ page, baseURL }) => {
+    const errors = await guard(page);
+    // A "remote" style (served here, so the suite stays hermetic) whose
+    // source names its archive by an absolute URL.
+    await page.route("**/remote-basemap/style.json", (route) =>
+      route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          version: 8,
+          sources: {
+            remote: { type: "vector", url: `pmtiles://${baseURL}/gallery-assets/cloud-native/districts.pmtiles` },
+          },
+          layers: [
+            { id: "background", type: "background", paint: { "background-color": "#eeeeee" } },
+            { id: "remote-fill", type: "fill", source: "remote", "source-layer": "districts", paint: { "fill-color": "#8ab" } },
+          ],
+        }),
+      })
+    );
+    const html = `<!DOCTYPE html><html><head>
+      <link rel="stylesheet" href="${baseURL}/vendor/maplibre-gl.css" />
+      <script type="importmap">{ "imports": { "maplibre-gl": "${baseURL}/vendor/maplibre-gl.esm.js" } }</script>
+      </head><body>
+      <ml-map id="remote" style="display:block;height:400px">
+        <script type="text/yaml">
+type: map
+id: remote-basemap
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "${baseURL}/remote-basemap/style.json"
+layers: []
+        </script>
+      </ml-map>
+      <script type="module" src="${baseURL}/packages/core/register.js"></script>
+      </body></html>`;
+    await page.route("**/remote-basemap/index.html", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto("/remote-basemap/index.html", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("remote") as any)?.mapReady === "function");
+    await page.evaluate(() => (document.getElementById("remote") as any).mapReady());
+    await waitForFeatures(page, "remote", "remote", "districts");
+    await expect(page.locator("#remote .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
 });

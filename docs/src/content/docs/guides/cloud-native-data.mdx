@@ -116,34 +116,63 @@ sources:
   (the 0.7 way, still supported — for custom headers or a custom `Source`),
   maplibre-yaml leaves that registration alone.
 
-<Aside type="note" title="PMTiles inside a basemap style">
-The automatic setup covers the sources in **your** document. A basemap style
-loaded from a URL (`mapStyle:` / `basemap:`) whose own sources use
-`pmtiles://` — Protomaps basemaps, for example — is loaded by MapLibre before
-maplibre-yaml can see inside it, so in 0.9 that case still needs the protocol
-registered from page JavaScript.
+### PMTiles inside a basemap style
 
-With a bundler (Vite, Astro), after `npm install pmtiles`:
+A basemap style loaded from a URL can use PMTiles too, with no page
+JavaScript: `mapStyle:` (or `basemap:` in format v2) can point at a style
+whose sources are `pmtiles://` URLs, such as a Protomaps basemap or one you
+host yourself (below). maplibre-yaml registers the `pmtiles://` protocol
+before the map is created, so the style's first requests find it. A page that
+registered its own `pmtiles` protocol keeps it.
 
-```js
-import { addProtocol } from "@maplibre-yaml/core/maplibre";
-import { Protocol } from "pmtiles";
-addProtocol("pmtiles", new Protocol().tile);
-```
+**Relative URLs inside the style are relative to the style.json**, the way a
+stylesheet's `url()` is relative to the stylesheet. That applies to a source's
+`url` (including the file inside `pmtiles://`), `tiles`, `sprite` and
+`glyphs`. MapLibre by itself would resolve them against the page, which
+breaks as soon as the page and the style live in different folders. `base`
+applies to the style URL itself, so a style under `base="/my-repo/"` finds its
+own files under `/my-repo/` too. If the style names a file that isn't there,
+the map's notice says which one, instead of showing a blank basemap.
 
-In a plain HTML page, register it on the `maplibre-gl` the page's import map
-names (the one `<ml-map>` uses), and load `pmtiles` from esm.sh, which
-resolves its own dependencies (unpkg does not). Put this script **before** the
-`register.js` script:
+## Host your own basemap
 
-```html
-<script type="module">
-  import { addProtocol } from "maplibre-gl";
-  import { Protocol } from "https://esm.sh/pmtiles@4";
-  addProtocol("pmtiles", new Protocol().tile);
-</script>
-```
-</Aside>
+A basemap can be one PMTiles file next to your site, served by the same static
+host, with no tile server and no API key:
+
+1. **Cut a regional extract** from the Protomaps daily planet build with the
+   [`pmtiles` command-line tool](https://docs.protomaps.com/pmtiles/cli):
+
+   ```bash
+   pmtiles extract https://build.protomaps.com/<date>.pmtiles nyc.pmtiles \
+     --bbox=-74.26,40.48,-73.70,40.92
+   ```
+
+   Pick `<date>` from [build.protomaps.com](https://build.protomaps.com/).
+   The tool reads only the part of the planet it needs.
+2. **Get a style** for it. Protomaps publishes basemap styles (light, dark,
+   grayscale and others) for exactly these tiles; see
+   [Protomaps basemaps](https://docs.protomaps.com/basemaps/maplibre). Save the
+   style as `style.json` beside the file and point its source at it:
+   `"url": "pmtiles://nyc.pmtiles"`. Its `glyphs` and `sprite` can stay on
+   Protomaps' asset host, or be copied next to the style and named relatively.
+3. **Use it** from your document:
+
+   ```yaml
+   config:
+     mapStyle: basemap/style.json   # public/basemap/ in an Astro or Vite site
+   ```
+
+**Size.** A city extract is typically tens of MB; a large region or a country
+can be hundreds of MB or more. GitHub refuses files over 100 MB in a
+repository, and a GitHub Pages site is limited to 1 GB, so keep extracts to
+the area you show (a smaller `--bbox`, or a lower `--maxzoom`, shrinks the
+file). For larger areas, use a host meant for big files, such as an object
+store.
+
+**Hosting.** The file is read with HTTP range requests, like any PMTiles file:
+GitHub Pages, Netlify, Cloudflare, S3 and R2 support them;
+`python -m http.server` does not (see
+[Hosting](#hosting-range-requests-and-cors)).
 
 ## FlatGeobuf
 
@@ -276,10 +305,19 @@ style:
 A `style.json` can carry a URL but not a file reader, so:
 
 - **PMTiles** export as `pmtiles://` URLs (a `.pmtiles` URL gains the
-  scheme). The style then needs a renderer that reads `pmtiles://` —
-  maplibre-gl JS with the protocol registered (the snippets above: the
-  bundler form, or the plain-HTML form for a page loading maplibre-gl from a
-  CDN).
+  scheme). The style then needs a renderer that reads `pmtiles://`, such as
+  maplibre-gl JS with the protocol registered. With a bundler, after
+  `npm install pmtiles`:
+
+  ```js
+  import maplibregl from "maplibre-gl";
+  import { Protocol } from "pmtiles";
+  maplibregl.addProtocol("pmtiles", new Protocol().tile);
+  ```
+
+  In a plain HTML page, import `addProtocol` from the `maplibre-gl` your import
+  map names and `Protocol` from `https://esm.sh/pmtiles@4` (esm.sh resolves
+  its dependencies; unpkg does not), before the map is created.
 - **FlatGeobuf** is converted: `mlym emit` reads the file (next to the YAML,
   in the current folder or its `public/`, or over http(s)) and writes its
   features into the style as GeoJSON. If it can't read the file, the source

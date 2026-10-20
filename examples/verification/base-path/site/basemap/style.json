@@ -1,0 +1,34 @@
+{
+  "version": 8,
+  "name": "self-hosted basemap (verification)",
+  "_comment": "A Protomaps-like self-hosted basemap: one PMTiles vector source and a few layers, every file named RELATIVE TO THIS STYLE. maplibre-yaml resolves them against the style's own URL (renderer/basemap-urls). Glyphs go two folders up to the e2e server's empty-pbf endpoint.",
+  "glyphs": "../../glyphs/{fontstack}/{range}.pbf",
+  "sources": {
+    "protomaps": { "type": "vector", "url": "pmtiles://region.pmtiles" }
+  },
+  "layers": [
+    { "id": "background", "type": "background", "paint": { "background-color": "#f2efe9" } },
+    {
+      "id": "landuse",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "districts",
+      "paint": { "fill-color": "#cde6c0", "fill-opacity": 0.8 }
+    },
+    {
+      "id": "boundaries",
+      "type": "line",
+      "source": "protomaps",
+      "source-layer": "districts",
+      "paint": { "line-color": "#7a8c99", "line-width": 1 }
+    },
+    {
+      "id": "labels",
+      "type": "symbol",
+      "source": "protomaps",
+      "source-layer": "districts",
+      "layout": { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 11 },
+      "paint": { "text-color": "#333333" }
+    }
+  ]
+}

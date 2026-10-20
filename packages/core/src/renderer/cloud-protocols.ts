@@ -13,7 +13,7 @@
  */
 
 import { formatsIn, type CloudFormat } from "../formats/detect";
-import { getDecoder } from "../formats/decoders";
+import { bundledDecoder, getDecoder } from "../formats/decoders";
 import { addProtocol, maplibregl, runtimeVersion } from "./maplibre-interop";
 
 type Obj = Record<string, unknown>;
@@ -34,16 +34,29 @@ function inlineStyleSources(mapStyle: unknown): unknown {
   return mapStyle && typeof mapStyle === "object" ? (mapStyle as Obj)["sources"] : undefined;
 }
 
+/** Why `pmtiles://` could not be registered on this module (maplibre-gl 3), if so. */
+let pmtilesProblem: Error | undefined;
+
+/** The reason `pmtiles://` is unavailable on this page, when it is (see {@link prepareProtocols}). */
+export function pmtilesUnavailable(): Error | undefined {
+  return isProtocolRegistered("pmtiles") ? undefined : pmtilesProblem;
+}
+
 /**
- * Register the protocols a document needs (PMTiles), on the module the
- * renderer constructs maps from. Starts at once and resolves when done;
- * the renderer awaits it before adding the document's sources, never
- * before constructing the map (the basemap loads in parallel). A page's own
+ * Register `pmtiles://` on the module the renderer constructs maps from —
+ * always, not only for a document whose own sources use it: a basemap style
+ * loaded from a URL (`mapStyle:` / `basemap:`, a Protomaps basemap or one
+ * self-hosted beside the site) may use `pmtiles://`, and MapLibre loads it
+ * before maplibre-yaml can see inside. The reader is bundled, so this costs
+ * nothing, and it runs synchronously, before the map is constructed: the
+ * style's first TileJSON and tile requests can never race it. A page's own
  * registration is left alone (host wins).
  *
- * @returns `undefined` when the document needs no protocol; otherwise the
- *   formats whose reader could not be set up, with the error — their
- *   sources are reported and skipped; everything else renders.
+ * @returns `undefined` when the document's own sources need no protocol;
+ *   otherwise a settled promise of the formats whose reader could not be
+ *   set up, with the error (awaited before the document's sources are
+ *   added; their sources are reported and skipped). A failure that only a
+ *   basemap would hit is kept for {@link pmtilesUnavailable}.
  */
 export function prepareProtocols(
   sources: unknown,
@@ -52,19 +65,31 @@ export function prepareProtocols(
 ): Promise<Map<CloudFormat, Error>> | undefined {
   const needed = formatsIn(sources, layers);
   for (const f of formatsIn(inlineStyleSources(mapStyle), [])) needed.add(f);
-  if (!needed.has("pmtiles")) return undefined;
   const failed = new Map<CloudFormat, Error>();
-  return getDecoder("pmtiles")
-    .then((pmtiles) => {
-      pmtiles.install({
-        addProtocol: addProtocol as never,
-        config: (maplibregl as unknown as { config?: { REGISTERED_PROTOCOLS?: Obj } }).config,
-        version: runtimeVersion(),
-        module: maplibregl as unknown as object,
-      });
-    })
+  const install = (pmtiles: { install: (host: never) => unknown }) =>
+    pmtiles.install({
+      addProtocol: addProtocol as never,
+      config: (maplibregl as unknown as { config?: { REGISTERED_PROTOCOLS?: Obj } }).config,
+      version: runtimeVersion(),
+      module: maplibregl as unknown as object,
+    } as never);
+  const bundled = bundledDecoder("pmtiles");
+  if (bundled) {
+    try {
+      install(bundled);
+    } catch (error) {
+      pmtilesProblem = error instanceof Error ? error : new Error(String(error));
+      failed.set("pmtiles", pmtilesProblem);
+    }
+    return needed.has("pmtiles") ? Promise.resolve(failed) : undefined;
+  }
+  // A reader moved to an on-demand chunk (not in 0.9): register when loaded.
+  const loading = getDecoder("pmtiles")
+    .then(install)
     .catch((error: unknown) => {
-      failed.set("pmtiles", error instanceof Error ? error : new Error(String(error)));
+      pmtilesProblem = error instanceof Error ? error : new Error(String(error));
+      failed.set("pmtiles", pmtilesProblem);
     })
     .then(() => failed);
+  return needed.has("pmtiles") ? loading : undefined;
 }

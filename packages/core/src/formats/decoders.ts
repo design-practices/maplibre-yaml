@@ -43,6 +43,17 @@ export function getDecoder<F extends DecodedFormat>(format: F): Promise<Decoders
   return Promise.resolve(BUNDLED[format]);
 }
 
+/**
+ * The decoder module for `format`, synchronously, while the decoders are
+ * bundled (0.9): what the renderer needs to register `pmtiles://` before it
+ * constructs a map, so a basemap style's first requests cannot race the
+ * registration. Becomes `undefined` for a format moved to an on-demand
+ * chunk; callers then fall back to {@link getDecoder}.
+ */
+export function bundledDecoder<F extends DecodedFormat>(format: F): Decoders[F] | undefined {
+  return BUNDLED[format];
+}
+
 /** Whether this version has a decoder for `format`. */
 export function hasDecoder(format: CloudFormat): format is DecodedFormat {
   return format === "pmtiles" || format === "flatgeobuf";

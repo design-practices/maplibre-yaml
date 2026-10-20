@@ -49,7 +49,8 @@ import { applyProjection, applySky, applyTerrain, type Scene3DMap } from './scen
 import { createStrings, type Strings } from '../i18n';
 import { mapLanguage } from './popup-builder';
 import { applyAccessibleName } from './accessible-name';
-import { isProtocolRegistered, prepareProtocols } from './cloud-protocols';
+import { isProtocolRegistered, pmtilesUnavailable, prepareProtocols } from './cloud-protocols';
+import { basemapRequestTransformer, type RequestTransformer } from './basemap-urls';
 import { formatOfSource, type CloudFormat } from '../formats/detect';
 
 /** The document's source ids (named, and `<layer>-source` for inline ones) that read `format`. */
@@ -152,6 +153,13 @@ function resolveFitTo(
   }
   return { kind: 'deferred' };
 }
+
+/**
+ * The reader's own plain-language failures (formats/errors), as they reach an
+ * `error` event from a style's PMTiles source.
+ */
+const BASEMAP_FILE_FAILURE =
+  /^`[^`]+` (didn't load \(|was served without range-request support|isn't a |is compressed)|^The browser couldn't read `/;
 
 /**
  * What part of the document a reported error belongs to — the third argument
@@ -508,8 +516,30 @@ export class MapRenderer {
         : authorLocale;
 
     // Initialize MapLibre map
+    // A basemap style loaded from a URL: its relative URLs (a self-hosted
+    // `pmtiles://nyc.pmtiles`, sprite, glyphs) resolve against the style
+    // itself (renderer/basemap-urls), and a `pmtiles://` source it asks for
+    // while the protocol is unusable (maplibre-gl 3) is reported once.
+    const hostTransform = (mapConfig as { transformRequest?: unknown }).transformRequest;
+    let pmtilesReported = false;
+    const transformRequest =
+      typeof mapStyle === 'string'
+        ? basemapRequestTransformer(
+            mapStyle,
+            typeof hostTransform === 'function' ? (hostTransform as RequestTransformer) : undefined,
+            () => {
+              const problem = pmtilesUnavailable();
+              if (!problem || pmtilesReported) return;
+              pmtilesReported = true;
+              console.warn(`[maplibre-yaml] the basemap style uses PMTiles: ${problem.message}`);
+              options.onError?.(problem, false, { kind: 'source', sourceId: 'basemap' });
+            }
+          )
+        : undefined;
+
     this.map = new MapLibreMap({
       ...mapConfig,
+      ...(transformRequest ? { transformRequest } : {}),
       ...(locale !== undefined ? { locale } : {}),
       ...initialFit,
       ...(Object.keys(contextAttributes).length > 0
@@ -1037,6 +1067,13 @@ export class MapRenderer {
         );
       if (layerId) return { kind: 'layer', layerId };
       if (typeof e.sourceId === 'string' && documentSourceIds.has(e.sourceId)) {
+        return { kind: 'source', sourceId: e.sourceId };
+      }
+      // A basemap style's own PMTiles file that failed (a self-hosted
+      // basemap with a wrong path, a server without range requests): the
+      // reader's plain-language failure, worth the map's notice rather than
+      // blank tiles. Other basemap tile errors stay off the page.
+      if (typeof e.sourceId === 'string' && BASEMAP_FILE_FAILURE.test(message)) {
         return { kind: 'source', sourceId: e.sourceId };
       }
       return undefined;
