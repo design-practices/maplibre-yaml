@@ -10,27 +10,29 @@
  *   `pmtiles://` form (a `.pmtiles` URL gains the scheme). The emitted style
  *   then needs a renderer that reads `pmtiles://` (maplibre-gl JS with the
  *   protocol registered): a `contract` warning says so.
- * - **FlatGeobuf** — class `exports-with-fallback`: converted to GeoJSON. Core
- *   stays network-free, so the projection writes an empty placeholder and
- *   returns an {@link EmitDataRef}; `mlym emit` reads the file and inlines
- *   the features (`contract`), or reports `lossy` when it can't.
- * - **GeoParquet** — not read by this version: emitted empty (`lossy`).
+ * - **FlatGeobuf** and **GeoParquet** — class `exports-with-fallback`:
+ *   converted to GeoJSON. Core stays network-free, so the projection writes
+ *   an empty placeholder and returns an {@link EmitDataRef}; `mlym emit`
+ *   reads the file and inlines the features (`contract`), or reports `lossy`
+ *   when it can't.
  * - **COG** — `cog://` URL, `contract` (needs a COG protocol plugin).
  *
  * Every other GeoJSON source given by `url:` emits it as `data: <url>`, the
  * style spec's form (ml-xzx).
  */
 
-import { formatOfSource, stripScheme, typeReadsFormat } from "../formats/detect";
+import { declaredColumns, formatOfSource, stripScheme, typeReadsFormat } from "../formats/detect";
 import type { EmitWarning } from "./project";
 
-/** A FlatGeobuf source the caller must read and inline (core describes, the CLI fetches). */
+/** A FlatGeobuf or GeoParquet source the caller must read and inline (core describes, the CLI fetches). */
 export interface EmitDataRef {
   /** The emitted source id (a hoisted inline source's generated id included). */
   source: string;
   /** The file URL as the document resolved it. */
   url: string;
-  format: "flatgeobuf";
+  format: "flatgeobuf" | "geoparquet";
+  /** GeoParquet: the columns an author listed (`columns:`); every column otherwise. */
+  columns?: readonly string[];
 }
 
 /** An empty FeatureCollection: the placeholder until the data is resolved. */
@@ -51,12 +53,15 @@ export const FLATGEOBUF_ON_EMIT =
   "not compile). Unreadable at emit time, the source is emitted empty (lossy).";
 
 export const GEOPARQUET_ON_EMIT =
-  "GeoParquet isn't read by this version, so the source is emitted empty (lossy).";
+  "GeoParquet sources are converted to GeoJSON at emit time: `mlym emit` reads the file " +
+  "and inlines its features as the source's data — every column, or the `columns:` " +
+  "listed (a snapshot; viewport reading does not compile). Unreadable at emit time, the " +
+  "source is emitted empty (lossy).";
 
 type Obj = Record<string, unknown>;
 
 /**
- * Put resolved FlatGeobuf features into an emitted style (the CLI's half of
+ * Put resolved FlatGeobuf / GeoParquet features into an emitted style (the CLI's half of
  * the conversion). Returns a new style; sources not named are untouched.
  */
 export function attachSourceData(
@@ -92,7 +97,7 @@ function lowerGeoJSONUrl(spec: Obj): Obj {
  * @param spec - The source's style half (as projected so far).
  * @param runtime - The source's runtime half (`format:` may sit there).
  * @param path - Dotted path for warnings.
- * @returns The spec to emit, its warnings, and a data ref for FlatGeobuf.
+ * @returns The spec to emit, its warnings, and a data ref for FlatGeobuf / GeoParquet.
  */
 export function lowerSourceFormat(
   id: string,
@@ -154,17 +159,24 @@ export function lowerSourceFormat(
     }
     case "geoparquet": {
       const { url: _url, ...rest } = spec;
+      const columns = declaredColumns({ ...spec, ...(runtime ?? {}) });
       return {
         spec: { ...rest, data: { type: "FeatureCollection", features: [] } },
         warnings: [
           {
             path: `${path}.url`,
-            kind: "lossy",
+            kind: "contract",
             construct: "format.geoparquet",
-            exportClass: "no-export",
+            exportClass: "exports-with-fallback",
             message: `\`${url}\` — ${GEOPARQUET_ON_EMIT}`,
           },
         ],
+        data: {
+          source: id,
+          url,
+          format: "geoparquet",
+          ...(Array.isArray(columns) ? { columns } : {}),
+        },
       };
     }
   }

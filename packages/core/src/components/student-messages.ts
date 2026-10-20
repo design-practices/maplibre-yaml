@@ -432,9 +432,9 @@ function pathOfSameOrigin(url: string, pageUrl: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Cloud-native formats (0.9, ml-cnv): PMTiles, FlatGeobuf — and the two the
-// syntax reserves (GeoParquet, COG). One sentence per failure, written for
-// the student who just pointed a map at a file.
+// Cloud-native formats (0.9, ml-cnv): PMTiles, FlatGeobuf, GeoParquet — and
+// the one the syntax reserves (COG). One sentence per failure, written for
+// the person who just pointed a map at a file.
 // ---------------------------------------------------------------------------
 
 /** The format's everyday name, for messages. */
@@ -463,7 +463,7 @@ function megabytes(bytes: number): string {
  * advice every range failure ends with.
  */
 export const RANGE_REQUEST_HINT =
-  "PMTiles and FlatGeobuf files need a web server that supports HTTP range requests: " +
+  "PMTiles, FlatGeobuf and GeoParquet files need a web server that supports HTTP range requests: " +
   "GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` does not — " +
   "preview locally with `npx serve` instead.";
 
@@ -498,12 +498,28 @@ export function describeFormatFailure(failure: FormatFailure): string {
       return `${file} didn't load (${failure.status ?? "HTTP error"}${text ? ` ${text}` : ""}).`;
     }
     case "too-large":
+      if (failure.format === "geoparquet") {
+        return (
+          `${file} is ${failure.size !== undefined ? megabytes(failure.size) : "very large"} ` +
+          "(the columns this map reads), too large to load whole in a browser. Add " +
+          "`load: viewport` to the source (the file needs a `bbox` covering column and " +
+          "spatially sorted row groups), list fewer `columns:`, or convert it to PMTiles."
+        );
+      }
       return (
         `${file} is ${failure.size !== undefined ? megabytes(failure.size) : "very large"}, ` +
         "too large to load whole in a browser. Add `load: viewport` to the source (the file " +
         "needs a spatial index), or convert it to PMTiles."
       );
     case "no-index":
+      if (failure.format === "geoparquet") {
+        return (
+          `${file} has no \`bbox\` covering column, so it can't be read one part at a time ` +
+          "(`load: viewport`). Write it with one — GeoPandas `to_parquet(..., " +
+          "write_covering_bbox=True)`, or `ogr2ogr -f Parquet -lco WRITE_COVERING_BBOX=YES " +
+          `out.parquet ${fileNameOf(failure.url)}\` — or use \`load: all\`.`
+        );
+      }
       return (
         `${file} has no spatial index, so it can't be read one part at a time ` +
         "(`load: viewport`). Re-create it with an index — `ogr2ogr -f FlatGeobuf -lco " +
@@ -513,16 +529,27 @@ export function describeFormatFailure(failure: FormatFailure): string {
       return (
         `${file} is in ${failure.crs ?? "a projected coordinate system"}; MapLibre needs ` +
         "longitude/latitude (EPSG:4326). Reproject it: " +
-        `\`ogr2ogr -t_srs EPSG:4326 out.fgb ${fileNameOf(failure.url)}\`.`
+        `\`ogr2ogr -t_srs EPSG:4326 out.${failure.format === "geoparquet" ? "parquet" : "fgb"} ` +
+        `${fileNameOf(failure.url)}\`.`
+      );
+    case "not-geoparquet":
+      return (
+        `${file} is a Parquet file but not GeoParquet (it has no geometry metadata). Write it ` +
+        "with GeoPandas `to_parquet`, `ogr2ogr -f Parquet`, or DuckDB's spatial extension."
+      );
+    case "encoding":
+      return (
+        `${file} stores its geometry as GeoArrow${failure.encoding ? ` (\`${failure.encoding}\`)` : ""}, ` +
+        "which maplibre-yaml doesn't read yet: it reads GeoParquet with WKB geometry. Rewrite " +
+        `it with WKB: \`ogr2ogr -f Parquet -lco GEOMETRY_ENCODING=WKB out.parquet ` +
+        `${fileNameOf(failure.url)}\`, or GeoPandas \`to_parquet(..., geometry_encoding="WKB")\`.`
       );
     case "unsupported":
-      return failure.format === "cog"
-        ? `${file} is a ${label}, which this version of maplibre-yaml can't read on its ` +
-            "own yet (it's planned). For now, convert it to PMTiles raster tiles, or " +
-            "register the `cog://` protocol from page JavaScript."
-        : `${file} is a ${label} file, which this version of maplibre-yaml can't read yet ` +
-            "(it's planned). For now, convert it to FlatGeobuf or GeoJSON: " +
-            `\`ogr2ogr out.fgb ${fileNameOf(failure.url)}\`.`;
+      return (
+        `${file} is a ${label}, which this version of maplibre-yaml can't read on its ` +
+        "own yet (it's planned). For now, convert it to PMTiles raster tiles, or " +
+        "register the `cog://` protocol from page JavaScript."
+      );
     case "decoder":
       return (
         `The ${label} reader couldn't be set up${failure.detail ? ` (${failure.detail})` : ""}, ` +

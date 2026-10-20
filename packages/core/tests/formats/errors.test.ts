@@ -44,7 +44,7 @@ describe("describeFormatFailure — the on-page sentences", () => {
   it("no-range names the hosts that work and the one that doesn't", () => {
     expect(describeFormatFailure({ code: "no-range", format: "pmtiles", url: URL })).toBe(
       "`/data/x.pmtiles` was served without range-request support (the server sent the whole file " +
-        "instead of the part asked for). PMTiles and FlatGeobuf files need a web server that supports " +
+        "instead of the part asked for). PMTiles, FlatGeobuf and GeoParquet files need a web server that supports " +
         "HTTP range requests: GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` " +
         "does not — preview locally with `npx serve` instead."
     );
@@ -81,13 +81,41 @@ describe("describeFormatFailure — the on-page sentences", () => {
     );
   });
 
-  it("the reserved formats say 'not yet', with what to do today", () => {
-    expect(describeFormatFailure({ code: "unsupported", format: "geoparquet", url: "w.parquet" })).toBe(
-      "`w.parquet` is a GeoParquet file, which this version of maplibre-yaml can't read yet (it's " +
-        "planned). For now, convert it to FlatGeobuf or GeoJSON: `ogr2ogr out.fgb w.parquet`."
-    );
+  it("the reserved format (COG) says 'not yet', with what to do today", () => {
     expect(describeFormatFailure({ code: "unsupported", format: "cog", url: "s.tif" })).toContain(
       "can't read on its own yet (it's planned)"
+    );
+  });
+
+  it("GeoParquet: plain Parquet, GeoArrow geometry, a CRS, a size, no covering column", () => {
+    expect(describeFormatFailure({ code: "not-geoparquet", format: "geoparquet", url: "d/t.parquet" })).toBe(
+      "`d/t.parquet` is a Parquet file but not GeoParquet (it has no geometry metadata). Write it with " +
+        "GeoPandas `to_parquet`, `ogr2ogr -f Parquet`, or DuckDB's spatial extension."
+    );
+    expect(
+      describeFormatFailure({ code: "encoding", format: "geoparquet", url: "d/p.parquet", encoding: "point" })
+    ).toBe(
+      "`d/p.parquet` stores its geometry as GeoArrow (`point`), which maplibre-yaml doesn't read yet: it " +
+        "reads GeoParquet with WKB geometry. Rewrite it with WKB: `ogr2ogr -f Parquet -lco " +
+        'GEOMETRY_ENCODING=WKB out.parquet p.parquet`, or GeoPandas `to_parquet(..., geometry_encoding="WKB")`.'
+    );
+    expect(describeFormatFailure({ code: "crs", format: "geoparquet", url: "d/p.parquet", crs: "EPSG:3857" })).toBe(
+      "`d/p.parquet` is in EPSG:3857; MapLibre needs longitude/latitude (EPSG:4326). Reproject it: " +
+        "`ogr2ogr -t_srs EPSG:4326 out.parquet p.parquet`."
+    );
+    expect(
+      describeFormatFailure({ code: "too-large", format: "geoparquet", url: "p.parquet", size: 80 * 1024 * 1024 })
+    ).toBe(
+      "`p.parquet` is 80 MB (the columns this map reads), too large to load whole in a browser. Add " +
+        "`load: viewport` to the source (the file needs a `bbox` covering column and spatially sorted row " +
+        "groups), list fewer `columns:`, or convert it to PMTiles."
+    );
+    expect(describeFormatFailure({ code: "no-index", format: "geoparquet", url: "p.parquet" })).toContain(
+      "has no `bbox` covering column, so it can't be read one part at a time (`load: viewport`)"
+    );
+    expect(describeFormatFailure({ code: "not-format", format: "geoparquet", url: "p.parquet" })).toBe(
+      "`p.parquet` isn't a GeoParquet file. A wrong path often returns a web page instead — check the " +
+        "file name and folder."
     );
   });
 

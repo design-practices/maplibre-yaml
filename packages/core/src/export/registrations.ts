@@ -152,8 +152,15 @@ exportClasses.register("source.format", {
 exportClasses.register("source.load", {
   class: "no-export",
   onEmit:
-    "How the browser reads a FlatGeobuf file (whole, or by view) has no style.json form; " +
-    "the emitted source carries a snapshot of the file's features.",
+    "How the browser reads a FlatGeobuf or GeoParquet file (whole, or by view) has no " +
+    "style.json form; the emitted source carries a snapshot of the file's features.",
+});
+
+exportClasses.register("source.columns", {
+  class: "no-export",
+  onEmit:
+    "Which GeoParquet columns the browser reads has no style.json form; the emitted " +
+    "snapshot carries the columns listed (every column when `columns:` isn't written).",
 });
 
 exportClasses.register("format.pmtiles", { class: "exports", onEmit: PMTILES_ON_EMIT });
@@ -176,7 +183,20 @@ exportClasses.register("format.flatgeobuf", {
   },
 });
 
-exportClasses.register("format.geoparquet", { class: "no-export", onEmit: GEOPARQUET_ON_EMIT });
+exportClasses.register("format.geoparquet", {
+  class: "exports-with-fallback",
+  onEmit: GEOPARQUET_ON_EMIT,
+  // The FlatGeobuf lowering, shared (lowerSourceFormat).
+  export: (ctx) => {
+    const { id, spec, runtime } = ctx.value as {
+      id: string;
+      spec: Record<string, unknown>;
+      runtime?: Record<string, unknown>;
+    };
+    const lowered = lowerSourceFormat(id, spec, runtime, ctx.path);
+    return { sources: { [id]: lowered.spec }, warnings: lowered.warnings };
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Document/root runtime constructs (RuntimeHalf fields + spec-native state)

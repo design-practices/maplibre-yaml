@@ -43,6 +43,10 @@ const SEAM_NAMES = [
 const LIBRARY_MARKERS: Record<string, string[]> = {
   pmtiles: ["Wrong magic number for PMTiles archive", "Server returned no content-length header"],
   flatgeobuf: ["Not a FlatGeobuf file", "Invalid header size", "FlatBuffers: "],
+  // hyparquet, plus fzstd (zstd) — the main bundle's formats/geoparquet.ts
+  // names none of these.
+  geoparquet: ['parquet filter requires rowFormat: "object"', "parquetReadColumn expected columns", "invalid zstd data"],
+  "geoparquet-brotli": ["copyUncompressedBlockToOutput: not enough bytes", "Invalid size nibble"],
 };
 
 /** Static import specifiers (`import … from "x"`, `import "x"`), minified or not. */
@@ -70,7 +74,7 @@ function jsFiles(dir: string): string[] {
 
 describe("the seam", () => {
   it("names the readers this version loads on demand", () => {
-    expect(SEAM_NAMES).toEqual(expect.arrayContaining(["pmtiles", "flatgeobuf"]));
+    expect(SEAM_NAMES).toEqual(expect.arrayContaining(["pmtiles", "flatgeobuf", "geoparquet", "geoparquet-brotli"]));
     for (const name of Object.keys(LIBRARY_MARKERS)) expect(SEAM_NAMES).toContain(name);
   });
 });

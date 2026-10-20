@@ -66,9 +66,12 @@ import type { CloudFormat } from "./detect";
 const LOADERS = {
   pmtiles: () => import("pmtiles"),
   flatgeobuf: () => import("./lib/flatgeobuf"),
+  geoparquet: () => import("./lib/geoparquet"),
+  // Brotli's decoder is mostly a dictionary (~68 KB gzip): its own chunk,
+  // fetched only for a GeoParquet file whose footer says brotli.
+  "geoparquet-brotli": () => import("./lib/geoparquet-brotli"),
   // Reserved for the 0.9 work in flight — each adds one line shaped like the
-  // two above (see "Adding a format" at the top of this file):
-  //   geoparquet          the hyparquet library
+  // ones above (see "Adding a format" at the top of this file):
   //   cog                 the @geomatico/maplibre-cog-protocol library
   //   "protomaps-basemap" the @protomaps/basemaps library
 } satisfies Record<string, () => Promise<unknown>>;

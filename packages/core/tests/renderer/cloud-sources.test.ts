@@ -2,8 +2,8 @@
  * Cloud-native sources at render time (0.9, ml-cnv): the PMTiles protocol is
  * registered once on the renderer's maplibre module (the page's own
  * registration wins), source URLs reach MapLibre in canonical form, our keys
- * never do, and a reserved format becomes a plain "not yet" instead of a
- * MapLibre error.
+ * never do, and a reserved format (COG) becomes a plain "not yet" instead of
+ * a MapLibre error.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -268,13 +268,15 @@ describe("LayerManager with cloud-native sources", () => {
     expect(map.addSource).toHaveBeenCalledWith("scene", { type: "raster", url: "cog://https://h.org/scene.tif" });
   });
 
-  it("a GeoParquet url: says 'not yet' instead of failing as 'not JSON'", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const manager = new LayerManager(map, callbacks);
+  it("a GeoParquet url: goes to its own reader, never the JSON fetcher (tests/formats/geoparquet)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const fetcher = { fetch: vi.fn() };
+    const manager = new LayerManager(map, callbacks, { fetcher: fetcher as never });
     manager.registerSources({ wells: { type: "geojson", url: "https://h.org/wells.parquet" } });
     await vi.waitFor(() => expect(callbacks.onDataError).toHaveBeenCalled());
-    expect(callbacks.onDataError.mock.calls[0][1].failure).toMatchObject({ code: "unsupported", format: "geoparquet" });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetcher.fetch).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledWith("https://h.org/wells.parquet", expect.anything());
+    expect(callbacks.onDataError.mock.calls[0][1].failure).toMatchObject({ code: "cors", format: "geoparquet" });
   });
 });
 

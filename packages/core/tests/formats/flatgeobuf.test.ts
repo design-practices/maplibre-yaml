@@ -197,11 +197,10 @@ describe("the fitTo prefetch seam (data/source-data, ml-aot.75)", () => {
     expect(fc.features).toHaveLength(48);
   });
 
-  it("a viewport source or a GeoParquet file is not loaded ahead", async () => {
+  it("a viewport source is not loaded ahead", async () => {
     await expect(cloudSourceDataLoader({ type: "geojson", url: "/p.fgb", load: "viewport" }, ctx)).rejects.toThrow(
       /not loaded ahead/
     );
-    await expect(cloudSourceDataLoader({ type: "geojson", url: "/w.parquet" }, ctx)).rejects.toThrow();
     expect(cloudSourceDataLoader({ type: "geojson", url: "/p.geojson" }, ctx)).toBeUndefined();
   });
 

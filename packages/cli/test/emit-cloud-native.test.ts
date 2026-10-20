@@ -1,5 +1,5 @@
 /**
- * `mlym emit` with cloud-native sources (0.9, ml-cnv): a FlatGeobuf file is
+ * `mlym emit` with cloud-native sources (0.9, ml-cnv): a FlatGeobuf or GeoParquet file is
  * read and inlined as GeoJSON (style.json can't carry a decoder); a file
  * that can't be read leaves the source empty, reported lossy, so --strict
  * refuses. PMTiles export as pmtiles:// URLs.
@@ -163,5 +163,89 @@ layers:
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('emit: GeoParquet → inline GeoJSON', () => {
+  it('reads the file beside the document and inlines every feature, every column', async () => {
+    const { style, warnings } = await emitStyle(parse(doc('districts.parquet')), 'strict', { trust: 'untrusted' }, {
+      documentPath: DOC_PATH,
+    });
+    const sources = style.sources as Record<string, Record<string, unknown>>;
+    const data = sources.districts.data as { features: { properties: Record<string, unknown> }[] };
+    expect(data.features).toHaveLength(48);
+    expect(Object.keys(data.features[0]!.properties).sort()).toEqual(['category', 'name', 'population']);
+    expect(sources.districts.url).toBeUndefined();
+    expect(warnings.some((w) => w.kind === 'lossy')).toBe(false);
+    expect(warnings).toContainEqual(
+      expect.objectContaining({ kind: 'contract', construct: 'format.geoparquet' })
+    );
+  });
+
+  it("an author's columns: is what the snapshot carries", async () => {
+    const yaml = `
+type: map
+id: cn
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+sources:
+  districts:
+    type: geojson
+    url: districts.parquet
+    columns: [name]
+layers:
+  - { id: d, type: fill, source: districts }
+`;
+    const { style } = await emitStyle(parse(yaml), 'strict', { trust: 'untrusted' }, { documentPath: DOC_PATH });
+    const data = (style.sources as Record<string, Record<string, unknown>>).districts.data as {
+      features: { properties: Record<string, unknown> }[];
+    };
+    expect(Object.keys(data.features[0]!.properties)).toEqual(['name']);
+    expect(JSON.stringify(style)).not.toContain('"columns"');
+  });
+
+  it('an unreadable file (GeoArrow geometry): empty source, lossy with the plain reason — --strict refuses', async () => {
+    const block = parse(doc('points-geoarrow.parquet'));
+    const { warnings } = await emitStyle(block, 'with-fallbacks', { trust: 'untrusted' }, {
+      documentPath: DOC_PATH,
+    });
+    const lossy = warnings.find((w) => w.kind === 'lossy' && w.construct === 'format.geoparquet');
+    expect(lossy?.message).toContain('stores its geometry as GeoArrow');
+    await expect(
+      emitStyle(block, 'strict', { trust: 'untrusted' }, { documentPath: DOC_PATH })
+    ).rejects.toThrow(EmitError);
+  });
+
+  it('classify: data loading decodes a GeoParquet file too (same path rules)', async () => {
+    const data = (await createDataLoader(DOC_PATH)('districts.parquet')) as { features: unknown[] };
+    expect(data.features).toHaveLength(48);
+    const zstd = (await createDataLoader(DOC_PATH)('points-zstd.parquet')) as { features: unknown[] };
+    expect(zstd.features).toHaveLength(400);
+  });
+
+  it('a GeoParquet source with classify: emits (breaks baked from the decoded features)', async () => {
+    const yaml = `
+type: map
+id: cn
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+sources:
+  districts:
+    type: geojson
+    url: districts.parquet
+layers:
+  - id: d
+    type: fill
+    source: districts
+    classify: { field: population, method: quantile, classes: 3, palette: Blues }
+`;
+    const { style } = await emitStyle(parse(yaml), 'with-fallbacks', { trust: 'untrusted' }, {
+      loadData: createDataLoader(DOC_PATH),
+      documentPath: DOC_PATH,
+    });
+    const layer = (style.layers as Record<string, unknown>[]).find((l) => l.id === 'd')!;
+    expect(JSON.stringify(layer.paint)).toContain('"step"');
   });
 });

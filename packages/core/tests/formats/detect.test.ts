@@ -111,14 +111,14 @@ describe("formatsIn", () => {
       },
       [{ id: "x", source: { type: "geojson", url: "x.fgb" } }, { id: "y", source: "a" }]
     );
-    expect([...found].sort()).toEqual(["flatgeobuf", "pmtiles"]);
+    expect([...found].sort()).toEqual(["flatgeobuf", "geoparquet", "pmtiles"]);
   });
 
   it("skips a format on a type that can't draw it", () => {
     expect([...formatsIn({ a: { type: "geojson", url: "a.pmtiles" } }, [])]).toEqual([]);
   });
 
-  it("reads only PMTiles and FlatGeobuf in this version", () => {
-    expect([...SUPPORTED_FORMATS].sort()).toEqual(["flatgeobuf", "pmtiles"]);
+  it("reads PMTiles, FlatGeobuf and GeoParquet in this version (COG is reserved)", () => {
+    expect([...SUPPORTED_FORMATS].sort()).toEqual(["flatgeobuf", "geoparquet", "pmtiles"]);
   });
 });

@@ -34,7 +34,11 @@ export type FormatFailureCode =
   | "no-index"
   /** Not longitude/latitude. */
   | "crs"
-  /** A recognized format this version doesn't read yet (GeoParquet, COG). */
+  /** A Parquet file without GeoParquet metadata (no `geo` key). */
+  | "not-geoparquet"
+  /** GeoParquet geometry in an encoding this version doesn't decode (GeoArrow). */
+  | "encoding"
+  /** A recognized format this version doesn't read yet (COG). */
   | "unsupported"
   /** The reader itself couldn't be set up (e.g. maplibre-gl too old). */
   | "decoder"
@@ -59,6 +63,8 @@ export interface FormatFailure {
   size?: number;
   /** The CRS the file declares (`crs`), e.g. "EPSG:3857". */
   crs?: string;
+  /** The geometry encoding a GeoParquet file uses (`encoding`), e.g. "point". */
+  encoding?: string;
   /** The underlying library message (`read`, `decoder`, `chunk`). */
   detail?: string;
 }

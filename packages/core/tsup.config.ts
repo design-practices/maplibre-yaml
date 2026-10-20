@@ -124,7 +124,19 @@ export default defineConfig([
     // OpenLayers (`ol`, ~30 MB with geotiff) as an optional dependency, which
     // npm installs, so depending on it put that tree under every core, astro
     // and cli install. Bundled, only the code core uses ships.
-    noExternal: ["pmtiles", "fflate", "flatgeobuf", "flatbuffers", "slice-source", "@repeaterjs/repeater"],
+    noExternal: [
+      "pmtiles",
+      "fflate",
+      "flatgeobuf",
+      "flatbuffers",
+      "slice-source",
+      "@repeaterjs/repeater",
+      // GeoParquet's reader (formats/lib/geoparquet*): devDependencies,
+      // bundled into its on-demand module like the others.
+      "hyparquet",
+      "hyparquet-compressors",
+      "fzstd",
+    ],
     esbuildOptions(options) {
       options.banner = {
         js: "// @maplibre-yaml/core - Declarative web maps with YAML",
@@ -178,6 +190,9 @@ function browserBuild(entry: Record<string, string>, chunks: boolean): Options {
       "flatbuffers",
       "slice-source",
       "@repeaterjs/repeater",
+      "hyparquet",
+      "hyparquet-compressors",
+      "fzstd",
       // Resolved to the stub below (the alias), not the package.
       "@bokuweb/zstd-wasm",
       ...Object.values(seam).filter((spec) => !spec.startsWith(".")),

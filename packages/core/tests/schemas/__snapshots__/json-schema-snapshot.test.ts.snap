@@ -344,7 +344,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "url": {
                         "type": "string",
                         "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                        "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                        "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) or GeoParquet (.parquet) file"
                       },
                       "format": {
                         "type": "string",
@@ -354,7 +354,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "geoparquet",
                           "cog"
                         ],
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                       },
                       "load": {
                         "anyOf": [
@@ -392,7 +392,23 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             }
                           }
                         ],
-                        "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
+                        "description": "FlatGeobuf/GeoParquet: read the whole file (all, default) or only the features in view (viewport)"
+                      },
+                      "columns": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "const": "all"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "minItems": 1
+                          }
+                        ],
+                        "description": "GeoParquet: the columns to read (default: the ones this document references), or all"
                       },
                       "data": {
                         "description": "Inline GeoJSON object"
@@ -666,7 +682,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "format": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                       },
                       "tiles": {
                         "type": "array",
@@ -758,7 +774,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "format": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                       },
                       "tiles": {
                         "type": "array",
@@ -841,7 +857,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "format": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                       },
                       "tiles": {
                         "type": "array",
@@ -4776,7 +4792,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "url": {
                     "type": "string",
                     "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                    "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                    "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) or GeoParquet (.parquet) file"
                   },
                   "format": {
                     "type": "string",
@@ -4786,7 +4802,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "geoparquet",
                       "cog"
                     ],
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                   },
                   "load": {
                     "anyOf": [
@@ -4824,7 +4840,23 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         }
                       }
                     ],
-                    "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
+                    "description": "FlatGeobuf/GeoParquet: read the whole file (all, default) or only the features in view (viewport)"
+                  },
+                  "columns": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "all"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 1
+                      }
+                    ],
+                    "description": "GeoParquet: the columns to read (default: the ones this document references), or all"
                   },
                   "data": {
                     "description": "Inline GeoJSON object"
@@ -5098,7 +5130,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "format": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                   },
                   "tiles": {
                     "type": "array",
@@ -5190,7 +5222,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "format": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                   },
                   "tiles": {
                     "type": "array",
@@ -5273,7 +5305,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "format": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                   },
                   "tiles": {
                     "type": "array",
@@ -8126,7 +8158,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "url": {
                                 "type": "string",
                                 "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                                "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                                "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) or GeoParquet (.parquet) file"
                               },
                               "format": {
                                 "type": "string",
@@ -8136,7 +8168,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "geoparquet",
                                   "cog"
                                 ],
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                               },
                               "load": {
                                 "anyOf": [
@@ -8174,7 +8206,23 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                     }
                                   }
                                 ],
-                                "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
+                                "description": "FlatGeobuf/GeoParquet: read the whole file (all, default) or only the features in view (viewport)"
+                              },
+                              "columns": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "all"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "minItems": 1
+                                  }
+                                ],
+                                "description": "GeoParquet: the columns to read (default: the ones this document references), or all"
                               },
                               "data": {
                                 "description": "Inline GeoJSON object"
@@ -8448,7 +8496,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "format": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                               },
                               "tiles": {
                                 "type": "array",
@@ -8540,7 +8588,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "format": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                               },
                               "tiles": {
                                 "type": "array",
@@ -8623,7 +8671,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "format": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                               },
                               "tiles": {
                                 "type": "array",
@@ -12787,7 +12835,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   "url": {
                                     "type": "string",
                                     "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                                    "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                                    "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) or GeoParquet (.parquet) file"
                                   },
                                   "format": {
                                     "type": "string",
@@ -12797,7 +12845,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                       "geoparquet",
                                       "cog"
                                     ],
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                                   },
                                   "load": {
                                     "anyOf": [
@@ -12835,7 +12883,23 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                         }
                                       }
                                     ],
-                                    "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
+                                    "description": "FlatGeobuf/GeoParquet: read the whole file (all, default) or only the features in view (viewport)"
+                                  },
+                                  "columns": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "const": "all"
+                                      },
+                                      {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        },
+                                        "minItems": 1
+                                      }
+                                    ],
+                                    "description": "GeoParquet: the columns to read (default: the ones this document references), or all"
                                   },
                                   "data": {
                                     "description": "Inline GeoJSON object"
@@ -13109,7 +13173,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "format": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                                   },
                                   "tiles": {
                                     "type": "array",
@@ -13201,7 +13265,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "format": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                                   },
                                   "tiles": {
                                     "type": "array",
@@ -13284,7 +13348,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "format": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
                                   },
                                   "tiles": {
                                     "type": "array",

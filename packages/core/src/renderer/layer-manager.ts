@@ -34,13 +34,14 @@ import { DataMerger } from "../data/merge/data-merger";
 import { LoadingManager } from "../ui/loading-manager";
 import { sanitizeAttribution } from "../utils/attribution";
 import type { MergeStrategy } from "../data/merge/data-merger";
-import { formatOfSource, typeReadsFormat } from "../formats/detect";
+import { declaredColumns, formatOfSource, typeReadsFormat } from "../formats/detect";
 import {
   FlatGeobufLoader,
+  GeoParquetLoader,
   loadModeOf,
   toMapLibreTileSpec,
-  unsupportedFormatError,
   withoutFormatKeys,
+  type FormatLoader,
 } from "./cloud-sources";
 
 type Layer = z.infer<typeof LayerSchema>;
@@ -133,6 +134,12 @@ export interface LayerManagerDataOptions {
    * maplibre-gl itself; defaults to "none registered".
    */
   isProtocolRegistered?: (scheme: string) => boolean;
+  /**
+   * The GeoParquet columns the document reads per source id (ml-cnv.4,
+   * `formats/columns`): injected by `MapRenderer`, which sees every layer
+   * that draws from a source. Absent: every column is read.
+   */
+  columnsFor?: (sourceId: string) => readonly string[] | "all" | undefined;
 }
 
 /**
@@ -158,10 +165,12 @@ export class LayerManager {
   private activeSourcePipelines: Set<string>;
   /** First loads a host already started, by source id (consumed once). */
   private pendingData: Map<string, Promise<FeatureCollection>>;
-  /** FlatGeobuf readers by source id (ml-cnv.3), stopped with their source. */
-  private formatLoaders = new Map<string, FlatGeobufLoader>();
+  /** FlatGeobuf / GeoParquet readers by source id (ml-cnv.3/.4), stopped with their source. */
+  private formatLoaders = new Map<string, FormatLoader>();
   /** Whether the page registered a URL protocol itself (see LayerManagerDataOptions). */
   private isProtocolRegistered: (scheme: string) => boolean;
+  /** The GeoParquet columns the document reads (see LayerManagerDataOptions). */
+  private columnsFor: (sourceId: string) => readonly string[] | "all" | undefined;
 
   constructor(
     map: MapLibreMap,
@@ -173,6 +182,7 @@ export class LayerManager {
     this.dataFetcher = data.fetcher ?? new DataFetcher();
     this.pendingData = new Map(Object.entries(data.pending ?? {}));
     this.isProtocolRegistered = data.isProtocolRegistered ?? (() => false);
+    this.columnsFor = data.columnsFor ?? (() => undefined);
     this.pollingManager = new PollingManager();
     this.streamManager = new StreamManager();
     this.dataMerger = new DataMerger();
@@ -633,18 +643,16 @@ export class LayerManager {
 
     this.sourceData.set(sourceId, initialData);
 
-    // Cloud-native vector data (ml-cnv): a FlatGeobuf file is decoded into
-    // this GeoJSON source by its own data provider instead of the JSON
-    // fetch below; a GeoParquet file (recognized, not read yet) says so
-    // rather than failing as "not JSON".
+    // Cloud-native vector data (ml-cnv): a FlatGeobuf or GeoParquet file is
+    // decoded into this GeoJSON source by its own data provider instead of
+    // the JSON fetch below.
     const format = config.url && !config.prefetchedData ? formatOfSource(config) : undefined;
     if (format === "flatgeobuf") {
       await this.startFlatGeobuf(sourceId, layerId, config);
       return;
     }
     if (format === "geoparquet" && typeReadsFormat(config.type, format)) {
-      this.pendingData.delete(sourceId);
-      this.callbacks.onDataError?.(layerId, unsupportedFormatError(format, config.url!));
+      await this.startGeoParquet(sourceId, layerId, config);
       return;
     }
 
@@ -712,9 +720,44 @@ export class LayerManager {
   }
 
   /**
+   * Read a GeoParquet `url:` into its GeoJSON source (ml-cnv.4): the
+   * columns the document reads (an author's `columns:` wins), the whole file
+   * or — `load: viewport`, or a file too large to load whole — the rows in
+   * view, re-read as the map moves. Events fire as for a GeoJSON `url:`.
+   */
+  private async startGeoParquet(
+    sourceId: string,
+    layerId: string,
+    config: GeoJSONSourceConfig
+  ): Promise<void> {
+    this.formatLoaders.get(sourceId)?.destroy();
+    this.callbacks.onDataLoading?.(layerId);
+    const columns = declaredColumns(config) ?? this.columnsFor(sourceId) ?? "all";
+    const loader = new GeoParquetLoader(
+      this.map,
+      config.url!,
+      loadModeOf(config as unknown as Record<string, unknown>),
+      columns,
+      {
+        onData: (data) => {
+          this.sourceData.set(sourceId, data);
+          const source = this.map.getSource(sourceId) as GeoJSONSource | undefined;
+          source?.setData?.(data);
+          this.callbacks.onDataLoaded?.(layerId, data.features.length);
+        },
+        onError: (error) => this.callbacks.onDataError?.(layerId, error),
+      }
+    );
+    this.formatLoaders.set(sourceId, loader);
+    const pending = this.pendingData.get(sourceId);
+    this.pendingData.delete(sourceId);
+    await loader.start(pending);
+  }
+
+  /**
    * The full extent of a source read by view (`load: viewport`), from the
-   * file's header — what `fitTo` frames, since the source's data is only the
-   * part in view. Undefined for every other source.
+   * file's header or metadata — what `fitTo` frames, since the source's data
+   * is only the part in view. Undefined for every other source.
    */
   getSourceExtent(sourceId: string): [[number, number], [number, number]] | undefined {
     const loader = this.formatLoaders.get(sourceId);
@@ -722,8 +765,8 @@ export class LayerManager {
   }
 
   /**
-   * Whether a source holds only the features in view: a FlatGeobuf source
-   * read by view — `load: viewport`, or a file too large to read whole that
+   * Whether a source holds only the features in view: a FlatGeobuf or
+   * GeoParquet source read by view — `load: viewport`, or a file too large to read whole that
    * switched itself to it. Its data is never the whole dataset.
    */
   readsByView(sourceId: string): boolean {
@@ -732,7 +775,8 @@ export class LayerManager {
 
   /** Whether a source's data comes from a cloud-native reader (no live refresh in 0.9). */
   private isFormatSource(config: GeoJSONSourceConfig): boolean {
-    return formatOfSource(config) === "flatgeobuf";
+    const format = formatOfSource(config);
+    return format === "flatgeobuf" || format === "geoparquet";
   }
 
   /**
@@ -743,12 +787,12 @@ export class LayerManager {
     sourceId: string,
     config: GeoJSONSourceConfig
   ): Promise<void> {
-    // Validation rejects live data on a FlatGeobuf source in 0.9; a document
-    // that skipped validation must not poll a binary file with the JSON
-    // fetcher.
+    // Validation rejects live data on a FlatGeobuf or GeoParquet source in
+    // 0.9; a document that skipped validation must not poll a binary file
+    // with the JSON fetcher.
     if (this.isFormatSource(config)) {
       console.warn(
-        `[maplibre-yaml] live refresh isn't available for FlatGeobuf sources yet; ` +
+        `[maplibre-yaml] live refresh isn't available for FlatGeobuf or GeoParquet sources yet; ` +
           `\`refresh:\`/\`stream:\` on "${sourceId}" is ignored.`
       );
       return;

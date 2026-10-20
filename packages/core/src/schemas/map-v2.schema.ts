@@ -66,6 +66,7 @@ import {
   StreamConfigSchema,
   CacheConfigSchema,
   LoadingConfigSchema,
+  SourceColumnsSchema,
   SourceFormatSchema,
   SourceLoadSchema,
 } from "./source.schema";
@@ -144,6 +145,7 @@ export const SourceRuntimeSchema = z
     // Cloud-native formats (0.9, ml-cnv): how the file is read.
     format: SourceFormatSchema.optional(),
     load: SourceLoadSchema.optional(),
+    columns: SourceColumnsSchema.optional(),
   })
   .passthrough()
   .describe("Per-source live-data configuration (v2 `source.runtime`)");

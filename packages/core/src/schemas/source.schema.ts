@@ -90,8 +90,8 @@ const TileURLTemplateSchema = z
  * `.fgb`, `.parquet`, `.tif` extension. Write `format:` only for a URL with no
  * telling extension (a signed link, an API endpoint); it wins over the URL.
  * `type:` stays the MapLibre source type (`vector`/`raster`/`raster-dem` for
- * PMTiles, `geojson` for FlatGeobuf). `geoparquet` and `cog` are recognized
- * but not read by this version yet. A source key in v1; under the source's
+ * PMTiles, `geojson` for FlatGeobuf and GeoParquet). `cog` is recognized but
+ * not read by this version yet. A source key in v1; under the source's
  * `runtime:` in a v2 document.
  *
  * @example
@@ -105,17 +105,19 @@ const TileURLTemplateSchema = z
 export const SourceFormatSchema = z
   .enum(["pmtiles", "flatgeobuf", "geoparquet", "cog"])
   .describe(
-    "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+    "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
   );
 
 /**
- * How a FlatGeobuf source is read (0.9, ml-cnv.3).
+ * How a FlatGeobuf or GeoParquet source is read (0.9, ml-cnv.3/.4).
  *
  * @remarks
  * - `all` (default): the whole file, once. Works on any web server.
  * - `viewport`: only the features in view, re-read as the map moves; needs a
- *   file with a spatial index and a server with range requests. Nothing is
- *   read below `minzoom` (default 10).
+ *   server with range requests and a file that can be read in parts — a
+ *   FlatGeobuf with a spatial index, or a GeoParquet file with a `bbox`
+ *   covering column and spatially sorted row groups. Nothing is read below
+ *   `minzoom` (default 10).
  *
  * @example
  * ```yaml
@@ -135,7 +137,27 @@ export const SourceLoadSchema = z
         .describe("viewport: read nothing below this zoom (default 10)"),
     }),
   ])
-  .describe("FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)");
+  .describe(
+    "FlatGeobuf/GeoParquet: read the whole file (all, default) or only the features in view (viewport)"
+  );
+
+/**
+ * The GeoParquet columns to read (0.9, ml-cnv.4).
+ *
+ * @remarks
+ * By default only the columns the document references for the source
+ * (paint, layout, filters, popups, `classify:` …) are read, plus the
+ * geometry. A list replaces that inference; `all` reads every column — for
+ * page JavaScript that reads clicked features' other properties.
+ *
+ * @example
+ * ```yaml
+ * columns: [name, depth_m]
+ * ```
+ */
+export const SourceColumnsSchema = z
+  .union([z.literal("all"), z.array(z.string()).min(1)])
+  .describe("GeoParquet: the columns to read (default: the ones this document references), or all");
 
 /**
  * WebSocket or Server-Sent Events streaming configuration.
@@ -402,10 +424,11 @@ export const GeoJSONSourceSchema = z
   .object({
     type: z.literal("geojson").describe("Source type"),
     url: ResourceURLSchema.optional().describe(
-      "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+      "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) or GeoParquet (.parquet) file"
     ),
     format: SourceFormatSchema.optional(),
     load: SourceLoadSchema.optional(),
+    columns: SourceColumnsSchema.optional(),
     // v1 keeps `data` as `z.any()` deliberately (R2/R10 byte-for-byte compat):
     // MapLibre tolerates loosely-conformant geometry that `z.any()` admits, and
     // hard-failing existing v1 files would break the compat guarantee. The

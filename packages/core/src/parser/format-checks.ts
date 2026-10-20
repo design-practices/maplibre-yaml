@@ -13,10 +13,11 @@
  * | `type: pmtiles` / `fgb` / `parquet` / `cog` / `mbtiles` … | error at `type` with the fix ({@link formatTypeMessage}, via the parser's unknown-type path) |
  * | `.fgb` / `.parquet` URL (or `format:`) on a tile source | error: features, not tiles — use `type: geojson` |
  * | `.pmtiles` / `.tif` URL (or `format:`) on `type: geojson` | error: tiles, not features — use `type: vector` / `raster` |
- * | `refresh:` / `stream:` on a FlatGeobuf source | error: live data isn't available for FlatGeobuf yet |
- * | GeoParquet or COG | warning: recognized, not read by this version yet |
+ * | `refresh:` / `stream:` on a FlatGeobuf or GeoParquet source | error: live data isn't available for them yet |
+ * | COG | warning: recognized, not read by this version yet |
  * | `format:` disagreeing with the URL | warning: `format:` wins |
- * | `load:` on a source that isn't FlatGeobuf | warning: no effect |
+ * | `load:` on a source that isn't FlatGeobuf or GeoParquet | warning: no effect |
+ * | `columns:` on a source that isn't GeoParquet | warning: no effect |
  *
  * Cross-field rules live here, not as schema refinements: another chained
  * refinement on a source schema pushes the layer union past TypeScript's
@@ -106,17 +107,21 @@ function mismatchMessage(format: CloudFormat, url: unknown): string {
   }
 }
 
-/** The "recognized, not read yet" warning for GeoParquet and COG. */
+/** The "recognized, not read yet" warning for a reserved format (COG). */
 function notYetMessage(format: CloudFormat, url: unknown): string {
   const file = fileLabel(url, format);
-  return format === "cog"
-    ? `${file} is a Cloud Optimized GeoTIFF. This version of maplibre-yaml can't read COGs ` +
-        "on its own yet (it's planned): the source stays empty unless the page registers " +
-        "the cog:// protocol itself. Convert the image to PMTiles to use it today."
-    : `${file} is a GeoParquet file. This version of maplibre-yaml can't read GeoParquet yet ` +
-        "(it's planned): the source stays empty. Convert it to FlatGeobuf (.fgb) or GeoJSON " +
-        "to use it today.";
+  return (
+    `${file} is a Cloud Optimized GeoTIFF. This version of maplibre-yaml can't read COGs ` +
+    "on its own yet (it's planned): the source stays empty unless the page registers " +
+    "the cog:// protocol itself. Convert the image to PMTiles to use it today."
+  );
 }
+
+/** Formats read into a GeoJSON source, where `load:` applies. */
+const FEATURE_FILE_FORMATS: ReadonlySet<CloudFormat | undefined> = new Set<CloudFormat | undefined>([
+  "flatgeobuf",
+  "geoparquet",
+]);
 
 /**
  * Run the cloud-native source checks on a materialized document.
@@ -157,14 +162,25 @@ export function checkSourceFormats(
       });
     }
 
-    // `load:` only means something for FlatGeobuf.
-    if (runtime["load"] !== undefined && format !== "flatgeobuf") {
+    // `load:` only means something for FlatGeobuf and GeoParquet.
+    if (runtime["load"] !== undefined && !FEATURE_FILE_FORMATS.has(format)) {
       warnings.push({
         path: [...runtimePath, "load"].join("."),
         message:
-          "load: only applies to FlatGeobuf sources (a .fgb URL or format: flatgeobuf); " +
-          "it does nothing here.",
+          "load: only applies to FlatGeobuf and GeoParquet sources (a .fgb or .parquet URL, " +
+          "or format: flatgeobuf / geoparquet); it does nothing here.",
         ...at([...runtimePath, "load"]),
+      });
+    }
+
+    // `columns:` only means something for GeoParquet.
+    if (runtime["columns"] !== undefined && format !== "geoparquet") {
+      warnings.push({
+        path: [...runtimePath, "columns"].join("."),
+        message:
+          "columns: only applies to GeoParquet sources (a .parquet URL or format: geoparquet); " +
+          "it does nothing here.",
+        ...at([...runtimePath, "columns"]),
       });
     }
 
@@ -183,14 +199,14 @@ export function checkSourceFormats(
       }
     }
 
-    // Live data on a FlatGeobuf source: rejected in 0.9.
-    if (format === "flatgeobuf") {
+    // Live data on a FlatGeobuf or GeoParquet source: rejected in 0.9.
+    if (FEATURE_FILE_FORMATS.has(format)) {
       for (const key of ["refresh", "refreshInterval", "stream"]) {
         if (runtime[key] === undefined) continue;
         errors.push({
           path: [...runtimePath, key].join("."),
           message:
-            `${key}: live data isn't available for FlatGeobuf sources yet. Remove it, or ` +
+            `${key}: live data isn't available for ${info.label} sources yet. Remove it, or ` +
             "serve the data as GeoJSON for live updates.",
           ...at([...runtimePath, key]),
         });

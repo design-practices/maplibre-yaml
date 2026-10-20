@@ -14,19 +14,18 @@
  * `format:` key names it outright when the URL has no telling extension
  * (a signed URL, an API endpoint); `format:` wins over the URL.
  *
- * Four formats are recognized; two are read in this version:
+ * Four formats are recognized; three are read in this version:
  *
  * | Format | Source `type:` | Read in 0.9 |
  * | --- | --- | --- |
  * | PMTiles | `vector`, `raster`, `raster-dem` | yes (tile protocol) |
  * | FlatGeobuf | `geojson` | yes (decoded to GeoJSON) |
- * | GeoParquet | `geojson` | not yet (reserved: "not supported yet") |
+ * | GeoParquet | `geojson` | yes (decoded to GeoJSON) |
  * | COG | `raster`, `raster-dem` | not yet without page JS (reserved) |
  *
- * Reserving GeoParquet and COG now is what keeps adding them later
- * additive: a document written for 0.9 means the same thing in the release
- * that reads them, and a 0.9 reader gets a plain "not supported yet" instead
- * of a JSON parse error.
+ * Reserving COG now is what keeps adding it later additive: a document
+ * written for 0.9 means the same thing in the release that reads it, and a
+ * 0.9 reader gets a plain "not supported yet" instead of a tile error.
  *
  * Everything here is pure (no DOM, no maplibre-gl), so the parser, the
  * renderer, the emitter and `mlym validate` share one answer.
@@ -42,6 +41,7 @@ export type CloudFormat = (typeof CLOUD_FORMATS)[number];
 export const SUPPORTED_FORMATS: ReadonlySet<CloudFormat> = new Set<CloudFormat>([
   "pmtiles",
   "flatgeobuf",
+  "geoparquet",
 ]);
 
 /** What a format holds, and the source types that can draw it. */
@@ -154,7 +154,7 @@ export function formatOfSource(source: unknown): CloudFormat | undefined {
 /** `load: viewport` reads nothing below this zoom unless `minzoom` says otherwise. */
 export const VIEWPORT_DEFAULT_MINZOOM = 10;
 
-/** How a FlatGeobuf source is read (`load:`). */
+/** How a FlatGeobuf or GeoParquet source is read (`load:`). */
 export interface LoadMode {
   mode: "all" | "viewport";
   /** Viewport mode reads nothing below this zoom. */
@@ -178,6 +178,20 @@ export function loadModeOf(source: unknown): LoadMode {
     if (load["mode"] === "viewport") return { mode: "viewport", minzoom };
   }
   return { mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM };
+}
+
+/**
+ * A GeoParquet source's `columns:` (flat, or under a v2 source's
+ * `runtime:`): the attribute columns to read — a list, or `all` — or
+ * `undefined` when the author left the choice to the document's references.
+ */
+export function declaredColumns(source: unknown): readonly string[] | "all" | undefined {
+  if (!isObject(source)) return undefined;
+  const runtime = source["runtime"];
+  const columns = source["columns"] ?? (isObject(runtime) ? runtime["columns"] : undefined);
+  if (typeof columns === "string" && columns.trim().toLowerCase() === "all") return "all";
+  if (Array.isArray(columns)) return columns.filter((c): c is string => typeof c === "string");
+  return undefined;
 }
 
 /**
