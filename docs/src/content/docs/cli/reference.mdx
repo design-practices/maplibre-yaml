@@ -267,7 +267,7 @@ have) prints an error and exits with code `1`, and nothing is created.
 | Template | Creates | Run it with |
 | -------- | ------- | ----------- |
 | `basic` | `index.html` (CDN import map, `<ml-map>` with a height, viewport meta tag) and `map.yaml` (a street basemap and one clickable point) | `npx serve .` in the folder, then open the address it prints. Needs no install or build |
-| `story` | `index.html` and a scrollytelling `story.yaml` | A story map with no build step: the page loads `<ml-scrollytelling>` from the CDN (`@maplibre-yaml/core` 0.8). Serve the folder (`npx serve .`) and scroll; see [Scrollytelling in plain HTML](/integrations/scrollytelling-html/) |
+| `story` | `index.html` and a scrollytelling `story.yaml` | A story map with no build step: the page loads `<ml-scrollytelling>` from the CDN, at the release line this CLI was built with. Serve the folder (`npx serve .`) and scroll; see [Story maps in plain HTML](/integrations/scrollytelling-html/) |
 | `astro` | An Astro 7 site: a layout (with the viewport meta tag) and a page rendering `public/configs/map.yaml` with `@maplibre-yaml/astro`'s `<Map>`, the [optional integration](/integrations/astro/#editing-in-astro-dev) in `astro.config.mjs` with commented-out `site`/`base` lines for GitHub Pages, and a `.github/workflows/deploy.yml` that publishes it with `withastro/action`. Its `@maplibre-yaml/core` and `@maplibre-yaml/astro` ranges are the versions this CLI release was built with | `npm install`, then `npm run dev`. For GitHub Pages, set `site` and `base` in `astro.config.mjs` and push (see [Deploying to GitHub Pages](/integrations/astro/#deploying-to-github-pages-or-any-subpath)) |
 
 Every YAML file the templates write starts with the
