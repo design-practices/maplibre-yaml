@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>classify on a phone: legend beside the layer panel</title>
+  <!--
+    ml-aot.111: the thematic-maps guide's choropleth (docs/public/configs/
+    classify/choropleth.yaml) on a phone-width page. Its automatic legend
+    (top-left) and the layer panel its label: adds (top-right) share the top
+    edge: PASS = side by side, neither covering the other.
+    Open at 390 px wide:
+      http://localhost:4174/examples/verification/22-classify-phone.html
+    (the e2e test serves the docs config with a local basemap.)
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    ml-map { display: block; width: 100%; height: 440px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-map id="map" src="/docs/public/configs/classify/choropleth.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

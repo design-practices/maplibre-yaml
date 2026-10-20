@@ -25,7 +25,7 @@ import type { ClassifyConfig } from '../schemas/classify.schema';
 const LEGEND_BOX_STYLE =
   'display:block;background:rgba(255,255,255,0.95);border-radius:4px;' +
   'box-shadow:0 1px 4px rgba(0,0,0,0.3);padding:8px 12px;' +
-  'font:12px/1.5 system-ui,sans-serif;color:#333;min-width:140px;';
+  'font:12px/1.5 system-ui,sans-serif;color:#333;min-width:min(140px, 100%);box-sizing:border-box;';
 
 const SYMBOL_STYLE = {
   circle: 'display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;',

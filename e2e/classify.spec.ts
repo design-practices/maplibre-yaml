@@ -14,7 +14,7 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 import { PNG } from "pngjs";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 
 const PAGE = "/examples/verification/18-classify.html";
 const STORY = "/examples/verification/story-layout/index.html?doc=classify";
@@ -312,3 +312,43 @@ test("a field the fetched data does not have: console warning and author note, f
   await page.screenshot({ path: "e2e/screenshots/classify-field-hint.png", fullPage: true });
   expect(errors).toEqual([]);
 });
+
+for (const doc of ["choropleth", "rate"]) {
+  test(`phone width: the legend and the layer panel share the top edge without overlapping — ${doc} (ml-aot.111)`, async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const page = await context.newPage();
+    const errors = await guard(page);
+    // The docs site's own config, with a local basemap and the data file
+    // where this server has it.
+    await page.route(`**/docs/public/configs/classify/choropleth.yaml`, async (route) => {
+      const yaml = readFileSync(`docs/public/configs/classify/${doc}.yaml`, "utf8")
+        .replace(/mapStyle: .*/, 'mapStyle: "/examples/verification/configs/local-style.json"')
+        .replace(/url: \/data\/classify\//g, "url: /docs/public/data/classify/");
+      await route.fulfill({ body: yaml, contentType: "text/yaml" });
+    });
+    await page.goto("/examples/verification/22-classify-phone.html", { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#map .ml-map-legend .legend-label", { timeout: 60_000 });
+    await page.waitForSelector("#map .ml-map-params");
+    const boxes = await page.evaluate(() => {
+      const r = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
+      const legend = r("#map .ml-map-legend details");
+      const panel = r("#map .ml-map-params");
+      const map = r("#map");
+      return {
+        overlap:
+          legend.left < panel.right - 1 &&
+          panel.left < legend.right - 1 &&
+          legend.top < panel.bottom - 1 &&
+          panel.top < legend.bottom - 1,
+        inside: legend.left >= map.left && panel.right <= map.right,
+      };
+    });
+    expect(boxes).toEqual({ overlap: false, inside: true });
+    mkdirSync("e2e/screenshots", { recursive: true });
+    await page.screenshot({ path: `e2e/screenshots/classify-phone-${doc}.png` });
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+}
