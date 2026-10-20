@@ -15,6 +15,7 @@ import { bakeClassify } from "../../src/classify/lower";
 import { CLASSIFY_METADATA_KEY, classifyRecordOf } from "../../src/classify/compile";
 import { exportClasses } from "../../src/export/registrations";
 import { LegendBuilder } from "../../src/renderer/legend-builder";
+import { createStrings } from "../../src/i18n";
 
 const FC = {
   type: "FeatureCollection",
@@ -207,8 +208,22 @@ describe("legend from the lowered layers", () => {
 `) as never);
     const el = document.createElement("div");
     new LegendBuilder().build(el, denormalizeLayers(model) as never, { position: "top-left" } as never);
-    const lines = [...el.querySelectorAll(".legend-heading, .legend-label")].map((n) => n.textContent);
+    const lines = [...el.querySelectorAll(".legend-group-heading, .legend-label")].map((n) => n.textContent);
     expect(lines).toEqual(["Value", "3–10", "10–30", "30–55", "No data"]);
+  });
+
+  it("routes No data / Other through the string table, and edges through the page's language", () => {
+    const model = toModel(v1(`  - id: a
+    type: fill
+    source: pts
+    label: Wert
+    classify: { field: v, breaks: [10.5, 30], colors: [red, green, blue] }
+`) as never);
+    const el = document.createElement("div");
+    const strings = createStrings({ "maplibre-yaml.Classify.NoData": "Keine Daten" });
+    new LegendBuilder({ strings, locale: "de-DE" }).build(el, denormalizeLayers(model) as never, {} as never);
+    const lines = [...el.querySelectorAll(".legend-group-heading, .legend-label")].map((n) => n.textContent);
+    expect(lines).toEqual(["Wert", "3–10,5", "10,5–30", "30–55", "Keine Daten"]);
   });
 
   it("stays quiet (no 'no entries' warning) while breaks are pending", () => {

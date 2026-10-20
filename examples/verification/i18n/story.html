@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Story: accessibility &amp; languages (0.9)</title>
+  <!--
+    A story with a title, a description and a Spanish locale: table.
+    PASS = the story's map is a region "Cruzando el puente de Brooklyn"
+    with the description; the chapter rail is "Capítulos" and its buttons
+    "Ir al capítulo N: …"; the legend button reads "Leyenda" and opens a
+    panel headed "Lugares".
+    Serve from the repo root (pnpm verify:serve), then open
+    /examples/verification/i18n/story.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <ml-scrollytelling id="story" src="story.yaml"></ml-scrollytelling>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

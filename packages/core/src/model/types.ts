@@ -77,6 +77,23 @@ export interface LayerModel {
 
 /** The half that compiles to `style.json`. */
 export interface StyleHalf {
+  /**
+   * The map's name (document-root `title:`, v1 and v2 alike).
+   *
+   * @remarks
+   * Style half because it compiles: the emitted style.json carries it as the
+   * spec's root `name`. Live, it is the map canvas's accessible name.
+   */
+  title?: string;
+  /**
+   * What the map shows, in words (document-root `description:`).
+   *
+   * @remarks
+   * Compiles into the emitted style's root `metadata`
+   * (`"maplibre-yaml:description"`); live, it is the canvas's accessible
+   * description (`aria-describedby`).
+   */
+  description?: string;
   /** The base style merged in at compile time. `mapStyle` in v1 surface syntax. */
   basemap?: MapConfig["mapStyle"];
   camera: CameraModel;
@@ -178,6 +195,10 @@ export interface MapModel {
 /** The v1 surface shapes a normalizer consumes. */
 export interface V1MapInput {
   id: string;
+  /** The map's accessible name, authored at the root. */
+  title?: string;
+  /** The map's text alternative, authored at the root. */
+  description?: string;
   config: MapConfig;
   layers?: Layer[];
   sources?: Record<string, LayerSource>;

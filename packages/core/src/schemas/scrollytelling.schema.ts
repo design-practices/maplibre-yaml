@@ -13,7 +13,7 @@
  */
 
 import { z } from "zod";
-import { LngLatSchema, ExpressionSchema } from "./base.schema";
+import { LngLatSchema, LngLatBoundsLikeSchema, ExpressionSchema } from "./base.schema";
 import { MapConfigSchema, MapBlockSchema, LegendConfigSchema, ControlPositionSchema } from "./map.schema";
 import { LayerOrReferenceSchema } from "./layer.schema";
 import { STORY_MAP_KEYS } from "../scrollytelling/keys";
@@ -121,9 +121,11 @@ export const ChapterActionSchema = z
       .optional()
       .describe("Filter expression (for setFilter, null to clear)"),
     bounds: z
-      .array(z.number())
+      .union([LngLatBoundsLikeSchema, z.array(z.number())])
       .optional()
-      .describe("Bounds array (for fitBounds)"),
+      .describe(
+        "Bounds for fitBounds: [west, south, east, north] or [[west, south], [east, north]]"
+      ),
     options: z.record(z.any()).optional().describe("Additional options"),
   })
   .describe("Chapter action for map state changes");

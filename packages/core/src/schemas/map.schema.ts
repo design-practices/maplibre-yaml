@@ -14,7 +14,7 @@
 import { z } from "zod";
 import {
   LngLatSchema,
-  LngLatBoundsSchema,
+  LngLatBoundsLikeSchema,
   ZoomLevelSchema,
   ColorSchema,
   ColorOrExpressionSchema,
@@ -206,9 +206,11 @@ export type LegendConfig = z.infer<typeof LegendConfigSchema>;
  *
  * - **Inline `data:`** — the bounds are known before the map exists, so the
  *   map is constructed already framed (no camera jump).
- * - **`url:`** — the map opens at the authored `center`/`zoom`, then jumps
- *   to the data's bounds once the first fetch lands (refreshes do not
- *   re-fit: the user owns the camera after load).
+ * - **`url:`** — `<ml-map>` fetches the data before it builds the map and
+ *   builds it already framed (ml-aot.75); a file slower than
+ *   `MLMap.fitToWaitMs` (1.5 s) gets the map at the authored `center`/`zoom`,
+ *   which jumps to the data's bounds once the fetch lands. Refreshes do not
+ *   re-fit: the user owns the camera after load.
  * - **vector / raster / raster-dem** — not supported: tiled sources have no
  *   client-side extent before they render. The renderer warns once and keeps
  *   the authored camera.
@@ -351,10 +353,10 @@ export const MapConfigSchema = z
       .max(180)
       .default(0)
       .describe("Camera bearing (rotation) in degrees (-180 to 180)"),
-    bounds: z
-      .union([LngLatBoundsSchema, z.array(z.number())])
-      .optional()
-      .describe("Fit map to bounds"),
+    bounds: LngLatBoundsLikeSchema.optional().describe(
+      "Fit the initial camera to these bounds: [west, south, east, north] or " +
+        "[[west, south], [east, north]] (longitude first)"
+    ),
     fitTo: FitToSchema.optional().describe(
       "Fit the initial camera to a GeoJSON source's data (wins over `bounds`)"
     ),
@@ -364,8 +366,8 @@ export const MapConfigSchema = z
     maxZoom: ZoomLevelSchema.optional().describe("Maximum zoom level"),
     minPitch: z.number().min(0).max(85).optional().describe("Minimum pitch"),
     maxPitch: z.number().min(0).max(85).optional().describe("Maximum pitch"),
-    maxBounds: LngLatBoundsSchema.optional().describe(
-      "Maximum geographic bounds",
+    maxBounds: LngLatBoundsLikeSchema.optional().describe(
+      "Maximum geographic bounds, in either bounds form",
     ),
 
     // Interaction
@@ -812,6 +814,41 @@ export const ParametersSchema = z
 export type Parameters = z.infer<typeof ParametersSchema>;
 
 /**
+ * The map's name, for people who can't see it.
+ *
+ * @remarks
+ * Screen readers announce it as the map's accessible name (the canvas's
+ * `aria-label`, where MapLibre puts `locale["Map.Title"]`, "Map" by
+ * default). Shown nowhere on the page. Exported as the style's `name`.
+ *
+ * @example
+ * ```yaml
+ * title: Heat vulnerability in the Bronx
+ * ```
+ */
+export const MapTitleSchema = z
+  .string()
+  .describe(
+    "The map's name, read out by screen readers as its accessible name (default: \"Map\", or locale Map.Title)"
+  );
+
+/**
+ * What the map shows, in a sentence or two: the text alternative for a
+ * reader who can't see it.
+ *
+ * @remarks
+ * Linked to the map with `aria-describedby` (a visually hidden element).
+ * Say what the map shows and what it means — "Census tracts shaded from
+ * pale yellow (low) to dark red (high); the highest values cluster along the
+ * Cross Bronx Expressway" — not how to use it.
+ */
+export const MapDescriptionSchema = z
+  .string()
+  .describe(
+    "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+  );
+
+/**
  * Standard map block.
  *
  * @remarks
@@ -878,6 +915,8 @@ export const MapBlockSchema: z.ZodObject<any> = z
       .describe("Format version — v1 documents may state `version: 1`"),
     className: z.string().optional().describe("CSS class name for container"),
     style: z.string().optional().describe("Inline CSS styles for container"),
+    title: MapTitleSchema.optional(),
+    description: MapDescriptionSchema.optional(),
     config: MapConfigSchema,
     sources: z
       .record(z.string(), LayerSourceSchema)
@@ -961,6 +1000,8 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     id: z.string().describe("Unique block identifier"),
     className: z.string().optional().describe("CSS class name for container"),
     style: z.string().optional().describe("Inline CSS styles for container"),
+    title: MapTitleSchema.optional(),
+    description: MapDescriptionSchema.optional(),
     config: MapConfigSchema,
     sources: z
       .record(z.string(), LayerSourceSchema)

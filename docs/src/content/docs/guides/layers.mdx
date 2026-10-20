@@ -168,6 +168,38 @@ paint:
     - "#ef4444" # Red: count >= 100
 ```
 
+### Strings starting with `=` are reserved
+
+A style value that starts with `=` — `text-field: "=upper({name})"` — is
+reserved for a future expression shorthand, a formula-style way to write
+the expressions above. It doesn't work yet: today MapLibre gets the text
+exactly as written. So that the shorthand can arrive later without changing
+what your map means, maplibre-yaml warns about such a string now, at its
+line, in `mlym validate`, in the browser console, and on the page while you
+develop (see [when something goes wrong](/integrations/web-components/#when-something-goes-wrong)).
+The check covers values under a layer's `paint:` and `layout:`, its
+`filter:`, and a story chapter's `setPaintProperty`/`setLayoutProperty`
+`value`, in both format versions; titles, descriptions and popup text are
+never checked.
+
+Write a MapLibre expression instead:
+
+```yaml
+layout:
+  text-field: ["upcase", ["get", "name"]]   # not "=upper({name})"
+```
+
+For text that really does start with `=`, wrap it in a `literal`
+expression, which never warns and draws the text as written:
+
+```yaml
+layout:
+  text-field: ["literal", "=5"]
+```
+
+MapLibre's own `==` operator (`["==", ["get", "kind"], "park"]`, or a legacy
+`["==", "kind", "park"]` filter) is not affected.
+
 ## Layer ordering
 
 Layers are drawn in order. Later layers appear on top:

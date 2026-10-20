@@ -14,15 +14,38 @@
  * did-you-mean), and a visitor to the published site, who only needs to
  * know part of the map is missing. So it leads with one plain line and puts
  * the author's detail in a "Details for the site's author" disclosure,
- * open while the page is served from this computer (localhost, file://)
- * and closed on a published site, where a click still opens it.
+ * open while the author is developing (see `author-hints.ts`) and closed on
+ * a published site, where a click still opens it.
+ *
+ * Two kinds of line (ml-aot.57): a *failure* (something didn't load) always
+ * shows; an author *hint* (a did-you-mean, a misplaced key) is only ever
+ * added while the author is developing — the element decides, via
+ * `showAuthorHints`. A notice holding only hints leads with
+ * {@link NOTICE_HINTS_TITLE} instead, since nothing failed.
  */
+
+import { DEFAULT_STRINGS, defaultStrings, type Strings } from "../i18n/strings";
 
 /** Class on the notice element. */
 export const NOTICE_CLASS = "ml-map-notice";
 
-/** The notice's lead line, for every reader. */
-export const NOTICE_TITLE = "Part of this map couldn't load";
+/**
+ * The notice's lead line, for every reader (English; a document's `locale:`
+ * overrides it as `maplibre-yaml.Notice.Title`).
+ */
+export const NOTICE_TITLE = DEFAULT_STRINGS["maplibre-yaml.Notice.Title"];
+
+/**
+ * The lead line of a notice that holds only author hints (nothing failed);
+ * `maplibre-yaml.Notice.HintsTitle` in a document's `locale:`.
+ */
+export const NOTICE_HINTS_TITLE = DEFAULT_STRINGS["maplibre-yaml.Notice.HintsTitle"];
+
+/** The disclosure's summary line (`maplibre-yaml.Notice.AuthorDetails`). */
+export const NOTICE_DETAILS_SUMMARY = DEFAULT_STRINGS["maplibre-yaml.Notice.AuthorDetails"];
+
+/** What a notice line is: something failed, or a hint for the author. */
+export type NoticeKind = "failure" | "hint";
 
 /** Whether a page is being served from this computer (an author working on it). */
 export function isLocalPage(doc: Document | undefined): boolean {
@@ -41,6 +64,8 @@ export function isLocalPage(doc: Document | undefined): boolean {
 export interface MapNoticeOptions {
   /** Start with the author's details open (default: on a local page). */
   openDetails?: boolean;
+  /** The document's UI strings (`maplibre-yaml.Notice.*`); English by default. */
+  strings?: Strings;
 }
 
 /** More than this many items collapse into "and N more". */
@@ -50,7 +75,7 @@ const MAX_ITEMS = 6;
  * Append `text` to `parent`, rendering `` `backticked` `` spans as `<code>`.
  * Built with text nodes only — nothing in a message is ever parsed as HTML.
  */
-function appendMessage(doc: Document, parent: HTMLElement, text: string): void {
+export function appendMessage(doc: Document, parent: HTMLElement, text: string): void {
   text.split("`").forEach((part, index) => {
     if (part === "") return;
     if (index % 2 === 1) {
@@ -78,8 +103,10 @@ export class MapNotice {
   private root: HTMLElement | null = null;
   private list: HTMLUListElement | null = null;
   private more: HTMLLIElement | null = null;
+  private title: HTMLElement | null = null;
   private readonly seen = new Set<string>();
   private hidden = 0;
+  private failures = 0;
 
   /**
    * @param host - where the panel mounts (the map container)
@@ -90,19 +117,39 @@ export class MapNotice {
     private readonly options: MapNoticeOptions = {}
   ) {}
 
+  private get t(): Strings {
+    return this.options.strings ?? defaultStrings;
+  }
+
   /** Number of distinct problems reported so far. */
   get size(): number {
     return this.seen.size;
   }
 
-  /** Add one problem (a no-op for a message already listed). */
-  add(message: string): void {
+  /** Number of distinct failures (not hints) reported so far. */
+  get failureCount(): number {
+    return this.failures;
+  }
+
+  /**
+   * Add one line (a no-op for a message already listed).
+   *
+   * @param kind - `"failure"` (default) or `"hint"`. The caller has already
+   *   decided a hint may show; the notice only words its lead line by kind.
+   */
+  add(message: string, kind: NoticeKind = "failure"): void {
     if (this.seen.has(message)) return;
     this.seen.add(message);
+    if (kind === "failure") this.failures += 1;
     const doc = this.host.ownerDocument;
     if (!this.root || !this.list) this.mount(doc);
     if (!this.root || !this.list) return;
     if (!this.root.isConnected) this.host.appendChild(this.root);
+    if (this.title) {
+      this.title.textContent = this.t(
+        this.failures > 0 ? "maplibre-yaml.Notice.Title" : "maplibre-yaml.Notice.HintsTitle"
+      );
+    }
 
     if (this.seen.size > MAX_ITEMS) {
       this.hidden += 1;
@@ -110,7 +157,7 @@ export class MapNotice {
         this.more = doc.createElement("li");
         this.list.appendChild(this.more);
       }
-      this.more.textContent = `…and ${this.hidden} more (see the browser console).`;
+      this.more.textContent = this.t("maplibre-yaml.Notice.More", { count: this.hidden });
       return;
     }
     const item = doc.createElement("li");
@@ -126,8 +173,10 @@ export class MapNotice {
     this.root = null;
     this.list = null;
     this.more = null;
+    this.title = null;
     this.seen.clear();
     this.hidden = 0;
+    this.failures = 0;
   }
 
   private mount(doc: Document): void {
@@ -158,7 +207,7 @@ export class MapNotice {
     ].join("; ");
 
     const title = doc.createElement("strong");
-    title.textContent = NOTICE_TITLE;
+    title.textContent = this.t("maplibre-yaml.Notice.Title");
     title.style.cssText = "display: block; margin-bottom: 2px;";
 
     // The author's fix, one click away for a visitor (see the file header).
@@ -166,7 +215,7 @@ export class MapNotice {
     details.open = this.options.openDetails ?? isLocalPage(doc);
     details.style.cssText = "font-size: 12px; line-height: 1.4;";
     const summary = doc.createElement("summary");
-    summary.textContent = "Details for the site's author";
+    summary.textContent = this.t("maplibre-yaml.Notice.AuthorDetails");
     summary.style.cssText = "cursor: pointer; opacity: 0.85;";
     const list = doc.createElement("ul");
     list.style.cssText = "margin: 2px 0 0; padding-left: 18px;";
@@ -175,8 +224,8 @@ export class MapNotice {
     const close = doc.createElement("button");
     close.type = "button";
     close.textContent = "×";
-    close.setAttribute("aria-label", "Dismiss this notice");
-    close.title = "Dismiss";
+    close.setAttribute("aria-label", this.t("maplibre-yaml.Notice.Dismiss"));
+    close.title = this.t("maplibre-yaml.Notice.Dismiss");
     close.style.cssText = [
       "position: absolute",
       "top: 4px",
@@ -195,6 +244,7 @@ export class MapNotice {
 
     root.append(title, details, close);
     this.root = root;
+    this.title = title;
     this.list = list;
   }
 }

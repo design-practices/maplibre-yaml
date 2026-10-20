@@ -35,6 +35,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               "type": "string",
               "description": "Inline CSS styles for container"
             },
+            "title": {
+              "type": "string",
+              "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+            },
+            "description": {
+              "type": "string",
+              "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+            },
             "config": {
               "type": "object",
               "properties": {
@@ -96,13 +104,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "maxItems": 4,
                       "items": [
                         {
-                          "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/0"
+                          "type": "number",
+                          "description": "Longitude in degrees (past ±180 to cross the antimeridian)"
                         },
                         {
                           "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
                         },
                         {
-                          "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/0"
+                          "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds/anyOf/0/items/0"
                         },
                         {
                           "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
@@ -112,12 +121,40 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                     },
                     {
                       "type": "array",
-                      "items": {
-                        "type": "number"
-                      }
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "type": "array",
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "items": [
+                            {
+                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds/anyOf/0/items/0"
+                            },
+                            {
+                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "array",
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "items": [
+                            {
+                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds/anyOf/0/items/0"
+                            },
+                            {
+                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
+                            }
+                          ]
+                        }
+                      ],
+                      "description": "Bounding box as two corners [[west, south], [east, north]]"
                     }
                   ],
-                  "description": "Fit map to bounds"
+                  "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
                 },
                 "fitTo": {
                   "type": "object",
@@ -169,8 +206,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "description": "Maximum pitch"
                 },
                 "maxBounds": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds/anyOf/0",
-                  "description": "Maximum geographic bounds"
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds",
+                  "description": "Maximum geographic bounds, in either bounds form"
                 },
                 "interactive": {
                   "type": "boolean",
@@ -1075,8 +1112,49 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                               "description": "Fallback value if property missing"
                                             },
                                             "format": {
-                                              "type": "string",
-                                              "description": "Number format string (e.g., \\",.0f\\")"
+                                              "anyOf": [
+                                                {
+                                                  "type": "string"
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "locale": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "description": "BCP 47 language tag, e.g. de-DE. Default: the page's language"
+                                                    },
+                                                    "currency": {
+                                                      "type": "string",
+                                                      "pattern": "^[A-Za-z]{3}$",
+                                                      "description": "ISO 4217 currency code (EUR, USD, JPY): format as money"
+                                                    },
+                                                    "unit": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "description": "A unit Intl knows (kilometer, percent, celsius, ...); ignored with currency"
+                                                    },
+                                                    "min-fraction-digits": {
+                                                      "type": "integer",
+                                                      "minimum": 0,
+                                                      "maximum": 20,
+                                                      "description": "At least this many decimals"
+                                                    },
+                                                    "max-fraction-digits": {
+                                                      "type": "integer",
+                                                      "minimum": 0,
+                                                      "maximum": 20,
+                                                      "description": "At most this many decimals (rounds)"
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "description": "MapLibre number-format options",
+                                                  "patternProperties": {
+                                                    "^x-": {}
+                                                  }
+                                                }
+                                              ],
+                                              "description": "How a numeric property is written: MapLibre number-format options (locale, currency, unit, min-fraction-digits, max-fraction-digits), or an older d3-style string such as \\",.0f\\""
                                             },
                                             "href": {
                                               "type": "string",
@@ -3671,11 +3749,18 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "description": "Filter expression (for setFilter, null to clear)"
                         },
                         "bounds": {
-                          "type": "array",
-                          "items": {
-                            "type": "number"
-                          },
-                          "description": "Bounds array (for fitBounds)"
+                          "anyOf": [
+                            {
+                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              }
+                            }
+                          ],
+                          "description": "Bounds for fitBounds: [west, south, east, north] or [[west, south], [east, north]]"
                         },
                         "options": {
                           "type": "object",
@@ -3726,6 +3811,12 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
             "footer": {
               "type": "string",
               "description": "Footer content (HTML)"
+            },
+            "title": {
+              "$ref": "#/$defs/any/oneOf/0/properties/title"
+            },
+            "description": {
+              "$ref": "#/$defs/any/oneOf/0/properties/description"
             },
             "sources": {
               "$ref": "#/$defs/any/oneOf/0/properties/sources"
@@ -4091,6 +4182,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "type": "string",
                               "description": "Inline CSS styles for container"
                             },
+                            "title": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/title",
+                              "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+                            },
+                            "description": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/description",
+                              "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+                            },
                             "config": {
                               "$ref": "#/$defs/any/oneOf/0/properties/config"
                             },
@@ -4289,6 +4388,14 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
           "type": "string",
           "description": "Inline CSS styles for container"
         },
+        "title": {
+          "type": "string",
+          "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+        },
         "config": {
           "type": "object",
           "properties": {
@@ -4350,13 +4457,14 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "maxItems": 4,
                   "items": [
                     {
-                      "$ref": "#/$defs/map/properties/config/properties/center/items/0"
+                      "type": "number",
+                      "description": "Longitude in degrees (past ±180 to cross the antimeridian)"
                     },
                     {
                       "$ref": "#/$defs/map/properties/config/properties/center/items/1"
                     },
                     {
-                      "$ref": "#/$defs/map/properties/config/properties/center/items/0"
+                      "$ref": "#/$defs/map/properties/config/properties/bounds/anyOf/0/items/0"
                     },
                     {
                       "$ref": "#/$defs/map/properties/config/properties/center/items/1"
@@ -4366,12 +4474,40 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                 },
                 {
                   "type": "array",
-                  "items": {
-                    "type": "number"
-                  }
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": [
+                    {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "$ref": "#/$defs/map/properties/config/properties/bounds/anyOf/0/items/0"
+                        },
+                        {
+                          "$ref": "#/$defs/map/properties/config/properties/center/items/1"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "$ref": "#/$defs/map/properties/config/properties/bounds/anyOf/0/items/0"
+                        },
+                        {
+                          "$ref": "#/$defs/map/properties/config/properties/center/items/1"
+                        }
+                      ]
+                    }
+                  ],
+                  "description": "Bounding box as two corners [[west, south], [east, north]]"
                 }
               ],
-              "description": "Fit map to bounds"
+              "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
             },
             "fitTo": {
               "type": "object",
@@ -4423,8 +4559,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
               "description": "Maximum pitch"
             },
             "maxBounds": {
-              "$ref": "#/$defs/map/properties/config/properties/bounds/anyOf/0",
-              "description": "Maximum geographic bounds"
+              "$ref": "#/$defs/map/properties/config/properties/bounds",
+              "description": "Maximum geographic bounds, in either bounds form"
             },
             "interactive": {
               "type": "boolean",
@@ -5329,8 +5465,49 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                           "description": "Fallback value if property missing"
                                         },
                                         "format": {
-                                          "type": "string",
-                                          "description": "Number format string (e.g., \\",.0f\\")"
+                                          "anyOf": [
+                                            {
+                                              "type": "string"
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "locale": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "description": "BCP 47 language tag, e.g. de-DE. Default: the page's language"
+                                                },
+                                                "currency": {
+                                                  "type": "string",
+                                                  "pattern": "^[A-Za-z]{3}$",
+                                                  "description": "ISO 4217 currency code (EUR, USD, JPY): format as money"
+                                                },
+                                                "unit": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "description": "A unit Intl knows (kilometer, percent, celsius, ...); ignored with currency"
+                                                },
+                                                "min-fraction-digits": {
+                                                  "type": "integer",
+                                                  "minimum": 0,
+                                                  "maximum": 20,
+                                                  "description": "At least this many decimals"
+                                                },
+                                                "max-fraction-digits": {
+                                                  "type": "integer",
+                                                  "minimum": 0,
+                                                  "maximum": 20,
+                                                  "description": "At most this many decimals (rounds)"
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "description": "MapLibre number-format options",
+                                              "patternProperties": {
+                                                "^x-": {}
+                                              }
+                                            }
+                                          ],
+                                          "description": "How a numeric property is written: MapLibre number-format options (locale, currency, unit, min-fraction-digits, max-fraction-digits), or an older d3-style string such as \\",.0f\\""
                                         },
                                         "href": {
                                           "type": "string",
@@ -8536,8 +8713,49 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                       "description": "Fallback value if property missing"
                                     },
                                     "format": {
-                                      "type": "string",
-                                      "description": "Number format string (e.g., \\",.0f\\")"
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "locale": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "description": "BCP 47 language tag, e.g. de-DE. Default: the page's language"
+                                            },
+                                            "currency": {
+                                              "type": "string",
+                                              "pattern": "^[A-Za-z]{3}$",
+                                              "description": "ISO 4217 currency code (EUR, USD, JPY): format as money"
+                                            },
+                                            "unit": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "description": "A unit Intl knows (kilometer, percent, celsius, ...); ignored with currency"
+                                            },
+                                            "min-fraction-digits": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 20,
+                                              "description": "At least this many decimals"
+                                            },
+                                            "max-fraction-digits": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 20,
+                                              "description": "At most this many decimals (rounds)"
+                                            }
+                                          },
+                                          "additionalProperties": false,
+                                          "description": "MapLibre number-format options",
+                                          "patternProperties": {
+                                            "^x-": {}
+                                          }
+                                        }
+                                      ],
+                                      "description": "How a numeric property is written: MapLibre number-format options (locale, currency, unit, min-fraction-digits, max-fraction-digits), or an older d3-style string such as \\",.0f\\""
                                     },
                                     "href": {
                                       "type": "string",
@@ -10509,6 +10727,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "type": "string",
                           "description": "Inline CSS styles for container"
                         },
+                        "title": {
+                          "type": "string",
+                          "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+                        },
+                        "description": {
+                          "type": "string",
+                          "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+                        },
                         "config": {
                           "type": "object",
                           "properties": {
@@ -10564,13 +10790,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "maxItems": 4,
                                   "items": [
                                     {
-                                      "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/0"
+                                      "type": "number",
+                                      "description": "Longitude in degrees (past ±180 to cross the antimeridian)"
                                     },
                                     {
                                       "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
                                     },
                                     {
-                                      "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/0"
+                                      "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds/anyOf/0/items/0"
                                     },
                                     {
                                       "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
@@ -10580,12 +10807,40 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 },
                                 {
                                   "type": "array",
-                                  "items": {
-                                    "type": "number"
-                                  }
+                                  "minItems": 2,
+                                  "maxItems": 2,
+                                  "items": [
+                                    {
+                                      "type": "array",
+                                      "minItems": 2,
+                                      "maxItems": 2,
+                                      "items": [
+                                        {
+                                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds/anyOf/0/items/0"
+                                        },
+                                        {
+                                          "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "array",
+                                      "minItems": 2,
+                                      "maxItems": 2,
+                                      "items": [
+                                        {
+                                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds/anyOf/0/items/0"
+                                        },
+                                        {
+                                          "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
+                                        }
+                                      ]
+                                    }
+                                  ],
+                                  "description": "Bounding box as two corners [[west, south], [east, north]]"
                                 }
                               ],
-                              "description": "Fit map to bounds"
+                              "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
                             },
                             "fitTo": {
                               "type": "object",
@@ -10635,8 +10890,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "description": "Maximum pitch"
                             },
                             "maxBounds": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds/anyOf/0",
-                              "description": "Maximum geographic bounds"
+                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds",
+                              "description": "Maximum geographic bounds, in either bounds form"
                             },
                             "interactive": {
                               "type": "boolean",
@@ -11331,6 +11586,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "type": "string",
                           "description": "Inline CSS styles for container"
                         },
+                        "title": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/title",
+                          "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+                        },
+                        "description": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/description",
+                          "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+                        },
                         "config": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config"
                         },
@@ -11675,11 +11938,18 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                       "description": "Filter expression (for setFilter, null to clear)"
                                     },
                                     "bounds": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "number"
-                                      },
-                                      "description": "Bounds array (for fitBounds)"
+                                      "anyOf": [
+                                        {
+                                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds"
+                                        },
+                                        {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "number"
+                                          }
+                                        }
+                                      ],
+                                      "description": "Bounds for fitBounds: [west, south, east, north] or [[west, south], [east, north]]"
                                     },
                                     "options": {
                                       "type": "object",
@@ -11730,6 +12000,12 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "footer": {
                           "type": "string",
                           "description": "Footer content (HTML)"
+                        },
+                        "title": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/title"
+                        },
+                        "description": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/description"
                         },
                         "sources": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/sources"
@@ -11994,13 +12270,14 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                   "maxItems": 4,
                   "items": [
                     {
-                      "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/0"
+                      "type": "number",
+                      "description": "Longitude in degrees (past ±180 to cross the antimeridian)"
                     },
                     {
                       "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
                     },
                     {
-                      "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/0"
+                      "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds/anyOf/0/items/0"
                     },
                     {
                       "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
@@ -12010,12 +12287,40 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                 },
                 {
                   "type": "array",
-                  "items": {
-                    "type": "number"
-                  }
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": [
+                    {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds/anyOf/0/items/0"
+                        },
+                        {
+                          "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds/anyOf/0/items/0"
+                        },
+                        {
+                          "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
+                        }
+                      ]
+                    }
+                  ],
+                  "description": "Bounding box as two corners [[west, south], [east, north]]"
                 }
               ],
-              "description": "Fit map to bounds"
+              "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
             },
             "fitTo": {
               "type": "object",
@@ -12067,8 +12372,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
               "description": "Maximum pitch"
             },
             "maxBounds": {
-              "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds/anyOf/0",
-              "description": "Maximum geographic bounds"
+              "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds",
+              "description": "Maximum geographic bounds, in either bounds form"
             },
             "interactive": {
               "type": "boolean",
@@ -12989,8 +13294,49 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                           "description": "Fallback value if property missing"
                                         },
                                         "format": {
-                                          "type": "string",
-                                          "description": "Number format string (e.g., \\",.0f\\")"
+                                          "anyOf": [
+                                            {
+                                              "type": "string"
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "locale": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "description": "BCP 47 language tag, e.g. de-DE. Default: the page's language"
+                                                },
+                                                "currency": {
+                                                  "type": "string",
+                                                  "pattern": "^[A-Za-z]{3}$",
+                                                  "description": "ISO 4217 currency code (EUR, USD, JPY): format as money"
+                                                },
+                                                "unit": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "description": "A unit Intl knows (kilometer, percent, celsius, ...); ignored with currency"
+                                                },
+                                                "min-fraction-digits": {
+                                                  "type": "integer",
+                                                  "minimum": 0,
+                                                  "maximum": 20,
+                                                  "description": "At least this many decimals"
+                                                },
+                                                "max-fraction-digits": {
+                                                  "type": "integer",
+                                                  "minimum": 0,
+                                                  "maximum": 20,
+                                                  "description": "At most this many decimals (rounds)"
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "description": "MapLibre number-format options",
+                                              "patternProperties": {
+                                                "^x-": {}
+                                              }
+                                            }
+                                          ],
+                                          "description": "How a numeric property is written: MapLibre number-format options (locale, currency, unit, min-fraction-digits, max-fraction-digits), or an older d3-style string such as \\",.0f\\""
                                         },
                                         "href": {
                                           "type": "string",
@@ -15004,11 +15350,18 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "description": "Filter expression (for setFilter, null to clear)"
                     },
                     "bounds": {
-                      "type": "array",
-                      "items": {
-                        "type": "number"
-                      },
-                      "description": "Bounds array (for fitBounds)"
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        }
+                      ],
+                      "description": "Bounds for fitBounds: [west, south, east, north] or [[west, south], [east, north]]"
                     },
                     "options": {
                       "type": "object",
@@ -15059,6 +15412,14 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
         "footer": {
           "type": "string",
           "description": "Footer content (HTML)"
+        },
+        "title": {
+          "type": "string",
+          "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
         },
         "sources": {
           "type": "object",

@@ -6,6 +6,7 @@
 import type { z } from 'zod';
 import { LayerSchema, LegendConfigSchema, LegendItemSchema } from '../schemas';
 import { escapeHtml } from '../utils/html';
+import { defaultStrings, elementLanguage, type Strings } from '../i18n';
 import {
   classifyLegendEntries,
   classifyRecordOf,
@@ -42,7 +43,7 @@ type LegendItem = z.infer<typeof LegendItemSchema>;
  * swatch size (graduated circles).
  */
 export type LegendEntry = LegendItem & {
-  /** A heading line naming the classified layer; no swatch. */
+  /** A group heading naming a classified layer; no swatch. */
   heading?: true;
   /** Swatch diameter in px (graduated circles). */
   size?: number;
@@ -52,15 +53,49 @@ export type LegendEntry = LegendItem & {
 export type ClassifyOverrides = ReadonlyMap<string, ClassifyRecord>;
 
 /**
+ * The author's `legend.title`, as a heading inside the panel — or `""` when
+ * there is none, or it only repeats the toggle ("Legend", or the toggle's
+ * translation), which would read "Legend / Legend".
+ */
+export function legendHeadingText(title: unknown, strings: Strings = defaultStrings): string {
+  if (typeof title !== 'string') return '';
+  const text = title.trim();
+  if (!text) return '';
+  const lower = text.toLowerCase();
+  if (lower === 'legend' || lower === strings('maplibre-yaml.Legend.Title').trim().toLowerCase()) return '';
+  return text;
+}
+
+/** Options for {@link LegendBuilder}. */
+export interface LegendBuilderOptions {
+  /** The document's UI strings (the toggle reads `maplibre-yaml.Legend.Title`). */
+  strings?: Strings;
+  /**
+   * Locale for generated (classify) class edges when their `format:` names
+   * none. Default: the legend container's page language.
+   */
+  locale?: string;
+}
+
+/**
  * Builds legend HTML from layer configurations
  */
 export class LegendBuilder {
+  private readonly strings: Strings;
+  private locale: string | undefined;
+
+  constructor(options: LegendBuilderOptions = {}) {
+    this.strings = options.strings ?? defaultStrings;
+    this.locale = options.locale;
+  }
+
   /**
    * Build legend in container from layers
    */
   build(container: string | HTMLElement, layers: Layer[], config?: Partial<LegendConfig>): void {
     const el = typeof container === 'string' ? document.getElementById(container) : container;
     if (!el) return;
+    this.locale ??= elementLanguage(el);
 
     const items: LegendEntry[] = config?.items || this.extractItems(layers);
 
@@ -82,12 +117,18 @@ export class LegendBuilder {
     el.hidden = false;
 
     // <details>/<summary> makes `collapsed:` real (the schema field existed
-    // with no implementation — ml-tfd.8 contract audit): the title is the
-    // toggle, `collapsed: true` starts closed, default stays fully visible.
-    // The summary needs content to be clickable, so an untitled legend gets
-    // the literal "Legend".
+    // with no implementation — ml-tfd.8 contract audit): `collapsed: true`
+    // starts closed, default stays fully visible. The toggle always says what
+    // it is — "Legend", or its translation (`maplibre-yaml.Legend.Title`) —
+    // as a story's legend button does (0.9): a screen reader announces
+    // "Legend, expanded" whatever the author titled it. The author's
+    // `title:` heads the panel instead.
+    const heading = legendHeadingText(config?.title, this.strings);
     let html = `<details class="maplibre-legend" style="${LEGEND_BOX_STYLE}"${config?.collapsed ? "" : " open"}>`;
-    html += `<summary class="legend-title" style="cursor:pointer;font-weight:600;">${escapeHtml(config?.title ?? "Legend")}</summary>`;
+    html += `<summary class="legend-title" style="cursor:pointer;font-weight:600;">${escapeHtml(this.strings('maplibre-yaml.Legend.Title'))}</summary>`;
+    if (heading) {
+      html += `<div class="legend-heading" style="font-weight:600;margin-top:4px;">${escapeHtml(heading)}</div>`;
+    }
     html += '<div class="legend-items">';
     for (const item of items) {
       html += this.renderItem(item);
@@ -122,7 +163,9 @@ export class LegendBuilder {
    */
   private renderItem(item: LegendEntry): string {
     if (item.heading) {
-      return `<div class="legend-heading" style="font-weight:600;margin-top:6px;">${escapeHtml(item.label)}</div>`;
+      // A classified layer's group heading (its label) — distinct from the
+      // panel's `.legend-heading` (the legend's own title).
+      return `<div class="legend-group-heading" style="font-weight:600;margin-top:6px;">${escapeHtml(item.label)}</div>`;
     }
     const shape = item.shape || 'square';
     let symbol = '';
@@ -183,8 +226,10 @@ export class LegendBuilder {
       );
       items.push(
         ...(classifyLegendEntries(record, {
-          title: (layer as { label?: string }).label ?? record.field,
+          title: (layer as { label?: string }).label,
           layerType: layer.type,
+          strings: this.strings,
+          ...(this.locale ? { locale: this.locale } : {}),
           ...(literal ? { color: literal[1] as string } : {}),
         }) as LegendEntry[])
       );

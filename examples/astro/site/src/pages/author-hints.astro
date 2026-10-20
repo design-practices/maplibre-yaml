@@ -1,0 +1,16 @@
+---
+import Base from "../layouts/Base.astro";
+import { Map } from "@maplibre-yaml/astro";
+---
+
+<Base title="Author hints">
+  <!--
+    ml-aot.57 — the same document twice; it has one author hint (legend:
+    nested under config:). Hints show while you develop (astro dev, or this
+    site on localhost) and stay off a published site — unless the map has
+    `debug`, which shows them wherever the site is served.
+  -->
+  <h1>Author hints</h1>
+  <div data-testid="plain-map"><Map src="/maps/author-hint.yaml" height="260px" /></div>
+  <div data-testid="debug-map"><Map src="/maps/author-hint.yaml" height="260px" debug /></div>
+</Base>

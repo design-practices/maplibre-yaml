@@ -34,7 +34,17 @@ import {
 } from "../classify/palettes";
 import { CLASSIFY_METHODS, type ClassifyMethod } from "../classify/breaks";
 import { suggest } from "../utils/suggest";
-import { numberFormatProblem, type NumberFormatOptions } from "../utils/format-number";
+import { toIntlNumberFormatOptions, type NumberFormatOptions } from "../i18n/number-format";
+
+/** Why `Intl` cannot format with these options (an unknown currency or unit, a bad locale), or null. */
+function numberFormatProblem(options: NumberFormatOptions): string | null {
+  try {
+    new Intl.NumberFormat(options.locale, toIntlNumberFormatOptions(options));
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
 
 /** Default class count for `method:` when `classes:` is omitted. */
 export const DEFAULT_CLASS_COUNT = 5;

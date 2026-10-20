@@ -165,6 +165,10 @@ export function readV2Block(doc: MapBlockV2): MapModel {
 
   // Presence discipline: optional keys attach only when present, never as
   // `undefined` — the same rule normalizeMapBlock enforces.
+  // `title`/`description` sit at the document root in both versions (AE2).
+  const root = doc as Record<string, unknown>;
+  if (typeof root["title"] === "string") model.style.title = root["title"];
+  if (typeof root["description"] === "string") model.style.description = root["description"];
   if ("basemap" in style)
     model.style.basemap = style["basemap"] as MapConfig["mapStyle"];
   if (docState !== undefined)

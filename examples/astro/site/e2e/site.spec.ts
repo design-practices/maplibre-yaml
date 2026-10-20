@@ -264,6 +264,30 @@ test.describe("explore: <FullPageMap> with the 0.7 surface", () => {
   });
 });
 
+test.describe("languages: <FullPageMap> in the document's locale (0.9)", () => {
+  const MAP = ".ml-fullpage-map ml-map";
+
+  for (const [path, how] of [
+    ["/explore-es/", "config: labelled at build time"],
+    ["/explore-es-src/", "src: labelled in the browser"],
+  ] as const) {
+    test(`buttons, legend and map name in Spanish — ${how} @dev`, async ({ page }) => {
+      const errors = await guard(page);
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await mapReady(page, MAP);
+      await expect(page.getByRole("region", { name: "Volcanes del Japón" })).toHaveAccessibleDescription(
+        "Los volcanes del arco japonés, marcados con círculos rojos."
+      );
+      await expect(page.getByRole("button", { name: "Acercar" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Alejar" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Restablecer la vista" })).toBeVisible();
+      await expect(page.locator(`${MAP} summary.legend-title`)).toHaveText("Leyenda");
+      await expect(page.locator(`${MAP} .legend-heading`)).toHaveText("Volcanes");
+      expect(errors).toEqual([]);
+    });
+  }
+});
+
 test.describe("story: <Scrollytelling config>", () => {
   const MAP = ".scrollytelling-container ml-map";
 
@@ -655,6 +679,28 @@ test.describe("view transitions: <ClientRouter /> soft navigation (ml-aot.22)", 
 
     expect(await page.evaluate(() => (window as any).__storyMaps[0] !== (window as any).__storyMaps[1])).toBe(true);
     expect(await page.evaluate(() => (window as any).__softNav), "navigations were soft").toBe(true);
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe("author hints: dev builds and the debug prop (ml-aot.57)", () => {
+  test("<Map debug> renders the attribute; astro dev marks the page a dev build, a built site does not @dev", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto("/author-hints/", { waitUntil: "domcontentloaded" });
+    const plain = '[data-testid="plain-map"] ml-map';
+    const debug = '[data-testid="debug-map"] ml-map';
+    await mapReady(page, plain);
+    await mapReady(page, debug);
+    expect(await page.locator(debug).getAttribute("debug")).toBe("");
+    expect(await page.locator(plain).getAttribute("debug")).toBeNull();
+    const devFlag = await page.evaluate(() => (globalThis as any).__MAPLIBRE_YAML_DEV__ === true);
+    expect(devFlag).toBe(process.env.ASTRO_SITE_MODE === "dev");
+    // Served from localhost (preview) or by astro dev: both maps show the hint.
+    for (const map of [plain, debug]) {
+      await expect(page.locator(`${map} .ml-map-notice`)).toContainText('"legend" belongs at the top level');
+    }
     expect(errors).toEqual([]);
   });
 });

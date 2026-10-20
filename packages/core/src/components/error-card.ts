@@ -6,6 +6,7 @@
 import type { ParseError } from "../parser/yaml-parser.js";
 import { escapeHtml } from "../utils/html.js";
 import { displayPath } from "../parser/validation-utils.js";
+import { defaultStrings, type Strings } from "../i18n/strings.js";
 
 /** Class on the card element; `<ml-map>` removes elements carrying it. */
 export const ERROR_CARD_CLASS = "ml-map-error";
@@ -20,6 +21,8 @@ export interface ErrorCardOptions {
   hint?: string;
   /** Append the "How to configure" box (shown when no config was given). */
   showHelp?: boolean;
+  /** The document's UI strings ("How to fix it:"); English by default. */
+  strings?: Strings;
 }
 
 const HELP_SECTION = `
@@ -88,7 +91,7 @@ export function createErrorCard(doc: Document, options: ErrorCardOptions): HTMLE
     .join("");
 
   const hint = options.hint
-    ? `<div class="ml-map-error-hint" style="margin-top: 12px; padding: 12px; background: #fff7ed; border-radius: 6px; color: #7c2d12; font-size: 14px; line-height: 1.5;"><strong>How to fix it:</strong> ${escapeHtml(options.hint)}</div>`
+    ? `<div class="ml-map-error-hint" style="margin-top: 12px; padding: 12px; background: #fff7ed; border-radius: 6px; color: #7c2d12; font-size: 14px; line-height: 1.5;"><strong>${escapeHtml((options.strings ?? defaultStrings)("maplibre-yaml.ErrorCard.HowToFix"))}</strong> ${escapeHtml(options.hint)}</div>`
     : "";
 
   const template = doc.createElement("template");

@@ -36,7 +36,8 @@ import {
   sampleEvenly,
 } from "./palettes";
 import { computeBreaks, fieldStats, type ClassifyMethod } from "./breaks";
-import { formatNumber, type NumberFormatOptions } from "../utils/format-number";
+import { formatNumber, type NumberFormatOptions } from "../i18n/number-format";
+import { defaultStrings, type Strings } from "../i18n/strings";
 
 /** The layer `metadata` key the compiled classify block is recorded under. */
 export const CLASSIFY_METADATA_KEY = "maplibre-yaml:classify";
@@ -45,15 +46,6 @@ export const CLASSIFY_METADATA_KEY = "maplibre-yaml:classify";
 export const DEFAULT_NO_DATA_COLOR = "#cccccc";
 /** Colour for categories that are not listed, when none is written. */
 export const DEFAULT_OTHER_COLOR = "#969696";
-
-/**
- * The legend's words for the two non-class entries. One table so the
- * translatable-strings work (0.9 i18n) can route them through `locale:`.
- */
-export const CLASSIFY_STRINGS = {
-  noData: "No data",
-  other: "Other",
-} as const;
 
 /**
  * The colour paint properties `classify:` can drive, per layer type — the
@@ -539,7 +531,8 @@ function autoFractionDigits(values: readonly number[]): number {
 export function classLabels(
   breaks: readonly number[],
   range?: { min?: number; max?: number },
-  format?: NumberFormatOptions
+  format?: NumberFormatOptions,
+  defaultLocale?: string
 ): string[] {
   const min = range?.min;
   const max = range?.max;
@@ -552,7 +545,7 @@ export function classLabels(
       : autoFractionDigits(edges);
   const options: NumberFormatOptions =
     digits === undefined ? (format ?? {}) : { ...(format ?? {}), "max-fraction-digits": digits };
-  const fmt = (v: number) => formatNumber(v, options);
+  const fmt = (v: number) => formatNumber(v, options, defaultLocale);
   const span = (a: number, b: number) => (a < 0 || b < 0 ? `${fmt(a)} – ${fmt(b)}` : `${fmt(a)}–${fmt(b)}`);
 
   if (breaks.length === 0) {
@@ -568,10 +561,13 @@ export function classLabels(
 }
 
 /** A heading for an unlabelled layer: the field, or the rate it maps. */
-function defaultTitle(record: ClassifyRecord): string {
+function defaultTitle(record: ClassifyRecord, defaultLocale?: string): string {
   if (record.normalize === undefined) return record.field;
+  const locale = record.format?.locale ? { locale: record.format.locale } : {};
   const per =
-    record.multiply !== undefined && record.multiply !== 1 ? `${formatNumber(record.multiply, record.format?.locale ? { locale: record.format.locale } : {})} ` : "";
+    record.multiply !== undefined && record.multiply !== 1
+      ? `${formatNumber(record.multiply, locale, defaultLocale)} `
+      : "";
   return `${record.field} per ${per}${record.normalize}`;
 }
 
@@ -589,17 +585,22 @@ function shapeFor(layerType: string | undefined): "circle" | "square" | "line" {
  * @param options.title - The heading (the layer's `label`, else the field).
  * @param options.color - Swatch colour when the record does not classify
  *   colour (radius only): the layer's own literal colour.
+ * @param options.strings - The document's UI strings ("No data" and "Other"
+ *   are `maplibre-yaml.Classify.NoData` / `.Other`).
+ * @param options.locale - Number locale when `format:` names none (the
+ *   page's language).
  * @returns no lines while a `method:` waits for its data.
  */
 export function classifyLegendEntries(
   record: ClassifyRecord,
-  options: { title?: string; layerType?: string; color?: string } = {}
+  options: { title?: string; layerType?: string; color?: string; strings?: Strings; locale?: string } = {}
 ): ClassifyLegendEntry[] {
+  const strings = options.strings ?? defaultStrings;
   if (isPending(record)) return [];
   const shape = shapeFor(options.layerType);
   const fallback = options.color ?? "#888888";
   const entries: ClassifyLegendEntry[] = [
-    { heading: true, label: options.title ?? defaultTitle(record), color: "transparent" },
+    { heading: true, label: options.title ?? defaultTitle(record, options.locale), color: "transparent" },
   ];
   const stats = record.stats;
   const radiusOf = (r: number | undefined) => (r !== undefined ? { size: Math.max(2, r * 2) } : {});
@@ -607,11 +608,15 @@ export function classifyLegendEntries(
   if (record.kind === "categorical") {
     for (const c of record.categories ?? []) entries.push({ label: c.value, color: c.color, shape });
     if (!isHide(record.other) && (stats === undefined || (stats.other ?? 0) > 0)) {
-      entries.push({ label: CLASSIFY_STRINGS.other, color: record.other ?? DEFAULT_OTHER_COLOR, shape });
+      entries.push({
+        label: strings("maplibre-yaml.Classify.Other"),
+        color: record.other ?? DEFAULT_OTHER_COLOR,
+        shape,
+      });
     }
   } else {
     const breaks = record.breaks ?? [];
-    const labels = classLabels(breaks, stats, record.format);
+    const labels = classLabels(breaks, stats, record.format, options.locale);
     labels.forEach((label, i) => {
       entries.push({
         label,
@@ -623,7 +628,7 @@ export function classifyLegendEntries(
   }
   if (!isHide(record.noData) && (stats === undefined || stats.noData > 0)) {
     entries.push({
-      label: CLASSIFY_STRINGS.noData,
+      label: strings("maplibre-yaml.Classify.NoData"),
       color: record.property ? record.noData : fallback,
       shape: record.radius ? "circle" : shape,
       ...radiusOf(record.radius?.[0]),

@@ -171,7 +171,7 @@ test("the legend lists each classified layer with real class edges", async ({ pa
   const { errors } = await openClassified(page);
   const legend = page.locator(".ml-map-legend");
   await expect(legend).toBeVisible();
-  const lines = await legend.locator(".legend-heading, .legend-label").allTextContents();
+  const lines = await legend.locator(".legend-group-heading, .legend-label").allTextContents();
   expect(lines).toEqual([
     "Value",
     "5–12",
@@ -204,7 +204,7 @@ test("a story's pinned legend shows the classes its map computed", async ({ page
   await page.goto(STORY, { waitUntil: "domcontentloaded" });
   const panel = page.locator(".scrolly-legend-panel");
   await expect(panel).toContainText("5–12", { timeout: 60_000 });
-  const lines = await panel.locator(".legend-heading, .legend-label").allTextContents();
+  const lines = await panel.locator(".legend-group-heading, .legend-label").allTextContents();
   expect(lines).toEqual(["Value", "5–12", "12–30", "30–50", "No data"]);
   await page.screenshot({ path: "e2e/screenshots/classify-story.png" });
   expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
@@ -235,7 +235,7 @@ test("a classified map with no legend: block gets its legend automatically", asy
   const legend = page.locator(".ml-map-chrome-top-left .ml-map-legend");
   await expect(legend).toBeVisible();
   await expect(legend.locator("summary")).toHaveText("Legend");
-  const lines = await legend.locator(".legend-heading, .legend-label").allTextContents();
+  const lines = await legend.locator(".legend-group-heading, .legend-label").allTextContents();
   expect(lines).toEqual(["Cases per 100k", "10–50", "50–200", "200–300", "No data"]);
   mkdirSync("e2e/screenshots", { recursive: true });
   await page.screenshot({ path: "e2e/screenshots/classify-rate-auto-legend.png" });
@@ -249,10 +249,35 @@ test("a classified story with no legend: pins an automatic legend, and its map b
   const panel = page.locator(".scrolly-legend-panel");
   await expect(panel).toContainText("50–200", { timeout: 60_000 });
   await expect(page.locator(".scrolly-legend-toggle")).toHaveText("Legend");
-  const lines = await panel.locator(".legend-heading, .legend-label").allTextContents();
+  const lines = await panel.locator(".legend-group-heading, .legend-label").allTextContents();
   expect(lines).toEqual(["Cases per 100k", "10–50", "50–200", "200–300", "No data"]);
   // The pinned legend is the only one: no map-chrome legend under the cards.
   await expect(page.locator("ml-map .ml-map-legend")).toHaveCount(0);
   await page.screenshot({ path: "e2e/screenshots/classify-story-auto.png" });
+  expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+});
+
+test("classify + fitTo on one url: source: one fetch, built framed, first frame already classified", async ({ page }) => {
+  const errors = await guard(page);
+  let requests = 0;
+  await page.route("**/data/classify-rates.geojson", async (route) => {
+    requests += 1;
+    await new Promise((resolve) => setTimeout(resolve, 300)); // inside the fitTo wait
+    await route.continue();
+  });
+  await page.goto("/examples/verification/20-classify-fit.html", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => (window as any).__first !== null, undefined, { timeout: 60_000 });
+  await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+  const first = await page.evaluate(() => (window as any).__first);
+  // Framed on the districts (lng 0–3, lat 0–2), not the document's world view.
+  expect(
+    Math.abs(first.lng - 1.5) < 0.3 && Math.abs(first.lat - 1) < 0.3 && first.zoom > 5,
+    JSON.stringify(first)
+  ).toBe(true);
+  // Drawn with the computed classes from its first frame, not the pending flat colour.
+  expect(first.paint[0]).toBe("let");
+  expect(JSON.stringify(first.paint)).toContain('"step"');
+  await expect(page.locator(".ml-map-legend .legend-label").first()).toHaveText("10–60");
+  expect(requests).toBe(1);
   expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
 });

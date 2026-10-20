@@ -1,0 +1,27 @@
+# classify + fitTo on the same url: source (0.9). The document's camera is
+# the whole world; fitTo frames the fetched districts. <ml-map> fetches the
+# file once, while the page starts: the map is built already framed, and the
+# quantile breaks are computed from the same data before the layer is drawn.
+type: map
+id: classify-fit
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo: { source: districts, padding: 40 }
+sources:
+  districts:
+    type: geojson
+    url: "/examples/verification/data/classify-rates.geojson"
+layers:
+  - id: rate
+    type: fill
+    source: districts
+    label: Cases per 100k
+    classify:
+      field: cases
+      normalize: population
+      multiply: 100000
+      method: quantile
+      classes: 3
+      palette: Purples

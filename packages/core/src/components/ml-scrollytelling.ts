@@ -74,6 +74,7 @@ import {
   errorCardHTML,
   footerHTML,
   railButtonsHTML,
+  storyStrings,
   type StoryProblem,
 } from "../scrollytelling/render";
 import { injectScrollytellingStyles } from "../scrollytelling/styles";
@@ -81,7 +82,8 @@ import { normalizeDocumentBase, resolveDocumentUrl } from "../utils/document-bas
 import { displayPath } from "../parser/validation-utils.js";
 import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
-import { isLocalPage } from "./map-notice.js";
+import { defaultStrings } from "../i18n/strings.js";
+import { showAuthorHints } from "./author-hints.js";
 import {
   StoryLegend,
   storyLegendConfig,
@@ -146,7 +148,7 @@ interface Waiter {
  */
 export class MLScrollytelling extends HTMLElement {
   static get observedAttributes(): string[] {
-    return ["src", "config", "base", "quiet"];
+    return ["src", "config", "base", "quiet", "debug"];
   }
 
   /** The validated story being shown, or `null`. */
@@ -216,24 +218,25 @@ export class MLScrollytelling extends HTMLElement {
     if (this.hasAttribute("quiet")) return;
     // Two readers, as on the map's notice (ml-aot.70): a visitor gets one
     // plain line; the fix sits under "Details for the site's author", open
-    // while the page is served from this computer, closed on a published site.
+    // while the author is developing (or with `debug`), closed on a
+    // published site (ml-aot.57).
     const doc = this.ownerDocument;
+    const t = this._story ? storyStrings(this._story) : defaultStrings;
     const kind = media instanceof HTMLVideoElement ? "video" : "image";
     const note = doc.createElement("div");
     note.className = "chapter-media-missing";
     note.setAttribute("role", "status");
     const lead = doc.createElement("p");
     lead.className = "chapter-media-missing-lead";
-    lead.textContent = `This chapter's ${kind} couldn't load.`;
+    lead.textContent = t(
+      kind === "video" ? "maplibre-yaml.Story.VideoMissing" : "maplibre-yaml.Story.ImageMissing"
+    );
     const details = doc.createElement("details");
-    details.open = isLocalPage(doc);
+    details.open = showAuthorHints(this);
     const summary = doc.createElement("summary");
-    summary.textContent = "Details for the site's author";
+    summary.textContent = t("maplibre-yaml.Notice.AuthorDetails");
     const fix = doc.createElement("p");
-    fix.textContent =
-      `${kind === "video" ? "Video" : "Image"} "${written}" didn't load. ` +
-      `Check the file name and folder — capital letters count (Photo.JPG and photo.jpg are ` +
-      `different files on most web servers).`;
+    fix.textContent = t("maplibre-yaml.Story.MediaMissingHint", { src: written });
     details.append(summary, fix);
     note.append(lead, details);
     holder.appendChild(note);
@@ -395,6 +398,13 @@ export class MLScrollytelling extends HTMLElement {
       const mapEl = this.mapElement;
       if (mapEl) mapEl.toggleAttribute("quiet", newValue !== null);
       if (newValue !== null) this.querySelectorAll(".chapter-media-missing").forEach((n) => n.remove());
+      return;
+    }
+    if (name === "debug") {
+      // Author hints anywhere (ml-aot.57), on the story's map too. (The
+      // attribute also outlines the chapters, as it always has.)
+      const mapEl = this.mapElement;
+      if (mapEl) mapEl.toggleAttribute("debug", newValue !== null);
       return;
     }
     if (oldValue === newValue || !this.initialized) return;
@@ -683,7 +693,8 @@ export class MLScrollytelling extends HTMLElement {
         rail.className = "chapter-markers";
         mapContainer.appendChild(rail);
       }
-      if (rail.tagName === "NAV") rail.setAttribute("aria-label", "Story chapters");
+      if (rail.tagName === "NAV")
+        rail.setAttribute("aria-label", storyStrings(story)("maplibre-yaml.Story.Chapters"));
       rail.innerHTML = railButtonsHTML(story);
     } else {
       rail?.remove();
@@ -718,6 +729,8 @@ export class MLScrollytelling extends HTMLElement {
     else if (mapEl.getAttribute("base") !== base) mapEl.setAttribute("base", base);
     // `quiet` on the story reaches its map (review F1): no on-page notice.
     mapEl.toggleAttribute("quiet", this.hasAttribute("quiet"));
+    // So does `debug`: the story's hints show wherever it is served (ml-aot.57).
+    mapEl.toggleAttribute("debug", this.hasAttribute("debug"));
   }
 
   /**

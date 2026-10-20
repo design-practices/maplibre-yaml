@@ -76,8 +76,10 @@ footer: "..."        # Optional footer HTML
 |----------|------|----------|---------|-------------|
 | `type` | `"scrollytelling"` | Yes | - | Block type |
 | `id` | string | Yes | - | Unique identifier |
-| `config` | object | Yes | - | Base map configuration |
+| `config` | object | Yes | - | Base map configuration (its `locale:` also translates the story's own text: the legend button, the chapter rail — see [Accessibility & languages](/guides/accessibility-languages/)) |
 | `chapters` | array | Yes | - | Story chapters (min: 1) |
+| `title` | string | No | - | The story map's name for screen readers (default: "Map") |
+| `description` | string | No | - | What the story map shows, in a sentence or two, read by screen readers |
 | `theme` | `"light"` \| `"dark"` | No | `"light"` | Visual theme |
 | `showMarkers` | boolean | No | `false` | Show a navigation rail: one dot per chapter at the right edge of the page, which readers can click to jump to a chapter. It does not put markers on the map |
 | `markerColor` | string | No | - | Fill color of the rail's dots. Unset, the dots are white with a dark outline and the current one is larger and dark, which stand out on any basemap |
@@ -594,7 +596,8 @@ and never moves while the story scrolls.
   chapter rail), or top-right on a wide screen whose cards are all
   `alignment: left`.
 - **Open or a button.** With `collapsed: auto` (the default) the legend is a
-  compact button labelled "Legend" (its `title` heads the open panel) on phones,
+  compact button labelled "Legend" (its `title` heads the open panel; the
+  button's word is `maplibre-yaml.Legend.Title` in `config.locale`) on phones,
   upright or on their side, and on wide screens where cards pass its corner
   (cards on both sides, or full-width). It is open everywhere else, where no
   card ever reaches it. `collapsed: true` always starts it as a button;

@@ -665,6 +665,35 @@ describe("LayerManager", () => {
           );
         });
       });
+
+      it("awaits a load the host already started instead of fetching again (ml-aot.75)", async () => {
+        const fetch = vi.fn(async () => okResponse());
+        vi.stubGlobal("fetch", fetch);
+        const setData = vi.fn();
+        let land!: (fc: typeof remoteFC) => void;
+        const pending = new Promise<typeof remoteFC>((resolve) => (land = resolve));
+        const prefetched = new LayerManager(mockMap, callbacks, { pending: { quakes: pending } });
+        prefetched.registerSources({
+          quakes: { type: "geojson", url: "https://example.com/quakes.geojson" },
+        });
+        mockMap.getSource = vi.fn((id: string) => (id === "quakes" ? { setData } : undefined));
+        expect(callbacks.onDataLoading).toHaveBeenCalledWith("quakes");
+        land(remoteFC);
+        await vi.waitFor(() => expect(setData).toHaveBeenCalledWith(remoteFC));
+        expect(callbacks.onDataLoaded).toHaveBeenCalledWith("quakes", 1);
+        expect(prefetched.getSourceData("quakes")).toEqual(remoteFC);
+        expect(fetch).not.toHaveBeenCalled();
+      });
+
+      it("a pending load that fails is reported like a failed fetch", async () => {
+        const failed = Promise.reject(Object.assign(new Error("HTTP 404: Not Found for q"), { url: "q" }));
+        failed.catch(() => {});
+        const prefetched = new LayerManager(mockMap, callbacks, { pending: { quakes: failed } });
+        prefetched.registerSources({ quakes: { type: "geojson", url: "q" } });
+        await vi.waitFor(() =>
+          expect(callbacks.onDataError).toHaveBeenCalledWith("quakes", expect.objectContaining({ url: "q" }))
+        );
+      });
     });
   });
 

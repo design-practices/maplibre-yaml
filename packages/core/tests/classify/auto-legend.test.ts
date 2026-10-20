@@ -103,7 +103,7 @@ describe("plain map", () => {
     expect(legend).not.toBeNull();
     expect(legend!.querySelector("summary")!.textContent).toBe("Legend");
     expect(legend!.querySelector("details")!.open).toBe(true);
-    const lines = [...legend!.querySelectorAll(".legend-heading, .legend-label")].map((n) => n.textContent);
+    const lines = [...legend!.querySelectorAll(".legend-group-heading, .legend-label")].map((n) => n.textContent);
     expect(lines).toEqual(["Value", "3–10", "10–12", "No data"]);
   });
 
@@ -115,12 +115,61 @@ describe("plain map", () => {
   it("an authored legend: block behaves as before", () => {
     const container = render(mapDoc("legend: { position: bottom-right, title: Mine }"));
     const legend = container.querySelector(".ml-map-chrome-bottom-right .ml-map-legend");
-    expect(legend!.querySelector("summary")!.textContent).toBe("Mine");
+    // The toggle always reads "Legend"; the author's title heads the panel.
+    expect(legend!.querySelector("summary")!.textContent).toBe("Legend");
+    expect(legend!.querySelector(".legend-heading")!.textContent).toBe("Mine");
   });
 
   it("no classified layer and no legend: block → no legend (unchanged)", () => {
     const container = render(mapDoc("", "paint: { circle-color: red }"));
     expect(container.querySelector(".ml-map-legend")).toBeNull();
+  });
+});
+
+describe("fetched data handed over by the fitTo prefetch (#160)", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("computes the breaks from prefetchedData before the layer is added (first frame classified)", async () => {
+    const parsed = YAMLParser.safeParseMapBlock(`type: map
+id: m
+config: { center: [0, 0], zoom: 2, mapStyle: "https://example.com/style.json" }
+sources:
+  pts: { type: geojson, url: /pts.geojson }
+layers:
+  - id: a
+    type: circle
+    source: pts
+    classify: { field: v, method: quantile, classes: 2, colors: [red, blue] }
+`);
+    const model = toModel(parsed.data as never);
+    // What <ml-map> does when the prefetch landed in time.
+    const sources = denormalizeSources(model)!;
+    const withData = {
+      ...sources,
+      pts: { ...sources["pts"], prefetchedData: JSON.parse(DATA) },
+    } as never;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const renderer = new MapRenderer(
+      container,
+      denormalizeConfig(model),
+      denormalizeLayers(model),
+      denormalizeOptions(model),
+      withData
+    );
+    const map = renderer.getMap() as any;
+    const added = new Set<string>();
+    map.addSource = vi.fn((id: string) => added.add(id));
+    map.getSource = vi.fn((id: string) => (added.has(id) ? { setData: vi.fn() } : undefined));
+    map.emit("load");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const layer = map.addLayer.mock.calls.map((c: unknown[]) => c[0]).find((l: any) => l.id === "a");
+    expect(layer.paint["circle-color"][0]).toBe("let");
+    expect(JSON.stringify(layer.paint["circle-color"])).toContain(
+      '["step",["to-number",["var","value"]],"red",12,"blue"]'
+    );
   });
 });
 

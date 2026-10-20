@@ -107,6 +107,66 @@ const PopupLinkTargetSchema = z.union([
   }),
 ]);
 
+/** A popup number format: MapLibre's `number-format` options. */
+export interface PopupNumberFormat {
+  locale?: string;
+  currency?: string;
+  unit?: string;
+  "min-fraction-digits"?: number;
+  "max-fraction-digits"?: number;
+}
+
+/**
+ * MapLibre `number-format` options for a popup value, formatted with
+ * `Intl.NumberFormat`.
+ *
+ * @remarks
+ * The same names (and meaning) as the style spec's `number-format`
+ * expression, so what an author learns for a label's `text-field` works in
+ * a popup. Not `.passthrough()`: a misspelt option (`max-fractions-digits`)
+ * warns as an unknown key.
+ *
+ * @example
+ * ```yaml
+ * format: { locale: de-DE, max-fraction-digits: 1 }   # 1.234.567,9
+ * format: { currency: EUR }                          # €12.50 / 12,50 €
+ * format: { unit: kilometer, max-fraction-digits: 0 } # 12 km
+ * ```
+ */
+export const PopupNumberFormatSchema = z
+  .object({
+    locale: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("BCP 47 language tag, e.g. de-DE. Default: the page's language"),
+    currency: z
+      .string()
+      .regex(/^[A-Za-z]{3}$/, "currency is a three-letter ISO 4217 code, e.g. EUR or USD")
+      .optional()
+      .describe("ISO 4217 currency code (EUR, USD, JPY): format as money"),
+    unit: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("A unit Intl knows (kilometer, percent, celsius, ...); ignored with currency"),
+    "min-fraction-digits": z
+      .number()
+      .int()
+      .min(0)
+      .max(20)
+      .optional()
+      .describe("At least this many decimals"),
+    "max-fraction-digits": z
+      .number()
+      .int()
+      .min(0)
+      .max(20)
+      .optional()
+      .describe("At most this many decimals (rounds)"),
+  })
+  .describe("MapLibre number-format options");
+
 /**
  * Content item for popup or dynamic text rendering.
  *
@@ -117,7 +177,11 @@ const PopupLinkTargetSchema = z.union([
  * - `str` - Static text string
  * - `property` - Feature property name to interpolate
  * - `else` - Fallback value if property is missing
- * - `format` - Number format string (e.g., ",.0f" for thousands separator)
+ * - `format` - How a numeric `property` is written, with MapLibre's
+ *   `number-format` options: `locale`, `currency`, `unit`,
+ *   `min-fraction-digits`, `max-fraction-digits` (formatted with
+ *   `Intl.NumberFormat`, in the page's language unless `locale` is given).
+ *   The older d3-style string (`",.0f"`) still works.
  * - `href` - Link URL: absolute (`https:`, `http:`, `mailto:`, `tel:`) or a
  *   relative path (`/about`, `./notes.html`, `#top`). Other schemes, such as
  *   `javascript:`, render as plain text.
@@ -141,7 +205,9 @@ const PopupLinkTargetSchema = z.union([
  * @example Formatted Number
  * ```yaml
  * - property: population
- *   format: ",.0f"
+ *   format: { max-fraction-digits: 0 }
+ * - property: price
+ *   format: { currency: EUR, locale: de-DE }
  * ```
  *
  * @example Link (`str` or `text` is the link text)
@@ -158,7 +224,7 @@ export const PopupContentItemSchema: z.ZodType<{
   str?: string | { $html: string };
   property?: string;
   else?: string;
-  format?: string;
+  format?: string | PopupNumberFormat;
   href?: string;
   text?: string;
   /** Validated against LINK_TARGET_VALUES; typed as the input it accepts. */
@@ -175,9 +241,11 @@ export const PopupContentItemSchema: z.ZodType<{
     property: z.string().optional().describe("Feature property name"),
     else: z.string().optional().describe("Fallback value if property missing"),
     format: z
-      .string()
+      .union([z.string(), PopupNumberFormatSchema])
       .optional()
-      .describe('Number format string (e.g., ",.0f")'),
+      .describe(
+        "How a numeric property is written: MapLibre number-format options (locale, currency, unit, min-fraction-digits, max-fraction-digits), or an older d3-style string such as \",.0f\""
+      ),
     href: PopupLinkHrefSchema.optional().describe(
       "Link URL: absolute (https:, mailto:, ...) or a relative path"
     ),
