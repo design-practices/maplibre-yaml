@@ -109,8 +109,9 @@ describe("prepareProtocols (on the interop-resolved module)", () => {
       [{}, [{ id: "x", source: { type: "raster", url: "pmtiles://x" } }], undefined],
       [{}, [], { version: 8, sources: { b: { type: "vector", url: "pmtiles://b.pmtiles" } }, layers: [] }],
     ] as const) {
-      const failed = await prepareProtocols(sources, layers, style);
-      expect(failed?.size).toBe(0);
+      const prepared = prepareProtocols(sources, layers, style);
+      expect(prepared?.failed.size).toBe(0);
+      expect((await prepared?.readers)?.size).toBe(0);
       expect(typeof registry()["pmtiles"]).toBe("function");
       removeProtocol("pmtiles");
     }
@@ -132,7 +133,7 @@ describe("prepareProtocols (on the interop-resolved module)", () => {
       expect(fresh.prepareProtocols({ a: { type: "geojson", url: "a.geojson" } }, [])).toBeUndefined();
       expect(typeof registered()["pmtiles"]).toBe("function");
       // …one with them gets the failure to report on those sources.
-      const failed = await fresh.prepareProtocols({ a: { type: "vector", url: "a.pmtiles" } }, []);
+      const failed = await fresh.prepareProtocols({ a: { type: "vector", url: "a.pmtiles" } }, [])?.readers;
       const error = failed?.get("pmtiles");
       expect(isFormatError(error) && error.failure).toMatchObject({
         code: "chunk",
@@ -148,23 +149,25 @@ describe("prepareProtocols (on the interop-resolved module)", () => {
   it("keeps a handler the page registered first (host wins)", async () => {
     const host = async () => ({ data: {} });
     maplibregl.addProtocol("pmtiles", host as never);
-    await prepareProtocols({ a: { type: "vector", url: "a.pmtiles" } }, []);
+    await prepareProtocols({ a: { type: "vector", url: "a.pmtiles" } }, [])?.readers;
     expect(registry()["pmtiles"]).toBe(host);
   });
 
-  it("registers cog:// synchronously too, and a COG source waits on it (ml-cnv.2)", async () => {
+  it("registers cog:// synchronously too; its reader downloads without anything waiting for it (ml-cnv.2)", async () => {
     if (registry()["cog"]) removeProtocol("cog");
     expect(prepareProtocols({}, [])).toBeUndefined();
     expect(typeof registry()["cog"]).toBe("function");
-    const failed = await prepareProtocols({ e: { type: "raster-dem", url: "e.tif" } }, []);
-    expect(failed?.size).toBe(0);
+    const prepared = prepareProtocols({ e: { type: "raster-dem", url: "e.tif" } }, []);
+    // Known at once: nothing to hold the document's sources back on.
+    expect(prepared?.failed.size).toBe(0);
+    expect((await prepared?.readers)?.size).toBe(0);
     removeProtocol("cog");
   });
 
   it("keeps a cog handler the page registered first (host wins)", async () => {
     const host = async () => ({ data: {} });
     maplibregl.addProtocol("cog", host as never);
-    await prepareProtocols({ a: { type: "raster", url: "a.tif" } }, []);
+    await prepareProtocols({ a: { type: "raster", url: "a.tif" } }, [])?.readers;
     expect(registry()["cog"]).toBe(host);
     removeProtocol("cog");
   });

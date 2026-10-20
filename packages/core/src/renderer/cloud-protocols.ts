@@ -44,6 +44,24 @@ export function pmtilesUnavailable(): Error | undefined {
   return isProtocolRegistered("pmtiles") ? undefined : pmtilesProblem;
 }
 
+/** What {@link prepareProtocols} set up for one document. */
+export interface PreparedProtocols {
+  /**
+   * Formats whose protocol can't be used on this page at all (maplibre-gl
+   * too old for it), known at once: reported on their sources.
+   */
+  failed: Map<CloudFormat, Error>;
+  /**
+   * The readers the document's own sources need, downloading. Never
+   * rejects: settles with the formats whose reader couldn't be downloaded,
+   * to report on their sources. Nothing waits for it — each protocol handler
+   * waits for its own reader on its first request, so a document's other
+   * sources never wait for a reader they don't use (the COG reader is
+   * 131 KB).
+   */
+  readers: Promise<Map<CloudFormat, Error>>;
+}
+
 /**
  * Register `pmtiles://` on the module the renderer constructs maps from —
  * always, not only for a document whose own sources use it: a basemap style
@@ -58,18 +76,15 @@ export function pmtilesUnavailable(): Error | undefined {
  * request.
  *
  * @returns `undefined` when the document's own sources need no protocol;
- *   otherwise a promise (never rejecting) of the formats whose reader could
- *   not be set up or downloaded, with the error — awaited before the
- *   document's sources are added; their sources are reported and skipped.
- *   The reader's download starts here, in parallel with the basemap. A
- *   failure that only a basemap would hit is kept for
- *   {@link pmtilesUnavailable}.
+ *   otherwise what was set up ({@link PreparedProtocols}). The readers'
+ *   download starts here, in parallel with the basemap. A failure that only
+ *   a basemap would hit is kept for {@link pmtilesUnavailable}.
  */
 export function prepareProtocols(
   sources: unknown,
   layers: unknown,
   mapStyle?: unknown
-): Promise<Map<CloudFormat, Error>> | undefined {
+): PreparedProtocols | undefined {
   const needed = formatsIn(sources, layers);
   for (const f of formatsIn(inlineStyleSources(mapStyle), [])) needed.add(f);
   const failed = new Map<CloudFormat, Error>();
@@ -86,7 +101,7 @@ export function prepareProtocols(
     if (installPmtiles(host()) !== "host") ours.add("pmtiles");
   } catch (error) {
     pmtilesProblem = error instanceof Error ? error : new Error(String(error));
-    failed.set("pmtiles", pmtilesProblem);
+    if (needed.has("pmtiles")) failed.set("pmtiles", pmtilesProblem);
   }
   try {
     if (installCog(host()) !== "host") ours.add("cog");
@@ -100,17 +115,19 @@ export function prepareProtocols(
   for (const format of needed) {
     if (hasDecoder(format) && (!protocols.includes(format) || ours.has(format))) prefetchDecoder(format);
   }
-  const waitFor = protocols.filter((f) => needed.has(f) && ours.has(f) && !failed.has(f));
   if (!protocols.some((f) => needed.has(f))) return undefined;
   // The page's own handler serves these sources: no reader of ours to wait on.
-  return Promise.all(
+  const waitFor = protocols.filter((f) => needed.has(f) && ours.has(f) && !failed.has(f));
+  const unavailable = new Map<CloudFormat, Error>();
+  const readers = Promise.all(
     waitFor.map((format) =>
       getDecoder(format as "pmtiles" | "cog").then(
         () => undefined,
         (error: unknown) => {
-          failed.set(format, error instanceof Error ? error : new Error(String(error)));
+          unavailable.set(format, error instanceof Error ? error : new Error(String(error)));
         }
       )
     )
-  ).then(() => failed);
+  ).then(() => unavailable);
+  return { failed, readers };
 }

@@ -317,6 +317,60 @@ test.describe("COG with no page JavaScript", () => {
     expect(errors).toEqual([]);
   });
 
+  test("a slow COG reader holds up only the COG: the document's other layers draw without it", async ({
+    page,
+    baseURL,
+  }) => {
+    const errors = await guard(page);
+    // Hold chunks/cog.js (131 KB) until the test lets it go.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let cogAsked = false;
+    await page.route("**/chunks/cog.js", async (route) => {
+      cogAsked = true;
+      await held;
+      await route.fallback();
+    });
+    const html = `<!DOCTYPE html><html><head>
+      <link rel="stylesheet" href="${baseURL}/vendor/maplibre-gl.css" />
+      <script type="importmap">{ "imports": { "maplibre-gl": "${baseURL}/vendor/maplibre-gl.esm.js" } }</script>
+      </head><body>
+      <ml-map id="mixed" style="display:block;height:300px">
+        <script type="text/yaml">
+type: map
+id: mixed
+config: { center: [10.2, 42.15], zoom: 9.6, mapStyle: "/examples/verification/configs/local-style.json" }
+sources:
+  imagery: { type: raster, url: /gallery-assets/cloud-native/imagery.cog.tif }
+  districts: { type: geojson, url: /gallery-assets/cloud-native/districts.fgb }
+layers:
+  - { id: imagery, type: raster, source: imagery }
+  - { id: districts, type: line, source: districts, paint: { line-color: "#1d3557" } }
+        </script>
+      </ml-map>
+      <script type="module" src="${baseURL}/packages/core/register.js"></script>
+      </body></html>`;
+    await page.route("**/cog-mixed/index.html", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto("/cog-mixed/index.html", { waitUntil: "domcontentloaded" });
+    // The FlatGeobuf layer is on the map and drawn while the COG reader is
+    // still downloading.
+    await page.waitForFunction(
+      () => {
+        const map = (document.getElementById("mixed") as any)?.getMap?.();
+        return Boolean(map?.getLayer("districts") && map.querySourceFeatures("districts").length > 0);
+      },
+      undefined,
+      { timeout: 30_000 }
+    );
+    expect(cogAsked).toBe(true);
+    // Then the reader arrives and the COG draws too.
+    release();
+    await page.evaluate(() => (document.getElementById("mixed") as any).mapReady());
+    await waitForTiles(page, "#mixed", ["imagery", "districts"]);
+    await expect(page.locator("#mixed .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
   test("a strict CSP that refuses blob: workers gets a plain notice, not a silent blank (maplibre-gl 6)", async ({
     page,
   }) => {

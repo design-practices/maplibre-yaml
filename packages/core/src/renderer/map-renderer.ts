@@ -551,11 +551,11 @@ export class MapRenderer {
     if (fit && fit.kind === 'unsupported') console.warn(`[maplibre-yaml] ${fit.reason}`);
 
     // Cloud-native formats (ml-cnv): register the protocols this document's
-    // sources need (PMTiles) on the module the map is built from. Started
-    // before the map exists — never blocking it: the basemap loads in
-    // parallel — and awaited in the load handler, before the document's own
-    // sources are added (the first point anything reads them).
-    const formatsReady = prepareProtocols(sources, layers, mapStyle);
+    // sources need (PMTiles, COG) on the module the map is built from, and
+    // start downloading their readers. Started before the map exists and
+    // never waited for: each protocol handler waits for its own reader, so
+    // no other source waits for a reader it doesn't use.
+    const protocolsPrepared = prepareProtocols(sources, layers, mapStyle);
 
     // The document's `title:` is the map's accessible name. MapLibre names
     // its canvas from `locale["Map.Title"]`, so hand it the title there too:
@@ -851,25 +851,23 @@ export class MapRenderer {
       beforeAttribution: () => this.attributionGuard.scrub(),
     });
 
-    // Set up load handler. With cloud-native sources, the document's sources
-    // wait for their readers (ml-cnv) — downloaded on demand (ml-7qa.5),
-    // started before the map was constructed, so usually already here; a
-    // reader that failed to set up or download is reported on its sources
-    // with a notice and everything else renders.
+    // Set up load handler. A cloud-native reader that can't be used (set up
+    // or downloaded, ml-7qa.5) is reported on the sources that read it, with
+    // a notice; everything else renders — without waiting for any reader.
     this.map.on('load', () => {
-      if (!formatsReady) {
-        onStyleLoaded();
-        return;
-      }
-      void formatsReady.then((failed) => {
-        if (this.destroyed) return;
-        for (const [format, error] of failed) {
-          for (const sourceId of sourceIdsReading(format, sources, layers)) {
-            options.onError?.(error, false, { kind: 'source', sourceId });
+      if (protocolsPrepared) {
+        const report = (failed: Map<CloudFormat, Error>) => {
+          if (this.destroyed) return;
+          for (const [format, error] of failed) {
+            for (const sourceId of sourceIdsReading(format, sources, layers)) {
+              options.onError?.(error, false, { kind: 'source', sourceId });
+            }
           }
-        }
-        onStyleLoaded();
-      });
+        };
+        report(protocolsPrepared.failed);
+        void protocolsPrepared.readers.then(report);
+      }
+      onStyleLoaded();
     });
     const onStyleLoaded = () => {
       this.isLoaded = true;
@@ -1322,12 +1320,9 @@ export class MapRenderer {
     }
     noteLayerImageRefs(this.imageRefs, layer);
     // A layer added after load may bring its own PMTiles source (ml-cnv).
-    const formatsReady = prepareProtocols(undefined, [layer]);
-    if (formatsReady) {
-      const failed = await formatsReady;
-      const [first] = failed.values();
-      if (first) throw first;
-    }
+    const prepared = prepareProtocols(undefined, [layer]);
+    const [unusable] = prepared?.failed.values() ?? [];
+    if (unusable) throw unusable;
     layer = this.withBasemapTextFont(layer);
     await this.layerManager.addLayer(layer);
     this.eventHandler.attachEvents(layer);
