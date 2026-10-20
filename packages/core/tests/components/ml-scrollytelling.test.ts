@@ -261,6 +261,18 @@ chapters:
     document.body.appendChild(el);
     expect(caption.parentElement!.tagName).toBe("ML-MAP");
   });
+
+  it("debug reaches the story's map, so its hints show wherever it is served (ml-aot.57)", () => {
+    const el = inline(STORY_YAML);
+    el.setAttribute("debug", "");
+    document.body.appendChild(el);
+    const map = el.querySelector("ml-map")!;
+    expect(map.hasAttribute("debug")).toBe(true);
+    el.removeAttribute("debug");
+    expect(map.hasAttribute("debug")).toBe(false);
+    el.setAttribute("debug", "");
+    expect(map.hasAttribute("debug")).toBe(true);
+  });
 });
 
 describe("one error card (ml-aot.7, ml-4al)", () => {

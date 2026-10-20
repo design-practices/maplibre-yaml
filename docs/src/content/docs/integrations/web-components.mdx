@@ -478,15 +478,41 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
   `ml-map:load` and `mapReady()` resolves. The notice is written for two
   readers: it leads with "Part of this map couldn't load" for anyone visiting
   the site, and keeps the fix in a "Details for the site's author" section
-  below it. That section starts open while the page is served from your own
-  computer (`localhost`, `127.0.0.1`, a `file://` page) and closed on a
-  published site, where a click opens it.
+  below it, open while you develop and closed on a published site, where a
+  click opens it.
+- **Author hints** (in the same notice) — the map works, but the document
+  probably doesn't say what you meant: a "did you mean" for a near-miss name,
+  a key nested under `config:` that belongs at the top level, a `fitTo`
+  typo, a `center` or `bounds` that looks written [latitude, longitude], a
+  chapter naming a layer that doesn't exist, a value starting with the
+  reserved `=`. These are for you, not your visitors, so they show **only
+  while you develop** (below). A notice holding only hints leads with
+  "Notes for this map's author".
 - **Height hint** — a map with no height is invisible, so the element shows a
   short note saying to give it one, and removes it once the map has a height.
 
-Add the `quiet` attribute to keep the notice and the height hint off the page
-(for a production site that would rather fail quietly). The problems are still
-logged to the console and dispatched as events. The error card is always shown.
+**When is it "while you develop"?** Failures always show. Author hints show
+when any of these is true, and stay off the page otherwise:
+
+| Situation | Author hints |
+| --------- | ------------ |
+| The page is served from your computer: `localhost`, `127.0.0.1`, `[::1]`, or opened as a `file://` page | shown |
+| A bundler development build: `astro dev`, `vite` (their `import.meta.env.DEV`), on any address, a Codespaces URL included | shown |
+| The element has the `debug` attribute (or its `<ml-scrollytelling>` does) | shown, wherever the page is served |
+| A published site (GitHub Pages, Netlify, your own domain), including the plain CDN script, which can't know how it was built | hidden |
+| The element has `quiet` | hidden — and so are failures |
+
+Every hint is still written to the browser console, wherever the page runs.
+To check a deployed site, add `debug`:
+
+```html
+<ml-map src="/maps/city.yaml" debug></ml-map>
+```
+
+Add the `quiet` attribute to keep the notice (failures and hints) and the
+height hint off the page, for a production site that would rather fail
+quietly. The problems are still logged to the console and dispatched as
+events. `quiet` wins over `debug`. The error card is always shown.
 
 ```html
 <ml-map src="/maps/city.yaml" quiet></ml-map>
@@ -1330,6 +1356,7 @@ file.
 | `src`     | string      | URL to external YAML configuration file    |
 | `config`  | JSON string | Map configuration as stringified JSON      |
 | `quiet`   | boolean     | Keep non-fatal notices and the zero-height hint off the page ([details](#when-something-goes-wrong)) |
+| `debug`   | boolean     | Show author hints on the page wherever it is served, not only while developing ([details](#when-something-goes-wrong)) |
 | `base`    | string      | Where the paths in `src` and in the document start, for a site under a subpath (`"/my-repo/"`) ([details](#sites-under-a-subpath-github-pages)) |
 
 ### Properties
@@ -1338,6 +1365,7 @@ file.
 | -------- | ------------------ | ---------------------------------- |
 | `config` | Object or string   | Map configuration object (set/get) |
 | `quiet`  | boolean            | Reflects the `quiet` attribute     |
+| `debug`  | boolean            | Reflects the `debug` attribute     |
 | `base`   | string or `null`   | Reflects the `base` attribute; setting it re-renders the map |
 
 ### Methods

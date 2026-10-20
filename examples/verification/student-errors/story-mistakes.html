@@ -68,7 +68,10 @@ chapters:
   <script>
     // ?quiet: the same story with quiet set (review F1) — no notice, no
     // card note; the console keeps every message.
-    if (new URLSearchParams(location.search).has("quiet")) document.getElementById("story").setAttribute("quiet", "");
+    const params = new URLSearchParams(location.search);
+    if (params.has("quiet")) document.getElementById("story").setAttribute("quiet", "");
+    // ?debug: author hints wherever the page is served (ml-aot.57).
+    if (params.has("debug")) document.getElementById("story").setAttribute("debug", "");
   </script>
   <script type="module" src="../../../packages/core/register.js"></script>
 </body>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Failures always, author hints while developing</title>
+  <!--
+    ml-aot.57 — the notice splits what failed (always shown) from author
+    hints (shown only while developing, or with debug).
+    Map 1 has a failure (a data file that 404s) and three hints: a string
+    starting with the reserved "=", a center written [latitude, longitude],
+    and markers: nested under config:. Map 2 has only a hint.
+    PASS on localhost (this page as served by pnpm verify:serve):
+      map 1 — "Part of this map couldn't load", details open, the 404 line
+      AND the three hints; map 2 — "Notes for this map's author" with its hint.
+    PASS on a published host (e2e/author-hints.spec.ts serves this page as
+    students.example.org): map 1 — the same lead line, details collapsed,
+    only the 404 line; map 2 — no notice at all. With ?debug, the published
+    page shows the hints again. With ?quiet, nothing shows anywhere.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/author-hints/map.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+    ml-map { display: block; height: 380px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>localhost: failure + hints. Published host: the failure only (?debug: hints too; ?quiet: nothing).</header>
+  <main>
+    <ml-map id="mixed">
+      <script type="text/yaml">
+type: map
+id: mixed
+config:
+  center: [40.68, -73.97]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+  markers:
+    - at: [-73.97, 40.68]
+sources:
+  places:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          properties: { name: "prospect park" }
+          geometry: { type: Point, coordinates: [-73.97, 40.66] }
+        - type: Feature
+          properties: { name: "mccarren park" }
+          geometry: { type: Point, coordinates: [-73.95, 40.72] }
+  missing:
+    type: geojson
+    url: "data/not-here.geojson"
+layers:
+  - id: names
+    type: symbol
+    source: places
+    layout:
+      text-field: "=upper({name})"
+  - id: missing
+    type: circle
+    source: missing
+    paint:
+      circle-color: "#e63946"
+      </script>
+    </ml-map>
+    <ml-map id="hints-only">
+      <script type="text/yaml">
+type: map
+id: hints-only
+config:
+  center: [-73.97, 40.68]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+  legend:
+    position: top-left
+layers: []
+      </script>
+    </ml-map>
+  </main>
+  <script>
+    // ?debug / ?quiet put the attribute on both maps before they load.
+    const params = new URLSearchParams(location.search);
+    for (const name of ["debug", "quiet"]) {
+      if (params.has(name)) document.querySelectorAll("ml-map").forEach((m) => m.setAttribute(name, ""));
+    }
+  </script>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>
