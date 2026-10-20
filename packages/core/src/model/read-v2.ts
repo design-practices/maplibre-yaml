@@ -200,7 +200,7 @@ export function readV2Block(doc: MapBlockV2): MapModel {
   if (v2Popups !== undefined && v2Popups.length > 0)
     model.runtime.popups = v2Popups;
   if (runtime["legend"] !== undefined)
-    model.runtime.legend = runtime["legend"] as LegendConfig;
+    model.runtime.legend = runtime["legend"] as LegendConfig | false;
   if (runtime["container"] !== undefined)
     model.runtime.container = runtime["container"] as {
       className?: string;

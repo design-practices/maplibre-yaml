@@ -2,6 +2,8 @@
 # A choropleth: tracts coloured by median income in five quantile classes.
 # The breaks are computed from the data when it loads (GeoJSON source), and
 # the legend shows their real edges. Tracts with no value draw light grey.
+# No legend: block — a map with a classify: layer gets its legend
+# automatically (legend: false turns it off).
 # Data: synthetic tracts made for this example.
 type: map
 id: classify-choropleth
@@ -9,9 +11,6 @@ config:
   center: [-75.19, 39.936]
   zoom: 12
   mapStyle: "https://tiles.openfreemap.org/styles/positron"
-legend:
-  title: Sample City
-  position: bottom-left
 sources:
   tracts:
     type: geojson

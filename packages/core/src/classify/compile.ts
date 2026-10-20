@@ -97,6 +97,10 @@ export interface ClassifyStats {
  */
 export interface ClassifyRecord {
   field: string;
+  /** Numeric: the field is divided by this property (a rate). */
+  normalize?: string;
+  /** Numeric: the rate is multiplied by this (per 100,000 …). */
+  multiply?: number;
   kind: "numeric" | "categorical";
   /** The colour property the classes drive; absent when only `radius` is classified. */
   property?: string;
@@ -217,6 +221,8 @@ export function resolveClassify(config: ClassifyConfig, layerType: string): Clas
   const record: ClassifyRecord = {
     ...base,
     kind: "numeric",
+    ...(config.normalize !== undefined ? { normalize: config.normalize } : {}),
+    ...(config.normalize !== undefined && config.multiply !== undefined ? { multiply: config.multiply } : {}),
     ...(method ? { method, classes: count } : {}),
     ...(config.breaks ? { breaks: [...config.breaks] } : {}),
   };
@@ -245,7 +251,10 @@ export function resolveClassify(config: ClassifyConfig, layerType: string): Clas
  * @returns a new record; the template is not modified.
  */
 export function withData(template: ClassifyRecord, data: unknown): ClassifyRecord {
-  const stats = fieldStats(data, template.field, template.kind);
+  const stats = fieldStats(data, template.field, template.kind, {
+    ...(template.normalize !== undefined ? { normalize: template.normalize } : {}),
+    ...(template.multiply !== undefined ? { multiply: template.multiply } : {}),
+  });
   if (template.kind === "categorical") {
     const listed = new Set((template.categories ?? []).map((c) => c.value));
     let other = 0;
@@ -286,22 +295,42 @@ export function withData(template: ClassifyRecord, data: unknown): ClassifyRecor
 
 /** The value, read once into an expression variable. */
 const VALUE = ["var", "value"];
+/** The `normalize:` divisor, read once. */
+const DIVISOR = ["var", "divisor"];
 
 /**
- * True when `value` is a usable number: a number that is not NaN, or a
- * non-empty string `to-number` converts. Kept sentinel-free:
+ * True when a variable holds a usable number: a number that is not NaN, or
+ * a non-empty string `to-number` converts. Kept sentinel-free:
  * `to-number(v, 0) == to-number(v, 1)` exactly when `v` itself converts.
  */
-const NUMERIC_VALUE = [
-  "any",
-  ["all", ["==", ["typeof", VALUE], "number"], ["==", VALUE, VALUE]],
-  [
-    "all",
-    ["==", ["typeof", VALUE], "string"],
-    ["!=", VALUE, ""],
-    ["==", ["to-number", VALUE, 0], ["to-number", VALUE, 1]],
-  ],
-];
+function isNumeric(v: unknown[]): unknown[] {
+  return [
+    "any",
+    ["all", ["==", ["typeof", v], "number"], ["==", v, v]],
+    ["all", ["==", ["typeof", v], "string"], ["!=", v, ""], ["==", ["to-number", v, 0], ["to-number", v, 1]]],
+  ];
+}
+
+const NUMERIC_VALUE = isNumeric(VALUE);
+
+/**
+ * How a numeric record reads its input: the `let` bindings, the validity
+ * test, and the number to classify. With `normalize:` the input is a rate —
+ * `value ÷ divisor (× multiply)` — valid only when both are numbers and the
+ * divisor is not 0, so a missing or zero population is no data rather than
+ * Infinity or NaN.
+ */
+function numericInput(record: ClassifyRecord): { bindings: unknown[]; valid: unknown; input: unknown } {
+  if (record.normalize === undefined) {
+    return { bindings: ["value", ["get", record.field]], valid: NUMERIC_VALUE, input: ["to-number", VALUE] };
+  }
+  const ratio = ["/", ["to-number", VALUE], ["to-number", DIVISOR]];
+  return {
+    bindings: ["value", ["get", record.field], "divisor", ["get", record.normalize]],
+    valid: ["all", NUMERIC_VALUE, isNumeric(DIVISOR), ["!=", ["to-number", DIVISOR], 0]],
+    input: record.multiply !== undefined ? ["*", ratio, record.multiply] : ratio,
+  };
+}
 
 /** `["step", input, out0, b1, out1, …]`, or the single output for one class. */
 function step(input: unknown, outputs: readonly unknown[], breaks: readonly number[]): unknown {
@@ -313,21 +342,20 @@ function step(input: unknown, outputs: readonly unknown[], breaks: readonly numb
 
 /** Numeric property expression: guarded unless no-data features are filtered out. */
 function numericExpression(
-  field: string,
+  record: ClassifyRecord,
   outputs: readonly unknown[],
   breaks: readonly number[],
   noDataOutput: unknown | undefined
 ): unknown {
+  const { bindings, valid, input } = numericInput(record);
   if (noDataOutput === undefined) {
     // noData: hide — the filter guarantees a usable value.
-    return step(["to-number", ["get", field]], outputs, breaks);
+    if (record.normalize === undefined) {
+      return step(["to-number", ["get", record.field]], outputs, breaks);
+    }
+    return ["let", ...bindings, step(input, outputs, breaks)];
   }
-  return [
-    "let",
-    "value",
-    ["get", field],
-    ["case", NUMERIC_VALUE, step(["to-number", VALUE], outputs, breaks), noDataOutput],
-  ];
+  return ["let", ...bindings, ["case", valid, step(input, outputs, breaks), noDataOutput]];
 }
 
 /** The compiled form of a record. */
@@ -375,7 +403,7 @@ export function compileClassify(record: ClassifyRecord): CompiledClassify {
     return { paint, ...(filters.length > 0 ? { filter: filters[0] as unknown[] } : {}) };
   }
 
-  const filter = hideNoData ? ["let", "value", ["get", field], NUMERIC_VALUE] : undefined;
+  const filter = hideNoData ? ["let", ...numericInput(record).bindings, numericInput(record).valid] : undefined;
   const breaks = record.breaks;
   if (record.property && record.colors && record.colors.length > 0) {
     if (breaks === undefined) {
@@ -387,7 +415,7 @@ export function compileClassify(record: ClassifyRecord): CompiledClassify {
       ];
     } else {
       paint[record.property] = numericExpression(
-        field,
+        record,
         record.colors,
         breaks,
         hideNoData ? undefined : record.noData
@@ -398,7 +426,7 @@ export function compileClassify(record: ClassifyRecord): CompiledClassify {
     paint["circle-radius"] =
       breaks === undefined
         ? record.radius[0]
-        : numericExpression(field, record.radius, breaks, hideNoData ? undefined : record.radius[0]);
+        : numericExpression(record, record.radius, breaks, hideNoData ? undefined : record.radius[0]);
   }
   return { paint, ...(filter ? { filter } : {}) };
 }
@@ -433,6 +461,33 @@ export function applyClassifyToSpec(
       : {};
   out["metadata"] = { ...metadata, [CLASSIFY_METADATA_KEY]: record };
   return out;
+}
+
+/**
+ * Whether any layer is classified — compiled (metadata record) or still a raw
+ * `classify:` block (a story's own `layers:`).
+ */
+export function hasClassifiedLayer(layers: readonly unknown[] | undefined): boolean {
+  return (layers ?? []).some(
+    (layer) =>
+      classifyRecordOf(layer) !== undefined ||
+      (layer !== null && typeof layer === "object" && typeof (layer as Record<string, unknown>)["classify"] === "object")
+  );
+}
+
+/**
+ * The legend a map builds (0.9): the authored `legend:` block; else, when a
+ * layer is classified, an automatic one with the schema's defaults (a
+ * thematic map without its key is not readable); `legend: false` — none.
+ */
+export function effectiveLegend<T extends object>(
+  legend: T | false | undefined,
+  layers: readonly unknown[] | undefined,
+  automatic: T
+): T | undefined {
+  if (legend === false) return undefined;
+  if (legend !== undefined) return legend;
+  return hasClassifiedLayer(layers) ? automatic : undefined;
 }
 
 /** The record a layer (spec or renderer layer) carries in its metadata, if any. */
@@ -512,6 +567,14 @@ export function classLabels(
   return labels;
 }
 
+/** A heading for an unlabelled layer: the field, or the rate it maps. */
+function defaultTitle(record: ClassifyRecord): string {
+  if (record.normalize === undefined) return record.field;
+  const per =
+    record.multiply !== undefined && record.multiply !== 1 ? `${formatNumber(record.multiply, record.format?.locale ? { locale: record.format.locale } : {})} ` : "";
+  return `${record.field} per ${per}${record.normalize}`;
+}
+
 /** The swatch shape for a layer type. */
 function shapeFor(layerType: string | undefined): "circle" | "square" | "line" {
   if (layerType === "circle") return "circle";
@@ -536,7 +599,7 @@ export function classifyLegendEntries(
   const shape = shapeFor(options.layerType);
   const fallback = options.color ?? "#888888";
   const entries: ClassifyLegendEntry[] = [
-    { heading: true, label: options.title ?? record.field, color: "transparent" },
+    { heading: true, label: options.title ?? defaultTitle(record), color: "transparent" },
   ];
   const stats = record.stats;
   const radiusOf = (r: number | undefined) => (r !== undefined ? { size: Math.max(2, r * 2) } : {});

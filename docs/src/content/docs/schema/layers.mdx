@@ -116,6 +116,8 @@ symbol layers. Full guide: [Thematic maps](/guides/thematic-maps/).
 | Key | Type | Description |
 | --- | --- | --- |
 | `field` | string | **Required.** The feature property to classify. |
+| `normalize` | string | Divide `field` by this property and classify the **rate** (cases ÷ population). A missing, zero or non-numeric divisor is no data. Numeric classes only. |
+| `multiply` | number | Scale the rate: `100` for percent, `100000` for "per 100,000". Needs `normalize:`. |
 | `breaks` | number[] | Class thresholds, as MapLibre `step`: n breaks make n + 1 classes; a value equal to a break takes the class above it. Strictly ascending. |
 | `method` | `quantile` \| `equal` \| `jenks` | Compute the breaks from the data instead — **GeoJSON sources only** (a vector tile source never holds the whole dataset). |
 | `classes` | integer 2–12 | How many classes `method:` computes. Default 5. |
@@ -129,7 +131,9 @@ symbol layers. Full guide: [Thematic maps](/guides/thematic-maps/).
 | `other` | colour \| `hide` | Categories not listed. Default grey `#969696`. |
 | `format` | object | Legend number format, with MapLibre `number-format` names: `locale`, `currency`, `unit`, `min-fraction-digits`, `max-fraction-digits`. |
 
-Exactly one of `breaks:`, `method:` or `categories:`. The compiled
+Exactly one of `breaks:`, `method:` or `categories:`. A map (or story) with
+a classified layer and no `legend:` block gets a legend automatically;
+`legend: false` turns it off. The compiled
 expression owns its paint property: `classify:` and the same property under
 `paint:` on one layer is an error. Export class: `exports` — the emitted
 style carries the compiled expression, and the layer's

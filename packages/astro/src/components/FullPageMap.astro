@@ -122,9 +122,11 @@ if (showLegend && effectiveConfig) {
   const doc = effectiveConfig as Record<string, any>;
   const legend = doc.version === 2 ? doc.runtime?.legend : doc.legend;
   const layers: any[] = Array.isArray(doc.layers) ? doc.layers : [];
+  // A `classify:` layer generates its own entries (0.9).
+  const styleLayers: any[] = Array.isArray(doc.style?.layers) ? doc.style.layers : [];
   const hasEntries =
     (Array.isArray(legend?.items) && legend.items.length > 0) ||
-    layers.some((l) => l?.legend || l?.runtime?.legend);
+    [...layers, ...styleLayers].some((l) => l?.legend || l?.runtime?.legend || l?.classify);
   if (!hasEntries) {
     console.warn(
       `FullPageMap: showLegend is set but no layer declares \`legend:\` (and the legend has no \`items:\`) — no legend will show. Add \`legend: { label, color }\` to the layers that should appear.`

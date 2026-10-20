@@ -616,6 +616,11 @@ legend:
 A `slot="legend"` child of the story fills the same panel with your own markup
 instead of the entries.
 
+A story with a [`classify:`](/guides/thematic-maps/) layer pins a legend even
+without a `legend:` block, by the same rules (a "Legend" button where cards
+pass its corner, open elsewhere), listing the layer's classes; `legend: false`
+turns it off. The story's map never draws a second legend under the cards.
+
 Everything else on the map stays put too. MapLibre's controls (scale bar,
 attribution, zoom buttons), corner slots, the params panel and the on-map
 notice sit in their corners under the cards: a card passes over a corner while

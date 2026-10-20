@@ -188,6 +188,35 @@ On a circle layer, `radius:` sizes each class — the same breaks drive
 Leave out `palette:`/`colors:` and only the radius is classified (the layer's
 own `circle-color` stays); features with no value are then hidden.
 
+## Rates, not counts
+
+A map of raw counts mostly shows where people live: the biggest tracts have
+the most of everything. Map a **rate** instead — `normalize:` divides the field
+by another property, and `multiply:` scales the result:
+
+```yaml
+classify:
+  field: cases            # the count
+  normalize: population   # ÷ the people it happened to
+  multiply: 100000        # × 100,000 → cases per 100,000 residents
+  method: jenks           # breaks are computed on the rate
+  palette: OrRd
+```
+
+<LiveMap src="/configs/classify/rate.yaml" height="440px" caption="Cases per 100,000 residents: the legend's edges are rates" />
+
+- Breaks — your own `breaks:` or a computed `method:` — are in the units of
+  the rate, and the legend shows the rate. Without a `label:`, the legend
+  heading names it (`cases per 100,000 population`).
+- A tract whose population is missing, 0 or not a number is **no data**, as is
+  one whose count is missing: the compiled expression checks before it
+  divides, so no feature is ever coloured by Infinity or NaN.
+- `normalize:` works for colour and for `radius:`; it needs numeric classes
+  (not `categories:`), and `multiply:` needs `normalize:`.
+
+The compiled input is `["/", ["to-number", value], ["to-number", divisor]]`
+(times `multiply`), inside the same `let`/`case` guard as below.
+
 ## No data
 
 A feature has **no data** when its value is null or missing, an empty string,
@@ -224,9 +253,11 @@ edges**, and a "No data" line:
 - "Other" and "No data" only when they can occur (with GeoJSON data, only when
   some feature actually has no data).
 
-The legend appears when the document has a `legend:` block (as for any
-layer's legend entry). Number formatting follows the reader's locale; set it
-with MapLibre's own `number-format` option names:
+A map with a classified layer gets its legend **automatically** — even with
+no `legend:` block — in the default place (top-left, open, headed "Legend");
+a story pins one by its usual rules. Write a `legend:` block to place or title
+it, or `legend: false` to have none. Number formatting follows the reader's
+locale; set it with MapLibre's own `number-format` option names:
 
 ```yaml
 classify:
@@ -342,4 +373,6 @@ Validation catches the common slips, at the line they happen on:
 - a palette with too few colours for the classes;
 - `method:` on a vector tile source;
 - `classify:` and the same paint property both written;
-- `radius:` on a layer that is not a circle layer.
+- `radius:` on a layer that is not a circle layer;
+- `normalize:` on `categories:`, a field divided by itself, or `multiply:`
+  without `normalize:` (and `normalise:` gets a "did you mean").

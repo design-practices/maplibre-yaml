@@ -739,7 +739,8 @@ export function projectStyle(
   // field cannot silently opt out: registered fields report with their
   // wording, and an unknown one still surfaces generically.
   for (const [construct, value] of Object.entries(model.runtime)) {
-    if (construct === "map" || value === undefined) continue;
+    // `legend: false` asks for no legend — nothing to lose on export.
+    if (construct === "map" || value === undefined || value === false) continue;
     const definition = exportClasses.get(construct);
     if (definition) {
       // A exports-with-fallback construct reaching the projection UN-lowered means

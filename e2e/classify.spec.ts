@@ -18,6 +18,8 @@ import { mkdirSync } from "node:fs";
 
 const PAGE = "/examples/verification/18-classify.html";
 const STORY = "/examples/verification/story-layout/index.html?doc=classify";
+const RATE = "/examples/verification/19-classify-rate.html";
+const STORY_AUTO = "/examples/verification/story-layout/index.html?doc=classify-auto";
 
 /** Fail on page errors and off-origin requests (hermetic). */
 async function guard(page: Page): Promise<string[]> {
@@ -73,7 +75,11 @@ async function sample(page: Page, points: Array<{ at: [number, number]; dx?: num
   });
 }
 
-async function openClassified(page: Page): Promise<{ errors: string[]; classified: Record<string, any> }> {
+async function openClassified(
+  page: Page,
+  url = PAGE,
+  layers = ["grid", "towns", "kinds"]
+): Promise<{ errors: string[]; classified: Record<string, any> }> {
   const errors = await guard(page);
   await page.addInitScript(() => {
     (window as any).__classified = {};
@@ -82,20 +88,20 @@ async function openClassified(page: Page): Promise<{ errors: string[]; classifie
       (window as any).__classified[d.layerId] = d.classify;
     });
   });
-  await page.goto(PAGE, { waitUntil: "domcontentloaded" });
-  // The fetched grid computes its breaks when the data lands.
-  await page.waitForFunction(() => (window as any).__classified?.grid?.breaks?.length === 2, undefined, {
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  // The fetched layer reports its classes (computed or with the data's stats).
+  await page.waitForFunction((id) => (window as any).__classified?.[id]?.stats !== undefined, layers[0], {
     timeout: 60_000,
   });
   await page.waitForFunction(
-    () => {
+    (ids) => {
       const map = (document.getElementById("map") as any)?.getMap?.();
       if (!map || !map.loaded()) return false;
-      return ["grid", "towns", "kinds"].every(
+      return (ids as string[]).every(
         (id) => (map.queryRenderedFeatures(undefined, { layers: [id] }) ?? []).length > 0
       );
     },
-    undefined,
+    layers,
     { timeout: 30_000 }
   );
   await page.evaluate(
@@ -201,5 +207,52 @@ test("a story's pinned legend shows the classes its map computed", async ({ page
   const lines = await panel.locator(".legend-heading, .legend-label").allTextContents();
   expect(lines).toEqual(["Value", "5–12", "12–30", "30–50", "No data"]);
   await page.screenshot({ path: "e2e/screenshots/classify-story.png" });
+  expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+});
+
+const PURPLES = ["#efedf5", "#bcbddc", "#756bb1"];
+
+test("normalize: classes the rate (cases per 100k); a zero or missing value is no data", async ({ page }) => {
+  const { errors, classified } = await openClassified(page, RATE, ["rate"]);
+  expect(classified.rate).toMatchObject({ normalize: "population", multiply: 100000, breaks: [50, 200] });
+  expect(classified.rate.stats).toMatchObject({ min: 10, max: 300, noData: 2 });
+  // Bottom row: 10, 60, 300 per 100k. Top row: population 0, "8000" (150), no cases.
+  const cells = await sample(page, [
+    { at: [0.5, 0.5] },
+    { at: [1.5, 0.5] },
+    { at: [2.5, 0.5] },
+    { at: [0.5, 1.5] },
+    { at: [1.5, 1.5] },
+    { at: [2.5, 1.5] },
+  ]);
+  const want = [PURPLES[0], PURPLES[1], PURPLES[2], NO_DATA, PURPLES[1], NO_DATA].map((c) => hex(c!));
+  cells.forEach((rgb, i) => expect(near(rgb, want[i]!), `cell R${i + 1}: ${rgb} vs ${want[i]}`).toBe(true));
+  expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+});
+
+test("a classified map with no legend: block gets its legend automatically", async ({ page }) => {
+  const { errors } = await openClassified(page, RATE, ["rate"]);
+  const legend = page.locator(".ml-map-chrome-top-left .ml-map-legend");
+  await expect(legend).toBeVisible();
+  await expect(legend.locator("summary")).toHaveText("Legend");
+  const lines = await legend.locator(".legend-heading, .legend-label").allTextContents();
+  expect(lines).toEqual(["Cases per 100k", "10–50", "50–200", "200–300", "No data"]);
+  mkdirSync("e2e/screenshots", { recursive: true });
+  await page.screenshot({ path: "e2e/screenshots/classify-rate-auto-legend.png" });
+  expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+});
+
+test("a classified story with no legend: pins an automatic legend, and its map builds none", async ({ page }) => {
+  const errors = await guard(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(STORY_AUTO, { waitUntil: "domcontentloaded" });
+  const panel = page.locator(".scrolly-legend-panel");
+  await expect(panel).toContainText("50–200", { timeout: 60_000 });
+  await expect(page.locator(".scrolly-legend-toggle")).toHaveText("Legend");
+  const lines = await panel.locator(".legend-heading, .legend-label").allTextContents();
+  expect(lines).toEqual(["Cases per 100k", "10–50", "50–200", "200–300", "No data"]);
+  // The pinned legend is the only one: no map-chrome legend under the cards.
+  await expect(page.locator("ml-map .ml-map-legend")).toHaveCount(0);
+  await page.screenshot({ path: "e2e/screenshots/classify-story-auto.png" });
   expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
 });

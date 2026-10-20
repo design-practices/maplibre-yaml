@@ -345,7 +345,7 @@ export function denormalizeSources(model: MapModel): Record<string, LayerSource>
 /** Reassemble the renderer options carried outside `config:`. */
 export function denormalizeOptions(model: MapModel): {
   controls?: ControlsConfig;
-  legend?: LegendConfig;
+  legend?: LegendConfig | false;
   state?: Record<string, unknown>;
   parameters?: Record<string, unknown>;
   markers?: MapModel["runtime"]["markers"];
@@ -358,7 +358,7 @@ export function denormalizeOptions(model: MapModel): {
 } {
   const options: {
     controls?: ControlsConfig;
-    legend?: LegendConfig;
+    legend?: LegendConfig | false;
     state?: Record<string, unknown>;
     parameters?: Record<string, unknown>;
     markers?: MapModel["runtime"]["markers"];

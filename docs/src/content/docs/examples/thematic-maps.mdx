@@ -8,6 +8,7 @@ import { Code } from '@astrojs/starlight/components';
 import choropleth from '../../../../public/configs/classify/choropleth.yaml?raw';
 import graduated from '../../../../public/configs/classify/graduated.yaml?raw';
 import categories from '../../../../public/configs/classify/categories.yaml?raw';
+import rate from '../../../../public/configs/classify/rate.yaml?raw';
 
 Three thematic maps, each written as one `classify:` block on an ordinary
 layer. Every one compiles to a plain MapLibre expression and generates its
@@ -17,13 +18,24 @@ legend. How it works, and every option: [Thematic maps](/guides/thematic-maps/).
 
 Median household income by tract, in five quantile classes (the same number
 of tracts in each). The breaks are computed when the GeoJSON loads; the
-legend shows their real edges, formatted as currency. Tracts with no value
+legend — automatic, since the document declares none — shows their real
+edges, formatted as currency. Tracts with no value
 — null, missing, `""`, `"n/a"` in this sample — are light grey, and the
 numeric strings a CSV export leaves behind (`"48200"`) count as numbers.
 
 <LiveMap src="/configs/classify/choropleth.yaml" height="460px" caption="Synthetic sample tracts. Click a tract for its value" />
 
 <Code code={choropleth} lang="yaml" title="choropleth.yaml" />
+
+## A rate — cases per 100,000 residents
+
+`normalize: population` and `multiply: 100000` turn a count into a rate, and
+the natural breaks are computed on the rate. The tract with no residents is
+no data (grey), not an Infinity class.
+
+<LiveMap src="/configs/classify/rate.yaml" height="460px" caption="Synthetic sample tracts" />
+
+<Code code={rate} lang="yaml" title="rate.yaml" />
 
 ## Graduated symbols — natural breaks, colour and size
 

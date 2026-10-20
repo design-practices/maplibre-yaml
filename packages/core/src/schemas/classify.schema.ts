@@ -45,6 +45,10 @@ export const MAX_CLASS_COUNT = 12;
 export interface ClassifyConfig {
   /** The feature property to classify. */
   field: string;
+  /** Divide `field` by this property: classify a rate, not a count. */
+  normalize?: string;
+  /** Multiply the rate (e.g. 100000 for "per 100,000"). Needs `normalize:`. */
+  multiply?: number;
   /** Explicit `step` thresholds, strictly ascending. */
   breaks?: number[];
   /** Compute the breaks from the data (GeoJSON sources only). */
@@ -176,6 +180,17 @@ export const ClassifySchema: z.ZodType<ClassifyConfig> = z
       .string()
       .min(1)
       .describe("The feature property to classify, e.g. median_income"),
+    normalize: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Divide the field by this property to map a rate, not a count (cases ÷ population); a missing or zero divisor is no data"
+      ),
+    multiply: z
+      .number()
+      .optional()
+      .describe('Multiply the rate, e.g. 100000 for "per 100,000" (with normalize:)'),
     breaks: z
       .array(z.number())
       .min(1)
@@ -297,6 +312,33 @@ export const ClassifySchema: z.ZodType<ClassifyConfig> = z
             } here).`
           : "classes: goes with method:. Categories make one class per listed value."
       );
+    }
+
+    if (config.normalize !== undefined) {
+      if (hasCategories) {
+        issue(
+          ["normalize"],
+          "normalize: divides one number by another to map a rate, and categories: colour " +
+            "values as they are. Remove normalize:, or classify a numeric field with breaks: or method:."
+        );
+      } else if (config.normalize === config.field) {
+        issue(
+          ["normalize"],
+          `normalize: divides ${config.field} by another property (cases ÷ population); dividing it ` +
+            "by itself is always 1."
+        );
+      }
+    }
+    if (config.multiply !== undefined) {
+      if (config.normalize === undefined) {
+        issue(
+          ["multiply"],
+          "multiply: scales the rate normalize: makes (multiply: 100000 for “per 100,000”). Add " +
+            "normalize: <the property to divide by>."
+        );
+      } else if (!(config.multiply > 0) || !Number.isFinite(config.multiply)) {
+        issue(["multiply"], "multiply: must be a positive number, e.g. 100 (percent) or 100000 (per 100,000).");
+      }
     }
 
     if (hasCategories) {

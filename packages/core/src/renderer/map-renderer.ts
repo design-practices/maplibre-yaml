@@ -15,7 +15,10 @@ import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
 import { EventHandler, type EventHandlerCallbacks } from './event-handler';
 import { LegendBuilder } from './legend-builder';
 import { ClassifyRuntime } from './classify-runtime';
-import type { ClassifyRecord } from '../classify/compile';
+import { effectiveLegend, type ClassifyRecord } from '../classify/compile';
+
+/** The legend a classified map gets when it declares none: the schema's defaults. */
+const AUTO_LEGEND = { position: 'top-left', collapsed: false } as const satisfies Partial<LegendConfig>;
 import type { MarkerConfig, StandalonePopupConfig, FitToConfig } from '../schemas/map.schema';
 import { ControlsManager } from './controls-manager';
 import { MarkersManager } from './markers-manager';
@@ -177,8 +180,11 @@ export interface MapRendererOptions {
   onError?: (error: Error, fatal?: boolean, context?: MapErrorContext) => void;
   /** Controls declared in the YAML `controls:` block — added automatically on map load */
   controls?: ControlsConfig;
-  /** Legend declared in the YAML `legend:` block — built automatically on map load */
-  legend?: LegendConfig;
+  /**
+   * Legend declared in the YAML `legend:` block — built automatically on map
+   * load. Absent with a `classify:` layer: an automatic legend; `false`: none.
+   */
+  legend?: LegendConfig | false;
   /**
    * Trust and runtime capabilities for this map.
    *
@@ -690,12 +696,14 @@ export class MapRenderer {
       if (options.controls && !this.controlsAdded) {
         this.addControls(options.controls);
       }
+      // A classified map without a `legend:` block gets one (0.9).
+      const legend = effectiveLegend(options.legend, layers, AUTO_LEGEND);
       if (options.legendElement && !this.legendBuilt) {
         // The `legend` slot replaces the built-in legend outright.
         this.legendBuilt = true;
-        this.chromeLayout().mount(options.legend?.position ?? 'top-left', options.legendElement);
-      } else if (options.legend && !this.legendBuilt) {
-        this.buildLegend(this.createLegendContainer(options.legend), layers, options.legend);
+        this.chromeLayout().mount(legend?.position ?? 'top-left', options.legendElement);
+      } else if (legend && !this.legendBuilt) {
+        this.buildLegend(this.createLegendContainer(legend), layers, legend);
       }
 
       // Params/toggle panel (U8, R11) — chrome, so a failure here warns and

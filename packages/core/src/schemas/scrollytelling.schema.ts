@@ -567,8 +567,8 @@ export const ScrollytellingBlockSchema: z.ZodObject<any> = z
     ...storyMapKeysShape(),
 
     // A story's legend is pinned above the cards (see StoryLegendSchema).
-    legend: StoryLegendSchema.optional().describe(
-      "The story's legend: pinned in one corner, above the chapter cards"
+    legend: z.union([StoryLegendSchema, z.literal(false)]).optional().describe(
+      "The story's legend: pinned in one corner, above the chapter cards. A story with a classify: layer gets one automatically; false turns it off"
     ),
   })
   .describe("Scrollytelling block for narrative map stories");

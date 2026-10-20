@@ -27,7 +27,20 @@
 import type { Chapter, ScrollytellingBlock } from "../schemas/scrollytelling.schema";
 import type { ControlPosition } from "../schemas/map.schema";
 import { LegendBuilder } from "../renderer/legend-builder";
-import type { ClassifyRecord } from "../classify/compile";
+import { effectiveLegend, type ClassifyRecord } from "../classify/compile";
+
+/**
+ * The legend a story pins: its `legend:` block; else, when a layer is
+ * classified, an automatic one (the 0.8.1 story-legend rules, defaults);
+ * `legend: false` — none.
+ */
+export function storyLegendConfig(story: { legend?: unknown; layers?: unknown }): Record<string, unknown> | undefined {
+  return effectiveLegend(
+    story.legend as Record<string, unknown> | false | undefined,
+    story.layers as unknown[] | undefined,
+    {}
+  );
+}
 import { escapeHtml } from "../utils/html";
 
 /** Phones held upright, and narrow windows: cards span the map's width. */
@@ -65,7 +78,7 @@ export function storyLegendPlacement(
   story: { chapters?: unknown; legend?: unknown },
   screen: StoryScreen
 ): StoryLegendPlacement {
-  const legend = (story.legend ?? {}) as { position?: ControlPosition; collapsed?: boolean | "auto" };
+  const legend = (story.legend || {}) as { position?: ControlPosition; collapsed?: boolean | "auto" };
   // The sides of the map a card passes over on this screen.
   const sides = new Set<"left" | "right">();
   for (const chapter of (story.chapters ?? []) as Chapter[]) {
@@ -121,7 +134,7 @@ export class StoryLegend {
   ) {
     const doc = host.ownerDocument;
     const id = `ml-story-legend-${++nextId}`;
-    const config = (story.legend ?? {}) as { title?: string; items?: unknown[] };
+    const config = (story.legend || {}) as { title?: string; items?: unknown[] };
     const title = config.title ?? "Legend";
 
     this.layer = doc.createElement("div");
@@ -183,7 +196,7 @@ export class StoryLegend {
     const builder = new LegendBuilder();
     const items = builder.entries(
       (this.story.layers ?? []) as never[],
-      this.story.legend as never,
+      (this.story.legend || undefined) as never,
       this.classified
     );
     this.panel.innerHTML = this.heading + builder.itemsHTML(items);

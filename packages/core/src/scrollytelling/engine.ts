@@ -28,6 +28,7 @@ import type {
   ScrollytellingBlock,
 } from "../schemas/scrollytelling.schema";
 import { STORY_MAP_KEYS } from "./keys";
+import { hasClassifiedLayer } from "../classify/compile";
 import { suggest } from "../utils/suggest";
 import { misplacedRootKeys } from "../parser/document-checks";
 
@@ -115,6 +116,9 @@ export function storyMapDocument(story: ScrollytellingBlock): Record<string, unk
     if (key === "legend") continue;
     if (source[key] !== undefined) doc[key] = source[key];
   }
+  // A classified map would build an automatic legend of its own (0.9): the
+  // story's pinned one is the legend, so turn the map's off.
+  if (hasClassifiedLayer(doc.layers as unknown[])) doc.legend = false;
   return doc;
 }
 

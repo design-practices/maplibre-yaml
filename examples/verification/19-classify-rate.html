@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>classify: rates and the automatic legend</title>
+  <!--
+    PASS = a 3×2 grid of purples by cases per 100,000 people (bottom row light
+    → dark; top row grey, mid purple, grey), and a "Legend" box top-left
+    although the YAML declares no legend: 10–50, 50–200, 200–300, No data
+    (the edges run from the data's lowest to its highest rate).
+    FAIL = no legend, black cells, or Infinity-coloured cells.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/19-classify-rate.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; width: 800px; height: 520px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = purples by cases per 100k, grey no-data cells, and a legend although the YAML declares none.</header>
+  <ml-map id="map" src="./configs/classify-rate.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

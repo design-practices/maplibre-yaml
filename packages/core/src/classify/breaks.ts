@@ -88,11 +88,30 @@ export function isFeatureData(data: unknown): boolean {
   return t === "FeatureCollection" || t === "Feature";
 }
 
-/** Read one field across a dataset. */
+/** A rate instead of a raw value: `field ÷ normalize × multiply`. */
+export interface RateOptions {
+  normalize?: string;
+  multiply?: number;
+}
+
+/**
+ * A feature's rate, read the way the compiled guard reads it: both values
+ * numeric and the divisor non-zero, else no data. Divide, then multiply —
+ * the expression's order, so both see the same float.
+ */
+export function rateValue(value: unknown, divisor: unknown, multiply?: number): number | undefined {
+  const v = numericValue(value);
+  const d = numericValue(divisor);
+  if (v === undefined || d === undefined || d === 0) return undefined;
+  return multiply !== undefined ? (v / d) * multiply : v / d;
+}
+
+/** Read one field (or a rate, with `normalize`) across a dataset. */
 export function fieldStats(
   data: unknown,
   field: string,
-  kind: "numeric" | "categorical"
+  kind: "numeric" | "categorical",
+  rate: RateOptions = {}
 ): FieldStats {
   const features = featuresOf(data);
   const values: number[] = [];
@@ -101,7 +120,10 @@ export function fieldStats(
   for (const feature of features) {
     const raw = propertyOf(feature, field);
     if (kind === "numeric") {
-      const v = numericValue(raw);
+      const v =
+        rate.normalize !== undefined
+          ? rateValue(raw, propertyOf(feature, rate.normalize), rate.multiply)
+          : numericValue(raw);
       if (v === undefined) noData++;
       else values.push(v);
     } else {

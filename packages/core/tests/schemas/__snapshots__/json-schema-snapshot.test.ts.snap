@@ -1301,6 +1301,15 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 "minLength": 1,
                                 "description": "The feature property to classify, e.g. median_income"
                               },
+                              "normalize": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Divide the field by this property to map a rate, not a count (cases ÷ population); a missing or zero divisor is no data"
+                              },
+                              "multiply": {
+                                "type": "number",
+                                "description": "Multiply the rate, e.g. 100000 for \\"per 100,000\\" (with normalize:)"
+                              },
                               "breaks": {
                                 "type": "array",
                                 "items": {
@@ -2967,68 +2976,77 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               }
             },
             "legend": {
-              "type": "object",
-              "properties": {
-                "position": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/logoPosition",
-                  "default": "top-left",
-                  "description": "Legend position"
-                },
-                "title": {
-                  "type": "string",
-                  "description": "Legend title"
-                },
-                "collapsed": {
-                  "type": "boolean",
-                  "default": false,
-                  "description": "Start collapsed"
-                },
-                "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "color": {
-                        "type": "string",
-                        "description": "Item color"
-                      },
-                      "label": {
-                        "type": "string",
-                        "description": "Item label"
-                      },
-                      "shape": {
-                        "type": "string",
-                        "enum": [
-                          "circle",
-                          "square",
-                          "line",
-                          "icon"
-                        ],
-                        "default": "square",
-                        "description": "Symbol shape"
-                      },
-                      "icon": {
-                        "type": "string",
-                        "description": "Icon name/URL (for shape: icon)"
-                      }
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "position": {
+                      "$ref": "#/$defs/any/oneOf/0/properties/config/properties/logoPosition",
+                      "default": "top-left",
+                      "description": "Legend position"
                     },
-                    "required": [
-                      "color",
-                      "label"
-                    ],
-                    "additionalProperties": false,
-                    "patternProperties": {
-                      "^x-": {}
+                    "title": {
+                      "type": "string",
+                      "description": "Legend title"
+                    },
+                    "collapsed": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Start collapsed"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "color": {
+                            "type": "string",
+                            "description": "Item color"
+                          },
+                          "label": {
+                            "type": "string",
+                            "description": "Item label"
+                          },
+                          "shape": {
+                            "type": "string",
+                            "enum": [
+                              "circle",
+                              "square",
+                              "line",
+                              "icon"
+                            ],
+                            "default": "square",
+                            "description": "Symbol shape"
+                          },
+                          "icon": {
+                            "type": "string",
+                            "description": "Icon name/URL (for shape: icon)"
+                          }
+                        },
+                        "required": [
+                          "color",
+                          "label"
+                        ],
+                        "additionalProperties": false,
+                        "patternProperties": {
+                          "^x-": {}
+                        }
+                      },
+                      "description": "Custom legend items (overrides layer legends)"
                     }
                   },
-                  "description": "Custom legend items (overrides layer legends)"
+                  "additionalProperties": false,
+                  "description": "Legend configuration",
+                  "patternProperties": {
+                    "^x-": {}
+                  }
+                },
+                {
+                  "type": "boolean",
+                  "const": false
                 }
-              },
-              "additionalProperties": false,
-              "description": "Legend configuration",
-              "patternProperties": {
-                "^x-": {}
-              }
+              ],
+              "description": "Legend configuration. A map with a classify: layer gets one automatically; false turns the legend off"
             },
             "state": {
               "type": "object",
@@ -3716,37 +3734,46 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               "$ref": "#/$defs/any/oneOf/0/properties/controls"
             },
             "legend": {
-              "type": "object",
-              "properties": {
-                "position": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/logoPosition",
-                  "description": "Legend corner. Default: top-left, or top-right on a wide screen whose cards are all on the left"
-                },
-                "title": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/legend/properties/title"
-                },
-                "collapsed": {
-                  "anyOf": [
-                    {
-                      "type": "boolean"
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "position": {
+                      "$ref": "#/$defs/any/oneOf/0/properties/config/properties/logoPosition",
+                      "description": "Legend corner. Default: top-left, or top-right on a wide screen whose cards are all on the left"
                     },
-                    {
-                      "type": "string",
-                      "const": "auto"
+                    "title": {
+                      "$ref": "#/$defs/any/oneOf/0/properties/legend/anyOf/0/properties/title"
+                    },
+                    "collapsed": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "string",
+                          "const": "auto"
+                        }
+                      ],
+                      "default": "auto",
+                      "description": "Start collapsed to a Legend button (true), open (false), or auto: collapsed on phones and where cards pass the legend's corner, open elsewhere"
+                    },
+                    "items": {
+                      "$ref": "#/$defs/any/oneOf/0/properties/legend/anyOf/0/properties/items"
                     }
-                  ],
-                  "default": "auto",
-                  "description": "Start collapsed to a Legend button (true), open (false), or auto: collapsed on phones and where cards pass the legend's corner, open elsewhere"
+                  },
+                  "additionalProperties": false,
+                  "description": "Story legend configuration",
+                  "patternProperties": {
+                    "^x-": {}
+                  }
                 },
-                "items": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/legend/properties/items"
+                {
+                  "type": "boolean",
+                  "const": false
                 }
-              },
-              "additionalProperties": false,
-              "description": "The story's legend: pinned in one corner, above the chapter cards",
-              "patternProperties": {
-                "^x-": {}
-              }
+              ],
+              "description": "The story's legend: pinned in one corner, above the chapter cards. A story with a classify: layer gets one automatically; false turns it off"
             },
             "state": {
               "$ref": "#/$defs/any/oneOf/0/properties/state"
@@ -4087,7 +4114,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "description": "Map controls"
                             },
                             "legend": {
-                              "$ref": "#/$defs/any/oneOf/0/properties/legend",
+                              "$ref": "#/$defs/any/oneOf/0/properties/legend/anyOf/0",
                               "description": "Legend configuration"
                             },
                             "state": {
@@ -5527,6 +5554,15 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             "type": "string",
                             "minLength": 1,
                             "description": "The feature property to classify, e.g. median_income"
+                          },
+                          "normalize": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Divide the field by this property to map a rate, not a count (cases ÷ population); a missing or zero divisor is no data"
+                          },
+                          "multiply": {
+                            "type": "number",
+                            "description": "Multiply the rate, e.g. 100000 for \\"per 100,000\\" (with normalize:)"
                           },
                           "breaks": {
                             "type": "array",
@@ -7194,68 +7230,77 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
           }
         },
         "legend": {
-          "type": "object",
-          "properties": {
-            "position": {
-              "$ref": "#/$defs/map/properties/config/properties/logoPosition",
-              "default": "top-left",
-              "description": "Legend position"
-            },
-            "title": {
-              "type": "string",
-              "description": "Legend title"
-            },
-            "collapsed": {
-              "type": "boolean",
-              "default": false,
-              "description": "Start collapsed"
-            },
-            "items": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "color": {
-                    "type": "string",
-                    "description": "Item color"
-                  },
-                  "label": {
-                    "type": "string",
-                    "description": "Item label"
-                  },
-                  "shape": {
-                    "type": "string",
-                    "enum": [
-                      "circle",
-                      "square",
-                      "line",
-                      "icon"
-                    ],
-                    "default": "square",
-                    "description": "Symbol shape"
-                  },
-                  "icon": {
-                    "type": "string",
-                    "description": "Icon name/URL (for shape: icon)"
-                  }
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "position": {
+                  "$ref": "#/$defs/map/properties/config/properties/logoPosition",
+                  "default": "top-left",
+                  "description": "Legend position"
                 },
-                "required": [
-                  "color",
-                  "label"
-                ],
-                "additionalProperties": false,
-                "patternProperties": {
-                  "^x-": {}
+                "title": {
+                  "type": "string",
+                  "description": "Legend title"
+                },
+                "collapsed": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Start collapsed"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "color": {
+                        "type": "string",
+                        "description": "Item color"
+                      },
+                      "label": {
+                        "type": "string",
+                        "description": "Item label"
+                      },
+                      "shape": {
+                        "type": "string",
+                        "enum": [
+                          "circle",
+                          "square",
+                          "line",
+                          "icon"
+                        ],
+                        "default": "square",
+                        "description": "Symbol shape"
+                      },
+                      "icon": {
+                        "type": "string",
+                        "description": "Icon name/URL (for shape: icon)"
+                      }
+                    },
+                    "required": [
+                      "color",
+                      "label"
+                    ],
+                    "additionalProperties": false,
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  },
+                  "description": "Custom legend items (overrides layer legends)"
                 }
               },
-              "description": "Custom legend items (overrides layer legends)"
+              "additionalProperties": false,
+              "description": "Legend configuration",
+              "patternProperties": {
+                "^x-": {}
+              }
+            },
+            {
+              "type": "boolean",
+              "const": false
             }
-          },
-          "additionalProperties": false,
-          "description": "Legend configuration",
-          "patternProperties": {
-            "^x-": {}
-          }
+          ],
+          "description": "Legend configuration. A map with a classify: layer gets one automatically; false turns the legend off"
         },
         "state": {
           "type": "object",
@@ -8716,6 +8761,15 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "type": "string",
                         "minLength": 1,
                         "description": "The feature property to classify, e.g. median_income"
+                      },
+                      "normalize": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Divide the field by this property to map a rate, not a count (cases ÷ population); a missing or zero divisor is no data"
+                      },
+                      "multiply": {
+                        "type": "number",
+                        "description": "Multiply the rate, e.g. 100000 for \\"per 100,000\\" (with normalize:)"
                       },
                       "breaks": {
                         "type": "array",
@@ -10832,68 +10886,77 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           }
                         },
                         "legend": {
-                          "type": "object",
-                          "properties": {
-                            "position": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/logoPosition",
-                              "default": "top-left",
-                              "description": "Legend position"
-                            },
-                            "title": {
-                              "type": "string",
-                              "description": "Legend title"
-                            },
-                            "collapsed": {
-                              "type": "boolean",
-                              "default": false,
-                              "description": "Start collapsed"
-                            },
-                            "items": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "color": {
-                                    "type": "string",
-                                    "description": "Item color"
-                                  },
-                                  "label": {
-                                    "type": "string",
-                                    "description": "Item label"
-                                  },
-                                  "shape": {
-                                    "type": "string",
-                                    "enum": [
-                                      "circle",
-                                      "square",
-                                      "line",
-                                      "icon"
-                                    ],
-                                    "default": "square",
-                                    "description": "Symbol shape"
-                                  },
-                                  "icon": {
-                                    "type": "string",
-                                    "description": "Icon name/URL (for shape: icon)"
-                                  }
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "position": {
+                                  "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/logoPosition",
+                                  "default": "top-left",
+                                  "description": "Legend position"
                                 },
-                                "required": [
-                                  "color",
-                                  "label"
-                                ],
-                                "additionalProperties": false,
-                                "patternProperties": {
-                                  "^x-": {}
+                                "title": {
+                                  "type": "string",
+                                  "description": "Legend title"
+                                },
+                                "collapsed": {
+                                  "type": "boolean",
+                                  "default": false,
+                                  "description": "Start collapsed"
+                                },
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "color": {
+                                        "type": "string",
+                                        "description": "Item color"
+                                      },
+                                      "label": {
+                                        "type": "string",
+                                        "description": "Item label"
+                                      },
+                                      "shape": {
+                                        "type": "string",
+                                        "enum": [
+                                          "circle",
+                                          "square",
+                                          "line",
+                                          "icon"
+                                        ],
+                                        "default": "square",
+                                        "description": "Symbol shape"
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "description": "Icon name/URL (for shape: icon)"
+                                      }
+                                    },
+                                    "required": [
+                                      "color",
+                                      "label"
+                                    ],
+                                    "additionalProperties": false,
+                                    "patternProperties": {
+                                      "^x-": {}
+                                    }
+                                  },
+                                  "description": "Custom legend items (overrides layer legends)"
                                 }
                               },
-                              "description": "Custom legend items (overrides layer legends)"
+                              "additionalProperties": false,
+                              "description": "Legend configuration",
+                              "patternProperties": {
+                                "^x-": {}
+                              }
+                            },
+                            {
+                              "type": "boolean",
+                              "const": false
                             }
-                          },
-                          "additionalProperties": false,
-                          "description": "Legend configuration",
-                          "patternProperties": {
-                            "^x-": {}
-                          }
+                          ],
+                          "description": "Legend configuration. A map with a classify: layer gets one automatically; false turns the legend off"
                         },
                         "state": {
                           "type": "object",
@@ -11291,7 +11354,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "description": "Map controls"
                         },
                         "legend": {
-                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend",
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend/anyOf/0",
                           "description": "Legend configuration"
                         },
                         "state": {
@@ -11675,37 +11738,46 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/controls"
                         },
                         "legend": {
-                          "type": "object",
-                          "properties": {
-                            "position": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/logoPosition",
-                              "description": "Legend corner. Default: top-left, or top-right on a wide screen whose cards are all on the left"
-                            },
-                            "title": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend/properties/title"
-                            },
-                            "collapsed": {
-                              "anyOf": [
-                                {
-                                  "type": "boolean"
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "position": {
+                                  "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/logoPosition",
+                                  "description": "Legend corner. Default: top-left, or top-right on a wide screen whose cards are all on the left"
                                 },
-                                {
-                                  "type": "string",
-                                  "const": "auto"
+                                "title": {
+                                  "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend/anyOf/0/properties/title"
+                                },
+                                "collapsed": {
+                                  "anyOf": [
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "auto"
+                                    }
+                                  ],
+                                  "default": "auto",
+                                  "description": "Start collapsed to a Legend button (true), open (false), or auto: collapsed on phones and where cards pass the legend's corner, open elsewhere"
+                                },
+                                "items": {
+                                  "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend/anyOf/0/properties/items"
                                 }
-                              ],
-                              "default": "auto",
-                              "description": "Start collapsed to a Legend button (true), open (false), or auto: collapsed on phones and where cards pass the legend's corner, open elsewhere"
+                              },
+                              "additionalProperties": false,
+                              "description": "Story legend configuration",
+                              "patternProperties": {
+                                "^x-": {}
+                              }
                             },
-                            "items": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/legend/properties/items"
+                            {
+                              "type": "boolean",
+                              "const": false
                             }
-                          },
-                          "additionalProperties": false,
-                          "description": "The story's legend: pinned in one corner, above the chapter cards",
-                          "patternProperties": {
-                            "^x-": {}
-                          }
+                          ],
+                          "description": "The story's legend: pinned in one corner, above the chapter cards. A story with a classify: layer gets one automatically; false turns it off"
                         },
                         "state": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/state"
@@ -13142,6 +13214,15 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                             "type": "string",
                             "minLength": 1,
                             "description": "The feature property to classify, e.g. median_income"
+                          },
+                          "normalize": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Divide the field by this property to map a rate, not a count (cases ÷ population); a missing or zero divisor is no data"
+                          },
+                          "multiply": {
+                            "type": "number",
+                            "description": "Multiply the rate, e.g. 100000 for \\"per 100,000\\" (with normalize:)"
                           },
                           "breaks": {
                             "type": "array",
@@ -15088,75 +15169,84 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
           }
         },
         "legend": {
-          "type": "object",
-          "properties": {
-            "position": {
-              "$ref": "#/$defs/scrollytelling/properties/config/properties/logoPosition",
-              "description": "Legend corner. Default: top-left, or top-right on a wide screen whose cards are all on the left"
-            },
-            "title": {
-              "type": "string",
-              "description": "Legend title"
-            },
-            "collapsed": {
-              "anyOf": [
-                {
-                  "type": "boolean"
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "position": {
+                  "$ref": "#/$defs/scrollytelling/properties/config/properties/logoPosition",
+                  "description": "Legend corner. Default: top-left, or top-right on a wide screen whose cards are all on the left"
                 },
-                {
+                "title": {
                   "type": "string",
-                  "const": "auto"
-                }
-              ],
-              "default": "auto",
-              "description": "Start collapsed to a Legend button (true), open (false), or auto: collapsed on phones and where cards pass the legend's corner, open elsewhere"
-            },
-            "items": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "color": {
-                    "type": "string",
-                    "description": "Item color"
-                  },
-                  "label": {
-                    "type": "string",
-                    "description": "Item label"
-                  },
-                  "shape": {
-                    "type": "string",
-                    "enum": [
-                      "circle",
-                      "square",
-                      "line",
-                      "icon"
-                    ],
-                    "default": "square",
-                    "description": "Symbol shape"
-                  },
-                  "icon": {
-                    "type": "string",
-                    "description": "Icon name/URL (for shape: icon)"
-                  }
+                  "description": "Legend title"
                 },
-                "required": [
-                  "color",
-                  "label"
-                ],
-                "additionalProperties": false,
-                "patternProperties": {
-                  "^x-": {}
+                "collapsed": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "const": "auto"
+                    }
+                  ],
+                  "default": "auto",
+                  "description": "Start collapsed to a Legend button (true), open (false), or auto: collapsed on phones and where cards pass the legend's corner, open elsewhere"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "color": {
+                        "type": "string",
+                        "description": "Item color"
+                      },
+                      "label": {
+                        "type": "string",
+                        "description": "Item label"
+                      },
+                      "shape": {
+                        "type": "string",
+                        "enum": [
+                          "circle",
+                          "square",
+                          "line",
+                          "icon"
+                        ],
+                        "default": "square",
+                        "description": "Symbol shape"
+                      },
+                      "icon": {
+                        "type": "string",
+                        "description": "Icon name/URL (for shape: icon)"
+                      }
+                    },
+                    "required": [
+                      "color",
+                      "label"
+                    ],
+                    "additionalProperties": false,
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  },
+                  "description": "Custom legend items (overrides layer legends)"
                 }
               },
-              "description": "Custom legend items (overrides layer legends)"
+              "additionalProperties": false,
+              "description": "Story legend configuration",
+              "patternProperties": {
+                "^x-": {}
+              }
+            },
+            {
+              "type": "boolean",
+              "const": false
             }
-          },
-          "additionalProperties": false,
-          "description": "The story's legend: pinned in one corner, above the chapter cards",
-          "patternProperties": {
-            "^x-": {}
-          }
+          ],
+          "description": "The story's legend: pinned in one corner, above the chapter cards. A story with a classify: layer gets one automatically; false turns it off"
         },
         "state": {
           "type": "object",
