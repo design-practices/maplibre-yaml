@@ -1217,9 +1217,37 @@ export class MapRenderer {
       // A basemap style that never loads is fatal: without it no layer can
       // draw and `load` never fires.
       options.onError?.(error, context?.kind === 'style', context);
+      if (context?.basemap && context.sourceId && !mapLoadFired) {
+        const sourceId = context.sourceId;
+        setTimeout(() => this.dropDeadBasemapSource(sourceId), 0);
+      }
     });
 
     if (protomaps) this.loadProtomapsBasemap(protomaps, options);
+  }
+
+  /**
+   * A basemap source whose file couldn't be read before the map loaded,
+   * on a maplibre-gl that counts it as still loading (4.x: a source whose
+   * TileJSON request failed never reports itself loaded, so MapLibre never
+   * fires `load` and `mapReady()` would wait forever). Its layers can draw
+   * nothing; they and the source are removed so the map loads. The notice
+   * already said why. Later releases count the failed source as settled and
+   * keep it.
+   */
+  private dropDeadBasemapSource(sourceId: string): void {
+    if (this.destroyed || !this.map) return;
+    const source = this.map.getSource(sourceId) as { loaded?: () => boolean } | undefined;
+    if (!source || typeof source.loaded !== 'function' || source.loaded()) return;
+    try {
+      for (const layer of this.map.getStyle()?.layers ?? []) {
+        if ((layer as { source?: unknown }).source === sourceId) this.map.removeLayer(layer.id);
+      }
+      this.map.removeSource(sourceId);
+      this.map.triggerRepaint?.();
+    } catch (error) {
+      console.warn(`[maplibre-yaml] the basemap source "${sourceId}" could not be removed:`, error);
+    }
   }
 
   /**
