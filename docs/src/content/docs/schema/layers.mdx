@@ -132,7 +132,7 @@ symbol layers. Full guide: [Thematic maps](/guides/thematic-maps/).
 | `format` | object | Legend number format, with MapLibre `number-format` names: `locale`, `currency`, `unit`, `min-fraction-digits`, `max-fraction-digits`. |
 
 Exactly one of `breaks:`, `method:` or `categories:`. A map (or story) with
-a classified layer and no `legend:` block gets a legend automatically;
+a classified layer (or a layer with its own `legend:` entry) and no `legend:` block gets a legend automatically;
 `legend: false` turns it off. The compiled
 expression owns its paint property: `classify:` and the same property under
 `paint:` on one layer is an error. Export class: `exports` — the emitted

@@ -833,10 +833,11 @@ controls:
 
 Display a map legend showing layer information.
 
-A map with a [`classify:`](/guides/thematic-maps/) layer gets a legend even
+A map with a [`classify:`](/guides/thematic-maps/) layer, or with a layer
+that writes its own entry (`legend: { label, color }`), gets a legend even
 without a `legend:` block — the default one below (top-left, open, headed
-"Legend"), listing each classified layer's classes. Write `legend: false` to
-turn it off, or a `legend:` block to place and title it yourself.
+"Legend"), listing those layers. Write `legend: false` to turn it off, or a
+`legend:` block to place and title it yourself.
 
 ### Legend Structure
 

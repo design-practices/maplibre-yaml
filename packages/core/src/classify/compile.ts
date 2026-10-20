@@ -475,10 +475,28 @@ export function hasClassifiedLayer(layers: readonly unknown[] | undefined): bool
   );
 }
 
+/** Whether any layer has a legend entry of its own (`legend: { label, color }`). */
+export function hasLayerLegendEntry(layers: readonly unknown[] | undefined): boolean {
+  return (layers ?? []).some((layer) => {
+    if (layer === null || typeof layer !== "object") return false;
+    const entry = (layer as Record<string, unknown>)["legend"];
+    return entry !== null && typeof entry === "object";
+  });
+}
+
+/**
+ * Whether a map without a `legend:` block gets one anyway (0.9): a layer is
+ * classified (a thematic map without its key is not readable), or a layer
+ * wrote its own legend entry — which, without a block, used to show nowhere.
+ */
+export function wantsAutomaticLegend(layers: readonly unknown[] | undefined): boolean {
+  return hasClassifiedLayer(layers) || hasLayerLegendEntry(layers);
+}
+
 /**
  * The legend a map builds (0.9): the authored `legend:` block; else, when a
- * layer is classified, an automatic one with the schema's defaults (a
- * thematic map without its key is not readable); `legend: false` — none.
+ * layer is classified or has its own legend entry, an automatic one with the
+ * schema's defaults; `legend: false` — none.
  */
 export function effectiveLegend<T extends object>(
   legend: T | false | undefined,
@@ -487,7 +505,7 @@ export function effectiveLegend<T extends object>(
 ): T | undefined {
   if (legend === false) return undefined;
   if (legend !== undefined) return legend;
-  return hasClassifiedLayer(layers) ? automatic : undefined;
+  return wantsAutomaticLegend(layers) ? automatic : undefined;
 }
 
 /** The record a layer (spec or renderer layer) carries in its metadata, if any. */

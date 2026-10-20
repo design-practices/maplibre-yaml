@@ -28,7 +28,7 @@ import type {
   ScrollytellingBlock,
 } from "../schemas/scrollytelling.schema";
 import { STORY_MAP_KEYS } from "./keys";
-import { hasClassifiedLayer } from "../classify/compile";
+import { wantsAutomaticLegend } from "../classify/compile";
 import { storyColumns } from "../formats/columns";
 import { suggest } from "../utils/suggest";
 import { boundsProblem, toFlatBounds } from "../utils/bounds";
@@ -122,7 +122,7 @@ export function storyMapDocument(story: ScrollytellingBlock): Record<string, unk
   }
   // A classified map would build an automatic legend of its own (0.9): the
   // story's pinned one is the legend, so turn the map's off.
-  if (hasClassifiedLayer(doc.layers as unknown[])) doc.legend = false;
+  if (wantsAutomaticLegend(doc.layers as unknown[])) doc.legend = false;
   // A GeoParquet source reads only the columns the document uses (0.9):
   // the chapters' actions use some too, and the map can't see them.
   const actions = ((story.chapters ?? []) as Chapter[]).flatMap((chapter): ChapterAction[] => [

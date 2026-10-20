@@ -338,6 +338,41 @@ test.describe("COG with no page JavaScript", () => {
     expect(errors).toEqual([]);
   });
 
+  test("a layer's own legend entry shows a legend without a legend: block (the COG vegetation demo)", async ({
+    page,
+    baseURL,
+  }) => {
+    const errors = await guard(page);
+    const html = `<!DOCTYPE html><html><head>
+      <link rel="stylesheet" href="${baseURL}/vendor/maplibre-gl.css" />
+      <script type="importmap">{ "imports": { "maplibre-gl": "${baseURL}/vendor/maplibre-gl.esm.js" } }</script>
+      </head><body>
+      <ml-map id="veg" style="display:block;height:300px">
+        <script type="text/yaml">
+type: map
+id: cog-vegetation
+config: { center: [10.2, 42.15], zoom: 9.4, mapStyle: "/examples/verification/configs/local-style.json" }
+sources:
+  vegetation:
+    type: raster
+    url: /gallery-assets/cloud-native/ndvi.cog.tif
+    colorRamp: { palette: YlGn, min: 0, max: 0.85 }
+layers:
+  - id: vegetation
+    type: raster
+    source: vegetation
+    legend: { label: "Vegetation index, 0 (light) to 0.85 (dark)", color: "#41ab5d", shape: square }
+        </script>
+      </ml-map>
+      <script type="module" src="${baseURL}/packages/core/register.js"></script>
+      </body></html>`;
+    await page.route("**/cog-veg/index.html", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto("/cog-veg/index.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("veg") as any).mapReady());
+    await expect(page.locator("#veg .ml-map-legend")).toContainText("Vegetation index, 0 (light) to 0.85 (dark)");
+    expect(errors).toEqual([]);
+  });
+
   test("a slow COG reader holds up only the COG: the document's other layers draw without it", async ({
     page,
     baseURL,
