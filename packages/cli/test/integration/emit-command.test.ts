@@ -242,6 +242,72 @@ layers:
     }
   });
 
+  // classify: (0.9) — `method:` breaks over a url: source are baked from the
+  // data at emit; the file resolves against the document like the site would.
+  const CLASSIFY_DATA = {
+    type: 'FeatureCollection',
+    features: [5, 12, '15', 30, 50, null].map((value, i) => ({
+      type: 'Feature',
+      properties: { value },
+      geometry: { type: 'Point', coordinates: [i, 0] },
+    })),
+  };
+  const classifyDoc = (url: string) => `type: map
+id: classed
+config: { center: [0, 0], zoom: 5 }
+sources:
+  grid: { type: geojson, url: "${url}" }
+layers:
+  - id: grid
+    type: circle
+    source: grid
+    classify: { field: value, method: quantile, classes: 3, palette: Reds }
+`;
+
+  it('bakes computed classify breaks from a local url: file into the style', async () => {
+    const dir = await mkdir();
+    await writeFile(join(dir, 'grid.geojson'), JSON.stringify(CLASSIFY_DATA));
+    const doc = join(dir, 'map.yaml');
+    await writeFile(doc, classifyDoc('grid.geojson'));
+
+    const { stdout } = await execAsync(`node "${CLI}" emit "${doc}" --strict`);
+    const style = JSON.parse(stdout);
+    const layer = style.layers.find((l: { id: string }) => l.id === 'grid');
+    expect(layer.metadata['maplibre-yaml:classify']).toMatchObject({
+      method: 'quantile',
+      breaks: [12, 30],
+      colors: ['#fee0d2', '#fc9272', '#de2d26'],
+    });
+    expect(JSON.stringify(layer.paint['circle-color'])).toContain('["step",["to-number",["var","value"]],"#fee0d2",12,"#fc9272",30,"#de2d26"]');
+    expect(layer).not.toHaveProperty('classify');
+  });
+
+  it('resolves a root-relative url: under public/, as a static site serves it', async () => {
+    const dir = await mkdir();
+    const { mkdir: mkdirp } = await import('node:fs/promises');
+    await mkdirp(join(dir, 'public', 'data'), { recursive: true });
+    await mkdirp(join(dir, 'public', 'configs'), { recursive: true });
+    await writeFile(join(dir, 'public', 'data', 'grid.geojson'), JSON.stringify(CLASSIFY_DATA));
+    const doc = join(dir, 'public', 'configs', 'map.yaml');
+    await writeFile(doc, classifyDoc('/data/grid.geojson'));
+
+    const { stdout } = await execAsync(`node "${CLI}" emit "${doc}"`);
+    const style = JSON.parse(stdout);
+    expect(style.layers[0].metadata['maplibre-yaml:classify'].breaks).toEqual([12, 30]);
+  });
+
+  it('fails clearly when computed breaks need data it cannot load', async () => {
+    const dir = await mkdir();
+    const doc = join(dir, 'map.yaml');
+    await writeFile(doc, classifyDoc('missing/nowhere.geojson'));
+
+    const failure = await execAsync(`node "${CLI}" emit "${doc}"`).catch((e) => e);
+    expect(failure.code).toBe(1);
+    expect(failure.stderr).toContain('layers.grid.classify');
+    expect(failure.stderr).toContain('missing/nowhere.geojson');
+    expect(failure.stderr).toContain('breaks:');
+  });
+
   it('rejects a scrollytelling document — only map compiles', async () => {
     const dir = await mkdir();
     const doc = join(dir, 'story.yaml');

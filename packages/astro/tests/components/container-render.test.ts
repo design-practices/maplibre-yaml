@@ -154,6 +154,14 @@ describe("FullPageMap", () => {
     };
     await container.renderToString(FullPageMap as any, { props: { config: withEntries, showLegend: true } });
     expect(warn.mock.calls.some((c) => String(c[0]).includes("no layer declares"))).toBe(false);
+
+    // A classify: layer makes its own entries (0.9) — no warning either.
+    const classified = {
+      ...MAP_CONFIG,
+      layers: [{ ...MAP_CONFIG.layers[0], classify: { field: "v", breaks: [1] } }],
+    };
+    await container.renderToString(FullPageMap as any, { props: { config: classified, showLegend: true } });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("no layer declares"))).toBe(false);
     warn.mockRestore();
   });
 

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>classify + fitTo on one url: source</title>
+  <!--
+    PASS = the map opens already framed on the six districts (no world view
+    first), already in their purple classes (no grey frame first), with an
+    automatic legend; the data file is requested once.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/20-classify-fit.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; width: 800px; height: 520px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <script>
+    // The first frame that draws the classified layer: its camera and the
+    // fill-color it was drawn with (for the e2e test and the reader).
+    window.__first = null;
+    new MutationObserver((records, observer) => {
+      const el = document.querySelector("ml-map");
+      const map = el && el.getMap && el.getMap();
+      if (!map) return;
+      observer.disconnect();
+      const onRender = () => {
+        if (!map.getLayer("rate")) return;
+        map.off("render", onRender);
+        const c = map.getCenter();
+        window.__first = {
+          lng: c.lng,
+          lat: c.lat,
+          zoom: map.getZoom(),
+          paint: map.getPaintProperty("rate", "fill-color"),
+        };
+      };
+      map.on("render", onRender);
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  </script>
+</head>
+<body>
+  <header>PASS = opens framed on the districts, already in purple classes, with a legend.</header>
+  <ml-map id="map" src="./configs/classify-fit.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

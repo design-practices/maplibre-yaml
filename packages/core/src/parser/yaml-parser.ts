@@ -271,6 +271,7 @@ import {
   expandSugarInScrollytellingBlock,
   type SugarRemap,
 } from "./expand-sugar";
+import { checkClassify } from "../classify/checks";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
 import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
@@ -474,6 +475,7 @@ export class YAMLParser {
 
     // Validate against schema
     const validated = RootSchema.parse(parsed);
+    throwOnClassifyErrors(parsed);
 
     // Resolve references
     return this.resolveReferences(validated);
@@ -643,7 +645,21 @@ export class YAMLParser {
         value,
         remaps,
       });
-      const finalErrors = replaceHashCommentErrors(errors, hashValues);
+      // The classify layer checks run on a failed document too (they read
+      // the raw value defensively): a wrong source kind or a paint clash is
+      // worth knowing alongside a typo in the block.
+      // Not for a layer the schema already rejected outside its classify:
+      // block (a mistyped `type:` would only echo as "no colour to classify").
+      const classifyErrors = checkClassify(value, { doc, lineCounter }).filter((c) => {
+        const layer = c.path.replace(/\.(classify|paint|filter)(\..*)?$/, "");
+        return !errors.some(
+          (e) =>
+            e.path === c.path ||
+            e.path === layer ||
+            (e.path.startsWith(`${layer}.`) && !e.path.startsWith(`${layer}.classify`))
+        );
+      });
+      const finalErrors = replaceHashCommentErrors([...errors, ...classifyErrors], hashValues);
       // A typo reported as THE error (`config.centre: Unknown key "centre" —
       // did you mean "center"?`) need not be repeated as a warning.
       const repeated = (w: ValidationWarning) =>
@@ -654,6 +670,13 @@ export class YAMLParser {
         errors: finalErrors,
         warnings: warnings.filter((w) => !repeated(w)),
       };
+    }
+
+    // `classify:` checks that need the layer around the block (layer type,
+    // the paint property it writes, the source kind for `method:`).
+    const classifyErrors = checkClassify(value, { doc, lineCounter });
+    if (classifyErrors.length > 0) {
+      return { success: false, errors: classifyErrors, warnings };
     }
 
     // A field that tolerates an empty value still lost what the author
@@ -822,6 +845,7 @@ export class YAMLParser {
       throw new Error(expansion.error.message);
     }
     const validated = RootSchema.parse(cloned);
+    throwOnClassifyErrors(cloned);
     return this.resolveReferences(validated);
   }
 
@@ -879,7 +903,9 @@ export class YAMLParser {
     }
 
     // Validate against MapBlockSchema
-    return MapBlockSchema.parse(parsed);
+    const block = MapBlockSchema.parse(parsed);
+    throwOnClassifyErrors(parsed);
+    return block;
   }
 
   /**
@@ -2304,6 +2330,14 @@ function findMatchingSourceBranch(
 }
 
 /**
+/** The throwing entry points' half of the `classify:` layer checks. */
+function throwOnClassifyErrors(value: unknown): void {
+  const errors = checkClassify(value);
+  if (errors.length > 0) {
+    throw new Error(errors.map((e) => `${e.path}: ${e.message}`).join("\n"));
+  }
+}
+
 /**
  * Convenience function to parse YAML config
  *

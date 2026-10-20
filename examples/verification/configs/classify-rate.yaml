@@ -1,0 +1,26 @@
+# classify: normalize + automatic legend (0.9).
+# Cases per 100,000 people = cases ÷ population × 100000. Bottom row: 10, 60,
+# 300 per 100k. Top row: population 0 → no data; "8000" (a string) → 150;
+# no cases → no data. Breaks [50, 200].
+# No legend: block — a classified map gets its legend automatically.
+type: map
+id: classify-rate
+config:
+  center: [1.5, 1]
+  zoom: 6.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  districts:
+    type: geojson
+    url: "/examples/verification/data/classify-rates.geojson"
+layers:
+  - id: rate
+    type: fill
+    source: districts
+    label: Cases per 100k
+    classify:
+      field: cases
+      normalize: population
+      multiply: 100000
+      breaks: [50, 200]
+      palette: Purples

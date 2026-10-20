@@ -18,6 +18,11 @@ import {
 } from './layer-manager';
 import { EventHandler, type EventHandlerCallbacks } from './event-handler';
 import { LegendBuilder } from './legend-builder';
+import { ClassifyRuntime } from './classify-runtime';
+import { effectiveLegend, type ClassifyRecord } from '../classify/compile';
+
+/** The legend a classified map gets when it declares none: the schema's defaults. */
+const AUTO_LEGEND = { position: 'top-left', collapsed: false } as const satisfies Partial<LegendConfig>;
 import type { MarkerConfig, StandalonePopupConfig, FitToConfig } from '../schemas/map.schema';
 import { ControlsManager } from './controls-manager';
 import { MarkersManager } from './markers-manager';
@@ -192,8 +197,11 @@ export interface MapRendererOptions {
   description?: string;
   /** Controls declared in the YAML `controls:` block — added automatically on map load */
   controls?: ControlsConfig;
-  /** Legend declared in the YAML `legend:` block — built automatically on map load */
-  legend?: LegendConfig;
+  /**
+   * Legend declared in the YAML `legend:` block — built automatically on map
+   * load. Absent with a `classify:` layer: an automatic legend; `false`: none.
+   */
+  legend?: LegendConfig | false;
   /**
    * Trust and runtime capabilities for this map.
    *
@@ -294,6 +302,11 @@ export interface MapRendererEvents {
   'layer:visibility': { layerId: string; visible: boolean };
   /** The `fitTo` camera (U14) framed its source's data. */
   'camera:fit': { source: string; bounds: Bounds };
+  /**
+   * A `classify:` layer's classes, as drawn: once when the layers settle,
+   * and again whenever fetched data (re)computes them.
+   */
+  'layer:classified': { layerId: string; classify: ClassifyRecord };
 }
 
 /**
@@ -339,6 +352,10 @@ export class MapRenderer {
   /** ml-aot.65: check `config.center` against the document's inline data, on load. */
   private checkInlineCenter: (() => void) | null = null;
   private autoLegendContainer: HTMLElement | null;
+  /** `classify:` layers whose breaks come from fetched data (0.9). */
+  private classify: ClassifyRuntime | null = null;
+  /** Where buildLegend() last drew, so classify can redraw it. */
+  private legendTarget: { container: string | HTMLElement; layers: Layer[]; config?: LegendConfig } | null = null;
 
 
   /**
@@ -585,6 +602,12 @@ export class MapRenderer {
     const layerCallbacks: LayerManagerCallbacks = {
       onDataLoading: (layerId) => this.emit('layer:data-loading', { layerId }),
       onDataLoaded: (layerId, featureCount) => {
+        // Computed classify breaks follow the data (first load and refresh).
+        try {
+          this.classify?.dataLoaded(layerId);
+        } catch (error) {
+          console.warn(`[maplibre-yaml] classify on layer "${layerId}" failed:`, error);
+        }
         // A fetched `fitTo` source frames the camera on its FIRST load only:
         // after that the user owns the camera, and a refresh must not yank it.
         if (fitTo && fit && fit.kind === 'deferred' && !this.fitApplied) {
@@ -627,6 +650,17 @@ export class MapRenderer {
     };
 
     this.layerManager = new LayerManager(this.map, layerCallbacks, options.sourceData);
+    const classifyRuntime = new ClassifyRuntime(
+      this.map,
+      layers as never,
+      sources as Record<string, unknown> | undefined,
+      (sourceId) => this.layerManager.getSourceData?.(sourceId),
+      (layerId, record) => {
+        this.redrawLegend();
+        this.emit('layer:classified', { layerId, classify: record });
+      }
+    );
+    if (classifyRuntime.active) this.classify = classifyRuntime;
     this.eventHandler = new EventHandler(this.map, eventCallbacks, options.capabilities);
     this.legendBuilder = new LegendBuilder({ strings: this.strings });
     this.controlsManager = new ControlsManager(this.map, {
@@ -715,12 +749,14 @@ export class MapRenderer {
       if (options.controls && !this.controlsAdded) {
         this.addControls(options.controls);
       }
+      // A classified map without a `legend:` block gets one (0.9).
+      const legend = effectiveLegend(options.legend, layers, AUTO_LEGEND);
       if (options.legendElement && !this.legendBuilt) {
         // The `legend` slot replaces the built-in legend outright.
         this.legendBuilt = true;
-        this.chromeLayout().mount(options.legend?.position ?? 'top-left', options.legendElement);
-      } else if (options.legend && !this.legendBuilt) {
-        this.buildLegend(this.createLegendContainer(options.legend), layers, options.legend);
+        this.chromeLayout().mount(legend?.position ?? 'top-left', options.legendElement);
+      } else if (legend && !this.legendBuilt) {
+        this.buildLegend(this.createLegendContainer(legend), layers, legend);
       }
 
       // Params/toggle panel (U8, R11) — chrome, so a failure here warns and
@@ -821,6 +857,15 @@ export class MapRenderer {
             }
             this.pendingVisibility.clear();
             this.checkInlineCenter?.();
+            if (this.classify) {
+              // Tell listeners (a story's pinned legend) the classes as drawn,
+              // then catch up: data that landed before its layer was added,
+              // and `data:` URLs MapLibre fetches by itself.
+              for (const [layerId, record] of this.classify.records()) {
+                this.emit('layer:classified', { layerId, classify: record });
+              }
+              void this.classify.layersReady();
+            }
             this.emit('load', undefined);
             options.onLoad?.();
           });
@@ -1124,7 +1169,25 @@ export class MapRenderer {
    */
   buildLegend(container: string | HTMLElement, layers: Layer[], config?: LegendConfig): void {
     this.legendBuilt = true;
+    this.legendTarget = { container, layers, ...(config ? { config } : {}) };
     this.legendBuilder.build(container, layers, config);
+  }
+
+  /**
+   * Redraw the legend buildLegend() drew, after a `classify:` layer's classes
+   * changed (computed breaks landed, a refresh moved them). A legend the
+   * host replaced through the `legend` slot is the host's to update.
+   */
+  private redrawLegend(): void {
+    const target = this.legendTarget;
+    if (!target || this.destroyed) return;
+    const el =
+      typeof target.container === 'string' ? document.getElementById(target.container) : target.container;
+    // Keep the reader's open/closed choice across a redraw (a refresh).
+    const open = el?.querySelector('details')?.open;
+    this.legendBuilder.build(target.container, target.layers, target.config);
+    const details = el?.querySelector('details');
+    if (details && open !== undefined) details.open = open;
   }
 
   /**
@@ -1280,6 +1343,8 @@ export class MapRenderer {
    * Destroy the map and clean up resources
    */
   destroy(): void {
+    this.classify?.destroy();
+    this.classify = null;
     this.eventHandler.destroy();
     this.layerManager.destroy();
     this.destroyed = true;

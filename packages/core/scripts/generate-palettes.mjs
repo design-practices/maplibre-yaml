@@ -1,0 +1,132 @@
+/**
+ * Regenerate src/classify/palettes-data.ts — the palette tables `classify:`
+ * resolves names against — from the two packages that publish them:
+ * colorbrewer@1.7.0 (Apache-2.0) and d3-scale-chromatic@3.1.0 (ISC; its
+ * viridis data is CC0). Neither is a dependency: unpack both into a scratch
+ * folder and point this script at it.
+ *
+ *   mkdir /tmp/palettes && cd /tmp/palettes
+ *   npm pack colorbrewer@1.7.0 d3-scale-chromatic@3.1.0
+ *   tar xzf colorbrewer-1.7.0.tgz && mv package colorbrewer
+ *   tar xzf d3-scale-chromatic-3.1.0.tgz && mv package d3sc
+ *   node packages/core/scripts/generate-palettes.mjs /tmp/palettes
+ *
+ * The data has not changed upstream since 2017; tests/classify/palettes.test.ts
+ * pins a few known values.
+ */
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const input = process.argv[2];
+if (!input) {
+  console.error("usage: node scripts/generate-palettes.mjs <folder with colorbrewer/ and d3sc/>");
+  process.exit(2);
+}
+const here = resolve(input) + "/";
+const cb = (await import(here + "colorbrewer/index.es.js")).default;
+
+const out = [];
+const strip = (arr) => arr.map((c) => c.replace("#", "").toLowerCase()).join("");
+
+// colorbrewer2.org's colour-blind flag, read at the scheme level (the site
+// flags a few diverging schemes safe only at their smaller sizes).
+const CVD_SAFE = new Set([
+  "BuGn","BuPu","GnBu","OrRd","PuBu","PuBuGn","PuRd","RdPu","YlGn","YlGnBu","YlOrBr","YlOrRd",
+  "Blues","Greens","Greys","Oranges","Purples","Reds",
+  "BrBG","PiYG","PRGn","PuOr","RdBu","RdYlBu",
+]);
+
+const groups = cb.schemeGroups;
+const typeOf = {};
+for (const n of groups.sequential) typeOf[n] = "sequential";
+for (const n of groups.singlehue) typeOf[n] = "sequential";
+for (const n of groups.diverging) typeOf[n] = "diverging";
+for (const n of groups.qualitative) typeOf[n] = "qualitative";
+
+for (const name of [...groups.sequential, ...groups.singlehue, ...groups.diverging, ...groups.qualitative]) {
+  const sizes = {};
+  for (const [k, v] of Object.entries(cb[name])) sizes[k] = strip(v);
+  out.push({ name, type: typeOf[name], source: "colorbrewer", cvdSafe: CVD_SAFE.has(name), sizes });
+}
+
+// viridis family (matplotlib, CC0) — sampled the way d3.quantize does.
+const vsrc = readFileSync(here + "d3sc/src/sequential-multi/viridis.js", "utf8");
+const hexes = [...vsrc.matchAll(/colors\("([0-9a-f]+)"\)/g)].map((m) => m[1]);
+const names = ["viridis", "magma", "inferno", "plasma"];
+function rampOf(spec) {
+  const range = spec.match(/.{6}/g);
+  return (t) => range[Math.max(0, Math.min(range.length - 1, Math.floor(t * range.length)))];
+}
+const ramps = Object.fromEntries(names.map((n, i) => [n, rampOf(hexes[i])]));
+// cividis: d3's polynomial fit.
+const civ = readFileSync(here + "d3sc/src/sequential-multi/cividis.js", "utf8")
+  .replace("export default function", "return function");
+const cividisRgb = new Function(civ)();
+ramps.cividis = (t) => {
+  const m = cividisRgb(t).match(/\d+/g).map(Number);
+  return m.map((c) => c.toString(16).padStart(2, "0")).join("");
+};
+for (const name of ["viridis", "cividis"]) {
+  const sizes = {};
+  for (let n = 2; n <= 12; n++) {
+    const cols = [];
+    for (let i = 0; i < n; i++) cols.push(ramps[name](i / (n - 1)));
+    sizes[n] = cols.join("");
+  }
+  out.push({ name, type: "sequential", source: "matplotlib", cvdSafe: true, sizes });
+}
+
+// Okabe & Ito (2008), "Color Universal Design" — the CVD-safe qualitative set.
+const okabe = ["E69F00", "56B4E9", "009E73", "F0E442", "0072B2", "D55E00", "CC79A7", "000000"].map((c) => c.toLowerCase());
+const okSizes = {};
+for (let n = 2; n <= 8; n++) okSizes[n] = okabe.slice(0, n).join("");
+out.push({ name: "okabe-ito", type: "qualitative", source: "okabe-ito", cvdSafe: true, sizes: okSizes });
+
+let ts = `/**
+ * @file Palette tables for \`classify:\` (generated — see below)
+ * @module @maplibre-yaml/core/classify/palettes-data
+ *
+ * @description
+ * Each palette maps a class count to its colours, packed as six-hex-digit
+ * runs (\`"f7fcb9addd8e31a354"\` = three colours) to keep the table small.
+ *
+ * Sources and licences:
+ * - **ColorBrewer** 2.0 schemes — Copyright (c) 2002 Cynthia Brewer, Mark
+ *   Harrower, and The Pennsylvania State University. Licensed under the
+ *   Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
+ *   Values from the \`colorbrewer\` npm package 1.7.0. \`cvdSafe\` follows
+ *   colorbrewer2.org's colour-blind flag at the scheme level (the site flags
+ *   a few diverging schemes safe only at their smaller sizes).
+ * - **viridis** — Nathaniel Smith and Stéfan van der
+ *   Walt (matplotlib), CC0; **cividis** — Nuñez, Anderton & Renslow (2018),
+ *   via d3-scale-chromatic 3.1.0 (ISC). Sampled at \`i / (n - 1)\` for n = 2–12,
+ *   as \`d3.quantize\` does.
+ * - **okabe-ito** — Okabe & Ito (2008), "Color Universal Design".
+ *
+ * GENERATED by scripts/generate-palettes.mjs — do not edit by hand.
+ */
+
+/** One palette: its kind, where it comes from, and its colours per class count. */
+export interface PaletteData {
+  /** Canonical spelling — ColorBrewer's own capitalisation (\`YlGnBu\`). */
+  readonly name: string;
+  readonly type: "sequential" | "diverging" | "qualitative";
+  readonly source: "colorbrewer" | "matplotlib" | "okabe-ito";
+  /** Distinguishable under the common colour-vision deficiencies. */
+  readonly cvdSafe: boolean;
+  /** Class count → packed hex colours. */
+  readonly sizes: Readonly<Record<number, string>>;
+}
+
+export const PALETTE_DATA: readonly PaletteData[] = [
+`;
+for (const p of out) {
+  ts += `  { name: ${JSON.stringify(p.name)}, type: "${p.type}", source: "${p.source}", cvdSafe: ${p.cvdSafe}, sizes: {\n`;
+  for (const [k, v] of Object.entries(p.sizes)) ts += `    ${k}: "${v}",\n`;
+  ts += `  } },\n`;
+}
+ts += `];\n`;
+const out_path = join(dirname(fileURLToPath(import.meta.url)), "../src/classify/palettes-data.ts");
+writeFileSync(out_path, ts);
+console.log("palettes:", out.length, "bytes:", ts.length);
