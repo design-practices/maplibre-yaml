@@ -25,11 +25,25 @@ export default defineConfig([
     treeshake: true,
     // `react` is only ever imported for types (src/react.ts); keep the
     // declaration bundler from inlining @types/react into dist/react.d.ts.
-    external: ["maplibre-gl", "react"],
+    // `@bokuweb/zstd-wasm` (flatgeobuf's codec for the rare seekable-zstd
+    // variant, reached by a dynamic import) stays a real dependency: a
+    // bundler resolving this build (Vite's dependency optimizer) must find it.
+    external: ["maplibre-gl", "react", "@bokuweb/zstd-wasm"],
+    // The cloud-native decoders are bundled here too, as in the browser
+    // build, and are devDependencies: flatgeobuf declares OpenLayers (`ol`,
+    // ~30 MB with geotiff) as an optional dependency, which npm installs,
+    // so depending on it put that tree under every core, astro and cli
+    // install. Bundled, only the code core uses ships (~20 KB gzip).
+    noExternal: ["pmtiles", "fflate", "flatgeobuf", "flatbuffers", "slice-source", "@repeaterjs/repeater"],
     esbuildOptions(options) {
       options.banner = {
         js: "// @maplibre-yaml/core - Declarative web maps with YAML",
       };
+      // fflate's `node` build (resolved on this platform) opens with
+      // `createRequire` from "module" for worker_threads, which breaks this
+      // build in every browser bundler. Its plain-ESM `browser` build works
+      // in Node too (pmtiles uses only the synchronous decoder).
+      options.alias = { ...(options.alias ?? {}), fflate: "fflate/browser" };
     },
   },
   // Browser build with bundled dependencies
