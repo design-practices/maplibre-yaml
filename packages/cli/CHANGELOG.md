@@ -1,5 +1,51 @@
 # @maplibre-yaml/cli
 
+## 0.5.0
+
+### Minor Changes
+
+- 80ea176: Installing the CLI no longer reports known vulnerabilities. `npm install @maplibre-yaml/cli` used to print "9 vulnerabilities (8 high), no fix available"; it now reports 0. sharp moves to 0.35.5, which fixes the libvips, libheif and librsvg advisories. Vite moves to 6.4, fixing dev-server advisories and the old esbuild Vite 5 brought. chokidar moves to 4 and file matching from fast-glob to tinyglobby, because the `braces` package they used has an advisory with no fixed release. Commands and options are unchanged.
+
+  **The CLI now needs Node.js 20.9 or later** (22 or 24 LTS recommended). sharp 0.35's security fixes don't run on older Node, and Node 18 reached end of life in 2025. On an older Node the CLI stops at once with "maplibre-yaml needs Node.js 20.9 or newer, but this is Node.js 18.x" and how to update, instead of failing later. The `maplibre-yaml` alias raises its Node minimum with it, so it moves to a minor version and `^0.1` installs on Node 18 keep the old one. This applies to the command line only: `@maplibre-yaml/core` and `@maplibre-yaml/astro` still support Node 18.
+
+- 84c9c1f: `maplibre-yaml preview` now renders scrollytelling stories. `preview story.yaml` (for example on the `init --template story` output) used to stop at "Visual preview currently supports only "type: map" blocks"; it now shows the story with `<ml-scrollytelling>` on the same hot-reloading page, so saving `story.yaml` reloads it and a validation error shows the error overlay, as for maps.
+
+### Patch Changes
+
+- 286a3c3: `init --template astro` now scaffolds a current site: Astro 7 with `@maplibre-yaml/astro`'s `<Map>` component (instead of a hand-wired `<ml-map>`), `@maplibre-yaml/core` 0.8 and `@maplibre-yaml/astro` 0.6, a layout with the viewport meta tag so maps fit on phones, the optional `@maplibre-yaml/astro/integration`, commented `site`/`base` lines for GitHub Pages, a ready-to-use `.github/workflows/deploy.yml`, a `.gitignore`, and `npm run check`. A fresh scaffold installs with no `npm audit` findings (the old one pulled core 0.7 and an Astro 5 with a critical advisory). The core and astro version ranges are now taken from the packages the CLI was released with, so they no longer fall behind.
+- 255b285: `maplibre-yaml preview` no longer hides the map's attribution: the status bar at the bottom of the preview page now sits below the map (and below a story's map) instead of over it, so the MapLibre/basemap credits and any bottom controls stay visible on desktop and phones. `preview --help` also describes `--no-open` correctly ("Don't open the browser"); it used to read "Open browser automatically".
+- 75364f6: The `preview` status bar now shows the file relative to the folder you ran the command in (`map.yaml` instead of a full absolute path), on one line, truncated with an ellipsis if it is still too long; the full path appears on hover. On a phone-width window the absolute path used to wrap and run into "Connected". The preview also waits for a save to finish before reloading, so a file written in two steps no longer briefly shows a wrong "Unable to determine document type" error.
+- 6a2f4d4: `maplibre-yaml validate` now checks every file and pattern you give it. Before, only the first argument was read: `validate a.yaml b.yaml`, an unquoted `validate *.yaml` (which the shell expands into many arguments) and several quoted patterns all reported just the first file and could exit 0 while later files were broken. Each file is now reported, the command exits non-zero if any of them fails, and an argument that matches no file is named ("No files match …") and makes the run exit non-zero instead of being skipped silently.
+- 92a236d: `validate`'s terminal output now matches the docs. Files are shown relative to the folder you ran it in (`✓ my-map.yaml`, not the full path); a run with both valid and broken files prints `✓ N file(s) valid` as well as the issues line; a missing top-level key (`config: Expected object, got undefined`) no longer carries a meaningless "at line 1, column 1"; and a plain file name that doesn't exist says `File not found: missing.yaml` (a pattern that matches nothing still says "No files match"). `init` and the story template now spell the commands `npx maplibre-yaml …`, as the docs do, and the story template puts `theme` at the top level of `story.yaml`, where the story reads it (under `config:` it did nothing).
+- 92a236d: `validate` reads each argument the way you meant it. A quoted pattern in a folder with a space (`validate "My Maps/*.yaml"`) is one pattern again, not two, so it no longer fails with "No files match"; the older `validate "a.yaml b.yaml"` spelling still works. A folder argument (`validate maps/`) validates every `.yaml`/`.yml` file under it. A file named directly on the command line is skipped, with a note, when your project's `validate.ignorePatterns` excludes it, as files matched by a pattern already were.
+- Updated dependencies [10f3435]
+- Updated dependencies [41b3bcd]
+- Updated dependencies [45fa5e7]
+- Updated dependencies [45fa5e7]
+- Updated dependencies [e4f8760]
+- Updated dependencies [45fa5e7]
+- Updated dependencies [79f1211]
+- Updated dependencies [187108e]
+- Updated dependencies [8dd3cec]
+- Updated dependencies [c6daeec]
+- Updated dependencies [45fa5e7]
+- Updated dependencies [bd78c8b]
+- Updated dependencies [d08185d]
+- Updated dependencies [9434721]
+- Updated dependencies [3cdc4a2]
+- Updated dependencies [84cddc7]
+- Updated dependencies [220f079]
+- Updated dependencies [75649c0]
+- Updated dependencies [fc9e64c]
+- Updated dependencies [f9f5526]
+- Updated dependencies [3ce86ed]
+- Updated dependencies [c832382]
+- Updated dependencies [e1c5ceb]
+- Updated dependencies [75649c0]
+- Updated dependencies [26badbc]
+- Updated dependencies [8dd3cec]
+  - @maplibre-yaml/core@0.8.1
+
 ## 0.4.2
 
 ### Patch Changes

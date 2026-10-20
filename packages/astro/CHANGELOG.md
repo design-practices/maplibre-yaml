@@ -1,5 +1,28 @@
 # @maplibre-yaml/astro
 
+## 0.6.1
+
+### Patch Changes
+
+- b3befa8: `Map`, `FullPageMap` and `Scrollytelling` accept a `quiet` prop, which renders `<ml-map quiet>` / `<ml-scrollytelling quiet>`. It hides the on-page notices for non-fatal problems, such as a data file that didn't load or the zero-height hint, so a finished site can keep them away from its visitors. The problems are still logged to the browser console, and fatal problems still show their error card. Before, an Astro site had no way to turn the notice off.
+- fa50f30: In `astro dev`, `Map`, `FullPageMap` and `Scrollytelling` now print a one-time console hint when the page has no `<meta name="viewport">`. Without it, phones lay the page out about 980px wide and shrink it, so a full-page map or story comes out tiny with unreadable controls and chapter text, and nothing else points at the cause. The hint is compiled out of production builds. The docs' FullPageMap and Scrollytelling "Basic Usage" snippets are now complete pages with the viewport meta and `body { margin: 0 }`.
+- 6d034fd: `FullPageMap` no longer shows two stacks of zoom buttons when the document declares its own navigation control. A YAML with `controls: { navigation: true }` already puts MapLibre's +/− in the top-right corner, and FullPageMap's own +/− appeared again under it, which looked like a bug. FullPageMap now keeps only its reset button in that case (checked on every load, so a `reload()` or new config is handled too); documents without a navigation control still get zoom in, zoom out and reset.
+- 2cd9b61: `FullPageMap`'s "Reset view" button now returns to the view the map opened with. When the document uses `fitTo` on a fetched source, the map is framed on the data once it loads. Reset used to go back to the YAML's own `center`/`zoom` instead, a different view from the one the page showed. It now resets to the fitted framing.
+- 8dd3cec: More validation errors are worded in plain language, the same in the browser's error card and in `maplibre-yaml validate`:
+
+  - `center: -73.982, 40.743` (no brackets) says `center needs square brackets: center: [-73.982, 40.743]`, not `Expected array, got string`. The same goes for a marker's `at:`.
+  - A value outside a fixed list (`alignment: middle`) lists the allowed values and suggests the likely one: `"middle" is not one of left, right, center, full. Did you mean "center"?`.
+  - A `"` inside a `"…"` value is explained at its line (it ends the value early; use single quotes around the value, or write `\"`). It used to read `Unexpected scalar at node end`.
+  - A document whose `type:` line is missing says `The document is missing type: at the top — add type: scrollytelling` (or `type: map`, going by the document's shape) wherever it is checked.
+  - Astro's build-time validation error (`loadScrollytellingConfig`, `loadMapConfig`, `loadFromGlob`) prints `Chapter 3 ("summit"): …` without repeating the `chapters.2.centre` path, as `maplibre-yaml validate` does. The structured `path` on each entry is unchanged.
+  - One mistake gives one message. A `centre:` typo is reported once, not again as an unknown `config:` key.
+
+  Code that shows errors to readers can use the new `displayPath()` helper. It leaves out the 0-based `chapters.3` path when the message already names the chapter (`Chapter 4 ("brooklyn-bridge") …`); the `path` itself is unchanged for tools. This is an additive change; existing code needs no action.
+
+- 84cddc7: A story's legend is now pinned above the chapter cards and never moves while the story scrolls. Before, cards passing over a corner covered the legend, on phones for most of each chapter. The legend sits top-left by default, opposite the chapter rail, or top-right on a wide screen whose cards are all `alignment: left`; a `legend.position` you set still wins. With the new `legend.collapsed: auto` (the story default) it is a compact button labelled "Legend" (the legend's own title heads the open panel) on phones and wherever cards pass its corner, and open everywhere else; `true` and `false` fix it either way. The button is a real button: it opens the legend as a panel above the cards, Escape closes it and returns focus to the button, a tap outside closes it on a phone, and focus is never trapped, so the map stays usable. A long legend scrolls inside the panel, and the panel does not animate under reduced motion. A `slot="legend"` child (also from Astro's `Scrollytelling`) fills the same panel. The rest of the map's chrome (scale bar, attribution, zoom buttons, corner slots, the params panel, the on-map notice) also stays put in its corner, under the cards; on phones the attribution stays a compact (i) button. Plain `<ml-map>` legends are unchanged.
+
+  On a phone on its side (a short landscape screen), cards are narrow and short and sit on the left, with the chapter's subject beside them. Before, desktop cards were taller than the screen and a centred one covered the subject. Chapter photos and videos are capped at 40% of the screen height, so a full-width card's photo no longer fills the map, and full-width cards keep the chapter's `center` above them as centred cards do.
+
 ## 0.6.0
 
 ### Minor Changes
