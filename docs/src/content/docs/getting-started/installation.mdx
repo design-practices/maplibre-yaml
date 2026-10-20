@@ -178,10 +178,13 @@ or the package on unpkg) and load `dist/register.browser.js` from it:
 <script type="module" src="/js/maplibre-yaml/dist/register.browser.js"></script>
 ```
 
-Some parts of maplibre-yaml load on demand, only for maps that use them —
-the readers for [PMTiles, FlatGeobuf and GeoParquet files](/guides/cloud-native-data/)
-are separate files in `dist/chunks/` — and the browser fetches them from
-next to the script. A copy of only `register.browser.js` works for every
+Some parts of maplibre-yaml load on demand, only for maps that use them, and
+the browser fetches them from `dist/chunks/` next to the script: the readers
+for [PMTiles, FlatGeobuf, GeoParquet and COG files](/guides/cloud-native-data/)
+(`pmtiles.js`, `flatgeobuf.js`, `geoparquet.js` and `geoparquet-brotli.js`,
+`cog.js` with its image codecs `cog-deflate.js`, `cog-jpeg.js`, `cog-lerc.js`
+and `cog-zstd.js`) and the [Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap)
+style generator (`protomaps-basemap.js`). A copy of only `register.browser.js` works for every
 other map; a map that needs a missing reader shows a notice naming the file.
 
 ### JavaScript API from a CDN

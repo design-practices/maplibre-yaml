@@ -90,7 +90,7 @@ export function absoluteUrl(url: string): string {
   }
 }
 
-/** The "not supported yet" error for a reserved format. */
+/** The "can't read" error for a format recognized ahead of its reader (none in 0.9). */
 export function unsupportedFormatError(format: CloudFormat, url: string): FormatError {
   return new FormatError({ code: "unsupported", format, url: stripScheme(url) });
 }

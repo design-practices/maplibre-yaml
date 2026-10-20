@@ -33,7 +33,10 @@ export const CLOUD_FORMATS = ["pmtiles", "flatgeobuf", "geoparquet", "cog"] as c
 /** A recognized cloud-native file format. */
 export type CloudFormat = (typeof CLOUD_FORMATS)[number];
 
-/** Formats this version reads YAML-only (all of them in 0.9; a format added to CLOUD_FORMATS before its reader would be reported as "not supported yet"). */
+/**
+ * Formats this version reads YAML-only: all four in 0.9. A format added to
+ * CLOUD_FORMATS ahead of its reader is reported as "can't read" instead.
+ */
 export const SUPPORTED_FORMATS: ReadonlySet<CloudFormat> = new Set<CloudFormat>([
   "pmtiles",
   "flatgeobuf",

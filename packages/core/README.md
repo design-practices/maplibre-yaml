@@ -167,7 +167,10 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
 - **Cloud-native data, YAML only:** PMTiles archives (`url: data/x.pmtiles`
   on a `vector`/`raster`/`raster-dem` source), FlatGeobuf files
   (`url: data/x.fgb`) and GeoParquet files (`url: data/x.parquet`) on a
-  `geojson` source, read with range requests and no page JavaScript
+  `geojson` source, and Cloud Optimized GeoTIFFs (`url: data/x.tif`) on a
+  `raster`/`raster-dem` source, read with range requests and no page
+  JavaScript; a whole Protomaps basemap from one `.pmtiles` file
+  (`mapStyle: { pmtiles: data/x.pmtiles }`)
   ([Cloud-native data](https://docs.maplibre-yaml.org/guides/cloud-native-data/)).
 - **Interactivity:** popups, hover states, markers, legends, a parameters
   panel, and Format v2 declarative interactions.
@@ -190,13 +193,13 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
 | `@maplibre-yaml/core/maplibre` | The maplibre-gl module `<ml-map>` renders with (for `addProtocol` plugins) |
 | `@maplibre-yaml/core/react` | JSX types for `<ml-map>` in React ([React](https://docs.maplibre-yaml.org/integrations/react/)) |
 | `@maplibre-yaml/core/schemas/json/*` | JSON Schema files (`map.schema.json`, …) |
-| `register.js` (CDN) | Browser bundle of `/register`, with `maplibre-gl` left to the import map. Format readers (PMTiles, FlatGeobuf, GeoParquet) load on demand from `dist/chunks/`: to self-host, copy the whole `dist/` folder |
+| `register.js` (CDN) | Browser bundle of `/register`, with `maplibre-gl` left to the import map. Format readers (PMTiles, FlatGeobuf, GeoParquet, COG) and the Protomaps basemap generator load on demand from `dist/chunks/`: to self-host, copy the whole `dist/` folder |
 
 ## Compatibility
 
 - **maplibre-gl** 4, 5 and 6 (`>= 6.4.1`, recommended). Peer range
   `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`. Keep the CSS on the same major as
-  the JavaScript. PMTiles sources need maplibre-gl 4 or later.
+  the JavaScript. PMTiles sources need maplibre-gl 4 or later, COG sources 4.5 or later.
 - Modern browsers (ES2022, ES modules, import maps for CDN use).
 
 ## More
