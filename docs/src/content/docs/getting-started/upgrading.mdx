@@ -142,6 +142,17 @@ and what to do about each, if anything.
   seconds before its first paint; on a slow file it then draws at
   `center`/`zoom` and frames the data when it arrives, as before.
   ([Fit to a source's data](/schema/map-config/#fit-to-a-sources-data))
+- **`fitTo` keeps a margin around the data.** Without `padding:`, the data is
+  framed with a margin (8% of the map's shorter side, 12 to 48 pixels, plus
+  room for the attribution at the bottom), so circles and icons at its edges
+  are drawn whole instead of cut in half. Write `padding: 0` for the exact
+  extent, as 0.8 framed it, or any `padding:` of your own.
+  ([Fit to a source's data](/schema/map-config/#fit-to-a-sources-data))
+- **A layer's own legend entry shows a legend.** A layer with
+  `legend: { label, color }` used to appear only when the document also had a
+  `legend:` block; now the map shows a legend for it anyway, as it does for a
+  classified layer. Write `legend: false` at the top level to keep a map
+  without one. ([Legend](/schema/map-config/#legend))
 - **`mlym emit` writes a GeoJSON `url:` source as `data: <url>`**, the way
   the MapLibre style spec expects, so the exported `style.json` now loads in
   MapLibre. A live `url:` source (`refresh:`, `stream:`) is reported as a
@@ -154,8 +165,8 @@ and what to do about each, if anything.
 - **A layer whose `before:` names a layer the map doesn't have is drawn on
   top** instead of disappearing (MapLibre used to refuse it). While you
   develop, the author notes suggest the closest layer id.
-- **The CDN script is larger**: `register.browser.js` grows from about 124 KB
-  to about 168 KB gzip, for thematic maps, translations, number formatting and
+- **The CDN script is larger**: `register.browser.js` grows from about 125 KB
+  to about 175 KB gzip, for thematic maps, translations, number formatting and
   the large-data formats. The format readers themselves are separate files,
   downloaded only by maps that use them.
 
