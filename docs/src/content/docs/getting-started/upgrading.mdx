@@ -147,6 +147,13 @@ and what to do about each, if anything.
   MapLibre. A live `url:` source (`refresh:`, `stream:`) is reported as a
   `contract` warning instead of `lossy`.
   ([emit](/cli/reference/#emit))
+- **A slow map says it is loading.** If a map hasn't drawn after about a
+  second, a small "Loading map…" appears in its middle until the basemap
+  draws. A page with its own loading indicator hides it with
+  `ml-map .ml-map-loading { display: none; }`.
+- **A layer whose `before:` names a layer the map doesn't have is drawn on
+  top** instead of disappearing (MapLibre used to refuse it). While you
+  develop, the author notes suggest the closest layer id.
 - **The CDN script is larger**: `register.browser.js` grows from about 124 KB
   to about 168 KB gzip, for thematic maps, translations, number formatting and
   the large-data formats. The format readers themselves are separate files,
@@ -163,7 +170,7 @@ and what to do about each, if anything.
 - **Large data from YAML alone.** PMTiles, FlatGeobuf, GeoParquet and Cloud
   Optimized GeoTIFF (COG) files, read in parts straight from a static host
   such as GitHub Pages, and a whole basemap from one Protomaps `.pmtiles`
-  file with no API key. See
+  file with no API key (`mapStyle: data/city.pmtiles` is enough). See
   [Large data: PMTiles, FlatGeobuf, GeoParquet & COG](/guides/cloud-native-data/).
 - **Accessible, translated maps.** A document's `title:` and `description:`
   name and describe the map for screen readers; `locale:` translates every
