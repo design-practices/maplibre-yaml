@@ -467,9 +467,9 @@ function pushSourceRuntimeWarnings(
       continue;
     }
     const definition = requireExportClass(`source.${key}`);
-    // `format:`/`load:` (ml-cnv) say how the file is read, not what is live:
+    // `format:`/`load:`/`colorRamp:` (ml-cnv) say how the file is read, not what is live:
     // the format's own lowering reports what the emitted source carries.
-    if (key === "format" || key === "load") {
+    if (key === "format" || key === "load" || key === "colorRamp") {
       warnings.push({
         path: `${basePath}.${key}`,
         kind: "contract",

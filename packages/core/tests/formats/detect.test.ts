@@ -118,7 +118,7 @@ describe("formatsIn", () => {
     expect([...formatsIn({ a: { type: "geojson", url: "a.pmtiles" } }, [])]).toEqual([]);
   });
 
-  it("reads only PMTiles and FlatGeobuf in this version", () => {
-    expect([...SUPPORTED_FORMATS].sort()).toEqual(["flatgeobuf", "pmtiles"]);
+  it("reads PMTiles, FlatGeobuf and COG in this version", () => {
+    expect([...SUPPORTED_FORMATS].sort()).toEqual(["cog", "flatgeobuf", "pmtiles"]);
   });
 });

@@ -58,6 +58,17 @@ import { FormatError } from "./errors";
 import type { CloudFormat } from "./detect";
 
 /**
+ * What formats/cog.ts calls in the `cog` chunk (formats/lib/cog.ts), named
+ * here: `@geomatico/maplibre-cog-protocol`'s own declaration types can't be
+ * named from core's emitted declarations (TS2742).
+ */
+interface CogLibrary {
+  cogProtocol: (params: { url: string; type?: string }) => Promise<{ data: unknown }>;
+  readCogHeader: typeof import("./cog-header").readCogHeader;
+  isCloudOptimized: typeof import("./cog-header").isCloudOptimized;
+}
+
+/**
  * The on-demand libraries, one literal `import()` each. The key is the
  * chunk's name (`dist/chunks/<key>.js`) and the name {@link getDecoder}
  * takes. Keep one `key: () => import("…")` per line: tsup.config.ts reads
@@ -66,10 +77,10 @@ import type { CloudFormat } from "./detect";
 const LOADERS = {
   pmtiles: () => import("pmtiles"),
   flatgeobuf: () => import("./lib/flatgeobuf"),
+  cog: () => import("./lib/cog") as Promise<CogLibrary>,
   // Reserved for the 0.9 work in flight — each adds one line shaped like the
-  // two above (see "Adding a format" at the top of this file):
+  // ones above (see "Adding a format" at the top of this file):
   //   geoparquet          the hyparquet library
-  //   cog                 the @geomatico/maplibre-cog-protocol library
   //   "protomaps-basemap" the @protomaps/basemaps library
 } satisfies Record<string, () => Promise<unknown>>;
 

@@ -18,8 +18,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -43,6 +43,7 @@ const SEAM_NAMES = [
 const LIBRARY_MARKERS: Record<string, string[]> = {
   pmtiles: ["Wrong magic number for PMTiles archive", "Server returned no content-length header"],
   flatgeobuf: ["Not a FlatGeobuf file", "Invalid header size", "FlatBuffers: "],
+  cog: ["Invalid COG protocol URL", "Server responded with full file", "GDAL_NODATA"],
 };
 
 /** Static import specifiers (`import … from "x"`, `import "x"`), minified or not. */
@@ -58,14 +59,20 @@ function dynamicImports(code: string): string[] {
   return [...code.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]!);
 }
 
-/** Every .js file under a dist subdirectory (relative to dist/). */
-function jsFiles(dir: string): string[] {
-  const root = join(DIST, dir);
-  if (!existsSync(root)) return [];
-  return readdirSync(root, { recursive: true })
-    .map(String)
-    .filter((f) => f.endsWith(".js"))
-    .map((f) => join(dir, f));
+/** `files` and every dist module they import statically, transitively (dist-relative). */
+function staticClosure(files: string[]): string[] {
+  const seen = new Set<string>();
+  const queue = [...files];
+  while (queue.length > 0) {
+    const file = queue.shift()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    for (const spec of staticImports(read(file))) {
+      if (!spec.startsWith(".")) continue;
+      queue.push(relative(DIST, resolve(DIST, dirname(file), spec)).split(sep).join("/"));
+    }
+  }
+  return [...seen];
 }
 
 describe("the seam", () => {
@@ -117,21 +124,28 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
 
 describe.skipIf(!built)("npm build: readers in dist/formats/, reached by import()", () => {
   const formatFiles = new Set(SEAM_NAMES.map((n) => `formats/${n}.js`));
-  const npmFiles = [
+  const entries = [
     "index.js",
     "register.js",
     "components/index.js",
     "schemas/index.js",
     "scrollytelling/index.js",
     "maplibre.js",
-    ...jsFiles("shared"),
   ];
+  /**
+   * The entries and every shared module they load statically — what a page
+   * using core downloads. Shared modules only a reader reaches (geotiff.js's
+   * codec sub-chunks share code with formats/cog.js) load on demand too.
+   */
+  const npmFiles = built ? staticClosure(entries) : entries;
 
   it("emits each reader as its own module", () => {
     for (const file of formatFiles) expect(existsSync(join(DIST, file)), file).toBe(true);
   });
 
   it("no entry or shared module contains a reader, or imports one statically", () => {
+    // Not vacuous: the entries do share code through dist/shared/.
+    expect(npmFiles.some((f) => f.startsWith("shared/"))).toBe(true);
     for (const file of npmFiles) {
       const code = read(file);
       for (const [name, markers] of Object.entries(LIBRARY_MARKERS)) {

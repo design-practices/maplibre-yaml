@@ -432,9 +432,9 @@ function pathOfSameOrigin(url: string, pageUrl: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Cloud-native formats (0.9, ml-cnv): PMTiles, FlatGeobuf — and the two the
-// syntax reserves (GeoParquet, COG). One sentence per failure, written for
-// the student who just pointed a map at a file.
+// Cloud-native formats (0.9, ml-cnv): PMTiles, FlatGeobuf, COG — and the one
+// the syntax reserves (GeoParquet). One sentence per failure, written for
+// whoever just pointed a map at a file.
 // ---------------------------------------------------------------------------
 
 /** The format's everyday name, for messages. */
@@ -463,7 +463,7 @@ function megabytes(bytes: number): string {
  * advice every range failure ends with.
  */
 export const RANGE_REQUEST_HINT =
-  "PMTiles and FlatGeobuf files need a web server that supports HTTP range requests: " +
+  "PMTiles, COG and FlatGeobuf files need a web server that supports HTTP range requests: " +
   "GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` does not — " +
   "preview locally with `npx serve` instead.";
 
@@ -510,19 +510,24 @@ export function describeFormatFailure(failure: FormatFailure): string {
         `SPATIAL_INDEX=YES out.fgb ${fileNameOf(failure.url)}\` — or use \`load: all\`.`
       );
     case "crs":
+      if (failure.format === "cog") return describeCogProjection(failure);
       return (
         `${file} is in ${failure.crs ?? "a projected coordinate system"}; MapLibre needs ` +
         "longitude/latitude (EPSG:4326). Reproject it: " +
         `\`ogr2ogr -t_srs EPSG:4326 out.fgb ${fileNameOf(failure.url)}\`.`
       );
     case "unsupported":
-      return failure.format === "cog"
-        ? `${file} is a ${label}, which this version of maplibre-yaml can't read on its ` +
-            "own yet (it's planned). For now, convert it to PMTiles raster tiles, or " +
-            "register the `cog://` protocol from page JavaScript."
-        : `${file} is a ${label} file, which this version of maplibre-yaml can't read yet ` +
-            "(it's planned). For now, convert it to FlatGeobuf or GeoJSON: " +
-            `\`ogr2ogr out.fgb ${fileNameOf(failure.url)}\`.`;
+      return (
+        `${file} is a ${label} file, which this version of maplibre-yaml can't read yet ` +
+        "(it's planned). For now, convert it to FlatGeobuf or GeoJSON: " +
+        `\`ogr2ogr out.fgb ${fileNameOf(failure.url)}\`.`
+      );
+    case "not-cloud-optimized":
+      return (
+        `${file} is a GeoTIFF but not a Cloud Optimized one (it has no internal tiles or no ` +
+        "overviews), so the browser may download most of the file to draw it. Convert it: " +
+        `\`gdal_translate -of COG -co COMPRESS=DEFLATE ${fileNameOf(failure.url)} out.tif\`.`
+      );
     case "decoder":
       return (
         `The ${label} reader couldn't be set up${failure.detail ? ` (${failure.detail})` : ""}, ` +
@@ -549,6 +554,28 @@ export function describeFormatFailure(failure: FormatFailure): string {
         (failure.detail ? `: ${failure.detail.replace(/[.\s]+$/, "")}.` : ".")
       );
   }
+}
+
+/**
+ * A COG that isn't in Web Mercator — the one projection the COG reader
+ * draws — or has no coordinates at all, with the GDAL command that fixes it.
+ */
+function describeCogProjection(failure: FormatFailure): string {
+  const file = `\`${failure.url}\``;
+  const name = fileNameOf(failure.url);
+  const fix =
+    `\`gdalwarp -t_srs EPSG:3857 -of COG -co COMPRESS=DEFLATE ${name} out.tif\`` +
+    " (GDAL 3.1 or later).";
+  if (failure.crs === undefined) {
+    return (
+      `${file} has no map coordinates (a plain TIFF image, not a GeoTIFF), so it can't be ` +
+      `placed on the map. Georeference it, then make a Web Mercator COG: ${fix}`
+    );
+  }
+  return (
+    `${file} is in ${failure.crs}; a COG must be in Web Mercator (EPSG:3857) to be drawn. ` +
+    `Reproject it: ${fix}`
+  );
 }
 
 /**

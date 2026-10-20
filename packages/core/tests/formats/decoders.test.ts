@@ -43,7 +43,8 @@ describe("getDecoder", () => {
   it("knows which formats it has a reader for", () => {
     expect(hasDecoder("pmtiles")).toBe(true);
     expect(hasDecoder("flatgeobuf")).toBe(true);
-    expect(hasDecoder("cog")).toBe(false);
+    expect(hasDecoder("cog")).toBe(true);
+    expect(hasDecoder("geoparquet")).toBe(false);
   });
 
   it("names the file it couldn't download and says to copy the whole dist/ folder", async () => {

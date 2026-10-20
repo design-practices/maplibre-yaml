@@ -156,6 +156,13 @@ exportClasses.register("source.load", {
     "the emitted source carries a snapshot of the file's features.",
 });
 
+exportClasses.register("source.colorRamp", {
+  class: "exports",
+  onEmit:
+    "A COG's colour ramp is compiled into its cog:// URL (the COG protocol's #color: " +
+    "fragment, with the palette written out as colours); the key does not appear in style.json.",
+});
+
 exportClasses.register("format.pmtiles", { class: "exports", onEmit: PMTILES_ON_EMIT });
 
 exportClasses.register("format.cog", { class: "exports", onEmit: COG_ON_EMIT });

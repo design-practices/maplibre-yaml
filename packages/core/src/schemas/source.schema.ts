@@ -90,8 +90,8 @@ const TileURLTemplateSchema = z
  * `.fgb`, `.parquet`, `.tif` extension. Write `format:` only for a URL with no
  * telling extension (a signed link, an API endpoint); it wins over the URL.
  * `type:` stays the MapLibre source type (`vector`/`raster`/`raster-dem` for
- * PMTiles, `geojson` for FlatGeobuf). `geoparquet` and `cog` are recognized
- * but not read by this version yet. A source key in v1; under the source's
+ * PMTiles or COG, `geojson` for FlatGeobuf). `geoparquet` is recognized but
+ * not read by this version yet. A source key in v1; under the source's
  * `runtime:` in a v2 document.
  *
  * @example
@@ -105,8 +105,50 @@ const TileURLTemplateSchema = z
 export const SourceFormatSchema = z
   .enum(["pmtiles", "flatgeobuf", "geoparquet", "cog"])
   .describe(
-    "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+    "File format, when the URL doesn't show it (pmtiles, flatgeobuf, cog; geoparquet is not read yet)"
   );
+
+/**
+ * Colours for a single-band Cloud Optimized GeoTIFF (0.9, ml-cnv.2).
+ *
+ * @remarks
+ * A COG with one band of values (a vegetation index, a temperature) has no
+ * colours of its own: `colorRamp:` maps `min`…`max` onto a palette — the
+ * same names `classify:` uses (`viridis`, `YlGn`, `RdBu` …; default
+ * `viridis`) — or onto your own `colors:`. Smooth by default; `classes: 5`
+ * draws five flat classes instead. Only on a `type: raster` source whose
+ * file is a COG. A source key in v1; under the source's `runtime:` in v2.
+ *
+ * @example
+ * ```yaml
+ * ndvi:
+ *   type: raster
+ *   url: data/ndvi.tif
+ *   colorRamp: { palette: YlGn, min: 0, max: 0.9 }
+ * ```
+ */
+export const ColorRampSchema = z
+  .object({
+    palette: z
+      .string()
+      .optional()
+      .describe("Palette name, as in classify: (viridis, cividis, YlGn, RdBu …); default viridis"),
+    colors: z
+      .array(z.string())
+      .min(2)
+      .optional()
+      .describe("Your own colours, low to high (#rrggbb), instead of a palette"),
+    min: z.number().describe("The value drawn in the first colour"),
+    max: z.number().describe("The value drawn in the last colour"),
+    reverse: z.boolean().optional().describe("Run the colours high to low"),
+    classes: z
+      .number()
+      .int()
+      .min(2)
+      .optional()
+      .describe("Draw this many flat classes instead of a smooth ramp"),
+  })
+  .describe("COG: colours for a single band of values (palette or colors, min, max)");
 
 /**
  * How a FlatGeobuf source is read (0.9, ml-cnv.3).
@@ -640,9 +682,10 @@ export const RasterSourceSchema = z
   .object({
     type: z.literal("raster").describe("Source type"),
     url: ResourceURLSchema.optional().describe(
-      "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+      "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or a COG (.tif or cog://)"
     ),
     format: SourceFormatSchema.optional(),
+    colorRamp: ColorRampSchema.optional(),
     tiles: z
       .array(TileURLTemplateSchema)
       .optional()
@@ -722,7 +765,7 @@ export const RasterDEMSourceSchema = z
   .object({
     type: z.literal("raster-dem").describe("Source type"),
     url: ResourceURLSchema.optional().describe(
-      "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+      "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or an elevation COG (.tif or cog://)"
     ),
     format: SourceFormatSchema.optional(),
     tiles: z

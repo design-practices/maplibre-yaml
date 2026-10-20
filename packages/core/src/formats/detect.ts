@@ -14,18 +14,18 @@
  * `format:` key names it outright when the URL has no telling extension
  * (a signed URL, an API endpoint); `format:` wins over the URL.
  *
- * Four formats are recognized; two are read in this version:
+ * Four formats are recognized; three are read in this version:
  *
  * | Format | Source `type:` | Read in 0.9 |
  * | --- | --- | --- |
  * | PMTiles | `vector`, `raster`, `raster-dem` | yes (tile protocol) |
  * | FlatGeobuf | `geojson` | yes (decoded to GeoJSON) |
  * | GeoParquet | `geojson` | not yet (reserved: "not supported yet") |
- * | COG | `raster`, `raster-dem` | not yet without page JS (reserved) |
+ * | COG | `raster`, `raster-dem` | yes (tile protocol, reader on demand) |
  *
- * Reserving GeoParquet and COG now is what keeps adding them later
+ * Reserving GeoParquet now is what keeps adding it later
  * additive: a document written for 0.9 means the same thing in the release
- * that reads them, and a 0.9 reader gets a plain "not supported yet" instead
+ * that reads it, and a 0.9 reader gets a plain "not supported yet" instead
  * of a JSON parse error.
  *
  * Everything here is pure (no DOM, no maplibre-gl), so the parser, the
@@ -42,6 +42,7 @@ export type CloudFormat = (typeof CLOUD_FORMATS)[number];
 export const SUPPORTED_FORMATS: ReadonlySet<CloudFormat> = new Set<CloudFormat>([
   "pmtiles",
   "flatgeobuf",
+  "cog",
 ]);
 
 /** What a format holds, and the source types that can draw it. */

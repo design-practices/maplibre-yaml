@@ -122,6 +122,85 @@ describe("GeoParquet (not read yet)", () => {
   });
 });
 
+describe("COG (ml-cnv.2)", () => {
+  it("writes cog:// URLs the way the renderer does: #dem, #color:, tileSize 256 (contract)", () => {
+    const parsed = YAMLParser.safeParseMapBlock(`type: map
+id: m
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+  mapStyle: https://x.org/style.json
+sources:
+  imagery: { type: raster, url: data/imagery.tif }
+  elevation: { type: raster-dem, url: data/elevation.tif }
+  ndvi:
+    type: raster
+    url: https://x.org/ndvi.tif
+    colorRamp: { palette: viridis, min: 0, max: 1, classes: 3 }
+  own:
+    type: raster
+    url: "cog://data/t.tif#color:BrewerSpectral9,-5,35,c"
+    tileSize: 512
+layers:
+  - { id: i, type: raster, source: imagery }
+  - { id: h, type: hillshade, source: elevation }
+  - { id: n, type: raster, source: ndvi }
+  - { id: o, type: raster, source: own }
+`);
+    expect(parsed.success).toBe(true);
+    const { style, warnings } = projectStyle(normalizeMapBlock(parsed.data as never), "strict");
+    const sources = style["sources"] as Record<string, Record<string, unknown>>;
+    expect(sources["imagery"]).toEqual({ type: "raster", url: "cog://data/imagery.tif", tileSize: 256 });
+    expect(sources["elevation"]).toEqual({
+      type: "raster-dem",
+      url: "cog://data/elevation.tif#dem",
+      tileSize: 256,
+      encoding: "mapbox",
+    });
+    expect(sources["ndvi"]).toEqual({
+      type: "raster",
+      url: 'cog://https://x.org/ndvi.tif#color:["#440154","#21918c","#fde725"],0,1',
+      tileSize: 256,
+    });
+    // An authored fragment and tileSize are the author's.
+    expect(sources["own"]).toEqual({
+      type: "raster",
+      url: "cog://data/t.tif#color:BrewerSpectral9,-5,35,c",
+      tileSize: 512,
+    });
+    expect(warnings.filter((w) => w.construct === "format.cog")).toHaveLength(4);
+    expect(warnings).toContainEqual(
+      expect.objectContaining({ path: "sources.ndvi.colorRamp", kind: "contract", construct: "source.colorRamp" })
+    );
+    expect(warnings.every((w) => w.kind === "contract")).toBe(true);
+    expect(validateStyleMin(style as never)).toEqual([]);
+  });
+
+  it("a v2 document's runtime.colorRamp", () => {
+    const parsed = YAMLParser.safeParseMapBlock(`version: 2
+type: map
+id: m
+style:
+  center: [10.2, 42.15]
+  zoom: 10
+  sources:
+    ndvi:
+      type: raster
+      url: data/ndvi.tif
+      runtime: { colorRamp: { colors: ["#000", "#fff"], min: -1, max: 1, reverse: true } }
+  layers:
+    - { id: n, type: raster, source: ndvi }
+`);
+    expect(parsed.success).toBe(true);
+    const { style } = projectStyle(toModel(parsed.data as never));
+    expect((style["sources"] as Record<string, unknown>)["ndvi"]).toEqual({
+      type: "raster",
+      url: 'cog://data/ndvi.tif#color:["#000000","#ffffff"],-1,1,c-',
+      tileSize: 256,
+    });
+  });
+});
+
 describe("registrations", () => {
   it("declare each format's export class", () => {
     expect(exportClasses.require("format.pmtiles").class).toBe("exports");
@@ -130,6 +209,7 @@ describe("registrations", () => {
     expect(exportClasses.require("format.geoparquet").class).toBe("no-export");
     expect(exportClasses.require("source.format").class).toBe("exports");
     expect(exportClasses.require("source.load").class).toBe("no-export");
+    expect(exportClasses.require("source.colorRamp").class).toBe("exports");
   });
 
   it("the flatgeobuf export() hook shares the projection's lowering", () => {

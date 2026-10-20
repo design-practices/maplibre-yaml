@@ -16,10 +16,13 @@
  *   {@link FlatGeobufLoader}, the data provider the GeoJSON `url:` pipeline
  *   calls instead of its JSON fetch — so `fitTo`, data events, popups and the
  *   legend see ordinary GeoJSON.
- * - **GeoParquet / COG**: recognized, not read yet. They fail with a plain
- *   "not supported yet" ({@link unsupportedFormatError}) instead of a JSON or
- *   tile error — unless the page registered `cog://` itself, which COG
- *   sources then use.
+ * - **COG** (`raster` / `raster-dem`): like PMTiles, a `cog://` protocol
+ *   (registered by `prepareProtocols`, its reader fetched on demand); the
+ *   URL becomes `cog://<absolute URL>` plus `#dem` or the `colorRamp:`
+ *   colours, with `tileSize: 256` (`formats/cog-spec`).
+ * - **GeoParquet**: recognized, not read yet. It fails with a plain
+ *   "not supported yet" ({@link unsupportedFormatError}) instead of a JSON
+ *   error.
  */
 
 import type { Map as MapLibreMap } from "maplibre-gl";
@@ -34,6 +37,7 @@ import {
 } from "../formats/detect";
 import { prefetchDecoder } from "../formats/decoders";
 import * as fgb from "../formats/flatgeobuf";
+import { cogSourceSpec } from "../formats/cog-spec";
 import type { FlatGeobufHeader } from "../formats/flatgeobuf";
 import { FormatError, isAbortError, isFormatError } from "../formats/errors";
 import { registerSourceDataLoader, type SourceDataLoader } from "../data/source-data";
@@ -59,7 +63,7 @@ export { VIEWPORT_DEFAULT_MINZOOM, loadModeOf, type LoadMode } from "../formats/
 export const VIEWPORT_DEBOUNCE_MS = 250;
 
 /** Keys that are ours, never MapLibre's: stripped before a source reaches it. */
-export const FORMAT_SOURCE_KEYS = ["format", "load"] as const;
+export const FORMAT_SOURCE_KEYS = ["format", "load", "colorRamp"] as const;
 
 type Obj = Record<string, unknown>;
 
@@ -72,7 +76,7 @@ export function withoutFormatKeys<T extends Obj>(spec: T): T {
 }
 
 // ---------------------------------------------------------------------------
-// Tile sources (PMTiles, and the COG reservation)
+// Tile sources (PMTiles, COG)
 // ---------------------------------------------------------------------------
 
 /** `url` resolved against the page (absolute), or as given outside a browser. */
@@ -96,16 +100,17 @@ export function unsupportedFormatError(format: CloudFormat, url: string): Format
  * that may name a cloud-native file.
  *
  * @returns `spec` — the input without our keys, with a PMTiles URL rewritten
- *   to `pmtiles://<absolute>` — and `problem` when the source can't be read
- *   in this version (a COG without a page-registered `cog://`); the spec is
- *   then an empty placeholder of the same type, so layers over it are added
- *   and draw nothing instead of each failing on a missing source.
- * @param isRegistered - Whether the page registered a URL protocol itself
- *   (the renderer passes `isProtocolRegistered` from ./cloud-protocols).
+ *   to `pmtiles://<absolute>` and a COG's to `cog://<absolute>` (see
+ *   `formats/cog-spec`) — and `problem` when the source can't be read in
+ *   this version; the spec is then an empty placeholder of the same type, so
+ *   layers over it are added and draw nothing instead of each failing on a
+ *   missing source.
+ * @param _isRegistered - Whether the page registered a URL protocol itself
+ *   (unused since COG is read YAML-only; kept for callers).
  */
 export function toMapLibreTileSpec(
   spec: Obj,
-  isRegistered: (scheme: string) => boolean = () => false
+  _isRegistered: (scheme: string) => boolean = () => false
 ): { spec: Obj; problem?: FormatError } {
   const clean = withoutFormatKeys(spec);
   const format = formatOfSource(spec);
@@ -116,9 +121,9 @@ export function toMapLibreTileSpec(
   if (format === "pmtiles") {
     return { spec: { ...clean, url: `pmtiles://${absoluteUrl(stripScheme(url))}` } };
   }
-  if (format === "cog" && isRegistered("cog")) {
-    // The page registered a COG protocol itself (the 0.7 page-JS route): use it.
-    return { spec: { ...clean, url: `cog://${absoluteUrl(stripScheme(url))}` } };
+  if (format === "cog") {
+    // `cog://<absolute>`, `#dem` / `#color:` and tileSize 256 (ml-cnv.2).
+    return { spec: cogSourceSpec({ ...clean, colorRamp: spec["colorRamp"] }, absoluteUrl) };
   }
   return { spec: placeholderTileSpec(spec["type"]), problem: unsupportedFormatError(format, url) };
 }

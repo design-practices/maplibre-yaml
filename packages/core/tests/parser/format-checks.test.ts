@@ -108,7 +108,7 @@ describe("type: <a file format> is an error with the fix", () => {
     ["flatgeobuf", "Keep the url: and set type: geojson"],
     ["fgb", "Keep the url: and set type: geojson"],
     ["geoparquet", "GeoParquet files are read with type: geojson. This version of maplibre-yaml can't read GeoParquet yet"],
-    ["cog", "a Cloud Optimized GeoTIFF is read with type: raster (or raster-dem for elevation)"],
+    ["cog", "Keep the url: and set type: raster (or raster-dem for elevation)"],
     ["mbtiles", "Convert it to PMTiles (pmtiles convert in.mbtiles out.pmtiles)"],
   ])("type: %s", (word, fix) => {
     const result = v1(`  data:
@@ -243,7 +243,7 @@ describe("live data on FlatGeobuf is not available in 0.9", () => {
   });
 });
 
-describe("GeoParquet and COG are reserved: recognized, not read yet", () => {
+describe("GeoParquet is reserved: recognized, not read yet (COG is read since ml-cnv.2)", () => {
   it("warns (not an error: the rest of the map still renders)", () => {
     const result = v1(`  wells:
     type: geojson
@@ -256,13 +256,12 @@ describe("GeoParquet and COG are reserved: recognized, not read yet", () => {
     expect(messages).toContain(
       '"data/wells.parquet" is a GeoParquet file. This version of maplibre-yaml can\'t read GeoParquet yet (it\'s planned)'
     );
-    expect(messages).toContain(
-      '"data/scene.tif" is a Cloud Optimized GeoTIFF. This version of maplibre-yaml can\'t read COGs on its own yet'
-    );
+    // A COG is read now: no "not yet" warning for it.
+    expect(messages).not.toContain("scene.tif");
     expect(result.warnings.every((w) => w.kind === "unimplemented")).toBe(true);
   });
 
-  it("format: geoparquet / cog validate (the syntax is reserved, not rejected)", () => {
+  it("format: geoparquet / cog validate", () => {
     expect(v1(`  a:\n    type: geojson\n    url: https://x.org/a\n    format: geoparquet`).success).toBe(true);
     expect(v1(`  a:\n    type: raster\n    url: https://x.org/a\n    format: cog`).success).toBe(true);
   });

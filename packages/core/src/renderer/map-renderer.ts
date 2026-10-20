@@ -50,6 +50,7 @@ import { createStrings, type Strings } from '../i18n';
 import { mapLanguage } from './popup-builder';
 import { applyAccessibleName } from './accessible-name';
 import { isProtocolRegistered, pmtilesUnavailable, prepareProtocols } from './cloud-protocols';
+import { cogHintFor } from '../formats/cog-protocol';
 import { basemapRequestTransformer, type RequestTransformer } from './basemap-urls';
 import { formatOfSource, type CloudFormat } from '../formats/detect';
 
@@ -105,12 +106,15 @@ function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
  *
  * - `bounds` — inline data: known before the map exists.
  * - `deferred` — a fetched geojson source: fit on its first data load.
+ * - `tile-bounds` — a COG (ml-cnv.2): fit to the extent its reader reports
+ *   once the source's metadata loads.
  * - `unsupported` — missing name, non-geojson source, or empty data: the
  *   authored center/zoom stand, with one warning naming why.
  */
 type FitResolution =
   | { kind: 'bounds'; bounds: Bounds }
   | { kind: 'deferred' }
+  | { kind: 'tile-bounds' }
   | { kind: 'unsupported'; reason: string; missing?: { suggestion?: string } };
 
 function resolveFitTo(
@@ -130,12 +134,18 @@ function resolveFitTo(
       missing: { suggestion },
     };
   }
+  if (
+    (source['type'] === 'raster' || source['type'] === 'raster-dem') &&
+    formatOfSource(source) === 'cog'
+  ) {
+    return { kind: 'tile-bounds' };
+  }
   if (source['type'] !== 'geojson') {
     return {
       kind: 'unsupported',
       reason:
         `fitTo.source "${fitTo.source}" is a ${String(source['type'])} source; only ` +
-        `GeoJSON sources have a client-side extent to fit (tiled sources do not); ${keep}`,
+        `GeoJSON sources and COGs have an extent to fit (other tiled sources do not); ${keep}`,
     };
   }
   const inline = source['data'] ?? source['prefetchedData'];
@@ -178,6 +188,8 @@ const BASEMAP_FILE_FAILURE =
  *   source is read by view); the layer draws in its no-data colour.
  * - `classify-field`: a hint — a classified layer's field has no usable
  *   value in the loaded data, so every feature draws as no data.
+ * - `source-hint`: a hint — a source draws, but its file is served in a
+ *   way that makes it slow (a GeoTIFF that isn't cloud-optimized).
  *
  * Errors with no context (a basemap tile, a glyph) are not the document's.
  */
@@ -192,8 +204,18 @@ export interface MapErrorContext {
    * `classify-field`: an author hint, not a failure — the loaded data has no
    * usable value for a classified layer's `field:` / `normalize:` (a
    * misspelt or wrong-case name, or text under numeric classes).
+   * `source-hint`: an author hint, not a failure — a source draws, but its
+   * file could be served better (a GeoTIFF that isn't cloud-optimized).
    */
-  kind: 'style' | 'layer' | 'source' | 'fit' | 'center' | 'classify' | 'classify-field';
+  kind:
+    | 'style'
+    | 'layer'
+    | 'source'
+    | 'fit'
+    | 'center'
+    | 'classify'
+    | 'classify-field'
+    | 'source-hint';
   /** For `center`: the center as written. */
   center?: [number, number];
   /** The document layer, for `layer` and `classify` errors. */
@@ -583,6 +605,39 @@ export class MapRenderer {
           sourceId: fitTo.source,
           ...(missing.suggestion ? { suggestion: missing.suggestion } : {}),
         });
+      });
+    }
+
+    // COG sources (ml-cnv.2): once a source's metadata has loaded, its reader
+    // knows the file's extent (fitTo) and whether it is cloud-optimized (an
+    // author hint when not).
+    const cogSources = new Set(sourceIdsReading('cog', sources, layers));
+    if (cogSources.size > 0 || (fitTo && fit && fit.kind === 'tile-bounds')) {
+      const hinted = new Set<string>();
+      this.map.on('sourcedata', (e: { sourceId?: string; sourceDataType?: string }) => {
+        if (this.destroyed || e.sourceDataType !== 'metadata' || !e.sourceId) return;
+        const source = this.map.getSource(e.sourceId) as { url?: unknown; bounds?: unknown } | undefined;
+        if (!source) return;
+        if (fitTo && fit && fit.kind === 'tile-bounds' && e.sourceId === fitTo.source && !this.fitApplied) {
+          const b = source.bounds;
+          if (Array.isArray(b) && b.length === 4 && b.every((n) => typeof n === 'number')) {
+            const bounds: Bounds = [[b[0], b[1]], [b[2], b[3]]] as Bounds;
+            this.fitApplied = true;
+            this.map.fitBounds(bounds, {
+              ...(fitTo.padding !== undefined ? { padding: fitTo.padding } : {}),
+              ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
+              animate: false,
+            });
+            this.emit('camera:fit', { source: fitTo.source, bounds });
+          }
+        }
+        if (cogSources.has(e.sourceId) && !hinted.has(e.sourceId) && typeof source.url === 'string') {
+          const hint = cogHintFor(source.url);
+          if (hint) {
+            hinted.add(e.sourceId);
+            options.onError?.(new Error(hint), false, { kind: 'source-hint', sourceId: e.sourceId });
+          }
+        }
       });
     }
 

@@ -25,6 +25,37 @@ import { defineConfig, type Options } from "tsup";
 
 const SEAM = "src/formats/decoders.ts";
 
+/**
+ * The COG library (ml-cnv.2, `chunks/cog.js` / `formats/cog.js`) reads with
+ * geotiff.js, which also reads local files and plain-Node HTTP (`fs`,
+ * `http`, `https`, `url`) and starts its decoding workers through
+ * `web-worker`, whose Node build uses worker_threads. Core only reads COGs
+ * in a browser, and the npm build is what Vite/Astro bundle for one: those
+ * imports resolve to the browser's own `Worker` and to empty modules
+ * instead (the browser builds get the same from geotiff's `browser` field;
+ * the plugin keeps them identical).
+ */
+const geotiffBrowserOnly = {
+  name: "geotiff-browser-only",
+  setup(build: {
+    onResolve: (o: { filter: RegExp }, cb: (args: { path: string; importer: string }) => unknown) => void;
+    onLoad: (o: { filter: RegExp; namespace: string }, cb: (args: { path: string }) => unknown) => void;
+  }) {
+    build.onResolve({ filter: /^(fs|http|https|url|web-worker)$/ }, (args) =>
+      /[\\/](geotiff|web-worker)[\\/]/.test(args.importer)
+        ? { path: args.path, namespace: "geotiff-browser-only" }
+        : undefined
+    );
+    build.onLoad({ filter: /.*/, namespace: "geotiff-browser-only" }, (args) => ({
+      contents:
+        args.path === "web-worker"
+          ? "export default typeof Worker !== 'undefined' ? Worker : undefined;"
+          : "export default {};",
+      loader: "js",
+    }));
+  },
+};
+
 /** The seam's table: on-demand name → specifier, as written in the `import()`. */
 const seam: Record<string, string> = Object.fromEntries(
   [
@@ -125,6 +156,7 @@ export default defineConfig([
     // npm installs, so depending on it put that tree under every core, astro
     // and cli install. Bundled, only the code core uses ships.
     noExternal: ["pmtiles", "fflate", "flatgeobuf", "flatbuffers", "slice-source", "@repeaterjs/repeater"],
+    esbuildPlugins: [geotiffBrowserOnly as never],
     esbuildOptions(options) {
       options.banner = {
         js: "// @maplibre-yaml/core - Declarative web maps with YAML",
@@ -182,7 +214,7 @@ function browserBuild(entry: Record<string, string>, chunks: boolean): Options {
       "@bokuweb/zstd-wasm",
       ...Object.values(seam).filter((spec) => !spec.startsWith(".")),
     ],
-    ...(chunks ? { esbuildPlugins: [seamChunksExternal as never] } : {}),
+    esbuildPlugins: [geotiffBrowserOnly as never, ...(chunks ? [seamChunksExternal as never] : [])],
     esbuildOptions(options) {
       options.banner = {
         js: "// @maplibre-yaml/core - Browser build with bundled dependencies",
