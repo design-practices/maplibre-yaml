@@ -107,8 +107,11 @@ export {
   imageAssetName,
   DEFAULT_PIN_WIDTH,
   DEFAULT_PIN_HEIGHT,
+  lowerSourceFormat,
+  attachSourceData,
 } from "./emitter";
 export type {
+  EmitDataRef,
   EmitAsset,
   EmitImageRef,
   HatchTileOptions,
@@ -154,6 +157,20 @@ export type {
 } from "./effects-host";
 export { lowerEffectLayer, EFFECT_ON_EMIT } from "./emitter/lower-effects";
 export type { EffectLowering } from "./emitter/lower-effects";
+
+// Cloud-native formats (0.9, ml-cnv): detection (shared by validation, the
+// renderer and the emitter), the plain-language error type, and the
+// FlatGeobuf decoder `mlym emit` converts files with.
+export {
+  CLOUD_FORMATS,
+  SUPPORTED_FORMATS,
+  formatFromUrl,
+  formatOfSource,
+  type CloudFormat,
+} from "./formats/detect";
+export { FormatError, isFormatError } from "./formats/errors";
+export type { FormatFailure, FormatFailureCode } from "./formats/errors";
+export { decodeBytes as decodeFlatGeobuf } from "./formats/flatgeobuf";
 
 // Capability policy — what a document may do, given where it is compiled
 export {

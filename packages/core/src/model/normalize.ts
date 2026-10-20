@@ -60,6 +60,12 @@ export const SOURCE_RUNTIME_KEYS = [
   "refreshInterval",
   "updateStrategy",
   "updateKey",
+  // Cloud-native formats (0.9, ml-cnv): how the file is read, not what is
+  // drawn. `format:` names the file format when the URL can't; `load:` picks
+  // whole-file or by-view reading for FlatGeobuf. Flat on a v1 source, under
+  // `runtime:` on a v2 one.
+  "format",
+  "load",
 ] as const;
 
 /**

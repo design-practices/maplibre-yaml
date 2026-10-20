@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cloud-native data: the page's own pmtiles protocol wins</title>
+  <!--
+    0.9 (ml-cnv.1, design D5 "host wins"). The 0.7 route — page JavaScript
+    registering `pmtiles` through @maplibre-yaml/core/maplibre — keeps
+    working: a page that registered its own handler (a custom Source, auth
+    headers, a tile transform) is never replaced by core's.
+    Here the page's handler is a stand-in that serves one flat-coloured
+    vector tile and counts its calls.
+    PASS = a purple square from the page's handler; window.hostCalls > 0; core
+    made no request for the archive. FAIL = no square, or requests to
+    districts.pmtiles (core's handler ran instead).
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/host-protocol.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 420px; margin: 8px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = the page's own pmtiles handler serves the source (window.hostCalls &gt; 0); core's is never used.</header>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: host-protocol
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  districts:
+    type: vector
+    url: /gallery-assets/cloud-native/districts.pmtiles
+layers:
+  - id: host-tiles
+    type: fill
+    source: districts
+    source-layer: host
+    paint: { fill-color: "#7b2cbf", fill-opacity: 0.6 }
+    </script>
+  </ml-map>
+  <script type="module">
+    import { addProtocol } from "../../../packages/core/maplibre.js";
+
+    // A minimal hand-written vector tile: one layer "host" with one square
+    // covering the whole tile (protobuf by hand, so no library is needed).
+    function squareTile() {
+      const varint = (n) => { const out = []; while (n > 127) { out.push((n & 127) | 128); n >>>= 7; } out.push(n); return out; };
+      const zz = (n) => (n << 1) ^ (n >> 31);
+      const field = (num, type) => varint((num << 3) | type);
+      const bytes = (num, arr) => [...field(num, 2), ...varint(arr.length), ...arr];
+      const geometry = [9, zz(0), zz(0), 26, zz(4096), zz(0), zz(0), zz(4096), zz(-4096), zz(0), 15];
+      const packed = geometry.flatMap(varint);
+      const feature = [...field(3, 0), 3, ...bytes(4, packed)];
+      const layer = [...bytes(1, [...new TextEncoder().encode("host")]), ...bytes(2, feature), ...field(5, 0), ...varint(4096), ...field(15, 0), 2];
+      return new Uint8Array(bytes(3, layer)).buffer;
+    }
+
+    window.hostCalls = 0;
+    window.hostHandler = async (params) => {
+      window.hostCalls++;
+      if (/\/\d+\/\d+\/\d+$/.test(params.url)) return { data: squareTile() };
+      const archive = params.url.replace(/^pmtiles:\/\//, "");
+      return {
+        data: {
+          tilejson: "3.0.0",
+          tiles: [`pmtiles://${archive}/{z}/{x}/{y}`],
+          minzoom: 0,
+          maxzoom: 14,
+          vector_layers: [{ id: "host", fields: {} }],
+        },
+      };
+    };
+    addProtocol("pmtiles", window.hostHandler);
+  </script>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

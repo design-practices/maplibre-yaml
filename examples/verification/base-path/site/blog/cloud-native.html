@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Base path: cloud-native files on a project site</title>
+  <!--
+    ml-cnv.1 — PMTiles and FlatGeobuf on a GitHub Pages project site
+    (/my-repo/), from a page one folder down. The document names its files
+    by site path, with no repo name: `pmtiles:///cloud-native/…` (the path
+    INSIDE the pmtiles:// URL is what gets rebased — in 0.8 it was left
+    alone and 404'd), `cloud-native/imagery.pmtiles` (bare relative) and
+    `/cloud-native/districts.fgb`.
+    PASS (left, base="/my-repo/") = imagery, outlines and coloured districts,
+    no notice. The right map is the same document without base: its notice
+    says the files weren't found — which is what makes the left one mean
+    something.
+    Open: http://localhost:4174/my-repo/blog/cloud-native.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    ml-map { display: block; height: 400px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>Left (base="/my-repo/") PASS = imagery + outlines + districts, no notice. Right (no base) = the files aren't found.</header>
+  <main>
+    <ml-map id="with-base" base="/my-repo/">
+      <script type="text/yaml">
+type: map
+id: cloud-native-base
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: styles/basemap.json
+sources:
+  imagery:
+    type: raster
+    url: cloud-native/imagery.pmtiles
+    tileSize: 256
+  outlines:
+    type: vector
+    url: pmtiles:///cloud-native/districts.pmtiles
+  districts:
+    type: geojson
+    url: /cloud-native/districts.fgb
+layers:
+  - { id: imagery, type: raster, source: imagery }
+  - { id: districts, type: fill, source: districts, paint: { fill-color: "#e9c46a", fill-opacity: 0.5 } }
+  - { id: outlines, type: line, source: outlines, source-layer: districts, paint: { line-color: "#1d3557" } }
+      </script>
+    </ml-map>
+    <ml-map id="no-base">
+      <script type="text/yaml">
+type: map
+id: cloud-native-no-base
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  imagery:
+    type: raster
+    url: cloud-native/imagery.pmtiles
+    tileSize: 256
+  outlines:
+    type: vector
+    url: pmtiles:///cloud-native/districts.pmtiles
+  districts:
+    type: geojson
+    url: /cloud-native/districts.fgb
+layers:
+  - { id: imagery, type: raster, source: imagery }
+  - { id: districts, type: fill, source: districts, paint: { fill-color: "#e9c46a", fill-opacity: 0.5 } }
+  - { id: outlines, type: line, source: outlines, source-layer: districts, paint: { line-color: "#1d3557" } }
+      </script>
+    </ml-map>
+  </main>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>fitTo on a FlatGeobuf file: framed on load</title>
+  <!--
+    ml-cnv.3 + ml-aot.75 — fitTo on a FlatGeobuf source builds the map
+    already framed, exactly as for a .geojson file: <ml-map> reads and decodes
+    the .fgb while the page starts (through the shared source-data seam) and
+    builds the map with its bounds. The file is requested ONCE: the layer
+    manager reuses that load.
+    PASS = opens on the coloured districts — no world view first, no jump.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/fit-framed.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; }
+    ml-map { display: block; height: 420px; }
+    #camera { font: 12px ui-monospace, monospace; margin-top: 6px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <script>
+    // Record the camera of the map's very first frame (and any move after
+    // it): the canvas appears in the same task that builds the map.
+    window.__frames = { first: null, moves: 0 };
+    new MutationObserver((records, observer) => {
+      const el = document.querySelector("ml-map");
+      const map = el && el.getMap && el.getMap();
+      if (!map) return;
+      observer.disconnect();
+      const camera = () => {
+        const c = map.getCenter();
+        return { lng: c.lng, lat: c.lat, zoom: map.getZoom() };
+      };
+      map.once("render", () => { window.__frames.first = camera(); });
+      map.on("move", () => { if (window.__frames.first) window.__frames.moves += 1; });
+      map.once("idle", () => {
+        const f = window.__frames.first;
+        document.getElementById("camera").textContent =
+          `first frame: ${f.lng.toFixed(3)}, ${f.lat.toFixed(3)} z${f.zoom.toFixed(2)} — ` +
+          `camera moves after the first frame: ${window.__frames.moves}`;
+      });
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  </script>
+</head>
+<body>
+  <header>PASS = opens on the coloured districts (FlatGeobuf) — no world view first, no jump.</header>
+  <main>
+    <ml-map id="map">
+      <script type="text/yaml">
+type: map
+id: fgb-fit-framed
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo:
+    source: districts
+    padding: 20
+sources:
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.fgb
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    paint:
+      fill-color: ["match", ["get", "category"], "park", "#2a9d8f", "residential", "#e9c46a", "industrial", "#e76f51", "#8d99ae"]
+      fill-opacity: 0.6
+      </script>
+    </ml-map>
+    <div id="camera">first frame: …</div>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

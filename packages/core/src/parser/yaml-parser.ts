@@ -297,6 +297,7 @@ import {
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
 import { checkDocument, chapterLabel, checkLocaleKeys } from "./document-checks";
+import { checkSourceFormats } from "./format-checks";
 import { reservedPrefixWarnings } from "./reserved-prefix";
 import { boundsProblem } from "../utils/bounds";
 import { explainIndentationError, explainQuoteError } from "./yaml-errors";
@@ -987,15 +988,20 @@ export class YAMLParser {
       // toJSSafe — the v1 `{$ref}` JSON-pointer resolution is a v1 affordance.
       // Turning the validated block into a MapModel is U3's job (the `toModel`
       // v2 branch stays a stub).
-      const v2 = withSourceRefWarnings(
-        this.validateAgainst(
-          m.value,
-          m.doc,
-          m.lineCounter,
-          MapBlockV2Schema,
-          false,
-          remaps
-        )
+      const v2 = withFormatChecks(
+        withSourceRefWarnings(
+          this.validateAgainst(
+            m.value,
+            m.doc,
+            m.lineCounter,
+            MapBlockV2Schema,
+            false,
+            remaps
+          )
+        ),
+        m.value,
+        2,
+        positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
       );
       // A `maplibre-yaml.*` string key the library doesn't have (0.9).
       const runtimeMap = (m.value as { runtime?: { map?: { locale?: unknown } } } | null)?.runtime?.map;
@@ -1012,19 +1018,24 @@ export class YAMLParser {
     // flagship `<ml-map src>` path. Leaving it unresolved passed the raw
     // `{$ref}` object to the renderer, which saw no `type` and silently added
     // nothing — a config that validated and produced no layer.
-    return withDocumentChecks(
-      withSourceRefWarnings(
-        this.validateAgainst(
-          m.value,
-          m.doc,
-          m.lineCounter,
-          MapBlockSchema,
-          true,
-          remaps
-        )
+    return withFormatChecks(
+      withDocumentChecks(
+        withSourceRefWarnings(
+          this.validateAgainst(
+            m.value,
+            m.doc,
+            m.lineCounter,
+            MapBlockSchema,
+            true,
+            remaps
+          )
+        ),
+        m.value,
+        "map",
+        positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
       ),
       m.value,
-      "map",
+      1,
       positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
     );
   }
@@ -1189,17 +1200,22 @@ export class YAMLParser {
     if ("error" in expansion) {
       return { success: false, errors: [expansion.error], warnings: [] };
     }
-    return withDocumentChecks(
-      this.validateAgainst(
+    return withFormatChecks(
+      withDocumentChecks(
+        this.validateAgainst(
+          m.value,
+          m.doc,
+          m.lineCounter,
+          ScrollytellingBlockSchema,
+          false,
+          expansion.remaps
+        ),
         m.value,
-        m.doc,
-        m.lineCounter,
-        ScrollytellingBlockSchema,
-        false,
-        expansion.remaps
+        "scrollytelling",
+        positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
       ),
       m.value,
-      "scrollytelling",
+      1,
       positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
     );
   }
@@ -1910,6 +1926,26 @@ function withDocumentChecks<T>(
   return { success: false, errors: [...result.errors, ...checks.errors], warnings };
 }
 
+/**
+ * Merge the cloud-native source checks ({@link checkSourceFormats}, ml-cnv)
+ * into a block's result: a format on a source type that can't draw it, or
+ * live data on a FlatGeobuf source, fails the document; the rest warn.
+ */
+function withFormatChecks<T>(
+  result: ParseResult<T>,
+  value: unknown,
+  version: 1 | 2,
+  positions: { doc: Document; lineCounter: LineCounter } | undefined
+): ParseResult<T> {
+  const checks = checkSourceFormats(value, version, positions);
+  if (checks.errors.length === 0 && checks.warnings.length === 0) return result;
+  const warnings = [...result.warnings, ...checks.warnings];
+  if (checks.errors.length === 0) return { ...result, warnings };
+  const seen = new Set(result.errors.map((e) => `${e.path}\u0000${e.message}`));
+  const added = checks.errors.filter((e) => !seen.has(`${e.path}\u0000${e.message}`));
+  return { success: false, errors: [...result.errors, ...added], warnings } as ParseResult<T>;
+}
+
 const UNION_FALLBACK = "Value does not match any of the expected formats";
 
 /** Issue codes that only say "wrong type", as opposed to a refined check. */
@@ -2005,6 +2041,12 @@ function bracketlessPairMessage(
 
 /** Everyday words for an enum value an author is likely to type instead. */
 const ENUM_SYNONYMS: Record<string, string> = {
+  // `format:` (ml-cnv): the file extension or another name for the format.
+  fgb: "flatgeobuf",
+  parquet: "geoparquet",
+  geotiff: "cog",
+  tif: "cog",
+  tiff: "cog",
   middle: "center",
   mid: "center",
   centre: "center",

@@ -1,0 +1,279 @@
+---
+title: Cloud-native data
+description: PMTiles and FlatGeobuf straight from YAML — no page JavaScript — and how to host them (range requests, CORS, GitHub Pages)
+---
+
+import LiveMap from "../../../components/LiveMap.astro";
+import { Aside } from "@astrojs/starlight/components";
+
+"Cloud-native" files are made to be read **in parts**, straight from a web
+server: the browser asks for the bytes it needs (HTTP *range requests*), so a
+map can draw a city from a country-sized file without downloading all of it.
+Since 0.9, maplibre-yaml reads two of them with nothing but YAML — in plain
+HTML from the CDN, in Astro, and under any bundler:
+
+| Format | File | Holds | Source `type:` |
+|---|---|---|---|
+| **PMTiles** | `.pmtiles` | Vector tiles, raster tiles or elevation, in one file | `vector`, `raster`, `raster-dem` |
+| **FlatGeobuf** | `.fgb` | Features (points, lines, polygons) with their properties | `geojson` |
+
+<LiveMap
+  src="/configs/cloud-native-demo.yaml"
+  height="420px"
+  caption="A PMTiles archive (imagery and outlines) and a FlatGeobuf file (the coloured districts). Click a district."
+/>
+
+## The rule: `type:` is what MapLibre draws, the URL is what the file is
+
+You keep writing the source type MapLibre knows — `vector`, `raster`,
+`raster-dem`, `geojson` — and point `url:` at the file. The file name tells
+maplibre-yaml how to read it.
+
+```yaml
+type: map
+id: cloud-native-minimal
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  outlines:
+    type: vector
+    url: /gallery-assets/cloud-native/districts.pmtiles
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.fgb
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    paint: { fill-color: "#e9c46a", fill-opacity: 0.6 }
+  - id: outlines
+    type: line
+    source: outlines
+    source-layer: districts
+    paint: { line-color: "#1d3557" }
+```
+
+That is the whole setup: no `<script>` to register anything, no extra import
+map entry. Layers, popups, the legend, `fitTo` and clustering work exactly as
+they do for any other source.
+
+- **`pmtiles://`** in front of the URL works too (`url: pmtiles://data/x.pmtiles`
+  or `pmtiles://https://example.org/x.pmtiles`) — it's the form MapLibre's own
+  examples use.
+- **`format:`** names the format when the URL can't — a signed link or an API
+  endpoint with no file extension. It wins over the URL.
+
+```yaml
+sources:
+  parcels:
+    type: geojson
+    url: "https://data.example.org/api/parcels?f=fgb"
+    format: flatgeobuf
+```
+
+<Aside type="caution" title="type: pmtiles is a mistake (with a fix)">
+`type: pmtiles`, `type: flatgeobuf`, `type: fgb` and similar are rejected with
+a message that says what to write instead (`type: vector` with the
+`.pmtiles` URL; `type: geojson` with the `.fgb` URL). A `.fgb` file on a
+`vector` source, or a `.pmtiles` file on a `geojson` source, is caught the
+same way. All of this happens at validation time, so `mlym validate` and the
+Astro content loader report it too.
+</Aside>
+
+## PMTiles
+
+One `.pmtiles` file holds a whole tile pyramid. Vector, raster and elevation
+archives all work:
+
+```yaml
+sources:
+  buildings:
+    type: vector
+    url: data/buildings.pmtiles     # layers say which source-layer to draw
+  imagery:
+    type: raster
+    url: data/imagery.pmtiles
+    tileSize: 256                   # most raster archives use 256-pixel tiles
+  terrain:
+    type: raster-dem
+    url: data/terrain.pmtiles
+    encoding: terrarium
+```
+
+- The archive's own metadata (zoom range, bounds, attribution, vector layer
+  names) reaches MapLibre, so you rarely need `minzoom`/`maxzoom` here.
+- **Framing:** a tile archive has no client-side extent to fit, so `fitTo`
+  doesn't apply to PMTiles sources in 0.9 — set `center`/`zoom` (or `bounds`)
+  for where the data is.
+- **Making one:** `tippecanoe -o buildings.pmtiles buildings.geojson` (vector),
+  `ogr2ogr -f PMTiles out.pmtiles in.gpkg`, or `pmtiles convert in.mbtiles
+  out.pmtiles` for an existing MBTiles file (a browser can't read `.mbtiles`
+  directly).
+- **A page that registers its own `pmtiles` protocol keeps it.** If your page
+  already does `addProtocol("pmtiles", …)` through `@maplibre-yaml/core/maplibre`
+  (the 0.7 way, still supported — for custom headers or a custom `Source`),
+  maplibre-yaml leaves that registration alone.
+
+<Aside type="note" title="PMTiles inside a basemap style">
+The automatic setup covers the sources in **your** document. A basemap style
+loaded from a URL (`mapStyle:` / `basemap:`) whose own sources use
+`pmtiles://` — Protomaps basemaps, for example — is loaded by MapLibre before
+maplibre-yaml can see inside it, so in 0.9 that case still needs the protocol
+registered from page JavaScript:
+
+```js
+import { addProtocol } from "@maplibre-yaml/core/maplibre";
+import { Protocol } from "pmtiles";
+addProtocol("pmtiles", new Protocol().tile);
+```
+</Aside>
+
+## FlatGeobuf
+
+A `.fgb` file is read into an ordinary GeoJSON source, so everything that
+works with a `.geojson` file works with it. Two ways to read it, with `load:`:
+
+| `load:` | What it reads | Needs |
+|---|---|---|
+| `all` (default) | The whole file, once | Any web server |
+| `viewport` | Only the features in view, re-read as the map moves; nothing below `minzoom` (default 10) | A file with a **spatial index**, and a server with **range requests** |
+
+```yaml
+sources:
+  districts:
+    type: geojson
+    url: data/districts.fgb                  # small file: read whole
+  parcels:
+    type: geojson
+    url: https://data.example.org/parcels.fgb
+    load: { mode: viewport, minzoom: 14 }    # big file: only what's in view
+```
+
+**Sizes.** Reading a file whole costs memory and time in the browser, so:
+
+- up to **10 MB**: read whole, no remarks;
+- **10–50 MB**: read whole, with a console note suggesting `load: viewport`
+  or PMTiles;
+- over **50 MB**: not read whole. A file with a spatial index is read by view
+  instead (with a console note); one without is refused, and the map says so.
+
+As a rule of thumb, whole-file data is comfortable up to about 100,000 simple
+features (~20 MB). Beyond that, use `load: viewport`, or PMTiles for anything
+large and static.
+
+- **Coordinates:** the file must be longitude/latitude (EPSG:4326). A file in
+  another projection is refused with the `ogr2ogr` command that fixes it.
+- **Making one:** `ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES out.fgb
+  in.geojson` (the index is GDAL's default; QGIS's "Export → FlatGeobuf" works
+  too).
+- **Live data** (`refresh:`, `stream:`) isn't available for FlatGeobuf
+  sources in 0.9 — validation says so. Serve GeoJSON for data that changes.
+- **`fitTo`** frames the decoded features; with `load: viewport` it frames
+  the extent recorded in the file's header.
+
+## Hosting: range requests and CORS
+
+PMTiles always, and FlatGeobuf with `load: viewport`, read files **in parts**
+with HTTP range requests. Most static hosts support them:
+
+| Host | Range requests | Notes |
+|---|---|---|
+| GitHub Pages | yes | On a project site (`user.github.io/repo/`) set `base` — see below |
+| Netlify, Cloudflare Pages, Vercel | yes | |
+| Amazon S3, Cloudflare R2, Google Cloud Storage | yes | From another site, set CORS (below) |
+| `npx serve`, `astro dev`, `astro preview`, Vite | yes | Good for previewing locally |
+| `python -m http.server` | **no** | PMTiles fail; `load: viewport` falls back to reading the whole file |
+
+**Files on another site** need CORS: the bucket or server must send
+`Access-Control-Allow-Origin`, allow the `Range` request header, and expose
+`Content-Range` and `Content-Length`. For S3 or R2, a CORS rule like:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://you.github.io"],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["Range", "If-Match"],
+    "ExposeHeaders": ["Content-Range", "Content-Length", "ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+
+**GitHub Pages project sites** serve your files under `/repo-name/`. Set the
+`base` attribute (`<ml-map base="/repo-name/">`; Astro passes its own `base`
+automatically) and write paths as you would on your own computer —
+`data/x.pmtiles`, `/data/x.fgb`, and `pmtiles://data/x.pmtiles` all resolve
+under the base.
+
+## When something goes wrong
+
+Problems with one file never take down the map: the basemap and every other
+layer still draw, and the map's notice ("Part of this map couldn't load")
+says what happened in plain words. The common cases:
+
+| What happened | What the notice says |
+|---|---|
+| The server doesn't support range requests | "`…/x.pmtiles` was served without range-request support (the server sent the whole file instead of the part asked for). PMTiles and FlatGeobuf files need a web server that supports HTTP range requests: GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` does not — preview locally with `npx serve` instead." |
+| Another site refused (CORS), or it's unreachable | "The browser couldn't read `…`: the server didn't allow this page to load it (CORS), or it couldn't be reached. A PMTiles file on another site needs that site to send `Access-Control-Allow-Origin` and to allow the `Range` header." |
+| A wrong path that returned a web page | "`…/x.pmtiles` isn't a PMTiles file. A wrong path often returns a web page instead — check the file name and folder." |
+| The file isn't there | "`…/x.fgb` didn't load (404 Not Found)", with where the browser looked and the `base` hint for project sites |
+| A FlatGeobuf in the wrong projection | "`…/x.fgb` is in EPSG:3857; MapLibre needs longitude/latitude (EPSG:4326). Reproject it: `ogr2ogr -t_srs EPSG:4326 out.fgb x.fgb`." |
+| Too large to read whole, no index | "`…/x.fgb` is 180 MB, too large to load whole in a browser. Add `load: viewport` to the source (the file needs a spatial index), or convert it to PMTiles." |
+
+## Format v2
+
+In a [format v2](/guides/format-v2/) document the URL stays in the source and
+`format:` / `load:` move under the source's `runtime:`:
+
+```yaml
+version: 2
+type: map
+id: cloud-native-v2
+style:
+  basemap: "https://tiles.openfreemap.org/styles/positron"
+  center: [10.2, 42.15]
+  zoom: 10
+  sources:
+    outlines: { type: vector, url: /gallery-assets/cloud-native/districts.pmtiles }
+    points:
+      type: geojson
+      url: /gallery-assets/cloud-native/points.fgb
+      runtime:
+        load: { mode: viewport, minzoom: 11 }
+  layers:
+    - { id: outlines, type: line, source: outlines, source-layer: districts }
+    - { id: points, type: circle, source: points }
+```
+
+## Exporting with `mlym emit`
+
+A `style.json` can carry a URL but not a file reader, so:
+
+- **PMTiles** export as `pmtiles://` URLs (a `.pmtiles` URL gains the
+  scheme). The style then needs a renderer that reads `pmtiles://` —
+  maplibre-gl JS with the protocol registered (the snippet above).
+- **FlatGeobuf** is converted: `mlym emit` reads the file (next to the YAML,
+  in the current folder or its `public/`, or over http(s)) and writes its
+  features into the style as GeoJSON. If it can't read the file, the source
+  is emitted empty and reported, and `--strict` refuses.
+
+See [Export classes](/guides/export-classes/) for the full table.
+
+## Coming later: GeoParquet and COG
+
+Two more formats are recognized already, so documents written today keep
+their meaning when support arrives:
+
+- **GeoParquet** (`.parquet`, `.geoparquet`, `format: geoparquet`) on a
+  `geojson` source;
+- **Cloud Optimized GeoTIFF** (`.tif`, `.tiff`, `cog://`, `format: cog`) on a
+  `raster` or `raster-dem` source.
+
+In this version they validate with a warning and show "can't read … yet (it's
+planned)" on the map instead of a confusing error; the rest of the map draws.
+Until then, convert GeoParquet to FlatGeobuf (`ogr2ogr out.fgb in.parquet`)
+and imagery to raster PMTiles. (A page that registers a `cog://` protocol
+itself — the 0.7 way — still gets its COG sources.)

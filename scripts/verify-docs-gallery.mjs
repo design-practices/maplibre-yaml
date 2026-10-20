@@ -53,12 +53,8 @@ QUERYABLE.delete("heatmap");
 // sweep drives bare configs through the raw viewer, which has no page JS.
 // Each entry names its replacement regression test so nothing is silently
 // untested; every skip is printed in the run output.
-const PROTOCOL_PAGES = new Map([
-  [
-    "pmtiles-source-and-protocol",
-    "needs the page's pmtiles protocol registration; hermetic twin covers the hatch (e2e/gallery-hatch.spec.ts)",
-  ],
-]);
+// (pmtiles-source-and-protocol left this list in 0.9: PMTiles is YAML-only now.)
+const PROTOCOL_PAGES = new Map([]);
 
 // Pages whose layers draw, but where queryRenderedFeatures can't see them.
 // Each names the test that asserts something else instead.

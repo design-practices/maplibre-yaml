@@ -21,6 +21,13 @@ import {
 import { buildFitToLowering } from "../emitter/lower-fit-to";
 import type { MarkerConfig, FitToConfig } from "../schemas/map.schema";
 import { lowerEffectLayer, EFFECT_ON_EMIT } from "../emitter/lower-effects";
+import {
+  lowerSourceFormat,
+  PMTILES_ON_EMIT,
+  COG_ON_EMIT,
+  FLATGEOBUF_ON_EMIT,
+  GEOPARQUET_ON_EMIT,
+} from "../emitter/lower-formats";
 
 /**
  * The default registry every emit path consults.
@@ -128,6 +135,48 @@ for (const key of [
 ]) {
   exportClasses.register(key, { class: "no-export", onEmit: LIVE_DATA_ON_EMIT });
 }
+
+// ---------------------------------------------------------------------------
+// Cloud-native formats (0.9, ml-cnv): the source keys that say how a file is
+// read, and one construct per format for what its source exports as. The
+// lowering lives in emitter/lower-formats (direct-file import, as above).
+// ---------------------------------------------------------------------------
+
+exportClasses.register("source.format", {
+  class: "exports",
+  onEmit:
+    "The file format is carried by the emitted source itself (a pmtiles:// URL, or " +
+    "GeoJSON data converted from the file); the key does not appear in style.json.",
+});
+
+exportClasses.register("source.load", {
+  class: "no-export",
+  onEmit:
+    "How the browser reads a FlatGeobuf file (whole, or by view) has no style.json form; " +
+    "the emitted source carries a snapshot of the file's features.",
+});
+
+exportClasses.register("format.pmtiles", { class: "exports", onEmit: PMTILES_ON_EMIT });
+
+exportClasses.register("format.cog", { class: "exports", onEmit: COG_ON_EMIT });
+
+exportClasses.register("format.flatgeobuf", {
+  class: "exports-with-fallback",
+  onEmit: FLATGEOBUF_ON_EMIT,
+  // Same one-implementation rule as markers: the hook and the projection
+  // share lowerSourceFormat. ctx.value is `{ id, spec, runtime? }`.
+  export: (ctx) => {
+    const { id, spec, runtime } = ctx.value as {
+      id: string;
+      spec: Record<string, unknown>;
+      runtime?: Record<string, unknown>;
+    };
+    const lowered = lowerSourceFormat(id, spec, runtime, ctx.path);
+    return { sources: { [id]: lowered.spec }, warnings: lowered.warnings };
+  },
+});
+
+exportClasses.register("format.geoparquet", { class: "no-export", onEmit: GEOPARQUET_ON_EMIT });
 
 // ---------------------------------------------------------------------------
 // Document/root runtime constructs (RuntimeHalf fields + spec-native state)

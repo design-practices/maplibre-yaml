@@ -15,7 +15,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ClassifyDataLoader } from '@maplibre-yaml/core';
+import { decodeFlatGeobuf, formatFromUrl, type ClassifyDataLoader } from '@maplibre-yaml/core';
 
 /** How long one data fetch may take at export. */
 const FETCH_TIMEOUT_MS = 30_000;
@@ -49,12 +49,41 @@ export function localDataCandidates(url: string, documentPath?: string): string[
   return [...new Set(candidates)];
 }
 
+/** Read a FlatGeobuf file (http(s) or local, same rules as below) and decode it. */
+async function loadFlatGeobuf(url: string, documentPath?: string): Promise<unknown> {
+  let bytes: Uint8Array;
+  if (/^https?:\/\//i.test(url)) {
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    } catch (error) {
+      throw new Error(`the request failed (${(error as Error).message})`);
+    }
+    if (!response.ok) {
+      throw new Error(`the server answered ${response.status} ${response.statusText}`.trim());
+    }
+    bytes = new Uint8Array(await response.arrayBuffer());
+  } else {
+    const candidates = localDataCandidates(url, documentPath);
+    const found = candidates.find((path) => existsSync(path));
+    if (!found) {
+      const shown = candidates.slice(0, 4).join(', ') + (candidates.length > 4 ? ', …' : '');
+      throw new Error(`no file found (looked for ${shown})`);
+    }
+    bytes = new Uint8Array(readFileSync(found));
+  }
+  return decodeFlatGeobuf(bytes, url);
+}
+
 /**
  * A loader for `bakeClassify`: fetches http(s) URLs, reads local paths
  * relative to `documentPath`. Rejects with a message that says what was tried.
  */
 export function createDataLoader(documentPath?: string): ClassifyDataLoader {
   return async (url: string) => {
+    // A FlatGeobuf file (ml-cnv.3) is decoded to GeoJSON, so classify breaks
+    // can be computed from it like from a .geojson file.
+    if (formatFromUrl(url) === 'flatgeobuf') return loadFlatGeobuf(url, documentPath);
     if (/^https?:\/\//i.test(url)) {
       let response: Response;
       try {

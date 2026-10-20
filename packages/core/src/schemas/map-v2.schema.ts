@@ -66,6 +66,8 @@ import {
   StreamConfigSchema,
   CacheConfigSchema,
   LoadingConfigSchema,
+  SourceFormatSchema,
+  SourceLoadSchema,
 } from "./source.schema";
 import {
   CircleLayerSchema,
@@ -139,6 +141,9 @@ export const SourceRuntimeSchema = z
       .enum(["runtime", "build", "hybrid"])
       .optional()
       .describe("When to fetch data: runtime (default), build, or hybrid"),
+    // Cloud-native formats (0.9, ml-cnv): how the file is read.
+    format: SourceFormatSchema.optional(),
+    load: SourceLoadSchema.optional(),
   })
   .passthrough()
   .describe("Per-source live-data configuration (v2 `source.runtime`)");
@@ -272,10 +277,18 @@ export const SourceV2Schema: z.ZodTypeAny = z.union([
       });
     }
   }),
-  requireUrlOrTiles(withSourceRuntime(baseObject(VectorSourceSchema)), "Vector"),
-  requireUrlOrTiles(withSourceRuntime(baseObject(RasterSourceSchema)), "Raster"),
+  // `format` is a runtime key (it says how the file is read): v2 writes it
+  // under `runtime:`, so the spec bodies drop the v1 flat spelling.
   requireUrlOrTiles(
-    withSourceRuntime(baseObject(RasterDEMSourceSchema)),
+    withSourceRuntime(baseObject(VectorSourceSchema).omit({ format: true })),
+    "Vector"
+  ),
+  requireUrlOrTiles(
+    withSourceRuntime(baseObject(RasterSourceSchema).omit({ format: true })),
+    "Raster"
+  ),
+  requireUrlOrTiles(
+    withSourceRuntime(baseObject(RasterDEMSourceSchema).omit({ format: true })),
     "Raster DEM"
   ),
   withSourceRuntime(baseObject(ImageSourceSchema)),

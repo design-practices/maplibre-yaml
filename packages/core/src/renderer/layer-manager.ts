@@ -29,6 +29,14 @@ import { DataMerger } from "../data/merge/data-merger";
 import { LoadingManager } from "../ui/loading-manager";
 import { sanitizeAttribution } from "../utils/attribution";
 import type { MergeStrategy } from "../data/merge/data-merger";
+import { formatOfSource, typeReadsFormat } from "../formats/detect";
+import {
+  FlatGeobufLoader,
+  loadModeOf,
+  toMapLibreTileSpec,
+  unsupportedFormatError,
+  withoutFormatKeys,
+} from "./cloud-sources";
 
 type Layer = z.infer<typeof LayerSchema>;
 type GeoJSONSourceConfig = z.infer<typeof GeoJSONSourceSchema>;
@@ -118,6 +126,13 @@ export interface LayerManagerCallbacks {
   onDataLoading?: (layerId: string) => void;
   onDataLoaded?: (layerId: string, featureCount: number) => void;
   onDataError?: (layerId: string, error: Error) => void;
+  /**
+   * A source that can't be read in this version (a reserved cloud-native
+   * format, ml-cnv): reported once, with a plain-language error. The
+   * source is added as an empty placeholder so its layers draw nothing
+   * rather than fail one by one.
+   */
+  onSourceError?: (sourceId: string, error: Error) => void;
 }
 
 /**
@@ -135,6 +150,12 @@ export interface LayerManagerDataOptions {
    * fetch as usual.
    */
   pending?: Record<string, Promise<FeatureCollection>>;
+  /**
+   * Whether a URL protocol (`cog`) is registered on the maplibre-gl module
+   * (ml-cnv). Injected by `MapRenderer` so this module never loads
+   * maplibre-gl itself; defaults to "none registered".
+   */
+  isProtocolRegistered?: (scheme: string) => boolean;
 }
 
 /**
@@ -160,6 +181,10 @@ export class LayerManager {
   private activeSourcePipelines: Set<string>;
   /** First loads a host already started, by source id (consumed once). */
   private pendingData: Map<string, Promise<FeatureCollection>>;
+  /** FlatGeobuf readers by source id (ml-cnv.3), stopped with their source. */
+  private formatLoaders = new Map<string, FlatGeobufLoader>();
+  /** Whether the page registered a URL protocol itself (see LayerManagerDataOptions). */
+  private isProtocolRegistered: (scheme: string) => boolean;
 
   constructor(
     map: MapLibreMap,
@@ -170,6 +195,7 @@ export class LayerManager {
     this.callbacks = callbacks || {};
     this.dataFetcher = data.fetcher ?? new DataFetcher();
     this.pendingData = new Map(Object.entries(data.pending ?? {}));
+    this.isProtocolRegistered = data.isProtocolRegistered ?? (() => false);
     this.pollingManager = new PollingManager();
     this.streamManager = new StreamManager();
     this.dataMerger = new DataMerger();
@@ -211,7 +237,7 @@ export class LayerManager {
         continue;
       }
 
-      this.addMapSource(id, this.toMapLibreSourceSpec(spec as any));
+      this.addMapSource(id, this.toMapLibreSourceSpec(spec as any, id));
     }
   }
 
@@ -238,7 +264,7 @@ export class LayerManager {
    * fields are ours; passing them through leaves unknown keys on the source
    * spec MapLibre validates.
    */
-  private toMapLibreSourceSpec(spec: Record<string, unknown>): any {
+  private toMapLibreSourceSpec(spec: Record<string, unknown>, sourceId?: string): any {
     const {
       refresh,
       cache,
@@ -253,7 +279,26 @@ export class LayerManager {
     } = spec as Record<string, unknown>;
     // Same-origin vector tile paths must be absolute by the time MapLibre's
     // worker fetches them (see utils/tile-url).
-    return absolutizeVectorTiles(mapLibreSpec);
+    return absolutizeVectorTiles(this.resolveTileSource(mapLibreSpec, sourceId));
+  }
+
+  /**
+   * A tile source's spec with its cloud-native URL resolved (a PMTiles URL
+   * becomes `pmtiles://<absolute>`) and our `format`/`load` keys removed. A
+   * format this version can't read is reported and replaced by an empty
+   * placeholder of the same type (ml-cnv).
+   */
+  private resolveTileSource(
+    spec: Record<string, unknown>,
+    sourceId?: string
+  ): Record<string, unknown> {
+    const type = spec["type"];
+    if (type !== "vector" && type !== "raster" && type !== "raster-dem") {
+      return withoutFormatKeys(spec);
+    }
+    const resolved = toMapLibreTileSpec(spec, this.isProtocolRegistered);
+    if (resolved.problem && sourceId) this.callbacks.onSourceError?.(sourceId, resolved.problem);
+    return resolved.spec;
   }
 
   /**
@@ -484,7 +529,10 @@ export class LayerManager {
         });
       }
     } else if (source.type === "vector") {
-      const vectorSource = source as unknown as VectorSourceConfig;
+      const vectorSource = this.resolveTileSource(
+        source as unknown as Record<string, unknown>,
+        sourceId
+      ) as unknown as VectorSourceConfig;
       const vectorSpec: any = { type: "vector" };
       if (vectorSource.url) vectorSpec.url = vectorSource.url;
       if (vectorSource.tiles)
@@ -498,7 +546,10 @@ export class LayerManager {
         vectorSpec.attribution = vectorSource.attribution;
       this.addMapSource(sourceId, vectorSpec);
     } else if (source.type === "raster") {
-      const rasterSource = source as unknown as RasterSourceConfig;
+      const rasterSource = this.resolveTileSource(
+        source as unknown as Record<string, unknown>,
+        sourceId
+      ) as unknown as RasterSourceConfig;
       const rasterSpec: any = { type: "raster" };
       if (rasterSource.url) rasterSpec.url = rasterSource.url;
       if (rasterSource.tiles) rasterSpec.tiles = rasterSource.tiles;
@@ -520,7 +571,10 @@ export class LayerManager {
       // Safe to spread — raster-dem carries no YAML-only keys to scrub (unlike
       // geojson's refresh/cache/prefetchedData). This also matches how
       // block-level named sources reach MapLibre.
-      const demSource = source as unknown as RasterDEMSourceConfig;
+      const demSource = this.resolveTileSource(
+        source as unknown as Record<string, unknown>,
+        sourceId
+      ) as unknown as RasterDEMSourceConfig;
       this.addMapSource(sourceId, {
         ...demSource,
         type: "raster-dem",
@@ -600,6 +654,21 @@ export class LayerManager {
 
     this.sourceData.set(sourceId, initialData);
 
+    // Cloud-native vector data (ml-cnv): a FlatGeobuf file is decoded into
+    // this GeoJSON source by its own data provider instead of the JSON
+    // fetch below; a GeoParquet file (recognized, not read yet) says so
+    // rather than failing as "not JSON".
+    const format = config.url && !config.prefetchedData ? formatOfSource(config) : undefined;
+    if (format === "flatgeobuf") {
+      await this.startFlatGeobuf(sourceId, layerId, config);
+      return;
+    }
+    if (format === "geoparquet" && typeReadsFormat(config.type, format)) {
+      this.pendingData.delete(sourceId);
+      this.callbacks.onDataError?.(layerId, unsupportedFormatError(format, config.url!));
+      return;
+    }
+
     // Fetch from URL if needed
     if (config.url && !config.prefetchedData) {
       this.callbacks.onDataLoading?.(layerId);
@@ -629,6 +698,56 @@ export class LayerManager {
   }
 
   /**
+   * Read a FlatGeobuf `url:` into its GeoJSON source (ml-cnv.3): the whole
+   * file, or — `load: viewport`, or a file too large to load whole — the
+   * features in view, re-read as the map moves. Data and error events fire
+   * exactly as for a GeoJSON `url:` (after each re-read in viewport mode).
+   */
+  private async startFlatGeobuf(
+    sourceId: string,
+    layerId: string,
+    config: GeoJSONSourceConfig
+  ): Promise<void> {
+    this.formatLoaders.get(sourceId)?.destroy();
+    this.callbacks.onDataLoading?.(layerId);
+    const loader = new FlatGeobufLoader(
+      this.map,
+      config.url!,
+      loadModeOf(config as unknown as Record<string, unknown>),
+      {
+        onData: (data) => {
+          this.sourceData.set(sourceId, data);
+          const source = this.map.getSource(sourceId) as GeoJSONSource | undefined;
+          source?.setData?.(data);
+          this.callbacks.onDataLoaded?.(layerId, data.features.length);
+        },
+        onError: (error) => this.callbacks.onDataError?.(layerId, error),
+      }
+    );
+    this.formatLoaders.set(sourceId, loader);
+    // A whole-file load the host already started (the `fitTo` prefetch,
+    // ml-aot.75) is reused, not repeated; viewport reads ignore it.
+    const pending = this.pendingData.get(sourceId);
+    this.pendingData.delete(sourceId);
+    await loader.start(pending);
+  }
+
+  /**
+   * The full extent of a source read by view (`load: viewport`), from the
+   * file's header — what `fitTo` frames, since the source's data is only the
+   * part in view. Undefined for every other source.
+   */
+  getSourceExtent(sourceId: string): [[number, number], [number, number]] | undefined {
+    const loader = this.formatLoaders.get(sourceId);
+    return loader?.readsByView ? loader.extent : undefined;
+  }
+
+  /** Whether a source's data comes from a cloud-native reader (no live refresh in 0.9). */
+  private isFormatSource(config: GeoJSONSourceConfig): boolean {
+    return formatOfSource(config) === "flatgeobuf";
+  }
+
+  /**
    * Setup polling and/or streaming for a GeoJSON source
    */
   private async setupDataUpdates(
@@ -636,6 +755,16 @@ export class LayerManager {
     sourceId: string,
     config: GeoJSONSourceConfig
   ): Promise<void> {
+    // Validation rejects live data on a FlatGeobuf source in 0.9; a document
+    // that skipped validation must not poll a binary file with the JSON
+    // fetcher.
+    if (this.isFormatSource(config)) {
+      console.warn(
+        `[maplibre-yaml] live refresh isn't available for FlatGeobuf sources yet; ` +
+          `\`refresh:\`/\`stream:\` on "${sourceId}" is ignored.`
+      );
+      return;
+    }
     // Setup streaming if configured
     if (config.stream) {
       const streamConfig = config.stream;
@@ -819,6 +948,8 @@ export class LayerManager {
 
     if (isInlineSource) {
       this.sourceData.delete(sourceId);
+      this.formatLoaders.get(sourceId)?.destroy();
+      this.formatLoaders.delete(sourceId);
     } else {
       // Shared: the data stays as long as a sibling still draws from it.
       this.releaseSource(sourceId);
@@ -850,6 +981,8 @@ export class LayerManager {
     this.pollingManager.destroy();
     this.streamManager.destroy();
     this.loadingManager.destroy();
+    for (const loader of this.formatLoaders.values()) loader.destroy();
+    this.formatLoaders.clear();
 
     // Clear data references
     this.sourceData.clear();

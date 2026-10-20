@@ -33,6 +33,7 @@ import type { ExportClassDefinition } from "../export";
 import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { sanitizeSourcesAttribution } from "../utils/attribution";
 import { lowerEffectLayer } from "./lower-effects";
+import { lowerSourceFormat, type EmitDataRef } from "./lower-formats";
 
 /**
  * Sanitize every `sources.*.attribution` in an emitted style, in place on the
@@ -118,6 +119,13 @@ export interface EmitResult {
    * declares none.
    */
   images?: EmitImageRef[];
+  /**
+   * FlatGeobuf sources to convert (ml-cnv.3). Core emits each as an empty
+   * GeoJSON source and describes the file here; the CLI reads it and inlines
+   * the features (`mlym emit`). A direct caller holds the same obligation.
+   * Absent when the document has none.
+   */
+  data?: EmitDataRef[];
   /**
    * Placement intent for the document's own layers.
    *
@@ -459,6 +467,18 @@ function pushSourceRuntimeWarnings(
       continue;
     }
     const definition = requireExportClass(`source.${key}`);
+    // `format:`/`load:` (ml-cnv) say how the file is read, not what is live:
+    // the format's own lowering reports what the emitted source carries.
+    if (key === "format" || key === "load") {
+      warnings.push({
+        path: `${basePath}.${key}`,
+        kind: "contract",
+        construct: `source.${key}`,
+        exportClass: definition.class,
+        message: `\`${key}\` — ${definition.onEmit}`,
+      });
+      continue;
+    }
     warnings.push({
       path: `${basePath}.${key}`,
       kind: hasData ? "contract" : "lossy",
@@ -479,9 +499,18 @@ export function projectStyle(
 ): EmitResult {
   const warnings: EmitWarning[] = [];
   const sources: Record<string, unknown> = {};
+  // FlatGeobuf sources the caller reads and inlines (ml-cnv; core describes).
+  const dataRefs: EmitDataRef[] = [];
 
   for (const [name, source] of Object.entries(model.style.sources)) {
-    sources[name] = isPlainObject(source.spec) ? { ...source.spec } : source.spec;
+    let spec: unknown = isPlainObject(source.spec) ? { ...source.spec } : source.spec;
+    if (isPlainObject(spec)) {
+      const lowered = lowerSourceFormat(name, spec, source.runtime, `sources.${name}`);
+      spec = lowered.spec;
+      warnings.push(...lowered.warnings);
+      if (lowered.data) dataRefs.push(lowered.data);
+    }
+    sources[name] = spec;
     if (Object.keys(source.runtime).length > 0) {
       const hasData = isPlainObject(source.spec) && "data" in source.spec;
       pushSourceRuntimeWarnings(warnings, `sources.${name}`, source.runtime, hasData);
@@ -553,7 +582,16 @@ export function projectStyle(
     // entry in `sources:`. An inline source is hoisted into a generated one.
     if (isPlainObject(spec["source"])) {
       const generated = `${id}-source`;
-      sources[generated] = spec["source"];
+      const sourceRuntime = layer.runtime["source"];
+      const lowered = lowerSourceFormat(
+        generated,
+        spec["source"],
+        isPlainObject(sourceRuntime) ? sourceRuntime : undefined,
+        `layers.${id}.source`
+      );
+      warnings.push(...lowered.warnings);
+      if (lowered.data) dataRefs.push(lowered.data);
+      sources[generated] = lowered.spec;
       spec["source"] = generated;
     }
 
@@ -824,5 +862,6 @@ export function projectStyle(
     warnings,
     placements,
     ...(imageRefs.length > 0 ? { images: imageRefs } : {}),
+    ...(dataRefs.length > 0 ? { data: dataRefs } : {}),
   };
 }

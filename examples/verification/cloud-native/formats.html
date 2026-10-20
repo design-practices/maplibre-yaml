@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cloud-native data: PMTiles and FlatGeobuf, YAML only</title>
+  <!--
+    0.9 (ml-cnv.1 / ml-cnv.3): PMTiles and FlatGeobuf with no page JavaScript.
+    The same document twice — v1 (left) and v2 (right) — must render the same:
+      - imagery.pmtiles   raster PMTiles (by extension), the green/brown patchwork
+      - districts.pmtiles vector PMTiles (by pmtiles:// scheme), dark outlines
+      - districts.fgb     FlatGeobuf read whole: coloured districts, click popup,
+                          legend entry, and fitTo frames them
+      - points.fgb        FlatGeobuf read by view (load: viewport, minzoom 11):
+                          no points at the starting zoom; zoom in to see them
+    PASS = both maps show the patchwork, outlines and coloured districts, framed
+    on the data; clicking a district opens a popup. FAIL = an empty map or a
+    "Part of this map couldn't load" notice.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/formats.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 440px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = imagery patchwork + district outlines (PMTiles) + coloured districts (FlatGeobuf) in both maps, no notice.</header>
+  <main>
+    <section>
+      <h2>v1 document</h2>
+      <ml-map id="v1">
+        <script type="text/yaml">
+type: map
+id: cloud-native-v1
+config:
+  center: [10.2, 42.15]
+  zoom: 8
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo: { source: districts, padding: 16 }
+legend:
+  title: Cloud-native data
+sources:
+  imagery:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery.pmtiles
+    tileSize: 256
+  outlines:
+    type: vector
+    url: pmtiles:///gallery-assets/cloud-native/districts.pmtiles
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.fgb
+  points:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.fgb
+    load: { mode: viewport, minzoom: 11 }
+layers:
+  - id: imagery
+    type: raster
+    source: imagery
+  - id: districts
+    type: fill
+    source: districts
+    paint:
+      fill-color: ["match", ["get", "category"], "park", "#2a9d8f", "residential", "#e9c46a", "industrial", "#e76f51", "#8d99ae"]
+      fill-opacity: 0.55
+    legend: { label: "Districts (FlatGeobuf)", color: "#e9c46a", shape: square }
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: name }]
+          - p: [{ str: "Population " }, { property: population }]
+  - id: outlines
+    type: line
+    source: outlines
+    source-layer: districts
+    paint: { line-color: "#1d3557", line-width: 1.5 }
+    legend: { label: "Outlines (PMTiles)", color: "#1d3557", shape: line }
+  - id: points
+    type: circle
+    source: points
+    paint: { circle-radius: 4, circle-color: "#264653", circle-stroke-width: 1, circle-stroke-color: "#ffffff" }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>v2 document</h2>
+      <ml-map id="v2">
+        <script type="text/yaml">
+version: 2
+type: map
+id: cloud-native-v2
+style:
+  basemap: "/examples/verification/configs/local-style.json"
+  center: [10.2, 42.15]
+  zoom: 8
+  sources:
+    imagery:
+      type: raster
+      url: /gallery-assets/cloud-native/imagery.pmtiles
+      tileSize: 256
+    outlines:
+      type: vector
+      url: pmtiles:///gallery-assets/cloud-native/districts.pmtiles
+    districts:
+      type: geojson
+      url: /gallery-assets/cloud-native/districts.fgb
+    points:
+      type: geojson
+      url: /gallery-assets/cloud-native/points.fgb
+      runtime:
+        load: { mode: viewport, minzoom: 11 }
+  layers:
+    - id: imagery
+      type: raster
+      source: imagery
+    - id: districts
+      type: fill
+      source: districts
+      paint:
+        fill-color: ["match", ["get", "category"], "park", "#2a9d8f", "residential", "#e9c46a", "industrial", "#e76f51", "#8d99ae"]
+        fill-opacity: 0.55
+      runtime:
+        legend: { label: "Districts (FlatGeobuf)", color: "#e9c46a", shape: square }
+        interactive:
+          click:
+            popup:
+              - h3: [{ property: name }]
+              - p: [{ str: "Population " }, { property: population }]
+    - id: outlines
+      type: line
+      source: outlines
+      source-layer: districts
+      paint: { line-color: "#1d3557", line-width: 1.5 }
+      runtime:
+        legend: { label: "Outlines (PMTiles)", color: "#1d3557", shape: line }
+    - id: points
+      type: circle
+      source: points
+      paint: { circle-radius: 4, circle-color: "#264653", circle-stroke-width: 1, circle-stroke-color: "#ffffff" }
+runtime:
+  fitTo: { source: districts, padding: 16 }
+  legend:
+    title: Cloud-native data
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

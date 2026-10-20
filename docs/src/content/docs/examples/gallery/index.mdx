@@ -29,6 +29,16 @@ them are separate work and not shipped yet.
 | [Crosshatch](/examples/gallery/crosshatch/) · after Tangram's [crosshatch](https://github.com/tangrams/tangram-sandbox/blob/gh-pages/styles/crosshatch.yaml) | <Badge text="YAML" variant="success" /> |
 | [Blueprint](/examples/gallery/blueprint/) · classic-style example | <Badge text="YAML" variant="success" /> |
 
+## Cloud-native data
+
+Not upstream examples: files read in parts, straight from a web server, with
+no page JavaScript (0.9). PMTiles has its upstream row under *Plugins,
+protocols & integrations*. See [Cloud-native data](/guides/cloud-native-data/).
+
+| Example | Status |
+|---|---|
+| [FlatGeobuf source](/examples/gallery/flatgeobuf-source/) · a `.fgb` file as a GeoJSON source: popups, legend, `fitTo` | <Badge text="YAML" variant="success" /> |
+
 ## Map basics
 
 | Example | Status |
@@ -94,7 +104,7 @@ them are separate work and not shipped yet.
 | [Add a raster tile source](/examples/gallery/add-a-raster-tile-source/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-raster-tile-source/) | <Badge text="YAML" variant="success" /> |
 | [Add a WMS source](/examples/gallery/add-a-wms-source/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-wms-source/) | <Badge text="YAML" variant="success" /> |
 | [Add a canvas source](/examples/gallery/add-a-canvas-source/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-canvas-source/) | <Badge text="YAML + JavaScript" variant="caution" /> |
-| [Add a COG raster source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-cog-raster-source/) · page pending: needs a hermetic COG fixture | <Badge text="YAML + JavaScript" variant="caution" /> |
+| [Add a COG raster source](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-cog-raster-source/) · page pending: needs a hermetic COG fixture. YAML-only COG is planned; the `.tif` / `cog://` syntax is already reserved ([cloud-native data](/guides/cloud-native-data/#coming-later-geoparquet-and-cog)) | <Badge text="YAML + JavaScript" variant="caution" /> |
 | [Add a video](/examples/gallery/add-a-video/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-video/) | <Badge text="YAML" variant="success" /> |
 | [Animate a series of images](/examples/gallery/animate-a-series-of-images/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-series-of-images/) | <Badge text="YAML + JavaScript" variant="caution" /> |
 | [Add live realtime data](/examples/gallery/add-live-realtime-data/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/add-live-realtime-data/) | <Badge text="YAML" variant="success" /> |
@@ -215,7 +225,7 @@ them are separate work and not shipped yet.
 | Example | Status |
 |---|---|
 | [Geocode with Nominatim](https://maplibre.org/maplibre-gl-js/docs/examples/geocode-with-nominatim/) · the geocoder plugin gets its `maplibregl` from `@maplibre-yaml/core/maplibre` and is added with `addControl()` after `mapReady()` | <Badge text="YAML + JavaScript" variant="caution" /> |
-| [PMTiles source and protocol](/examples/gallery/pmtiles-source-and-protocol/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/pmtiles-source-and-protocol/) | <Badge text="YAML + JavaScript" variant="caution" /> |
+| [PMTiles source and protocol](/examples/gallery/pmtiles-source-and-protocol/) · [upstream](https://maplibre.org/maplibre-gl-js/docs/examples/pmtiles-source-and-protocol/) · YAML only since 0.9 ([cloud-native data](/guides/cloud-native-data/)) | <Badge text="YAML" variant="success" /> |
 | [Create deck.gl layer using REST API](https://maplibre.org/maplibre-gl-js/docs/examples/create-deckgl-layer-using-rest-api/) · deck's `MapboxOverlay` is a control, so `addControl()` after `mapReady()`. deck is host code here, not a library backend (D-A1) | <Badge text="YAML + JavaScript" variant="caution" /> |
 | [Draw geometries with Terra Draw](https://maplibre.org/maplibre-gl-js/docs/examples/draw-geometries-with-terra-draw/) · a plugin control added with `addControl()` after `mapReady()` | <Badge text="YAML + JavaScript" variant="caution" /> |
 | [Draw polygon with mapbox-gl-draw](https://maplibre.org/maplibre-gl-js/docs/examples/draw-polygon-with-mapbox-gl-draw/) · a plugin control added with `addControl()` after `mapReady()`; the area readout sits in a corner slot | <Badge text="YAML + JavaScript" variant="caution" /> |

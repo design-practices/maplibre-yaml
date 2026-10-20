@@ -49,6 +49,26 @@ import { applyProjection, applySky, applyTerrain, type Scene3DMap } from './scen
 import { createStrings, type Strings } from '../i18n';
 import { mapLanguage } from './popup-builder';
 import { applyAccessibleName } from './accessible-name';
+import { isProtocolRegistered, prepareProtocols } from './cloud-protocols';
+import { formatOfSource, type CloudFormat } from '../formats/detect';
+
+/** The document's source ids (named, and `<layer>-source` for inline ones) that read `format`. */
+function sourceIdsReading(
+  format: CloudFormat,
+  sources: Record<string, unknown> | undefined,
+  layers: Layer[]
+): string[] {
+  const ids = Object.entries(sources ?? {})
+    .filter(([, source]) => formatOfSource(source) === format)
+    .map(([id]) => id);
+  for (const layer of layers) {
+    const source = (layer as { source?: unknown }).source;
+    if (source && typeof source === 'object' && formatOfSource(source) === format) {
+      ids.push(`${layer.id}-source`);
+    }
+  }
+  return ids;
+}
 import type { CapabilityPolicy } from "../capabilities.js";
 import {
   denormalizeConfig,
@@ -458,6 +478,13 @@ export class MapRenderer {
         : {};
     if (fit && fit.kind === 'unsupported') console.warn(`[maplibre-yaml] ${fit.reason}`);
 
+    // Cloud-native formats (ml-cnv): register the protocols this document's
+    // sources need (PMTiles) on the module the map is built from. Started
+    // before the map exists — never blocking it: the basemap loads in
+    // parallel — and awaited in the load handler, before the document's own
+    // sources are added (the first point anything reads them).
+    const formatsReady = prepareProtocols(sources, layers, mapStyle);
+
     // The document's `title:` is the map's accessible name. MapLibre names
     // its canvas from `locale["Map.Title"]`, so hand it the title there too:
     // MapLibre and the attribute set below then agree.
@@ -612,7 +639,11 @@ export class MapRenderer {
         // after that the user owns the camera, and a refresh must not yank it.
         if (fitTo && fit && fit.kind === 'deferred' && !this.fitApplied) {
           const data = this.layerManager.getSourceData(fitTo.source);
-          const bounds = data ? geojsonBounds(data) : null;
+          // A source read by view (FlatGeobuf `load: viewport`, ml-cnv.3)
+          // holds only the part in view: frame the file's own extent.
+          const bounds =
+            this.layerManager.getSourceExtent?.(fitTo.source) ??
+            (data ? geojsonBounds(data) : null);
           if (bounds) {
             this.fitApplied = true;
             this.map.fitBounds(bounds, {
@@ -642,6 +673,12 @@ export class MapRenderer {
         this.emit('layer:data-loaded', { layerId, featureCount });
       },
       onDataError: (layerId, error) => this.emit('layer:data-error', { layerId, error }),
+      // A source in a format this version can't read (ml-cnv): reported
+      // once, against the source, like any non-fatal source failure.
+      onSourceError: (sourceId, error) => {
+        console.warn(`[maplibre-yaml] ${error.message.replace(/`/g, '"')}`);
+        options.onError?.(error, false, { kind: 'source', sourceId });
+      },
     };
 
     const eventCallbacks: EventHandlerCallbacks = {
@@ -649,7 +686,10 @@ export class MapRenderer {
       onHover: (layerId, feature, lngLat) => this.emit('layer:hover', { layerId, feature, lngLat }),
     };
 
-    this.layerManager = new LayerManager(this.map, layerCallbacks, options.sourceData);
+    this.layerManager = new LayerManager(this.map, layerCallbacks, {
+      ...options.sourceData,
+      isProtocolRegistered,
+    });
     const classifyRuntime = new ClassifyRuntime(
       this.map,
       layers as never,
@@ -668,8 +708,26 @@ export class MapRenderer {
       beforeAttribution: () => this.attributionGuard.scrub(),
     });
 
-    // Set up load handler
+    // Set up load handler. With cloud-native sources, the document's sources
+    // wait for their readers (ml-cnv) — a microtask while the decoders are
+    // bundled; a reader that failed to set up skips its sources with a
+    // notice and everything else renders.
     this.map.on('load', () => {
+      if (!formatsReady) {
+        onStyleLoaded();
+        return;
+      }
+      void formatsReady.then((failed) => {
+        if (this.destroyed) return;
+        for (const [format, error] of failed) {
+          for (const sourceId of sourceIdsReading(format, sources, layers)) {
+            options.onError?.(error, false, { kind: 'source', sourceId });
+          }
+        }
+        onStyleLoaded();
+      });
+    });
+    const onStyleLoaded = () => {
       this.isLoaded = true;
 
       // Named sources are registered through LayerManager rather than added
@@ -874,7 +932,7 @@ export class MapRenderer {
           if (this.destroyed) return;
           options.onError?.(error, true);
         });
-    });
+    };
 
     // An image name no declared image or sprite supplies: warn once per
     // name instead of letting MapLibre spam one warning per render. The set
@@ -1035,6 +1093,13 @@ export class MapRenderer {
       return;
     }
     noteLayerImageRefs(this.imageRefs, layer);
+    // A layer added after load may bring its own PMTiles source (ml-cnv).
+    const formatsReady = prepareProtocols(undefined, [layer]);
+    if (formatsReady) {
+      const failed = await formatsReady;
+      const [first] = failed.values();
+      if (first) throw first;
+    }
     layer = this.withBasemapTextFont(layer);
     await this.layerManager.addLayer(layer);
     this.eventHandler.attachEvents(layer);

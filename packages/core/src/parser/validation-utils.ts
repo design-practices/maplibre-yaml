@@ -26,6 +26,7 @@ import { GeoJSONSchema } from "../schemas/geojson.schema";
 import { SPEC_PAINT_KEYS, SPEC_LAYOUT_KEYS, SPEC_EXPRESSION_OPERATORS, SPEC_ZERO_ARG_OPERATORS } from "./spec-keys.generated";
 import { getEffectsHost } from "../effects-host";
 import { suggest, spellingVariantOf } from "../utils/suggest";
+import { formatTypeMessage } from "./format-messages";
 
 /**
  * A non-fatal validation finding surfaced alongside errors.
@@ -156,6 +157,12 @@ export function unknownTypeMessage(
   received: unknown,
   validTypes: readonly string[]
 ): string {
+  // `type: pmtiles` (and fgb, parquet, cog, mbtiles …): a file format, not a
+  // source type — give the fix instead of a did-you-mean (ml-cnv).
+  if (kind === "source") {
+    const formatFix = formatTypeMessage(received);
+    if (formatFix) return formatFix;
+  }
   const value =
     typeof received === "string" ? received : JSON.stringify(received);
   const hint =

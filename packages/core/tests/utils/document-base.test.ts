@@ -93,6 +93,24 @@ describe("resolveDocumentUrl", () => {
         }
       });
 
+      // ml-cnv.1: in 0.8 the whole `pmtiles://…` URL was left alone, so
+      // `pmtiles://data/x.pmtiles` 404'd on a GitHub Pages project site.
+      it("rebases the file URL inside pmtiles:// and cog://", () => {
+        expect(resolveDocumentUrl("pmtiles://data/x.pmtiles", base)).toBe("pmtiles:///my-repo/data/x.pmtiles");
+        expect(resolveDocumentUrl("pmtiles:///data/x.pmtiles", base)).toBe("pmtiles:///my-repo/data/x.pmtiles");
+        expect(resolveDocumentUrl("pmtiles://./x.pmtiles", base)).toBe("pmtiles:///my-repo/x.pmtiles");
+        expect(resolveDocumentUrl("pmtiles:///my-repo/x.pmtiles", base)).toBe("pmtiles:///my-repo/x.pmtiles");
+        expect(resolveDocumentUrl("cog://data/scene.tif#dem", base)).toBe("cog:///my-repo/data/scene.tif#dem");
+        expect(resolveDocumentUrl("pmtiles://https://example.com/a.pmtiles", base)).toBe(
+          "pmtiles://https://example.com/a.pmtiles"
+        );
+      });
+
+      it("rebases a .pmtiles / .fgb file path like any other", () => {
+        expect(resolveDocumentUrl("data/x.pmtiles", base)).toBe("/my-repo/data/x.pmtiles");
+        expect(resolveDocumentUrl("/data/x.fgb", base)).toBe("/my-repo/data/x.fgb");
+      });
+
       it("keeps tile and glyph placeholders verbatim", () => {
         expect(resolveDocumentUrl("/tiles/{z}/{x}/{y}.pbf", base)).toBe("/my-repo/tiles/{z}/{x}/{y}.pbf");
         expect(resolveDocumentUrl("fonts/{fontstack}/{range}.pbf", base)).toBe(

@@ -27,6 +27,34 @@ and run as printed.
 | `image` | Single image overlay | Map overlays, floor plans |
 | `video` | Video overlay | Animated overlays |
 
+### Cloud-native files (PMTiles, FlatGeobuf)
+
+`type:` stays the MapLibre source type; the `url:` says what the file is. A
+**PMTiles** archive (`.pmtiles`, or a `pmtiles://` URL) works on a `vector`,
+`raster` or `raster-dem` source, and a **FlatGeobuf** file (`.fgb`) on a
+`geojson` source — with no page JavaScript. Two keys go with them:
+
+| Property | On | Description |
+|----------|----|-------------|
+| `format` | `vector`, `raster`, `raster-dem`, `geojson` | `pmtiles` or `flatgeobuf` — only for a URL with no telling extension (it wins over the URL). `geoparquet` and `cog` are recognized but not read by this version yet |
+| `load` | FlatGeobuf (`geojson`) | `all` (default): the whole file; `viewport` or `{ mode: viewport, minzoom }`: only the features in view (needs a spatial index and range requests) |
+
+```yaml
+sources:
+  buildings:
+    type: vector
+    url: data/buildings.pmtiles
+  parcels:
+    type: geojson
+    url: data/parcels.fgb
+    load: { mode: viewport, minzoom: 14 }
+```
+
+`type: pmtiles` (or `flatgeobuf`, `fgb` …) is an error that tells you what to
+write instead. In a v2 document, `format` and `load` go under the source's
+`runtime:`. Hosting, sizes and error messages: [Cloud-native
+data](/guides/cloud-native-data/).
+
 ## GeoJSON Source
 
 The primary data source type with comprehensive support for dynamic data loading.
@@ -54,7 +82,7 @@ source:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `url` | string | URL to fetch GeoJSON data |
+| `url` | string | URL to fetch GeoJSON data — or a FlatGeobuf `.fgb` file ([cloud-native](#cloud-native-files-pmtiles-flatgeobuf)) |
 | `data` | object | Inline GeoJSON object |
 | `prefetchedData` | object | Pre-fetched data from build time |
 
@@ -539,7 +567,7 @@ source:
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `url` | string | One of url/tiles | TileJSON URL |
+| `url` | string | One of url/tiles | TileJSON URL, or a PMTiles archive (`.pmtiles` / `pmtiles://`) |
 | `tiles` | string[] | One of url/tiles | Tile URL templates |
 | `minzoom` | number | No | Minimum zoom level |
 | `maxzoom` | number | No | Maximum zoom level |
@@ -580,7 +608,7 @@ source:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `url` | string | - | TileJSON URL |
+| `url` | string | - | TileJSON URL, or a PMTiles archive (`.pmtiles` / `pmtiles://`) |
 | `tiles` | string[] | - | Tile URL templates |
 | `tileSize` | number | `512` | Tile size in pixels |
 | `minzoom` | number | - | Minimum zoom level |
@@ -621,7 +649,7 @@ source:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `url` | string | - | TileJSON URL |
+| `url` | string | - | TileJSON URL, or a PMTiles archive (`.pmtiles` / `pmtiles://`) |
 | `tiles` | string[] | - | Tile URL templates |
 | `tileSize` | number | `512` | Tile size in pixels |
 | `encoding` | `"terrarium"` \| `"mapbox"` \| `"custom"` | `"mapbox"` | Elevation encoding |

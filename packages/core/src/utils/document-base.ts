@@ -20,9 +20,13 @@
  * - `data/x.geojson`, `./data/x.geojson`, `../x.geojson` (relative) → resolved
  *   against the base, not the page, so the same document works on every page
  *   of the site.
- * - Anything with a scheme (`https:`, `blob:`, `data:`, `pmtiles:`,
- *   `mailto:`), protocol-relative `//cdn…`, and `#…` / `?…` references are
- *   left as written.
+ * - Anything with a scheme (`https:`, `blob:`, `data:`, `mailto:`),
+ *   protocol-relative `//cdn…`, and `#…` / `?…` references are left as
+ *   written.
+ * - A tile-protocol URL (`pmtiles://`, `cog://`) keeps its scheme and has
+ *   the file URL inside it rebased by the rules above:
+ *   `pmtiles://data/x.pmtiles` → `pmtiles://<base>data/x.pmtiles`;
+ *   `pmtiles://https://…` is left as written.
  * - Tile placeholders (`{z}/{x}/{y}`, `{fontstack}`) are kept verbatim — no
  *   `new URL()` round trip percent-encodes their braces.
  *
@@ -34,6 +38,9 @@ import type { MapModel, SourceModel, LayerModel } from "../model/types";
 
 /** A string carrying its own scheme (`https:`, `blob:`, `pmtiles:` …). */
 const HAS_SCHEME = /^[a-zA-Z][a-zA-Z\d+\-.]*:/;
+
+/** A tile-protocol URL whose inner part is itself a file URL (`pmtiles://…`, `cog://…`). */
+const TILE_PROTOCOL = /^(?:pmtiles|cog):\/\//i;
 
 /**
  * Normalize a `base` value to the form {@link resolveDocumentUrl} joins with:
@@ -90,6 +97,15 @@ export function resolveDocumentUrl<T>(url: T, base: string | null | undefined): 
 
 /** {@link resolveDocumentUrl} with an already-normalized base. */
 function resolveAgainst(url: string, base: string): string {
+  // A tile-protocol URL wraps a file URL (`pmtiles://data/x.pmtiles`): the
+  // file inside is what the browser fetches, so it is what gets rebased
+  // (ml-cnv; in 0.8 these 404'd on a GitHub Pages project site).
+  const protocol = TILE_PROTOCOL.exec(url);
+  if (protocol) {
+    const inner = url.slice(protocol[0].length);
+    const resolved = inner === "" ? inner : resolveAgainst(inner, base);
+    return resolved === inner ? url : protocol[0] + resolved;
+  }
   if (HAS_SCHEME.test(url) || url.startsWith("//")) return url;
   if (url.startsWith("#") || url.startsWith("?")) return url;
 

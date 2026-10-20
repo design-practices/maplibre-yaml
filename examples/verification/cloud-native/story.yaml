@@ -1,0 +1,48 @@
+# A story map over cloud-native data (0.9, ml-cnv): the same PMTiles and
+# FlatGeobuf sources an <ml-map> reads, in <ml-scrollytelling>, no page JS.
+type: scrollytelling
+id: cloud-native-story
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [10.2, 42.15]
+  zoom: 9.4
+legend:
+  title: Islands district plan
+sources:
+  imagery:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery.pmtiles
+    tileSize: 256
+  outlines:
+    type: vector
+    url: /gallery-assets/cloud-native/districts.pmtiles
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.fgb
+layers:
+  - id: imagery
+    type: raster
+    source: imagery
+  - id: districts
+    type: fill
+    source: districts
+    paint:
+      fill-color: ["match", ["get", "category"], "park", "#2a9d8f", "residential", "#e9c46a", "industrial", "#e76f51", "#8d99ae"]
+      fill-opacity: 0.6
+    legend: { label: "Districts (FlatGeobuf)", color: "#e9c46a", shape: square }
+  - id: outlines
+    type: line
+    source: outlines
+    source-layer: districts
+    paint: { line-color: "#1d3557", line-width: 1.2 }
+chapters:
+  - id: overview
+    title: The whole plan
+    description: "<p>Imagery and outlines come from PMTiles archives; the coloured districts are a FlatGeobuf file — all named in YAML.</p>"
+    center: [10.2, 42.15]
+    zoom: 9.4
+  - id: closer
+    title: A closer look
+    description: "<p>Zoomed in: the archives serve only the tiles in view.</p>"
+    center: [10.1, 42.08]
+    zoom: 11

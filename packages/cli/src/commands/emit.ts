@@ -29,6 +29,7 @@ import {
   attachSpriteImages,
   lowerMarkers,
   lowerFitTo,
+  attachSourceData,
   bakeClassify,
   EmitError,
   type EmitMode,
@@ -40,6 +41,7 @@ import {
   type ClassifyDataLoader,
 } from '@maplibre-yaml/core';
 import { logger } from '../lib/logger.js';
+import { resolveDataRefs, type DataReader } from '../lib/data-refs.js';
 import { createDataLoader } from '../lib/data-loader.js';
 import { EXIT_CODES } from '../types.js';
 
@@ -64,6 +66,13 @@ export async function emitStyle(
      * folder; `mlym emit` passes one that resolves against the document.
      */
     loadData?: ClassifyDataLoader;
+    /**
+     * The document's path: FlatGeobuf files (ml-cnv.3) are looked up the way
+     * `loadData` looks up GeoJSON (beside it, then the site root / public/).
+     */
+    documentPath?: string;
+    /** An injectable FlatGeobuf file reader, for tests. */
+    reader?: DataReader;
   } = {},
 ): Promise<{
   style: Record<string, unknown>;
@@ -114,6 +123,21 @@ export async function emitStyle(
     projected = attachSpriteImages(projected, loweringImages);
   }
   projected = { ...projected, warnings: [...loweringWarnings, ...projected.warnings] };
+
+  // FlatGeobuf sources (ml-cnv.3): core emitted each empty and described
+  // the file; read and inline the features now. An unreadable file stays
+  // empty and is reported lossy, so the strict check below refuses it.
+  if (projected.data && projected.data.length > 0) {
+    const { resolved, warnings: dataWarnings } = await resolveDataRefs(projected.data, {
+      ...(options.documentPath ? { documentPath: options.documentPath } : {}),
+      ...(options.reader ? { reader: options.reader } : {}),
+    });
+    projected = {
+      ...projected,
+      style: attachSourceData(projected.style, resolved),
+      warnings: [...projected.warnings, ...dataWarnings],
+    };
+  }
 
   // projectStyle enforces --strict over its own warnings, but the runtime
   // gate can ADD lossy ones (state inlined below the target floor). Without
@@ -299,6 +323,7 @@ export const emitCommand = defineCommand({
     try {
       ({ style, warnings, assets, images } = await emitStyle(parsed.data, mode, policy, {
         loadData: createDataLoader(filePath),
+        documentPath: filePath,
       }));
     } catch (err) {
       if (err instanceof EmitError) {

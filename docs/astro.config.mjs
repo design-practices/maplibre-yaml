@@ -169,6 +169,7 @@ export default defineConfig({
             { label: "Thematic maps (classify)", link: "/guides/thematic-maps/" },
             { label: "Accessibility & languages", link: "/guides/accessibility-languages/" },
             { label: "Data Sources", link: "/guides/data-sources/" },
+            { label: "Cloud-native data", link: "/guides/cloud-native-data/" },
             { label: "Live Data & Streaming", link: "/guides/live-data/" },
             { label: "Reusing Values & Blocks", link: "/guides/reuse/" },
             { label: "Editor Setup", link: "/guides/editor-setup/" },
