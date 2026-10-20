@@ -54,7 +54,16 @@ export function isLocalPage(doc: Document | undefined): boolean {
     if (!location) return false;
     if (location.protocol === "file:") return true;
     const host = location.hostname.replace(/^\[|\]$/g, "");
-    return host === "localhost" || host.endsWith(".localhost") || host === "::1" || /^127\./.test(host);
+    return (
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host === "::1" ||
+      /^127\./.test(host) ||
+      // A dev server bound to every interface (`--host`), opened at the
+      // address it prints.
+      host === "0.0.0.0" ||
+      host === "::"
+    );
   } catch {
     return false;
   }

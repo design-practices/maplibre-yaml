@@ -42,6 +42,10 @@ describe("map notice for visitors and authors", () => {
     expect(isLocalPage(at("http://127.0.0.1:3000/my-repo/"))).toBe(true);
     expect(isLocalPage(at("http://[::1]:8080/"))).toBe(true);
     expect(isLocalPage(at("file:///home/s/site/index.html"))).toBe(true);
+    // Dev servers bound to every interface (`--host`) print these addresses.
+    expect(isLocalPage(at("http://0.0.0.0:4321/"))).toBe(true);
+    expect(isLocalPage(at("http://[::]:4321/"))).toBe(true);
+    expect(isLocalPage(at("http://0.0.0.0.example.com/"))).toBe(false);
     expect(isLocalPage(at("https://someone.github.io/my-repo/"))).toBe(false);
     expect(isLocalPage(at("https://example.com/"))).toBe(false);
   });
