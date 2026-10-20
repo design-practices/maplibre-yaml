@@ -191,5 +191,39 @@ export {
   applyDocumentBaseToLayer,
 } from "./utils/document-base";
 
+// Thematic classes (`classify:`, 0.9): the compiler, palettes, break
+// methods, and the emit-time bake `mlym emit` runs.
+export {
+  CLASSIFY_METADATA_KEY,
+  CLASSIFY_COLOR_PROPERTIES,
+  resolveClassify,
+  withData as classifyWithData,
+  compileClassify,
+  classifyRecordOf,
+  classifyLegendEntries,
+  classLabels,
+  computeBreaks,
+  quantileBreaks,
+  equalBreaks,
+  jenksBreaks,
+  listPalettes,
+  findPalette,
+  paletteColors,
+  lowerClassifyInModel,
+  bakeClassify,
+} from "./classify";
+export type {
+  ClassifyRecord,
+  ClassifyCategory,
+  ClassifyStats,
+  ClassifyLegendEntry,
+  ClassifyMethod,
+  ClassifyDataLoader,
+  ClassifyBakeError,
+  PaletteData,
+} from "./classify";
+export { formatNumber } from "./utils/format-number";
+export type { NumberFormatOptions } from "./utils/format-number";
+
 // Note: Components are exported separately via './components' entry point
 // to avoid auto-registering custom elements when not needed

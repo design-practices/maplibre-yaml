@@ -157,3 +157,67 @@ layers:
     );
   });
 });
+
+describe('emitStyle — classify (0.9)', () => {
+  const doc = (source: string) => `
+type: map
+id: classed
+config: { center: [0, 0], zoom: 5 }
+sources:
+  grid: ${source}
+layers:
+  - id: grid
+    type: fill
+    source: grid
+    classify: { field: v, method: equal, classes: 2 }
+`;
+  const data = {
+    type: 'FeatureCollection',
+    features: [0, 10].map((v) => ({ type: 'Feature', properties: { v }, geometry: null })),
+  };
+
+  it('bakes breaks through the loader it is given', async () => {
+    const urls: string[] = [];
+    const { style } = await emitStyle(
+      parse(doc('{ type: geojson, url: "https://example.com/g.geojson" }')),
+      'with-fallbacks',
+      { trust: 'untrusted' },
+      {
+        loadData: async (url) => {
+          urls.push(url);
+          return data;
+        },
+      },
+    );
+    expect(urls).toEqual(['https://example.com/g.geojson']);
+    const layer = (style['layers'] as Array<Record<string, any>>)[0]!;
+    expect(layer['metadata']['maplibre-yaml:classify'].breaks).toEqual([5]);
+  });
+
+  it('needs no loader when the data is inline', async () => {
+    const { style } = await emitStyle(
+      parse(doc(`{ type: geojson, data: ${JSON.stringify(data)} }`)),
+      'strict',
+      { trust: 'untrusted' },
+      {
+        loadData: async () => {
+          throw new Error('not called');
+        },
+      },
+    );
+    const layer = (style['layers'] as Array<Record<string, any>>)[0]!;
+    expect(layer['metadata']['maplibre-yaml:classify'].breaks).toEqual([5]);
+  });
+
+  it('throws an EmitError naming the layer when the loader fails', async () => {
+    await expect(
+      emitStyle(parse(doc('{ type: geojson, url: "https://example.com/g.geojson" }')), 'with-fallbacks', {
+        trust: 'untrusted',
+      }, {
+        loadData: async () => {
+          throw new Error('HTTP 503');
+        },
+      }),
+    ).rejects.toThrow(/layers\.grid\.classify.*HTTP 503/s);
+  });
+});

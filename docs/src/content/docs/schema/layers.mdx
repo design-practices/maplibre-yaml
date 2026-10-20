@@ -92,6 +92,12 @@ All layers share these base properties:
       description: "Legend entry configuration",
     },
     {
+      name: "classify",
+      type: "object",
+      description:
+        "Thematic classes: compiles to a step (numeric) or match (categories) paint expression with a no-data guard, and adds the classes to the legend. See below and the Thematic maps guide.",
+    },
+    {
       name: "effect",
       type: "object",
       description:
@@ -99,6 +105,59 @@ All layers share these base properties:
     },
   ]}
 />
+
+### `classify:`
+
+Colours (and, on circle layers, sizes) features by class — a choropleth,
+graduated symbols, or a category map — without writing the `step`/`match`
+expression or the legend by hand. Fill, line, circle, fill-extrusion and
+symbol layers. Full guide: [Thematic maps](/guides/thematic-maps/).
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `field` | string | **Required.** The feature property to classify. |
+| `breaks` | number[] | Class thresholds, as MapLibre `step`: n breaks make n + 1 classes; a value equal to a break takes the class above it. Strictly ascending. |
+| `method` | `quantile` \| `equal` \| `jenks` | Compute the breaks from the data instead — **GeoJSON sources only** (a vector tile source never holds the whole dataset). |
+| `classes` | integer 2–12 | How many classes `method:` computes. Default 5. |
+| `categories` | `{ value: colour }` \| list | Categorical classes (compiles to `match`): a map of value → colour, or a list of values coloured from `palette:`/`colors:`. |
+| `palette` | string | A palette name, case-insensitive: ColorBrewer (`Blues`, `YlGnBu`, `RdBu`, `Set2` …), `viridis`, `cividis`, `okabe-ito`. Default `YlGnBu` (numeric), `okabe-ito` (categories). |
+| `colors` | colour[] | Your own colours instead of a palette: one per class (or per listed category). |
+| `reverse` | boolean | Flip the palette. |
+| `property` | string | The colour paint property to drive. Default: `fill-color` / `line-color` / `circle-color` / `fill-extrusion-color` / `text-color`. |
+| `radius` | number[] | Circle layers: one `circle-radius` per class (graduated symbols). |
+| `noData` | colour \| `hide` | Features whose value is null, missing, empty or not a number. Default light grey `#cccccc`. |
+| `other` | colour \| `hide` | Categories not listed. Default grey `#969696`. |
+| `format` | object | Legend number format, with MapLibre `number-format` names: `locale`, `currency`, `unit`, `min-fraction-digits`, `max-fraction-digits`. |
+
+Exactly one of `breaks:`, `method:` or `categories:`. The compiled
+expression owns its paint property: `classify:` and the same property under
+`paint:` on one layer is an error. Export class: `exports` — the emitted
+style carries the compiled expression, and the layer's
+`metadata["maplibre-yaml:classify"]` records the classes.
+
+```yaml
+type: map
+id: classify-reference
+config:
+  center: [-75.19, 39.936]
+  zoom: 12
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+legend: {}
+layers:
+  - id: income
+    type: fill
+    source:
+      type: geojson
+      url: /data/classify/sample-tracts.geojson
+    label: Median household income
+    classify:
+      field: median_income
+      breaks: [40000, 60000, 80000, 100000]
+      palette: Blues
+      noData: hide
+    paint:
+      fill-opacity: 0.85
+```
 
 ### `effect:` (experimental)
 

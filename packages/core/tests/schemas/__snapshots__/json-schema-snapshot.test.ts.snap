@@ -1293,6 +1293,136 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "additionalProperties": true,
                             "description": "Experimental: a registered shader effect (\`type\` + flat params) that enhances this layer; the layer itself is the static fallback"
                           },
+                          "classify": {
+                            "type": "object",
+                            "properties": {
+                              "field": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "The feature property to classify, e.g. median_income"
+                              },
+                              "breaks": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                },
+                                "minItems": 1,
+                                "description": "Class thresholds, as MapLibre step: n breaks make n + 1 classes, and a value equal to a break takes the class above it"
+                              },
+                              "method": {
+                                "type": "string",
+                                "description": "Compute breaks from the data: quantile, equal, or jenks (GeoJSON sources only)"
+                              },
+                              "classes": {
+                                "type": "integer",
+                                "minimum": 2,
+                                "maximum": 12,
+                                "description": "How many classes method: computes (default 5)"
+                              },
+                              "categories": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string",
+                                      "description": "CSS color value"
+                                    }
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": [
+                                        "string",
+                                        "number",
+                                        "boolean"
+                                      ]
+                                    },
+                                    "minItems": 1
+                                  }
+                                ],
+                                "description": "Categorical classes: a map of value → colour, or a list of values coloured from palette:"
+                              },
+                              "palette": {
+                                "type": "string",
+                                "description": "A named palette: ColorBrewer (Blues, YlGnBu, RdBu, Set2 …), viridis, cividis, okabe-ito"
+                              },
+                              "colors": {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
+                                },
+                                "minItems": 1,
+                                "description": "Explicit colours, one per class (or per category)"
+                              },
+                              "reverse": {
+                                "type": "boolean",
+                                "description": "Reverse the named palette"
+                              },
+                              "property": {
+                                "type": "string",
+                                "description": "The colour paint property to drive (default: the layer type's main colour)"
+                              },
+                              "radius": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "minItems": 1,
+                                "description": "Graduated symbols: circle-radius for each class (circle layers)"
+                              },
+                              "noData": {
+                                "type": "string",
+                                "description": "Features with a missing or non-numeric value: a colour (default light grey) or \\"hide\\""
+                              },
+                              "other": {
+                                "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/noData",
+                                "description": "Categories that are not listed: a colour (default grey) or \\"hide\\""
+                              },
+                              "format": {
+                                "type": "object",
+                                "properties": {
+                                  "locale": {
+                                    "type": "string",
+                                    "description": "BCP 47 locale, e.g. en-US"
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "description": "ISO 4217 currency code, e.g. USD"
+                                  },
+                                  "unit": {
+                                    "type": "string",
+                                    "description": "A unit such as percent or kilometer"
+                                  },
+                                  "min-fraction-digits": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 20,
+                                    "description": "Fewest digits after the decimal point"
+                                  },
+                                  "max-fraction-digits": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 20,
+                                    "description": "Most digits after the decimal point (default: just enough to tell the breaks apart)"
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "description": "Legend number format (MapLibre number-format option names)",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
+                              }
+                            },
+                            "required": [
+                              "field"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Thematic classes for this layer: compiles to a MapLibre step (numeric) or match (categories) expression",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          },
                           "metadata": {
                             "type": "object",
                             "additionalProperties": {},
@@ -1320,8 +1450,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "circle-color": {
                                 "anyOf": [
                                   {
-                                    "type": "string",
-                                    "description": "CSS color value"
+                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                                   },
                                   {
                                     "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
@@ -1442,6 +1571,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           },
                           "effect": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                          },
+                          "classify": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                           },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -1605,6 +1737,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "effect": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                           },
+                          "classify": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                          },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                           },
@@ -1725,6 +1860,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           },
                           "effect": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                          },
+                          "classify": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                           },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -2140,6 +2278,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "effect": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                           },
+                          "classify": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                          },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                           },
@@ -2244,6 +2385,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           },
                           "effect": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                          },
+                          "classify": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                           },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -2365,6 +2509,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "effect": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                           },
+                          "classify": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                          },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                           },
@@ -2456,6 +2603,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "effect": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                           },
+                          "classify": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                          },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                           },
@@ -2513,12 +2663,12 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "hillshade-shadow-color": {
                                 "anyOf": [
                                   {
-                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                                   },
                                   {
                                     "type": "array",
                                     "items": {
-                                      "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                                      "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                                     },
                                     "minItems": 1
                                   },
@@ -2595,6 +2745,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           },
                           "effect": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                          },
+                          "classify": {
+                            "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                           },
                           "metadata": {
                             "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -2944,7 +3097,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                     "description": "Marker position [lng, lat]"
                   },
                   "color": {
-                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
+                    "$ref": "#/$defs/any/oneOf/0/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties",
                     "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
                   },
                   "size": {
@@ -5367,6 +5520,136 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         "additionalProperties": true,
                         "description": "Experimental: a registered shader effect (\`type\` + flat params) that enhances this layer; the layer itself is the static fallback"
                       },
+                      "classify": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "The feature property to classify, e.g. median_income"
+                          },
+                          "breaks": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 1,
+                            "description": "Class thresholds, as MapLibre step: n breaks make n + 1 classes, and a value equal to a break takes the class above it"
+                          },
+                          "method": {
+                            "type": "string",
+                            "description": "Compute breaks from the data: quantile, equal, or jenks (GeoJSON sources only)"
+                          },
+                          "classes": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "maximum": 12,
+                            "description": "How many classes method: computes (default 5)"
+                          },
+                          "categories": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string",
+                                  "description": "CSS color value"
+                                }
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "string",
+                                    "number",
+                                    "boolean"
+                                  ]
+                                },
+                                "minItems": 1
+                              }
+                            ],
+                            "description": "Categorical classes: a map of value → colour, or a list of values coloured from palette:"
+                          },
+                          "palette": {
+                            "type": "string",
+                            "description": "A named palette: ColorBrewer (Blues, YlGnBu, RdBu, Set2 …), viridis, cividis, okabe-ito"
+                          },
+                          "colors": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
+                            },
+                            "minItems": 1,
+                            "description": "Explicit colours, one per class (or per category)"
+                          },
+                          "reverse": {
+                            "type": "boolean",
+                            "description": "Reverse the named palette"
+                          },
+                          "property": {
+                            "type": "string",
+                            "description": "The colour paint property to drive (default: the layer type's main colour)"
+                          },
+                          "radius": {
+                            "type": "array",
+                            "items": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "minItems": 1,
+                            "description": "Graduated symbols: circle-radius for each class (circle layers)"
+                          },
+                          "noData": {
+                            "type": "string",
+                            "description": "Features with a missing or non-numeric value: a colour (default light grey) or \\"hide\\""
+                          },
+                          "other": {
+                            "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/noData",
+                            "description": "Categories that are not listed: a colour (default grey) or \\"hide\\""
+                          },
+                          "format": {
+                            "type": "object",
+                            "properties": {
+                              "locale": {
+                                "type": "string",
+                                "description": "BCP 47 locale, e.g. en-US"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 currency code, e.g. USD"
+                              },
+                              "unit": {
+                                "type": "string",
+                                "description": "A unit such as percent or kilometer"
+                              },
+                              "min-fraction-digits": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 20,
+                                "description": "Fewest digits after the decimal point"
+                              },
+                              "max-fraction-digits": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 20,
+                                "description": "Most digits after the decimal point (default: just enough to tell the breaks apart)"
+                              }
+                            },
+                            "additionalProperties": false,
+                            "description": "Legend number format (MapLibre number-format option names)",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          }
+                        },
+                        "required": [
+                          "field"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Thematic classes for this layer: compiles to a MapLibre step (numeric) or match (categories) expression",
+                        "patternProperties": {
+                          "^x-": {}
+                        }
+                      },
                       "metadata": {
                         "type": "object",
                         "additionalProperties": {},
@@ -5394,8 +5677,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                           "circle-color": {
                             "anyOf": [
                               {
-                                "type": "string",
-                                "description": "CSS color value"
+                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                               },
                               {
                                 "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
@@ -5516,6 +5798,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       },
                       "effect": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
+                      "classify": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                       },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -5679,6 +5964,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "effect": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
+                      "classify": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -5799,6 +6087,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       },
                       "effect": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
+                      "classify": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                       },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -6214,6 +6505,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "effect": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
+                      "classify": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -6318,6 +6612,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       },
                       "effect": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
+                      "classify": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                       },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -6439,6 +6736,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "effect": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
+                      "classify": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -6530,6 +6830,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "effect": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
+                      "classify": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -6587,12 +6890,12 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                           "hillshade-shadow-color": {
                             "anyOf": [
                               {
-                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                               },
                               {
                                 "type": "array",
                                 "items": {
-                                  "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                                  "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                                 },
                                 "minItems": 1
                               },
@@ -6669,6 +6972,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       },
                       "effect": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
+                      "classify": {
+                        "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                       },
                       "metadata": {
                         "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -7018,7 +7324,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                 "description": "Marker position [lng, lat]"
               },
               "color": {
-                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
+                "$ref": "#/$defs/map/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties",
                 "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
               },
               "size": {
@@ -8403,6 +8709,136 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                     "additionalProperties": true,
                     "description": "Experimental: a registered shader effect (\`type\` + flat params) that enhances this layer; the layer itself is the static fallback"
                   },
+                  "classify": {
+                    "type": "object",
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The feature property to classify, e.g. median_income"
+                      },
+                      "breaks": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 1,
+                        "description": "Class thresholds, as MapLibre step: n breaks make n + 1 classes, and a value equal to a break takes the class above it"
+                      },
+                      "method": {
+                        "type": "string",
+                        "description": "Compute breaks from the data: quantile, equal, or jenks (GeoJSON sources only)"
+                      },
+                      "classes": {
+                        "type": "integer",
+                        "minimum": 2,
+                        "maximum": 12,
+                        "description": "How many classes method: computes (default 5)"
+                      },
+                      "categories": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string",
+                              "description": "CSS color value"
+                            }
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "string",
+                                "number",
+                                "boolean"
+                              ]
+                            },
+                            "minItems": 1
+                          }
+                        ],
+                        "description": "Categorical classes: a map of value → colour, or a list of values coloured from palette:"
+                      },
+                      "palette": {
+                        "type": "string",
+                        "description": "A named palette: ColorBrewer (Blues, YlGnBu, RdBu, Set2 …), viridis, cividis, okabe-ito"
+                      },
+                      "colors": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
+                        },
+                        "minItems": 1,
+                        "description": "Explicit colours, one per class (or per category)"
+                      },
+                      "reverse": {
+                        "type": "boolean",
+                        "description": "Reverse the named palette"
+                      },
+                      "property": {
+                        "type": "string",
+                        "description": "The colour paint property to drive (default: the layer type's main colour)"
+                      },
+                      "radius": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "minItems": 1,
+                        "description": "Graduated symbols: circle-radius for each class (circle layers)"
+                      },
+                      "noData": {
+                        "type": "string",
+                        "description": "Features with a missing or non-numeric value: a colour (default light grey) or \\"hide\\""
+                      },
+                      "other": {
+                        "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify/properties/noData",
+                        "description": "Categories that are not listed: a colour (default grey) or \\"hide\\""
+                      },
+                      "format": {
+                        "type": "object",
+                        "properties": {
+                          "locale": {
+                            "type": "string",
+                            "description": "BCP 47 locale, e.g. en-US"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "description": "ISO 4217 currency code, e.g. USD"
+                          },
+                          "unit": {
+                            "type": "string",
+                            "description": "A unit such as percent or kilometer"
+                          },
+                          "min-fraction-digits": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 20,
+                            "description": "Fewest digits after the decimal point"
+                          },
+                          "max-fraction-digits": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 20,
+                            "description": "Most digits after the decimal point (default: just enough to tell the breaks apart)"
+                          }
+                        },
+                        "additionalProperties": false,
+                        "description": "Legend number format (MapLibre number-format option names)",
+                        "patternProperties": {
+                          "^x-": {}
+                        }
+                      }
+                    },
+                    "required": [
+                      "field"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Thematic classes for this layer: compiles to a MapLibre step (numeric) or match (categories) expression",
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  },
                   "metadata": {
                     "type": "object",
                     "additionalProperties": {},
@@ -8430,8 +8866,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                       "circle-color": {
                         "anyOf": [
                           {
-                            "type": "string",
-                            "description": "CSS color value"
+                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                           },
                           {
                             "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/filter"
@@ -8552,6 +8987,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   },
                   "effect": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
+                  },
+                  "classify": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify"
                   },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
@@ -8715,6 +9153,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   "effect": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
                   },
+                  "classify": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify"
+                  },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
                   },
@@ -8835,6 +9276,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   },
                   "effect": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
+                  },
+                  "classify": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify"
                   },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
@@ -9250,6 +9694,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   "effect": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
                   },
+                  "classify": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify"
+                  },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
                   },
@@ -9354,6 +9801,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   },
                   "effect": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
+                  },
+                  "classify": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify"
                   },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
@@ -9475,6 +9925,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   "effect": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
                   },
+                  "classify": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify"
+                  },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
                   },
@@ -9566,6 +10019,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   "effect": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
                   },
+                  "classify": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify"
+                  },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
                   },
@@ -9623,12 +10079,12 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                       "hillshade-shadow-color": {
                         "anyOf": [
                           {
-                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                            "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                              "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                             },
                             "minItems": 1
                           },
@@ -9705,6 +10161,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                   },
                   "effect": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/effect"
+                  },
+                  "classify": {
+                    "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify"
                   },
                   "metadata": {
                     "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/metadata"
@@ -10503,7 +10962,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 "description": "Marker position [lng, lat]"
                               },
                               "color": {
-                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties",
                                 "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
                               },
                               "size": {
@@ -12676,6 +13135,136 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                         "additionalProperties": true,
                         "description": "Experimental: a registered shader effect (\`type\` + flat params) that enhances this layer; the layer itself is the static fallback"
                       },
+                      "classify": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "The feature property to classify, e.g. median_income"
+                          },
+                          "breaks": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 1,
+                            "description": "Class thresholds, as MapLibre step: n breaks make n + 1 classes, and a value equal to a break takes the class above it"
+                          },
+                          "method": {
+                            "type": "string",
+                            "description": "Compute breaks from the data: quantile, equal, or jenks (GeoJSON sources only)"
+                          },
+                          "classes": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "maximum": 12,
+                            "description": "How many classes method: computes (default 5)"
+                          },
+                          "categories": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string",
+                                  "description": "CSS color value"
+                                }
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "string",
+                                    "number",
+                                    "boolean"
+                                  ]
+                                },
+                                "minItems": 1
+                              }
+                            ],
+                            "description": "Categorical classes: a map of value → colour, or a list of values coloured from palette:"
+                          },
+                          "palette": {
+                            "type": "string",
+                            "description": "A named palette: ColorBrewer (Blues, YlGnBu, RdBu, Set2 …), viridis, cividis, okabe-ito"
+                          },
+                          "colors": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
+                            },
+                            "minItems": 1,
+                            "description": "Explicit colours, one per class (or per category)"
+                          },
+                          "reverse": {
+                            "type": "boolean",
+                            "description": "Reverse the named palette"
+                          },
+                          "property": {
+                            "type": "string",
+                            "description": "The colour paint property to drive (default: the layer type's main colour)"
+                          },
+                          "radius": {
+                            "type": "array",
+                            "items": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "minItems": 1,
+                            "description": "Graduated symbols: circle-radius for each class (circle layers)"
+                          },
+                          "noData": {
+                            "type": "string",
+                            "description": "Features with a missing or non-numeric value: a colour (default light grey) or \\"hide\\""
+                          },
+                          "other": {
+                            "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/noData",
+                            "description": "Categories that are not listed: a colour (default grey) or \\"hide\\""
+                          },
+                          "format": {
+                            "type": "object",
+                            "properties": {
+                              "locale": {
+                                "type": "string",
+                                "description": "BCP 47 locale, e.g. en-US"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 currency code, e.g. USD"
+                              },
+                              "unit": {
+                                "type": "string",
+                                "description": "A unit such as percent or kilometer"
+                              },
+                              "min-fraction-digits": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 20,
+                                "description": "Fewest digits after the decimal point"
+                              },
+                              "max-fraction-digits": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 20,
+                                "description": "Most digits after the decimal point (default: just enough to tell the breaks apart)"
+                              }
+                            },
+                            "additionalProperties": false,
+                            "description": "Legend number format (MapLibre number-format option names)",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          }
+                        },
+                        "required": [
+                          "field"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Thematic classes for this layer: compiles to a MapLibre step (numeric) or match (categories) expression",
+                        "patternProperties": {
+                          "^x-": {}
+                        }
+                      },
                       "metadata": {
                         "type": "object",
                         "additionalProperties": {},
@@ -12703,8 +13292,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                           "circle-color": {
                             "anyOf": [
                               {
-                                "type": "string",
-                                "description": "CSS color value"
+                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                               },
                               {
                                 "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/filter"
@@ -12825,6 +13413,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       },
                       "effect": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
+                      "classify": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                       },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -12988,6 +13579,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "effect": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
+                      "classify": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -13108,6 +13702,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       },
                       "effect": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
+                      "classify": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                       },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -13523,6 +14120,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "effect": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
+                      "classify": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -13627,6 +14227,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       },
                       "effect": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
+                      "classify": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                       },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -13748,6 +14351,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "effect": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
+                      "classify": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -13839,6 +14445,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "effect": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
                       },
+                      "classify": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
+                      },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
                       },
@@ -13896,12 +14505,12 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                           "hillshade-shadow-color": {
                             "anyOf": [
                               {
-                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                               },
                               {
                                 "type": "array",
                                 "items": {
-                                  "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0"
+                                  "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties"
                                 },
                                 "minItems": 1
                               },
@@ -13978,6 +14587,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       },
                       "effect": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/effect"
+                      },
+                      "classify": {
+                        "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify"
                       },
                       "metadata": {
                         "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/metadata"
@@ -14613,7 +15225,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                 "description": "Marker position [lng, lat]"
               },
               "color": {
-                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/paint/properties/circle-color/anyOf/0",
+                "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/classify/properties/categories/anyOf/0/additionalProperties",
                 "description": "Pin color (the default pin only; ignored when \`icon\` is set)"
               },
               "size": {

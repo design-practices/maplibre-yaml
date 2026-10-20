@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Graduated symbols: world cities sized and coloured by population in five
+# natural-breaks (jenks) classes. One classify block drives circle-color and
+# circle-radius from the same breaks; the legend draws each class's circle.
+# Data: Natural Earth populated places (public domain).
+type: map
+id: classify-graduated
+config:
+  center: [10, 25]
+  zoom: 1.3
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+legend:
+  position: bottom-left
+sources:
+  cities:
+    type: geojson
+    url: /data/classify/world-cities.geojson
+layers:
+  - id: cities
+    type: circle
+    source: cities
+    label: City population
+    classify:
+      field: pop
+      method: jenks
+      classes: 5
+      palette: YlOrRd
+      radius: [2, 4, 7, 10, 14]
+    paint:
+      circle-opacity: 0.85
+      circle-stroke-color: "#ffffff"
+      circle-stroke-width: 1
+    interactive:
+      click:
+        popup:
+          - h4:
+              - property: name
+          - p:
+              - str: "Population: "
+              - property: pop
+                format: ",.0f"

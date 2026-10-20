@@ -24,6 +24,7 @@
  * boundary is how they drift.
  */
 
+import { classifyRecordOf, isPending } from "../classify/compile";
 import type { MapModel, LayerModel } from "../model/types";
 import type { EmitAsset, EmitImageRef } from "./assets";
 import { DOCUMENT_SPRITE_ID, declareDocumentSprite } from "./assets";
@@ -493,6 +494,24 @@ export function projectStyle(
     let spec = transformLayer(layer);
     let dropped = false;
     const id = String(spec["id"] ?? "");
+
+    // A `classify: { method }` whose data is fetched compiles once the data
+    // is in hand — `mlym emit` bakes it first (bakeClassify). Reaching here
+    // still pending means no one did: the layer draws one flat colour.
+    const classified = classifyRecordOf(spec);
+    if (classified && isPending(classified)) {
+      requireExportClass("layer.classify");
+      warnings.push({
+        path: `layers.${id}.classify`,
+        kind: "lossy",
+        construct: "layer.classify",
+        exportClass: "exports",
+        message:
+          `\`classify\` on layer "${id}" computes its breaks (method: ${classified.method}) from ` +
+          "data that was not loaded, so the emitted layer draws a single colour. Bake the " +
+          "breaks first (bakeClassify — `mlym emit` does), or write breaks: yourself.",
+      });
+    }
 
     // Declared document images: rewrite the image-valued properties to the
     // document-sprite namespace so refs resolve in the emitted style.

@@ -27,6 +27,7 @@
 import type { Chapter, ScrollytellingBlock } from "../schemas/scrollytelling.schema";
 import type { ControlPosition } from "../schemas/map.schema";
 import { LegendBuilder } from "../renderer/legend-builder";
+import type { ClassifyRecord } from "../classify/compile";
 import { escapeHtml } from "../utils/html";
 
 /** Phones held upright, and narrow windows: cards span the map's width. */
@@ -107,6 +108,11 @@ export class StoryLegend {
   /** The layout's last answer, to tell a screen change from a re-layout. */
   private lastKey = "";
   private placement: StoryLegendPlacement = { corner: "top-left", collapsed: false };
+  /** `classify:` classes as the story's map drew them, by layer id. */
+  private readonly classified = new Map<string, ClassifyRecord>();
+  /** The author's own legend markup fills the panel; nothing to regenerate. */
+  private readonly slotted: boolean;
+  private readonly heading: string;
 
   constructor(
     private readonly host: HTMLElement,
@@ -137,18 +143,17 @@ export class StoryLegend {
     this.panel.setAttribute("role", "region");
     this.panel.setAttribute("aria-label", title);
 
+    this.slotted = slotElement !== null;
+    this.heading =
+      title.trim().toLowerCase() === "legend"
+        ? ""
+        : `<div class="scrolly-legend-heading">${escapeHtml(title)}</div>`;
     if (slotElement) {
       // The author's own legend markup (`slot="legend"`) fills the panel.
       slotElement.removeAttribute("hidden");
       this.panel.appendChild(slotElement);
     } else {
-      const builder = new LegendBuilder();
-      const items = builder.entries((story.layers ?? []) as never[], story.legend as never);
-      const heading =
-        title.trim().toLowerCase() === "legend"
-          ? ""
-          : `<div class="scrolly-legend-heading">${escapeHtml(title)}</div>`;
-      this.panel.innerHTML = heading + builder.itemsHTML(items);
+      this.renderItems();
     }
     this.root.append(this.toggle, this.panel);
     this.layer.appendChild(this.root);
@@ -171,6 +176,26 @@ export class StoryLegend {
       if (event.target instanceof Node && this.root.contains(event.target)) return;
       this.setOpen(false, true);
     });
+  }
+
+  /** Draw the generated entries (the story's `legend:` items or its layers'). */
+  private renderItems(): void {
+    const builder = new LegendBuilder();
+    const items = builder.entries(
+      (this.story.layers ?? []) as never[],
+      this.story.legend as never,
+      this.classified
+    );
+    this.panel.innerHTML = this.heading + builder.itemsHTML(items);
+  }
+
+  /**
+   * A `classify:` layer's classes as the story's map drew them (computed
+   * breaks, the data's range): redraw the entries to match.
+   */
+  updateClassify(layerId: string, record: ClassifyRecord): void {
+    this.classified.set(layerId, record);
+    if (!this.slotted) this.renderItems();
   }
 
   /** The legend's element tree (for tests and the host). */

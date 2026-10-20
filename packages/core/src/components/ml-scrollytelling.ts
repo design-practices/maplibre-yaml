@@ -83,6 +83,7 @@ import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
 import { isLocalPage } from "./map-notice.js";
 import { StoryLegend, STORY_NARROW_QUERY, STORY_LANDSCAPE_QUERY } from "../scrollytelling/story-legend.js";
+import type { ClassifyRecord } from "../classify/compile.js";
 import {
   isFilePage,
   looksLikeHtml,
@@ -184,6 +185,13 @@ export class MLScrollytelling extends HTMLElement {
     super();
     this.addEventListener("click", (event) => this.onClick(event));
     this.addEventListener("keydown", (event) => this.onKeydown(event));
+    // classify: (0.9) — the story's map reports each classified layer's
+    // classes as drawn (computed breaks, the data's range); the pinned
+    // legend shows the same edges as the map.
+    this.addEventListener("ml-map:layer-classified", (event) => {
+      const detail = (event as CustomEvent<{ layerId: string; classify: ClassifyRecord }>).detail;
+      if (detail) this.legend?.updateClassify(detail.layerId, detail.classify);
+    });
     // A chapter photo or video that fails to load (error does not bubble:
     // capture it). The card showed a broken image with only its alt text
     // and the 404 was in the console alone (ml-aot.51).

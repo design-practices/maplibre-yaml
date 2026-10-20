@@ -133,6 +133,7 @@ export interface MLMapEventMap {
   "ml-map:parameter-change": CustomEvent<MapRendererEvents["parameter:change"]>;
   "ml-map:layer-visibility": CustomEvent<MapRendererEvents["layer:visibility"]>;
   "ml-map:camera-fit": CustomEvent<MapRendererEvents["camera:fit"]>;
+  "ml-map:layer-classified": CustomEvent<MapRendererEvents["layer:classified"]>;
 }
 
 /**
@@ -202,6 +203,7 @@ const MAP_CONTAINER_CLASS = "ml-map-container";
  * @fires ml-map:parameter-change - A params-panel control wrote a state key
  * @fires ml-map:layer-visibility - A params-panel checkbox toggled a layer
  * @fires ml-map:camera-fit - The `fitTo` camera framed its source's data (detail: source, bounds)
+ * @fires ml-map:layer-classified - A `classify:` layer's classes as drawn (detail: layerId, classify), on load and when fetched data (re)computes them
  */
 export class MLMap extends HTMLElement {
   /** Internal MapRenderer instance */
@@ -1327,6 +1329,17 @@ export class MLMap extends HTMLElement {
         new CustomEvent("ml-map:image-error", {
           bubbles: true,
           detail: { name, url },
+        })
+      );
+    });
+
+    // classify: (0.9) — the classes as drawn, once the layers settle and
+    // whenever fetched data (re)computes them (a story's legend listens).
+    this.renderer.on("layer:classified", ({ layerId, classify }) => {
+      this.dispatchEvent(
+        new CustomEvent("ml-map:layer-classified", {
+          bubbles: true,
+          detail: { layerId, classify },
         })
       );
     });

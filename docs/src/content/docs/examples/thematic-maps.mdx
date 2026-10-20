@@ -1,0 +1,53 @@
+---
+title: Thematic Maps
+description: A choropleth, graduated symbols and a category map, each one classify block
+---
+
+import LiveMap from '../../../components/LiveMap.astro';
+import { Code } from '@astrojs/starlight/components';
+import choropleth from '../../../../public/configs/classify/choropleth.yaml?raw';
+import graduated from '../../../../public/configs/classify/graduated.yaml?raw';
+import categories from '../../../../public/configs/classify/categories.yaml?raw';
+
+Three thematic maps, each written as one `classify:` block on an ordinary
+layer. Every one compiles to a plain MapLibre expression and generates its
+legend. How it works, and every option: [Thematic maps](/guides/thematic-maps/).
+
+## Choropleth — quantile classes from the data
+
+Median household income by tract, in five quantile classes (the same number
+of tracts in each). The breaks are computed when the GeoJSON loads; the
+legend shows their real edges, formatted as currency. Tracts with no value
+— null, missing, `""`, `"n/a"` in this sample — are light grey, and the
+numeric strings a CSV export leaves behind (`"48200"`) count as numbers.
+
+<LiveMap src="/configs/classify/choropleth.yaml" height="460px" caption="Synthetic sample tracts. Click a tract for its value" />
+
+<Code code={choropleth} lang="yaml" title="choropleth.yaml" />
+
+## Graduated symbols — natural breaks, colour and size
+
+World cities by population in five natural-breaks (jenks) classes. One block
+drives both `circle-color` and `circle-radius` from the same breaks.
+
+<LiveMap src="/configs/classify/graduated.yaml" height="420px" caption="Natural Earth populated places (public domain)" />
+
+<Code code={graduated} lang="yaml" title="graduated.yaml" />
+
+## Categories over vector tiles
+
+The demo tiles' countries coloured by continent with `okabe-ito`, a
+colour-blind-safe palette. Categories compile to a `match` and need no data
+scan, so they work on a basemap's vector tiles; values not listed
+(Antarctica) take the `other:` colour.
+
+<LiveMap src="/configs/classify/categories.yaml" height="400px" />
+
+<Code code={categories} lang="yaml" title="categories.yaml" />
+
+## Export
+
+`mlym emit choropleth.yaml` writes a style.json whose `fill-color` is the
+compiled `step` (with the breaks computed from the data at export) and whose
+layer `metadata["maplibre-yaml:classify"]` records the classes. It opens in
+Maputnik and renders in any MapLibre map — no maplibre-yaml required.

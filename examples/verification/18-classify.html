@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>classify: thematic maps</title>
+  <!--
+    PASS = a 4×2 grid: top row pale red, red, red, dark red; bottom row grey,
+    grey, grey, dark red (no-data cells are light GREY, never black). Below
+    it, blue circles growing with population (the last one grey), then
+    green, orange and purple dots and a grey one. The legend lists real
+    class edges: 5–12, 12–30, 30–50, No data, …
+    FAIL = black cells, a single-colour grid, or an empty legend.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/18-classify.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; width: 800px; height: 520px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = graded reds, grey (not black) no-data cells, growing blue circles, a legend with real edges.</header>
+  <ml-map id="map" src="./configs/classify.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

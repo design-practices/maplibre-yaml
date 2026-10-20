@@ -29,6 +29,7 @@ import {
   attachSpriteImages,
   lowerMarkers,
   lowerFitTo,
+  bakeClassify,
   EmitError,
   type EmitMode,
   type EmitWarning,
@@ -36,8 +37,10 @@ import {
   type EmitImageRef,
   type CapabilityPolicy,
   type TrustContext,
+  type ClassifyDataLoader,
 } from '@maplibre-yaml/core';
 import { logger } from '../lib/logger.js';
+import { createDataLoader } from '../lib/data-loader.js';
 import { EXIT_CODES } from '../types.js';
 
 /**
@@ -54,6 +57,14 @@ export async function emitStyle(
   block: unknown,
   mode: EmitMode,
   policy: CapabilityPolicy,
+  options: {
+    /**
+     * Loads a `classify: { method }` layer's data when its source is fetched
+     * (`url:`). Default: http(s) URLs, and local paths from the working
+     * folder; `mlym emit` passes one that resolves against the document.
+     */
+    loadData?: ClassifyDataLoader;
+  } = {},
 ): Promise<{
   style: Record<string, unknown>;
   warnings: EmitWarning[];
@@ -61,6 +72,19 @@ export async function emitStyle(
   images?: EmitImageRef[];
 }> {
   let model = toModel(block as never);
+
+  // classify: breaks a `method:` computes from fetched data are baked now,
+  // in both modes. A classed map whose classes are unknown has no honest
+  // fallback (one flat colour would look like a result), so data that
+  // cannot be loaded fails the export, naming the layer, URL and fix.
+  const baked = await bakeClassify(model, options.loadData ?? createDataLoader());
+  if (baked.errors.length > 0) {
+    throw new EmitError(
+      `Export failed: ${baked.errors.length} classify layer(s) could not compute their breaks.\n` +
+        baked.errors.map((e) => `  ${e.path}: ${e.message}`).join('\n'),
+    );
+  }
+  model = baked.model;
 
   // Fallback lowerings (markers → symbol layer + pin sprites, fitTo → a
   // computed camera; KTD4) run only
@@ -273,7 +297,9 @@ export const emitCommand = defineCommand({
     let assets: EmitAsset[] | undefined;
     let images: EmitImageRef[] | undefined;
     try {
-      ({ style, warnings, assets, images } = await emitStyle(parsed.data, mode, policy));
+      ({ style, warnings, assets, images } = await emitStyle(parsed.data, mode, policy, {
+        loadData: createDataLoader(filePath),
+      }));
     } catch (err) {
       if (err instanceof EmitError) {
         logger.error(err.message);

@@ -6,6 +6,14 @@
 import type { z } from 'zod';
 import { LayerSchema, LegendConfigSchema, LegendItemSchema } from '../schemas';
 import { escapeHtml } from '../utils/html';
+import {
+  classifyLegendEntries,
+  classifyRecordOf,
+  isPending,
+  resolveClassify,
+  type ClassifyRecord,
+} from '../classify/compile';
+import type { ClassifyConfig } from '../schemas/classify.schema';
 
 /**
  * Inline base styles, matching the params panel's box. Core ships no
@@ -29,6 +37,21 @@ type LegendConfig = z.infer<typeof LegendConfigSchema>;
 type LegendItem = z.infer<typeof LegendItemSchema>;
 
 /**
+ * One legend line: an authored item, or a line generated from a layer's
+ * `classify:` — which may be a group heading (the layer's label) or carry a
+ * swatch size (graduated circles).
+ */
+export type LegendEntry = LegendItem & {
+  /** A heading line naming the classified layer; no swatch. */
+  heading?: true;
+  /** Swatch diameter in px (graduated circles). */
+  size?: number;
+};
+
+/** Per-layer classify records that supersede what the layers carry (a story's map reports them). */
+export type ClassifyOverrides = ReadonlyMap<string, ClassifyRecord>;
+
+/**
  * Builds legend HTML from layer configurations
  */
 export class LegendBuilder {
@@ -39,7 +62,7 @@ export class LegendBuilder {
     const el = typeof container === 'string' ? document.getElementById(container) : container;
     if (!el) return;
 
-    const items = config?.items || this.extractItems(layers);
+    const items: LegendEntry[] = config?.items || this.extractItems(layers);
 
     // Nothing to show → no box. An empty "Legend" panel reads as broken chrome;
     // say what's missing instead (entries come from layers' `legend:` fields
@@ -47,6 +70,9 @@ export class LegendBuilder {
     if (items.length === 0) {
       el.innerHTML = "";
       el.hidden = true;
+      // A classify layer still computing its breaks fills the legend when its
+      // data lands (the renderer redraws it) — nothing is missing yet.
+      if (this.hasPendingClassify(layers)) return;
       console.warn(
         "[maplibre-yaml] legend: has no entries — add `legend:` to the layers that " +
           "should appear, or list `items:` on the legend block. No legend is shown."
@@ -75,27 +101,44 @@ export class LegendBuilder {
    * The legend's entries: the block's own `items:`, else every layer's
    * `legend:` field. Empty when there is nothing to show.
    */
-  entries(layers: Layer[], config?: Partial<LegendConfig>): LegendItem[] {
-    return config?.items || this.extractItems(layers);
+  entries(
+    layers: Layer[],
+    config?: Partial<LegendConfig>,
+    overrides?: ClassifyOverrides
+  ): LegendEntry[] {
+    return config?.items || this.extractItems(layers, overrides);
   }
 
   /**
    * The entries' markup (swatch + label each), without the box or a title:
    * for a host that puts them in its own panel (a story's pinned legend).
    */
-  itemsHTML(items: LegendItem[]): string {
+  itemsHTML(items: LegendEntry[]): string {
     return `<div class="legend-items">${items.map((item) => this.renderItem(item)).join('')}</div>`;
   }
 
   /**
    * Render a single legend item
    */
-  private renderItem(item: LegendItem): string {
+  private renderItem(item: LegendEntry): string {
+    if (item.heading) {
+      return `<div class="legend-heading" style="font-weight:600;margin-top:6px;">${escapeHtml(item.label)}</div>`;
+    }
     const shape = item.shape || 'square';
     let symbol = '';
 
-    const swatch = (kind: 'circle' | 'line' | 'square') =>
-      `<span class="legend-symbol ${kind}" style="background:${escapeHtml(item.color)};${SYMBOL_STYLE[kind]}"></span>`;
+    // A graduated circle's swatch is drawn at its class's size, centred in a
+    // fixed-width cell so the labels stay aligned.
+    const sized = (kind: 'circle' | 'line' | 'square') =>
+      item.size !== undefined && kind === 'circle'
+        ? `${SYMBOL_STYLE[kind]}width:${item.size}px;height:${item.size}px;`
+        : SYMBOL_STYLE[kind];
+    const swatch = (kind: 'circle' | 'line' | 'square') => {
+      const span = `<span class="legend-symbol ${kind}" style="background:${escapeHtml(item.color)};${sized(kind)}"></span>`;
+      return item.size !== undefined
+        ? `<span class="legend-symbol-cell" style="display:inline-flex;flex:none;justify-content:center;align-items:center;width:${this.cellWidth}px;">${span}</span>`
+        : span;
+    };
 
     switch (shape) {
       case 'circle':
@@ -118,13 +161,63 @@ export class LegendBuilder {
     return `<div class="legend-item" style="display:flex;align-items:center;gap:6px;margin-top:4px;">${symbol}<span class="legend-label">${escapeHtml(item.label)}</span></div>`;
   }
 
+  /** Width of the swatch cell when graduated circles are drawn (their largest). */
+  private cellWidth = 12;
+
   /**
-   * Extract legend items from layers
+   * Extract legend items from layers: a layer's authored `legend:` item, or
+   * — for a `classify:` layer without one — a heading and one line per class.
    */
-  private extractItems(layers: Layer[]): LegendItem[] {
-    return layers
-      .filter((l) => l.legend && typeof l.legend === 'object')
-      .map((l) => l.legend as LegendItem);
+  private extractItems(layers: Layer[], overrides?: ClassifyOverrides): LegendEntry[] {
+    const items: LegendEntry[] = [];
+    for (const layer of layers) {
+      if (layer.legend && typeof layer.legend === 'object') {
+        items.push(layer.legend as LegendItem);
+        continue;
+      }
+      const record = this.classifyRecord(layer, overrides);
+      if (!record) continue;
+      const own = (layer as { paint?: Record<string, unknown> }).paint;
+      const literal = Object.entries(own ?? {}).find(
+        ([key, value]) => key.endsWith('-color') && typeof value === 'string'
+      );
+      items.push(
+        ...(classifyLegendEntries(record, {
+          title: (layer as { label?: string }).label ?? record.field,
+          layerType: layer.type,
+          ...(literal ? { color: literal[1] as string } : {}),
+        }) as LegendEntry[])
+      );
+    }
+    const sizes = items.map((i) => i.size ?? 0);
+    this.cellWidth = Math.max(12, ...sizes);
+    return items;
+  }
+
+  /** The classify record for a layer: reported, compiled (metadata), or raw `classify:`. */
+  private classifyRecord(layer: Layer, overrides?: ClassifyOverrides): ClassifyRecord | undefined {
+    const reported = overrides?.get(layer.id);
+    if (reported) return reported;
+    const compiled = classifyRecordOf(layer);
+    if (compiled) return compiled;
+    // An uncompiled layer (a story's own `layers:`): resolve the block here.
+    const raw = (layer as { classify?: unknown }).classify;
+    if (raw && typeof raw === 'object') {
+      try {
+        return resolveClassify(raw as ClassifyConfig, layer.type);
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }
+
+  /** Whether some classify layer is still waiting for its data. */
+  private hasPendingClassify(layers: Layer[]): boolean {
+    return layers.some((layer) => {
+      const record = this.classifyRecord(layer);
+      return record !== undefined && isPending(record);
+    });
   }
 
 }

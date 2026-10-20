@@ -139,6 +139,14 @@ export {
   LayerOrReferenceSchema,
 } from "./layer.schema";
 
+// Thematic classes (`classify:`, 0.9)
+export {
+  ClassifySchema,
+  DEFAULT_CLASS_COUNT,
+  MAX_CLASS_COUNT,
+} from "./classify.schema";
+export type { ClassifyConfig } from "./classify.schema";
+
 // Content schemas
 export {
   ValidTagNames,

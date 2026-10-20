@@ -1,0 +1,67 @@
+# classify: (0.9, ml-6x0) — browser verification, which is also the demo.
+#
+# grid   — a choropleth whose breaks are COMPUTED (method: quantile) from a
+#          fetched url: source when it lands: values 5, 12, "15", 30, 50 →
+#          breaks [12, 30]. Its bottom row has no data (null, missing, "n/a")
+#          and must draw light grey, never MapLibre's black fallback.
+# towns  — graduated symbols with explicit breaks: colour AND radius per class.
+# kinds  — categories (match) with an "other" colour and a no-data value.
+type: map
+id: classify
+config:
+  center: [2, -0.4]
+  zoom: 6
+  mapStyle: "/examples/verification/configs/local-style.json"
+legend:
+  title: Classify
+  position: top-right
+sources:
+  # Named unlike the layer: data events arrive keyed by the source.
+  cells:
+    type: geojson
+    url: "/examples/verification/data/classify-grid.geojson"
+layers:
+  - id: grid
+    type: fill
+    source: cells
+    label: Value
+    classify:
+      field: value
+      method: quantile
+      classes: 3
+      palette: Reds
+  - id: towns
+    type: circle
+    label: Population
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: { pop: 500 }, geometry: { type: Point, coordinates: [0.5, -1] } }
+          - { type: Feature, properties: { pop: 5000 }, geometry: { type: Point, coordinates: [1.5, -1] } }
+          - { type: Feature, properties: { pop: "20000" }, geometry: { type: Point, coordinates: [2.5, -1] } }
+          - { type: Feature, properties: { pop: null }, geometry: { type: Point, coordinates: [3.5, -1] } }
+    classify:
+      field: pop
+      breaks: [1000, 10000]
+      palette: Blues
+      radius: [5, 9, 13]
+  - id: kinds
+    type: circle
+    label: Kind
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - { type: Feature, properties: { kind: a }, geometry: { type: Point, coordinates: [0.5, -2] } }
+          - { type: Feature, properties: { kind: b }, geometry: { type: Point, coordinates: [1.5, -2] } }
+          - { type: Feature, properties: { kind: zz }, geometry: { type: Point, coordinates: [2.5, -2] } }
+          - { type: Feature, properties: {}, geometry: { type: Point, coordinates: [3.5, -2] } }
+    classify:
+      field: kind
+      categories: { a: "#1b9e77", b: "#d95f02" }
+      other: "#7570b3"
+    paint:
+      circle-radius: 9

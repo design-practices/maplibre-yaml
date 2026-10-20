@@ -14,6 +14,7 @@ import type { MapModel, V1MapInput } from "./types";
 import type { MapBlockV2 } from "../schemas/map-v2.schema";
 import { normalizeMapBlock } from "./normalize";
 import { readV2Block } from "./read-v2";
+import { lowerClassifyInModel } from "../classify/lower";
 
 /**
  * Turn a parsed block into the internal model, selecting the reader by version.
@@ -28,8 +29,11 @@ import { readV2Block } from "./read-v2";
 export function toModel(
   block: { version?: number } & Record<string, unknown>
 ): MapModel {
+  // `classify:` compiles to plain paint here, after either front end, so the
+  // renderer and the emitter both see MapLibre expressions (and v1/v2 twins
+  // still produce one model).
   if (block.version === 2) {
-    return readV2Block(block as unknown as MapBlockV2);
+    return lowerClassifyInModel(readV2Block(block as unknown as MapBlockV2));
   }
-  return normalizeMapBlock(block as unknown as V1MapInput);
+  return lowerClassifyInModel(normalizeMapBlock(block as unknown as V1MapInput));
 }

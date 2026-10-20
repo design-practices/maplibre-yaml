@@ -458,6 +458,7 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
 | `ml-map:parameter-change` | `{ key, value }` | A params-panel control wrote a state key |
 | `ml-map:layer-visibility` | `{ layerId, visible }` | A params-panel checkbox toggled a layer |
 | `ml-map:camera-fit` | `{ source, bounds }` | The `fitTo` camera framed its source's data (once, on the first data load for fetched sources) |
+| `ml-map:layer-classified` | `{ layerId, classify }` | A `classify:` layer's classes as drawn — once when the layers settle, and again when fetched data computes or refreshes them. `classify` is the record the emitted style carries in `metadata["maplibre-yaml:classify"]` (breaks, colours, stats) |
 
 ### When something goes wrong
 

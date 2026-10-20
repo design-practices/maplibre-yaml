@@ -21,6 +21,7 @@ import {
   ZoomLevelSchema,
 } from "./base.schema";
 import { LayerSourceSchema } from "./source.schema";
+import { ClassifySchema } from "./classify.schema";
 import { markOpenSchema } from "../parser/validation-utils";
 import { getEffectsHost, type EffectBlock } from "../effects-host";
 import { LINK_TARGET_VALUES } from "../utils/html";
@@ -610,6 +611,9 @@ export const BaseLayerPropertiesSchema = z.object({
   ),
   legend: LegendItemSchema.optional().describe("Legend configuration"),
   effect: EffectConfigSchema.optional(),
+  // Thematic classes (0.9, ml-6x0): compiles to a step/match paint
+  // expression; the layer-type checks live in classify/checks.ts.
+  classify: ClassifySchema.optional(),
   metadata: z.record(z.any()).optional().describe("Custom metadata"),
 });
 
