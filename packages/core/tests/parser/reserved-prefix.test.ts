@@ -149,6 +149,8 @@ chapters:
   it("suggests an expression built from what was written", () => {
     expect(expressionExample("=upper({name})")).toBe('["upcase", ["get", "name"]]');
     expect(expressionExample("=lower({city})")).toBe('["downcase", ["get", "city"]]');
+    // MapLibre's token pattern: spaces inside the braces are part of the name.
+    expect(expressionExample("=upper({Site Name})")).toBe('["upcase", ["get", "Site Name"]]');
     expect(expressionExample("=population * 2")).toBe('["get", "name"]');
     expect(reservedPrefixWarnings({ layers: [{ paint: { "circle-radius": "==3" } }] })).toHaveLength(1);
   });

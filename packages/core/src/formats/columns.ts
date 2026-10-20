@@ -41,9 +41,20 @@ type Found = { all: boolean; names: Set<string> };
 /** Legacy (non-expression) filter operators whose second element is a property name. */
 const LEGACY_KEY_OPS = new Set(["==", "!=", "<", "<=", ">", ">=", "in", "!in", "has", "!has"]);
 
-/** `{name}` tokens in a string (MapLibre's legacy token syntax). */
+/**
+ * `{name}` tokens in a string (MapLibre's legacy token syntax), with
+ * MapLibre's own pattern: anything between the braces, spaces included
+ * (`{Site Name}`). MapLibre looks the key up as written; the trimmed name is
+ * read too, so `{ name }` costs nothing when the column is `name` (a column
+ * the file lacks is never fetched).
+ */
 function addTokens(text: string, found: Found): void {
-  for (const m of text.matchAll(/\{([^{}\s]+)\}/g)) found.names.add(m[1]!);
+  for (const m of text.matchAll(/\{([^{}]+)\}/g)) {
+    const key = m[1]!;
+    found.names.add(key);
+    const trimmed = key.trim();
+    if (trimmed && trimmed !== key) found.names.add(trimmed);
+  }
 }
 
 /** Walk an expression (or anything that may contain one). */

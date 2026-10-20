@@ -141,6 +141,20 @@ layers:
   });
 });
 
+describe("{tokens} as MapLibre reads them", () => {
+  it("a name with spaces is a token; a padded one reads the trimmed name too", () => {
+    const columns = geoParquetColumns({ wells }, [
+      {
+        id: "labels",
+        type: "symbol",
+        source: "wells",
+        layout: { "text-field": "{Site Name}: { depth }", "icon-image": "{kind}-15" },
+      },
+    ]);
+    expect(columns.get("wells")).toEqual([" depth ", "Site Name", "depth", "kind"]);
+  });
+});
+
 describe("story chapter actions (0.9)", () => {
   const layers = [
     { id: "dots", type: "circle", source: "wells", paint: { "circle-color": ["get", "kind"] } },

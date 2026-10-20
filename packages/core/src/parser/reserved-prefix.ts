@@ -52,7 +52,9 @@ export function hasReservedPrefix(value: unknown): value is string {
  * `"=upper({name})"` → `["upcase", ["get", "name"]]`.
  */
 export function expressionExample(value: string): string {
-  const property = /\{([^{}\s]+)\}/.exec(value)?.[1] ?? /\b(?:get|prop)\(\s*["']?([\w.-]+)/i.exec(value)?.[1];
+  // MapLibre's token pattern: a name with spaces (`{Site Name}`) is a token too.
+  const property =
+    /\{([^{}]+)\}/.exec(value)?.[1]?.trim() || /\b(?:get|prop)\(\s*["']?([\w.-]+)/i.exec(value)?.[1];
   const get = `["get", "${property ?? "name"}"]`;
   if (/^=\s*(?:upper|upcase|uppercase)\s*\(/i.test(value)) return `["upcase", ${get}]`;
   if (/^=\s*(?:lower|downcase|lowercase)\s*\(/i.test(value)) return `["downcase", ${get}]`;
