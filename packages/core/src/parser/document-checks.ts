@@ -541,3 +541,32 @@ export function checkDocument(
 
   return { errors, warnings };
 }
+
+/**
+ * A standalone map with no basemap (ml-aot.97). The schema keeps it optional
+ * because the Astro builders can inherit `defaultMapStyle`, but `<ml-map>`
+ * has nothing to inherit and refuses the map with an error card; validation
+ * says the same, as a warning (it is not wrong under the Astro builders).
+ *
+ * @param version - 1 (`config.mapStyle`) or 2 (`style.basemap`).
+ */
+export function missingBasemapWarning(
+  value: unknown,
+  version: 1 | 2,
+  positions?: Positions
+): ValidationWarning | undefined {
+  if (!isObject(value)) return undefined;
+  const parent = version === 2 ? value["style"] : value["config"];
+  if (!isObject(parent)) return undefined;
+  const key = version === 2 ? "basemap" : "mapStyle";
+  if (parent[key]) return undefined;
+  const path = version === 2 ? ["style"] : ["config"];
+  return {
+    path: [...path, key].join("."),
+    message:
+      `No ${key}: this map has no basemap. <ml-map> needs one and shows an error instead of the ` +
+      `map; add ${key}: "https://demotiles.maplibre.org/style.json" (or another style URL) under ` +
+      `${path[0]}:. Only the Astro builders can fill it in from a site-wide defaultMapStyle.`,
+    ...atKey(positions, [], path[0]!),
+  };
+}

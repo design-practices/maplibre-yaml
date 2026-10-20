@@ -297,7 +297,7 @@ import {
   type ValidationWarning,
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
-import { checkDocument, chapterLabel, checkLocaleKeys } from "./document-checks";
+import { checkDocument, chapterLabel, checkLocaleKeys, missingBasemapWarning } from "./document-checks";
 import { checkSourceFormats } from "./format-checks";
 import { reservedPrefixWarnings } from "./reserved-prefix";
 import { boundsProblem } from "../utils/bounds";
@@ -985,6 +985,13 @@ export class YAMLParser {
     // `cities`) validates — the name could be a basemap source — but is
     // almost certainly a typo; say so with a did-you-mean (ml-aot.15).
     const sourceRefWarnings = checkSourceReferences(m.value, m.doc, m.lineCounter);
+    // No basemap: valid under the Astro builders, refused by <ml-map>.
+    const noBasemap = missingBasemapWarning(
+      m.value,
+      detected.version === 2 ? 2 : 1,
+      positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
+    );
+    if (noBasemap) sourceRefWarnings.push(noBasemap);
     const withSourceRefWarnings = <T>(result: ParseResult<T>): ParseResult<T> =>
       sourceRefWarnings.length === 0
         ? result
