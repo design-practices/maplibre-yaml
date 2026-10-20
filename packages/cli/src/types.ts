@@ -7,7 +7,7 @@ export interface ValidationError {
   message: string;
   line?: number;
   column?: number;
-  severity: 'error' | 'warning';
+  severity: 'error' | 'warning' | 'note';
   /**
    * Carried through from the parser. Deprecations are exempt from strict
    * promotion unless `--strict-deprecations`, so this must survive the

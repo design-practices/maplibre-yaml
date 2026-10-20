@@ -37,6 +37,29 @@ describe('formatter', () => {
       expect(output).toContain('Missing required field');
     });
 
+    it('prints a note as information, not counted as a warning (ml-aot.127)', () => {
+      const results: ValidationResult[] = [{
+        file: 'bm-string.yaml',
+        valid: true,
+        errors: [],
+        warnings: [{
+          path: 'config.mapStyle',
+          message: 'mapStyle: data/nyc.pmtiles is read as the Protomaps basemap.',
+          severity: 'note',
+          kind: 'note',
+        }],
+      }];
+      const output = formatHuman(results);
+      expect(output).toContain('ℹ note');
+      expect(output).toContain('✓ bm-string.yaml');
+      expect(output).toContain('✓ 1 file(s) valid');
+      expect(output).not.toMatch(/⚠|warning/);
+      const json = JSON.parse(formatJSON(results));
+      expect(json.summary.warningCount).toBe(0);
+      expect(json.summary.noteCount).toBe(1);
+      expect(json.files[0].warnings[0].severity).toBe('note');
+    });
+
     it('formats warnings', () => {
       const results: ValidationResult[] = [{
         file: 'test.yaml',

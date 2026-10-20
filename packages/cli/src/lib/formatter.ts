@@ -17,8 +17,14 @@ export function formatHuman(results: ValidationResult[]): string {
   let filesWithErrors = 0;
   let filesWithWarnings = 0;
 
+  let totalNotes = 0;
+
   for (const result of results) {
-    if (result.warnings.length > 0) {
+    // A note explains how a valid value is read (a basemap written as just
+    // a .pmtiles file): nothing is wrong, so it isn't counted as a warning.
+    const warnings = result.warnings.filter((w) => w.kind !== 'note');
+    const notes = result.warnings.filter((w) => w.kind === 'note');
+    if (warnings.length > 0) {
       filesWithWarnings++;
     }
 
@@ -37,7 +43,7 @@ export function formatHuman(results: ValidationResult[]): string {
           lines.push(`    ${pc.dim(location)}`);
         }
       }
-    } else if (result.warnings.length > 0) {
+    } else if (warnings.length > 0) {
       // Valid, but has advisory warnings worth surfacing.
       lines.push('');
       lines.push(pc.yellow(`⚠ ${result.file}`));
@@ -46,11 +52,20 @@ export function formatHuman(results: ValidationResult[]): string {
     }
 
     // Warnings are surfaced whether or not the file also has errors.
-    for (const warning of result.warnings) {
+    for (const warning of warnings) {
       totalWarnings++;
       const location = formatLocation(warning);
       const path = displayPath(warning) ? pc.yellow(displayPath(warning)) + ': ' : '';
       lines.push(`  ${pc.yellow('warning')} ${path}${warning.message}`);
+      if (location) {
+        lines.push(`    ${pc.dim(location)}`);
+      }
+    }
+    for (const note of notes) {
+      totalNotes++;
+      const location = formatLocation(note);
+      const path = displayPath(note) ? pc.cyan(displayPath(note)) + ': ' : '';
+      lines.push(`  ${pc.cyan('ℹ note')} ${path}${note.message}`);
       if (location) {
         lines.push(`    ${pc.dim(location)}`);
       }
@@ -60,7 +75,9 @@ export function formatHuman(results: ValidationResult[]): string {
   // Summary
   lines.push('');
   if (totalErrors === 0 && totalWarnings === 0) {
-    lines.push(pc.green(`✓ ${results.length} file(s) valid`));
+    lines.push(
+      pc.green(`✓ ${results.length} file(s) valid`) + (totalNotes > 0 ? pc.dim(` (${totalNotes} note(s))`) : '')
+    );
   } else if (totalErrors === 0) {
     // Warnings only: the run still exits 0, so use a warning glyph and accurate
     // wording rather than a red ✗ over "0 file(s) with issues".
@@ -90,14 +107,16 @@ export function formatJSON(results: ValidationResult[]): string {
       file: r.file,
       valid: r.valid,
       errors: r.errors,
-      warnings: r.warnings,
+      // A note is information, not a warning (`severity: "note"`).
+      warnings: r.warnings.map((w) => (w.kind === 'note' ? { ...w, severity: 'note' as const } : w)),
     })),
     summary: {
       total: results.length,
       valid: results.filter(r => r.valid).length,
       invalid: results.filter(r => !r.valid).length,
       errorCount: results.reduce((sum, r) => sum + r.errors.length, 0),
-      warningCount: results.reduce((sum, r) => sum + r.warnings.length, 0),
+      warningCount: results.reduce((sum, r) => sum + r.warnings.filter((w) => w.kind !== 'note').length, 0),
+      noteCount: results.reduce((sum, r) => sum + r.warnings.filter((w) => w.kind === 'note').length, 0),
     },
   };
 

@@ -41,7 +41,7 @@ export function formatVSCode(results: ValidationResult[]): string {
       const path = displayPath(warning) ? `[${displayPath(warning)}] ` : '';
 
       lines.push(
-        `${result.file}:${line}:${column}: warning: ${path}${warning.message}`
+        `${result.file}:${line}:${column}: ${warning.kind === 'note' ? 'info' : 'warning'}: ${path}${warning.message}`
       );
     }
   }

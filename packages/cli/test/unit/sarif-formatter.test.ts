@@ -166,4 +166,21 @@ describe('SARIF formatter', () => {
 
     expect(parsed.runs[0].results[0]).toHaveProperty('ruleId');
   });
+
+  it('a note is SARIF level "note" (ml-aot.127)', () => {
+    const sarif = JSON.parse(
+      formatSARIF(
+        [
+          {
+            file: 'bm.yaml',
+            valid: true,
+            errors: [],
+            warnings: [{ path: 'config.mapStyle', message: 'read as the Protomaps basemap', severity: 'note', kind: 'note' }],
+          },
+        ],
+        '0.0.0'
+      )
+    );
+    expect(sarif.runs[0].results[0].level).toBe('note');
+  });
 });
