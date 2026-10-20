@@ -2,7 +2,11 @@
  * The one UI string table (0.9): English defaults, overridden per document
  * through the same `locale:` map MapLibre reads, under namespaced keys.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// The package root pulls in the renderer; maplibre-gl 4's UMD bundle needs
+// URL.createObjectURL at import, which jsdom lacks (the CI matrix runs 4).
+vi.mock("maplibre-gl", () => ({ default: {}, Map: vi.fn() }));
 import {
   DEFAULT_STRINGS,
   MAPLIBRE_STRINGS,
