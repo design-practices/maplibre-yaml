@@ -393,7 +393,8 @@ metadata.
 reads (the footer gives their sizes before any data is downloaded): up to
 **10 MB** read whole, **10–50 MB** read whole with a console note, over
 **50 MB** read by view if the file allows it, refused otherwise. A small file
-(under 512 KB) arrives in one request.
+(under 512 KB) usually arrives in one request; a host that answers 416 for
+a small file's end (GitHub Pages, `npx serve`) costs a second.
 
 **Without range requests** (`python -m http.server`) the first request
 returns the whole file. That is fine for a small file; a file over 50 MB is
@@ -687,7 +688,7 @@ The readers for these formats are not part of maplibre-yaml's main script.
 A page downloads a reader from `dist/chunks/`, next to the script, only when
 a map uses that format: PMTiles about 8 KB gzip, FlatGeobuf about 12 KB,
 GeoParquet about 23 KB (plus about 68 KB for a brotli-compressed file), COG
-about 131 KB, and the Protomaps basemap style generator about 7 KB. From a
+about 132 KB, and the Protomaps basemap style generator about 7 KB. From a
 CDN that is automatic; if you host maplibre-yaml's files yourself, copy the
 whole `dist/` folder
 ([Installation](/getting-started/installation/#hosting-the-files-yourself)).

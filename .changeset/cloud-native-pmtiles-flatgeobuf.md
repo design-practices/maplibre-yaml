@@ -13,26 +13,27 @@ PMTiles, FlatGeobuf, GeoParquet and Cloud Optimized GeoTIFF (COG) files now work
 
 Core registers the `pmtiles://` and `cog://` protocols once on the maplibre-gl module it renders with, before any map is created, and keeps a page's own registration. So a basemap style loaded from a URL can use `pmtiles://` too, and relative URLs inside such a style (the file inside `pmtiles://`, TileJSON, tiles, sprite and glyphs) resolve against the style.json itself.
 
-**Where the files can live.** Any static host with HTTP range requests: GitHub Pages, raw.githubusercontent.com, Netlify, S3, R2, `npx serve`, `astro dev` and `astro preview`. Hosts that answer a small file's range request with 416 (GitHub Pages, jsDelivr, `npx serve`), or that don't let a page on another site read `Content-Range` (GitHub Pages), are handled, and a 416 that remains says the file was found rather than to check its name.
+**Where the files can live.** Any static host with HTTP range requests: your own site on GitHub Pages, Netlify or the like, raw.githubusercontent.com, fastly.jsdelivr.net, S3, R2, and locally `npx serve`, `astro dev` and `astro preview`. Hosts that answer a request for the end of a small file with 416 (GitHub Pages, raw.githubusercontent.com, fastly.jsdelivr.net, `npx serve`), or that don't let a page on another site read `Content-Range` (GitHub Pages), are handled, and a 416 that remains says the file was found rather than to check its name. cdn.jsdelivr.net sometimes answers range requests from a compressed copy of the file: GeoParquet is then read whole, and PMTiles and FlatGeobuf read by view get a notice that says so (use fastly.jsdelivr.net, or serve the file from your own site).
 
 **Protomaps basemap shorthand.** `mapStyle: { pmtiles: data/nyc.pmtiles, flavor: dark, lang: es }` builds the Protomaps basemap style in the page around a Protomaps `.pmtiles` extract — no API key, no tile server. It is also accepted as `basemap:` in v2, as `defaultMapStyle`, and by the Astro map builders' `mapStyle` option.
 - A basemap written as just the file, `mapStyle: data/nyc.pmtiles` (or a `pmtiles://` URL), is the same Protomaps basemap with its defaults — the light flavor, labels in the page's language — and validation notes how it is read.
 - Flavors: `light`, `dark`, `white`, `grayscale`, `black`, in any case.
 - Labels in `lang:`, or else in the page's language. Arabic, Hebrew, Persian and Urdu labels are drawn right to left: maplibre-gl 6.9 and later do it themselves; with an older maplibre-gl, core sets MapLibre's right-to-left text plugin, downloaded from unpkg.com the first time such a label is drawn.
 - OpenStreetMap and Protomaps attribution.
-- Protomaps' hosted fonts and icons, unless `glyphs:` and `sprite:` name your own copies. When the fonts or icons can't load, the map's notice names the host (or your path) and the fix.
+- Protomaps' hosted fonts and icons, unless `glyphs:` and `sprite:` name your own copies. When the fonts, the icons or both can't load, the map's notice says which, names the host (or your path) and the fix; on maplibre-gl 4, whose basemap draws nothing without its fonts, the labels are left out so the rest of the basemap draws.
+- A Protomaps file cut with the older tile schema (before late 2024), which would draw only land and water, gets a notice to cut a new extract.
 - The document's layers draw on top; `before:` and story chapters can name the basemap's layers by id.
 
 **FlatGeobuf and GeoParquet** are read into an ordinary GeoJSON source, so popups, legends, `classify:`, `fitTo` and clustering work unchanged.
 - `load: viewport` reads only the features in view from a large file — one with a FlatGeobuf spatial index, or a GeoParquet `bbox` covering column and location-sorted row groups.
 - Size guards keep a too-big file from freezing the tab, also when the server doesn't say how big the file is.
-- GeoParquet reads only the columns the document uses — its layers, popups, labels (`{Site Name}` tokens included), filters, `classify:` and a story's chapter actions; `columns:` chooses them, `columns: all` reads every one. It opens a file with a single request, and reads WKB geometry from snappy, zstd, gzip, lz4 or brotli files.
+- GeoParquet reads only the columns the document uses — its layers, popups, labels (`{Site Name}` tokens included), filters, `classify:` and a story's chapter actions; `columns:` chooses them, `columns: all` reads every one. It usually opens a file with one request (a host that answers 416 for a small file costs a second), and reads WKB geometry from snappy, zstd, gzip, lz4 or brotli files.
 - A misspelt `classify:` field on a GeoParquet source still gets the did-you-mean and the file's column names, and a column that `columns:` leaves out is named as such.
 
 **COG.**
 - On a `raster` source a COG draws as imagery; on a `raster-dem` source it is elevation for `hillshade` layers and 3D `terrain:`.
 - A single band of values (a vegetation index, a temperature) is coloured with `colorRamp: { palette, min, max }`, using the `classify:` palette names or your own `colors:`; `classes:` draws flat classes, along your `colors:` too.
-- `fitTo` frames a COG's own extent, already on the first frame: `<ml-map>` reads the file's header while the page starts, within the same `fitTo` wait as a GeoJSON file (`MLMap.fitToWaitMs`, 1.5 seconds), and the reader reuses that read.
+- `fitTo` frames a COG's own extent, already on the first frame: `<ml-map>` reads the file's header while the page starts, within the same `fitTo` wait as a GeoJSON file (`MLMap.fitToWaitMs`, 1.5 seconds), and the reader reuses that read, so a COG's first 64 KB are requested once.
 - COGs must be in Web Mercator (EPSG:3857): a file in another projection is refused with the `gdalwarp` command that converts it, also when its header lies at the end of the file. A GeoTIFF that isn't cloud-optimized still draws, with an author hint giving the `gdal_translate -of COG` command.
 - COGs need maplibre-gl 4.5 or later.
 
@@ -41,7 +42,8 @@ Core registers the `pmtiles://` and `cog://` protocols once on the maplibre-gl m
 **When a file fails**, the map's notice says why in plain words, and the rest of the map still draws:
 - a server without range requests (`python -m http.server`), or CORS;
 - a wrong path that returned a web page, or a missing file;
-- a GeoParquet or FlatGeobuf file whose name doesn't say what it is (a `.pq` file), with the fix: rename it or add `format:`;
+- a GeoParquet or FlatGeobuf file whose name doesn't say what it is (a `.pq` file, read as JSON), with the fix: rename it or add `format:`;
+- a host that compresses the parts of files it sends (cdn.jsdelivr.net);
 - a file in the wrong projection;
 - a Zstandard-compressed FlatGeobuf;
 - GeoArrow-encoded GeoParquet geometry (with the command that rewrites it as WKB), or a Parquet file without geometry metadata;
@@ -55,4 +57,4 @@ Core registers the `pmtiles://` and `cog://` protocols once on the maplibre-gl m
 - writes PMTiles sources as `pmtiles://` URLs, a Protomaps basemap as the full style it generates, and COG sources as `cog://` URLs (with `#dem`, the `colorRamp:` as `#color:`, and `tileSize: 256`); the exported style then needs those protocols registered;
 - converts FlatGeobuf and GeoParquet files to inline GeoJSON, and classify breaks computed at export read both.
 
-**Size.** The readers are bundled inside core, so there is nothing extra to install, but they are not part of core's main script: a page downloads a reader only when a map uses its format (see the entry on on-demand format readers). Cloud-native support adds about 23 KB gzip to `register.browser.js`. Across the whole 0.9 release (including thematic maps, translatable UI strings and number formatting), `register.browser.js` grows from about 125 KB to about 174 KB gzip (+49 KB) since 0.8.1.
+**Size.** The readers are bundled inside core, so there is nothing extra to install, but they are not part of core's main script: a page downloads a reader only when a map uses its format (see the entry on on-demand format readers). Cloud-native support adds about 24 KB gzip to `register.browser.js`. Across the whole 0.9 release (including thematic maps, translatable UI strings and number formatting), `register.browser.js` grows from about 125 KB to about 175 KB gzip (+50 KB) since 0.8.1.
