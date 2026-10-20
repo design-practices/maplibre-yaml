@@ -272,6 +272,7 @@ import {
   type SugarRemap,
 } from "./expand-sugar";
 import { checkClassify } from "../classify/checks";
+import { restoreCategoryOrder } from "../classify/category-order";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
 import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
@@ -679,6 +680,10 @@ export class YAMLParser {
     if (classifyErrors.length > 0) {
       return { success: false, errors: classifyErrors, warnings };
     }
+
+    // A `categories:` map with numeric keys keeps the order it was written
+    // in (JavaScript would list the numbers first).
+    restoreCategoryOrder(result.data, doc);
 
     // A field that tolerates an empty value still lost what the author
     // wrote: say so, as a warning.

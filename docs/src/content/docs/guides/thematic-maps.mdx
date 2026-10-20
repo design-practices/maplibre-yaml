@@ -138,9 +138,7 @@ classify:
 
 Categories compile to a `match`. Numbers work too (`categories: [1, 2, 3]`
 matches a zoning code stored as `1` or `"1"`). The legend lists categories in
-the order you write them — except that in the `value: colour` form, numeric
-values come first (a JavaScript rule for object keys); use the list form with
-`colors:` when the order of numeric codes matters. Categories need no data scan,
+the order you write them, numeric codes included. Categories need no data scan,
 so they work on vector tiles exactly as on GeoJSON:
 
 <LiveMap src="/configs/classify/categories.yaml" height="380px" caption="The demo tiles' countries by continent, with a colour-blind-safe palette" />

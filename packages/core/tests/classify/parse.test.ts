@@ -206,6 +206,47 @@ describe("block errors — positioned, with did-you-mean", () => {
   });
 });
 
+describe("categories map order (ml-aot.80)", () => {
+  it("keeps the authored order of numeric keys, as the list form", async () => {
+    const { resolveClassify, classifyLegendEntries } = await import("../../src/classify/compile");
+    const result = parse(`  - id: zones
+    type: fill
+    source: tracts
+    classify:
+      field: code
+      categories:
+        10: red
+        2: green
+        b: blue
+        1: black
+`);
+    expect(result.errors).toEqual([]);
+    const classify = (result.data as never as { layers: Array<{ classify: never }> }).layers[0]!.classify;
+    const record = resolveClassify(classify, "fill");
+    expect(record.categories).toEqual([
+      { value: "10", color: "red" },
+      { value: "2", color: "green" },
+      { value: "b", color: "blue" },
+      { value: "1", color: "black" },
+    ]);
+    expect(classifyLegendEntries(record).slice(1, 5).map((e) => e.label)).toEqual(["10", "2", "b", "1"]);
+  });
+
+  it("leaves a map JavaScript would not reorder as written", () => {
+    const result = parse(`  - id: zones
+    type: fill
+    source: tracts
+    classify:
+      field: zone
+      categories: { residential: "#f6e8c3", commercial: "#d8b365" }
+`);
+    const classify = (result.data as never as { layers: Array<{ classify: Record<string, unknown> }> }).layers[0]!
+      .classify;
+    expect(classify["categories"]).toEqual({ residential: "#f6e8c3", commercial: "#d8b365" });
+    expect(classify["colors"]).toBeUndefined();
+  });
+});
+
 describe("layer checks", () => {
   it("refuses method: over a vector tile source, and says why", () => {
     const [error] = only(parse(`  - id: v
