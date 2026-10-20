@@ -396,14 +396,29 @@ export function describeSourceProblem(
 ): string {
   let text = `Source \`${sourceId}\` didn't load: ${message.replace(/\s+$/, "")}`;
   const e = error as { failure?: FormatFailure; cause?: { failure?: FormatFailure } } | undefined;
-  const failure = e?.failure ?? e?.cause?.failure;
+  // A PMTiles tile error crosses MapLibre's worker boundary as a plain
+  // error: the message survives, the failure object does not (ml-aot.102).
+  const failure = e?.failure ?? e?.cause?.failure ?? httpFailureOf(message);
   if (failure?.code === "http" && failure.status === 404 && context.pageUrl) {
+    // Where the browser looked, as for a data file that 404'd.
+    const resolved = resolveUrl(failure.url, context.pageUrl);
+    if (resolved !== failure.url) text += ` The browser looked for ${resolved}.`;
     const hint =
       baseLookupHint(failure.url, context.pageUrl, context.base) ??
       subpathBaseHint(pathOfSameOrigin(failure.url, context.pageUrl), context.pageUrl, context.base);
     if (hint) text += ` ${hint}`;
   }
   return text;
+}
+
+/**
+ * The HTTP failure a {@link describeFormatFailure} message states
+ * (`` `/data/x.pmtiles` didn't load (404 Not Found). ``), for an error that
+ * lost its `failure` on the way.
+ */
+function httpFailureOf(message: string): FormatFailure | undefined {
+  const m = /^`([^`]+)` didn't load \((\d{3})\b/.exec(message);
+  return m ? { code: "http", format: "pmtiles", url: m[1]!, status: Number(m[2]) } : undefined;
 }
 
 /** `https://host/x/y` on a page at `https://host/…` → `/x/y`; otherwise unchanged. */

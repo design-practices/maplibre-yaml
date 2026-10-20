@@ -118,4 +118,16 @@ describe("the notice wraps them", () => {
     expect(text).toContain("Source `tiles` didn't load:");
     expect(text).toContain('add base="/my-repo/"');
   });
+
+  it("a PMTiles 404 that lost its failure object (MapLibre's worker) still says where and suggests base (ml-aot.102)", () => {
+    const original = new FormatError({ code: "http", format: "pmtiles", url: "/data/districts.pmtiles", status: 404 });
+    // What reaches the page: a plain error with the same message.
+    const plain = new Error(original.message);
+    const text = describeSourceProblem("districts", plain.message, plain, {
+      pageUrl: "http://localhost:4321/my-repo/",
+    });
+    expect(text).toContain("didn't load (404");
+    expect(text).toContain("The browser looked for http://localhost:4321/data/districts.pmtiles.");
+    expect(text).toContain('add base="/my-repo/"');
+  });
 });
