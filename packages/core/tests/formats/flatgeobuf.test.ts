@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { decodeBytes, probe, openWhole, decodeStream } from "../../src/formats/flatgeobuf";
+import { decodeBytes, probe, openWhole, decodeStream, isLonLat } from "../../src/formats/flatgeobuf";
 import { isFormatError } from "../../src/formats/errors";
 import {
   FlatGeobufLoader,
@@ -107,6 +107,41 @@ describe("decodeBytes", () => {
   it("calls a web page what it is", async () => {
     const error = await decodeBytes(fixture("not-really.fgb"), "not-really.fgb").catch((e) => e);
     expect(isFormatError(error) && error.failure.code).toBe("not-format");
+  });
+});
+
+describe("isLonLat: which CRS a header declares", () => {
+  const head = (code: number | undefined, envelope?: [number, number, number, number]) => ({
+    header: { featuresCount: 1, indexed: true, ...(envelope ? { envelope } : {}) },
+    raw: code !== undefined ? { crs: { org: "EPSG", code } } : {},
+  });
+  const LONLAT: [number, number, number, number] = [10, 42, 10.5, 42.3];
+  const METRES: [number, number, number, number] = [1113194, 5160979, 1168854, 5206000];
+
+  it("accepts known geographic codes outside the old hard-coded list", () => {
+    for (const code of [4167, 4490, 4612, 6668, 7844, 4979, 4937, 4230, 4277]) {
+      const { header, raw } = head(code, LONLAT);
+      expect(isLonLat(header, raw), `EPSG:${code}`).toBe(true);
+    }
+  });
+
+  it("decides an unknown code by the envelope", () => {
+    const inside = head(9999, LONLAT);
+    expect(isLonLat(inside.header, inside.raw)).toBe(true);
+    const outside = head(9999, METRES);
+    expect(isLonLat(outside.header, outside.raw)).toBe(false);
+  });
+
+  it("still refuses known projected codes, even with a small extent", () => {
+    for (const code of [3857, 900913, 32633, 25832]) {
+      const { header, raw } = head(code, [0.1, 0.1, 0.2, 0.2]);
+      expect(isLonLat(header, raw), `EPSG:${code}`).toBe(false);
+    }
+  });
+
+  it("a geographic code with a projected-looking extent is refused (mislabelled file)", () => {
+    const { header, raw } = head(4326, METRES);
+    expect(isLonLat(header, raw)).toBe(false);
   });
 });
 
