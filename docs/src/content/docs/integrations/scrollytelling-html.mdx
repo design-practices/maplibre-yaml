@@ -126,9 +126,12 @@ takes, see [Scrollytelling](/schema/scrollytelling/).
 
 <Aside type="caution" title="Open it from a web server, not by double-clicking">
   `src="story.yaml"` is fetched by the browser, and browsers refuse to fetch
-  files from a page opened as `file://`. Any static server works: `npx serve .`,
-  `python3 -m http.server`, VS Code's Live Server, GitHub Pages. To keep
-  everything in one file instead, put the YAML inline (next section).
+  files from a page opened as `file://`. Use `npx serve .` locally, and GitHub
+  Pages (or any static host) to publish. A story with PMTiles, FlatGeobuf,
+  GeoParquet or COG files needs a server with range requests: `npx serve` has
+  them, `python3 -m http.server` doesn't (see
+  [Hosting](/guides/cloud-native-data/#hosting-range-requests-and-cors)). To
+  keep everything in one file instead, put the YAML inline (next section).
 </Aside>
 
 ## The story inline, in one file

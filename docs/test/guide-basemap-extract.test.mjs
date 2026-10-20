@@ -18,7 +18,9 @@ const GUIDE = join(
 const text = readFileSync(GUIDE, "utf8");
 
 test("every pmtiles extract command caps the zoom", () => {
-  const commands = [...text.matchAll(/pmtiles extract[^\n\\]*(?:\\\n[^\n\\]*)*/g)].map((m) => m[0]);
+  // Commands as a student copies them: a line that starts with the command
+  // (prose and notices quoting "pmtiles extract" aren't commands).
+  const commands = [...text.matchAll(/^\s*pmtiles extract[^\n\\]*(?:\\\n[^\n\\]*)*/gm)].map((m) => m[0]);
   assert.ok(commands.length > 0, "the guide shows an extract command");
   for (const command of commands) assert.match(command, /--maxzoom=\d+/, command);
 });

@@ -78,8 +78,10 @@ Get a map on your page in 4 steps.
 
 4. **View in browser**
 
-   Serve the folder with any web server (for example `npx serve .`) and open
-   the address it prints. Opening the HTML file directly does not work: a
+   Serve the folder with `npx serve .` and open the address it prints (another
+   static server works too, if it supports range requests — needed for
+   PMTiles, FlatGeobuf, GeoParquet and COG files; `python -m http.server`
+   doesn't). Opening the HTML file directly does not work: a
    `file://` page cannot fetch `map.yaml`.
 
 </Steps>

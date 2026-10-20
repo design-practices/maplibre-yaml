@@ -156,8 +156,9 @@ layers:
       circle-color: "#e63946"
 ```
 
-Serve the folder with any static web server, for example `npx serve .`, and
-open the address it prints. Opening the HTML file directly (a `file://`
+Serve the folder with `npx serve .` and open the address it prints. (Another
+static server works too if it supports range requests, which PMTiles,
+FlatGeobuf, GeoParquet and COG files need; `python -m http.server` doesn't.) Opening the HTML file directly (a `file://`
 address) does not work: the browser blocks the page from fetching `map.yaml`.
 
 ### Versions in CDN URLs
