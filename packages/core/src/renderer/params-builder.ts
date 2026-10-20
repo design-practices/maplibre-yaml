@@ -27,6 +27,9 @@
  * layout visibility and keep working on every supported runtime.
  */
 
+import { defaultStrings, type Strings } from "../i18n/strings";
+import { formatNumber } from "../i18n/number-format";
+
 /** One `parameters:` entry's presentation metadata (schema-validated). */
 export interface ParameterMeta {
   label?: string;
@@ -72,7 +75,38 @@ export function hasPanelContent(config: ParamsPanelConfig): boolean {
   );
 }
 
+/** Options for {@link ParamsBuilder}. */
+export interface ParamsBuilderOptions {
+  /** The document's UI strings (the declared-absence notice). */
+  strings?: Strings;
+  /**
+   * The page's language, read when a slider's value is written out (the
+   * readout is a number in the reader's locale: `0,5` on a German page).
+   */
+  language?: () => string | undefined;
+}
+
+/** A slider's value as text: its own decimals, in the page's locale. */
+function sliderText(raw: string, language: string | undefined): string {
+  const value = Number(raw);
+  if (raw === "" || !Number.isFinite(value)) return raw;
+  const decimals = (raw.split(".")[1] ?? "").length;
+  return formatNumber(
+    value,
+    { "min-fraction-digits": decimals, "max-fraction-digits": decimals },
+    language
+  );
+}
+
 export class ParamsBuilder {
+  private readonly strings: Strings;
+  private readonly language: () => string | undefined;
+
+  constructor(options: ParamsBuilderOptions = {}) {
+    this.strings = options.strings ?? defaultStrings;
+    this.language = options.language ?? (() => undefined);
+  }
+
   /** Build the panel into `container`. No content → container left empty. */
   build(
     container: HTMLElement,
@@ -94,9 +128,7 @@ export class ParamsBuilder {
       // parameter controls the runtime cannot drive.
       const notice = document.createElement("div");
       notice.className = "ml-map-params-notice";
-      notice.textContent =
-        "Parameter controls need maplibre-gl ≥ 5.6 (global state); " +
-        "this map renders with the document's defaults.";
+      notice.textContent = this.strings("maplibre-yaml.Params.StateUnsupported");
       notice.style.cssText = "max-width:200px;color:#666;";
       panel.appendChild(notice);
     } else {
@@ -170,9 +202,9 @@ export class ParamsBuilder {
         input.style.cssText = "width:100%;display:block;";
         const value = document.createElement("span");
         value.className = "ml-map-params-value";
-        value.textContent = input.value;
+        value.textContent = sliderText(input.value, this.language());
         input.addEventListener("input", () => {
-          value.textContent = input.value;
+          value.textContent = sliderText(input.value, this.language());
           callbacks.onStateChange?.(key, Number(input.value));
         });
         // No state entry: the browser seeds the slider at its midpoint —

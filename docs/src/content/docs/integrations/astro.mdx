@@ -490,6 +490,10 @@ legend and parameters panel. A `legend` slot replaces the built-in legend.
 
 Corners with no content render nothing. `FullPageMap`'s zoom and reset buttons
 already sit in `top-right`, and your `top-right` content stacks below them.
+Their labels come from the document's `locale:` table
+(`NavigationControl.ZoomIn`, `NavigationControl.ZoomOut` and
+`maplibre-yaml.FullPageMap.ResetView` — see [Accessibility &
+languages](/guides/accessibility-languages/)).
 
 **Examples** (each line is a separate usage, in a page that imports `Map`):
 

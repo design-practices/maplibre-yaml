@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# A map in Spanish (0.9): `title`/`description` name it for screen readers,
+# and one `locale:` table translates MapLibre's controls, the legend, and
+# FullPageMap's own zoom/reset buttons. Used by /explore-es/ (config, labels
+# rendered at build time) and /explore-es-src/ (src, labelled in the browser).
+type: map
+id: calor-es
+title: Volcanes del Japón
+description: Los volcanes del arco japonés, marcados con círculos rojos.
+config:
+  center: [136.5, 34]
+  zoom: 4.3
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  locale:
+    NavigationControl.ZoomIn: Acercar
+    NavigationControl.ZoomOut: Alejar
+    maplibre-yaml.Legend.Title: Leyenda
+    maplibre-yaml.FullPageMap.ResetView: Restablecer la vista
+legend:
+  title: Volcanes
+  position: bottom-right
+  items:
+    - { color: "#e4572e", label: Volcán, shape: circle }
+layers:
+  - id: fuji
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [138.73, 35.36] }
+            properties: { name: Fuji }
+    paint:
+      circle-radius: 8
+      circle-color: "#e4572e"

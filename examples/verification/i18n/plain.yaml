@@ -1,0 +1,15 @@
+type: map
+id: plain
+config:
+  center: [0, 20]
+  zoom: 2
+  mapStyle: "/examples/verification/configs/local-style.json"
+controls:
+  navigation: true
+legend:
+  title: Places
+  position: top-left
+  items:
+    - { color: "#d62828", label: Volcano, shape: circle }
+    - { color: "#3b82f6", label: Port, shape: circle }
+layers: []

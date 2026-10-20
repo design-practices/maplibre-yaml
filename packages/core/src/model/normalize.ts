@@ -243,6 +243,8 @@ export function normalizeMapBlock(input: V1MapInput): MapModel {
   // Optional keys are attached only when present, never as `undefined` — the
   // model carries the same presence discipline it enforces on `runtime.map`.
   if ("mapStyle" in config) model.style.basemap = config["mapStyle"] as MapConfig["mapStyle"];
+  if (input.title !== undefined) model.style.title = input.title;
+  if (input.description !== undefined) model.style.description = input.description;
   if (input.state !== undefined) model.style.state = input.state;
   if (input.parameters !== undefined) model.runtime.parameters = input.parameters;
   if (input.controls !== undefined) model.runtime.controls = input.controls;
@@ -344,6 +346,8 @@ export function denormalizeSources(model: MapModel): Record<string, LayerSource>
 
 /** Reassemble the renderer options carried outside `config:`. */
 export function denormalizeOptions(model: MapModel): {
+  title?: string;
+  description?: string;
   controls?: ControlsConfig;
   legend?: LegendConfig;
   state?: Record<string, unknown>;
@@ -357,6 +361,8 @@ export function denormalizeOptions(model: MapModel): {
   light?: MapModel["style"]["light"];
 } {
   const options: {
+    title?: string;
+    description?: string;
     controls?: ControlsConfig;
     legend?: LegendConfig;
     state?: Record<string, unknown>;
@@ -369,6 +375,11 @@ export function denormalizeOptions(model: MapModel): {
     projection?: MapModel["style"]["projection"];
     light?: MapModel["style"]["light"];
   } = {};
+  // The map's accessible name and description: style half (they export as
+  // the style's `name`/`metadata`), but the live map applies them to the
+  // canvas, so the renderer gets them as options.
+  if (model.style.title !== undefined) options.title = model.style.title;
+  if (model.style.description !== undefined) options.description = model.style.description;
   if (model.runtime.controls !== undefined) options.controls = model.runtime.controls;
   if (model.runtime.legend !== undefined) options.legend = model.runtime.legend;
   if (model.runtime.markers !== undefined) options.markers = model.runtime.markers;

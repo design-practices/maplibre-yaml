@@ -812,6 +812,41 @@ export const ParametersSchema = z
 export type Parameters = z.infer<typeof ParametersSchema>;
 
 /**
+ * The map's name, for people who can't see it.
+ *
+ * @remarks
+ * Screen readers announce it as the map's accessible name (the canvas's
+ * `aria-label`, where MapLibre puts `locale["Map.Title"]`, "Map" by
+ * default). Shown nowhere on the page. Exported as the style's `name`.
+ *
+ * @example
+ * ```yaml
+ * title: Heat vulnerability in the Bronx
+ * ```
+ */
+export const MapTitleSchema = z
+  .string()
+  .describe(
+    "The map's name, read out by screen readers as its accessible name (default: \"Map\", or locale Map.Title)"
+  );
+
+/**
+ * What the map shows, in a sentence or two: the text alternative for a
+ * reader who can't see it.
+ *
+ * @remarks
+ * Linked to the map with `aria-describedby` (a visually hidden element).
+ * Say what the map shows and what it means — "Census tracts shaded from
+ * pale yellow (low) to dark red (high); the highest values cluster along the
+ * Cross Bronx Expressway" — not how to use it.
+ */
+export const MapDescriptionSchema = z
+  .string()
+  .describe(
+    "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+  );
+
+/**
  * Standard map block.
  *
  * @remarks
@@ -878,6 +913,8 @@ export const MapBlockSchema: z.ZodObject<any> = z
       .describe("Format version — v1 documents may state `version: 1`"),
     className: z.string().optional().describe("CSS class name for container"),
     style: z.string().optional().describe("Inline CSS styles for container"),
+    title: MapTitleSchema.optional(),
+    description: MapDescriptionSchema.optional(),
     config: MapConfigSchema,
     sources: z
       .record(z.string(), LayerSourceSchema)
@@ -956,6 +993,8 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
     id: z.string().describe("Unique block identifier"),
     className: z.string().optional().describe("CSS class name for container"),
     style: z.string().optional().describe("Inline CSS styles for container"),
+    title: MapTitleSchema.optional(),
+    description: MapDescriptionSchema.optional(),
     config: MapConfigSchema,
     sources: z
       .record(z.string(), LayerSourceSchema)

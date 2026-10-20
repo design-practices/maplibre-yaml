@@ -37,6 +37,9 @@ import type {
   ProjectionConfig,
 } from '../schemas/map.schema';
 import { applyProjection, applySky, applyTerrain, type Scene3DMap } from './scene-3d';
+import { createStrings, type Strings } from '../i18n';
+import { mapLanguage } from './popup-builder';
+import { applyAccessibleName } from './accessible-name';
 import type { CapabilityPolicy } from "../capabilities.js";
 import {
   denormalizeConfig,
@@ -173,6 +176,16 @@ export interface MapRendererOptions {
    * absent for errors that are not the document's (a basemap tile).
    */
   onError?: (error: Error, fatal?: boolean, context?: MapErrorContext) => void;
+  /**
+   * The map's name (the document's `title:`): the canvas's accessible name,
+   * in place of MapLibre's generic `locale["Map.Title"]` ("Map").
+   */
+  title?: string;
+  /**
+   * What the map shows (the document's `description:`): a visually hidden
+   * element the canvas points at with `aria-describedby`.
+   */
+  description?: string;
   /** Controls declared in the YAML `controls:` block — added automatically on map load */
   controls?: ControlsConfig;
   /** Legend declared in the YAML `legend:` block — built automatically on map load */
@@ -295,6 +308,11 @@ export class MapRenderer {
   private controlsAdded: boolean;
   private legendBuilt: boolean;
   private paramsBuilt = false;
+  /**
+   * The library's UI strings for this document (`config.locale`, the same
+   * table MapLibre reads for its controls).
+   */
+  private readonly strings: Strings;
   /** Lazily created on the first chrome mount (KTD10 corner system). */
   private chrome: ChromeLayout | null = null;
   /** Panel toggles made before the layer chain settles — applied after. */
@@ -350,6 +368,9 @@ export class MapRenderer {
     this.controlsAdded = false;
     this.legendBuilt = false;
     this.autoLegendContainer = null;
+    // One `locale:` table for MapLibre's controls and the library's own
+    // strings (namespaced `maplibre-yaml.*`, which MapLibre ignores).
+    this.strings = createStrings(config.locale);
 
     // When a `controls.attribution` control is configured, MapLibre's built-in
     // attribution must be disabled at construction time so the two don't
@@ -408,9 +429,22 @@ export class MapRenderer {
         : {};
     if (fit && fit.kind === 'unsupported') console.warn(`[maplibre-yaml] ${fit.reason}`);
 
+    // The document's `title:` is the map's accessible name. MapLibre names
+    // its canvas from `locale["Map.Title"]`, so hand it the title there too:
+    // MapLibre and the attribute set below then agree.
+    const authorLocale = (config as { locale?: unknown }).locale;
+    const locale =
+      typeof options.title === 'string' && options.title.trim() !== ''
+        ? {
+            ...(authorLocale && typeof authorLocale === 'object' ? (authorLocale as Record<string, unknown>) : {}),
+            'Map.Title': options.title,
+          }
+        : authorLocale;
+
     // Initialize MapLibre map
     this.map = new MapLibreMap({
       ...mapConfig,
+      ...(locale !== undefined ? { locale } : {}),
       ...initialFit,
       ...(Object.keys(contextAttributes).length > 0
         ? { canvasContextAttributes: contextAttributes }
@@ -429,6 +463,13 @@ export class MapRenderer {
       // to run first (see attribution-guard.ts).
       attributionControl: false,
     } as any);
+    // Accessible name and description on the canvas (every supported
+    // maplibre-gl major; MapLibre's own role/label are extended, not fought).
+    applyAccessibleName(this.map, {
+      ...(options.title !== undefined ? { title: options.title } : {}),
+      ...(options.description !== undefined ? { description: options.description } : {}),
+      strings: this.strings,
+    });
     if (fitTo && fit && fit.kind === 'bounds') {
       this.mapReadyFit = { source: fitTo.source, bounds: fit.bounds };
     }
@@ -575,7 +616,7 @@ export class MapRenderer {
 
     this.layerManager = new LayerManager(this.map, layerCallbacks);
     this.eventHandler = new EventHandler(this.map, eventCallbacks, options.capabilities);
-    this.legendBuilder = new LegendBuilder();
+    this.legendBuilder = new LegendBuilder({ strings: this.strings });
     this.controlsManager = new ControlsManager(this.map, {
       ...(options.terrain ? { terrain: options.terrain } : {}),
       beforeAttribution: () => this.attributionGuard.scrub(),
@@ -1116,7 +1157,10 @@ export class MapRenderer {
     this.paramsBuilt = true;
     const mount = document.createElement('div');
     this.chromeLayout().mount('top-right', mount);
-    new ParamsBuilder().build(mount, panelConfig, {
+    new ParamsBuilder({
+      strings: this.strings,
+      language: mapLanguage(this.map),
+    }).build(mount, panelConfig, {
       onStateChange: (key, value) => {
         if (this.destroyed) return;
         try {

@@ -1,0 +1,298 @@
+---
+title: "Accessibility & languages"
+description: "Name and describe a map for screen readers, show its controls in another language, and format numbers for the reader's locale"
+---
+
+A map canvas is a picture: a screen reader can't see what is on it, and the
+buttons around it speak English unless you say otherwise. This guide covers
+the three things maplibre-yaml adds on top of what MapLibre already does:
+
+- a **name and description** for the map (`title:` and `description:`),
+- **one table of UI text** (`locale:`) for MapLibre's controls and the
+  library's own legend, notices and story chrome,
+- **numbers in the reader's language** in popups (`format:` with MapLibre's
+  `number-format` options).
+
+All three use MapLibre's own vocabulary, so what you learn here works in
+plain MapLibre too.
+
+## Name and describe your map
+
+MapLibre makes every map canvas a named region a screen reader can jump to.
+Its name is "Map" — on a page with three maps, a listener hears "Map, region"
+three times. Give each map its own name with `title:`, and say what it shows
+with `description:`:
+
+```yaml
+type: map
+id: heat
+title: Heat vulnerability in the Bronx
+description: >
+  Census tracts shaded in five classes from pale yellow (low) to dark red
+  (high). The highest values cluster along the Cross Bronx Expressway.
+config:
+  center: [-73.88, 40.84]
+  zoom: 11
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+```
+
+A screen reader now announces **"Heat vulnerability in the Bronx, region"**
+when the map gets focus, followed by the description. Both are invisible on
+the page: `title` becomes the canvas's `aria-label`, and `description` is a
+visually hidden element the canvas points at with `aria-describedby` (it is
+also read in a screen reader's browse mode).
+
+- **`title`** is a name, not a sentence: what you would put in a figure's
+  caption heading.
+- **`description`** is the map's alt text. Say what it shows and what it
+  means — "the highest values cluster along the expressway" — not how to use
+  it ("drag to pan"). One or two sentences.
+- **Without `title`** the map keeps MapLibre's name, "Map" (translate it with
+  `Map.Title` in `locale:`, below).
+
+`title:` and `description:` sit at the top level of the document, next to
+`config:`, in every kind of document:
+
+```yaml
+# Format v2: the same keys, at the top level.
+version: 2
+type: map
+id: heat
+title: Heat vulnerability in the Bronx
+description: Census tracts shaded from pale yellow (low) to dark red (high).
+style:
+  basemap: "https://tiles.openfreemap.org/styles/liberty"
+  center: [-73.88, 40.84]
+  zoom: 11
+```
+
+```yaml
+# A story: the title names the story's map.
+type: scrollytelling
+id: bridge
+title: Crossing the Brooklyn Bridge
+description: A walk from Manhattan to Brooklyn in three chapters.
+config:
+  center: [-73.9969, 40.7061]
+  zoom: 15
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+chapters:
+  - id: start
+    title: City Hall Park
+    center: [-74.0055, 40.7128]
+    zoom: 16
+```
+
+When you export a map with `mlym emit`, `title` becomes the style's `name`
+and `description` is kept in its `metadata` (as `maplibre-yaml:description`).
+
+### What MapLibre already does
+
+You don't need to configure any of this — it is listed so you know it is
+there:
+
+- **Keyboard.** A focused map pans with the arrow keys, zooms with `+` and
+  `-`, and rotates and tilts with Shift + arrows. Every control button has a
+  label.
+- **Reduced motion.** When the reader's system asks for reduced motion,
+  camera moves (`flyTo`, story chapter changes) jump instead of animating.
+  `config.reduceMotion: true` or `false` overrides the system setting.
+- **Right-to-left text.** maplibre-gl 6 shapes Arabic and Hebrew labels by
+  itself. On maplibre-gl 4 or 5, call `setRTLTextPlugin` from your page.
+
+## Show the map in another language
+
+MapLibre reads the text of its controls ("Zoom in", "Close popup") from a
+`locale:` table in the map's config. maplibre-yaml reads its own text — the
+legend's header, the "part of this map couldn't load" notice, a story's
+chapter buttons — from **the same table**, under keys that start with
+`maplibre-yaml.`, so one table translates everything on the map:
+
+```yaml
+type: map
+id: calor
+title: Vulnerabilidad al calor en el Bronx
+config:
+  center: [-73.88, 40.84]
+  zoom: 11
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  locale:
+    # MapLibre's keys
+    Map.Title: Mapa
+    NavigationControl.ZoomIn: Acercar
+    NavigationControl.ZoomOut: Alejar
+    NavigationControl.ResetBearing: Restablecer la orientación
+    Popup.Close: Cerrar
+    # maplibre-yaml's keys
+    maplibre-yaml.Legend.Title: Leyenda
+    maplibre-yaml.Notice.Title: Parte de este mapa no se pudo cargar
+    maplibre-yaml.Notice.Dismiss: Cerrar este aviso
+controls:
+  navigation: true
+legend:
+  items:
+    - { color: "#fee08b", label: Bajo }
+    - { color: "#d73027", label: Alto }
+```
+
+In format v2 the table lives at `runtime.map.locale`; in a story, at
+`config.locale`, as in a map. A key you leave out stays in English. A
+misspelt `maplibre-yaml.` key is reported by validation with a
+did-you-mean, since it would otherwise silently do nothing.
+
+**Also set the page's language** (`<html lang="es">`, or `lang="es"` on
+`<ml-map>`). Screen readers use it to pronounce the text, and numbers in
+popups follow it (see [Number formats](#number-formats)).
+
+### maplibre-yaml's keys
+
+| Key | English | Where it appears |
+| --- | --- | --- |
+| `maplibre-yaml.Legend.Title` | Legend | The legend's header (plain maps) and button (stories) |
+| `maplibre-yaml.Notice.Title` | Part of this map couldn't load | The notice shown when a layer or data file fails |
+| `maplibre-yaml.Notice.AuthorDetails` | Details for the site's author | The notice's disclosure; a story's missing-image note |
+| `maplibre-yaml.Notice.Dismiss` | Dismiss this notice | The notice's close button (label and tooltip) |
+| `maplibre-yaml.Notice.More` | …and `{count}` more (see the browser console). | The notice, past six problems |
+| `maplibre-yaml.ErrorCard.HowToFix` | How to fix it: | Error cards |
+| `maplibre-yaml.ErrorCard.ConfigurationError` | Configuration Error | Error card title (e.g. no `mapStyle`) |
+| `maplibre-yaml.ErrorCard.MapError` | Map Error | Error card title (the map couldn't start) |
+| `maplibre-yaml.ErrorCard.StyleNotLoaded` | The basemap style didn't load | Error card title |
+| `maplibre-yaml.ErrorCard.StyleHint` | Check `{key}`: open the URL in a new browser tab… | That card's "how to fix it" |
+| `maplibre-yaml.ErrorCard.LocalServer` | Open this page through a local web server | Error card title (page opened from a file) |
+| `maplibre-yaml.ErrorCard.LocalServerHint` | Start a local web server in this page's folder… | That card's "how to fix it" |
+| `maplibre-yaml.HeightHint` | This map is invisible because the `<ml-map>` element has no height… | Shown when the map has no height |
+| `maplibre-yaml.Params.StateUnsupported` | Parameter controls need maplibre-gl ≥ 5.6… | The params panel on old maplibre-gl |
+| `maplibre-yaml.Story.Chapters` | Story chapters | The chapter rail's label |
+| `maplibre-yaml.Story.GoToChapter` | Go to chapter `{number}`: `{title}` | Each rail button's label |
+| `maplibre-yaml.Story.ImageMissing` | This chapter's image couldn't load. | A chapter whose image failed |
+| `maplibre-yaml.Story.VideoMissing` | This chapter's video couldn't load. | A chapter whose video failed |
+| `maplibre-yaml.Story.MediaMissingHint` | "`{src}`" didn't load. Check the file name and folder… | That note's details |
+| `maplibre-yaml.Story.VideoUnsupported` | Your browser does not support the video element. | Inside a chapter `<video>` |
+| `maplibre-yaml.FullPageMap.ResetView` | Reset view | Astro `<FullPageMap>`'s reset button |
+
+Text in `{braces}` is filled in when the string is shown — keep it in your
+translation (`Ir al capítulo {number}: {title}`). Text in backticks inside a
+message is shown as code.
+
+### MapLibre's keys
+
+MapLibre's own keys cover its controls: `NavigationControl.ZoomIn`,
+`NavigationControl.ZoomOut`, `NavigationControl.ResetBearing`,
+`FullscreenControl.Enter`, `FullscreenControl.Exit`,
+`GeolocateControl.FindMyLocation`, `ScaleControl.Kilometers`, `Popup.Close`,
+`Map.Title` and more — see MapLibre's
+[`defaultLocale`](https://github.com/maplibre/maplibre-gl-js/blob/main/src/ui/default_locale.ts)
+for the full list in your version. maplibre-yaml reads three of them too:
+`Map.Title` (the map's name when it has no `title:`), and
+`NavigationControl.ZoomIn` / `NavigationControl.ZoomOut` (the zoom buttons
+Astro's `<FullPageMap>` draws).
+
+### What stays in English
+
+- **Messages for the map's author** — why a layer didn't draw, which file
+  404'd, did-you-mean hints — are in English; they are diagnostics, listed
+  under the notice's "Details for the site's author".
+- **Anything shown before the document is read** — a `src` that didn't load,
+  YAML that doesn't parse, Astro's "Loading story…" — has no `locale:` to
+  read yet. These only appear while a map is broken.
+
+### Adding a translation
+
+maplibre-yaml ships English only. A translation is a `locale:` table: copy
+the keys above (and MapLibre's, if your map shows its controls) and translate
+the values. To use one table on several maps, keep it in one YAML file and
+reuse it with an anchor, or — in Astro — merge it into each document's
+`config.locale` before passing `config` to the component. A German table:
+
+```yaml no-validate
+locale:
+  Map.Title: Karte
+  NavigationControl.ZoomIn: Vergrößern
+  NavigationControl.ZoomOut: Verkleinern
+  Popup.Close: Popup schließen
+  maplibre-yaml.Legend.Title: Legende
+  maplibre-yaml.Notice.Title: Ein Teil dieser Karte konnte nicht geladen werden
+  maplibre-yaml.Notice.AuthorDetails: Details für die Person, die die Seite erstellt hat
+  maplibre-yaml.Notice.Dismiss: Hinweis schließen
+  maplibre-yaml.Story.Chapters: Kapitel der Geschichte
+  maplibre-yaml.Story.GoToChapter: "Zu Kapitel {number}: {title}"
+```
+
+### Your own chrome, in the map's language
+
+Buttons you add next to the map (slot content) can use the same table:
+`<ml-map>`'s `uiString(key)` returns the document's text for a key, or the
+English default.
+
+```js
+const el = document.querySelector("ml-map");
+await el.mapReady();
+myZoomButton.ariaLabel = el.uiString("NavigationControl.ZoomIn");
+```
+
+## Number formats
+
+A popup shows a property's number exactly as stored unless the item has a
+`format:`. The format takes the options of MapLibre's
+[`number-format`](https://maplibre.org/maplibre-style-spec/expressions/#number-format)
+expression — the ones you would use in a label's `text-field` — and the
+browser formats the number with `Intl.NumberFormat`:
+
+| Option | What it does |
+| --- | --- |
+| `locale` | The language to format for, e.g. `de-DE`. Default: the page's language, then the browser's |
+| `currency` | Format as money: `EUR`, `USD`, `JPY` … |
+| `unit` | Add a unit: `kilometer`, `percent`, `celsius` … (ignored with `currency`) |
+| `min-fraction-digits` | At least this many decimals |
+| `max-fraction-digits` | At most this many decimals (rounds) |
+
+```yaml
+type: map
+id: rents
+config:
+  center: [13.405, 52.52]
+  zoom: 11
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: districts
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [13.405, 52.52] }
+            properties: { name: Mitte, rent: 1240.5, residents: 397134 }
+    paint:
+      circle-radius: 10
+      circle-color: "#2563eb"
+    interactive:
+      click:
+        popup:
+          - h3:
+              - property: name
+          - p:
+              - str: "Median rent: "
+              - property: rent
+                format: { currency: EUR, max-fraction-digits: 0 }
+          - p:
+              - str: "Residents: "
+              - property: residents
+                format: { max-fraction-digits: 0 }
+```
+
+On a page with `<html lang="de">` the popup reads "Median rent: 1.241 €" and
+"Residents: 397.134"; with `lang="en"`, "€1,241" and "397,134". Name a
+`locale` in the format to fix it regardless of the page.
+
+The older d3-style string, `format: ",.0f"`, still works (`,` groups
+thousands, `.Nf` keeps N decimals) and now follows the page's language too.
+
+From JavaScript, the same formatter is exported as `formatNumber(value,
+options, defaultLocale)` from `@maplibre-yaml/core`:
+
+```js
+import { formatNumber } from "@maplibre-yaml/core";
+formatNumber(1234567.891, { locale: "de-DE", "max-fraction-digits": 1 }); // "1.234.567,9"
+```

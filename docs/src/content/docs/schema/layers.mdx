@@ -621,7 +621,7 @@ layers:
           - p:
               - str: "Population: "
               - property: population
-                format: ",.0f"
+                format: { max-fraction-digits: 0 }
           - p:
               - str: "Nickname: "
               - property: nickname
@@ -631,8 +631,10 @@ layers:
                 text: "Largest US cities"
 ```
 
-New York's popup reads "Population: 8,336,817" and "Nickname: The Big Apple".
-Chicago has no `nickname`, so its popup shows "Nickname: none recorded".
+New York's popup reads "Population: 8,336,817" and "Nickname: The Big Apple"
+(on an English page — on a German one, "8.336.817"; see
+[Number formats](#number-formats)). Chicago has no `nickname`, so its popup
+shows "Nickname: none recorded".
 
 ### Structure
 
@@ -654,7 +656,7 @@ Each item is one of these:
 | `str: "Population: "` | The text as written |
 | `property: population` | The feature's `population` property |
 | `property: …` plus `else: "n/a"` | `else` is shown when the property is missing or `null` (without `else`, nothing is shown) |
-| `property: …` plus `format: ",.0f"` | Formats a number. `,` adds thousands separators and `.Nf` keeps N decimal places: `",.0f"` gives `8,336,817`, `".2f"` gives `0.12`. Text values are shown unchanged |
+| `property: …` plus `format: { … }` | Formats a number in the reader's language, with MapLibre's `number-format` options. See [Number formats](#number-formats). Text values are shown unchanged |
 | `href: "https://…"` plus `str: "Read more"` (or `text:`) | A link with that text. Without `str` or `text`, the URL is the link text. See [Links](#links) |
 | `src: "https://…/photo.jpg"` plus `alt: "…"` | An image |
 
@@ -671,6 +673,52 @@ popup:
 ```
 
 Wrapping a link in `a:` or an image in `img:` instead gives the same result.
+
+### Number formats
+
+`format:` takes the options of MapLibre's
+[`number-format`](https://maplibre.org/maplibre-style-spec/expressions/#number-format)
+expression — the same names you use to format a label's `text-field` — and
+formats with the browser's `Intl.NumberFormat`:
+
+| Option | What it does | Example |
+|--------|--------------|---------|
+| `locale` | The language to format for (a BCP 47 tag). Default: the page's language — the `lang` on `<ml-map>` or `<html>` — then the browser's | `de-DE` |
+| `currency` | Format as money in this ISO 4217 currency | `EUR`, `USD`, `JPY` |
+| `unit` | Add a unit Intl knows. Ignored when `currency` is set | `kilometer`, `percent`, `celsius` |
+| `min-fraction-digits` | At least this many decimals | `2` |
+| `max-fraction-digits` | At most this many decimals (rounds) | `0` |
+
+```yaml
+popup:
+  - p:
+      - str: "Population: "
+      - property: population
+        format: { max-fraction-digits: 0 }            # 8,336,817 · 8.336.817 on a German page
+  - p:
+      - str: "Median rent: "
+      - property: rent
+        format: { currency: EUR, max-fraction-digits: 0 }   # €1,240 · 1.240 €
+  - p:
+      - str: "Area: "
+      - property: area_km2
+        format: { unit: kilometer, max-fraction-digits: 1 } # 12.5 km
+  - p:
+      - str: "Share: "
+      - property: share
+        format: { locale: en-US, min-fraction-digits: 2, max-fraction-digits: 2 }  # always 0.37
+```
+
+Numbers are grouped (`8,336,817`) and rounded to three decimals unless the
+options say otherwise. A property without `format:` is shown exactly as
+stored, so years and ids (`1999`, `10012`) are never grouped. A value
+`Intl` cannot use (an unknown currency or unit) logs one console warning and
+the number is shown without it. The [Accessibility &
+languages](/guides/accessibility-languages/#number-formats) guide has more.
+
+**Older documents:** the d3-style string `format: ",.0f"` still works (`,`
+groups thousands, `.Nf` keeps N decimals). Since 0.9 it follows the page's
+language too, like every other format; it used to be US English always.
 
 ### Links
 

@@ -6,6 +6,7 @@
 import type { z } from 'zod';
 import { LayerSchema, LegendConfigSchema, LegendItemSchema } from '../schemas';
 import { escapeHtml } from '../utils/html';
+import { defaultStrings, type Strings } from '../i18n';
 
 /**
  * Inline base styles, matching the params panel's box. Core ships no
@@ -29,9 +30,35 @@ type LegendConfig = z.infer<typeof LegendConfigSchema>;
 type LegendItem = z.infer<typeof LegendItemSchema>;
 
 /**
+ * The author's `legend.title`, as a heading inside the panel — or `""` when
+ * there is none, or it only repeats the toggle ("Legend", or the toggle's
+ * translation), which would read "Legend / Legend".
+ */
+export function legendHeadingText(title: unknown, strings: Strings = defaultStrings): string {
+  if (typeof title !== 'string') return '';
+  const text = title.trim();
+  if (!text) return '';
+  const lower = text.toLowerCase();
+  if (lower === 'legend' || lower === strings('maplibre-yaml.Legend.Title').trim().toLowerCase()) return '';
+  return text;
+}
+
+/** Options for {@link LegendBuilder}. */
+export interface LegendBuilderOptions {
+  /** The document's UI strings (the toggle reads `maplibre-yaml.Legend.Title`). */
+  strings?: Strings;
+}
+
+/**
  * Builds legend HTML from layer configurations
  */
 export class LegendBuilder {
+  private readonly strings: Strings;
+
+  constructor(options: LegendBuilderOptions = {}) {
+    this.strings = options.strings ?? defaultStrings;
+  }
+
   /**
    * Build legend in container from layers
    */
@@ -56,12 +83,18 @@ export class LegendBuilder {
     el.hidden = false;
 
     // <details>/<summary> makes `collapsed:` real (the schema field existed
-    // with no implementation — ml-tfd.8 contract audit): the title is the
-    // toggle, `collapsed: true` starts closed, default stays fully visible.
-    // The summary needs content to be clickable, so an untitled legend gets
-    // the literal "Legend".
+    // with no implementation — ml-tfd.8 contract audit): `collapsed: true`
+    // starts closed, default stays fully visible. The toggle always says what
+    // it is — "Legend", or its translation (`maplibre-yaml.Legend.Title`) —
+    // as a story's legend button does (0.9): a screen reader announces
+    // "Legend, expanded" whatever the author titled it. The author's
+    // `title:` heads the panel instead.
+    const heading = legendHeadingText(config?.title, this.strings);
     let html = `<details class="maplibre-legend" style="${LEGEND_BOX_STYLE}"${config?.collapsed ? "" : " open"}>`;
-    html += `<summary class="legend-title" style="cursor:pointer;font-weight:600;">${escapeHtml(config?.title ?? "Legend")}</summary>`;
+    html += `<summary class="legend-title" style="cursor:pointer;font-weight:600;">${escapeHtml(this.strings('maplibre-yaml.Legend.Title'))}</summary>`;
+    if (heading) {
+      html += `<div class="legend-heading" style="font-weight:600;margin-top:4px;">${escapeHtml(heading)}</div>`;
+    }
     html += '<div class="legend-items">';
     for (const item of items) {
       html += this.renderItem(item);

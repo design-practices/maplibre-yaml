@@ -13,6 +13,7 @@ import type { Chapter, ScrollytellingBlock } from "../schemas/scrollytelling.sch
 import { escapeHtml } from "../utils/html";
 import { displayPath } from "../parser/validation-utils";
 import { resolveDocumentUrl } from "../utils/document-base";
+import { createStrings, defaultStrings, type Strings } from "../i18n/strings";
 
 export { escapeHtml };
 
@@ -51,6 +52,13 @@ export interface ChapterHTMLOptions {
    * does, so `/images/x.jpg` works on a site under a subpath (GitHub Pages).
    */
   base?: string | null;
+  /** The story's UI strings (its `config.locale`); English by default. */
+  strings?: Strings;
+}
+
+/** The story's UI strings: its `config.locale`, the table MapLibre reads. */
+export function storyStrings(story: { config?: unknown }): Strings {
+  return createStrings((story as { config?: { locale?: unknown } }).config?.locale);
 }
 
 /**
@@ -90,7 +98,9 @@ export function chapterHTML(chapter: Chapter, opts: ChapterHTMLOptions = {}): st
   if (video !== null) {
     content += `<div class="chapter-media"><video src="${escapeHtml(
       video
-    )}" controls playsinline preload="metadata">Your browser does not support the video element.</video></div>`;
+    )}" controls playsinline preload="metadata">${escapeHtml(
+      (opts.strings ?? defaultStrings)("maplibre-yaml.Story.VideoUnsupported")
+    )}</video></div>`;
   }
   content += `<h2 class="chapter-title" id="chapter-title-${id}">${escapeHtml(chapter.title)}</h2>`;
   if (chapter.description) {
@@ -106,9 +116,10 @@ export function chapterHTML(chapter: Chapter, opts: ChapterHTMLOptions = {}): st
 /** Every chapter section, the first one active; media resolved against `base`. */
 export function chaptersHTML(story: ScrollytellingBlock, opts: { base?: string | null } = {}): string {
   const theme = story.theme ?? "light";
+  const strings = storyStrings(story);
   return (story.chapters ?? [])
     .map((chapter: Chapter, index: number) =>
-      chapterHTML(chapter, { theme, isActive: index === 0, base: opts.base })
+      chapterHTML(chapter, { theme, isActive: index === 0, base: opts.base, strings })
     )
     .join("");
 }
@@ -132,12 +143,15 @@ export function railButtonsHTML(story: ScrollytellingBlock): string {
   const style = story.markerColor
     ? ` style="--ml-marker-color: ${escapeHtml(safeCssColor(story.markerColor))}"`
     : "";
+  const t = storyStrings(story);
   return (story.chapters ?? [])
     .map(
       (chapter: Chapter, index: number) =>
         `<button type="button" class="chapter-marker${index === 0 ? " active" : ""}" ` +
         `data-chapter-id="${escapeHtml(chapter.id)}" ` +
-        `aria-label="Go to chapter ${index + 1}: ${escapeHtml(chapter.title)}"` +
+        `aria-label="${escapeHtml(
+          t("maplibre-yaml.Story.GoToChapter", { number: index + 1, title: chapter.title })
+        )}"` +
         `${index === 0 ? ' aria-current="step"' : ""}${style}></button>`
     )
     .join("");
@@ -146,7 +160,9 @@ export function railButtonsHTML(story: ScrollytellingBlock): string {
 /** The rail, or `""` without `showMarkers`. */
 export function railHTML(story: ScrollytellingBlock): string {
   if (!story.showMarkers) return "";
-  return `<nav class="chapter-markers" aria-label="Story chapters">${railButtonsHTML(story)}</nav>`;
+  return `<nav class="chapter-markers" aria-label="${escapeHtml(
+    storyStrings(story)("maplibre-yaml.Story.Chapters")
+  )}">${railButtonsHTML(story)}</nav>`;
 }
 
 /** One problem in a story, as the error card lists it. */

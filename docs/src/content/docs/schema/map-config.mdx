@@ -14,6 +14,8 @@ Map configuration defines the initial view, interaction settings, controls, and 
 ```yaml
 - type: map
   id: my-map
+  title: "..."         # The map's name for screen readers (optional)
+  description: "..."   # What it shows, in a sentence or two (optional)
   config:              # Map configuration
     center: [lng, lat]
     zoom: 12
@@ -656,22 +658,28 @@ config:
 
 ## Localization
 
-Customize UI text for different languages.
+Customize UI text for different languages. One `locale:` table covers
+MapLibre's own controls (keys like `NavigationControl.ZoomIn`) and the text
+maplibre-yaml adds (keys starting `maplibre-yaml.`, like the legend's
+header). Keys you leave out stay in English.
 
 ```yaml
 config:
   center: [-74.006, 40.7128]
   zoom: 12
   locale:
-    "AttributionControl.ToggleAttribution": "Show attribution"
-    "FullscreenControl.Enter": "Enter fullscreen"
-    "FullscreenControl.Exit": "Exit fullscreen"
-    "GeolocateControl.FindMyLocation": "Find my location"
-    "NavigationControl.ResetBearing": "Reset bearing"
-    "NavigationControl.ZoomIn": "Zoom in"
-    "NavigationControl.ZoomOut": "Zoom out"
+    "FullscreenControl.Enter": "Pantalla completa"
+    "GeolocateControl.FindMyLocation": "Buscar mi ubicación"
+    "NavigationControl.ResetBearing": "Restablecer orientación"
+    "NavigationControl.ZoomIn": "Acercar"
+    "NavigationControl.ZoomOut": "Alejar"
+    "maplibre-yaml.Legend.Title": "Leyenda"
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
+
+[Accessibility & languages](/guides/accessibility-languages/) lists every
+key, and shows how to give the map a name and description for screen
+readers (`title:` and `description:`).
 
 ## Map Controls
 
@@ -767,9 +775,22 @@ legend:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `position` | string | `"top-left"` | Legend position |
-| `title` | string | - | Legend title |
+| `title` | string | - | A heading inside the legend panel (the toggle above it always reads "Legend") |
 | `collapsed` | boolean | `false` | Start collapsed |
 | `items` | array | - | Custom legend items |
+
+The legend is a collapsible panel whose header — the part you click to open
+or close it — always reads **Legend**, so a screen reader announces "Legend,
+expanded" on every map. Your `title:` is a heading inside the panel, above
+the entries; a `title` of "Legend" (or none) adds no heading, so the word is
+never shown twice. Story legends work the same way. To show the header in
+another language, set `maplibre-yaml.Legend.Title` in `config.locale` (see
+[Accessibility & languages](/guides/accessibility-languages/)).
+
+:::note[Changed in 0.9]
+Before 0.9 a plain map's `title:` replaced "Legend" in the header. Your
+document needs no change: the title now appears as the panel's heading.
+:::
 
 ### Legend Item Properties
 
