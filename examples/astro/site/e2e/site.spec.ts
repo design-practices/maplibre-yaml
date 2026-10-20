@@ -690,3 +690,25 @@ test.describe("view transitions: <ClientRouter /> soft navigation (ml-aot.22)", 
     expect(errors).toEqual([]);
   });
 });
+
+test.describe("author hints: dev builds and the debug prop (ml-aot.57)", () => {
+  test("<Map debug> renders the attribute; astro dev marks the page a dev build, a built site does not @dev", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto("/author-hints/", { waitUntil: "domcontentloaded" });
+    const plain = '[data-testid="plain-map"] ml-map';
+    const debug = '[data-testid="debug-map"] ml-map';
+    await mapReady(page, plain);
+    await mapReady(page, debug);
+    expect(await page.locator(debug).getAttribute("debug")).toBe("");
+    expect(await page.locator(plain).getAttribute("debug")).toBeNull();
+    const devFlag = await page.evaluate(() => (globalThis as any).__MAPLIBRE_YAML_DEV__ === true);
+    expect(devFlag).toBe(process.env.ASTRO_SITE_MODE === "dev");
+    // Served from localhost (preview) or by astro dev: both maps show the hint.
+    for (const map of [plain, debug]) {
+      await expect(page.locator(`${map} .ml-map-notice`)).toContainText('"legend" belongs at the top level');
+    }
+    expect(errors).toEqual([]);
+  });
+});

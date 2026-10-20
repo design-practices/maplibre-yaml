@@ -448,6 +448,9 @@ export const StyleV2Schema: z.ZodTypeAny = z
 export const RuntimeMapSchema = z
   .object({
     interactive: MapConfigSchema.shape.interactive,
+    // Both bounds forms, checked like v1's `config.bounds` (ml-aot.76).
+    bounds: MapConfigSchema.shape.bounds,
+    maxBounds: MapConfigSchema.shape.maxBounds,
   })
   .passthrough()
   .describe("MapLibre `Map` constructor options (minZoom, scrollZoom, ...)");

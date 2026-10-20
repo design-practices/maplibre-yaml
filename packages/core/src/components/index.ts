@@ -70,6 +70,9 @@ export type { MLMapEventMap, MLMapErrorDetail } from "./ml-map.js";
 export { MLScrollytelling, registerMLScrollytelling } from "./ml-scrollytelling.js";
 export type { MLScrollytellingEventMap } from "./ml-scrollytelling.js";
 export { defaultStyles, injectStyles } from "./styles";
+// When author hints show on the page (ml-aot.57): one rule, for every element.
+export { showAuthorHints, authorHintsDecision } from "./author-hints.js";
+export type { AuthorHintsDecision, AuthorHintsReason } from "./author-hints.js";
 
 // Auto-inject styles when module is imported
 import "./styles";

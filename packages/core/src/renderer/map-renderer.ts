@@ -11,7 +11,11 @@ import { createImageRefs, noteImageValue, noteLayerImageRefs } from '../utils/im
 import { suggest } from '../utils/suggest';
 import type { z } from 'zod';
 import { MapConfigSchema, LayerSchema, LayerSourceSchema, ControlsConfigSchema, LegendConfigSchema } from '../schemas';
-import { LayerManager, type LayerManagerCallbacks } from './layer-manager';
+import {
+  LayerManager,
+  type LayerManagerCallbacks,
+  type LayerManagerDataOptions,
+} from './layer-manager';
 import { EventHandler, type EventHandlerCallbacks } from './event-handler';
 import { LegendBuilder } from './legend-builder';
 import type { MarkerConfig, StandalonePopupConfig, FitToConfig } from '../schemas/map.schema';
@@ -261,6 +265,14 @@ export interface MapRendererOptions {
    * auto legend is not built. Borrowed, like {@link chrome}.
    */
   legendElement?: HTMLElement;
+  /**
+   * Data loading the host already started for named sources (ml-aot.75):
+   * `<ml-map>` fetches a `fitTo` source's `url:` before it builds the map,
+   * and hands the load over here so the source's first load awaits it
+   * instead of fetching again (one request), through the same fetcher and
+   * cache. Optional; without it every source loads itself, as before.
+   */
+  sourceData?: LayerManagerDataOptions;
 }
 
 /** One host-supplied chrome element and the corner it mounts into. */
@@ -610,7 +622,10 @@ export class MapRenderer {
       onHover: (layerId, feature, lngLat) => this.emit('layer:hover', { layerId, feature, lngLat }),
     };
 
-    this.layerManager = new LayerManager(this.map, layerCallbacks, { isProtocolRegistered });
+    this.layerManager = new LayerManager(this.map, layerCallbacks, {
+      ...options.sourceData,
+      isProtocolRegistered,
+    });
     this.eventHandler = new EventHandler(this.map, eventCallbacks, options.capabilities);
     this.legendBuilder = new LegendBuilder();
     this.controlsManager = new ControlsManager(this.map, {

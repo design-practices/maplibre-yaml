@@ -458,6 +458,9 @@ interface MapProps {
 
   // Hide on-page notices for non-fatal problems (default: false)
   quiet?: boolean;
+
+  // Show author hints on the page wherever it is served (default: false)
+  debug?: boolean;
 }
 ```
 
@@ -469,6 +472,17 @@ whose visitors shouldn't see author-facing details. The problems are still
 logged to the browser console, and a fatal problem (a document that doesn't
 validate, a basemap that never loads) still shows its error card.
 `FullPageMap` and `Scrollytelling` take the same prop.
+
+The notice always lists **failures**. **Author hints** — a "did you mean", a
+key nested under `config:`, coordinates that look written [latitude,
+longitude], a value starting with the reserved `=` — show only while you
+develop: in `astro dev` (on any address, a Codespaces URL included) and
+when the site is served from your computer (`astro preview` on
+`localhost`). The built site you deploy doesn't show them. Add `debug` to
+show them on a deployed page too, while you check it; `quiet` still wins.
+`FullPageMap` and `Scrollytelling` take the same prop (on `Scrollytelling`
+it also outlines the chapters). The full rules are under
+[when something goes wrong](/integrations/web-components/#when-something-goes-wrong).
 
 ### Corner slots
 
@@ -1269,6 +1283,9 @@ interface FullPageMapProps {
 
   // Hide on-page notices for non-fatal problems (default: false; see Map)
   quiet?: boolean;
+
+  // Show author hints wherever the page is served (default: false; see Map)
+  debug?: boolean;
 }
 ```
 
@@ -1561,7 +1578,7 @@ interface ScrollytellingProps {
   src?: string;              // Path to YAML config file (in public directory)
   config?: ScrollytellingBlock;  // Pre-loaded scrollytelling configuration
   class?: string;            // Additional CSS class for container
-  debug?: boolean;           // Debug mode - shows chapter boundaries
+  debug?: boolean;           // Debug mode - chapter outlines, author hints on any host
   // Where the story's paths start (default: import.meta.env.BASE_URL).
   // false = resolve relative paths against the page.
   base?: string | false;
@@ -1897,6 +1914,9 @@ Enable `debug` prop to see:
 - Red dashed outlines around inactive chapters
 - Green outlines around the active chapter
 - Helpful for fine-tuning scroll trigger points
+- The story's author hints (a chapter naming a layer that doesn't exist, a
+  key nested under `config:`) on the map's notice even on a deployed site;
+  without `debug` they show only in `astro dev` and on `localhost`
 
 ```astro
 <Scrollytelling config={story} debug />

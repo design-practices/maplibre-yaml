@@ -106,6 +106,22 @@ describe("fitTo (U14)", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it("a url: source whose data the host prefetched is framed at construction too (ml-aot.75)", () => {
+    const renderer = new MapRenderer(
+      document.createElement("div"),
+      { ...BASE, fitTo: { source: "route", padding: 10 } } as any,
+      [],
+      {},
+      { route: { type: "geojson", url: "data/route.geojson", prefetchedData: LINE } } as any
+    );
+    const opts = (renderer.getMap() as any).ctorOptions;
+    expect(opts.bounds).toEqual([
+      [-77.03, 38.88],
+      [-77.0, 38.89],
+    ]);
+    expect(opts.fitBoundsOptions).toEqual({ padding: 10 });
+  });
+
   it("announces the inline fit on load as camera:fit", () => {
     const renderer = new MapRenderer(
       document.createElement("div"),

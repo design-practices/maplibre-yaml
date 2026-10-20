@@ -74,6 +74,15 @@ export interface MapProps {
    * finished site whose visitors shouldn't see author-facing details.
    */
   quiet?: boolean;
+  /**
+   * Show author hints on the page wherever it is served (`<ml-map debug>`).
+   * The notice always lists failures; hints — did-you-mean suggestions, a
+   * key nested under `config:`, coordinates that look swapped, a string
+   * starting with the reserved `=` — show only while you develop (in
+   * `astro dev`, and on `localhost` with `astro preview`). Set `debug` to
+   * check a deployed site. `quiet` still hides everything.
+   */
+  debug?: boolean;
 }
 
 /**
@@ -143,7 +152,12 @@ export interface ScrollytellingProps {
   config?: ScrollytellingBlock;
   /** Additional CSS class for container */
   class?: string;
-  /** Debug mode - shows chapter boundaries */
+  /**
+   * Debug mode: outlines the chapter boundaries and shows author hints on
+   * the story's map wherever the page is served (`<ml-scrollytelling
+   * debug>`). Without it, hints show only while you develop (`astro dev`,
+   * `localhost`); failures always show.
+   */
   debug?: boolean;
   /**
    * Where the story's paths start (`<ml-scrollytelling base>`): `src`, every

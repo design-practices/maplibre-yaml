@@ -118,6 +118,53 @@ export const LngLatBoundsSchema = z
 export type LngLatBounds = z.infer<typeof LngLatBoundsSchema>;
 
 /**
+ * A bounds longitude. Not limited to ±180: MapLibre takes bounds past the
+ * antimeridian (`[100, -50, 290, 62]` frames the Pacific), and `bounds:`
+ * accepted them before it checked its form.
+ */
+const BOUNDS_LONGITUDE = z
+  .number()
+  .finite()
+  .describe("Longitude in degrees (past ±180 to cross the antimeridian)");
+
+/**
+ * Bounds in either form MapLibre takes (`LngLatBoundsLike`, ml-aot.76).
+ *
+ * @remarks
+ * - Four numbers: `[west, south, east, north]`.
+ * - Two corners: `[[west, south], [east, north]]`, as MapLibre's own docs
+ *   and many copied snippets write it.
+ *
+ * Both are longitude first. A value that fits neither is reported with the
+ * order spelled out and, when it reads correctly with latitude and longitude
+ * swapped, the swapped value (see `utils/bounds.ts`).
+ *
+ * @example YAML
+ * ```yaml
+ * bounds: [-74.02, 40.645, -73.92, 40.80]
+ * bounds: [[-74.02, 40.645], [-73.92, 40.80]]
+ * ```
+ */
+export const LngLatBoundsLikeSchema = z
+  .union([
+    z
+      .tuple([BOUNDS_LONGITUDE, LatitudeSchema, BOUNDS_LONGITUDE, LatitudeSchema])
+      .describe("Bounding box as [west, south, east, north]"),
+    z
+      .tuple([
+        z.tuple([BOUNDS_LONGITUDE, LatitudeSchema]),
+        z.tuple([BOUNDS_LONGITUDE, LatitudeSchema]),
+      ])
+      .describe("Bounding box as two corners [[west, south], [east, north]]"),
+  ])
+  .describe(
+    "Bounds as [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
+  );
+
+/** Inferred type for {@link LngLatBoundsLikeSchema}. */
+export type LngLatBoundsLike = z.infer<typeof LngLatBoundsLikeSchema>;
+
+/**
  * CSS color value.
  *
  * @remarks

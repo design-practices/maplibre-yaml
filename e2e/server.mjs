@@ -58,7 +58,12 @@ const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = Number(process.env.VERIFY_PORT ?? 4174);
 
-const MAPLIBRE_DIR = dirname(require.resolve("maplibre-gl/package.json"));
+// VERIFY_MAPLIBRE_DIR serves another maplibre-gl install (a package
+// directory) from /vendor, to run specs against another major locally
+// without the CI matrix's pnpm override:
+//   VERIFY_MAPLIBRE_DIR=/tmp/ml4/node_modules/maplibre-gl VERIFY_PORT=4591 pnpm verify:browser e2e/x.spec.ts
+const MAPLIBRE_DIR =
+  process.env.VERIFY_MAPLIBRE_DIR ?? dirname(require.resolve("maplibre-gl/package.json"));
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",

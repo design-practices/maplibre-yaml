@@ -15,8 +15,12 @@ import { isFormatError } from "../../src/formats/errors";
 import {
   FlatGeobufLoader,
   loadModeOf,
+  loadFlatGeobufWhole,
+  cloudSourceDataLoader,
+  WholeFileTooLarge,
   VIEWPORT_DEFAULT_MINZOOM,
 } from "../../src/renderer/cloud-sources";
+import { loadSourceData } from "../../src/data/source-data";
 
 const FIXTURES = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -139,6 +143,31 @@ describe("probe / openWhole", () => {
   });
 });
 
+describe("the fitTo prefetch seam (data/source-data, ml-aot.75)", () => {
+  const ctx = { fetcher: { fetch: vi.fn() } as never };
+
+  it("a FlatGeobuf source read whole is loaded ahead and decoded, not fetched as JSON", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const fc = await loadSourceData({ type: "geojson", url: "/districts.fgb" }, ctx);
+    expect(fc.features).toHaveLength(48);
+  });
+
+  it("a viewport source or a GeoParquet file is not loaded ahead", async () => {
+    await expect(cloudSourceDataLoader({ type: "geojson", url: "/p.fgb", load: "viewport" }, ctx)).rejects.toThrow(
+      /not loaded ahead/
+    );
+    await expect(cloudSourceDataLoader({ type: "geojson", url: "/w.parquet" }, ctx)).rejects.toThrow();
+    expect(cloudSourceDataLoader({ type: "geojson", url: "/p.geojson" }, ctx)).toBeUndefined();
+  });
+
+  it("an oversized file rejects with its size, so the reader can switch to the view", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const error = await loadFlatGeobufWhole("/oversize/60/points.fgb").catch((e) => e);
+    expect(error).toBeInstanceOf(WholeFileTooLarge);
+    expect(error.size).toBe(60 * 1024 * 1024);
+  });
+});
+
 describe("loadModeOf", () => {
   it("normalizes load:", () => {
     expect(loadModeOf({})).toEqual({ mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM });
@@ -228,6 +257,20 @@ describe("FlatGeobufLoader", () => {
   it("load: viewport on a file without an index → says so", async () => {
     const { onError } = await run("/points-noindex.fgb", loadModeOf({ load: "viewport" }));
     expect(isFormatError(onError.mock.calls[0]![0]) && onError.mock.calls[0]![0].failure.code).toBe("no-index");
+  });
+
+  it("reuses a whole-file load the host already started (no second request)", async () => {
+    const log: { url: string; status: number }[] = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    const started = Promise.resolve({ type: "FeatureCollection" as const, features: [] });
+    const onData = vi.fn();
+    const loader = new FlatGeobufLoader(fakeMap(12, AREA) as never, "/points.fgb", loadModeOf({}), {
+      onData,
+      onError: vi.fn(),
+    });
+    await loader.start(started);
+    expect(onData).toHaveBeenCalledWith({ type: "FeatureCollection", features: [] });
+    expect(log).toEqual([]);
   });
 
   it("destroy() stops further reads and callbacks", async () => {

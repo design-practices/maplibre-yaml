@@ -297,6 +297,8 @@ import {
 import { isLikelyMisspelling } from "../utils/suggest";
 import { checkDocument, chapterLabel } from "./document-checks";
 import { checkSourceFormats } from "./format-checks";
+import { reservedPrefixWarnings } from "./reserved-prefix";
+import { boundsProblem } from "../utils/bounds";
 import { explainIndentationError, explainQuoteError } from "./yaml-errors";
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -624,6 +626,9 @@ export class YAMLParser {
       doc,
       lineCounter
     );
+    // A style value starting with the reserved `=` (ml-3e9): every block
+    // type and format version, valid document or not.
+    warnings.push(...reservedPrefixWarnings(value, { doc, lineCounter }));
 
     // Values YAML emptied because an unquoted `#` started a comment
     // (`circle-color: #ef4444`). Their schema errors say nothing useful
@@ -1514,6 +1519,9 @@ export class YAMLParser {
       remaps?: SugarRemap[];
     }
   ): ParseError[] {
+    // Several issues can explain one value the same way (two out-of-range
+    // numbers in one `bounds:`, ml-aot.76): list each message once.
+    const seen = new Set<string>();
     return error.errors.map((err) => {
       const formatted = this.formatIssue(err, ctx);
       // `chapters.3` is the fourth chapter: name it the way the author sees
@@ -1543,6 +1551,11 @@ export class YAMLParser {
         return { ...formatted, message: formatted.message.slice(last.length + 2) };
       }
       return formatted;
+    }).filter((entry) => {
+      const key = `${entry.path}\u0000${entry.message}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
   }
 
@@ -1619,7 +1632,11 @@ export class YAMLParser {
           break;
         }
 
-        case "invalid_union":
+        case "invalid_union": {
+          // Bounds in neither form (ml-aot.76): say which order, and give the
+          // swapped value when latitude and longitude look swapped.
+          const bounds = boundsIssue(err.path, ctx?.value);
+          if (bounds) return withPosition(bounds, ctx);
           message = this.formatUnionError(err, ctx);
           if (message === UNION_FALLBACK) {
             // Report the failure inside the union instead of the union
@@ -1631,8 +1648,18 @@ export class YAMLParser {
             message = sameSpotTypeMessage(err, ctx?.value) ?? message;
           }
           break;
+        }
 
         case "too_small":
+        case "too_big": {
+          // A number out of range inside bounds (ml-aot.76): one message for
+          // the whole value, naming the order, with the swapped did-you-mean.
+          const bounds = boundsIssue(err.path, ctx?.value);
+          if (bounds) return withPosition(bounds, ctx);
+          if (err.code === "too_big") {
+            message = tooBigMessage(err, ctx?.value);
+            break;
+          }
           if (err.type === "array") {
             message = `Array must have at least ${err.minimum} element(s)`;
           } else if (err.type === "string") {
@@ -1643,18 +1670,7 @@ export class YAMLParser {
             if (swap) message += `. ${swap}`;
           }
           break;
-
-        case "too_big":
-          if (err.type === "array") {
-            message = `Array must have at most ${err.maximum} element(s)`;
-          } else if (err.type === "string") {
-            message = `String must have at most ${err.maximum} character(s)`;
-          } else {
-            message = `Value must be <= ${err.maximum}`;
-            const swap = lngLatSwapHint(err.path, ctx?.value);
-            if (swap) message += `. ${swap}`;
-          }
-          break;
+        }
 
         case "invalid_string":
           // A message the schema wrote itself (the source-URL and chapter-
@@ -2028,6 +2044,51 @@ export function missingTypeMessage(expected: string): string {
     `The document is missing type: at the top — add type: ${expected} as its first ` +
     `line (or type: ${other}, for a ${other === "map" ? "single map" : "story"}).`
   );
+}
+
+function tooBigMessage(err: ZodIssue & { code: "too_big" }, root: unknown): string {
+  if (err.type === "array") return `Array must have at most ${err.maximum} element(s)`;
+  if (err.type === "string") return `String must have at most ${err.maximum} character(s)`;
+  let message = `Value must be <= ${err.maximum}`;
+  const swap = lngLatSwapHint(err.path, root);
+  if (swap) message += `. ${swap}`;
+  return message;
+}
+
+/**
+ * For an issue at or inside a `bounds:`/`maxBounds:` value (the value
+ * itself, or a number or corner within it), the whole value's problem in
+ * words (ml-aot.76), reported at the bounds key.
+ */
+function boundsIssue(
+  path: (string | number)[],
+  root: unknown
+): { path: (string | number)[]; message: string } | undefined {
+  if (root === undefined) return undefined;
+  for (let depth = 0; depth <= 2 && depth < path.length; depth++) {
+    const at = path.length - 1 - depth;
+    const key = path[at];
+    if (key !== "bounds" && key !== "maxBounds") continue;
+    if (!path.slice(at + 1).every((segment) => typeof segment === "number")) return undefined;
+    const keyPath = path.slice(0, at + 1);
+    const message = boundsProblem(valueAtPath(root, keyPath), key);
+    return message ? { path: keyPath, message } : undefined;
+  }
+  return undefined;
+}
+
+/** `{ path, message }` with the source position of `path`, as formatIssue returns. */
+function withPosition(
+  found: { path: (string | number)[]; message: string },
+  ctx: { doc: Document; lineCounter: LineCounter; remaps?: SugarRemap[] } | undefined
+): ParseError {
+  const anchored = remapSugarPath(found.path, ctx?.remaps);
+  const pos = ctx ? positionForPath(ctx.doc, ctx.lineCounter, anchored) : undefined;
+  return {
+    path: anchored.join("."),
+    message: found.message,
+    ...(pos ? { line: pos.line, column: pos.column } : {}),
+  };
 }
 
 function lngLatSwapHint(

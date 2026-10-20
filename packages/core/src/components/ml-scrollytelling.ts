@@ -81,7 +81,7 @@ import { normalizeDocumentBase, resolveDocumentUrl } from "../utils/document-bas
 import { displayPath } from "../parser/validation-utils.js";
 import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
-import { isLocalPage } from "./map-notice.js";
+import { showAuthorHints } from "./author-hints.js";
 import { StoryLegend, STORY_NARROW_QUERY, STORY_LANDSCAPE_QUERY } from "../scrollytelling/story-legend.js";
 import {
   isFilePage,
@@ -140,7 +140,7 @@ interface Waiter {
  */
 export class MLScrollytelling extends HTMLElement {
   static get observedAttributes(): string[] {
-    return ["src", "config", "base", "quiet"];
+    return ["src", "config", "base", "quiet", "debug"];
   }
 
   /** The validated story being shown, or `null`. */
@@ -203,7 +203,8 @@ export class MLScrollytelling extends HTMLElement {
     if (this.hasAttribute("quiet")) return;
     // Two readers, as on the map's notice (ml-aot.70): a visitor gets one
     // plain line; the fix sits under "Details for the site's author", open
-    // while the page is served from this computer, closed on a published site.
+    // while the author is developing (or with `debug`), closed on a
+    // published site (ml-aot.57).
     const doc = this.ownerDocument;
     const kind = media instanceof HTMLVideoElement ? "video" : "image";
     const note = doc.createElement("div");
@@ -213,7 +214,7 @@ export class MLScrollytelling extends HTMLElement {
     lead.className = "chapter-media-missing-lead";
     lead.textContent = `This chapter's ${kind} couldn't load.`;
     const details = doc.createElement("details");
-    details.open = isLocalPage(doc);
+    details.open = showAuthorHints(this);
     const summary = doc.createElement("summary");
     summary.textContent = "Details for the site's author";
     const fix = doc.createElement("p");
@@ -382,6 +383,13 @@ export class MLScrollytelling extends HTMLElement {
       const mapEl = this.mapElement;
       if (mapEl) mapEl.toggleAttribute("quiet", newValue !== null);
       if (newValue !== null) this.querySelectorAll(".chapter-media-missing").forEach((n) => n.remove());
+      return;
+    }
+    if (name === "debug") {
+      // Author hints anywhere (ml-aot.57), on the story's map too. (The
+      // attribute also outlines the chapters, as it always has.)
+      const mapEl = this.mapElement;
+      if (mapEl) mapEl.toggleAttribute("debug", newValue !== null);
       return;
     }
     if (oldValue === newValue || !this.initialized) return;
@@ -705,6 +713,8 @@ export class MLScrollytelling extends HTMLElement {
     else if (mapEl.getAttribute("base") !== base) mapEl.setAttribute("base", base);
     // `quiet` on the story reaches its map (review F1): no on-page notice.
     mapEl.toggleAttribute("quiet", this.hasAttribute("quiet"));
+    // So does `debug`: the story's hints show wherever it is served (ml-aot.57).
+    mapEl.toggleAttribute("debug", this.hasAttribute("debug"));
   }
 
   /**

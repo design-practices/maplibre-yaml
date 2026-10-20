@@ -156,8 +156,11 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
   document from under `/my-repo/`. `<ml-scrollytelling>` takes it too.
 - **Mistakes show on the page.** A document that cannot render shows an
   error card with line numbers and did-you-mean hints. A layer or data file
-  that fails while the rest works is listed in a notice over the map. The
-  `quiet` attribute hides the notice (the error card always shows).
+  that fails while the rest works is listed in a notice over the map.
+  Author hints (did-you-mean, misplaced keys, swapped coordinates) join it
+  only while you develop (`localhost`, a bundler dev build), or anywhere
+  with the `debug` attribute. The `quiet` attribute hides the notice (the
+  error card always shows).
 - **Data:** GeoJSON (by URL or inline), vector and raster tiles, images and
   video, with polling, Server-Sent Events and WebSocket updates
   ([Live Data](https://docs.maplibre-yaml.org/guides/live-data/)).

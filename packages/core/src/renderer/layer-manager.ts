@@ -22,6 +22,7 @@ import {
 // maplibre-gl `Popup` value, and this module needs only a maplibre-free string.
 import { HOVER_FEATURE_STATE_KEY } from "../interactions/built-ins";
 import { DataFetcher } from "../data/data-fetcher";
+import { loadSourceData } from "../data/source-data";
 import { PollingManager } from "../data/polling-manager";
 import { StreamManager } from "../data/streaming/stream-manager";
 import { DataMerger } from "../data/merge/data-merger";
@@ -135,6 +136,29 @@ export interface LayerManagerCallbacks {
 }
 
 /**
+ * Data loading a host already started for named sources (ml-aot.75).
+ */
+export interface LayerManagerDataOptions {
+  /**
+   * The fetcher (and its cache) to load with — the one the host's prefetch
+   * used, so refreshes see the same cache they always did.
+   */
+  fetcher?: DataFetcher;
+  /**
+   * A load already in flight (or settled) per named source id: the source's
+   * FIRST load awaits it instead of requesting the data again. Refreshes
+   * fetch as usual.
+   */
+  pending?: Record<string, Promise<FeatureCollection>>;
+  /**
+   * Whether a URL protocol (`cog`) is registered on the maplibre-gl module
+   * (ml-cnv). Injected by `MapRenderer` so this module never loads
+   * maplibre-gl itself; defaults to "none registered".
+   */
+  isProtocolRegistered?: (scheme: string) => boolean;
+}
+
+/**
  * Manages map layers and their data sources
  */
 export class LayerManager {
@@ -155,25 +179,23 @@ export class LayerManager {
   private sourceRefCounts: Map<string, number>;
   /** Named sources with a refresh/stream pipeline currently running. */
   private activeSourcePipelines: Set<string>;
+  /** First loads a host already started, by source id (consumed once). */
+  private pendingData: Map<string, Promise<FeatureCollection>>;
   /** FlatGeobuf readers by source id (ml-cnv.3), stopped with their source. */
   private formatLoaders = new Map<string, FlatGeobufLoader>();
-  /** Whether the page registered a URL protocol itself (injected; see options). */
+  /** Whether the page registered a URL protocol itself (see LayerManagerDataOptions). */
   private isProtocolRegistered: (scheme: string) => boolean;
 
-  /**
-   * @param options.isProtocolRegistered - Whether a URL protocol (`cog`) is
-   *   registered on the maplibre-gl module. Injected by `MapRenderer` so this
-   *   module never loads maplibre-gl itself; defaults to "none registered".
-   */
   constructor(
     map: MapLibreMap,
     callbacks?: LayerManagerCallbacks,
-    options: { isProtocolRegistered?: (scheme: string) => boolean } = {}
+    data: LayerManagerDataOptions = {}
   ) {
     this.map = map;
     this.callbacks = callbacks || {};
-    this.isProtocolRegistered = options.isProtocolRegistered ?? (() => false);
-    this.dataFetcher = new DataFetcher();
+    this.dataFetcher = data.fetcher ?? new DataFetcher();
+    this.pendingData = new Map(Object.entries(data.pending ?? {}));
+    this.isProtocolRegistered = data.isProtocolRegistered ?? (() => false);
     this.pollingManager = new PollingManager();
     this.streamManager = new StreamManager();
     this.dataMerger = new DataMerger();
@@ -642,6 +664,7 @@ export class LayerManager {
       return;
     }
     if (format === "geoparquet" && typeReadsFormat(config.type, format)) {
+      this.pendingData.delete(sourceId);
       this.callbacks.onDataError?.(layerId, unsupportedFormatError(format, config.url!));
       return;
     }
@@ -651,15 +674,12 @@ export class LayerManager {
       this.callbacks.onDataLoading?.(layerId);
 
       try {
-        const cacheEnabled = config.cache?.enabled ?? true;
-        const cacheTTL = config.cache?.ttl;
-
-        const result = await this.dataFetcher.fetch(config.url, {
-          skipCache: !cacheEnabled,
-          ttl: cacheTTL,
-        });
-
-        const data = result.data as FeatureCollection;
+        // A load the host already started (the `fitTo` prefetch, ml-aot.75)
+        // is awaited, not repeated: one request for the data, ever.
+        const pending = this.pendingData.get(sourceId);
+        this.pendingData.delete(sourceId);
+        const data = await (pending ??
+          loadSourceData(config as typeof config & { url: string }, { fetcher: this.dataFetcher }));
         this.sourceData.set(sourceId, data);
 
         const source = this.map.getSource(sourceId) as GeoJSONSource;
@@ -705,7 +725,11 @@ export class LayerManager {
       }
     );
     this.formatLoaders.set(sourceId, loader);
-    await loader.start();
+    // A whole-file load the host already started (the `fitTo` prefetch,
+    // ml-aot.75) is reused, not repeated; viewport reads ignore it.
+    const pending = this.pendingData.get(sourceId);
+    this.pendingData.delete(sourceId);
+    await loader.start(pending);
   }
 
   /**

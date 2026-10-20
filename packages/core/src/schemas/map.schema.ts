@@ -14,7 +14,7 @@
 import { z } from "zod";
 import {
   LngLatSchema,
-  LngLatBoundsSchema,
+  LngLatBoundsLikeSchema,
   ZoomLevelSchema,
   ColorSchema,
   ColorOrExpressionSchema,
@@ -206,9 +206,11 @@ export type LegendConfig = z.infer<typeof LegendConfigSchema>;
  *
  * - **Inline `data:`** — the bounds are known before the map exists, so the
  *   map is constructed already framed (no camera jump).
- * - **`url:`** — the map opens at the authored `center`/`zoom`, then jumps
- *   to the data's bounds once the first fetch lands (refreshes do not
- *   re-fit: the user owns the camera after load).
+ * - **`url:`** — `<ml-map>` fetches the data before it builds the map and
+ *   builds it already framed (ml-aot.75); a file slower than
+ *   `MLMap.fitToWaitMs` (1.5 s) gets the map at the authored `center`/`zoom`,
+ *   which jumps to the data's bounds once the fetch lands. Refreshes do not
+ *   re-fit: the user owns the camera after load.
  * - **vector / raster / raster-dem** — not supported: tiled sources have no
  *   client-side extent before they render. The renderer warns once and keeps
  *   the authored camera.
@@ -351,10 +353,10 @@ export const MapConfigSchema = z
       .max(180)
       .default(0)
       .describe("Camera bearing (rotation) in degrees (-180 to 180)"),
-    bounds: z
-      .union([LngLatBoundsSchema, z.array(z.number())])
-      .optional()
-      .describe("Fit map to bounds"),
+    bounds: LngLatBoundsLikeSchema.optional().describe(
+      "Fit the initial camera to these bounds: [west, south, east, north] or " +
+        "[[west, south], [east, north]] (longitude first)"
+    ),
     fitTo: FitToSchema.optional().describe(
       "Fit the initial camera to a GeoJSON source's data (wins over `bounds`)"
     ),
@@ -364,8 +366,8 @@ export const MapConfigSchema = z
     maxZoom: ZoomLevelSchema.optional().describe("Maximum zoom level"),
     minPitch: z.number().min(0).max(85).optional().describe("Minimum pitch"),
     maxPitch: z.number().min(0).max(85).optional().describe("Maximum pitch"),
-    maxBounds: LngLatBoundsSchema.optional().describe(
-      "Maximum geographic bounds",
+    maxBounds: LngLatBoundsLikeSchema.optional().describe(
+      "Maximum geographic bounds, in either bounds form",
     ),
 
     // Interaction

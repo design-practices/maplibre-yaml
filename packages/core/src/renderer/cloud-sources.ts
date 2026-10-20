@@ -28,6 +28,7 @@ import { formatOfSource, stripScheme, typeReadsFormat, type CloudFormat } from "
 import { getDecoder } from "../formats/decoders";
 import type { FlatGeobufHeader } from "../formats/flatgeobuf";
 import { FormatError, isAbortError, isFormatError } from "../formats/errors";
+import { registerSourceDataLoader, type SourceDataLoader } from "../data/source-data";
 // No maplibre-gl here: the layer manager imports this module, and it loads
 // without maplibre-gl (types only). Protocol registration, which needs the
 // module, lives in ./cloud-protocols (MapRenderer only).
@@ -155,6 +156,68 @@ export function loadModeOf(source: Obj): LoadMode {
   return { mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM };
 }
 
+/** A whole-file read refused for size: the caller reads by view instead. */
+export class WholeFileTooLarge extends Error {
+  constructor(readonly size: number) {
+    super(`${mb(size)}: too large to load whole`);
+    this.name = "WholeFileTooLarge";
+  }
+}
+
+/**
+ * Read a whole FlatGeobuf file, with the size guards: over
+ * {@link WHOLE_FILE_WARN_BYTES} a console note; over
+ * {@link WHOLE_FILE_MAX_BYTES} nothing is decoded and it rejects with
+ * {@link WholeFileTooLarge} (the loader then reads by view).
+ *
+ * @returns `null` when `isCurrent()` turned false mid-read (superseded).
+ */
+export async function loadFlatGeobufWhole(
+  url: string,
+  options: { isCurrent?: () => boolean; onHeader?: (header: FlatGeobufHeader) => void } = {}
+): Promise<FeatureCollection | null> {
+  const fgb = await getDecoder("flatgeobuf");
+  const opened = await fgb.openWhole(url);
+  if (opened.size !== undefined && opened.size > WHOLE_FILE_MAX_BYTES) {
+    fgb.discard(opened);
+    throw new WholeFileTooLarge(opened.size);
+  }
+  if (opened.size !== undefined && opened.size > WHOLE_FILE_WARN_BYTES) {
+    console.warn(
+      `[maplibre-yaml] ${url} is ${mb(opened.size)}; loading it whole may take a ` +
+        "few seconds. For big files add `load: viewport` (needs a spatial index) or " +
+        "convert to PMTiles."
+    );
+  }
+  return fgb.decodeStream(opened, url, options);
+}
+
+/**
+ * The FlatGeobuf entry on the shared source-data seam (`data/source-data.ts`,
+ * ml-aot.75): a `fitTo` on a FlatGeobuf source read whole is loaded — and
+ * decoded — ahead of the map, like a GeoJSON one, so the map is built
+ * already framed on it. The layer manager then reuses that load (one
+ * request). A source read by view, or a format this version doesn't read,
+ * is not loaded ahead: the loader declines with a rejection the prefetch
+ * settles on at once, and the layer manager reads the source itself.
+ */
+export const cloudSourceDataLoader: SourceDataLoader = (source) => {
+  const format = formatOfSource(source);
+  if (!format || !typeReadsFormat(source["type"], format)) return undefined;
+  if (format === "flatgeobuf" && loadModeOf(source as Obj).mode === "all") {
+    const url = String(source["url"]);
+    return loadFlatGeobufWhole(url).then(
+      (data) => data ?? { type: "FeatureCollection", features: [] }
+    );
+  }
+  if (format === "flatgeobuf" || format === "geoparquet") {
+    return Promise.reject(new Error(`${format}: not loaded ahead of the map`));
+  }
+  return undefined;
+};
+
+registerSourceDataLoader(cloudSourceDataLoader);
+
 /** What a {@link FlatGeobufLoader} reports. */
 export interface FlatGeobufCallbacks {
   /** Features ready (the whole file, or the view's part of it). */
@@ -242,13 +305,19 @@ export class FlatGeobufLoader {
     return env ? [[env[0], env[1]], [env[2], env[3]]] : undefined;
   }
 
-  /** Begin reading. Errors go to `onError`; never rejects. */
-  async start(): Promise<void> {
+  /**
+   * Begin reading. Errors go to `onError`; never rejects.
+   *
+   * @param started - A whole-file load the host already started for this
+   *   source (the `fitTo` prefetch): used instead of a second request.
+   *   Ignored by `load: viewport`.
+   */
+  async start(started?: Promise<FeatureCollection>): Promise<void> {
     try {
       if (this.load.mode === "viewport") {
         await this.startViewport(false);
       } else {
-        await this.readWhole();
+        await this.readWhole(started);
       }
     } catch (error) {
       this.fail(error);
@@ -272,31 +341,30 @@ export class FlatGeobufLoader {
     if (data && !this.destroyed) this.callbacks.onData(data);
   }
 
-  private async readWhole(): Promise<void> {
-    const fgb = await getDecoder("flatgeobuf");
-    const opened = await fgb.openWhole(this.url);
-    if (opened.size !== undefined && opened.size > WHOLE_FILE_MAX_BYTES) {
-      fgb.discard(opened);
+  /**
+   * The whole-file read — or, when the host already started it (the `fitTo`
+   * prefetch, ml-aot.75, through {@link loadFlatGeobufWhole}), its result.
+   */
+  private async readWhole(started?: Promise<FeatureCollection>): Promise<void> {
+    const generation = ++this.generation;
+    let data: FeatureCollection | null;
+    try {
+      data = started
+        ? await started
+        : await loadFlatGeobufWhole(this.url, {
+            isCurrent: () => generation === this.generation && !this.destroyed,
+            onHeader: (header) => (this.header = header),
+          });
+    } catch (error) {
+      if (!(error instanceof WholeFileTooLarge)) throw error;
       console.warn(
-        `[maplibre-yaml] ${this.url} is ${mb(opened.size)}, too large to load whole; ` +
+        `[maplibre-yaml] ${this.url} is ${mb(error.size)}, too large to load whole; ` +
           "reading only the part in view instead (add `load: viewport` to say so, or " +
           "convert the file to PMTiles)."
       );
-      await this.startViewport(true, opened.size);
+      await this.startViewport(true, error.size);
       return;
     }
-    if (opened.size !== undefined && opened.size > WHOLE_FILE_WARN_BYTES) {
-      console.warn(
-        `[maplibre-yaml] ${this.url} is ${mb(opened.size)}; loading it whole may take a ` +
-          "few seconds. For big files add `load: viewport` (needs a spatial index) or " +
-          "convert to PMTiles."
-      );
-    }
-    const generation = ++this.generation;
-    const data = await fgb.decodeStream(opened, this.url, {
-      isCurrent: () => generation === this.generation && !this.destroyed,
-      onHeader: (header) => (this.header = header),
-    });
     this.deliver(data);
   }
 

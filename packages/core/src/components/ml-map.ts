@@ -51,7 +51,8 @@ import {
 } from "../model/index.js";
 import type { MapModel } from "../model/types.js";
 import { createErrorCard, ERROR_CARD_CLASS } from "./error-card.js";
-import { MapNotice } from "./map-notice.js";
+import { MapNotice, type NoticeKind } from "./map-notice.js";
+import { showAuthorHints } from "./author-hints.js";
 import {
   describeDataProblem,
   describeImageProblem,
@@ -77,7 +78,14 @@ import {
   type EffectLayerRef,
   type EffectsAttachment,
 } from "../effects-host.js";
-import type { ChromeMount, MapRendererEvents } from "../renderer/map-renderer.js";
+import type {
+  ChromeMount,
+  MapRendererEvents,
+  MapRendererOptions,
+} from "../renderer/map-renderer.js";
+import type { FeatureCollection } from "geojson";
+import { DataFetcher } from "../data/data-fetcher.js";
+import { isLoadedFromUrl, loadSourceData } from "../data/source-data.js";
 import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
 import { displayPath } from "../parser/validation-utils.js";
 import {
@@ -183,6 +191,47 @@ function pageScriptsPending(doc: Document): boolean {
 const MAP_CONTAINER_CLASS = "ml-map-container";
 
 /**
+ * A `fitTo` source's data, loading ahead of the map (ml-aot.75). See
+ * {@link MLMap.fitToWaitMs}.
+ */
+interface FitPrefetch {
+  /** The `sources:` name `fitTo` names. */
+  sourceId: string;
+  /** The load (shared with the renderer, so the data is requested once). */
+  data: Promise<FeatureCollection>;
+  /** The fetcher (and cache) that loads it, handed to the renderer. */
+  fetcher: DataFetcher;
+  /** Set once `data` settles. */
+  result: { data: FeatureCollection } | { error: unknown } | null;
+}
+
+/**
+ * Start loading the data `fitTo` frames, when it is a fetched GeoJSON
+ * source, so the map can be built already framed on it. `null` otherwise
+ * (no `fitTo`, inline data, a tiled source, a name that matches nothing).
+ */
+function startFitPrefetch(model: MapModel): FitPrefetch | null {
+  const fitTo = model.runtime.fitTo;
+  if (!fitTo) return null;
+  const source = denormalizeSources(model)?.[fitTo.source];
+  if (!isLoadedFromUrl(source)) return null;
+  const fetcher = new DataFetcher();
+  const prefetch: FitPrefetch = {
+    sourceId: fitTo.source,
+    data: loadSourceData(source, { fetcher }),
+    fetcher,
+    result: null,
+  };
+  // Settled either way here; the renderer reports a failure through its
+  // usual data-error path when it awaits the same promise.
+  prefetch.data.then(
+    (data) => (prefetch.result = { data }),
+    (error: unknown) => (prefetch.result = { error })
+  );
+  return prefetch;
+}
+
+/**
  * MLMap custom element for rendering MapLibre maps from YAML/JSON configuration.
  *
  * @fires ml-map:load - Map loaded and ready for interaction
@@ -255,6 +304,22 @@ export class MLMap extends HTMLElement {
   private cancelDeferredRender: (() => void) | null = null;
 
   /**
+   * How long `<ml-map>` waits for a `fitTo` source's data before it builds
+   * the map anyway, in milliseconds (ml-aot.75).
+   *
+   * @remarks
+   * When `config.fitTo` names a `url:` GeoJSON source, the element fetches
+   * that file as soon as the document is read and builds the map with the
+   * data's bounds, so the first frame is already framed — no load at the
+   * authored center/zoom followed by a jump. If the file takes longer than
+   * this, the map is built at the authored `center`/`zoom` and jumps once
+   * the data lands (the 0.8 behaviour); the file is still requested only
+   * once. Set it before maps render (`MLMap.fitToWaitMs = 3000`); `0` turns
+   * the wait off.
+   */
+  static fitToWaitMs = 1500;
+
+  /**
    * The effects attached to the current map (experimental, 0.7), and the
    * subscription waiting for an effects host that registers late. Both are
    * torn down with the renderer, so a reload never leaks a custom layer.
@@ -295,6 +360,11 @@ export class MLMap extends HTMLElement {
    * on the first layer/source/data problem of the current render.
    */
   private notice: MapNotice | null = null;
+  /**
+   * Every line reported for the current render, shown or not — so turning
+   * `debug` on (or `quiet` off) later can rebuild the notice (ml-aot.57).
+   */
+  private noticeEntries: Array<{ message: string; kind: NoticeKind }> = [];
   /** The current document's `onPage` warnings, shown once its map renders. */
   private documentNotices: string[] = [];
 
@@ -315,7 +385,7 @@ export class MLMap extends HTMLElement {
    * Observed attributes that trigger attributeChangedCallback
    */
   static get observedAttributes(): string[] {
-    return ["src", "config", "quiet", "base"];
+    return ["src", "config", "quiet", "base", "debug"];
   }
 
   /**
@@ -362,6 +432,29 @@ export class MLMap extends HTMLElement {
 
   set quiet(value: boolean) {
     this.toggleAttribute("quiet", Boolean(value));
+  }
+
+  /**
+   * Whether author hints show on the page wherever it is served. Reflects the
+   * boolean `debug` attribute.
+   *
+   * @remarks
+   * The on-page notice always lists failures (a data file that didn't load,
+   * a layer MapLibre rejected). Author hints — did-you-mean suggestions, a
+   * key nested under `config:`, a `fitTo` typo, coordinates that look
+   * swapped, a string starting with the reserved `=` — show only while you
+   * develop: on a page served from this computer (`localhost`, `127.0.0.1`,
+   * `[::1]`, `file:`) and in a bundler dev build (`astro dev`, `vite`).
+   * `debug` shows them on a published site too, for checking a deploy.
+   * `quiet` still wins: it hides the notice entirely. The console always
+   * gets every hint either way.
+   */
+  get debug(): boolean {
+    return this.hasAttribute("debug");
+  }
+
+  set debug(value: boolean) {
+    this.toggleAttribute("debug", Boolean(value));
   }
 
   /**
@@ -505,7 +598,15 @@ export class MLMap extends HTMLElement {
       if (newValue !== null) {
         this.notice?.clear();
         this.removeHeightHint();
+      } else {
+        this.rebuildNotice();
       }
+      return;
+    }
+
+    if (name === "debug") {
+      // Which hints may show changed (ml-aot.57): rebuild from what was reported.
+      this.rebuildNotice();
       return;
     }
 
@@ -770,7 +871,7 @@ export class MLMap extends HTMLElement {
     this.teardownRenderer();
     // The teardown cleared the notice; this document's on-page warnings
     // (logged as it was parsed, just before) go back on it.
-    for (const message of this.documentNotices) this.reportProblem(message);
+    for (const message of this.documentNotices) this.reportProblem(message, { kind: "hint" });
 
     // A fresh render resets the readiness state a pending or future
     // mapReady() reads.
@@ -788,6 +889,18 @@ export class MLMap extends HTMLElement {
 
     this.appendChild(this.mapContainer);
 
+    // `fitTo` on a fetched source (ml-aot.75): start loading its data NOW,
+    // alongside the rest of page start-up, so the map can be built already
+    // framed on it instead of loading at center/zoom and jumping.
+    let prefetch: FitPrefetch | null = null;
+    if (MLMap.fitToWaitMs > 0) {
+      try {
+        prefetch = startFitPrefetch(applyDocumentBase(toModel(mapBlock as never), this.base));
+      } catch {
+        prefetch = null; // constructRenderer reports a document it cannot model
+      }
+    }
+
     // Never build the MapLibre map while the page's module scripts are still
     // evaluating (ml-aot.2). A bundler can hoist `register` ahead of the code
     // that sets maplibre-gl 6's worker URL (side-effect order is not kept
@@ -797,7 +910,12 @@ export class MLMap extends HTMLElement {
     // when it is still ahead; otherwise (elements created later, frameworks,
     // maplibre-gl 4/5) this is the same synchronous path as before.
     const doc = this.ownerDocument;
-    if (pageScriptsPending(doc)) {
+    const scriptsPending = pageScriptsPending(doc);
+    if (!prefetch) {
+      if (!scriptsPending) {
+        this.constructRenderer(mapBlock);
+        return;
+      }
       const resume = () => {
         this.cancelDeferredRender = null;
         if (this.initialized && this.isConnected) this.constructRenderer(mapBlock);
@@ -809,7 +927,44 @@ export class MLMap extends HTMLElement {
       };
       return;
     }
-    this.constructRenderer(mapBlock);
+
+    // Wait for whichever applies: the page's scripts, and the fitTo data —
+    // the latter at most `fitToWaitMs`, then the map is built anyway.
+    let cancelled = false;
+    let stopWaitingForDom: (() => void) | null = null;
+    let fitTimer: ReturnType<typeof setTimeout> | undefined;
+    const waits: Promise<unknown>[] = [
+      Promise.race([
+        prefetch.data.then(
+          () => undefined,
+          () => undefined
+        ),
+        new Promise<void>((resolve) => {
+          fitTimer = setTimeout(resolve, MLMap.fitToWaitMs);
+        }),
+      ]),
+    ];
+    if (scriptsPending) {
+      waits.push(
+        new Promise<void>((resolve) => {
+          const ready = () => resolve();
+          doc.addEventListener("DOMContentLoaded", ready, { once: true });
+          stopWaitingForDom = () => doc.removeEventListener("DOMContentLoaded", ready);
+        })
+      );
+    }
+    this.cancelDeferredRender = () => {
+      cancelled = true;
+      stopWaitingForDom?.();
+      clearTimeout(fitTimer);
+      this.cancelDeferredRender = null;
+    };
+    void Promise.all(waits).then(() => {
+      clearTimeout(fitTimer);
+      if (cancelled) return;
+      this.cancelDeferredRender = null;
+      if (this.initialized && this.isConnected) this.constructRenderer(mapBlock, prefetch);
+    });
   }
 
   /**
@@ -817,7 +972,7 @@ export class MLMap extends HTMLElement {
    * attached) map container. Split from {@link renderMap} so the DOM-ready
    * deferral can run it later.
    */
-  private constructRenderer(mapBlock: MapBlock): void {
+  private constructRenderer(mapBlock: MapBlock, prefetch: FitPrefetch | null = null): void {
     if (!this.mapContainer) return;
     const slots = this.collectSlots();
     const isV2 = (mapBlock as { version?: number }).version === 2;
@@ -832,6 +987,28 @@ export class MLMap extends HTMLElement {
       // document in one pass, before anything fetches (ml-aot.30).
       const model = applyDocumentBase(toModel(mapBlock as never), this.base);
 
+      // The fitTo prefetch (ml-aot.75). Data that arrived in time rides in as
+      // the source's `prefetchedData`, so the renderer builds the map framed
+      // on it; data still on its way is handed over as the pending load, so
+      // the source awaits it (one request) and the map fits when it lands.
+      let sources = denormalizeSources(model);
+      let sourceData: MapRendererOptions["sourceData"];
+      if (prefetch && sources?.[prefetch.sourceId]) {
+        sourceData = {
+          fetcher: prefetch.fetcher,
+          pending: { [prefetch.sourceId]: prefetch.data },
+        };
+        if (prefetch.result && "data" in prefetch.result) {
+          sources = {
+            ...sources,
+            [prefetch.sourceId]: {
+              ...sources[prefetch.sourceId],
+              prefetchedData: prefetch.result.data,
+            } as (typeof sources)[string],
+          };
+        }
+      }
+
       const renderer: MapRenderer = new MapRenderer(
         this.mapContainer,
         denormalizeConfig(model),
@@ -840,6 +1017,7 @@ export class MLMap extends HTMLElement {
           ...denormalizeOptions(model),
           chrome: slots.chrome,
           legendElement: slots.legendElement,
+          ...(sourceData ? { sourceData } : {}),
         onLoad: () => {
           // Load event is also emitted via the event system
         },
@@ -847,12 +1025,16 @@ export class MLMap extends HTMLElement {
           // A fitTo.source typo (ml-aot.51): the renderer already warned on
           // the console; put it on the map too. Not a map error.
           if (context?.kind === "fit" && context.sourceId) {
-            this.reportProblem(describeFitToProblem(context.sourceId, context.suggestion));
+            this.reportProblem(describeFitToProblem(context.sourceId, context.suggestion), {
+              kind: "hint",
+            });
             return;
           }
           // `center: [lat, lng]` (ml-aot.65): the renderer warned; show it.
           if (context?.kind === "center" && context.center && context.swapped) {
-            this.reportProblem(describeSwappedCenter(context.center, context.swapped));
+            this.reportProblem(describeSwappedCenter(context.center, context.swapped), {
+              kind: "hint",
+            });
             return;
           }
           // Loud by default: with no `ml-map:error` listener attached, a
@@ -911,7 +1093,7 @@ export class MLMap extends HTMLElement {
           }
         },
         },
-        denormalizeSources(model)
+        sources
       );
       this.renderer = renderer;
 
@@ -963,14 +1145,15 @@ export class MLMap extends HTMLElement {
   }
 
   /**
-   * Put one line in this map's non-fatal notice ("part of this map didn't
-   * load"). For `<ml-scrollytelling>`, which reports its own document's
-   * problems on its map (ml-aot.48, ml-aot.51). Respects `quiet`.
+   * Put one line in this map's non-fatal notice. For `<ml-scrollytelling>`,
+   * which reports its own document's problems on its map (ml-aot.48,
+   * ml-aot.51) — author hints by default (a chapter naming a missing layer),
+   * so they follow the hint rules (ml-aot.57). Respects `quiet`.
    *
    * @internal
    */
-  _reportNotice(message: string): void {
-    this.reportProblem(message);
+  _reportNotice(message: string, kind: NoticeKind = "hint"): void {
+    this.reportProblem(message, { kind });
   }
 
   /**
@@ -1075,12 +1258,36 @@ export class MLMap extends HTMLElement {
    * @param options.log - also `console.error` it; for problems nothing else
    *   logs (a data file that 404'd). MapLibre errors are already logged by the
    *   renderer's `onError` handler.
+   * @param options.kind - `"failure"` (default: something didn't load) always
+   *   shows; `"hint"` (a did-you-mean, a misplaced key) shows only while the
+   *   author is developing, per {@link showAuthorHints} (ml-aot.57).
    */
-  private reportProblem(message: string, options: { log?: boolean } = {}): void {
+  private reportProblem(
+    message: string,
+    options: { log?: boolean; kind?: NoticeKind } = {}
+  ): void {
     if (options.log) console.error(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+    const kind = options.kind ?? "failure";
+    if (!this.noticeEntries.some((e) => e.message === message)) {
+      this.noticeEntries.push({ message, kind });
+    }
+    this.showNoticeLine(message, kind);
+  }
+
+  /** Add one line to the notice, if `quiet` and the hint rules allow it. */
+  private showNoticeLine(message: string, kind: NoticeKind): void {
     if (this.quiet || !this.mapContainer) return;
-    this.notice ??= new MapNotice(this.mapContainer);
-    this.notice.add(message);
+    const hints = showAuthorHints(this);
+    if (kind === "hint" && !hints) return;
+    this.notice ??= new MapNotice(this.mapContainer, { openDetails: hints });
+    this.notice.add(message, kind);
+  }
+
+  /** Rebuild the notice from every line reported for this render. */
+  private rebuildNotice(): void {
+    this.notice?.clear();
+    this.notice = null;
+    for (const { message, kind } of this.noticeEntries) this.showNoticeLine(message, kind);
   }
 
   /**
@@ -1425,6 +1632,7 @@ export class MLMap extends HTMLElement {
     this.teardownEffects();
     this.notice?.clear();
     this.notice = null;
+    this.noticeEntries = [];
     this.pendingStyleErrors = null;
     this.removeHeightHint();
     this.parkSlots();

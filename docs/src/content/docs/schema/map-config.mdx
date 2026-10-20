@@ -462,7 +462,7 @@ Control the camera position and orientation.
 |----------|------|---------|-------|-------------|
 | `pitch` | number | `0` | 0-85 | Camera tilt angle in degrees |
 | `bearing` | number | `0` | -180 to 180 | Camera rotation in degrees |
-| `bounds` | array | - | - | Fit map to geographic bounds |
+| `bounds` | array | - | - | Fit map to geographic bounds: `[west, south, east, north]` or `[[west, south], [east, north]]` |
 | `fitTo` | object | - | - | Fit the initial camera to a GeoJSON source's data (see below) |
 
 ### Examples
@@ -487,6 +487,27 @@ config:
   bounds: [-74.3, 40.5, -73.7, 40.9]  # [west, south, east, north]
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
+
+`bounds` takes either of MapLibre's two forms, so a value copied from
+MapLibre's docs works as written:
+
+```yaml
+bounds: [-74.3, 40.5, -73.7, 40.9]        # four numbers: west, south, east, north
+bounds: [[-74.3, 40.5], [-73.7, 40.9]]    # two corners: [west, south], [east, north]
+```
+
+Both are **longitude first**, like `center`. A value in neither form gets an
+error that spells out the order. When the numbers only make sense with
+latitude and longitude swapped (the order many map sites show), the message
+gives the swapped value to copy: `bounds [34, -118.5, 34.1, -118.2] has a
+latitude outside -90 to 90 … Did you mean [-118.5, 34, -118.2, 34.1]?`. A
+swap that is still in range (`[40.6, -74.0, 40.8, -73.9]` for New York) is
+caught by comparing the box with the map's own places (`center`, inline
+data, markers) and shown as a warning with the same did-you-mean.
+Longitudes past ±180 are allowed, for bounds that cross the antimeridian
+(`[100, -50, 290, 62]` frames the Pacific). `maxBounds`, format v2's
+`runtime.map.bounds` / `runtime.map.maxBounds`, and a story chapter's
+`fitBounds` action take both forms too.
 
 #### Fit to a Source's Data
 
@@ -524,9 +545,18 @@ layers:
 ```
 
 - **Inline `data:`**: the map is constructed already framed, with no camera jump.
-- **`url:`**: the map opens at `center`/`zoom`, then frames the data when the
-  first fetch lands. Refreshes don't re-fit, because the user owns the camera
-  after load. An `ml-map:camera-fit` event fires when the fit applies.
+- **`url:`**: also framed from the first frame, with no jump. `<ml-map>`
+  starts fetching the file as soon as it reads the document, while the rest
+  of the page starts up, and builds the map with the data's bounds. The file
+  is requested once: the map's source uses the same download (and the
+  source's `cache:` settings). If the file takes longer than 1.5 seconds,
+  the map is built at `center`/`zoom` anyway and frames the data when it
+  lands, so a slow file never holds up the basemap for long
+  (`MLMap.fitToWaitMs` changes the wait; `0` turns it off). Story maps and
+  the Astro components (`src` or `config`) get the same, and `base` applies
+  to the URL as everywhere else. Refreshes don't re-fit, because the user
+  owns the camera after load. An `ml-map:camera-fit` event fires when the
+  fit applies.
 - **vector / raster / raster-dem**: not supported. Tiled sources have no
   client-side extent. The renderer warns once and keeps `center`/`zoom`.
 - `fitTo` wins over `bounds` when both are set. In format v2 it lives at
@@ -548,7 +578,7 @@ Limit user interaction to specific zoom levels, pitch angles, or geographic area
 | `maxZoom` | number | Maximum zoom level (0-24) |
 | `minPitch` | number | Minimum pitch angle (0-85) |
 | `maxPitch` | number | Maximum pitch angle (0-85) |
-| `maxBounds` | array | Maximum geographic bounds [west, south, east, north] |
+| `maxBounds` | array | Maximum geographic bounds: `[west, south, east, north]` or `[[west, south], [east, north]]` |
 
 ### Example
 
