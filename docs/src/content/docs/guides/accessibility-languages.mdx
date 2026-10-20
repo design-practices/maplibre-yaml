@@ -102,6 +102,36 @@ there:
   your page — except under a Protomaps basemap labelled in Arabic, Hebrew,
   Persian or Urdu, for which maplibre-yaml sets it.
 
+### While the map loads
+
+On a slow connection a map can take several seconds to draw. While it
+starts, `<ml-map>` carries `aria-busy="true"`, so a screen reader knows the
+region is still loading, and if the map hasn't drawn after about a second a
+small "Loading map…" appears in its middle (`role="status"`). Both go away
+as soon as the basemap draws, or when an error card replaces the map. The
+text is the `maplibre-yaml.Loading` key below. It is not a notice, so
+`quiet` doesn't hide it; to use your own loading UI instead, hide it with
+CSS:
+
+```css
+ml-map .ml-map-loading { display: none; }
+```
+
+Before maplibre-yaml's script has loaded, the browser doesn't know what
+`<ml-map>` is yet and can't show anything inside it. A rule for the
+not-yet-defined element covers that moment too:
+
+```css
+ml-map:not(:defined) {
+  display: grid;
+  place-items: center;
+  background: #f3f4f6;
+  color: #4b5563;
+  font: 13px system-ui, sans-serif;
+}
+ml-map:not(:defined)::before { content: "Loading map…"; }
+```
+
 ## Show the map in another language
 
 MapLibre reads the text of its controls ("Zoom in", "Close popup") from a
@@ -163,6 +193,7 @@ popups follow it (see [Number formats](#number-formats)).
 | `maplibre-yaml.ErrorCard.StyleHint` | Check `{key}`: open the URL in a new browser tab… | That card's "how to fix it" |
 | `maplibre-yaml.ErrorCard.LocalServer` | Open this page through a local web server | Error card title (page opened from a file) |
 | `maplibre-yaml.ErrorCard.LocalServerHint` | Start a local web server in this page's folder… | That card's "how to fix it" |
+| `maplibre-yaml.Loading` | Loading map… | Shown in the middle of a map that takes more than a second to draw |
 | `maplibre-yaml.HeightHint` | This map is invisible because the `<ml-map>` element has no height… | Shown when the map has no height |
 | `maplibre-yaml.Params.StateUnsupported` | Parameter controls need maplibre-gl ≥ 5.6… | The params panel on old maplibre-gl |
 | `maplibre-yaml.Story.Chapters` | Story chapters | The chapter rail's label |

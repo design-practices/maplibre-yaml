@@ -67,6 +67,9 @@ export const DEFAULT_STRINGS = {
     '"npx serve ." in a terminal there, or use VS Code\'s "Live Server" ' +
     "extension — then open the http://localhost address it prints.",
 
+  // Shown in the middle of a map that takes more than a second to draw.
+  "maplibre-yaml.Loading": "Loading map…",
+
   // Shown on the page when `<ml-map>` has no height.
   "maplibre-yaml.HeightHint":
     "This map is invisible because the `<ml-map>` element has no height. Give it one, " +

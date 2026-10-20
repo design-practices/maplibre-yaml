@@ -97,6 +97,7 @@ import type { FeatureCollection } from "geojson";
 import { DataFetcher } from "../data/data-fetcher.js";
 import { isLoadedFromUrl, loadSourceData } from "../data/source-data.js";
 import { geoParquetColumns, isGeoParquetSource } from "../formats/columns.js";
+import { LoadingIndicator } from "./loading-indicator.js";
 import { formatOfSource } from "../formats/detect.js";
 import { cogUrl } from "../formats/cog-spec.js";
 import { fileUrlOf } from "../formats/cog.js";
@@ -437,6 +438,13 @@ export class MLMap extends HTMLElement {
    */
   private strings: Strings = defaultStrings;
 
+  /** `aria-busy` and a delayed "Loading map…" until the basemap draws (ml-aot.121). */
+  private readonly loading = new LoadingIndicator(
+    this,
+    () => this.mapContainer,
+    () => this.strings("maplibre-yaml.Loading")
+  );
+
   /**
    * Resolved URL of the YAML file the current document came from (`src`),
    * or `null` for inline/JSON/property documents. Only used to explain how
@@ -627,6 +635,9 @@ export class MLMap extends HTMLElement {
     if (!this.style.display || this.style.display === "inline") {
       this.style.display = "block";
     }
+
+    // A quiet "Loading map…" if the map takes a while (ml-aot.121).
+    this.loading.start();
 
     // Initialize configuration loading
     this.initialize();
@@ -1489,11 +1500,19 @@ export class MLMap extends HTMLElement {
   private setupEventForwarding(): void {
     if (!this.renderer) return;
 
+    // The basemap's first full draw ends the loading state (ml-aot.121).
+    this.loading.start();
+    const map = (this.renderer as { getMap?: () => unknown }).getMap?.() as
+      | { once?: (type: string, listener: () => void) => unknown }
+      | undefined;
+    map?.once?.("load", () => this.loading.stop());
+
     // Map load event — the renderer emits this after the basemap is ready
     // AND every document layer was added, so it is the document-level
     // readiness signal mapReady()'s fast path keys on.
     this.renderer.on("load", () => {
       this.documentLoaded = true;
+      this.loading.stop();
       if (this.cssCheckPending) {
         this.cssCheckPending = false;
         void this.warnIfMapLibreCssMissing();
@@ -1674,7 +1693,9 @@ export class MLMap extends HTMLElement {
   private createMapContainer(): HTMLDivElement {
     const el = document.createElement("div");
     el.className = MAP_CONTAINER_CLASS;
-    el.style.cssText = "width: 100%; height: 100%;";
+    // Positioned, so the loading label centres on it before MapLibre's own
+    // class (which is positioned too) arrives.
+    el.style.cssText = "position: relative; width: 100%; height: 100%;";
     return el;
   }
 
@@ -1804,6 +1825,7 @@ export class MLMap extends HTMLElement {
       hint,
     }: { showHelp?: boolean; title?: string; hint?: string } = {}
   ): void {
+    this.loading.stop();
     // Targeted replacement (KTD9): the error card takes the map container's
     // place; author children (inline YAML, parked slot children) survive so
     // a fixed document can reload() into the same element.
@@ -1891,6 +1913,7 @@ export class MLMap extends HTMLElement {
    * Clean up resources when component is removed
    */
   private destroy(): void {
+    this.loading.stop();
     this.cancelEmptyConfigCheck();
     this.teardownRenderer();
     this.appliedConfigKey = null;
