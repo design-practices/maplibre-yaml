@@ -1,0 +1,17 @@
+---
+import Base from "../layouts/Base.astro";
+import { Map } from "@maplibre-yaml/astro";
+---
+
+<Base title="Cloud-native data">
+  <main>
+    <h1>Cloud-native data</h1>
+    <p class="lede">
+      A PMTiles archive (the outlines) and a FlatGeobuf file (the coloured districts), named in
+      YAML like any other file. No page JavaScript: <code>@maplibre-yaml/core</code> reads both.
+    </p>
+    <div class="map-frame" data-testid="cloud-native-map">
+      <Map src="/maps/cloud-native.yaml" height="460px" />
+    </div>
+  </main>
+</Base>

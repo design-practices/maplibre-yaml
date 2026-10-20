@@ -297,7 +297,55 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "url": {
                         "type": "string",
                         "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                        "description": "URL to fetch GeoJSON data"
+                        "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                      },
+                      "format": {
+                        "type": "string",
+                        "enum": [
+                          "pmtiles",
+                          "flatgeobuf",
+                          "geoparquet",
+                          "cog"
+                        ],
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                      },
+                      "load": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "all",
+                              "viewport"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "all",
+                                  "viewport"
+                                ],
+                                "description": "all (whole file) or viewport (features in view)"
+                              },
+                              "minzoom": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 24,
+                                "description": "viewport: read nothing below this zoom (default 10)"
+                              }
+                            },
+                            "required": [
+                              "mode"
+                            ],
+                            "additionalProperties": false,
+                            "patternProperties": {
+                              "^x-": {}
+                            }
+                          }
+                        ],
+                        "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
                       },
                       "data": {
                         "description": "Inline GeoJSON object"
@@ -567,7 +615,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
-                        "description": "TileJSON URL"
+                        "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                      },
+                      "format": {
+                        "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                       },
                       "tiles": {
                         "type": "array",
@@ -655,7 +707,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
-                        "description": "TileJSON URL"
+                        "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                      },
+                      "format": {
+                        "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                       },
                       "tiles": {
                         "type": "array",
@@ -734,7 +790,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
-                        "description": "TileJSON URL"
+                        "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                      },
+                      "format": {
+                        "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                       },
                       "tiles": {
                         "type": "array",
@@ -4371,7 +4431,55 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "url": {
                     "type": "string",
                     "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                    "description": "URL to fetch GeoJSON data"
+                    "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "pmtiles",
+                      "flatgeobuf",
+                      "geoparquet",
+                      "cog"
+                    ],
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                  },
+                  "load": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "all",
+                          "viewport"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "all",
+                              "viewport"
+                            ],
+                            "description": "all (whole file) or viewport (features in view)"
+                          },
+                          "minzoom": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 24,
+                            "description": "viewport: read nothing below this zoom (default 10)"
+                          }
+                        },
+                        "required": [
+                          "mode"
+                        ],
+                        "additionalProperties": false,
+                        "patternProperties": {
+                          "^x-": {}
+                        }
+                      }
+                    ],
+                    "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
                   },
                   "data": {
                     "description": "Inline GeoJSON object"
@@ -4641,7 +4749,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
-                    "description": "TileJSON URL"
+                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                  },
+                  "format": {
+                    "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                   },
                   "tiles": {
                     "type": "array",
@@ -4729,7 +4841,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
-                    "description": "TileJSON URL"
+                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                  },
+                  "format": {
+                    "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                   },
                   "tiles": {
                     "type": "array",
@@ -4808,7 +4924,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
-                    "description": "TileJSON URL"
+                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                  },
+                  "format": {
+                    "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                   },
                   "tiles": {
                     "type": "array",
@@ -7440,7 +7560,55 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "url": {
                                 "type": "string",
                                 "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                                "description": "URL to fetch GeoJSON data"
+                                "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                              },
+                              "format": {
+                                "type": "string",
+                                "enum": [
+                                  "pmtiles",
+                                  "flatgeobuf",
+                                  "geoparquet",
+                                  "cog"
+                                ],
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                              },
+                              "load": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "all",
+                                      "viewport"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "mode": {
+                                        "type": "string",
+                                        "enum": [
+                                          "all",
+                                          "viewport"
+                                        ],
+                                        "description": "all (whole file) or viewport (features in view)"
+                                      },
+                                      "minzoom": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 24,
+                                        "description": "viewport: read nothing below this zoom (default 10)"
+                                      }
+                                    },
+                                    "required": [
+                                      "mode"
+                                    ],
+                                    "additionalProperties": false,
+                                    "patternProperties": {
+                                      "^x-": {}
+                                    }
+                                  }
+                                ],
+                                "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
                               },
                               "data": {
                                 "description": "Inline GeoJSON object"
@@ -7710,7 +7878,11 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                "description": "TileJSON URL"
+                                "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                              },
+                              "format": {
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                               },
                               "tiles": {
                                 "type": "array",
@@ -7798,7 +7970,11 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                "description": "TileJSON URL"
+                                "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                              },
+                              "format": {
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                               },
                               "tiles": {
                                 "type": "array",
@@ -7877,7 +8053,11 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                "description": "TileJSON URL"
+                                "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                              },
+                              "format": {
+                                "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                               },
                               "tiles": {
                                 "type": "array",
@@ -11704,7 +11884,55 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   "url": {
                                     "type": "string",
                                     "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                                    "description": "URL to fetch GeoJSON data"
+                                    "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                                  },
+                                  "format": {
+                                    "type": "string",
+                                    "enum": [
+                                      "pmtiles",
+                                      "flatgeobuf",
+                                      "geoparquet",
+                                      "cog"
+                                    ],
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                  },
+                                  "load": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "all",
+                                          "viewport"
+                                        ]
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "mode": {
+                                            "type": "string",
+                                            "enum": [
+                                              "all",
+                                              "viewport"
+                                            ],
+                                            "description": "all (whole file) or viewport (features in view)"
+                                          },
+                                          "minzoom": {
+                                            "type": "number",
+                                            "minimum": 0,
+                                            "maximum": 24,
+                                            "description": "viewport: read nothing below this zoom (default 10)"
+                                          }
+                                        },
+                                        "required": [
+                                          "mode"
+                                        ],
+                                        "additionalProperties": false,
+                                        "patternProperties": {
+                                          "^x-": {}
+                                        }
+                                      }
+                                    ],
+                                    "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
                                   },
                                   "data": {
                                     "description": "Inline GeoJSON object"
@@ -11974,7 +12202,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                    "description": "TileJSON URL"
+                                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                  },
+                                  "format": {
+                                    "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                                   },
                                   "tiles": {
                                     "type": "array",
@@ -12062,7 +12294,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                    "description": "TileJSON URL"
+                                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                  },
+                                  "format": {
+                                    "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                                   },
                                   "tiles": {
                                     "type": "array",
@@ -12141,7 +12377,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                    "description": "TileJSON URL"
+                                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                  },
+                                  "format": {
+                                    "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
                                   },
                                   "tiles": {
                                     "type": "array",

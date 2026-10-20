@@ -1,0 +1,103 @@
+/**
+ * `mlym emit` with cloud-native sources (0.9, ml-cnv): a FlatGeobuf file is
+ * read and inlined as GeoJSON (style.json can't carry a decoder); a file
+ * that can't be read leaves the source empty, reported lossy, so --strict
+ * refuses. PMTiles export as pmtiles:// URLs.
+ */
+
+import { describe, it, expect } from 'vitest';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { YAMLParser, EmitError } from '@maplibre-yaml/core';
+import { emitStyle } from '../src/commands/emit';
+import { diskCandidates, resolveDataRefs } from '../src/lib/data-refs';
+
+const REPO = join(dirname(fileURLToPath(import.meta.url)), '../../..');
+const FIXTURES = join(REPO, 'docs/public/gallery-assets/cloud-native');
+
+const parse = (yaml: string) => {
+  const result = YAMLParser.safeParseMapBlock(yaml);
+  if (!result.success) throw new Error(JSON.stringify(result.errors));
+  return result.data;
+};
+
+const doc = (url: string) => `
+type: map
+id: cn
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+sources:
+  districts:
+    type: geojson
+    url: ${url}
+  tiles:
+    type: vector
+    url: districts.pmtiles
+layers:
+  - { id: d, type: fill, source: districts }
+  - { id: t, type: line, source: tiles, source-layer: districts }
+`;
+
+describe('emit: FlatGeobuf → inline GeoJSON', () => {
+  it('reads the file beside the document and inlines every feature', async () => {
+    const { style, warnings } = await emitStyle(parse(doc('districts.fgb')), 'strict', { trust: 'untrusted' }, {
+      documentDir: FIXTURES,
+    });
+    const sources = style.sources as Record<string, Record<string, unknown>>;
+    const data = sources.districts.data as { features: unknown[] };
+    expect(data.features).toHaveLength(48);
+    expect(sources.districts.url).toBeUndefined();
+    expect(sources.tiles.url).toBe('pmtiles://districts.pmtiles');
+    expect(warnings.some((w) => w.kind === 'lossy')).toBe(false);
+  });
+
+  it('an unreadable file: empty source, lossy — and --strict refuses', async () => {
+    const block = parse(doc('missing.fgb'));
+    const { style, warnings } = await emitStyle(block, 'with-fallbacks', { trust: 'untrusted' }, {
+      documentDir: FIXTURES,
+    });
+    const sources = style.sources as Record<string, Record<string, unknown>>;
+    expect((sources.districts.data as { features: unknown[] }).features).toEqual([]);
+    expect(warnings).toContainEqual(
+      expect.objectContaining({ kind: 'lossy', construct: 'format.flatgeobuf', path: 'sources.districts.data' })
+    );
+    await expect(
+      emitStyle(block, 'strict', { trust: 'untrusted' }, { documentDir: FIXTURES })
+    ).rejects.toThrow(EmitError);
+  });
+
+  it('http(s) URLs are fetched (reader injectable)', async () => {
+    const seen: string[] = [];
+    const { readFileSync } = await import('node:fs');
+    const { resolved, warnings } = await resolveDataRefs(
+      [{ source: 's', url: 'https://example.org/d.fgb', format: 'flatgeobuf' }],
+      {
+        reader: async (url) => {
+          seen.push(url);
+          return new Uint8Array(readFileSync(join(FIXTURES, 'districts.fgb')));
+        },
+      }
+    );
+    expect(seen).toEqual(['https://example.org/d.fgb']);
+    expect((resolved[0]!.data as { features: unknown[] }).features).toHaveLength(48);
+    expect(warnings).toEqual([]);
+  });
+
+  it('a wrong-CRS file is lossy with the plain reason', async () => {
+    const { warnings } = await resolveDataRefs(
+      [{ source: 's', url: 'districts-3857.fgb', format: 'flatgeobuf' }],
+      { documentDir: FIXTURES }
+    );
+    expect(warnings[0]!.kind).toBe('lossy');
+    expect(warnings[0]!.message).toContain('is in EPSG:3857');
+  });
+
+  it('looks beside the document, then the folder, then public/', () => {
+    expect(diskCandidates('/data/x.fgb', '/site/src/maps', '/site')).toEqual([
+      '/site/src/maps/data/x.fgb',
+      '/site/data/x.fgb',
+      '/site/public/data/x.fgb',
+    ]);
+  });
+});

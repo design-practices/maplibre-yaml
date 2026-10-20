@@ -38,8 +38,13 @@
  *                                  site serves it
  *  - `/my-repo/*`                  examples/verification/base-path/site, as
  *                                  GitHub Pages serves a project site
- *                                  (ml-aot.30)
- *  - everything else               static from the repo root
+ *                                  (ml-aot.30); `/my-repo/cloud-native/*`
+ *                                  is the cloud-native fixture folder
+ *  - everything else               static from the repo root, with HTTP
+ *                                  range requests (ml-cnv) — and the
+ *                                  `/norange/`, `/nocors/`, `/oversize/<MB>/`
+ *                                  hosting variants described at
+ *                                  HOSTING_PREFIX
  */
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
@@ -73,6 +78,9 @@ const TYPES = {
   ".md": "text/markdown; charset=utf-8",
   ".webp": "image/webp",
   ".woff2": "font/woff2",
+  // Cloud-native fixtures (ml-cnv).
+  ".pmtiles": "application/vnd.pmtiles",
+  ".fgb": "application/octet-stream",
 };
 
 /**
@@ -290,17 +298,132 @@ function hillsTile(z, x, y) {
   return HILLS_CACHE.get(key);
 }
 
+/**
+ * Cloud-native hosting conditions (ml-cnv), as path prefixes in front of any
+ * static path:
+ *
+ *  - (none)               HTTP range requests honoured (206 / 416, suffix
+ *                         ranges), CORS open, `Range` allowed on preflight
+ *                         and `Content-Range` exposed — what GitHub Pages,
+ *                         Netlify, S3 or R2 (with CORS set) do
+ *  - `/norange/…`         `Range` ignored: 200 with the whole file, which is
+ *                         what `python -m http.server` does
+ *  - `/nocors/…`          no `Access-Control-Allow-Origin`: fetched from a
+ *                         page on another origin (127.0.0.1 vs localhost),
+ *                         the browser refuses to read it
+ *  - `/oversize/<MB>/…`   the file padded with zeros to <MB> megabytes, so a
+ *                         size guard can be exercised without committing a
+ *                         big file (ranges still honoured; the padding is
+ *                         generated on demand, never held in memory)
+ */
+const HOSTING_PREFIX = /^\/(norange|nocors|oversize\/(\d+))(\/.*)$/;
+
+/** Parse a single `Range: bytes=a-b` / `bytes=a-` / `bytes=-n` against `size`. */
+function parseRange(header, size) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(header).trim());
+  if (!m || (m[1] === "" && m[2] === "")) return null;
+  let start;
+  let end;
+  if (m[1] === "") {
+    const suffix = Number(m[2]);
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+  }
+  if (start >= size || start > end) return { unsatisfiable: true };
+  return { start, end };
+}
+
+/** Bytes [start, end] of `file` followed by zero padding up to `size`. */
+function virtualSlice(file, size, start, end) {
+  const out = Buffer.alloc(end - start + 1);
+  if (start < file.length) file.copy(out, 0, start, Math.min(file.length, end + 1));
+  return out;
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
-  const path = decodeURIComponent(url.pathname);
+  let path = decodeURIComponent(url.pathname);
+
+  const hosting = HOSTING_PREFIX.exec(path);
+  const cors = !hosting || hosting[1] !== "nocors";
+  const ranges = !hosting || hosting[1] !== "norange";
+  const padMb = hosting && hosting[2] ? Number(hosting[2]) : 0;
+  if (hosting) path = hosting[3];
+
+  const corsHeaders = cors
+    ? {
+        "access-control-allow-origin": "*",
+        "access-control-expose-headers": "Content-Range, Content-Length, Accept-Ranges, ETag",
+      }
+    : {};
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      ...corsHeaders,
+      ...(cors
+        ? { "access-control-allow-methods": "GET, HEAD", "access-control-allow-headers": "Range" }
+        : {}),
+    });
+    return res.end();
+  }
 
   const send = (status, body, type) => {
+    // Static files honour ranges (and the hosting conditions above); a
+    // generated response is sent whole.
+    if (status === 200 && Buffer.isBuffer(body)) return sendFile(body, type);
     res.writeHead(status, {
       "content-type": type,
-      "access-control-allow-origin": "*",
+      ...corsHeaders,
       "cache-control": "no-store",
     });
     res.end(body);
+  };
+
+  const sendFile = (file, type) => {
+    const size = Math.max(file.length, padMb * 1024 * 1024);
+    const headers = {
+      "content-type": type,
+      ...corsHeaders,
+      "cache-control": "no-store",
+      ...(ranges ? { "accept-ranges": "bytes" } : {}),
+    };
+    const range = ranges && req.headers.range ? parseRange(req.headers.range, size) : null;
+    if (range && range.unsatisfiable) {
+      res.writeHead(416, { ...headers, "content-range": `bytes */${size}` });
+      return res.end();
+    }
+    if (range) {
+      const body = virtualSlice(file, size, range.start, range.end);
+      res.writeHead(206, {
+        ...headers,
+        "content-range": `bytes ${range.start}-${range.end}/${size}`,
+        "content-length": body.length,
+      });
+      return res.end(req.method === "HEAD" ? undefined : body);
+    }
+    res.writeHead(200, { ...headers, "content-length": size });
+    if (req.method === "HEAD") return res.end();
+    if (size === file.length) return res.end(file);
+    // Padded: stream the file, then zeros, until done or the client hangs up.
+    res.write(file);
+    let left = size - file.length;
+    const zeros = Buffer.alloc(1024 * 1024);
+    const pump = () => {
+      while (left > 0) {
+        const n = Math.min(left, zeros.length);
+        left -= n;
+        if (!res.write(n === zeros.length ? zeros : zeros.subarray(0, n))) {
+          res.once("drain", pump);
+          return;
+        }
+      }
+      res.end();
+    };
+    res.on("close", () => (left = 0));
+    pump();
   };
 
   try {
@@ -398,11 +521,28 @@ const server = createServer(async (req, res) => {
       return res.end();
     }
     if (path.startsWith("/my-repo/")) {
-      const SITE = join(ROOT, "examples", "verification", "base-path", "site");
+      // The cloud-native fixtures (ml-cnv) appear inside the project site
+      // too, so a document can name them by a site path under `base`.
+      const SITE = path.startsWith("/my-repo/cloud-native/")
+        ? join(ROOT, "docs", "public", "gallery-assets")
+        : join(ROOT, "examples", "verification", "base-path", "site");
       const sub = path.slice("/my-repo".length);
       const rel = normalize(sub.endsWith("/") ? `${sub}index.html` : sub).replace(/^(\.\.[/\\])+/, "");
       const file = join(SITE, rel);
       if (!file.startsWith(SITE)) return send(403, "forbidden", "text/plain");
+      return send(200, await readFile(file), TYPES[extname(file)] ?? "application/octet-stream");
+    }
+
+    // The package as a CDN serves it (ml-cnv.5): unpkg/jsDelivr serve the
+    // published package folder under a versioned path, so a plain page loads
+    // `…/@maplibre-yaml/core@<version>/register.js` with only maplibre-gl in
+    // its import map. Served from packages/core (its built dist/ included).
+    const cdn = /^\/cdn\/@maplibre-yaml\/core@[^/]+(\/.*)$/.exec(path);
+    if (cdn) {
+      const PKG = join(ROOT, "packages", "core");
+      const rel = normalize(cdn[1]).replace(/^(\.\.[/\\])+/, "");
+      const file = join(PKG, rel);
+      if (!file.startsWith(PKG)) return send(403, "forbidden", "text/plain");
       return send(200, await readFile(file), TYPES[extname(file)] ?? "application/octet-stream");
     }
 

@@ -18,6 +18,7 @@ import { suggestColorName } from "../schemas/css-colors.js";
 import { SPEC_LAYOUT_KEYS, SPEC_PAINT_KEYS } from "../parser/spec-keys.generated.js";
 import { suggest } from "../utils/suggest.js";
 import { normalizeDocumentBase } from "../utils/document-base.js";
+import type { FormatFailure } from "../formats/errors.js";
 
 /** What the error card shows: a title, the errors, and how to fix them. */
 export interface ErrorCardContent {
@@ -378,9 +379,144 @@ export function describeLayerProblem(layerId: string, message: string): string {
   );
 }
 
-/** A document source failed at runtime (tiles, a TileJSON). */
-export function describeSourceProblem(sourceId: string, message: string): string {
-  return `Source \`${sourceId}\` didn't load: ${message.replace(/\s+$/, "")}`;
+/**
+ * A document source failed at runtime (tiles, a TileJSON, a PMTiles archive).
+ *
+ * @param error - The error itself, when the caller has it: a cloud-native
+ *   failure ({@link describeFormatFailure}) that 404'd gets the same `base`
+ *   advice a GeoJSON file does.
+ */
+export function describeSourceProblem(
+  sourceId: string,
+  message: string,
+  error?: unknown,
+  context: { pageUrl?: string; base?: string | null } = {}
+): string {
+  let text = `Source \`${sourceId}\` didn't load: ${message.replace(/\s+$/, "")}`;
+  const e = error as { failure?: FormatFailure; cause?: { failure?: FormatFailure } } | undefined;
+  const failure = e?.failure ?? e?.cause?.failure;
+  if (failure?.code === "http" && failure.status === 404 && context.pageUrl) {
+    const hint =
+      baseLookupHint(failure.url, context.pageUrl, context.base) ??
+      subpathBaseHint(pathOfSameOrigin(failure.url, context.pageUrl), context.pageUrl, context.base);
+    if (hint) text += ` ${hint}`;
+  }
+  return text;
+}
+
+/** `https://host/x/y` on a page at `https://host/…` → `/x/y`; otherwise unchanged. */
+function pathOfSameOrigin(url: string, pageUrl: string): string {
+  try {
+    const target = new URL(url, pageUrl);
+    return target.origin === new URL(pageUrl).origin ? target.pathname + target.search : url;
+  } catch {
+    return url;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cloud-native formats (0.9, ml-cnv): PMTiles, FlatGeobuf — and the two the
+// syntax reserves (GeoParquet, COG). One sentence per failure, written for
+// the student who just pointed a map at a file.
+// ---------------------------------------------------------------------------
+
+/** The format's everyday name, for messages. */
+const FORMAT_LABELS: Record<string, string> = {
+  pmtiles: "PMTiles",
+  flatgeobuf: "FlatGeobuf",
+  geoparquet: "GeoParquet",
+  cog: "Cloud Optimized GeoTIFF (COG)",
+};
+
+/** The file name at the end of a URL, for command examples. */
+function fileNameOf(url: string): string {
+  const path = url.replace(/[?#].*$/, "");
+  return path.slice(path.lastIndexOf("/") + 1) || path;
+}
+
+/** Bytes as "180 MB" (one decimal below 10 MB). */
+function megabytes(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
+}
+
+/**
+ * Hosts that serve range requests, and the local preview that doesn't — the
+ * advice every range failure ends with.
+ */
+export const RANGE_REQUEST_HINT =
+  "PMTiles and FlatGeobuf files need a web server that supports HTTP range requests: " +
+  "GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` does not — " +
+  "preview locally with `npx serve` instead.";
+
+/**
+ * One cloud-native failure, in plain language: what happened to which file
+ * and what to do about it. Used as the `message` of every
+ * {@link FormatError}, so the notice, the console and the
+ * `ml-map:layer-data-error` / `ml-map:error` events all say the same thing.
+ */
+export function describeFormatFailure(failure: FormatFailure): string {
+  const label = FORMAT_LABELS[failure.format] ?? failure.format;
+  const file = `\`${failure.url}\``;
+  switch (failure.code) {
+    case "no-range":
+      return (
+        `${file} was served without range-request support (the server sent the whole ` +
+        `file instead of the part asked for). ${RANGE_REQUEST_HINT}`
+      );
+    case "cors":
+      return (
+        `The browser couldn't read ${file}: the server didn't allow this page to load it ` +
+        `(CORS), or it couldn't be reached. A ${label} file on another site needs that ` +
+        "site to send `Access-Control-Allow-Origin` and to allow the `Range` header."
+      );
+    case "not-format":
+      return (
+        `${file} isn't a ${label} file. A wrong path often returns a web page instead — ` +
+        "check the file name and folder."
+      );
+    case "http": {
+      const text = failure.statusText?.trim() || STATUS_TEXT[failure.status ?? 0] || "";
+      return `${file} didn't load (${failure.status ?? "HTTP error"}${text ? ` ${text}` : ""}).`;
+    }
+    case "too-large":
+      return (
+        `${file} is ${failure.size !== undefined ? megabytes(failure.size) : "very large"}, ` +
+        "too large to load whole in a browser. Add `load: viewport` to the source (the file " +
+        "needs a spatial index), or convert it to PMTiles."
+      );
+    case "no-index":
+      return (
+        `${file} has no spatial index, so it can't be read one part at a time ` +
+        "(`load: viewport`). Re-create it with an index — `ogr2ogr -f FlatGeobuf -lco " +
+        `SPATIAL_INDEX=YES out.fgb ${fileNameOf(failure.url)}\` — or use \`load: all\`.`
+      );
+    case "crs":
+      return (
+        `${file} is in ${failure.crs ?? "a projected coordinate system"}; MapLibre needs ` +
+        "longitude/latitude (EPSG:4326). Reproject it: " +
+        `\`ogr2ogr -t_srs EPSG:4326 out.fgb ${fileNameOf(failure.url)}\`.`
+      );
+    case "unsupported":
+      return failure.format === "cog"
+        ? `${file} is a ${label}, which this version of maplibre-yaml can't read on its ` +
+            "own yet (it's planned). For now, convert it to PMTiles raster tiles, or " +
+            "register the `cog://` protocol from page JavaScript."
+        : `${file} is a ${label} file, which this version of maplibre-yaml can't read yet ` +
+            "(it's planned). For now, convert it to FlatGeobuf or GeoJSON: " +
+            `\`ogr2ogr out.fgb ${fileNameOf(failure.url)}\`.`;
+    case "decoder":
+      return (
+        `The ${label} reader couldn't be set up${failure.detail ? ` (${failure.detail})` : ""}, ` +
+        `so ${file} wasn't read. Other layers are unaffected.`
+      );
+    case "read":
+    default:
+      return (
+        `${file} couldn't be read as ${label}` +
+        (failure.detail ? `: ${failure.detail.replace(/[.\s]+$/, "")}.` : ".")
+      );
+  }
 }
 
 /**
@@ -399,6 +535,15 @@ export function describeDataProblem(
     base?: string | null;
   }
 ): string {
+  // A cloud-native file (FlatGeobuf, a reserved format) already carries its
+  // own plain-language reason; say which layer it leaves empty.
+  if ((error as { failure?: FormatFailure }).failure) {
+    return (
+      `Layer \`${layerId}\` has no data: ${error.message}` +
+      (context.filePage ? ` ${FILE_PAGE_HINT}` : "")
+    );
+  }
+
   const url = error.url;
   const what = url ? `Data file \`${url}\`` : `The data for layer \`${layerId}\``;
 

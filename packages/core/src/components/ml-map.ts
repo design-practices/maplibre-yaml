@@ -902,7 +902,12 @@ export class MLMap extends HTMLElement {
           if (!terminal && context?.kind === "layer" && context.layerId) {
             this.reportProblem(describeLayerProblem(context.layerId, error.message));
           } else if (!terminal && context?.kind === "source" && context.sourceId) {
-            this.reportProblem(describeSourceProblem(context.sourceId, error.message));
+            this.reportProblem(
+              describeSourceProblem(context.sourceId, error.message, error, {
+                pageUrl: this.ownerDocument.baseURI,
+                base: this.base,
+              })
+            );
           }
         },
         },

@@ -42,6 +42,12 @@ disagree.
 | `layer.label` | `no-export` | Display labels are chrome metadata. |
 | `layer.toggleable` | `no-export` | The emitted style carries the layer's authored visibility and no toggle. |
 | `source.refresh` / `source.stream` / `source.cache` / `source.loading` / `source.prefetchedData` / `source.fetchStrategy` / `source.refreshInterval` / `source.updateStrategy` / `source.updateKey` | `no-export` | Live-data machinery; the emitted source carries the data present at compile time (lossy when there is none). |
+| `format.pmtiles` | `exports` | A [PMTiles](/guides/cloud-native-data/) source exports with its URL in the canonical `pmtiles://` form (a `.pmtiles` URL gains the scheme); `type` is untouched. Reported as a `contract` warning: the renderer must read `pmtiles://` (maplibre-gl JS: register the protocol). |
+| `format.flatgeobuf` | `exports-with-fallback` | A FlatGeobuf source is converted to GeoJSON: `mlym emit` reads the file and inlines its features as the source's `data` (a snapshot — viewport reading doesn't compile). Unreadable at emit time, the source is emitted empty and reported as lossy. |
+| `format.cog` | `exports` | A COG source (recognized, not read by this version) exports as a `cog://` URL, which only renderers with a COG protocol plugin can draw (`contract`). |
+| `format.geoparquet` | `no-export` | GeoParquet isn't read by this version; the source is emitted empty and reported as lossy. |
+| `source.format` | `exports` | The file format is carried by the emitted source itself (a `pmtiles://` URL, or GeoJSON converted from the file); the key never appears in `style.json`. |
+| `source.load` | `no-export` | How the browser reads a FlatGeobuf file (whole, or by view) has no `style.json` form; the emitted source carries the file's features. |
 | `map.options` | `no-export` | MapLibre constructor options are host decisions; the emitted style uses MapLibre's defaults. |
 | `controls` | `no-export` | DOM chrome; the emitted map gets MapLibre's default control set only. |
 | `legend` | `no-export` | DOM chrome; no legend surface exists in a style. |

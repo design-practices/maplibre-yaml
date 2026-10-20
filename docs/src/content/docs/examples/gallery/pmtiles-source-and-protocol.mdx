@@ -1,35 +1,36 @@
 ---
 title: PMTiles source and protocol
-description: "The MapLibre pmtiles example — a protocol plugin registered through the maplibre module core runs on"
+description: "The MapLibre pmtiles example — YAML only since 0.9: a .pmtiles or pmtiles:// URL is all it takes"
 ---
 
 import LiveMap from '../../../../components/LiveMap.astro';
-import PmtilesProtocol from '../../../../components/PmtilesProtocol.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/pmtiles-source-and-protocol.yaml?raw';
 
-Replicates the MapLibre example [PMTiles source and protocol](https://maplibre.org/maplibre-gl-js/docs/examples/pmtiles-source-and-protocol/). Protocol plugins register on the maplibre-gl *module*, not a map instance — which is why this was an unreachable gap until 0.7: `@maplibre-yaml/core/maplibre` re-exports the exact module `<ml-map>` renders with, so `addProtocol` lands where the document's requests actually go.
+Replicates the MapLibre example [PMTiles source and protocol](https://maplibre.org/maplibre-gl-js/docs/examples/pmtiles-source-and-protocol/). Since 0.9 it is **YAML only**: maplibre-yaml sees the `pmtiles://` URL (or a `.pmtiles` file name), registers the PMTiles protocol itself — once, on the maplibre-gl module the map renders with — and reads the archive with HTTP range requests.
 
-<PmtilesProtocol />
 <LiveMap src="/configs/gallery/pmtiles-source-and-protocol.yaml" height="440px" />
 
-## The YAML half
+## The YAML
 
 <Code code={config} lang="yaml" title="pmtiles-source-and-protocol.yaml" />
 
-## The JavaScript half
+## What to notice
+
+- `type: vector` stays the MapLibre source type; the URL says the file is a PMTiles archive. `url: https://…/firenze.pmtiles` (no scheme) works the same — and so does a file on your own site, `url: data/firenze.pmtiles`.
+- No page JavaScript, no import-map entry: the PMTiles reader is part of `@maplibre-yaml/core` (CDN build and npm package alike).
+- The archive is read in parts (range requests), so the host must support them — GitHub Pages, Netlify, S3 and R2 do; `python -m http.server` doesn't. See [Cloud-native data](/guides/cloud-native-data/#hosting-range-requests-and-cors).
+- Data: [Protomaps](https://protomaps.com/) Florence sample extract (ODbL).
+
+## Registering the protocol yourself (still supported)
+
+Before 0.9 this page needed page JavaScript; that route still works, and a page that registers `pmtiles` itself keeps its registration (useful for custom headers or a custom `Source`). Register through `@maplibre-yaml/core/maplibre`, so the protocol lands on the same maplibre-gl module `<ml-map>` renders with:
 
 ```js
 import { addProtocol } from "@maplibre-yaml/core/maplibre";
 import { Protocol } from "pmtiles";
 
-const protocol = new Protocol();
-addProtocol("pmtiles", protocol.tile);
+addProtocol("pmtiles", new Protocol().tile);
 ```
 
-## What to notice
-
-- The YAML stays purely declarative — `pmtiles://` in the source URL is the only trace of the plugin. Validation and export treat it as an ordinary vector source.
-- The import path matters: registering `addProtocol` from a *separately loaded* maplibre-gl (a CDN copy, a second bundle) registers on a module the map never consults, and the source fails with no obvious cause. The `@maplibre-yaml/core/maplibre` subpath guarantees module identity with the renderer.
-- The same page code covers COG, custom tile transforms, and any other `addProtocol` plugin.
-- Data: [Protomaps](https://protomaps.com/) Florence sample extract (ODbL).
+It is also how to use PMTiles inside a *basemap style* loaded from a URL (a Protomaps basemap): maplibre-yaml can't see inside that style before MapLibre loads it.

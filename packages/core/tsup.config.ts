@@ -55,8 +55,24 @@ export default defineConfig([
     splitting: false,
     treeshake: true,
     minify: true, // CDN-served raw from unpkg — ship it minified
-    external: ["maplibre-gl"],
-    noExternal: ["yaml", "zod"], // Bundle these for browser
+    // `@bokuweb/zstd-wasm` is flatgeobuf's codec for seekable-zstd files,
+    // reached only through a dynamic import for that rare variant: kept out
+    // of the bundle (a bare dynamic import that fails, with a plain error,
+    // only if such a file is ever read).
+    external: ["maplibre-gl", "@bokuweb/zstd-wasm"],
+    // Bundle these for browser. The cloud-native decoders (ml-cnv, 0.9) are
+    // bundled into the single file — no chunks yet; formats/decoders.ts is
+    // the seam lazy loading (ml-7qa.5) will split at.
+    noExternal: [
+      "yaml",
+      "zod",
+      "pmtiles",
+      "fflate",
+      "flatgeobuf",
+      "flatbuffers",
+      "slice-source",
+      "@repeaterjs/repeater",
+    ],
     esbuildOptions(options) {
       options.banner = {
         js: "// @maplibre-yaml/core - Browser build with bundled dependencies",

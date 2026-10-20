@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cloud-native data from the CDN build, plain HTML</title>
+  <!--
+    0.9 (ml-cnv.5): the documented zero-build pattern — one module script
+    from the CDN, an import map that maps ONLY maplibre-gl — reads PMTiles and
+    FlatGeobuf with no page JavaScript and no extra downloads: the decoders
+    are inside the one browser bundle (no chunks in 0.9).
+    The e2e server mounts packages/core at /cdn/@maplibre-yaml/core@<version>/,
+    the way unpkg/jsDelivr serve the published package. On a real page:
+      <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"></script>
+    PASS = imagery, outlines and coloured districts; no notice.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/cdn.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>CDN build, plain HTML — PASS = imagery + outlines + coloured districts, no notice.</header>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: cloud-native-cdn
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  imagery:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery.pmtiles
+    tileSize: 256
+  outlines:
+    type: vector
+    url: /gallery-assets/cloud-native/districts.pmtiles
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.fgb
+layers:
+  - { id: imagery, type: raster, source: imagery }
+  - id: districts
+    type: fill
+    source: districts
+    paint:
+      fill-color: ["match", ["get", "category"], "park", "#2a9d8f", "residential", "#e9c46a", "industrial", "#e76f51", "#8d99ae"]
+      fill-opacity: 0.55
+  - { id: outlines, type: line, source: outlines, source-layer: districts, paint: { line-color: "#1d3557" } }
+    </script>
+  </ml-map>
+  <script type="module" src="/cdn/@maplibre-yaml/core@0.9.0/register.js"></script>
+</body>
+</html>

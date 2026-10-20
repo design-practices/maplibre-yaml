@@ -1,0 +1,42 @@
+# A FlatGeobuf file as a GeoJSON source — YAML only (0.9). The .fgb file
+# name is the only hint; layers, popups, the legend and fitTo work as for
+# a .geojson file. Synthetic, public-domain data (a fictional sea area,
+# scripts/fixtures/cloud-native.py). Hermetic test: e2e/gallery.spec.ts
+# (twin) and e2e/cloud-native.spec.ts.
+type: map
+id: flatgeobuf-source
+config:
+  center: [10.2, 42.15]
+  zoom: 8
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+  fitTo: { source: districts, padding: 24 }
+legend:
+  title: District plan
+sources:
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.fgb
+  points:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.fgb
+    load: { mode: viewport, minzoom: 11 }
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    paint:
+      fill-color: ["match", ["get", "category"], "park", "#2a9d8f", "residential", "#e9c46a", "industrial", "#e76f51", "#8d99ae"]
+      fill-opacity: 0.65
+      fill-outline-color: "#1d3557"
+    legend: { label: Districts, color: "#e9c46a", shape: square }
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: name }]
+          - p: [{ str: "Category: " }, { property: category }]
+          - p: [{ str: "Population " }, { property: population }]
+  - id: points
+    type: circle
+    source: points
+    paint: { circle-radius: 4, circle-color: "#264653", circle-stroke-width: 1, circle-stroke-color: "#ffffff" }
+    legend: { label: "Stations (from zoom 11)", color: "#264653", shape: circle }

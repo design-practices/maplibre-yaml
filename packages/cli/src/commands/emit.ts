@@ -29,6 +29,7 @@ import {
   attachSpriteImages,
   lowerMarkers,
   lowerFitTo,
+  attachSourceData,
   EmitError,
   type EmitMode,
   type EmitWarning,
@@ -38,6 +39,7 @@ import {
   type TrustContext,
 } from '@maplibre-yaml/core';
 import { logger } from '../lib/logger.js';
+import { resolveDataRefs, type DataReader } from '../lib/data-refs.js';
 import { EXIT_CODES } from '../types.js';
 
 /**
@@ -54,6 +56,11 @@ export async function emitStyle(
   block: unknown,
   mode: EmitMode,
   policy: CapabilityPolicy,
+  /**
+   * Where the document lives (FlatGeobuf paths are looked up beside it), and
+   * an injectable file reader for tests.
+   */
+  dataOptions: { documentDir?: string; reader?: DataReader } = {},
 ): Promise<{
   style: Record<string, unknown>;
   warnings: EmitWarning[];
@@ -90,6 +97,18 @@ export async function emitStyle(
     projected = attachSpriteImages(projected, loweringImages);
   }
   projected = { ...projected, warnings: [...loweringWarnings, ...projected.warnings] };
+
+  // FlatGeobuf sources (ml-cnv.3): core emitted each empty and described
+  // the file; read and inline the features now. An unreadable file stays
+  // empty and is reported lossy, so the strict check below refuses it.
+  if (projected.data && projected.data.length > 0) {
+    const { resolved, warnings: dataWarnings } = await resolveDataRefs(projected.data, dataOptions);
+    projected = {
+      ...projected,
+      style: attachSourceData(projected.style, resolved),
+      warnings: [...projected.warnings, ...dataWarnings],
+    };
+  }
 
   // projectStyle enforces --strict over its own warnings, but the runtime
   // gate can ADD lossy ones (state inlined below the target floor). Without
@@ -273,7 +292,9 @@ export const emitCommand = defineCommand({
     let assets: EmitAsset[] | undefined;
     let images: EmitImageRef[] | undefined;
     try {
-      ({ style, warnings, assets, images } = await emitStyle(parsed.data, mode, policy));
+      ({ style, warnings, assets, images } = await emitStyle(parsed.data, mode, policy, {
+        documentDir: dirname(filePath),
+      }));
     } catch (err) {
       if (err instanceof EmitError) {
         logger.error(err.message);

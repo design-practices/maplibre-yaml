@@ -167,6 +167,7 @@ export default defineConfig({
             { label: "Effects (experimental)", link: "/guides/effects/" },
             { label: "Working with Layers", link: "/guides/layers/" },
             { label: "Data Sources", link: "/guides/data-sources/" },
+            { label: "Cloud-native data", link: "/guides/cloud-native-data/" },
             { label: "Live Data & Streaming", link: "/guides/live-data/" },
             { label: "Reusing Values & Blocks", link: "/guides/reuse/" },
             { label: "Editor Setup", link: "/guides/editor-setup/" },

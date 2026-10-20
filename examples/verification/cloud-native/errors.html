@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cloud-native data: what a student sees when it goes wrong</title>
+  <!--
+    0.9 (ml-cnv): every way a PMTiles or FlatGeobuf source commonly fails,
+    one map per group, each said in plain words in the map's notice — never
+    a raw library message ("Wrong magic number", "Failed to fetch",
+    "Server returned no content-length header…").
+      - a server without range requests (python -m http.server): /norange/
+      - a host that doesn't allow this page to read the file (CORS): the file
+        on 127.0.0.1 from a page on localhost, without CORS headers (/nocors/)
+      - a wrong path that returns a web page (not-really.*)
+      - a missing file (404)
+      - a FlatGeobuf in Web Mercator (wrong CRS)
+      - a FlatGeobuf too large to load whole with no index (/oversize/60/…)
+      - load: viewport on a FlatGeobuf without an index
+      - GeoParquet and COG: recognized, not read by this version yet
+    And two that must WORK: load: viewport on a server without ranges (read
+    whole instead), and an oversized indexed file (read by view instead).
+    Every map still draws its basemap; other layers are unaffected.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/errors.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #7f1d1d; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 330px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = each map's notice says what went wrong in plain words; the two "works" maps draw their points.</header>
+  <main>
+    <section>
+      <h2>PMTiles failures</h2>
+      <ml-map id="pmtiles-errors">
+        <script type="text/yaml">
+type: map
+id: pmtiles-errors
+config:
+  center: [10.2, 42.15]
+  zoom: 9.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  norange:
+    type: vector
+    url: /norange/gallery-assets/cloud-native/districts.pmtiles
+  blocked:
+    type: vector
+    url: "{{OTHER_ORIGIN}}/nocors/gallery-assets/cloud-native/districts.pmtiles"
+  webpage:
+    type: vector
+    url: /gallery-assets/cloud-native/not-really.pmtiles
+  missing:
+    type: raster
+    url: /gallery-assets/cloud-native/missing.pmtiles
+layers:
+  - { id: norange, type: line, source: norange, source-layer: districts }
+  - { id: blocked, type: line, source: blocked, source-layer: districts }
+  - { id: webpage, type: line, source: webpage, source-layer: districts }
+  - { id: missing, type: raster, source: missing }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>FlatGeobuf failures</h2>
+      <ml-map id="fgb-errors">
+        <script type="text/yaml">
+type: map
+id: fgb-errors
+config:
+  center: [10.2, 42.15]
+  zoom: 9.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  blocked:
+    type: geojson
+    url: "{{OTHER_ORIGIN}}/nocors/gallery-assets/cloud-native/districts.fgb"
+  webpage:
+    type: geojson
+    url: /gallery-assets/cloud-native/not-really.fgb
+  missing:
+    type: geojson
+    url: /gallery-assets/cloud-native/missing.fgb
+  mercator:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts-3857.fgb
+  huge:
+    type: geojson
+    url: /oversize/60/gallery-assets/cloud-native/points-noindex.fgb
+  unindexed:
+    type: geojson
+    url: /gallery-assets/cloud-native/points-noindex.fgb
+    load: viewport
+layers:
+  - { id: blocked, type: fill, source: blocked }
+  - { id: webpage, type: fill, source: webpage }
+  - { id: missing, type: fill, source: missing }
+  - { id: mercator, type: fill, source: mercator }
+  - { id: huge, type: circle, source: huge }
+  - { id: unindexed, type: circle, source: unindexed }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Not read by this version yet (GeoParquet, COG) — the rest still draws</h2>
+      <ml-map id="reserved">
+        <script type="text/yaml">
+type: map
+id: reserved
+config:
+  center: [10.2, 42.15]
+  zoom: 9.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  wells:
+    type: geojson
+    url: /gallery-assets/cloud-native/wells.parquet
+  scene:
+    type: raster
+    url: /gallery-assets/cloud-native/scene.tif
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.fgb
+layers:
+  - { id: scene, type: raster, source: scene }
+  - { id: districts, type: fill, source: districts, paint: { fill-color: "#2a9d8f", fill-opacity: 0.6 } }
+  - { id: wells, type: circle, source: wells }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Works anyway: no ranges (read whole), and too large (read by view)</h2>
+      <ml-map id="fallbacks">
+        <script type="text/yaml">
+type: map
+id: fallbacks
+config:
+  center: [10.1, 42.1]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  norange:
+    type: geojson
+    url: /norange/gallery-assets/cloud-native/points.fgb
+    load: viewport
+  big:
+    type: geojson
+    url: /oversize/60/gallery-assets/cloud-native/points.fgb
+layers:
+  - id: norange
+    type: circle
+    source: norange
+    paint: { circle-radius: 6, circle-color: "#e76f51" }
+  - id: big
+    type: circle
+    source: big
+    paint: { circle-radius: 3, circle-color: "#1d3557" }
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script>
+    // The CORS cases need another origin: the same server, reached as
+    // 127.0.0.1 instead of localhost. Classic script, so it runs before the
+    // elements upgrade (register.js is a module, run after parsing).
+    for (const s of document.querySelectorAll('script[type="text/yaml"]')) {
+      s.textContent = s.textContent.replaceAll("{{OTHER_ORIGIN}}", `http://127.0.0.1:${location.port}`);
+    }
+  </script>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

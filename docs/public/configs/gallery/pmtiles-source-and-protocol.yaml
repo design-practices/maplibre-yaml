@@ -1,11 +1,8 @@
-# PMTiles vector source via the pmtiles:// protocol. The page registers the
-# protocol through `@maplibre-yaml/core/maplibre` (see the docs page); this
-# config is plain declarative YAML — the URL scheme is the only hint a
-# protocol plugin is involved. Data: Protomaps' Florence sample (ODbL).
-#
-# NOTE for the live sweep: this config cannot render without the page's
-# protocol registration — scripts/verify-docs-gallery.mjs skips it by name;
-# the hermetic regression test is e2e/gallery-hatch.spec.ts (stub protocol).
+# PMTiles vector source via the pmtiles:// protocol — YAML only since 0.9:
+# maplibre-yaml registers the protocol itself when a source's URL is a
+# pmtiles:// URL or a .pmtiles file. Data: Protomaps' Florence sample (ODbL).
+# Hermetic tests: e2e/cloud-native.spec.ts (YAML-only, synthetic archives)
+# and e2e/gallery-hatch.spec.ts (the page-registered route, stub protocol).
 type: map
 id: pmtiles-source-and-protocol
 config:

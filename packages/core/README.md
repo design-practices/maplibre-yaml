@@ -161,6 +161,10 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
 - **Data:** GeoJSON (by URL or inline), vector and raster tiles, images and
   video, with polling, Server-Sent Events and WebSocket updates
   ([Live Data](https://docs.maplibre-yaml.org/guides/live-data/)).
+- **Cloud-native data, YAML only:** PMTiles archives (`url: data/x.pmtiles`
+  on a `vector`/`raster`/`raster-dem` source) and FlatGeobuf files
+  (`url: data/x.fgb` on a `geojson` source), read with range requests and no
+  page JavaScript ([Cloud-native data](https://docs.maplibre-yaml.org/guides/cloud-native-data/)).
 - **Interactivity:** popups, hover states, markers, legends, a parameters
   panel, and Format v2 declarative interactions.
 - **Export:** `mlym emit` (from `@maplibre-yaml/cli`) turns a map document
@@ -188,7 +192,7 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
 
 - **maplibre-gl** 4, 5 and 6 (`>= 6.4.1`, recommended). Peer range
   `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`. Keep the CSS on the same major as
-  the JavaScript.
+  the JavaScript. PMTiles sources need maplibre-gl 4 or later.
 - Modern browsers (ES2022, ES modules, import maps for CDN use).
 
 ## More

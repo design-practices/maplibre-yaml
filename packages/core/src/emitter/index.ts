@@ -36,6 +36,8 @@ export {
   FIT_TO_REFERENCE_VIEWPORT,
 } from "./lower-fit-to";
 export type { LoweredFitTo, FitToLowering } from "./lower-fit-to";
+export { lowerSourceFormat, attachSourceData } from "./lower-formats";
+export type { EmitDataRef } from "./lower-formats";
 export type { PinOptions } from "./assets";
 export type { BasemapFetcher } from "./basemap";
 export type { EmitMode, EmitWarning, EmitWarningKind, EmitResult, LayerPlacement } from "./project";

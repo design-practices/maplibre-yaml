@@ -1,0 +1,46 @@
+# Cloud-native data (0.9): PMTiles + FlatGeobuf, YAML only.
+# Synthetic, public-domain data in a fictional sea area
+# (scripts/fixtures/cloud-native.py).
+type: map
+id: cloud-native-demo
+config:
+  center: [10.2, 42.15]
+  zoom: 8
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+  fitTo: { source: districts, padding: 24 }
+legend:
+  title: District plan
+sources:
+  imagery:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery.pmtiles
+    tileSize: 256
+  outlines:
+    type: vector
+    url: /gallery-assets/cloud-native/districts.pmtiles
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.fgb
+layers:
+  - id: imagery
+    type: raster
+    source: imagery
+    paint: { raster-opacity: 0.8 }
+  - id: districts
+    type: fill
+    source: districts
+    paint:
+      fill-color: ["match", ["get", "category"], "park", "#2a9d8f", "residential", "#e9c46a", "industrial", "#e76f51", "#8d99ae"]
+      fill-opacity: 0.6
+    legend: { label: "Districts (FlatGeobuf)", color: "#e9c46a", shape: square }
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: name }]
+          - p: [{ str: "Population " }, { property: population }]
+  - id: outlines
+    type: line
+    source: outlines
+    source-layer: districts
+    paint: { line-color: "#1d3557", line-width: 1.2 }
+    legend: { label: "Outlines (PMTiles)", color: "#1d3557", shape: line }

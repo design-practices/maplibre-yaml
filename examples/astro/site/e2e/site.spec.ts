@@ -151,6 +151,38 @@ test.describe("home: <Map config> and <Map src>", () => {
   });
 });
 
+test.describe("cloud-native data: PMTiles and FlatGeobuf from YAML (0.9, ml-cnv)", () => {
+  test("both formats render, framed on the data, with no page JavaScript @dev", async ({ page }) => {
+    const errors = await guard(page);
+    const ranged: number[] = [];
+    page.on("response", (r) => {
+      if (/districts\.pmtiles/.test(r.url())) ranged.push(r.status());
+    });
+    await page.goto("/cloud-native/", { waitUntil: "domcontentloaded" });
+    const map = '[data-testid="cloud-native-map"] ml-map';
+    await mapReady(page, map);
+    await layerLoaded(page, map, "districts");
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (sel) =>
+            (document.querySelector(sel) as any)
+              .getMap()
+              .querySourceFeatures("outlines", { sourceLayer: "districts" }).length,
+          map
+        )
+      )
+      .toBeGreaterThan(0);
+    // fitTo framed the decoded FlatGeobuf data (the YAML says zoom 8).
+    await expect.poll(async () => (await camera(page, map)).zoom).toBeGreaterThan(9);
+    // The archive was read in parts (HTTP range requests), as on any static host.
+    expect(ranged.length).toBeGreaterThan(0);
+    expect(ranged.every((s) => s === 206)).toBe(true);
+    await expect(page.locator(`${map} .ml-map-notice`)).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe("explore: <FullPageMap> with the 0.7 surface", () => {
   const MAP = ".ml-fullpage-map ml-map";
 

@@ -83,6 +83,61 @@ const TileURLTemplateSchema = z
   .describe("Tile URL template");
 
 /**
+ * The cloud-native file format a source reads (0.9, ml-cnv).
+ *
+ * @remarks
+ * Optional: the URL normally says it — a `pmtiles://` scheme or a `.pmtiles`,
+ * `.fgb`, `.parquet`, `.tif` extension. Write `format:` only for a URL with no
+ * telling extension (a signed link, an API endpoint); it wins over the URL.
+ * `type:` stays the MapLibre source type (`vector`/`raster`/`raster-dem` for
+ * PMTiles, `geojson` for FlatGeobuf). `geoparquet` and `cog` are recognized
+ * but not read by this version yet. A source key in v1; under the source's
+ * `runtime:` in a v2 document.
+ *
+ * @example
+ * ```yaml
+ * parcels:
+ *   type: geojson
+ *   url: https://data.example.org/api/parcels?f=fgb
+ *   format: flatgeobuf
+ * ```
+ */
+export const SourceFormatSchema = z
+  .enum(["pmtiles", "flatgeobuf", "geoparquet", "cog"])
+  .describe(
+    "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+  );
+
+/**
+ * How a FlatGeobuf source is read (0.9, ml-cnv.3).
+ *
+ * @remarks
+ * - `all` (default): the whole file, once. Works on any web server.
+ * - `viewport`: only the features in view, re-read as the map moves; needs a
+ *   file with a spatial index and a server with range requests. Nothing is
+ *   read below `minzoom` (default 10).
+ *
+ * @example
+ * ```yaml
+ * load: { mode: viewport, minzoom: 12 }
+ * ```
+ */
+export const SourceLoadSchema = z
+  .union([
+    z.enum(["all", "viewport"]),
+    z.object({
+      mode: z.enum(["all", "viewport"]).describe("all (whole file) or viewport (features in view)"),
+      minzoom: z
+        .number()
+        .min(0)
+        .max(24)
+        .optional()
+        .describe("viewport: read nothing below this zoom (default 10)"),
+    }),
+  ])
+  .describe("FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)");
+
+/**
  * WebSocket or Server-Sent Events streaming configuration.
  *
  * @remarks
@@ -346,7 +401,11 @@ export type RefreshConfig = z.infer<typeof RefreshConfigSchema>;
 export const GeoJSONSourceSchema = z
   .object({
     type: z.literal("geojson").describe("Source type"),
-    url: ResourceURLSchema.optional().describe("URL to fetch GeoJSON data"),
+    url: ResourceURLSchema.optional().describe(
+      "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+    ),
+    format: SourceFormatSchema.optional(),
+    load: SourceLoadSchema.optional(),
     // v1 keeps `data` as `z.any()` deliberately (R2/R10 byte-for-byte compat):
     // MapLibre tolerates loosely-conformant geometry that `z.any()` admits, and
     // hard-failing existing v1 files would break the compat guarantee. The
@@ -507,7 +566,10 @@ export type GeoJSONSource = z.infer<typeof GeoJSONSourceSchema>;
 export const VectorSourceSchema = z
   .object({
     type: z.literal("vector").describe("Source type"),
-    url: ResourceURLSchema.optional().describe("TileJSON URL"),
+    url: ResourceURLSchema.optional().describe(
+      "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+    ),
+    format: SourceFormatSchema.optional(),
     tiles: z
       .array(TileURLTemplateSchema)
       .optional()
@@ -577,7 +639,10 @@ export type VectorSource = z.infer<typeof VectorSourceSchema>;
 export const RasterSourceSchema = z
   .object({
     type: z.literal("raster").describe("Source type"),
-    url: ResourceURLSchema.optional().describe("TileJSON URL"),
+    url: ResourceURLSchema.optional().describe(
+      "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+    ),
+    format: SourceFormatSchema.optional(),
     tiles: z
       .array(TileURLTemplateSchema)
       .optional()
@@ -656,7 +721,10 @@ export type RasterSource = z.infer<typeof RasterSourceSchema>;
 export const RasterDEMSourceSchema = z
   .object({
     type: z.literal("raster-dem").describe("Source type"),
-    url: ResourceURLSchema.optional().describe("TileJSON URL"),
+    url: ResourceURLSchema.optional().describe(
+      "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+    ),
+    format: SourceFormatSchema.optional(),
     tiles: z
       .array(TileURLTemplateSchema)
       .optional()
