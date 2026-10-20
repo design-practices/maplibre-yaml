@@ -129,4 +129,39 @@ layers:
     const layer = (style.layers as Record<string, unknown>[]).find((l) => l.id === 'd')!;
     expect(JSON.stringify(layer.paint)).toContain('population');
   });
+
+  it('classify: format: flatgeobuf on an extensionless URL is decoded, not read as JSON (ml-aot.79)', async () => {
+    const { mkdtempSync, copyFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'mlym-fgb-'));
+    try {
+      copyFileSync(join(FIXTURES, 'districts.fgb'), join(dir, 'districts'));
+      const yaml = `
+type: map
+id: cn
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+sources:
+  districts:
+    type: geojson
+    url: districts
+    format: flatgeobuf
+layers:
+  - id: d
+    type: fill
+    source: districts
+    classify: { field: population, method: quantile, classes: 3, palette: Blues }
+`;
+      const docPath = join(dir, 'map.yaml');
+      const { style } = await emitStyle(parse(yaml), 'with-fallbacks', { trust: 'untrusted' }, {
+        loadData: createDataLoader(docPath),
+        documentPath: docPath,
+      });
+      const layer = (style.layers as Record<string, unknown>[]).find((l) => l.id === 'd')!;
+      expect(JSON.stringify(layer.paint)).toContain('"step"');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

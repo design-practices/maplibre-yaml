@@ -15,7 +15,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decodeFlatGeobuf, formatFromUrl, type ClassifyDataLoader } from '@maplibre-yaml/core';
+import {
+  decodeFlatGeobuf,
+  formatFromUrl,
+  type ClassifyDataLoader,
+  type CloudFormat,
+} from '@maplibre-yaml/core';
 
 /** How long one data fetch may take at export. */
 const FETCH_TIMEOUT_MS = 30_000;
@@ -80,10 +85,13 @@ async function loadFlatGeobuf(url: string, documentPath?: string): Promise<unkno
  * relative to `documentPath`. Rejects with a message that says what was tried.
  */
 export function createDataLoader(documentPath?: string): ClassifyDataLoader {
-  return async (url: string) => {
+  return async (url: string, options?: { format?: CloudFormat }) => {
     // A FlatGeobuf file (ml-cnv.3) is decoded to GeoJSON, so classify breaks
-    // can be computed from it like from a .geojson file.
-    if (formatFromUrl(url) === 'flatgeobuf') return loadFlatGeobuf(url, documentPath);
+    // can be computed from it like from a .geojson file. The source's
+    // `format:` wins over the URL (an extensionless API URL), as in the browser.
+    if ((options?.format ?? formatFromUrl(url)) === 'flatgeobuf') {
+      return loadFlatGeobuf(url, documentPath);
+    }
     if (/^https?:\/\//i.test(url)) {
       let response: Response;
       try {
