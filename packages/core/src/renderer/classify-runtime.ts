@@ -46,6 +46,7 @@ import {
 } from "../classify/compile";
 import { isFeatureData } from "../classify/breaks";
 import { DataFetcher } from "../data/data-fetcher";
+import { classifiedHighlightProperty, withHighlight } from "./highlight-paint";
 
 /** A renderer layer (loosely: the v1 layer shape, after `toModel`). */
 interface RuntimeLayer {
@@ -54,6 +55,7 @@ interface RuntimeLayer {
   source?: unknown;
   paint?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  interactive?: unknown;
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -222,12 +224,15 @@ export class ClassifyRuntime {
     layer.paint = { ...(layer.paint ?? {}), ...compiled.paint };
     layer.metadata = { ...(layer.metadata ?? {}), [CLASSIFY_METADATA_KEY]: record };
     if (this.map.getLayer(layer.id)) {
+      // hover.highlight wraps the classified colour (layer-manager does the
+      // same when it adds the layer from `layer.paint`, kept unwrapped).
+      const highlighted = classifiedHighlightProperty(layer);
       for (const [property, value] of Object.entries(compiled.paint)) {
         (this.map.setPaintProperty as (id: string, name: string, value: unknown) => void).call(
           this.map,
           layer.id,
           property,
-          value
+          property === highlighted ? withHighlight(value) : value
         );
       }
     }

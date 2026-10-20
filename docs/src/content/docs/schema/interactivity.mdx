@@ -221,10 +221,13 @@ feature-state works:
   use a property as the id. If neither is set, `highlight` enables `generateId`
   and warns — but generated ids are not stable across data refreshes, so
   `promoteId` is the durable choice.
-- **Already using an expression for that colour?** Then `highlight` leaves your
-  paint alone and warns, rather than overwriting your data-driven styling.
-  Reference `["feature-state", "hover"]` yourself, as in [Custom highlight
-  styling](#custom-highlight-styling) below.
+- **A [classified](/guides/thematic-maps/) layer** highlights like any other:
+  the colour `classify:` generates is wrapped the same way (also after
+  computed breaks land), as long as `classify:` drives that primary colour.
+- **Already using your own expression for that colour?** Then `highlight`
+  leaves your paint alone and warns, rather than overwriting your data-driven
+  styling. Reference `["feature-state", "hover"]` yourself, as in [Custom
+  highlight styling](#custom-highlight-styling) below.
 
 Because feature-state is per *source*, two layers sharing one source share
 highlight state.

@@ -112,6 +112,20 @@ describe("ClassifyRuntime", () => {
     expect(classifyRecordOf(l)!.colors).toEqual(["#000000", "#ffffff"]);
   });
 
+  it("keeps hover.highlight on a classified colour when computed breaks land", () => {
+    const data = new Map<string, unknown>([["s", fc([0, 10])]]);
+    const map = fakeMap(new Set(["h"]));
+    const l = Object.assign(layer("h", "s"), { interactive: { hover: { highlight: true } } });
+    const runtime = new ClassifyRuntime(map as never, [l], {}, (id) => data.get(id), () => {});
+    runtime.dataLoaded("s");
+    const [, property, value] = map.setPaintProperty.mock.calls[0]!;
+    expect(property).toBe("fill-color");
+    expect((value as unknown[]).slice(0, 2)).toEqual(["case", ["boolean", ["feature-state", "hover"], false]]);
+    expect(JSON.stringify((value as unknown[])[3])).toContain('"step"');
+    // The layer object stays unwrapped: it is what a (re-)add wraps.
+    expect((l.paint["fill-color"] as unknown[])[0]).toBe("let");
+  });
+
   it("fetches a data: URL string MapLibre loads by itself", async () => {
     const l = layer("u", "named");
     const fetcher = { fetch: vi.fn(async () => ({ data: fc([0, 4]) })) };

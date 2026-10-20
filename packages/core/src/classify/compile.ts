@@ -399,8 +399,9 @@ export function compileClassify(record: ClassifyRecord): CompiledClassify {
   const breaks = record.breaks;
   if (record.property && record.colors && record.colors.length > 0) {
     if (breaks === undefined) {
-      // An expression, not a bare literal: hover.highlight rewrites a
-      // literal colour, and that rewrite would be lost when the breaks land.
+      // An expression, not a bare literal: the layer is classified, and
+      // hover.highlight wraps a classified colour (re-wrapped when the
+      // breaks land, renderer/highlight-paint).
       paint[record.property] = [
         "to-color",
         hideNoData ? record.colors[Math.floor((record.colors.length - 1) / 2)] : record.noData,

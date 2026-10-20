@@ -17,10 +17,15 @@ import {
   ImageSourceSchema,
   VideoSourceSchema,
 } from "../schemas";
-// Import the constant from its submodule rather than the interactions barrel:
-// the barrel now re-exports `attachInteractions`, which eagerly loads the
-// maplibre-gl `Popup` value, and this module needs only a maplibre-free string.
-import { HOVER_FEATURE_STATE_KEY } from "../interactions/built-ins";
+// maplibre-gl free (it imports the hover key from its submodule, not the
+// interactions barrel, which eagerly loads maplibre-gl's `Popup`).
+import {
+  HIGHLIGHT_PAINT_PROPERTY,
+  classifiedHighlightProperty,
+  isHighlightEnabled,
+  isHighlightWrapped,
+  withHighlight,
+} from "./highlight-paint";
 import { DataFetcher } from "../data/data-fetcher";
 import { loadSourceData } from "../data/source-data";
 import { PollingManager } from "../data/polling-manager";
@@ -47,47 +52,19 @@ type ImageSourceConfig = z.infer<typeof ImageSourceSchema>;
 type VideoSourceConfig = z.infer<typeof VideoSourceSchema>;
 
 /**
- * The paint property each layer type highlights through.
- *
- * @remarks
- * Types absent here (heatmap, raster, hillshade, background) have no
- * per-feature color to drive, so highlight does not apply to them.
- */
-const HIGHLIGHT_PAINT_PROPERTY: Record<string, string> = {
-  circle: "circle-color",
-  line: "line-color",
-  fill: "fill-color",
-  "fill-extrusion": "fill-extrusion-color",
-  symbol: "text-color",
-};
-
-/**
- * Colour a highlighted feature takes.
- *
- * @remarks
- * `hover.highlight` is a boolean, so the colour cannot be authored. Authors who
- * want control write their own `["feature-state", "hover"]` paint expression
- * instead, which this rewrite deliberately leaves untouched.
- */
-const HIGHLIGHT_COLOR = "#ffd700";
-
-/** Whether a layer asks for hover highlighting. */
-function isHighlightEnabled(layer: Layer): boolean {
-  const interactive = (layer as { interactive?: { hover?: { highlight?: unknown } } })
-    .interactive;
-  return interactive?.hover?.highlight === true;
-}
-
-/**
  * Wrap the layer's primary colour in a feature-state `case`, so a highlighted
  * feature renders differently.
  *
  * @remarks
- * Only rewrites a plain literal colour. An authored expression is left alone
- * and warned about: overwriting it would silently discard data-driven styling,
- * and merging arbitrary expressions is not something we can do correctly.
+ * Rewrites a plain literal colour, and a colour `classify:` generated (the
+ * library's own expression, re-wrapped by the classify runtime when computed
+ * breaks land). An authored expression is left alone and warned about:
+ * overwriting it would silently discard data-driven styling, and merging
+ * arbitrary expressions is not something we can do correctly. The layer's
+ * own `paint` object is not modified (a re-add must not wrap twice).
  */
-function applyHighlightPaint(layerSpec: any, layerType: string): void {
+function applyHighlightPaint(layerSpec: any, layer: Layer): void {
+  const layerType = layer.type;
   const property = HIGHLIGHT_PAINT_PROPERTY[layerType];
   if (!property) {
     console.warn(
@@ -97,10 +74,15 @@ function applyHighlightPaint(layerSpec: any, layerType: string): void {
     return;
   }
 
-  const paint = (layerSpec.paint ??= {});
+  const paint = (layerSpec.paint = { ...(layerSpec.paint ?? {}) });
   const authored = paint[property];
+  if (isHighlightWrapped(authored)) return;
 
   if (Array.isArray(authored)) {
+    if (classifiedHighlightProperty(layer) === property) {
+      paint[property] = withHighlight(authored);
+      return;
+    }
     console.warn(
       `[maplibre-yaml] hover.highlight left "${property}" on layer ` +
         `"${layerSpec.id}" untouched because it is already an expression. ` +
@@ -110,13 +92,8 @@ function applyHighlightPaint(layerSpec: any, layerType: string): void {
     return;
   }
 
-  paint[property] = [
-    "case",
-    ["boolean", ["feature-state", HOVER_FEATURE_STATE_KEY], false],
-    HIGHLIGHT_COLOR,
-    // MapLibre's default for every colour paint property we highlight through.
-    authored ?? "#000000",
-  ];
+  // MapLibre's default for every colour paint property we highlight through.
+  paint[property] = withHighlight(authored ?? "#000000");
 }
 
 /**
@@ -434,7 +411,7 @@ export class LayerManager {
     // `hover.highlight` is only visible if some paint property reads the hover
     // feature-state, so wire it into the layer's primary color here.
     if (isHighlightEnabled(layer)) {
-      applyHighlightPaint(layerSpec, layer.type);
+      applyHighlightPaint(layerSpec, layer);
     }
     if ("layout" in layer && layer.layout) layerSpec.layout = layer.layout;
     if ("source-layer" in layer && layer["source-layer"])

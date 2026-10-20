@@ -140,6 +140,39 @@ describe("LayerManager", () => {
       warn.mockRestore();
     });
 
+    it("wraps a classify-generated colour too, without a warning, and leaves layer.paint as it was", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { resolveClassify, applyClassifyToSpec } = await import("../../src/classify/compile");
+      const record = resolveClassify({ field: "v", breaks: [10], colors: ["#000000", "#ffffff"] }, "circle");
+      const layer = applyClassifyToSpec(
+        {
+          id: "pts",
+          type: "circle",
+          visible: true,
+          toggleable: false,
+          source: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+          interactive: { hover: { highlight: true } },
+        },
+        record
+      ) as any;
+      const classified = layer.paint["circle-color"];
+
+      await manager.addLayer(layer);
+
+      const spec = mockMap.addLayer.mock.calls[0][0];
+      expect(spec.paint["circle-color"]).toEqual([
+        "case",
+        ["boolean", ["feature-state", "hover"], false],
+        expect.any(String),
+        classified,
+      ]);
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("already an expression"));
+      // The renderer's layer keeps the plain classified colour (a re-add or
+      // computed breaks must not wrap twice).
+      expect(layer.paint["circle-color"]).toEqual(classified);
+      warn.mockRestore();
+    });
+
     it("does not rewrite paint when highlight is absent", async () => {
       const layer = {
         id: "pts",
