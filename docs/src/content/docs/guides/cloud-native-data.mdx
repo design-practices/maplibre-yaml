@@ -317,7 +317,8 @@ refused before it downloads, and the notice explains why.
   or EPSG:4326). A file in another projection is refused with the `ogr2ogr`
   command that fixes it.
 - **Compression:** snappy (the usual default), zstd, gzip, lz4 and brotli all
-  work.
+  work. Brotli's decoder is large (about 68 KB), so it is downloaded only for
+  a file that uses it.
 - **A plain Parquet file** — one without GeoParquet's geometry metadata, such
   as a table with a WKB column written by hand — is named as such in the
   notice.
@@ -416,10 +417,10 @@ says what happened in plain words. The common cases:
 
 The readers for these formats are not part of maplibre-yaml's main script:
 a page downloads the PMTiles reader (about 8 KB), the FlatGeobuf reader
-(about 12 KB) or the GeoParquet reader (about __GPKB__ KB, plus about __BRKB__ KB
-for a brotli-compressed file) only when a map uses that format, from
-`dist/chunks/` next to the script. From a CDN that is automatic; if you host maplibre-yaml's files
-yourself, copy the whole `dist/` folder
+(about 12 KB) or the GeoParquet reader (about 23 KB, plus about 68 KB for a
+brotli-compressed file) only when a map uses that format, from
+`dist/chunks/` next to the script. From a CDN that is automatic; if you host
+maplibre-yaml's files yourself, copy the whole `dist/` folder
 ([Installation](/getting-started/installation/#hosting-the-files-yourself)).
 
 ## Format v2

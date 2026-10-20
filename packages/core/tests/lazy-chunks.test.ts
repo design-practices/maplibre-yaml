@@ -45,7 +45,7 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
   flatgeobuf: ["Not a FlatGeobuf file", "Invalid header size", "FlatBuffers: "],
   // hyparquet, plus fzstd (zstd) — the main bundle's formats/geoparquet.ts
   // names none of these.
-  geoparquet: ['parquet filter requires rowFormat: "object"', "parquetReadColumn expected columns", "invalid zstd data"],
+  geoparquet: ['parquet filter requires rowFormat: "object"', "parquet requires metadata", "invalid zstd data"],
   "geoparquet-brotli": ["copyUncompressedBlockToOutput: not enough bytes", "Invalid size nibble"],
 };
 

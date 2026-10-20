@@ -375,8 +375,10 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     // two readers this document needs, on demand from dist/chunks/ next to
     // the bundle (ml-7qa.5) — nothing else.
     const fromPackage = [...new Set(scripts.filter((p) => p.startsWith("/cdn/")))].sort();
+    // GeoParquet's reader, but not its brotli codec: this file is zstd.
     expect(fromPackage).toEqual([
       "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/flatgeobuf.js",
+      "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/geoparquet.js",
       "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/pmtiles.js",
       "/cdn/@maplibre-yaml/core@0.9.0/dist/register.browser.js",
       "/cdn/@maplibre-yaml/core@0.9.0/register.js",

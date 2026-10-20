@@ -179,7 +179,7 @@ or the package on unpkg) and load `dist/register.browser.js` from it:
 ```
 
 Some parts of maplibre-yaml load on demand, only for maps that use them —
-the readers for [PMTiles and FlatGeobuf files](/guides/cloud-native-data/)
+the readers for [PMTiles, FlatGeobuf and GeoParquet files](/guides/cloud-native-data/)
 are separate files in `dist/chunks/` — and the browser fetches them from
 next to the script. A copy of only `register.browser.js` works for every
 other map; a map that needs a missing reader shows a notice naming the file.

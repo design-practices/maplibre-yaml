@@ -190,7 +190,7 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
 | `@maplibre-yaml/core/maplibre` | The maplibre-gl module `<ml-map>` renders with (for `addProtocol` plugins) |
 | `@maplibre-yaml/core/react` | JSX types for `<ml-map>` in React ([React](https://docs.maplibre-yaml.org/integrations/react/)) |
 | `@maplibre-yaml/core/schemas/json/*` | JSON Schema files (`map.schema.json`, …) |
-| `register.js` (CDN) | Browser bundle of `/register`, with `maplibre-gl` left to the import map. Format readers (PMTiles, FlatGeobuf) load on demand from `dist/chunks/`: to self-host, copy the whole `dist/` folder |
+| `register.js` (CDN) | Browser bundle of `/register`, with `maplibre-gl` left to the import map. Format readers (PMTiles, FlatGeobuf, GeoParquet) load on demand from `dist/chunks/`: to self-host, copy the whole `dist/` folder |
 
 ## Compatibility
 

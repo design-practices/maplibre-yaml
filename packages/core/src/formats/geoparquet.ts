@@ -43,7 +43,7 @@
 
 // Types only: a value import would pull the library into the main bundle.
 import type { AsyncBuffer, Compressors, FileMetaData, LogicalType } from "hyparquet";
-import type { Feature, FeatureCollection, Geometry } from "geojson";
+import type { FeatureCollection } from "geojson";
 import { isLonLatCrs } from "./crs";
 import { getDecoder } from "./decoders";
 import { FormatError, isAbortError, isFormatError } from "./errors";
@@ -509,51 +509,6 @@ export async function compressorsFor(source: GeoParquetFile, columns: readonly s
   }
 }
 
-// ---------------------------------------------------------------------------
-// Rows → GeoJSON features
-// ---------------------------------------------------------------------------
-
-/**
- * A value MapLibre can carry as a feature property: 64-bit integers become
- * numbers (or strings beyond 2^53), dates ISO strings, bytes are dropped.
- */
-function propertyValue(value: unknown): unknown {
-  if (typeof value === "bigint") {
-    return value <= BigInt(Number.MAX_SAFE_INTEGER) && value >= BigInt(Number.MIN_SAFE_INTEGER)
-      ? Number(value)
-      : value.toString();
-  }
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
-  if (value instanceof Uint8Array) return undefined;
-  if (Array.isArray(value)) return value.map(propertyValue);
-  if (isObject(value)) {
-    const out: Obj = {};
-    for (const [k, v] of Object.entries(value)) {
-      const converted = propertyValue(v);
-      if (converted !== undefined) out[k] = converted;
-    }
-    return out;
-  }
-  return value;
-}
-
-/** Rows (objects) to features: the geometry column becomes the geometry. */
-function toFeatures(rows: readonly Obj[], geometryColumn: string, columns: readonly string[]): Feature[] {
-  const features: Feature[] = [];
-  for (const row of rows) {
-    const geometry = row[geometryColumn] as Geometry | null | undefined;
-    if (!geometry || typeof geometry !== "object") continue;
-    const properties: Obj = {};
-    for (const name of columns) {
-      if (name === geometryColumn) continue;
-      const value = propertyValue(row[name]);
-      if (value !== undefined) properties[name] = value;
-    }
-    features.push({ type: "Feature", geometry, properties });
-  }
-  return features;
-}
-
 /** Options for {@link readAll} and {@link readBbox}. */
 export interface ReadOptions {
   /** The attribute columns to read (`all`, or the projection). Default `all`. */
@@ -575,7 +530,7 @@ async function read(
       ...(filter && source.info.covering ? [source.info.covering.xmin.split(".")[0]!] : []),
     ]);
     if (options.isCurrent && !options.isCurrent()) return null;
-    const { parquetReadObjects } = await getDecoder("geoparquet");
+    const { parquetReadObjects, toFeatures } = await getDecoder("geoparquet");
     const rows = (await parquetReadObjects({
       file: source.file,
       metadata: source.metadata,

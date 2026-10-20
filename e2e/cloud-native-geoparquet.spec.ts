@@ -163,6 +163,7 @@ test.describe("GeoParquet with no page JavaScript", () => {
 
   test("a v2 document: runtime: format, load and columns; a brotli file decodes too", async ({ page }) => {
     const errors = await guard(page);
+    const brotliChunk = recordRequests(page, /\/chunks\/geoparquet-brotli\.js/);
     await OPEN(page, "v2");
     await waitForFeatures(page, "v2", "districts");
     await waitForFeatures(page, "v2", "brotli");
@@ -182,6 +183,8 @@ test.describe("GeoParquet with no page JavaScript", () => {
     // Only the column this document reads from the districts (its fill colour).
     expect(state.districtKeys).toEqual(["category"]);
     expect(state.brotli).toBeGreaterThan(300);
+    // Brotli's decoder is its own chunk, fetched for the brotli file.
+    expect(brotliChunk.map((r) => r.status)).toEqual([200]);
     expect(state.points).toBe(0); // below minzoom 11
     // Our keys never reach MapLibre.
     expect(JSON.stringify(state.spec)).not.toMatch(/"columns"|"load"|"format"/);
