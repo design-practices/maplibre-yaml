@@ -241,3 +241,47 @@ test.describe("GeoParquet with no page JavaScript", () => {
     expect(errors).toEqual([]);
   });
 });
+
+test.describe("GeoParquet author hints", () => {
+  test("a misspelt classify field gets a did-you-mean from the file's columns, read or not (ml-aot.118)", async ({
+    page,
+    baseURL,
+  }) => {
+    const errors = await guard(page);
+    const map = (id: string, extra: string) => `
+      <ml-map id="${id}" style="display:block;height:240px">
+        <script type="text/yaml">
+type: map
+id: ${id}
+config: { center: [10.2, 42.15], zoom: 9, mapStyle: "/examples/verification/configs/local-style.json"${extra} }
+sources:
+  districts: { type: geojson, url: /gallery-assets/cloud-native/districts.parquet }
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    classify: { field: populaton, method: quantile, classes: 4, palette: Blues }
+        </script>
+      </ml-map>`;
+    const html = `<!DOCTYPE html><html><head>
+      <link rel="stylesheet" href="${baseURL}/vendor/maplibre-gl.css" />
+      <script type="importmap">{ "imports": { "maplibre-gl": "${baseURL}/vendor/maplibre-gl.esm.js" } }</script>
+      </head><body>
+      ${map("plain", "")}
+      ${map("framed", ", fitTo: districts")}
+      <script type="module" src="${baseURL}/packages/core/register.js"></script>
+      </body></html>`;
+    await page.route("**/gp-hint/index.html", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto("/gp-hint/index.html", { waitUntil: "domcontentloaded" });
+    // Read whole, and read through the fitTo prefetch: both carry the file's columns.
+    for (const id of ["plain", "framed"]) {
+      const notice = page.locator(`#${id} .ml-map-notice`);
+      await expect(notice).toContainText('classify field: "populaton" is not a property of any feature', {
+        timeout: 30_000,
+      });
+      await expect(notice).toContainText('Did you mean "population"?');
+      await expect(notice).toContainText('The data\'s properties: "name", "category", "population".');
+    }
+    expect(errors).toEqual([]);
+  });
+});

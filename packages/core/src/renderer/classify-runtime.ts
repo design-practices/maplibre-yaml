@@ -75,6 +75,12 @@ export function classifyFieldMessage(layerId: string, problem: ClassifyFieldProb
     problem.available.length > 0
       ? ` The data's properties: ${problem.available.map((n) => `"${n}"`).join(", ")}.`
       : "";
+  if (problem.unread) {
+    return (
+      `${where} is a column of the file, but columns: leaves it out, so it wasn't read and every ` +
+      "feature is drawn as no data. Add it to columns:."
+    );
+  }
   if (problem.reason === "missing") {
     return (
       `${where} is not a property of any feature, so every feature is drawn as no data.` +

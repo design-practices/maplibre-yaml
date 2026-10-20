@@ -687,3 +687,30 @@ describe("LayerManager reads a GeoParquet url: (not the JSON fetch)", () => {
     expect(failure(callbacks.onDataError.mock.calls[0]![1])?.code).toBe("encoding");
   });
 });
+
+describe("the file's own column names reach the classify hint (ml-aot.118)", () => {
+  it("a misspelt field gets a did-you-mean and the file's columns, though only some were read", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const { classifyFieldProblems } = await import("../../src/classify/breaks");
+    const { classifyFieldMessage } = await import("../../src/renderer/classify-runtime");
+    // What the renderer reads for `classify: { field: populaton }`: that name alone.
+    const data = await readAll(await open("/districts.parquet"), { columns: ["populaton"] });
+    expect(Object.keys(data!.features[0]!.properties!)).toEqual([]);
+    const [problem] = classifyFieldProblems(data, { field: "populaton", kind: "numeric" });
+    expect(problem).toMatchObject({ reason: "missing", suggestion: "population" });
+    const message = classifyFieldMessage("d", problem!);
+    expect(message).toContain('Did you mean "population"?');
+    expect(message).toContain('The data\'s properties: "name", "category", "population".');
+  });
+
+  it("a real column that columns: leaves out is named as such, not misspelt", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const { classifyFieldProblems } = await import("../../src/classify/breaks");
+    const { classifyFieldMessage } = await import("../../src/renderer/classify-runtime");
+    const data = await readAll(await open("/districts.parquet"), { columns: ["name"] });
+    const [problem] = classifyFieldProblems(data, { field: "population", kind: "numeric" });
+    expect(problem).toMatchObject({ reason: "missing", unread: true });
+    expect(problem!.suggestion).toBeUndefined();
+    expect(classifyFieldMessage("d", problem!)).toContain("is a column of the file, but columns: leaves it out");
+  });
+});

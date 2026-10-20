@@ -20,6 +20,8 @@
  * {@link numericValue}), so the breaks describe the features the map colours.
  */
 
+import { declaredPropertyNames } from "../data/property-names";
+
 /** The break-computation methods. */
 export const CLASSIFY_METHODS = ["quantile", "equal", "jenks"] as const;
 export type ClassifyMethod = (typeof CLASSIFY_METHODS)[number];
@@ -364,6 +366,11 @@ export interface ClassifyFieldProblem {
   sample?: unknown;
   /** The data's property names (the first dozen). */
   available: string[];
+  /**
+   * The file has a column of that name, but it wasn't read (a GeoParquet
+   * `columns:` list that leaves it out).
+   */
+  unread?: boolean;
 }
 
 /**
@@ -379,18 +386,23 @@ export function classifyFieldProblems(
 ): ClassifyFieldProblem[] {
   const features = featuresOf(data);
   if (features.length === 0) return [];
-  const names = propertyNames(features);
+  // A file that declares its columns (GeoParquet, which reads only some of
+  // them) suggests from all of them, not just the ones read.
+  const declared = declaredPropertyNames(data);
+  const names = declared ? [...declared] : propertyNames(features);
   const available = names.slice(0, 12);
   const problems: ClassifyFieldProblem[] = [];
   const check = (key: "field" | "normalize", name: string, numeric: boolean) => {
     const p = presence(features, name);
     if (p.present > 0 && (!numeric || p.numeric > 0)) return;
     const reason = p.present === 0 ? "missing" : "not-numeric";
-    const suggestion = reason === "missing" ? nearestName(name, names) : undefined;
+    const unread = reason === "missing" && declared !== undefined && declared.includes(name);
+    const suggestion = reason === "missing" && !unread ? nearestName(name, names) : undefined;
     problems.push({
       key,
       name,
       reason,
+      ...(unread ? { unread } : {}),
       ...(suggestion ? { suggestion } : {}),
       ...(p.sample !== undefined ? { sample: p.sample } : {}),
       available,

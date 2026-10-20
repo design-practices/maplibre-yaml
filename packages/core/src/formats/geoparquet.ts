@@ -48,6 +48,7 @@ import type { AsyncBuffer, Compressors, FileMetaData, LogicalType } from "hyparq
 import type { FeatureCollection } from "geojson";
 import { isLonLatCrs } from "./crs";
 import { getDecoder } from "./decoders";
+import { recordPropertyNames } from "../data/property-names";
 import { FormatError, isAbortError, isFormatError } from "./errors";
 import { BodyTooLarge, fetchTail, httpError, type Tail } from "./http";
 
@@ -533,7 +534,13 @@ async function read(
       ...(filter ? { filter: filter as never } : {}),
     })) as Obj[];
     if (options.isCurrent && !options.isCurrent()) return null;
-    return { type: "FeatureCollection", features: toFeatures(rows, source.info.geometryColumn, columns) };
+    const data: FeatureCollection = {
+      type: "FeatureCollection",
+      features: toFeatures(rows, source.info.geometryColumn, columns),
+    };
+    // Every column the file has, read or not: what a hint suggests from.
+    recordPropertyNames(data, source.info.columns);
+    return data;
   } catch (error) {
     throw readFailure(error, source.url);
   }
