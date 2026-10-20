@@ -56,7 +56,6 @@ import { formatOfSource, type CloudFormat } from '../formats/detect';
 import { protomapsBasemapOf, type ProtomapsBasemap } from '../schemas/basemap.schema';
 import {
   basemapAssetMessage,
-  basemapAssetProblem,
   ensureRightToLeftLabels,
   probeBasemapAssets,
   type BasemapAssets,
@@ -1249,6 +1248,35 @@ export class MapRenderer {
     if (protomaps) this.loadProtomapsBasemap(protomaps, options);
   }
 
+  /**
+   * Leave a Protomaps basemap's label layers out (maplibre-gl 4 with its
+   * fonts unreachable: every basemap tile fails to parse, so nothing of the
+   * basemap draws). The style is set again in full — the tiles that failed
+   * are only requested again by a fresh load — keeping every other layer.
+   *
+   * @returns Whether labels were removed.
+   */
+  private hideBasemapLabels(): boolean {
+    try {
+      const style = this.map.getStyle() as { layers?: Array<Record<string, unknown>> };
+      const layers = style.layers ?? [];
+      const kept = layers.filter(
+        (layer) =>
+          !(
+            layer['type'] === 'symbol' &&
+            layer['source'] === PROTOMAPS_SOURCE_ID &&
+            (layer['layout'] as Record<string, unknown> | undefined)?.['text-field'] !== undefined
+          )
+      );
+      if (kept.length === layers.length) return false;
+      this.map.setStyle({ ...style, layers: kept } as never, { diff: false });
+      return true;
+    } catch (error) {
+      console.warn('[maplibre-yaml] the basemap labels could not be left out:', error);
+      return false;
+    }
+  }
+
   /** `fitTo`'s padding for the map as it is now: the author's, else the default for its size. */
   private fitPadding(fitTo: FitToConfig): number | FitPadding {
     const canvas = this.map?.getContainer?.();
@@ -1304,9 +1332,15 @@ export class MapRenderer {
       if (checked || e.sourceId !== PROTOMAPS_SOURCE_ID || e.sourceDataType !== 'metadata') return;
       checked = true;
       const source = map.getSource(PROTOMAPS_SOURCE_ID) as
-        | { vectorLayerIds?: string[]; url?: string }
+        | { vectorLayerIds?: string[]; url?: string; loaded?: () => boolean }
         | undefined;
-      const problem = notAProtomapsBasemap(source?.vectorLayerIds, source?.url ?? '');
+      // A source whose file didn't load (maplibre-gl 4 announces metadata
+      // for it too) has nothing to judge: its own notice says why.
+      if (!source?.url) {
+        checked = false;
+        return;
+      }
+      const problem = notAProtomapsBasemap(source.vectorLayerIds, source.url);
       if (!problem) return;
       console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
       options.onError?.(new Error(problem), false, { kind: 'basemap' });
@@ -1346,28 +1380,32 @@ export class MapRenderer {
           hostedGlyphs: typeof spec.glyphs !== 'string',
           hostedSprite: typeof spec.sprite !== 'string',
         };
+        // Checked once: on the first error that may be about them (a style
+        // error; on maplibre-gl 4 a basemap tile error, which is how missing
+        // fonts show there), else after the map first goes idle — MapLibre
+        // reports a font that didn't load only on the console (5 and later).
         let assetsChecked = false;
-        const report = (problem: string) => {
-          if (this.destroyed) return;
-          console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
-          options.onError?.(new Error(problem), false, { kind: 'basemap' });
-        };
-        map.on('error', (e: { error?: unknown; sourceId?: unknown; tile?: unknown; layer?: unknown }) => {
-          // Fonts and icons are the style's, not a source's or a layer's.
-          if (assetsChecked || this.destroyed || e.sourceId !== undefined || e.tile !== undefined) return;
-          if (e.layer !== undefined) return;
+        const checkAssets = () => {
+          if (assetsChecked || this.destroyed) return;
           assetsChecked = true;
-          const raw = e.error as { message?: unknown } | undefined;
-          const problem = basemapAssetProblem(String(raw?.message ?? raw ?? ''), assets);
-          if (problem) {
-            report(problem);
-            return;
-          }
-          // An error that doesn't say which file (maplibre-gl 4): ask.
-          void probeBasemapAssets(assets).then((which) => {
-            if (which) report(basemapAssetMessage(which, assets));
+          void probeBasemapAssets(assets).then((failed) => {
+            if (this.destroyed || failed.length === 0) return;
+            // maplibre-gl 4 parses no basemap tile whose labels lack their
+            // fonts: leave the labels out so the rest of the basemap draws.
+            const major = Number(runtimeVersion()?.split('.')[0]);
+            const labelsHidden = failed.includes('glyphs') && major > 0 && major < 5 && this.hideBasemapLabels();
+            const problem = basemapAssetMessage(failed, assets, { labelsHidden });
+            console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
+            options.onError?.(new Error(problem), false, { kind: 'basemap' });
           });
+        };
+        map.on('error', (event) => {
+          const e = event as unknown as { sourceId?: unknown; tile?: unknown; layer?: unknown };
+          if (e.layer !== undefined) return;
+          if (e.sourceId === undefined && e.tile === undefined) checkAssets();
+          else if (e.sourceId === PROTOMAPS_SOURCE_ID) checkAssets();
         });
+        map.on('idle', checkAssets); // checkAssets runs once
         // maplibre-gl 3 cannot read pmtiles:// (cloud-protocols).
         const problem = pmtilesUnavailable();
         if (problem) {

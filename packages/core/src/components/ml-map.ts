@@ -1144,7 +1144,9 @@ export class MLMap extends HTMLElement {
           // Loud by default: with no `ml-map:error` listener attached, a
           // dispatched event is invisible and the document fails silently
           // (ml-tfd.8 contract audit). Hosts still get the event.
-          console.error("[maplibre-yaml] map error:", error);
+          // A basemap notice was already logged by the renderer, as a warning
+          // in plain words: once is enough (ml-aot.125).
+          if (context?.kind !== "basemap") console.error("[maplibre-yaml] map error:", error);
           // MapLibre reports a worker that could not start as a runtime
           // error, but the map can never load without one: treat it as
           // terminal and put it on the page, not only on the console — a

@@ -225,6 +225,47 @@ test.describe("a Protomaps basemap from a .pmtiles file, YAML only", () => {
     expect(errors).toEqual([]);
   });
 
+  test("only the fonts unreachable: a notice for the labels, logged once, and on maplibre-gl 4 the basemap still draws (ml-aot.125)", async ({
+    page,
+  }) => {
+    const { errors } = await guard(page);
+    const logged: { type: string; text: string }[] = [];
+    page.on("console", (m) => {
+      if (/couldn't load/.test(m.text()) && /basemap's/.test(m.text())) logged.push({ type: m.type(), text: m.text() });
+    });
+    // Protomaps' hosted fonts blocked (its sprites still load), and the
+    // self-hosted map's own fonts folder missing.
+    await page.route(`${HOSTED}fonts/**`, (route) => route.abort("connectionrefused"));
+    await page.route("**/my-repo/protomaps-assets/fonts/**", (route) => route.fulfill({ status: 404, body: "not found" }));
+    await page.goto(PAGE, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("dark") as any)?.mapReady === "function");
+    await ready(page, "dark");
+    await ready(page, "self-hosted");
+    await expect(page.locator("#dark .ml-map-notice")).toContainText(
+      "The basemap's labels couldn't load: its fonts come from protomaps.github.io, which this page couldn't reach.",
+      { timeout: 30_000 }
+    );
+    await expect(page.locator("#self-hosted .ml-map-notice")).toContainText(
+      /The basemap's fonts \(glyphs: http:\/\/localhost:\d+\/my-repo\/protomaps-assets\/fonts\/\{fontstack\}\/\{range\}\.pbf\) couldn't load/,
+      { timeout: 30_000 }
+    );
+    // The rest of the basemap draws (on maplibre-gl 4, with its labels left out).
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const map = (document.getElementById("self-hosted") as any).getMap();
+            return map.queryRenderedFeatures().filter((f: any) => f.source === "protomaps").length;
+          }),
+        { timeout: 30_000 }
+      )
+      .toBeGreaterThan(50);
+    // Each notice is logged once, as a warning — not also as a "map error".
+    expect(logged.length).toBeGreaterThan(0);
+    expect(logged.filter((l) => l.type === "error")).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
   test("labels in a right-to-left language: MapLibre's plugin on a maplibre-gl that needs it (ml-cnv.16)", async ({
     page,
   }) => {

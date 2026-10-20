@@ -111,33 +111,62 @@ function hostOf(url: string): string {
 /** Which of a basemap's assets a message is about. */
 export type BasemapAsset = "glyphs" | "sprite";
 
-/** The notice for a basemap's fonts (`glyphs`) or icons (`sprite`) that didn't load. */
-export function basemapAssetMessage(which: BasemapAsset, assets: BasemapAssets): string {
-  const glyphs = which === "glyphs";
-  const hosted = glyphs ? assets.hostedGlyphs : assets.hostedSprite;
+/** How a basemap's missing assets are drawn around. */
+export interface BasemapAssetOptions {
+  /**
+   * The basemap's labels were left out so the rest of it could draw
+   * (maplibre-gl 4 draws no basemap tile at all without its fonts).
+   */
+  labelsHidden?: boolean;
+}
+
+/**
+ * The notice for a basemap's fonts (`glyphs`) and/or icons (`sprite`) that
+ * didn't load: the host when they are Protomaps' hosted copies, the path
+ * when they are the author's.
+ */
+export function basemapAssetMessage(
+  failed: BasemapAsset | readonly BasemapAsset[],
+  assets: BasemapAssets,
+  options: BasemapAssetOptions = {}
+): string {
+  const which = new Set(typeof failed === "string" ? [failed] : failed);
+  const glyphs = which.has("glyphs");
+  const sprite = which.has("sprite");
+  const effect = options.labelsHidden
+    ? "The basemap's labels are left out so the rest of it can draw (maplibre-gl 4 draws no basemap without its fonts)" +
+      (sprite ? ", and its icons and road shields are missing." : ".")
+    : glyphs && sprite
+      ? "Labels may show in a fallback font, and icons and road shields are missing."
+      : glyphs
+        ? "Labels may show in a fallback font or not at all."
+        : "Icons and road shields are missing.";
+  const hosted = [...which].some((w) => (w === "glyphs" ? assets.hostedGlyphs : assets.hostedSprite));
   if (hosted) {
-    const host = hostOf(glyphs ? assets.glyphs : assets.sprite);
+    const host = hostOf(glyphs && assets.hostedGlyphs ? assets.glyphs : assets.sprite);
+    const what = glyphs && sprite ? "labels and icons" : glyphs ? "labels" : "icons";
+    const from = glyphs && sprite ? "its fonts and icons come" : glyphs ? "its fonts come" : "its icons come";
     return (
-      `The basemap's labels and icons couldn't load: its fonts and icons come from ${host}, ` +
-      "which this page couldn't reach. Labels may show in a fallback font, and icons and road " +
-      "shields are missing. To serve your own copies, set `glyphs:` and `sprite:` in the " +
-      "basemap (the Protomaps basemaps-assets fonts and sprites, copied to your site)."
+      `The basemap's ${what} couldn't load: ${from} from ${host}, which this page couldn't reach. ${effect} ` +
+      "To serve your own copies, set `glyphs:` and `sprite:` in the basemap (the Protomaps basemaps-assets " +
+      "fonts and sprites, copied to your site)."
     );
   }
-  const key = glyphs ? "glyphs" : "sprite";
-  const what = glyphs ? "fonts" : "icons";
+  const parts = [
+    ...(glyphs ? [`fonts (\`glyphs: ${assets.glyphs}\`)`] : []),
+    ...(sprite ? [`icons (\`sprite: ${assets.sprite}\`)`] : []),
+  ];
+  const keys = [...(glyphs ? ["`glyphs:`"] : []), ...(sprite ? ["`sprite:`"] : [])].join(" and ");
   return (
-    `The basemap's ${what} (\`${key}: ${glyphs ? assets.glyphs : assets.sprite}\`) couldn't load, so ` +
-    `${glyphs ? "its labels may show in a fallback font or not at all" : "its icons and road shields are missing"}. ` +
-    `Check the path in \`${key}:\` and that the files are on your site.`
+    `The basemap's ${parts.join(" and ")} couldn't load. ${effect} Check the path in ${keys} and that the ` +
+    "files are on your site."
   );
 }
 
 /**
  * When a MapLibre error names a basemap font or icon file that didn't load
- * (maplibre-gl 5 and later put the URL in the message), the notice to show;
- * otherwise `undefined` — see {@link probeBasemapAssets} for the errors that
- * say nothing (maplibre-gl 4).
+ * (maplibre-gl 5 and later put the URL in a sprite error), the notice to
+ * show; otherwise `undefined`. {@link probeBasemapAssets} is the general check.
  *
  * @param message - The error's message.
  */
@@ -148,19 +177,20 @@ export function basemapAssetProblem(message: string, assets: BasemapAssets): str
 }
 
 /** The first glyph range of the font every Protomaps flavor labels with. */
-function glyphProbeUrl(template: string): string {
+export function glyphProbeUrl(template: string): string {
   return template.replace("{fontstack}", encodeURIComponent("Noto Sans Regular")).replace("{range}", "0-255");
 }
 
 /**
- * Which of a basemap's assets can't be fetched, asked directly: for an
- * error that doesn't say which file failed (maplibre-gl 4 reports a sprite
- * that didn't load as a bare "Failed to fetch", a glyph range as an empty
- * error). The browser's cache answers when MapLibre fetched them already.
+ * Which of a basemap's assets can't be fetched, asked directly. MapLibre
+ * reports a font that didn't load only as a console warning (maplibre-gl 5
+ * and later) or as a tile error naming no file (4), and a sprite on 4 as a
+ * bare "Failed to fetch". The browser's cache answers when MapLibre fetched
+ * them already.
  *
- * @returns The asset that failed, or `undefined` when both load.
+ * @returns The assets that failed (empty when both load).
  */
-export async function probeBasemapAssets(assets: BasemapAssets): Promise<BasemapAsset | undefined> {
+export async function probeBasemapAssets(assets: BasemapAssets): Promise<BasemapAsset[]> {
   const loads = async (url: string) => {
     try {
       const response = await fetch(url);
@@ -170,7 +200,9 @@ export async function probeBasemapAssets(assets: BasemapAssets): Promise<Basemap
       return false;
     }
   };
-  if (assets.sprite && !(await loads(`${assets.sprite}.json`))) return "sprite";
-  if (assets.glyphs && !(await loads(glyphProbeUrl(assets.glyphs)))) return "glyphs";
-  return undefined;
+  const [glyphs, sprite] = await Promise.all([
+    assets.glyphs ? loads(glyphProbeUrl(assets.glyphs)) : Promise.resolve(true),
+    assets.sprite ? loads(`${assets.sprite}.json`) : Promise.resolve(true),
+  ]);
+  return [...(glyphs ? [] : (["glyphs"] as const)), ...(sprite ? [] : (["sprite"] as const))];
 }
