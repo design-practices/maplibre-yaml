@@ -195,13 +195,15 @@ export class MapNotice {
     root.setAttribute("aria-live", "polite");
     root.style.cssText = [
       "position: absolute",
-      "top: 10px",
-      "left: 50%",
-      "transform: translateX(-50%)",
+      // A host can move the notice clear of its own chrome (a story's
+      // pinned legend on a phone, ml-aot.108) through these properties.
+      "top: var(--ml-map-notice-top, 10px)",
+      "left: var(--ml-map-notice-left, 50%)",
+      "transform: var(--ml-map-notice-transform, translateX(-50%))",
       "z-index: 5",
       "box-sizing: border-box",
       "width: max-content",
-      "max-width: min(480px, calc(100% - 20px))",
+      "max-width: var(--ml-map-notice-max-width, min(480px, calc(100% - 20px)))",
       "max-height: 45%",
       "overflow: auto",
       "padding: 8px 32px 8px 12px",

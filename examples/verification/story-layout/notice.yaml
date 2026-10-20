@@ -1,0 +1,47 @@
+# A story whose map shows a notice (ml-aot.108): one layer's data file is
+# missing (a failure every reader sees) and the legend lists items by hand
+# beside a classified layer (an author note on a local page). On a phone the
+# pinned legend (top-left) and the notice (top-centre) must not overlap,
+# with the legend closed or open: the notice moves beside or below it.
+type: scrollytelling
+id: story-notice
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [2, 1]
+  zoom: 6
+legend:
+  title: Values
+  items:
+    - { color: "#2a9d8f", label: Parks }
+    - { color: "#e76f51", label: Museums }
+sources:
+  cells:
+    type: geojson
+    url: "/examples/verification/data/classify-grid.geojson"
+  gone:
+    type: geojson
+    url: "/examples/verification/data/not-here.geojson"
+layers:
+  - id: grid
+    type: fill
+    source: cells
+    label: Value
+    classify:
+      field: value
+      method: quantile
+      classes: 3
+      palette: Reds
+  - id: missing
+    type: circle
+    source: gone
+chapters:
+  - id: first
+    title: A notice and a legend
+    description: "<p>The notice stays readable beside or below the legend.</p>"
+    center: [2, 1]
+    zoom: 6
+  - id: second
+    title: Second chapter
+    description: "<p>Nothing moves.</p>"
+    center: [2, 1]
+    zoom: 6.5

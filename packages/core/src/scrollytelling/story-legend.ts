@@ -215,6 +215,7 @@ export class StoryLegend {
   updateClassify(layerId: string, record: ClassifyRecord): void {
     this.classified.set(layerId, record);
     if (!this.slotted) this.renderItems();
+    this.clearNotice();
   }
 
   /** The legend's element tree (for tests and the host). */
@@ -273,6 +274,44 @@ export class StoryLegend {
     this.panel.hidden = !open;
     this.toggle.setAttribute("aria-expanded", String(open));
     this.root.classList.toggle("is-open", open);
+    this.clearNotice();
+  }
+
+  /**
+   * Keep the map's notice (`.ml-map-notice`, top-centre) readable beside the
+   * legend (ml-aot.108): on a narrow map the two would overlap, and the
+   * legend layer sits above the map. When the legend, open or closed, takes
+   * part of the notice's band at the top, the notice moves into the room
+   * beside it, or — too narrow for that — below it. Set as custom
+   * properties on the map container, which the notice reads; removed when
+   * there is no conflict.
+   */
+  private clearNotice(): void {
+    const container = this.host.querySelector<HTMLElement>(":scope > .scrolly-map-container");
+    if (!container) return;
+    const style = container.style;
+    const props = ["top", "left", "transform", "max-width"].map((p) => `--ml-map-notice-${p}`);
+    for (const prop of props) style.removeProperty(prop);
+    if (!this.placement.corner.startsWith("top") || !this.root.isConnected) return;
+    const map = container.getBoundingClientRect();
+    const legend = this.root.getBoundingClientRect();
+    if (map.width === 0 || legend.width === 0) return;
+    // The band the notice may use: centred, at most 480 px, 10 px margins.
+    const width = Math.min(480, map.width - 20);
+    const bandLeft = map.left + (map.width - width) / 2;
+    const bandRight = bandLeft + width;
+    if (legend.right <= bandLeft || legend.left >= bandRight) return;
+    const left = this.placement.corner.endsWith("left");
+    const room = left ? map.right - 10 - (legend.right + 8) : legend.left - 8 - (map.left + 10);
+    if (room >= 320) {
+      // Beside the legend.
+      style.setProperty("--ml-map-notice-left", `${left ? legend.right + 8 - map.left : 10}px`);
+      style.setProperty("--ml-map-notice-transform", "none");
+      style.setProperty("--ml-map-notice-max-width", `${Math.min(480, room)}px`);
+    } else {
+      // Below it.
+      style.setProperty("--ml-map-notice-top", `${Math.ceil(legend.bottom - map.top) + 8}px`);
+    }
   }
 
   private isSmall(): boolean {
@@ -293,6 +332,8 @@ export class StoryLegend {
    */
   destroy(): void {
     for (const cleanup of this.cleanups.splice(0)) cleanup();
+    const container = this.host.querySelector<HTMLElement>(":scope > .scrolly-map-container");
+    for (const p of ["top", "left", "transform", "max-width"]) container?.style.removeProperty(`--ml-map-notice-${p}`);
     const slot = this.panel.querySelector<HTMLElement>(':scope > [slot="legend"]');
     if (slot) this.host.appendChild(slot);
     this.layer.remove();
