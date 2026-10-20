@@ -68,6 +68,8 @@ export const SOURCE_RUNTIME_KEYS = [
   "format",
   "load",
   "columns",
+  // A single-band COG's colours (ml-cnv.2): compiled into its cog:// URL.
+  "colorRamp",
 ] as const;
 
 /**

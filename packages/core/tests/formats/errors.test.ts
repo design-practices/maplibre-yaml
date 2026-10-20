@@ -44,7 +44,7 @@ describe("describeFormatFailure — the on-page sentences", () => {
   it("no-range names the hosts that work and the one that doesn't", () => {
     expect(describeFormatFailure({ code: "no-range", format: "pmtiles", url: URL })).toBe(
       "`/data/x.pmtiles` was served without range-request support (the server sent the whole file " +
-        "instead of the part asked for). PMTiles, FlatGeobuf and GeoParquet files need a web server that supports " +
+        "instead of the part asked for). PMTiles, FlatGeobuf, GeoParquet and COG files need a web server that supports " +
         "HTTP range requests: GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` " +
         "does not — preview locally with `npx serve` instead."
     );
@@ -81,9 +81,29 @@ describe("describeFormatFailure — the on-page sentences", () => {
     );
   });
 
-  it("the reserved format (COG) says 'not yet', with what to do today", () => {
-    expect(describeFormatFailure({ code: "unsupported", format: "cog", url: "s.tif" })).toContain(
-      "can't read on its own yet (it's planned)"
+  it("a recognized format this version can't read says so, with what to do", () => {
+    expect(describeFormatFailure({ code: "unsupported", format: "geoparquet", url: "w.parquet" })).toBe(
+      "`w.parquet` is a GeoParquet file, which this version of maplibre-yaml can't read. " +
+        "Update maplibre-yaml, or convert the file to a format this version reads."
+    );
+  });
+
+  it("a COG in the wrong projection gets the gdalwarp command (ml-cnv.2)", () => {
+    expect(describeFormatFailure({ code: "crs", format: "cog", url: "/d/scene.tif", crs: "EPSG:4326" })).toBe(
+      "`/d/scene.tif` is in EPSG:4326; a COG must be in Web Mercator (EPSG:3857) to be drawn. " +
+        "Reproject it: `gdalwarp -t_srs EPSG:3857 -of COG -co COMPRESS=DEFLATE scene.tif out.tif` " +
+        "(GDAL 3.1 or later)."
+    );
+    expect(describeFormatFailure({ code: "crs", format: "cog", url: "photo.tif" })).toContain(
+      "has no map coordinates (a plain TIFF image, not a GeoTIFF)"
+    );
+  });
+
+  it("a GeoTIFF that isn't cloud-optimized gets the gdal_translate command", () => {
+    expect(describeFormatFailure({ code: "not-cloud-optimized", format: "cog", url: "/d/big.tif" })).toBe(
+      "`/d/big.tif` is a GeoTIFF but not a Cloud Optimized one (it has no internal tiles or no " +
+        "overviews), so the browser may download most of the file to draw it. Convert it: " +
+        "`gdal_translate -of COG -co COMPRESS=DEFLATE big.tif out.tif`."
     );
   });
 

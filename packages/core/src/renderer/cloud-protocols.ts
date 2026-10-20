@@ -15,6 +15,7 @@
 import { formatsIn, type CloudFormat } from "../formats/detect";
 import { getDecoder, hasDecoder, prefetchDecoder } from "../formats/decoders";
 import { install as installPmtiles } from "../formats/pmtiles";
+import { install as installCog } from "../formats/cog-protocol";
 import { addProtocol, maplibregl, runtimeVersion } from "./maplibre-interop";
 
 type Obj = Record<string, unknown>;
@@ -52,7 +53,9 @@ export function pmtilesUnavailable(): Error | undefined {
  * the map is constructed, so the style's first TileJSON and tile requests can
  * never race it; it costs nothing, because the handler downloads the reader
  * (`chunks/pmtiles.js`) only when the first request arrives. A page's own
- * registration is left alone (host wins).
+ * registration is left alone (host wins). `cog://` is registered the same
+ * way (ml-cnv.2): its handler downloads `chunks/cog.js` on a COG's first
+ * request.
  *
  * @returns `undefined` when the document's own sources need no protocol;
  *   otherwise a promise (never rejecting) of the formats whose reader could
@@ -70,30 +73,44 @@ export function prepareProtocols(
   const needed = formatsIn(sources, layers);
   for (const f of formatsIn(inlineStyleSources(mapStyle), [])) needed.add(f);
   const failed = new Map<CloudFormat, Error>();
-  let installed = false;
+  const host = () =>
+    ({
+      addProtocol: addProtocol as never,
+      config: (maplibregl as unknown as { config?: { REGISTERED_PROTOCOLS?: Obj } }).config,
+      version: runtimeVersion(),
+      module: maplibregl as unknown as object,
+    }) as never;
+  // Which protocols core's own handler serves (not the page's: host wins).
+  const ours = new Set<CloudFormat>();
   try {
-    installed =
-      installPmtiles({
-        addProtocol: addProtocol as never,
-        config: (maplibregl as unknown as { config?: { REGISTERED_PROTOCOLS?: Obj } }).config,
-        version: runtimeVersion(),
-        module: maplibregl as unknown as object,
-      }) !== "host";
+    if (installPmtiles(host()) !== "host") ours.add("pmtiles");
   } catch (error) {
     pmtilesProblem = error instanceof Error ? error : new Error(String(error));
     failed.set("pmtiles", pmtilesProblem);
   }
-  // Every on-demand reader the document's own sources need starts
-  // downloading now, in parallel with maplibre-gl's style and tiles (not
-  // pmtiles when the page's own handler serves it).
-  for (const format of needed) {
-    if (hasDecoder(format) && (format !== "pmtiles" || installed)) prefetchDecoder(format);
+  try {
+    if (installCog(host()) !== "host") ours.add("cog");
+  } catch (error) {
+    if (needed.has("cog")) failed.set("cog", error instanceof Error ? error : new Error(String(error)));
   }
-  if (!needed.has("pmtiles")) return undefined;
+  // Every on-demand reader the document's own sources need starts
+  // downloading now, in parallel with maplibre-gl's style and tiles (not a
+  // protocol's when the page's own handler serves it).
+  const protocols: CloudFormat[] = ["pmtiles", "cog"];
+  for (const format of needed) {
+    if (hasDecoder(format) && (!protocols.includes(format) || ours.has(format))) prefetchDecoder(format);
+  }
+  const waitFor = protocols.filter((f) => needed.has(f) && ours.has(f) && !failed.has(f));
+  if (!protocols.some((f) => needed.has(f))) return undefined;
   // The page's own handler serves these sources: no reader of ours to wait on.
-  if (!installed) return Promise.resolve(failed);
-  return getDecoder("pmtiles").then(
-    () => failed,
-    (error: unknown) => failed.set("pmtiles", error instanceof Error ? error : new Error(String(error)))
-  );
+  return Promise.all(
+    waitFor.map((format) =>
+      getDecoder(format as "pmtiles" | "cog").then(
+        () => undefined,
+        (error: unknown) => {
+          failed.set(format, error instanceof Error ? error : new Error(String(error)));
+        }
+      )
+    )
+  ).then(() => failed);
 }

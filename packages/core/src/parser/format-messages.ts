@@ -39,9 +39,9 @@ export function formatTypeMessage(received: unknown): string | undefined {
       );
     case "cog":
       return (
-        `${word} is a file format, not a source type: a Cloud Optimized GeoTIFF is read ` +
-        "with type: raster (or raster-dem for elevation). This version of maplibre-yaml " +
-        "can't read COGs on its own yet (it's planned)."
+        `${word} is a file format, not a source type. Keep the url: and set type: raster ` +
+        "(or raster-dem for elevation) — the .tif file name (or a cog:// URL) tells " +
+        "maplibre-yaml to read it as a Cloud Optimized GeoTIFF."
       );
     case "mbtiles":
       return (

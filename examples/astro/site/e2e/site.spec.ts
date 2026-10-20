@@ -196,6 +196,37 @@ test.describe("cloud-native data: PMTiles, FlatGeobuf and GeoParquet from YAML (
   });
 });
 
+test.describe("Cloud Optimized GeoTIFF from YAML (0.9, ml-cnv.2)", () => {
+  test("imagery and elevation render, framed on the file, with no page JavaScript @dev", async ({ page }) => {
+    const errors = await guard(page);
+    const ranged: number[] = [];
+    page.on("response", (r) => {
+      if (/\.cog\.tif/.test(r.url())) ranged.push(r.status());
+    });
+    await page.goto("/cog/", { waitUntil: "domcontentloaded" });
+    const map = '[data-testid="cog-map"] ml-map';
+    await mapReady(page, map);
+    await page.waitForFunction(
+      (sel) => {
+        const m = (document.querySelector(sel) as any)?.getMap?.();
+        return Boolean(m && m.getSource("imagery") && m.isSourceLoaded("imagery") && m.isSourceLoaded("elevation"));
+      },
+      map,
+      { timeout: 45_000 }
+    );
+    const style = await page.evaluate((sel) => (document.querySelector(sel) as any).getMap().getStyle(), map);
+    expect(style.sources.imagery.url).toMatch(/^cog:\/\/.*\/data\/cloud-native\/imagery\.cog\.tif$/);
+    expect(style.sources.elevation.url).toMatch(/elevation\.cog\.tif#dem$/);
+    // fitTo framed the file's extent (the YAML says zoom 8).
+    await expect.poll(async () => (await camera(page, map)).zoom).toBeGreaterThan(8.5);
+    // Read in parts (HTTP range requests), as on any static host.
+    expect(ranged.length).toBeGreaterThan(0);
+    expect(ranged.every((s) => s === 206)).toBe(true);
+    await expect(page.locator(`${map} .ml-map-notice`)).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe("explore: <FullPageMap> with the 0.7 surface", () => {
   const MAP = ".ml-fullpage-map ml-map";
 

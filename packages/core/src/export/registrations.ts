@@ -163,6 +163,13 @@ exportClasses.register("source.columns", {
     "snapshot carries the columns listed (every column when `columns:` isn't written).",
 });
 
+exportClasses.register("source.colorRamp", {
+  class: "exports",
+  onEmit:
+    "A COG's colour ramp is compiled into its cog:// URL (the COG protocol's #color: " +
+    "fragment, with the palette written out as colours); the key does not appear in style.json.",
+});
+
 exportClasses.register("format.pmtiles", { class: "exports", onEmit: PMTILES_ON_EMIT });
 
 exportClasses.register("format.cog", { class: "exports", onEmit: COG_ON_EMIT });

@@ -109,7 +109,7 @@ describe("type: <a file format> is an error with the fix", () => {
     ["fgb", "Keep the url: and set type: geojson"],
     ["geoparquet", "Keep the url: and set type: geojson — the .parquet (or .geoparquet) file name tells maplibre-yaml to read it as GeoParquet"],
     ["parquet", "Keep the url: and set type: geojson — the .parquet (or .geoparquet) file name tells maplibre-yaml to read it as GeoParquet"],
-    ["cog", "a Cloud Optimized GeoTIFF is read with type: raster (or raster-dem for elevation)"],
+    ["cog", "Keep the url: and set type: raster (or raster-dem for elevation)"],
     ["mbtiles", "Convert it to PMTiles (pmtiles convert in.mbtiles out.pmtiles)"],
   ])("type: %s", (word, fix) => {
     const result = v1(`  data:
@@ -326,8 +326,8 @@ describe("live data on FlatGeobuf is not available in 0.9", () => {
   });
 });
 
-describe("GeoParquet is read; COG is reserved: recognized, not read yet", () => {
-  it("GeoParquet validates clean; COG warns (not an error: the rest of the map still renders)", () => {
+describe("GeoParquet and COG are both read: neither is reported as 'not yet'", () => {
+  it("both validate clean", () => {
     const result = v1(`  wells:
     type: geojson
     url: data/wells.parquet
@@ -340,15 +340,12 @@ describe("GeoParquet is read; COG is reserved: recognized, not read yet", () => 
     expect(result.success).toBe(true);
     const messages = result.warnings.map((w) => w.message).join("\n");
     expect(messages).not.toContain("GeoParquet");
-    expect(messages).not.toMatch(/not supported yet|can't read GeoParquet/);
-    expect(messages).toContain(
-      '"data/scene.tif" is a Cloud Optimized GeoTIFF. This version of maplibre-yaml can\'t read COGs on its own yet'
-    );
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings.every((w) => w.kind === "unimplemented")).toBe(true);
+    expect(messages).not.toContain("scene.tif");
+    expect(messages).not.toMatch(/not supported yet|can't read/);
+    expect(result.warnings).toHaveLength(0);
   });
 
-  it("format: geoparquet / cog validate (the syntax is reserved, not rejected)", () => {
+  it("format: geoparquet / cog validate", () => {
     expect(v1(`  a:\n    type: geojson\n    url: https://x.org/a\n    format: geoparquet`).success).toBe(true);
     expect(v1(`  a:\n    type: raster\n    url: https://x.org/a\n    format: cog`).success).toBe(true);
   });

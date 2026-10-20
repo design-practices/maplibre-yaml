@@ -14,7 +14,8 @@
  * | `.fgb` / `.parquet` URL (or `format:`) on a tile source | error: features, not tiles — use `type: geojson` |
  * | `.pmtiles` / `.tif` URL (or `format:`) on `type: geojson` | error: tiles, not features — use `type: vector` / `raster` |
  * | `refresh:` / `stream:` on a FlatGeobuf or GeoParquet source | error: live data isn't available for them yet |
- * | COG | warning: recognized, not read by this version yet |
+ * | a recognized format this version doesn't read (none in 0.9) | warning: recognized, not read by this version |
+ * | COG `colorRamp:`, `encoding:`, `tileSize:` | see `cog-checks.ts` |
  * | `format:` disagreeing with the URL | warning: `format:` wins |
  * | `load:` on a source that isn't FlatGeobuf or GeoParquet | warning: no effect |
  * | `columns:` on a source that isn't GeoParquet | warning: no effect |
@@ -49,7 +50,7 @@ const isObject = (v: unknown): v is Obj => typeof v === "object" && v !== null &
 export { formatTypeMessage } from "./format-messages";
 
 /** One source the checks visit: the object, its path, and where its runtime keys sit. */
-interface SourceAt {
+export interface SourceAt {
   source: Obj;
   path: (string | number)[];
   /** The object holding `format`/`load`/`refresh` (the source in v1, `runtime:` in v2). */
@@ -58,7 +59,7 @@ interface SourceAt {
 }
 
 /** Every source object of a document (named, then inline on layers). */
-function sourcesOf(value: Obj, version: 1 | 2): SourceAt[] {
+export function sourcesOf(value: Obj, version: 1 | 2): SourceAt[] {
   const root = version === 2 ? value["style"] : value;
   if (!isObject(root)) return [];
   const base: (string | number)[] = version === 2 ? ["style"] : [];
@@ -107,13 +108,17 @@ function mismatchMessage(format: CloudFormat, url: unknown): string {
   }
 }
 
-/** The "recognized, not read yet" warning for a reserved format (COG). */
+/**
+ * The "recognized, not read" warning for a format in CLOUD_FORMATS that this
+ * version doesn't read. Every format is read in 0.9, so this only fires if a
+ * format is recognized ahead of its reader again.
+ */
 function notYetMessage(format: CloudFormat, url: unknown): string {
   const file = fileLabel(url, format);
   return (
-    `${file} is a Cloud Optimized GeoTIFF. This version of maplibre-yaml can't read COGs ` +
-    "on its own yet (it's planned): the source stays empty unless the page registers " +
-    "the cog:// protocol itself. Convert the image to PMTiles to use it today."
+    `${file} is a ${FORMAT_INFO[format].label} file, which this version of maplibre-yaml ` +
+    "can't read: the source stays empty. Update maplibre-yaml, or convert the file to a " +
+    "format this version reads."
   );
 }
 

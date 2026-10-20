@@ -1,0 +1,31 @@
+# Cloud Optimized GeoTIFF (0.9): imagery and elevation, named in YAML like any
+# other file — no page JavaScript. Synthetic, public-domain fixtures
+# (scripts/fixtures/cog.py) in public/data/cloud-native/. COGs are read with
+# HTTP range requests: astro dev, astro preview and GitHub Pages all serve
+# them.
+type: map
+id: cog
+config:
+  center: [10.2, 42.15]
+  zoom: 8
+  pitch: 45
+  mapStyle: https://tiles.openfreemap.org/styles/positron
+  fitTo: { source: imagery, padding: 20 }
+sources:
+  imagery:
+    type: raster
+    url: /data/cloud-native/imagery.cog.tif
+  elevation:
+    type: raster-dem
+    url: /data/cloud-native/elevation.cog.tif
+terrain:
+  source: elevation
+  exaggeration: 1.5
+layers:
+  - id: imagery
+    type: raster
+    source: imagery
+  - id: hills
+    type: hillshade
+    source: elevation
+    paint: { hillshade-exaggeration: 0.5 }

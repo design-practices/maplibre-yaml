@@ -299,6 +299,7 @@ import {
 import { isLikelyMisspelling } from "../utils/suggest";
 import { checkDocument, chapterLabel, checkLocaleKeys, missingBasemapWarning } from "./document-checks";
 import { checkSourceFormats } from "./format-checks";
+import { applyCogDefaults, checkCogSources } from "./cog-checks";
 import { reservedPrefixWarnings } from "./reserved-prefix";
 import { boundsProblem } from "../utils/bounds";
 import { explainIndentationError, explainQuoteError } from "./yaml-errors";
@@ -1954,6 +1955,15 @@ function withFormatChecks<T>(
   positions: { doc: Document; lineCounter: LineCounter } | undefined
 ): ParseResult<T> {
   const checks = checkSourceFormats(value, version, positions);
+  // COG sources (ml-cnv.2): colorRamp/encoding checks, and tileSize 256
+  // unless the author wrote one.
+  const cog = checkCogSources(value, version, positions);
+  if (result.success) applyCogDefaults(result.data, value, version);
+  checks.errors.push(...cog.errors);
+  // A specific colorRamp warning replaces the generic "Unknown key" one.
+  const specific = new Set(cog.warnings.map((w) => w.path));
+  result = { ...result, warnings: result.warnings.filter((w) => !specific.has(w.path)) };
+  checks.warnings.push(...cog.warnings);
   if (checks.errors.length === 0 && checks.warnings.length === 0) return result;
   const warnings = [...result.warnings, ...checks.warnings];
   if (checks.errors.length === 0) return { ...result, warnings };

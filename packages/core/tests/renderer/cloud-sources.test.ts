@@ -2,8 +2,9 @@
  * Cloud-native sources at render time (0.9, ml-cnv): the PMTiles protocol is
  * registered once on the renderer's maplibre module (the page's own
  * registration wins), source URLs reach MapLibre in canonical form, our keys
- * never do, and a reserved format (COG) becomes a plain "not yet" instead of
- * a MapLibre error.
+ * never do (COG: `cog://`, `#dem`, `#color:`, tileSize 256), and a format
+ * recognized ahead of its reader becomes a plain "not yet" instead of a
+ * MapLibre error.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -150,6 +151,23 @@ describe("prepareProtocols (on the interop-resolved module)", () => {
     await prepareProtocols({ a: { type: "vector", url: "a.pmtiles" } }, []);
     expect(registry()["pmtiles"]).toBe(host);
   });
+
+  it("registers cog:// synchronously too, and a COG source waits on it (ml-cnv.2)", async () => {
+    if (registry()["cog"]) removeProtocol("cog");
+    expect(prepareProtocols({}, [])).toBeUndefined();
+    expect(typeof registry()["cog"]).toBe("function");
+    const failed = await prepareProtocols({ e: { type: "raster-dem", url: "e.tif" } }, []);
+    expect(failed?.size).toBe(0);
+    removeProtocol("cog");
+  });
+
+  it("keeps a cog handler the page registered first (host wins)", async () => {
+    const host = async () => ({ data: {} });
+    maplibregl.addProtocol("cog", host as never);
+    await prepareProtocols({ a: { type: "raster", url: "a.tif" } }, []);
+    expect(registry()["cog"]).toBe(host);
+    removeProtocol("cog");
+  });
 });
 
 describe("toMapLibreTileSpec", () => {
@@ -180,14 +198,32 @@ describe("toMapLibreTileSpec", () => {
     expect(toMapLibreTileSpec(source).spec).toBe(source);
   });
 
-  it("a COG (reserved) becomes an empty placeholder plus a plain 'not yet'", () => {
-    const { spec, problem } = toMapLibreTileSpec({ type: "raster", url: "data/scene.tif" });
-    expect(spec["type"]).toBe("raster");
-    expect(spec["url"]).toBeUndefined();
-    expect(problem?.failure).toMatchObject({ code: "unsupported", format: "cog", url: "data/scene.tif" });
+  it("a COG becomes cog://<absolute> with tileSize 256 (ml-cnv.2)", () => {
+    const { spec, problem } = toMapLibreTileSpec({ type: "raster", url: "data/scene.tif", tileSize: 512 });
+    expect(problem).toBeUndefined();
+    // An authored tileSize is kept (the parser turns an unwritten one into 256).
+    expect(spec).toEqual({ type: "raster", url: `cog://${new URL("data/scene.tif", document.baseURI).href}`, tileSize: 512 });
+    expect(toMapLibreTileSpec({ type: "raster", url: "cog://https://h.org/s.tif" }).spec).toEqual({
+      type: "raster",
+      url: "cog://https://h.org/s.tif",
+      tileSize: 256,
+    });
   });
 
-  it("a COG uses the page's own cog:// protocol when one is registered", () => {
+  it("a COG raster-dem gets #dem and mapbox encoding; colorRamp becomes #color: and leaves the spec", () => {
+    expect(
+      toMapLibreTileSpec({ type: "raster-dem", url: "https://h.org/e.tif", encoding: "terrarium" }).spec
+    ).toEqual({ type: "raster-dem", url: "cog://https://h.org/e.tif#dem", tileSize: 256, encoding: "mapbox" });
+    expect(
+      toMapLibreTileSpec({
+        type: "raster",
+        url: "https://h.org/n.tif",
+        colorRamp: { colors: ["#000000", "#ffffff"], min: 0, max: 1 },
+      }).spec
+    ).toEqual({ type: "raster", url: 'cog://https://h.org/n.tif#color:["#000000","#ffffff"],0,1,c', tileSize: 256 });
+  });
+
+  it("a page's own cog:// URL is kept as written", () => {
     maplibregl.addProtocol("cog", (async () => ({ data: {} })) as never);
     try {
       expect(isProtocolRegistered("cog")).toBe(true);
@@ -253,19 +289,30 @@ describe("LayerManager with cloud-native sources", () => {
     expect(map.addSource).toHaveBeenCalledWith("x-source", { type: "vector", url: "pmtiles://https://h.org/a.pmtiles" });
   });
 
-  it("a reserved format is reported once and added as a placeholder (layers still add)", () => {
+  it("a COG source is added in canonical form, never as an error (ml-cnv.2)", () => {
     const manager = new LayerManager(map, callbacks);
-    manager.registerSources({ scene: { type: "raster", url: "https://h.org/scene.tif" } });
-    expect(callbacks.onSourceError).toHaveBeenCalledTimes(1);
-    expect(callbacks.onSourceError.mock.calls[0][0]).toBe("scene");
-    expect(map.addSource).toHaveBeenCalledWith("scene", expect.objectContaining({ type: "raster" }));
+    manager.registerSources({ scene: { type: "raster", url: "https://h.org/scene.tif", tileSize: 256 } });
+    expect(callbacks.onSourceError).not.toHaveBeenCalled();
+    expect(map.addSource).toHaveBeenCalledWith("scene", {
+      type: "raster",
+      url: "cog://https://h.org/scene.tif",
+      tileSize: 256,
+    });
   });
 
-  it("asks the injected predicate whether the page registered cog:// (no maplibre-gl import of its own)", () => {
-    const manager = new LayerManager(map, callbacks, { isProtocolRegistered: (s) => s === "cog" });
-    manager.registerSources({ scene: { type: "raster", url: "https://h.org/scene.tif" } });
-    expect(callbacks.onSourceError).not.toHaveBeenCalled();
-    expect(map.addSource).toHaveBeenCalledWith("scene", { type: "raster", url: "cog://https://h.org/scene.tif" });
+  it("an inline COG raster-dem source too", async () => {
+    const manager = new LayerManager(map, callbacks);
+    await manager.addLayer({
+      id: "hills",
+      type: "hillshade",
+      source: { type: "raster-dem", url: "https://h.org/e.tif" },
+    } as never);
+    expect(map.addSource).toHaveBeenCalledWith("hills-source", {
+      type: "raster-dem",
+      url: "cog://https://h.org/e.tif#dem",
+      tileSize: 256,
+      encoding: "mapbox",
+    });
   });
 
   it("a GeoParquet url: goes to its own reader, never the JSON fetcher (tests/formats/geoparquet)", async () => {

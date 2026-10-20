@@ -434,7 +434,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "geoparquet",
                           "cog"
                         ],
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                       },
                       "load": {
                         "anyOf": [
@@ -762,7 +762,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "format": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                       },
                       "tiles": {
                         "type": "array",
@@ -850,11 +850,54 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
-                        "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                        "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or a COG (.tif or cog://)"
                       },
                       "format": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
+                      },
+                      "colorRamp": {
+                        "type": "object",
+                        "properties": {
+                          "palette": {
+                            "type": "string",
+                            "description": "Palette name, as in classify: (viridis, cividis, YlGn, RdBu …); default viridis"
+                          },
+                          "colors": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "minItems": 2,
+                            "description": "Your own colours, low to high (#rrggbb), instead of a palette"
+                          },
+                          "min": {
+                            "type": "number",
+                            "description": "The value drawn in the first colour"
+                          },
+                          "max": {
+                            "type": "number",
+                            "description": "The value drawn in the last colour"
+                          },
+                          "reverse": {
+                            "type": "boolean",
+                            "description": "Run the colours high to low"
+                          },
+                          "classes": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "description": "Draw this many flat classes instead of a smooth ramp"
+                          }
+                        },
+                        "required": [
+                          "min",
+                          "max"
+                        ],
+                        "additionalProperties": false,
+                        "description": "COG: colours for a single band of values (palette or colors, min, max)",
+                        "patternProperties": {
+                          "^x-": {}
+                        }
                       },
                       "tiles": {
                         "type": "array",
@@ -933,11 +976,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
-                        "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                        "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or an elevation COG (.tif or cog://)"
                       },
                       "format": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                       },
                       "tiles": {
                         "type": "array",
@@ -4961,7 +5004,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "geoparquet",
                       "cog"
                     ],
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                   },
                   "load": {
                     "anyOf": [
@@ -5289,7 +5332,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "format": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                   },
                   "tiles": {
                     "type": "array",
@@ -5377,11 +5420,54 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
-                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                    "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or a COG (.tif or cog://)"
                   },
                   "format": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
+                  },
+                  "colorRamp": {
+                    "type": "object",
+                    "properties": {
+                      "palette": {
+                        "type": "string",
+                        "description": "Palette name, as in classify: (viridis, cividis, YlGn, RdBu …); default viridis"
+                      },
+                      "colors": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 2,
+                        "description": "Your own colours, low to high (#rrggbb), instead of a palette"
+                      },
+                      "min": {
+                        "type": "number",
+                        "description": "The value drawn in the first colour"
+                      },
+                      "max": {
+                        "type": "number",
+                        "description": "The value drawn in the last colour"
+                      },
+                      "reverse": {
+                        "type": "boolean",
+                        "description": "Run the colours high to low"
+                      },
+                      "classes": {
+                        "type": "integer",
+                        "minimum": 2,
+                        "description": "Draw this many flat classes instead of a smooth ramp"
+                      }
+                    },
+                    "required": [
+                      "min",
+                      "max"
+                    ],
+                    "additionalProperties": false,
+                    "description": "COG: colours for a single band of values (palette or colors, min, max)",
+                    "patternProperties": {
+                      "^x-": {}
+                    }
                   },
                   "tiles": {
                     "type": "array",
@@ -5460,11 +5546,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
-                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                    "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or an elevation COG (.tif or cog://)"
                   },
                   "format": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                   },
                   "tiles": {
                     "type": "array",
@@ -8412,7 +8498,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "geoparquet",
                                   "cog"
                                 ],
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                               },
                               "load": {
                                 "anyOf": [
@@ -8740,7 +8826,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "format": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                               },
                               "tiles": {
                                 "type": "array",
@@ -8828,11 +8914,54 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or a COG (.tif or cog://)"
                               },
                               "format": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
+                              },
+                              "colorRamp": {
+                                "type": "object",
+                                "properties": {
+                                  "palette": {
+                                    "type": "string",
+                                    "description": "Palette name, as in classify: (viridis, cividis, YlGn, RdBu …); default viridis"
+                                  },
+                                  "colors": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "minItems": 2,
+                                    "description": "Your own colours, low to high (#rrggbb), instead of a palette"
+                                  },
+                                  "min": {
+                                    "type": "number",
+                                    "description": "The value drawn in the first colour"
+                                  },
+                                  "max": {
+                                    "type": "number",
+                                    "description": "The value drawn in the last colour"
+                                  },
+                                  "reverse": {
+                                    "type": "boolean",
+                                    "description": "Run the colours high to low"
+                                  },
+                                  "classes": {
+                                    "type": "integer",
+                                    "minimum": 2,
+                                    "description": "Draw this many flat classes instead of a smooth ramp"
+                                  }
+                                },
+                                "required": [
+                                  "min",
+                                  "max"
+                                ],
+                                "additionalProperties": false,
+                                "description": "COG: colours for a single band of values (palette or colors, min, max)",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
                               },
                               "tiles": {
                                 "type": "array",
@@ -8911,11 +9040,11 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or an elevation COG (.tif or cog://)"
                               },
                               "format": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                               },
                               "tiles": {
                                 "type": "array",
@@ -13163,7 +13292,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                       "geoparquet",
                                       "cog"
                                     ],
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                                   },
                                   "load": {
                                     "anyOf": [
@@ -13491,7 +13620,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "format": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                                   },
                                   "tiles": {
                                     "type": "array",
@@ -13579,11 +13708,54 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                    "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or a COG (.tif or cog://)"
                                   },
                                   "format": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
+                                  },
+                                  "colorRamp": {
+                                    "type": "object",
+                                    "properties": {
+                                      "palette": {
+                                        "type": "string",
+                                        "description": "Palette name, as in classify: (viridis, cividis, YlGn, RdBu …); default viridis"
+                                      },
+                                      "colors": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        },
+                                        "minItems": 2,
+                                        "description": "Your own colours, low to high (#rrggbb), instead of a palette"
+                                      },
+                                      "min": {
+                                        "type": "number",
+                                        "description": "The value drawn in the first colour"
+                                      },
+                                      "max": {
+                                        "type": "number",
+                                        "description": "The value drawn in the last colour"
+                                      },
+                                      "reverse": {
+                                        "type": "boolean",
+                                        "description": "Run the colours high to low"
+                                      },
+                                      "classes": {
+                                        "type": "integer",
+                                        "minimum": 2,
+                                        "description": "Draw this many flat classes instead of a smooth ramp"
+                                      }
+                                    },
+                                    "required": [
+                                      "min",
+                                      "max"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "COG: colours for a single band of values (palette or colors, min, max)",
+                                    "patternProperties": {
+                                      "^x-": {}
+                                    }
                                   },
                                   "tiles": {
                                     "type": "array",
@@ -13662,11 +13834,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                    "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or an elevation COG (.tif or cog://)"
                                   },
                                   "format": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet; cog is not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                                   },
                                   "tiles": {
                                     "type": "array",

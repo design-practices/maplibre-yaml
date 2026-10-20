@@ -1,0 +1,36 @@
+# Cloud Optimized GeoTIFFs — YAML only (0.9). A .tif file name is the only
+# hint: imagery on a raster source, elevation on a raster-dem source (it
+# drives the hillshade layer and the 3D terrain). fitTo frames the imagery
+# file's own extent.
+# Synthetic, public-domain data (a fictional island, scripts/fixtures/cog.py).
+# Hermetic test: e2e/gallery.spec.ts (twin) and e2e/cloud-native-cog.spec.ts.
+type: map
+id: add-a-cog-raster-source
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  pitch: 50
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+  fitTo: { source: imagery, padding: 20 }
+legend:
+  title: The island
+sources:
+  imagery:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery.cog.tif
+  elevation:
+    type: raster-dem
+    url: /gallery-assets/cloud-native/elevation.cog.tif
+terrain:
+  source: elevation
+  exaggeration: 1.5
+layers:
+  - id: imagery
+    type: raster
+    source: imagery
+    legend: { label: Imagery, color: "#789c5c", shape: square }
+  - id: hills
+    type: hillshade
+    source: elevation
+    paint: { hillshade-exaggeration: 0.5 }
+    legend: { label: Hillshade, color: "#7f7f7f", shape: square }

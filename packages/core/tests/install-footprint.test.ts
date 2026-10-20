@@ -46,7 +46,9 @@ if (process.env.CI && !built) {
 function importsOf(code: string): string[] {
   const found = new Set<string>();
   for (const m of code.matchAll(/^import\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/gm)) found.add(m[1]!);
-  for (const m of code.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g)) found.add(m[1]!);
+  // Not a JSDoc type (`{import('http').IncomingMessage}`, kept in the
+  // unminified Node build from geotiff.js's sources).
+  for (const m of code.matchAll(/(?<!\{)\bimport\(\s*['"]([^'"]+)['"]\s*\)/g)) found.add(m[1]!);
   return [...found];
 }
 
@@ -58,6 +60,9 @@ describe("install footprint", () => {
     expect(deps).not.toContain("ol");
     // The Protomaps basemap generator (ml-cnv.7) is bundled the same way.
     expect(deps).not.toContain("@protomaps/basemaps");
+    // The COG reader (ml-cnv.2): ~20 MB installed (geotiff.js and its codecs).
+    expect(deps).not.toContain("@geomatico/maplibre-cog-protocol");
+    expect(deps).not.toContain("geotiff");
   });
 
   it.skipIf(!built)("the Node build bundles them and imports nothing Node-only", () => {

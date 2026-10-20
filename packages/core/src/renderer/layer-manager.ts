@@ -129,7 +129,8 @@ export interface LayerManagerDataOptions {
    */
   pending?: Record<string, Promise<FeatureCollection>>;
   /**
-   * Whether a URL protocol (`cog`) is registered on the maplibre-gl module
+   * Whether a URL protocol is registered on the maplibre-gl module (unused
+   * since COG is read YAML-only, ml-cnv.2; kept for callers)
    * (ml-cnv). Injected by `MapRenderer` so this module never loads
    * maplibre-gl itself; defaults to "none registered".
    */

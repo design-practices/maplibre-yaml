@@ -1,0 +1,17 @@
+---
+import Base from "../layouts/Base.astro";
+import { Map } from "@maplibre-yaml/astro";
+---
+
+<Base title="Cloud Optimized GeoTIFF">
+  <main>
+    <h1>Cloud Optimized GeoTIFF</h1>
+    <p class="lede">
+      Two COG files named in YAML: the imagery, and the elevation that shades the hills and
+      lifts the map into 3D. No page JavaScript: <code>@maplibre-yaml/core</code> reads them.
+    </p>
+    <div class="map-frame" data-testid="cog-map">
+      <Map src="/maps/cog.yaml" height="460px" />
+    </div>
+  </main>
+</Base>

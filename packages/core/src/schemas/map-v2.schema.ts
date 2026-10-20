@@ -68,6 +68,7 @@ import {
   LoadingConfigSchema,
   SourceColumnsSchema,
   SourceFormatSchema,
+  ColorRampSchema,
   SourceLoadSchema,
 } from "./source.schema";
 import {
@@ -146,6 +147,7 @@ export const SourceRuntimeSchema = z
     format: SourceFormatSchema.optional(),
     load: SourceLoadSchema.optional(),
     columns: SourceColumnsSchema.optional(),
+    colorRamp: ColorRampSchema.optional(),
   })
   .passthrough()
   .describe("Per-source live-data configuration (v2 `source.runtime`)");
@@ -286,7 +288,7 @@ export const SourceV2Schema: z.ZodTypeAny = z.union([
     "Vector"
   ),
   requireUrlOrTiles(
-    withSourceRuntime(baseObject(RasterSourceSchema).omit({ format: true })),
+    withSourceRuntime(baseObject(RasterSourceSchema).omit({ format: true, colorRamp: true })),
     "Raster"
   ),
   requireUrlOrTiles(

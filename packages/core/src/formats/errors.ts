@@ -32,13 +32,15 @@ export type FormatFailureCode =
   | "too-large"
   /** `load: viewport` (or an oversized file) needs a spatial index it lacks. */
   | "no-index"
-  /** Not longitude/latitude. */
+  /** Not longitude/latitude (FlatGeobuf), or not Web Mercator (COG). */
   | "crs"
   /** A Parquet file without GeoParquet metadata (no `geo` key). */
   | "not-geoparquet"
   /** GeoParquet geometry in an encoding this version doesn't decode (GeoArrow). */
   | "encoding"
-  /** A recognized format this version doesn't read yet (COG). */
+  /** A GeoTIFF that draws but isn't cloud-optimized (an author hint, not a failure). */
+  | "not-cloud-optimized"
+  /** A recognized format this version doesn't read (none in 0.9; kept for the next one). */
   | "unsupported"
   /** The reader itself couldn't be set up (e.g. maplibre-gl too old). */
   | "decoder"

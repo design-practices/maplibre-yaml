@@ -14,18 +14,14 @@
  * `format:` key names it outright when the URL has no telling extension
  * (a signed URL, an API endpoint); `format:` wins over the URL.
  *
- * Four formats are recognized; three are read in this version:
+ * Four formats are recognized, and all four are read in this version:
  *
  * | Format | Source `type:` | Read in 0.9 |
  * | --- | --- | --- |
  * | PMTiles | `vector`, `raster`, `raster-dem` | yes (tile protocol) |
  * | FlatGeobuf | `geojson` | yes (decoded to GeoJSON) |
  * | GeoParquet | `geojson` | yes (decoded to GeoJSON) |
- * | COG | `raster`, `raster-dem` | not yet without page JS (reserved) |
- *
- * Reserving COG now is what keeps adding it later additive: a document
- * written for 0.9 means the same thing in the release that reads it, and a
- * 0.9 reader gets a plain "not supported yet" instead of a tile error.
+ * | COG | `raster`, `raster-dem` | yes (tile protocol, reader on demand) |
  *
  * Everything here is pure (no DOM, no maplibre-gl), so the parser, the
  * renderer, the emitter and `mlym validate` share one answer.
@@ -37,11 +33,12 @@ export const CLOUD_FORMATS = ["pmtiles", "flatgeobuf", "geoparquet", "cog"] as c
 /** A recognized cloud-native file format. */
 export type CloudFormat = (typeof CLOUD_FORMATS)[number];
 
-/** Formats this version reads YAML-only. The rest are reserved. */
+/** Formats this version reads YAML-only (all of them in 0.9; a format added to CLOUD_FORMATS before its reader would be reported as "not supported yet"). */
 export const SUPPORTED_FORMATS: ReadonlySet<CloudFormat> = new Set<CloudFormat>([
   "pmtiles",
   "flatgeobuf",
   "geoparquet",
+  "cog",
 ]);
 
 /** What a format holds, and the source types that can draw it. */

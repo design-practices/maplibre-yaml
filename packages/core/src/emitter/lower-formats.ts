@@ -15,13 +15,16 @@
  *   an empty placeholder and returns an {@link EmitDataRef}; `mlym emit`
  *   reads the file and inlines the features (`contract`), or reports `lossy`
  *   when it can't.
- * - **COG** — `cog://` URL, `contract` (needs a COG protocol plugin).
+ * - **COG** — class `exports`: the `cog://` URL the renderer uses (`#dem` for
+ *   elevation, a `colorRamp:` compiled to `#color:`, `tileSize: 256`); the
+ *   style then needs the COG protocol plugin registered (`contract`).
  *
  * Every other GeoJSON source given by `url:` emits it as `data: <url>`, the
  * style spec's form (ml-xzx).
  */
 
 import { declaredColumns, formatOfSource, stripScheme, typeReadsFormat } from "../formats/detect";
+import { cogSourceSpec } from "../formats/cog-spec";
 import type { EmitWarning } from "./project";
 
 /** A FlatGeobuf or GeoParquet source the caller must read and inline (core describes, the CLI fetches). */
@@ -44,8 +47,9 @@ export const PMTILES_ON_EMIT =
   "pmtiles package; check other renderers' PMTiles support).";
 
 export const COG_ON_EMIT =
-  "COG sources export as cog:// URLs, which only renderers with a COG protocol plugin " +
-  "(e.g. @geomatico/maplibre-cog-protocol) can draw.";
+  "COG sources export as cog:// URLs in the dialect of @geomatico/maplibre-cog-protocol " +
+  "(#dem for elevation, #color: for a colour ramp) with tileSize 256; renderers must " +
+  "register that plugin's protocol (maplibre-gl JS: addProtocol('cog', cogProtocol)) to draw them.";
 
 export const FLATGEOBUF_ON_EMIT =
   "FlatGeobuf sources are converted to GeoJSON at emit time: `mlym emit` reads the file " +
@@ -127,9 +131,12 @@ export function lowerSourceFormat(
       };
     }
     case "cog": {
-      const canonical = `cog://${stripScheme(url)}`;
+      // Same translation as the renderer (formats/cog-spec), without making
+      // the URL absolute: the emitted style keeps the document's own paths.
+      const lowered = cogSourceSpec({ ...spec, colorRamp: runtime?.["colorRamp"] ?? spec["colorRamp"] });
+      const canonical = String(lowered["url"]);
       return {
-        spec: { ...spec, url: canonical },
+        spec: lowered,
         warnings: [
           {
             path: `${path}.url`,

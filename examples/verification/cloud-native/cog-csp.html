@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!--
+    A strict Content Security Policy that allows workers only from this
+    site's own files (no blob:). maplibre-gl 6 loads its worker from a file,
+    so the map draws; the COG reader starts its decoding workers from blob:
+    URLs, which this policy refuses.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="worker-src 'self'" />
+  <title>A COG under a strict worker policy</title>
+  <!--
+    0.9 (ml-cnv.2). PASS (maplibre-gl 6) = the basemap draws, and the notice
+    says the page's Content Security Policy blocks the COG reader's workers,
+    with the directive that allows them. (maplibre-gl 4 and 5 start their
+    own workers from blob: too, so under this policy no map draws at all.)
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/cog-csp.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: cog-csp
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  imagery:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery.cog.tif
+layers:
+  - { id: imagery, type: raster, source: imagery }
+    </script>
+  </ml-map>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

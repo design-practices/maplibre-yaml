@@ -27,19 +27,22 @@ and run as printed.
 | `image` | Single image overlay | Map overlays, floor plans |
 | `video` | Video overlay | Animated overlays |
 
-### Cloud-native files (PMTiles, FlatGeobuf, GeoParquet)
+### Cloud-native files (PMTiles, FlatGeobuf, GeoParquet, COG)
 
 `type:` stays the MapLibre source type; the `url:` says what the file is. A
 **PMTiles** archive (`.pmtiles`, or a `pmtiles://` URL) works on a `vector`,
-`raster` or `raster-dem` source, and a **FlatGeobuf** file (`.fgb`) or a
-**GeoParquet** file (`.parquet`, `.geoparquet`) on a `geojson` source — with
-no page JavaScript. Three keys go with them:
+`raster` or `raster-dem` source, a **FlatGeobuf** file (`.fgb`) or a
+**GeoParquet** file (`.parquet`, `.geoparquet`) on a `geojson` source, and a
+**Cloud Optimized GeoTIFF** (`.tif`, `.tiff`, or a `cog://` URL; Web Mercator
+only) on a `raster` or `raster-dem` source — with no page JavaScript. These
+keys go with them:
 
 | Property | On | Description |
 |----------|----|-------------|
-| `format` | `vector`, `raster`, `raster-dem`, `geojson` | `pmtiles`, `flatgeobuf` or `geoparquet` — only for a URL with no telling extension (it wins over the URL). `cog` is recognized but not read by this version yet |
+| `format` | `vector`, `raster`, `raster-dem`, `geojson` | `pmtiles`, `flatgeobuf`, `geoparquet` or `cog` — only for a URL with no telling extension (it wins over the URL) |
 | `load` | FlatGeobuf, GeoParquet (`geojson`) | `all` (default): the whole file; `viewport` or `{ mode: viewport, minzoom }`: only the features in view (needs range requests, and a FlatGeobuf spatial index or a GeoParquet `bbox` covering column) |
 | `columns` | GeoParquet (`geojson`) | The columns to read: by default only the ones the document references (paint, filters, popups, `classify:` …); a list replaces that, `all` reads every column |
+| `colorRamp` | COG (`raster`) | Colours for a single band of values: `{ palette, min, max }` (palette names as in `classify:`, default `viridis`), or `colors: ["#…", "#…"]` instead of `palette`; `reverse: true`; `classes: 5` for flat classes instead of a smooth ramp |
 
 ```yaml
 sources:
@@ -54,11 +57,19 @@ sources:
     type: geojson
     url: data/wells.parquet
     columns: [name, depth_m]
+  elevation:
+    type: raster-dem
+    url: data/elevation.tif          # hillshade layers and terrain:
+  ndvi:
+    type: raster
+    url: data/ndvi.tif
+    colorRamp: { palette: YlGn, min: 0, max: 0.9 }
 ```
 
-`type: pmtiles` (or `flatgeobuf`, `fgb`, `geoparquet`, `parquet` …) is an
-error that tells you what to write instead. In a v2 document, `format`,
-`load` and `columns` go under the source's `runtime:`. Hosting, sizes and error messages: [Cloud-native
+`type: pmtiles` (or `flatgeobuf`, `fgb`, `geoparquet`, `parquet`, `cog` …) is an
+error that tells you what to write instead. In a v2 document, `format`, `load`,
+`columns` and `colorRamp` go under the source's `runtime:`. Hosting, sizes and
+error messages: [Cloud-native
 data](/guides/cloud-native-data/).
 
 ## GeoJSON Source
