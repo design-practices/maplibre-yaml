@@ -761,9 +761,10 @@ export class MapRenderer {
     });
 
     // Set up load handler. With cloud-native sources, the document's sources
-    // wait for their readers (ml-cnv) — a microtask while the decoders are
-    // bundled; a reader that failed to set up skips its sources with a
-    // notice and everything else renders.
+    // wait for their readers (ml-cnv) — downloaded on demand (ml-7qa.5),
+    // started before the map was constructed, so usually already here; a
+    // reader that failed to set up or download is reported on its sources
+    // with a notice and everything else renders.
     this.map.on('load', () => {
       if (!formatsReady) {
         onStyleLoaded();

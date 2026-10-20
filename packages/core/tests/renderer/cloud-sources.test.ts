@@ -115,6 +115,35 @@ describe("prepareProtocols (on the interop-resolved module)", () => {
     }
   });
 
+  it("a reader that can't be downloaded fails only the document's PMTiles sources, after registering (ml-7qa.5)", async () => {
+    vi.resetModules();
+    vi.doMock("pmtiles", () => {
+      throw new TypeError("Failed to fetch dynamically imported module: http://h.org/dist/chunks/pmtiles.js");
+    });
+    try {
+      const fresh = await import("../../src/renderer/cloud-protocols");
+      const interop = await import("../../src/renderer/maplibre-interop");
+      const registered = () =>
+        (interop.maplibregl as unknown as { config: { REGISTERED_PROTOCOLS: Record<string, unknown> } }).config
+          .REGISTERED_PROTOCOLS;
+      // A document without PMTiles sources waits on nothing (the basemap's
+      // own requests would report through the handler)…
+      expect(fresh.prepareProtocols({ a: { type: "geojson", url: "a.geojson" } }, [])).toBeUndefined();
+      expect(typeof registered()["pmtiles"]).toBe("function");
+      // …one with them gets the failure to report on those sources.
+      const failed = await fresh.prepareProtocols({ a: { type: "vector", url: "a.pmtiles" } }, []);
+      const error = failed?.get("pmtiles");
+      expect(isFormatError(error) && error.failure).toMatchObject({
+        code: "chunk",
+        url: "http://h.org/dist/chunks/pmtiles.js",
+      });
+      interop.removeProtocol("pmtiles");
+    } finally {
+      vi.doUnmock("pmtiles");
+      vi.resetModules();
+    }
+  });
+
   it("keeps a handler the page registered first (host wins)", async () => {
     const host = async () => ({ data: {} });
     maplibregl.addProtocol("pmtiles", host as never);
