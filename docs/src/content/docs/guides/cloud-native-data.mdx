@@ -188,7 +188,7 @@ That's the whole basemap. Details:
   with range requests.
 - **Labels and icons** come from Protomaps' hosted fonts and sprites
   (`protomaps.github.io/basemaps-assets`), so labels need that host to be
-  reachable. To host everything yourself, copy the fonts and the sprite for
+  reachable; when it isn't, the map's notice says so. To host everything yourself, copy the fonts and the sprite for
   your flavor from [basemaps-assets](https://github.com/protomaps/basemaps-assets)
   and name them:
 
@@ -202,7 +202,11 @@ That's the whole basemap. Details:
 - **Label language.** `lang:` picks the language labels are drawn in where
   OpenStreetMap has the name (`en`, `es`, `fr`, `de`, `ja`, `zh-Hans`, and
   about 40 more). Without it, labels follow the page's `lang` when the
-  basemap has that language, and English otherwise.
+  basemap has that language, and English otherwise. Arabic, Hebrew, Persian
+  and Urdu labels (`ar`, `he`, `fa`, `ur`) are written right to left:
+  maplibre-gl 6.9 and later draw them as they are; with an older maplibre-gl,
+  maplibre-yaml sets MapLibre's right-to-left text plugin, which the browser
+  downloads from unpkg.com the first time such a label is drawn.
 - **Your layers draw on top** of the basemap, as with any basemap. `before:`
   can name a basemap layer to slide one underneath, for example
   `before: places_subplace` to keep neighborhood names above your data, and a

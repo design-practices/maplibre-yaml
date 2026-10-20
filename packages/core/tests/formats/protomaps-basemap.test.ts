@@ -117,7 +117,18 @@ chapters:
   it("a lang outside the basemap's languages gets did-you-mean", () => {
     const { ok, errors } = messages(v1("pmtiles: data/nyc.pmtiles\nlang: zh-hans"));
     expect(ok).toBe(false);
-    expect(errors.join("\n")).toContain('Did you mean "zh-Hans"?');
+    expect(errors.join("\n")).toContain('did you mean "zh-Hans"?');
+    // A language tag means its language.
+    expect(messages(v1("pmtiles: data/nyc.pmtiles\nlang: es-MX")).errors.join("\n")).toContain('did you mean "es"?');
+  });
+
+  it("a code that is only a letter away from another isn't suggested: xx is not ar (ml-cnv.16)", () => {
+    const { ok, errors } = messages(v1("pmtiles: data/nyc.pmtiles\nlang: xx"));
+    expect(ok).toBe(false);
+    const text = errors.join("\n");
+    expect(text).toContain(`lang: "xx" isn't a label language of the Protomaps basemap. It has ar, cs,`);
+    expect(text).not.toMatch(/did you mean/i);
+    expect(messages(v1("pmtiles: data/nyc.pmtiles\nlang: AR")).errors.join("\n")).toContain('did you mean "ar"?');
   });
 
   it("style keys AND pmtiles: is refused rather than guessed at", () => {

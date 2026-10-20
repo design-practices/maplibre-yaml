@@ -186,6 +186,85 @@ test.describe("a Protomaps basemap from a .pmtiles file, YAML only", () => {
     expect(errors).toEqual([]);
   });
 
+  test("Protomaps' hosted fonts and icons unreachable: a notice naming the host and the glyphs:/sprite: fix (ml-cnv.16)", async ({
+    page,
+  }) => {
+    const { errors } = await guard(page);
+    // Registered after the guard's own route for the host, so consulted first.
+    await page.route(`${HOSTED}**`, (route) => route.abort("connectionrefused"));
+    await page.goto(PAGE, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("dark") as any)?.mapReady === "function");
+    await ready(page, "dark");
+    const notice = page.locator("#dark .ml-map-notice");
+    await expect(notice).toContainText(
+      "The basemap's labels and icons couldn't load: its fonts and icons come from protomaps.github.io, which this page couldn't reach.",
+      { timeout: 30_000 }
+    );
+    await expect(notice).toContainText("set glyphs: and sprite: in the basemap");
+    // The self-hosted map names its own copies: nothing to say there.
+    await ready(page, "self-hosted");
+    await expect(page.locator("#self-hosted .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test("labels in a right-to-left language: MapLibre's plugin on a maplibre-gl that needs it (ml-cnv.16)", async ({
+    page,
+  }) => {
+    const { errors } = await guard(page);
+    const plugin: string[] = [];
+    // A stand-in for MapLibre's right-to-left text plugin (the suite stays offline).
+    await page.route("https://unpkg.com/@mapbox/mapbox-gl-rtl-text@*/**", (route) => {
+      plugin.push(route.request().url());
+      return route.fulfill({
+        contentType: "text/javascript",
+        headers: { "access-control-allow-origin": "*" },
+        body:
+          "self.registerRTLTextPlugin && self.registerRTLTextPlugin({ applyArabicShaping: (s) => s, " +
+          "processBidirectionalText: (s) => [s], processStyledBidirectionalText: (s, st) => [[s, st]] });",
+      });
+    });
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8" />
+      <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+      <script type="importmap">{ "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }</script>
+      </head><body>
+      <ml-map id="rtl" base="/my-repo/" style="display:block;height:300px">
+        <script type="text/yaml">
+type: map
+id: protomaps-rtl
+config:
+  center: [-73.9935, 40.6985]
+  zoom: 14.6
+  mapStyle:
+    pmtiles: protomaps/brooklyn.pmtiles
+    lang: ar
+    glyphs: protomaps-assets/fonts/{fontstack}/{range}.pbf
+    sprite: protomaps-assets/sprites/v4/light
+layers: []
+        </script>
+      </ml-map>
+      <script type="module" src="/packages/core/register.js"></script>
+      </body></html>`;
+    await page.route("**/my-repo/zz-rtl.html", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto("/my-repo/zz-rtl.html", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("rtl") as any)?.mapReady === "function");
+    await ready(page, "rtl");
+    const { version, status } = await page.evaluate(async () => {
+      const mod: any = await import("/vendor/maplibre-gl.esm.js" as string);
+      const gl = mod.default ?? mod;
+      return { version: gl.getVersion(), status: gl.getRTLTextPluginStatus?.() };
+    });
+    const [major, minor] = version.split(".").map(Number);
+    if (major > 6 || (major === 6 && minor >= 9)) {
+      // maplibre-gl 6.9+ draws Arabic itself: no plugin.
+      expect(status).toBe("unavailable");
+      expect(plugin).toEqual([]);
+    } else {
+      // Set, lazily: it downloads when an Arabic label is about to be drawn.
+      expect(status).not.toBe("unavailable");
+    }
+    expect(errors).toEqual([]);
+  });
+
   test("the generator chunk blocked: a notice, and the document's own layers still draw", async ({ page }) => {
     const { errors } = await guard(page);
     const asked: string[] = [];

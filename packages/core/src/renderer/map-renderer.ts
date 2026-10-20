@@ -55,6 +55,14 @@ import { basemapRequestTransformer, type RequestTransformer } from './basemap-ur
 import { formatOfSource, type CloudFormat } from '../formats/detect';
 import { isProtomapsBasemap, type ProtomapsBasemap } from '../schemas/basemap.schema';
 import {
+  basemapAssetMessage,
+  basemapAssetProblem,
+  ensureRightToLeftLabels,
+  probeBasemapAssets,
+  type BasemapAssets,
+} from './basemap-assets';
+import {
+  basemapLanguage,
   fallbackBasemapStyle,
   notAProtomapsBasemap,
   prefetchProtomapsBasemap,
@@ -1246,6 +1254,26 @@ export class MapRenderer {
       console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
       options.onError?.(new Error(problem), false, { kind: 'basemap' });
     });
+    // A basemap icon its sprite lacks (the generator names "townhall", which
+    // Protomaps' hosted sprite doesn't have): a blank image instead of a
+    // MapLibre console warning on every load. The document's own image
+    // names keep their warning (the styleimagemissing handler above).
+    map.on('styleimagemissing', (e: { id: string }) => {
+      if (this.imageRefs.names.has(e.id) || this.imageRefs.dynamic || map.hasImage(e.id)) return;
+      map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
+    });
+    // Right-to-left labels on a maplibre-gl older than 6.9 need MapLibre's
+    // plugin (renderer/basemap-assets).
+    const language = basemapLanguage(spec, pageLanguage);
+    ensureRightToLeftLabels(language, (pluginUrl) => {
+      if (this.destroyed) return;
+      const problem =
+        `The basemap's ${language} labels need MapLibre's right-to-left text plugin, which couldn't ` +
+        `be downloaded from ${new URL(pluginUrl).host}, so they may draw unjoined or reversed. ` +
+        'maplibre-gl 6.9 or later draws them without it.';
+      console.warn(`[maplibre-yaml] ${problem}`);
+      options.onError?.(new Error(problem), false, { kind: 'basemap' });
+    });
     protomapsStyle(spec, {
       ...(pageUrl ? { pageUrl } : {}),
       ...(pageLanguage ? { pageLanguage } : {}),
@@ -1253,6 +1281,36 @@ export class MapRenderer {
       (style) => {
         if (this.destroyed) return;
         map.setStyle(style as never);
+        // Fonts or icons that don't load (Protomaps' host unreachable, a
+        // self-hosted path that 404s): one notice, naming the host and the fix.
+        const assets: BasemapAssets = {
+          glyphs: String(style['glyphs'] ?? ''),
+          sprite: String(style['sprite'] ?? ''),
+          hostedGlyphs: typeof spec.glyphs !== 'string',
+          hostedSprite: typeof spec.sprite !== 'string',
+        };
+        let assetsChecked = false;
+        const report = (problem: string) => {
+          if (this.destroyed) return;
+          console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
+          options.onError?.(new Error(problem), false, { kind: 'basemap' });
+        };
+        map.on('error', (e: { error?: unknown; sourceId?: unknown; tile?: unknown; layer?: unknown }) => {
+          // Fonts and icons are the style's, not a source's or a layer's.
+          if (assetsChecked || this.destroyed || e.sourceId !== undefined || e.tile !== undefined) return;
+          if (e.layer !== undefined) return;
+          assetsChecked = true;
+          const raw = e.error as { message?: unknown } | undefined;
+          const problem = basemapAssetProblem(String(raw?.message ?? raw ?? ''), assets);
+          if (problem) {
+            report(problem);
+            return;
+          }
+          // An error that doesn't say which file (maplibre-gl 4): ask.
+          void probeBasemapAssets(assets).then((which) => {
+            if (which) report(basemapAssetMessage(which, assets));
+          });
+        });
         // maplibre-gl 3 cannot read pmtiles:// (cloud-protocols).
         const problem = pmtilesUnavailable();
         if (problem) {

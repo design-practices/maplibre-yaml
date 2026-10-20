@@ -158,12 +158,7 @@ function checkShorthand(value: Record<string, unknown>, ctx: z.RefinementCtx): v
   }
   const lang = value["lang"];
   if (lang !== undefined && !(PROTOMAPS_LANGUAGES as readonly unknown[]).includes(lang)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.invalid_enum_value,
-      options: [...PROTOMAPS_LANGUAGES],
-      received: lang as string,
-      path: ["lang"],
-    });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lang"], message: unknownLanguageMessage(lang) });
   }
   for (const key of ["glyphs", "sprite"] as const) {
     if (value[key] !== undefined && typeof value[key] !== "string") {
@@ -174,6 +169,33 @@ function checkShorthand(value: Record<string, unknown>, ctx: z.RefinementCtx): v
       });
     }
   }
+}
+
+/**
+ * The label language a `lang:` value most likely meant: the same code in
+ * another case (`AR`, `zh-hans`), or a language tag's language (`es-MX` →
+ * `es`, `zh-TW` → `zh-Hant`, `nb` → `no`) — never a code that is merely a
+ * letter away: between two-letter codes that is noise ("xx" is not "ar").
+ */
+export function closestBasemapLanguage(value: string): string | undefined {
+  const known: readonly string[] = PROTOMAPS_LANGUAGES;
+  const tag = value.trim().replace(/_/g, "-").toLowerCase();
+  const same = known.find((code) => code.toLowerCase() === tag);
+  if (same) return same;
+  if (tag === "zh" || tag.startsWith("zh-")) return /^zh-(hant|tw|hk|mo)\b/.test(tag) ? "zh-Hant" : "zh-Hans";
+  const primary = tag.split("-")[0]!;
+  const mapped = primary === "nb" || primary === "nn" ? "no" : primary;
+  return known.includes(mapped) ? mapped : undefined;
+}
+
+/** The message for a `lang:` the basemap has no labels in. */
+function unknownLanguageMessage(value: unknown): string {
+  const close = typeof value === "string" ? closestBasemapLanguage(value) : undefined;
+  return (
+    `lang: ${JSON.stringify(value)} isn't a label language of the Protomaps basemap` +
+    (close ? ` — did you mean "${close}"?` : ".") +
+    ` It has ${PROTOMAPS_LANGUAGES.join(", ")}. Without lang:, labels follow the page's language when the basemap has it.`
+  );
 }
 
 /**
