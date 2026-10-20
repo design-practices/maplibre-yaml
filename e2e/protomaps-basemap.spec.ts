@@ -166,6 +166,24 @@ test.describe("a Protomaps basemap from a .pmtiles file, YAML only", () => {
     expect(errors).toEqual([]);
   });
 
+  test("mapStyle written as just the .pmtiles file is the light basemap, not a broken style URL (ml-aot.115)", async ({
+    page,
+  }) => {
+    const { errors, hosted } = await guard(page);
+    await page.goto("/my-repo/blog/protomaps-string.html", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("string") as any)?.mapReady === "function");
+    await ready(page, "string");
+    const source = await page.evaluate(
+      () => (document.getElementById("string") as any).getMap().getStyle().sources.protomaps
+    );
+    // base applied to the file, read through pmtiles://.
+    expect(source.url).toMatch(/^pmtiles:\/\/http:\/\/localhost:\d+\/my-repo\/protomaps\/brooklyn\.pmtiles$/);
+    await expect.poll(() => placedLabels(page, "string"), { timeout: 45_000 }).not.toEqual([]);
+    expect(hosted.some((u) => u.endsWith("/sprites/v4/light.json"))).toBe(true);
+    await expect(page.locator("#string .ml-map-error, #string .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
   test("a missing file, and a PMTiles file that isn't a Protomaps basemap, get the map's notice", async ({ page }) => {
     const { errors } = await guard(page);
     const consoleErrors: string[] = [];

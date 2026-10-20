@@ -171,4 +171,13 @@ describe('CLI deprecation warnings (integration)', () => {
       expect(error.stdout).toContain('circle-radis');
     }
   });
+
+  it('explains a basemap string naming a .pmtiles file, and never promotes that note (ml-aot.115)', async () => {
+    const { stdout } = await execAsync(
+      `node "${CLI}" validate test/fixtures/pmtiles-basemap-string.yaml --strict`,
+      { env: IN_CI }
+    );
+    expect(stdout).toContain('read as a Protomaps basemap');
+    expect(stdout).toContain('mapStyle: { pmtiles: data/nyc.pmtiles, flavor: dark, lang: es }');
+  });
 });

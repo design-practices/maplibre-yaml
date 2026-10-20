@@ -57,6 +57,7 @@ config:
 | A style URL | `mapStyle: "https://tiles.openfreemap.org/styles/liberty"` | A hosted basemap (OpenFreeMap, MapTiler, Stadia, …) or a `style.json` on your site |
 | A style object | `mapStyle: { version: 8, sources: {...}, layers: [...] }` | A small style written in the document |
 | A Protomaps basemap | `mapStyle: { pmtiles: data/nyc.pmtiles, flavor: light }` | A full basemap from one `.pmtiles` file, with no API key and no tile server |
+| A `.pmtiles` file | `mapStyle: data/nyc.pmtiles` | The same Protomaps basemap with its defaults (light, labels in the page's language) |
 
 The Protomaps form takes these keys:
 

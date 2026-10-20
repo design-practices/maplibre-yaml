@@ -352,7 +352,8 @@ export const MapConfigSchema = z
     zoom: ZoomLevelSchema.describe("Initial zoom level (0-24)"),
     mapStyle: MapStyleSchema.optional().describe(
       "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file " +
-        "({ pmtiles, flavor, lang }). Optional when global config.defaultMapStyle is set.",
+        "({ pmtiles, flavor, lang }, or the file's path alone for the defaults). Optional when " +
+        "global config.defaultMapStyle is set.",
     ),
 
     // View

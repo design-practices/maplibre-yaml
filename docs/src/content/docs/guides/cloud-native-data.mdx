@@ -144,9 +144,9 @@ the map's notice says which one, instead of showing a blank basemap.
 ## Host your own basemap
 
 A basemap can be one PMTiles file next to your site, served by the same static
-host, with no tile server and no API key. Point `mapStyle:` at the file and
-maplibre-yaml builds the whole [Protomaps](https://protomaps.com/) basemap
-style around it, in the page:
+host, with no tile server and no API key. Point `mapStyle:` at the file
+(`mapStyle: data/nyc.pmtiles`) and maplibre-yaml builds the whole
+[Protomaps](https://protomaps.com/) basemap style around it, in the page:
 
 <LiveMap
   src="/configs/protomaps-basemap-demo.yaml"
@@ -167,6 +167,16 @@ style around it, in the page:
 2. **Put the file in your site**: `public/data/nyc.pmtiles` in an Astro or
    Vite project, or a `data/` folder next to your HTML page.
 3. **Use it** from your document:
+
+   ```yaml
+   config:
+     center: [-73.98, 40.71]
+     zoom: 12
+     mapStyle: data/nyc.pmtiles
+   ```
+
+   That is the light flavor, with labels in the page's language. To choose,
+   write `mapStyle:` as a block:
 
    ```yaml
    config:

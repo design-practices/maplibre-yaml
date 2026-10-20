@@ -9,7 +9,8 @@
  *
  * | Value | Meaning |
  * | --- | --- |
- * | a string | a style URL (`https://…/style.json`, or a path) |
+ * | a string naming a `.pmtiles` file (or a `pmtiles://` URL) | the Protomaps basemap shorthand with its defaults: `data/nyc.pmtiles` is `{ pmtiles: data/nyc.pmtiles }` |
+ * | any other string | a style URL (`https://…/style.json`, or a path) |
  * | an object with `version`, `sources` or `layers` | an inline MapLibre style |
  * | any other object | the Protomaps basemap shorthand: `{ pmtiles, flavor?, lang?, glyphs?, sprite? }` |
  *
@@ -90,6 +91,24 @@ export function isProtomapsBasemap(value: unknown): value is ProtomapsBasemap {
 export function isPmtilesReference(value: string): boolean {
   if (/^pmtiles:\/\/./i.test(value)) return true;
   return /\.pmtiles$/i.test(value.replace(/[?#].*$/, ""));
+}
+
+/**
+ * Whether a string basemap names a `.pmtiles` file: the Protomaps shorthand
+ * written short. A style URL returns style JSON, which a `.pmtiles` file
+ * never is, so the two can't be confused.
+ */
+export function isPmtilesBasemapString(value: unknown): value is string {
+  return typeof value === "string" && isPmtilesReference(value.trim());
+}
+
+/**
+ * The Protomaps shorthand a basemap value stands for — the object as written,
+ * or `{ pmtiles }` for a string naming a `.pmtiles` file — else `undefined`.
+ */
+export function protomapsBasemapOf(value: unknown): ProtomapsBasemap | undefined {
+  if (isPmtilesBasemapString(value)) return { pmtiles: value.trim() };
+  return isProtomapsBasemap(value) ? value : undefined;
 }
 
 /**
@@ -226,8 +245,9 @@ export const ProtomapsBasemapSchema = z
 
 /**
  * `config.mapStyle` / `style.basemap`: a style URL, an inline style object,
- * or the Protomaps basemap shorthand (see the file header for how they are
- * told apart).
+ * or the Protomaps basemap shorthand — as an object, or as a string naming a
+ * `.pmtiles` file, which parses to the object (see the file header for how
+ * they are told apart).
  */
 export const MapStyleSchema = z
   .union([z.string().url(), ProtomapsBasemapSchema, z.any()])
@@ -244,4 +264,7 @@ export const MapStyleSchema = z
       return;
     }
     if (isProtomapsBasemap(value)) checkShorthand(value as unknown as Record<string, unknown>, ctx);
-  });
+  })
+  // `mapStyle: data/nyc.pmtiles` is the shorthand with its defaults (light,
+  // labels in the page's language): every reader downstream sees one form.
+  .transform((value: unknown) => (isPmtilesBasemapString(value) ? { pmtiles: value.trim() } : value));

@@ -20,7 +20,7 @@
 
 import type { EmitResult, EmitWarning } from "./project";
 import { EmitError, sanitizeEmittedAttribution } from "./project";
-import { isProtomapsBasemap } from "../schemas/basemap.schema";
+import { protomapsBasemapOf } from "../schemas/basemap.schema";
 import { protomapsStyle } from "../formats/protomaps-style";
 
 /**
@@ -300,9 +300,10 @@ export async function resolveBasemap(
   // A Protomaps basemap (`{ pmtiles, flavor, lang }`, ml-cnv.7) is generated,
   // not fetched: the full style, layers expanded, its file as `pmtiles://`
   // written as the document gave it (projectStyle says what that needs).
-  if (isProtomapsBasemap(basemap)) {
+  const protomaps = protomapsBasemapOf(basemap);
+  if (protomaps) {
     try {
-      return await protomapsStyle(basemap);
+      return await protomapsStyle(protomaps);
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e);
       throw new EmitError(`Could not build the Protomaps basemap: ${reason}`);

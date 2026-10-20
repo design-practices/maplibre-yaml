@@ -160,7 +160,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                     },
                     {}
                   ],
-                  "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }). Optional when global config.defaultMapStyle is set."
+                  "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }, or the file's path alone for the defaults). Optional when global config.defaultMapStyle is set."
                 },
                 "pitch": {
                   "type": "number",
@@ -4730,7 +4730,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                 },
                 {}
               ],
-              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }). Optional when global config.defaultMapStyle is set."
+              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }, or the file's path alone for the defaults). Optional when global config.defaultMapStyle is set."
             },
             "pitch": {
               "type": "number",
@@ -11408,7 +11408,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                             },
                             "mapStyle": {
                               "$ref": "#/$defs/root/properties/config/properties/defaultMapStyle",
-                              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }). Optional when global config.defaultMapStyle is set."
+                              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }, or the file's path alone for the defaults). Optional when global config.defaultMapStyle is set."
                             },
                             "pitch": {
                               "type": "number",
@@ -12978,7 +12978,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                 },
                 {}
               ],
-              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }). Optional when global config.defaultMapStyle is set."
+              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }, or the file's path alone for the defaults). Optional when global config.defaultMapStyle is set."
             },
             "pitch": {
               "type": "number",

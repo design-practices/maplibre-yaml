@@ -12,6 +12,7 @@ import {
   PROTOMAPS_FLAVORS,
   PROTOMAPS_LANGUAGES,
   isProtomapsBasemap,
+  protomapsBasemapOf,
 } from "../../src/schemas/basemap.schema";
 import {
   basemapLanguage,
@@ -74,6 +75,53 @@ chapters:
     zoom: 14
 `);
     expect(story.errors).toEqual([]);
+  });
+
+  it("a string naming a .pmtiles file is the shorthand with its defaults, and validation says so (ml-aot.115)", () => {
+    const one = YAMLParser.safeParseMapBlock(v1("data/nyc.pmtiles").replace("mapStyle:\n    ", "mapStyle: "));
+    expect(one.errors).toEqual([]);
+    expect((one.data as any).config.mapStyle).toEqual({ pmtiles: "data/nyc.pmtiles" });
+    const note = one.warnings.find((w) => w.path === "config.mapStyle")!;
+    expect(note.kind).toBe("note");
+    expect(note.message).toContain('mapStyle: "data/nyc.pmtiles" names a .pmtiles file, so it is read as a Protomaps basemap');
+    expect(note.message).toContain("mapStyle: { pmtiles: data/nyc.pmtiles, flavor: dark, lang: es }");
+    const v2 = YAMLParser.safeParseMapBlock(`
+version: 2
+type: map
+id: pm2
+style:
+  basemap: pmtiles://https://example.org/nyc.pmtiles
+  center: [-73.99, 40.70]
+  zoom: 14
+  layers: []
+`);
+    expect(v2.errors).toEqual([]);
+    expect((v2.data as any).style.basemap).toEqual({ pmtiles: "pmtiles://https://example.org/nyc.pmtiles" });
+    expect(v2.warnings.some((w) => w.path === "style.basemap" && w.kind === "note")).toBe(true);
+    const story = YAMLParser.safeParseScrollytellingBlock(`
+type: scrollytelling
+id: s
+config:
+  center: [-73.99, 40.70]
+  zoom: 14
+  mapStyle: data/nyc.pmtiles
+chapters:
+  - id: one
+    title: One
+    center: [-73.99, 40.70]
+    zoom: 14
+`);
+    expect(story.errors).toEqual([]);
+    expect((story.data as any).config.mapStyle).toEqual({ pmtiles: "data/nyc.pmtiles" });
+    expect(story.warnings.filter((w) => w.kind === "note")).toHaveLength(1);
+    expect(protomapsBasemapOf(" tiles/x.pmtiles?v=2 ")).toEqual({ pmtiles: "tiles/x.pmtiles?v=2" });
+    expect(protomapsBasemapOf("https://x/style.json")).toBeUndefined();
+  });
+
+  it("defaultMapStyle takes the string form too", async () => {
+    const { GlobalConfigSchema } = await import("../../src/schemas/page.schema");
+    const r = GlobalConfigSchema.safeParse({ defaultMapStyle: "data/nyc.pmtiles" });
+    expect(r.success && r.data.defaultMapStyle).toEqual({ pmtiles: "data/nyc.pmtiles" });
   });
 
   it("still accepts a style URL and an inline style object", () => {

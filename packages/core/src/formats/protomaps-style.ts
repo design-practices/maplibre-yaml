@@ -20,7 +20,7 @@
  */
 
 import type { ProtomapsBasemap } from "../schemas/basemap.schema";
-import { isProtomapsBasemap, PROTOMAPS_FLAVORS, PROTOMAPS_LANGUAGES } from "../schemas/basemap.schema";
+import { protomapsBasemapOf, PROTOMAPS_FLAVORS, PROTOMAPS_LANGUAGES } from "../schemas/basemap.schema";
 import { absolutizeTileTemplate } from "../utils/tile-url";
 import { getDecoder, prefetchDecoder } from "./decoders";
 
@@ -143,7 +143,7 @@ export async function protomapsStyle(
  * rejects; the renderer reports a failure when it awaits them.
  */
 export function prefetchProtomapsBasemap(basemap: unknown): void {
-  if (!isProtomapsBasemap(basemap)) return;
+  if (!protomapsBasemapOf(basemap)) return;
   prefetchDecoder("protomaps-basemap");
   prefetchDecoder("pmtiles");
 }

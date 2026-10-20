@@ -297,7 +297,7 @@ import {
   type ValidationWarning,
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
-import { checkDocument, chapterLabel, checkLocaleKeys, missingBasemapWarning } from "./document-checks";
+import { checkDocument, chapterLabel, checkLocaleKeys, missingBasemapWarning, pmtilesBasemapNote } from "./document-checks";
 import { checkSourceFormats } from "./format-checks";
 import { applyCogDefaults, checkCogSources } from "./cog-checks";
 import { reservedPrefixWarnings } from "./reserved-prefix";
@@ -993,6 +993,12 @@ export class YAMLParser {
       positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
     );
     if (noBasemap) sourceRefWarnings.push(noBasemap);
+    const pmtilesNote = pmtilesBasemapNote(
+      m.value,
+      detected.version === 2 ? 2 : 1,
+      positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
+    );
+    if (pmtilesNote) sourceRefWarnings.push(pmtilesNote);
     const withSourceRefWarnings = <T>(result: ParseResult<T>): ParseResult<T> =>
       sourceRefWarnings.length === 0
         ? result

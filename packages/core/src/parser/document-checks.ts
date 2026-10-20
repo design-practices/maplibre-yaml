@@ -24,6 +24,7 @@ import { suggest, spellingVariantOf } from "../utils/suggest";
 import { boundsOfPoints, swappedCenter as swappedPair } from "../utils/swapped-center";
 import { toFlatBounds } from "../utils/bounds";
 import { MapBlockSchema, MapConfigSchema } from "../schemas/map.schema";
+import { isPmtilesBasemapString } from "../schemas/basemap.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
 import { DEFAULT_STRINGS, STRINGS_PREFIX } from "../i18n/strings";
 
@@ -368,6 +369,10 @@ export function checkDocument(
   duplicateIds(value["layers"], ["layers"], "layer", positions, { errors, warnings });
   if (kind === "scrollytelling") {
     duplicateIds(value["chapters"], ["chapters"], "chapter", positions, { errors, warnings });
+    // A story's basemap string naming a .pmtiles file (maps get this note
+    // with their other basemap checks).
+    const note = pmtilesBasemapNote(value, 1, positions);
+    if (note && !already.has(note.path)) warnings.push(note);
   }
 
   // ml-aot.48 — keys under config: that belong at the root, and keys no one reads.
@@ -542,6 +547,36 @@ export function checkDocument(
   }
 
   return { errors, warnings };
+}
+
+/**
+ * A basemap written as a string naming a `.pmtiles` file (`mapStyle:
+ * data/nyc.pmtiles`): valid — it is the Protomaps basemap shorthand with its
+ * defaults — and explained, since it reads like a style URL. A `note`, never
+ * promoted to an error under `--strict`.
+ *
+ * @param version - 1 (`config.mapStyle`, maps and stories) or 2 (`style.basemap`).
+ */
+export function pmtilesBasemapNote(
+  value: unknown,
+  version: 1 | 2,
+  positions?: Positions
+): ValidationWarning | undefined {
+  if (!isObject(value)) return undefined;
+  const parentKey = version === 2 ? "style" : "config";
+  const parent = value[parentKey];
+  const key = version === 2 ? "basemap" : "mapStyle";
+  if (!isObject(parent) || !isPmtilesBasemapString(parent[key])) return undefined;
+  const file = String(parent[key]).trim();
+  return {
+    path: `${parentKey}.${key}`,
+    message:
+      `${key}: "${file}" names a .pmtiles file, so it is read as a Protomaps basemap (the light ` +
+      `flavor, labels in the page's language). To choose a flavor or a language, write it as ` +
+      `${key}: { pmtiles: ${file}, flavor: dark, lang: es }.`,
+    kind: "note",
+    ...atKey(positions, [parentKey], key),
+  };
 }
 
 /**

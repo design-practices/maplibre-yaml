@@ -1185,7 +1185,8 @@ export class MLMap extends HTMLElement {
             })`
           : "";
       const path = displayPath(warning) ? `${displayPath(warning)}: ` : "";
-      console.warn(`[ml-map] ${path}${warning.message}${location}`);
+      // A note explains how a valid value is read: information, not a warning.
+      (warning.kind === "note" ? console.info : console.warn)(`[ml-map] ${path}${warning.message}${location}`);
       // A valid document where part of it silently does nothing (a root key
       // nested under config:): also say so on the page (ml-aot.48). Still
       // the non-fatal notice, never the error card.

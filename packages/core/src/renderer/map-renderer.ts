@@ -53,7 +53,7 @@ import { isProtocolRegistered, pmtilesUnavailable, prepareProtocols } from './cl
 import { cogHintFor } from '../formats/cog-protocol';
 import { basemapRequestTransformer, type RequestTransformer } from './basemap-urls';
 import { formatOfSource, type CloudFormat } from '../formats/detect';
-import { isProtomapsBasemap, type ProtomapsBasemap } from '../schemas/basemap.schema';
+import { protomapsBasemapOf, type ProtomapsBasemap } from '../schemas/basemap.schema';
 import {
   basemapAssetMessage,
   basemapAssetProblem,
@@ -534,7 +534,7 @@ export class MapRenderer {
     // A Protomaps basemap from a `.pmtiles` file (ml-cnv.7): its style is
     // generated in the page, on demand, so the map is built without one and
     // given it when ready (below). `load` waits for it as for any style.
-    const protomaps: ProtomapsBasemap | undefined = isProtomapsBasemap(mapStyle) ? mapStyle : undefined;
+    const protomaps: ProtomapsBasemap | undefined = protomapsBasemapOf(mapStyle);
     if (mapStyle && typeof mapStyle === 'object' && 'sources' in mapStyle) {
       const styleObject = mapStyle as Record<string, unknown>;
       const sources = sanitizeSourcesAttribution(styleObject['sources']);

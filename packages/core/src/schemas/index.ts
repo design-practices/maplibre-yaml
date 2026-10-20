@@ -208,6 +208,7 @@ export {
   PROTOMAPS_FLAVORS,
   PROTOMAPS_LANGUAGES,
   isProtomapsBasemap,
+  protomapsBasemapOf,
 } from "./basemap.schema";
 export type { ProtomapsBasemap, ProtomapsFlavor } from "./basemap.schema";
 
