@@ -121,12 +121,27 @@ The automatic setup covers the sources in **your** document. A basemap style
 loaded from a URL (`mapStyle:` / `basemap:`) whose own sources use
 `pmtiles://` — Protomaps basemaps, for example — is loaded by MapLibre before
 maplibre-yaml can see inside it, so in 0.9 that case still needs the protocol
-registered from page JavaScript:
+registered from page JavaScript.
+
+With a bundler (Vite, Astro), after `npm install pmtiles`:
 
 ```js
 import { addProtocol } from "@maplibre-yaml/core/maplibre";
 import { Protocol } from "pmtiles";
 addProtocol("pmtiles", new Protocol().tile);
+```
+
+In a plain HTML page, register it on the `maplibre-gl` the page's import map
+names (the one `<ml-map>` uses), and load `pmtiles` from esm.sh, which
+resolves its own dependencies (unpkg does not). Put this script **before** the
+`register.js` script:
+
+```html
+<script type="module">
+  import { addProtocol } from "maplibre-gl";
+  import { Protocol } from "https://esm.sh/pmtiles@4";
+  addProtocol("pmtiles", new Protocol().tile);
+</script>
 ```
 </Aside>
 
@@ -259,7 +274,9 @@ A `style.json` can carry a URL but not a file reader, so:
 
 - **PMTiles** export as `pmtiles://` URLs (a `.pmtiles` URL gains the
   scheme). The style then needs a renderer that reads `pmtiles://` —
-  maplibre-gl JS with the protocol registered (the snippet above).
+  maplibre-gl JS with the protocol registered (the snippets above: the
+  bundler form, or the plain-HTML form for a page loading maplibre-gl from a
+  CDN).
 - **FlatGeobuf** is converted: `mlym emit` reads the file (next to the YAML,
   in the current folder or its `public/`, or over http(s)) and writes its
   features into the style as GeoJSON. If it can't read the file, the source
