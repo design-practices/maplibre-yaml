@@ -98,6 +98,7 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
   { slug: "add-live-realtime-data", layers: ["drone"], rendered: "drone" },
   // 0.9 (ml-cnv.3): a FlatGeobuf file as a GeoJSON source, YAML only.
   { slug: "flatgeobuf-source", layers: ["districts", "points"], rendered: "districts" },
+  { slug: "add-a-cog-raster-source", layers: ["imagery", "hills"] },
   // Wave 2. Config-flag pages assert behavior in the bespoke tests below;
   // label twins assert presence + error-freeness (the local style serves
   // empty glyphs, so no visible text renders hermetically). Docs-only, no

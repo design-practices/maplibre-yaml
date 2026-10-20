@@ -1,0 +1,35 @@
+# A story map over Cloud Optimized GeoTIFFs (0.9, ml-cnv.2): the same .tif
+# sources an <ml-map> reads, in <ml-scrollytelling>, no page JS.
+type: scrollytelling
+id: cog-story
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [10.2, 42.15]
+  zoom: 9.6
+sources:
+  imagery:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery.cog.tif
+  elevation:
+    type: raster-dem
+    url: /gallery-assets/cloud-native/elevation.cog.tif
+layers:
+  - id: imagery
+    type: raster
+    source: imagery
+  - id: hills
+    type: hillshade
+    source: elevation
+    paint: { hillshade-exaggeration: 0.5 }
+chapters:
+  - id: overview
+    title: The island
+    description: "<p>Imagery and shading come from two Cloud Optimized GeoTIFFs, named in YAML.</p>"
+    center: [10.2, 42.15]
+    zoom: 9.6
+  - id: summit
+    title: The summit
+    description: "<p>Zoomed in: only the tiles in view are read from the files.</p>"
+    center: [10.15, 42.17]
+    zoom: 11
+    pitch: 40

@@ -11,7 +11,6 @@
  * maplibre-gl 4+, the floor of that matrix.
  */
 import { test, expect, type Page } from "@playwright/test";
-import { PNG } from "pngjs";
 
 /** Fail on page errors and off-origin requests (hermeticity). */
 async function guard(page: Page, allow: RegExp = /^$/): Promise<string[]> {
@@ -275,21 +274,9 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
       "Layer wells has no data: /gallery-assets/cloud-native/wells.parquet is a GeoParquet file, which this " +
         "version of maplibre-yaml can't read yet (it's planned)."
     );
-    await expect(reserved).toContainText(
-      "Source scene didn't load: /gallery-assets/cloud-native/scene.tif is a Cloud Optimized GeoTIFF (COG), " +
-        "which this version of maplibre-yaml can't read on its own yet (it's planned)."
-    );
-    // The rest of a map with a failed source still draws.
+    // The rest of a map with a failed source still draws. (COG failures:
+    // cloud-native-cog.spec.ts.)
     await waitForFeatures(page, "reserved", "districts");
-    // ...and the COG's placeholder draws nothing: away from the districts the
-    // map shows the basemap's own background (#cfe8c9).
-    const box = (await page.locator("#reserved").boundingBox())!;
-    await page.waitForTimeout(500);
-    const shot = PNG.sync.read(
-      await page.screenshot({ clip: { x: box.x + 8, y: box.y + box.height - 60, width: 4, height: 4 } })
-    );
-    const [r, g, b] = [shot.data[0]!, shot.data[1]!, shot.data[2]!];
-    expect(Math.abs(r - 0xcf) + Math.abs(g - 0xe8) + Math.abs(b - 0xc9), `pixel ${r},${g},${b}`).toBeLessThan(12);
 
     // Never a raw library message.
     for (const id of ["pmtiles-errors", "fgb-errors", "reserved"]) {

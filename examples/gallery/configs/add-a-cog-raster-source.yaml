@@ -1,0 +1,33 @@
+# Hermetic twin of docs/public/configs/gallery/add-a-cog-raster-source.yaml
+# (local basemap; the same COG fixtures, which the e2e server serves at
+# /gallery-assets/cloud-native/ with range support).
+type: map
+id: add-a-cog-raster-source
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  pitch: 50
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo: { source: imagery, padding: 20 }
+legend:
+  title: The island
+sources:
+  imagery:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery.cog.tif
+  elevation:
+    type: raster-dem
+    url: /gallery-assets/cloud-native/elevation.cog.tif
+terrain:
+  source: elevation
+  exaggeration: 1.5
+layers:
+  - id: imagery
+    type: raster
+    source: imagery
+    legend: { label: Imagery, color: "#789c5c", shape: square }
+  - id: hills
+    type: hillshade
+    source: elevation
+    paint: { hillshade-exaggeration: 0.5 }
+    legend: { label: Hillshade, color: "#7f7f7f", shape: square }
