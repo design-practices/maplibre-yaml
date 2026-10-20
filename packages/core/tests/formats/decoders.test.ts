@@ -113,6 +113,27 @@ describe("the readers' callers", () => {
     expect(isFormatError(error) && error.failure.code).toBe("chunk");
   });
 
+  it("pmtiles: a reader that failed to download is dropped, so the next request downloads it again (ml-cnv.18)", async () => {
+    offline();
+    const decoders = await import("../../src/formats/decoders");
+    const { install: freshInstall } = await import("../../src/formats/pmtiles");
+    const addProtocol = vi.fn();
+    freshInstall({ addProtocol, config: { REGISTERED_PROTOCOLS: {} }, module: {} });
+    const handler = addProtocol.mock.calls[0]![1] as (p: { url: string }, a: AbortController) => Promise<unknown>;
+    const request = { url: "pmtiles://https://h.org/x.pmtiles" };
+    const first = await handler(request, new AbortController()).catch((e) => e);
+    expect(isFormatError(first) && first.failure.code).toBe("chunk");
+    // Back online: the next request gets a reader and its tile.
+    const tile = vi.fn(async () => ({ data: "tile" }));
+    vi.spyOn(decoders.reimport, "load").mockResolvedValue({
+      Protocol: class {
+        tile = tile;
+      },
+    });
+    await expect(handler(request, new AbortController())).resolves.toEqual({ data: "tile" });
+    expect(tile).toHaveBeenCalledTimes(1);
+  });
+
   it("pmtiles: registering needs no reader download (sync, before new Map())", () => {
     const addProtocol = vi.fn();
     install({ addProtocol, config: { REGISTERED_PROTOCOLS: {} }, module: {} });

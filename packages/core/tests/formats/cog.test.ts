@@ -96,6 +96,22 @@ describe("readCogHeader — the first bytes of a GeoTIFF", () => {
     expect(header).toMatchObject({ width: 800, height: 600, crs: "EPSG:4326", webMercator: false });
   });
 
+  it("BigTIFF in both byte orders reads its 64-bit offsets as 64-bit (ml-cnv.18)", () => {
+    // Big-endian: the high word comes first, so reading an 8-byte offset as
+    // 4 bytes gives 0, not the directory's offset.
+    for (const le of [true, false]) {
+      const file = tiff({ big: true, le, width: 4096, height: 2048, tile: 512, projected: 3857, next: true, ifdAt: 300 });
+      expect(readCogHeader(file), le ? "little-endian" : "big-endian").toMatchObject({
+        width: 4096,
+        height: 2048,
+        tileWidth: 512,
+        hasOverviews: true,
+        crs: "EPSG:3857",
+        webMercator: true,
+      });
+    }
+  });
+
   it("isCloudOptimized: small images pass either way; a big tiled one needs overviews", () => {
     const base = { webMercator: true, hasOverviews: false } as const;
     expect(isCloudOptimized({ ...base, width: 200, height: 200 })).toBe(true);

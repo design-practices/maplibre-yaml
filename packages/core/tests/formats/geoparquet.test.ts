@@ -417,6 +417,41 @@ describe("reading by view (bbox covering, row-group statistics)", () => {
     expect(canSkipByView(await open("/districts-nobbox.parquet"))).toBe(false);
   });
 
+  it("canSkipByView: row groups that each span most of the file can't be skipped (ml-cnv.18)", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const sorted = await open("/points.parquet");
+    expect(canSkipByView(sorted)).toBe(true);
+    // The same 8 row groups, unsorted: every group's bbox statistics cover
+    // the whole extent, so a view would still read all of them.
+    const groups = structuredClone(sorted.metadata.row_groups);
+    const extent = { xmin: Infinity, ymin: Infinity, xmax: -Infinity, ymax: -Infinity };
+    const stat = (chunk: (typeof groups)[number]["columns"][number]) => chunk.meta_data?.statistics;
+    for (const group of groups) {
+      for (const chunk of group.columns) {
+        const path = chunk.meta_data?.path_in_schema.join(".");
+        const s = stat(chunk);
+        if (path === "bbox.xmin") extent.xmin = Math.min(extent.xmin, Number(s?.min_value ?? s?.min));
+        if (path === "bbox.ymin") extent.ymin = Math.min(extent.ymin, Number(s?.min_value ?? s?.min));
+        if (path === "bbox.xmax") extent.xmax = Math.max(extent.xmax, Number(s?.max_value ?? s?.max));
+        if (path === "bbox.ymax") extent.ymax = Math.max(extent.ymax, Number(s?.max_value ?? s?.max));
+      }
+    }
+    for (const group of groups) {
+      for (const chunk of group.columns) {
+        const path = chunk.meta_data?.path_in_schema.join(".");
+        const s = stat(chunk);
+        if (!s) continue;
+        if (path === "bbox.xmin") s.min_value = extent.xmin;
+        if (path === "bbox.ymin") s.min_value = extent.ymin;
+        if (path === "bbox.xmax") s.max_value = extent.xmax;
+        if (path === "bbox.ymax") s.max_value = extent.ymax;
+      }
+    }
+    const unsorted = { ...sorted, metadata: { ...sorted.metadata, row_groups: groups } };
+    expect(groups).toHaveLength(8);
+    expect(canSkipByView(unsorted)).toBe(false);
+  });
+
   it("a file without a covering column can't be read by view", async () => {
     vi.stubGlobal("fetch", fixtureFetch());
     const error = await readBbox(await open("/districts-nobbox.parquet"), VIEW).catch((e) => e);
