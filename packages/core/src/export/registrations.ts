@@ -83,6 +83,18 @@ exportClasses.register("layer.before", {
     "where `before:` put it (and EmitResult.placements carries the intent).",
 });
 
+// Thematic classes (0.9, ml-6x0). Style-side sugar, compiled in toModel —
+// so the emitter sees plain paint; registered so the export-class table and
+// the emit report name it.
+exportClasses.register("layer.classify", {
+  class: "exports",
+  onEmit:
+    "Compiled to plain MapLibre: a step (numeric classes) or match (categories) paint " +
+    "expression behind a no-data guard, plus a filter for `noData: hide` / `other: hide`, " +
+    'and recorded in the layer\'s metadata["maplibre-yaml:classify"]. Breaks a `method:` ' +
+    "computes are baked from the data at export (fetched when the source is a `url:`).",
+});
+
 // Experimental (0.7, @maplibre-yaml/effects). The fallback is the layer the
 // effect sits on; the export() and the projection share lowerEffectLayer
 // (imported directly, never via the emitter barrel — see `markers` below).

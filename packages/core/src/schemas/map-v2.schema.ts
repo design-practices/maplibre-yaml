@@ -473,7 +473,12 @@ export const RuntimeV2Schema: z.ZodTypeAny = z
       "MapLibre `Map` constructor options"
     ),
     controls: ControlsConfigSchema.optional().describe("Map controls"),
-    legend: LegendConfigSchema.optional().describe("Legend configuration"),
+    legend: z
+      .union([LegendConfigSchema, z.literal(false)])
+      .optional()
+      .describe(
+        "Legend configuration. A map with a classify: layer gets one automatically; false turns the legend off"
+      ),
     parameters: ParametersSchema.optional().describe(
       "Presentation metadata for `state` keys — label, type, range"
     ),

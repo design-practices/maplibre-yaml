@@ -1,0 +1,36 @@
+# classify: in a story (0.9). The pinned legend lists the classes the story's
+# map computed from its fetched data: 5–12, 12–30, 30–50, No data.
+type: scrollytelling
+id: story-classify
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [2, 1]
+  zoom: 6
+legend:
+  title: Values
+sources:
+  # Named unlike the layer: data events arrive keyed by the source.
+  cells:
+    type: geojson
+    url: "/examples/verification/data/classify-grid.geojson"
+layers:
+  - id: grid
+    type: fill
+    source: cells
+    label: Value
+    classify:
+      field: value
+      method: quantile
+      classes: 3
+      palette: Reds
+chapters:
+  - id: first
+    title: Classes from the data
+    description: "<p>Quantile classes computed when the data loaded.</p>"
+    center: [2, 1]
+    zoom: 6
+  - id: second
+    title: Still the same classes
+    description: "<p>The legend does not move while the story scrolls.</p>"
+    center: [2, 1]
+    zoom: 6.5

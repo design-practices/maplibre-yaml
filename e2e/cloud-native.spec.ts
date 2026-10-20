@@ -183,6 +183,25 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     expect(errors).toEqual([]);
   });
 
+  test("classify: over a FlatGeobuf source computes its breaks from the decoded features", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto("/examples/verification/cloud-native/classify.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "districts");
+    await page.waitForFunction(() => {
+      const map = (document.getElementById("map") as any).getMap();
+      const color = map.getPaintProperty("population", "fill-color");
+      return Array.isArray(color) && JSON.stringify(color).includes("population");
+    });
+    const colors = await page.evaluate(() =>
+      JSON.stringify((document.getElementById("map") as any).getMap().getPaintProperty("population", "fill-color"))
+    );
+    expect(colors).toMatch(/"step"/);
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    await page.screenshot({ path: "e2e/results/cnv_classify.png" });
+    expect(errors).toEqual([]);
+  });
+
   test("a page that registered its own pmtiles protocol keeps it (host wins)", async ({ page }) => {
     const errors = await guard(page);
     const archive = recordRequests(page, /districts\.pmtiles/);

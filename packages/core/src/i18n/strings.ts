@@ -88,6 +88,10 @@ export const DEFAULT_STRINGS = {
     "(Photo.JPG and photo.jpg are different files on most web servers).",
   "maplibre-yaml.Story.VideoUnsupported": "Your browser does not support the video element.",
 
+  // Legend lines a `classify:` layer generates beside its classes.
+  "maplibre-yaml.Classify.NoData": "No data",
+  "maplibre-yaml.Classify.Other": "Other",
+
   // Astro's <FullPageMap> chrome (its zoom buttons use MapLibre's
   // NavigationControl.ZoomIn / NavigationControl.ZoomOut).
   "maplibre-yaml.FullPageMap.ResetView": "Reset view",

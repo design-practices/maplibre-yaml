@@ -166,6 +166,7 @@ export default defineConfig({
             { label: "Export classes", link: "/guides/export-classes/" },
             { label: "Effects (experimental)", link: "/guides/effects/" },
             { label: "Working with Layers", link: "/guides/layers/" },
+            { label: "Thematic maps (classify)", link: "/guides/thematic-maps/" },
             { label: "Accessibility & languages", link: "/guides/accessibility-languages/" },
             { label: "Data Sources", link: "/guides/data-sources/" },
             { label: "Cloud-native data", link: "/guides/cloud-native-data/" },
@@ -243,6 +244,7 @@ export default defineConfig({
             { label: "MapLibre Gallery", link: "/examples/gallery/" },
             { label: "Mapzen Classics", link: "/examples/classics/" },
             { label: "Basic Map", link: "/examples/basic-map/" },
+            { label: "Thematic Maps", link: "/examples/thematic-maps/" },
             {
               label: "Earthquake Tracker",
               link: "/examples/earthquake-tracker/",

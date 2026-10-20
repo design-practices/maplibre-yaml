@@ -167,7 +167,8 @@ export interface RuntimeHalf {
    */
   map: Record<string, unknown>;
   controls?: ControlsConfig;
-  legend?: LegendConfig;
+  /** `false`: no legend, not even the automatic one classify: layers get. */
+  legend?: LegendConfig | false;
   container?: { className?: string; style?: string };
   /** Presentation metadata for `state` keys, keyed by state name. */
   parameters?: Record<string, unknown>;
@@ -202,7 +203,7 @@ export interface V1MapInput {
   layers?: Layer[];
   sources?: Record<string, LayerSource>;
   controls?: ControlsConfig;
-  legend?: LegendConfig;
+  legend?: LegendConfig | false;
   className?: string;
   style?: string;
   /** Spec-native runtime tunables, authored at the document root as in v2. */

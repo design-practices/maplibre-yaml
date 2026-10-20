@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# A rate, not a count: cases per 100,000 residents in each tract. normalize:
+# divides by population and multiply: scales it; breaks (here jenks) are
+# computed on the rate. A tract with no residents (population 0 or missing)
+# is no data — never an Infinity class. Data: synthetic tracts.
+type: map
+id: classify-rate
+config:
+  center: [-75.19, 39.936]
+  zoom: 12
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  tracts:
+    type: geojson
+    url: /data/classify/sample-tracts.geojson
+layers:
+  - id: rate
+    type: fill
+    source: tracts
+    label: Cases per 100,000 residents
+    classify:
+      field: cases
+      normalize: population
+      multiply: 100000
+      method: jenks
+      classes: 5
+      palette: OrRd
+      format: { max-fraction-digits: 0 }
+    paint:
+      fill-opacity: 0.85
+      fill-outline-color: "#ffffff"

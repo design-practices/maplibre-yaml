@@ -355,7 +355,7 @@ export function denormalizeOptions(model: MapModel): {
   title?: string;
   description?: string;
   controls?: ControlsConfig;
-  legend?: LegendConfig;
+  legend?: LegendConfig | false;
   state?: Record<string, unknown>;
   parameters?: Record<string, unknown>;
   markers?: MapModel["runtime"]["markers"];
@@ -370,7 +370,7 @@ export function denormalizeOptions(model: MapModel): {
     title?: string;
     description?: string;
     controls?: ControlsConfig;
-    legend?: LegendConfig;
+    legend?: LegendConfig | false;
     state?: Record<string, unknown>;
     parameters?: Record<string, unknown>;
     markers?: MapModel["runtime"]["markers"];

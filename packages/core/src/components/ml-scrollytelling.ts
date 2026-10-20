@@ -84,7 +84,13 @@ import { noteStoryImageRefs } from "../utils/image-refs.js";
 import { ML_MAP_SLOTS, registerMLMap, type MLMap } from "./ml-map.js";
 import { defaultStrings } from "../i18n/strings.js";
 import { showAuthorHints } from "./author-hints.js";
-import { StoryLegend, STORY_NARROW_QUERY, STORY_LANDSCAPE_QUERY } from "../scrollytelling/story-legend.js";
+import {
+  StoryLegend,
+  storyLegendConfig,
+  STORY_NARROW_QUERY,
+  STORY_LANDSCAPE_QUERY,
+} from "../scrollytelling/story-legend.js";
+import type { ClassifyRecord } from "../classify/compile.js";
 import {
   isFilePage,
   looksLikeHtml,
@@ -186,6 +192,13 @@ export class MLScrollytelling extends HTMLElement {
     super();
     this.addEventListener("click", (event) => this.onClick(event));
     this.addEventListener("keydown", (event) => this.onKeydown(event));
+    // classify: (0.9) — the story's map reports each classified layer's
+    // classes as drawn (computed breaks, the data's range); the pinned
+    // legend shows the same edges as the map.
+    this.addEventListener("ml-map:layer-classified", (event) => {
+      const detail = (event as CustomEvent<{ layerId: string; classify: ClassifyRecord }>).detail;
+      if (detail) this.legend?.updateClassify(detail.layerId, detail.classify);
+    });
     // A chapter photo or video that fails to load (error does not bubble:
     // capture it). The card showed a broken image with only its alt text
     // and the 404 was in the console alone (ml-aot.51).
@@ -750,8 +763,11 @@ export class MLScrollytelling extends HTMLElement {
     if (slot) this.appendChild(slot);
     this.legend?.destroy();
     this.legend = null;
-    if (!story.legend && !slot) return;
-    const legend = new StoryLegend(this, story, slot);
+    // `legend:` as written; automatic for a classified story; `false`: none
+    // (an author's slot="legend" markup still shows).
+    const config = storyLegendConfig(story);
+    if (!config && !slot) return;
+    const legend = new StoryLegend(this, { ...story, legend: (config ?? {}) as never }, slot);
     mapContainer.after(legend.layer);
     legend.layout();
     this.legend = legend;

@@ -9,40 +9,38 @@
  * describes, the CLI fetches). A file that can't be read leaves the source
  * empty, reported as `lossy` so `--strict` refuses it.
  *
- * Paths on disk: the browser resolves a relative `url:` against the page,
- * which emit doesn't have, so the likely places are tried in order — next to
- * the YAML file, the current folder, and its `public/` (where an Astro site
- * keeps data).
+ * Paths on disk resolve exactly as `classify:` data does
+ * ({@link localDataCandidates}, data-loader.ts): beside the document, then
+ * the site root and its `public/` folder.
  */
 
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
 import { decodeFlatGeobuf, type EmitDataRef, type EmitWarning } from '@maplibre-yaml/core';
+import { localDataCandidates } from './data-loader.js';
 
 /** Inline data larger than this gets a note: the style file grows by as much. */
 export const LARGE_INLINE_BYTES = 2 * 1024 * 1024;
 
+/** How long one data fetch may take at export. */
+const FETCH_TIMEOUT_MS = 30_000;
+
 /** Reads a file's bytes (injectable for tests). */
-export type DataReader = (url: string, candidates: string[]) => Promise<Uint8Array>;
+export type DataReader = (url: string, documentPath?: string) => Promise<Uint8Array>;
 
-/** Where on disk a relative/root-relative `url:` may live. */
-export function diskCandidates(url: string, documentDir: string | undefined, cwd = process.cwd()): string[] {
-  const path = url.replace(/[?#].*$/, '');
-  const rel = path.replace(/^\/+/, '');
-  const dirs = [documentDir, cwd, join(cwd, 'public')].filter((d): d is string => Boolean(d));
-  return [...new Set(dirs.map((dir) => resolve(dir, rel)))];
-}
-
-/** The default reader: fetch an http(s) URL; otherwise the first existing candidate. */
-export const defaultReader: DataReader = async (url, candidates) => {
+/** The default reader: fetch an http(s) URL; otherwise the first existing local candidate. */
+export const defaultReader: DataReader = async (url, documentPath) => {
   if (/^https?:\/\//i.test(url)) {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`.trim());
     return new Uint8Array(await response.arrayBuffer());
   }
+  const candidates = localDataCandidates(url, documentPath);
   const found = candidates.find((file) => existsSync(file));
-  if (!found) throw new Error(`not found (looked in ${candidates.join(', ')})`);
+  if (!found) {
+    const shown = candidates.slice(0, 4).join(', ') + (candidates.length > 4 ? ', …' : '');
+    throw new Error(`no file found (looked for ${shown})`);
+  }
   return new Uint8Array(await readFile(found));
 };
 
@@ -54,14 +52,14 @@ export const defaultReader: DataReader = async (url, candidates) => {
  */
 export async function resolveDataRefs(
   refs: readonly EmitDataRef[],
-  options: { documentDir?: string; reader?: DataReader } = {}
+  options: { documentPath?: string; reader?: DataReader } = {}
 ): Promise<{ resolved: { source: string; data: unknown }[]; warnings: EmitWarning[] }> {
   const reader = options.reader ?? defaultReader;
   const resolved: { source: string; data: unknown }[] = [];
   const warnings: EmitWarning[] = [];
   for (const ref of refs) {
     try {
-      const bytes = await reader(ref.url, diskCandidates(ref.url, options.documentDir));
+      const bytes = await reader(ref.url, options.documentPath);
       const data = await decodeFlatGeobuf(bytes, ref.url);
       resolved.push({ source: ref.source, data });
       const size = JSON.stringify(data).length;

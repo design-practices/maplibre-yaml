@@ -1,0 +1,35 @@
+# classify: in a story with NO legend: block (0.9) — the story pins an
+# automatic legend by the 0.8.1 rules (a "Legend" button where cards pass,
+# open elsewhere), and its map builds none of its own.
+type: scrollytelling
+id: story-classify-auto
+config:
+  mapStyle: "/examples/verification/configs/local-style.json"
+  center: [1.5, 1]
+  zoom: 6.5
+sources:
+  districts:
+    type: geojson
+    url: "/examples/verification/data/classify-rates.geojson"
+layers:
+  - id: rate
+    type: fill
+    source: districts
+    label: Cases per 100k
+    classify:
+      field: cases
+      normalize: population
+      multiply: 100000
+      breaks: [50, 200]
+      palette: Purples
+chapters:
+  - id: first
+    title: Rates, not counts
+    description: "<p>Cases per 100,000 people.</p>"
+    center: [1.5, 1]
+    zoom: 6.5
+  - id: second
+    title: The same rates
+    description: "<p>The legend stays pinned.</p>"
+    center: [1.5, 1]
+    zoom: 6

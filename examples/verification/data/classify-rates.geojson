@@ -1,0 +1,11 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  { "type": "Feature", "properties": { "cell": "R1", "cases": 1, "population": 10000 }, "geometry": { "type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]] } },
+  { "type": "Feature", "properties": { "cell": "R2", "cases": 6, "population": 10000 }, "geometry": { "type": "Polygon", "coordinates": [[[1, 0], [2, 0], [2, 1], [1, 1], [1, 0]]] } },
+  { "type": "Feature", "properties": { "cell": "R3", "cases": 30, "population": 10000 }, "geometry": { "type": "Polygon", "coordinates": [[[2, 0], [3, 0], [3, 1], [2, 1], [2, 0]]] } },
+  { "type": "Feature", "properties": { "cell": "R4", "cases": 5, "population": 0 }, "geometry": { "type": "Polygon", "coordinates": [[[0, 1], [1, 1], [1, 2], [0, 2], [0, 1]]] } },
+  { "type": "Feature", "properties": { "cell": "R5", "cases": 12, "population": "8000" }, "geometry": { "type": "Polygon", "coordinates": [[[1, 1], [2, 1], [2, 2], [1, 2], [1, 1]]] } },
+  { "type": "Feature", "properties": { "cell": "R6", "population": 5000 }, "geometry": { "type": "Polygon", "coordinates": [[[2, 1], [3, 1], [3, 2], [2, 2], [2, 1]]] } }
+ ]
+}

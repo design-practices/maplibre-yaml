@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A thematic map from a FlatGeobuf file</title>
+  <!--
+    0.9: classify: (ml-6x0) over a FlatGeobuf source (ml-cnv.3). The breaks
+    are computed from the decoded features, exactly as from a .geojson file.
+    PASS = districts in three shades of blue by population, with a legend of
+    three classes. FAIL = one flat colour, or a notice.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/classify.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; height: 420px; margin: 8px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = three shades of blue by population, a three-class legend, no notice.</header>
+  <ml-map id="map">
+    <script type="text/yaml">
+type: map
+id: fgb-classify
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+legend:
+  position: bottom-left
+sources:
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.fgb
+layers:
+  - id: population
+    type: fill
+    source: districts
+    label: Population
+    classify:
+      field: population
+      method: quantile
+      classes: 3
+      palette: Blues
+    paint:
+      fill-opacity: 0.85
+    </script>
+  </ml-map>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

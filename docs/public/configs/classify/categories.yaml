@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Categories over vector tiles: the demo tiles' countries coloured by
+# continent with a CVD-safe palette. Categories need no data scan, so they
+# work on tiled sources exactly as on GeoJSON (computed breaks do not).
+type: map
+id: classify-categories
+config:
+  center: [15, 20]
+  zoom: 1.2
+  mapStyle: "https://demotiles.maplibre.org/style.json"
+legend:
+  position: bottom-left
+layers:
+  - id: continents
+    type: fill
+    source: maplibre
+    source-layer: countries
+    before: countries-boundary
+    label: Continent
+    classify:
+      field: CONTINENT
+      categories: [Africa, Asia, Europe, North America, South America, Oceania]
+      palette: okabe-ito
+      other: "#d9d9d9"
+    paint:
+      fill-opacity: 1
