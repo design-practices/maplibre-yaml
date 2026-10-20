@@ -138,6 +138,21 @@ describe("runtime layer and data problems (ml-aot.15)", () => {
     );
   });
 
+  it("a 416 says the file was found and the server refused the range — not to check the file name (ml-aot.114)", () => {
+    const error = Object.assign(new Error("HTTP 416:  for data/tracts.parquet"), { url: "data/tracts.parquet" });
+    const text = describeDataProblem("t", error, {
+      pageUrl: "https://me.github.io/my-repo/index.html",
+      base: "/my-repo/",
+      filePage: false,
+    });
+    expect(text).toBe(
+      "Data file `data/tracts.parquet` didn't load (416 Range Not Satisfiable), so layer `t` has no data. " +
+        "The file was found, but the server refused the part of it that was asked for: the file may be " +
+        "incomplete (upload it again), or the server doesn't serve parts of files correctly."
+    );
+    expect(text).not.toMatch(/file name|folder/);
+  });
+
   it("a path written relative to the YAML file gets the page-relative fix (ml-zft)", () => {
     const error = Object.assign(new Error("HTTP 404: Not Found for cities.geojson"), { url: "cities.geojson" });
     const text = describeDataProblem("cities", error, {

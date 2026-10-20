@@ -287,10 +287,20 @@ const STATUS_TEXT: Record<number, string> = {
   401: "Unauthorized",
   403: "Forbidden",
   404: "Not Found",
+  416: "Range Not Satisfiable",
   429: "Too Many Requests",
   500: "Internal Server Error",
   503: "Service Unavailable",
 };
+
+/**
+ * A 416 means the file is there: the server refused the part of it a reader
+ * asked for. Pointing at the file name or the folder would send the author
+ * the wrong way (ml-aot.114).
+ */
+const RANGE_REFUSED_HINT =
+  "The file was found, but the server refused the part of it that was asked for: the file may " +
+  "be incomplete (upload it again), or the server doesn't serve parts of files correctly.";
 
 /** Status-bearing error shapes MapLibre throws (`AJAXError`). */
 function statusOf(error: Error): { status?: number; statusText?: string } {
@@ -498,7 +508,8 @@ export function describeFormatFailure(failure: FormatFailure): string {
       );
     case "http": {
       const text = failure.statusText?.trim() || STATUS_TEXT[failure.status ?? 0] || "";
-      return `${file} didn't load (${failure.status ?? "HTTP error"}${text ? ` ${text}` : ""}).`;
+      const line = `${file} didn't load (${failure.status ?? "HTTP error"}${text ? ` ${text}` : ""}).`;
+      return failure.status === 416 ? `${line} ${RANGE_REFUSED_HINT}` : line;
     }
     case "too-large":
       if (failure.format === "geoparquet") {
@@ -657,7 +668,10 @@ export function describeDataProblem(
   }
 
   let text = `${what} didn't load (${reason}), so layer \`${layerId}\` has no data.`;
-  if (url && context.pageUrl) {
+  if (http?.[1] === "416") {
+    // The file is there: no "check the file name" or base advice.
+    text += ` ${RANGE_REFUSED_HINT}`;
+  } else if (url && context.pageUrl) {
     const resolved = resolveUrl(url, context.pageUrl);
     if (resolved !== url) text += ` The browser looked for ${resolved}`;
     if (

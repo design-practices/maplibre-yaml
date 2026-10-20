@@ -48,6 +48,11 @@ describe("classifyPmtilesError", () => {
 });
 
 describe("describeFormatFailure — the on-page sentences", () => {
+  it("a 416 on a tile archive says the file was found (ml-aot.114)", () => {
+    const text = describeFormatFailure({ code: "http", status: 416, format: "pmtiles", url: URL });
+    expect(text).toContain("didn't load (416 Range Not Satisfiable). The file was found");
+  });
+
   it("no-range names the hosts that work and the one that doesn't", () => {
     expect(describeFormatFailure({ code: "no-range", format: "pmtiles", url: URL })).toBe(
       "`/data/x.pmtiles` was served without range-request support (the server sent the whole file " +
