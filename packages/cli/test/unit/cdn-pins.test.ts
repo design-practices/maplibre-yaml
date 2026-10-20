@@ -33,6 +33,8 @@ describe('CDN pins', () => {
     const output = execFileSync('node', [SCRIPT, '--dry-run', '--version', 'core=7.3.0'], { encoding: 'utf8' });
     expect(output).toContain('+      src="https://unpkg.com/@maplibre-yaml/core@7.3/register.js"');
     expect(output).not.toMatch(/^\+.*core@7\.3\.0/m);
+    // The docs site's versioned schema path follows core too (ml-aot.110).
+    expect(output).toContain("docs.maplibre-yaml.org/schema/v7.3/<block>.schema.json");
   });
 
   it('minorPin takes the minor line of a version', () => {

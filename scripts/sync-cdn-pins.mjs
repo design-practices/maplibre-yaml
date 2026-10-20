@@ -18,6 +18,9 @@
  * at build time and carry no pin.
  *
  * Usage:
+ * It also keeps the docs site's versioned schema path (`/schema/v0.9/`) on
+ * core's minor.
+ *
  *   node scripts/sync-cdn-pins.mjs            rewrite stale pins
  *   node scripts/sync-cdn-pins.mjs --check    exit 1 listing stale pins
  *   node scripts/sync-cdn-pins.mjs --dry-run  print the change, write nothing
@@ -46,18 +49,25 @@ const EXTENSIONS = [".md", ".mdx", ".html", ".astro", ".ts", ".tsx", ".js", ".mj
  * Paths never rewritten: generated API reference, build output, and pages
  * that pin an old or exact version on purpose (the editor-setup page shows
  * how to pin a schema to the version a project uses; the verification pages
- * pin the release they verify).
+ * pin the release they verify). The editor-setup page's examples follow the
+ * current line too: they show the URL forms, and the docs site serves only
+ * the current release's `/schema/v<major>.<minor>/` (ml-aot.110).
  */
 const SKIP = [
   "node_modules",
   "dist",
   ".astro",
   "docs/src/content/docs/reference/api",
-  "docs/src/content/docs/guides/editor-setup.mdx",
   "examples/verification",
 ];
 
 const PIN = /@maplibre-yaml\/(core|astro|cli)@(\d+)\.(\d+)(?![\d.])/g;
+/**
+ * The docs site's versioned schema path, `/schema/v0.9/`: it holds core's
+ * current release (docs/scripts/generate-agent-assets.mjs), so it follows
+ * core's minor like a pin.
+ */
+const SCHEMA_PATH = /\/schema\/v(\d+)\.(\d+)\//g;
 
 function skipped(path) {
   const rel = relative(repoRoot, path).split(sep).join("/");
@@ -105,13 +115,25 @@ export function findPins(minors = currentMinors()) {
           want: minors[m[1]],
         });
       }
+      for (const m of text.matchAll(SCHEMA_PATH)) {
+        pins.push({
+          file: relative(repoRoot, file),
+          line: i + 1,
+          text,
+          package: "core",
+          pinned: `${m[1]}.${m[2]}`,
+          want: minors.core,
+        });
+      }
     });
   }
   return pins;
 }
 
 function rewrite(text, minors) {
-  return text.replace(PIN, (_, pkg) => `@maplibre-yaml/${pkg}@${minors[pkg]}`);
+  return text
+    .replace(PIN, (_, pkg) => `@maplibre-yaml/${pkg}@${minors[pkg]}`)
+    .replace(SCHEMA_PATH, () => `/schema/v${minors.core}/`);
 }
 
 function main(argv) {
