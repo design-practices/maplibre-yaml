@@ -19,6 +19,7 @@
  * | `format:` disagreeing with the URL | warning: `format:` wins |
  * | `load:` on a source that isn't FlatGeobuf or GeoParquet | warning: no effect |
  * | `columns:` on a source that isn't GeoParquet | warning: no effect |
+ * | a GeoParquet `columns:` list without a property the document uses | warning: names each one (it would read as missing) |
  *
  * Cross-field rules live here, not as schema refinements: another chained
  * refinement on a source schema pushes the layer union past TypeScript's
@@ -34,6 +35,7 @@ import {
   SUPPORTED_FORMATS,
   type CloudFormat,
 } from "../formats/detect";
+import { columnsLeftOut } from "../formats/columns";
 import { positionForPath, type ValidationWarning } from "./validation-utils";
 
 /** An error a check found (the parser's ParseError shape). */
@@ -228,5 +230,44 @@ export function checkSourceFormats(
       });
     }
   }
+
+  // A GeoParquet `columns:` list replaces the inference: a property the
+  // document uses (a popup, a label token, a filter, classify, a story
+  // chapter's action) that the list leaves out reads as missing.
+  const root = version === 2 ? value["style"] : value;
+  if (isObject(root)) {
+    const chapters = Array.isArray(value["chapters"]) ? value["chapters"].filter(isObject) : [];
+    const actions = chapters.flatMap((chapter) => [
+      ...(Array.isArray(chapter["onChapterEnter"]) ? chapter["onChapterEnter"] : []),
+      ...(Array.isArray(chapter["onChapterExit"]) ? chapter["onChapterExit"] : []),
+    ]);
+    const leftOut = columnsLeftOut(root["sources"], root["layers"], actions);
+    for (const { path, runtimePath } of leftOut.size > 0 ? sourcesOf(value, version) : []) {
+      const id = sourceIdAt(root, path);
+      const missing = id === undefined ? undefined : leftOut.get(id);
+      if (!missing) continue;
+      const names = missing.map((name) => `"${name}"`).join(", ");
+      warnings.push({
+        path: [...runtimePath, "columns"].join("."),
+        message:
+          `columns: leaves out ${names}, which this map uses (in a popup, label, filter, ` +
+          "classify: or chapter action). Columns that aren't read show blank or as no data: add " +
+          `${missing.length === 1 ? "it" : "them"} to columns:, or remove columns: to read every ` +
+          "column the map uses.",
+        ...at([...runtimePath, "columns"]),
+      });
+    }
+  }
   return { errors, warnings };
+}
+
+/** The id the renderer gives the source at `path`: its name, or `<layer id>-source` inline. */
+function sourceIdAt(root: Obj, path: (string | number)[]): string | undefined {
+  if (path[path.length - 2] === "sources") return String(path[path.length - 1]);
+  const tail = path.slice(-3);
+  if (tail[0] === "layers" && tail[2] === "source") {
+    const layer = Array.isArray(root["layers"]) ? root["layers"][tail[1] as number] : undefined;
+    return isObject(layer) && typeof layer["id"] === "string" ? `${layer["id"]}-source` : undefined;
+  }
+  return undefined;
 }

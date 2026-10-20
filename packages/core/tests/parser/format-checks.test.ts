@@ -252,6 +252,64 @@ describe("columns:", () => {
     );
   });
 
+  it("a list that leaves out a property the map uses warns, naming each one (ml-aot.117)", () => {
+    const result = v1(
+      `  t:\n    type: geojson\n    url: data/tracts.parquet\n    columns: [tract]`,
+      `layers:
+  - id: t
+    type: fill
+    source: t
+    paint: { fill-color: "#ccc" }
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: tract }]
+          - p: [{ str: "Population: " }, { property: population }]
+  - id: labels
+    type: symbol
+    source: t
+    layout: { text-field: "{ Tract Name }" }
+  - id: inline
+    type: circle
+    source: { type: geojson, url: data/wells.parquet, columns: [id] }
+    filter: [">", ["get", "depth"], 10]`
+    );
+    expect(result.success).toBe(true);
+    const at = (path: string) => result.warnings.filter((w) => w.path === path);
+    expect(at("sources.t.columns")).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('columns: leaves out "Tract Name", "population", which this map uses'),
+        line: 11,
+      }),
+    ]);
+    expect(at("layers.2.source.columns")[0]?.message).toContain('leaves out "depth"');
+  });
+
+  it("…and counts a story chapter's actions; a complete list, all, or no list doesn't warn", () => {
+    const parquet = `  w:\n    type: geojson\n    url: data/w.parquet\n    columns: [kind]`;
+    const doc = (sources: string) =>
+      YAMLParser.safeParseScrollytellingBlock(`type: scrollytelling
+id: s
+config: { center: [10.2, 42.15], zoom: 9, mapStyle: https://example.com/style.json }
+sources:
+${sources}
+layers:
+  - { id: w, type: circle, source: w, paint: { circle-color: ["get", "kind"] } }
+chapters:
+  - id: a
+    title: A
+    center: [10.2, 42.15]
+    zoom: 9
+    onChapterEnter:
+      - { action: setFilter, layer: w, filter: [">=", ["get", "value"], 50] }
+`);
+    expect(doc(parquet).warnings.find((w) => w.path === "sources.w.columns")?.message).toContain('leaves out "value"');
+    for (const columns of ["[kind, value]", "all"]) {
+      expect(doc(parquet.replace("[kind]", columns)).warnings.filter((w) => w.path === "sources.w.columns")).toEqual([]);
+    }
+    expect(doc(parquet.replace("\n    columns: [kind]", "")).warnings).toEqual([]);
+  });
+
   it("rejects an empty list and a bare word other than all", () => {
     expect(v1(`  a:\n    type: geojson\n    url: data/a.parquet\n    columns: []`).success).toBe(false);
     expect(v1(`  a:\n    type: geojson\n    url: data/a.parquet\n    columns: some`).success).toBe(false);

@@ -154,12 +154,76 @@ export function geoParquetColumns(
   layers: unknown,
   actions: readonly unknown[] = []
 ): Map<string, readonly string[] | "all"> {
+  return resolveColumns(sources, layers, actions, true);
+}
+
+/**
+ * The columns each GeoParquet source's document references, ignoring an
+ * author's `columns:` — what {@link geoParquetColumns} would read without it.
+ */
+export function referencedColumns(
+  sources: unknown,
+  layers: unknown,
+  actions: readonly unknown[] = []
+): Map<string, readonly string[] | "all"> {
+  return resolveColumns(sources, layers, actions, false);
+}
+
+/**
+ * For each GeoParquet source whose `columns:` is a list, the referenced
+ * properties the list leaves out (trimmed, sorted): those would read as
+ * missing — a blank popup line or label, a filter that matches nothing,
+ * every feature drawn as no data. Sources without a list, or whose
+ * references can't be narrowed, are left out.
+ */
+export function columnsLeftOut(
+  sources: unknown,
+  layers: unknown,
+  actions: readonly unknown[] = []
+): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const declared = new Map<string, readonly string[] | "all">();
+  eachGeoParquetSource(sources, layers, (id, source) => {
+    const list = declaredColumns(source);
+    if (list !== undefined) declared.set(id, list);
+  });
+  for (const [id, referenced] of referencedColumns(sources, layers, actions)) {
+    const list = declared.get(id);
+    if (list === undefined || list === "all" || referenced === "all") continue;
+    const have = new Set(list);
+    const missing = new Set<string>();
+    for (const name of referenced) {
+      const trimmed = name.trim();
+      if (trimmed && !have.has(name) && !have.has(trimmed)) missing.add(trimmed);
+    }
+    if (missing.size > 0) out.set(id, [...missing].sort());
+  }
+  return out;
+}
+
+/** Visit each GeoParquet source with the id the renderer gives it. */
+function eachGeoParquetSource(sources: unknown, layers: unknown, visit: (id: string, source: Obj) => void): void {
+  if (isObject(sources)) {
+    for (const [name, source] of Object.entries(sources)) if (isGeoParquetSource(source)) visit(name, source);
+  }
+  for (const layer of Array.isArray(layers) ? layers.filter(isObject) : []) {
+    const source = layer["source"];
+    if (isGeoParquetSource(source) && typeof layer["id"] === "string") visit(`${layer["id"]}-source`, source);
+  }
+}
+
+function resolveColumns(
+  sources: unknown,
+  layers: unknown,
+  actions: readonly unknown[],
+  honourDeclared: boolean
+): Map<string, readonly string[] | "all"> {
   const out = new Map<string, readonly string[] | "all">();
   const layerList = Array.isArray(layers) ? layers.filter(isObject) : [];
   const actionList = actions.filter(isObject);
 
   const resolve = (id: string, source: Obj, users: Obj[]) => {
-    const declared = declaredColumns(source);
+    const declared = honourDeclared ? declaredColumns(source) : undefined;
     if (declared !== undefined) {
       out.set(id, declared);
       return;
