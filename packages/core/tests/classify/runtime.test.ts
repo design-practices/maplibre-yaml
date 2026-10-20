@@ -238,6 +238,45 @@ describe("ClassifyRuntime", () => {
       expect(classifyFieldProblems(rows([]), { field: "x", kind: "numeric" })).toEqual([]);
     });
 
+    it("an empty placeholder before the fetch is not 'checked': the fetched data is (ml-aot.105)", async () => {
+      const data = new Map<string, unknown>([["tracts", rows([])]]); // the named source's placeholder
+      const onFieldProblem = vi.fn();
+      const record = resolveClassify({ field: "Median_Income", breaks: [50000], colors: ["#000000", "#ffffff"] }, "fill");
+      const l = applyClassifyToSpec({ id: "income", type: "fill", source: "tracts" }, record) as never;
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["income"])) as never, [l], {}, (id) => data.get(id), () => {}, {
+        readsByView: () => false,
+        onRefused: vi.fn(),
+        onFieldProblem,
+      });
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+      expect(onFieldProblem).not.toHaveBeenCalled();
+      data.set("tracts", TRACTS);
+      runtime.dataLoaded("tracts");
+      expect(onFieldProblem).toHaveBeenCalledTimes(1);
+      expect(String(onFieldProblem.mock.calls[0]![1])).toContain('Did you mean "median_income"?');
+    });
+
+    it("inline data the pipeline never delivers is checked from the document (ml-aot.105)", async () => {
+      const onFieldProblem = vi.fn();
+      const record = resolveClassify({ field: "Value", breaks: [1], colors: ["#000000", "#ffffff"] }, "fill");
+      const own = applyClassifyToSpec(
+        { id: "own", type: "fill", source: { type: "geojson", data: rows([{ value: 1 }, { value: 2 }]) } },
+        record
+      ) as never;
+      const named = applyClassifyToSpec({ id: "named", type: "fill", source: "pts" }, record) as never;
+      const runtime = new ClassifyRuntime(
+        fakeMap(new Set(["own", "named"])) as never,
+        [own, named],
+        { pts: { type: "geojson", data: rows([{ value: 3 }]) } },
+        () => undefined,
+        () => {},
+        { readsByView: () => false, onRefused: vi.fn(), onFieldProblem }
+      );
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+      expect(onFieldProblem.mock.calls.map((c) => c[0]).sort()).toEqual(["named", "own"]);
+      expect(String(onFieldProblem.mock.calls[0]![1])).toContain('Did you mean "value"?');
+    });
+
     it("the runtime reports it once per layer, for fetched and inline data", async () => {
       const data = new Map<string, unknown>([["s", TRACTS]]);
       const onFieldProblem = vi.fn();

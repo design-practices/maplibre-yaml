@@ -61,6 +61,13 @@ interface RuntimeLayer {
 const isObject = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object" && !Array.isArray(v);
 
+/** Features in a GeoJSON value (a Feature counts as one). */
+function featureCount(data: unknown): number {
+  if (!isObject(data)) return 0;
+  if (data["type"] === "Feature") return 1;
+  return Array.isArray(data["features"]) ? data["features"].length : 0;
+}
+
 /** One plain-language line for a {@link ClassifyFieldProblem} (an author hint). */
 export function classifyFieldMessage(layerId: string, problem: ClassifyFieldProblem): string {
   const where = `Layer \`${layerId}\`: classify ${problem.key}: "${problem.name}"`;
@@ -192,19 +199,28 @@ export class ClassifyRuntime {
       if (record && isPending(record)) {
         this.compute(layer);
       } else {
-        // Inline data never passes through a delivery: check its field here.
+        // Inline data never passes through a delivery: check its field here
+        // (the pipeline's copy, else the document's own `data:` object).
         const sourceId = this.sourceIdOf(layer);
-        const data = this.getSourceData(sourceId);
-        if (!this.byView?.readsByView(sourceId) && isFeatureData(data)) this.diagnose(layer, data);
+        if (this.byView?.readsByView(sourceId)) continue;
+        const delivered = this.getSourceData(sourceId);
+        const data = featureCount(delivered) > 0 ? delivered : this.inlineDataOf(layer);
+        if (isFeatureData(data)) this.diagnose(layer, data);
       }
     }
     await this.loadUrlData(fetcher);
   }
 
-  /** Once per layer: report a field the loaded data has no value for. */
+  /**
+   * Once per layer: report a field the loaded data has no value for. Only
+   * data with features counts as checked: a named source holds an empty
+   * placeholder until its fetch lands, and latching on that would skip the
+   * real data (ml-aot.105).
+   */
   private diagnose(layer: RuntimeLayer, data: unknown): void {
     const template = this.templates.get(layer.id);
     if (!template || this.diagnosed.has(layer.id) || !this.byView?.onFieldProblem) return;
+    if (featureCount(data) === 0) return;
     this.diagnosed.add(layer.id);
     for (const problem of classifyFieldProblems(data, template)) {
       this.byView.onFieldProblem(layer.id, classifyFieldMessage(layer.id, problem));
@@ -260,6 +276,15 @@ export class ClassifyRuntime {
       );
     }
     await Promise.all(jobs);
+  }
+
+  /** A layer's inline GeoJSON `data:` object (its own source, or the named one). */
+  private inlineDataOf(layer: RuntimeLayer): unknown {
+    let spec: unknown = layer.source;
+    if (typeof spec === "string") spec = this.sources?.[spec];
+    if (!isObject(spec)) return undefined;
+    const data = spec["data"] ?? spec["prefetchedData"];
+    return isFeatureData(data) ? data : undefined;
   }
 
   /** A layer's `data:` URL string, when its source is GeoJSON given that way. */

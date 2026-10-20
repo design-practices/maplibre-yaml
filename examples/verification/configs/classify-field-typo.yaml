@@ -1,0 +1,23 @@
+# classify field hint (ml-aot.95 / ml-aot.105): a NAMED url: source (the
+# guide's and starters' form) with a wrong-case field. The data has "cases",
+# not "Cases": every feature is no data, and the console plus (on a local
+# page) the map's author notes name the field with a did-you-mean.
+type: map
+id: classify-field-typo
+config:
+  center: [1.5, 1]
+  zoom: 6.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  districts:
+    type: geojson
+    url: "/examples/verification/data/classify-rates.geojson"
+layers:
+  - id: typo-field
+    type: fill
+    source: districts
+    label: Cases
+    classify:
+      field: Cases
+      breaks: [5, 20]
+      palette: Purples
