@@ -37,7 +37,7 @@ import type {
   ProjectionConfig,
 } from '../schemas/map.schema';
 import { applyProjection, applySky, applyTerrain, type Scene3DMap } from './scene-3d';
-import { prepareProtocols } from './cloud-sources';
+import { isProtocolRegistered, prepareProtocols } from './cloud-protocols';
 import { formatOfSource, type CloudFormat } from '../formats/detect';
 
 /** The document's source ids (named, and `<layer>-source` for inline ones) that read `format`. */
@@ -610,7 +610,7 @@ export class MapRenderer {
       onHover: (layerId, feature, lngLat) => this.emit('layer:hover', { layerId, feature, lngLat }),
     };
 
-    this.layerManager = new LayerManager(this.map, layerCallbacks);
+    this.layerManager = new LayerManager(this.map, layerCallbacks, { isProtocolRegistered });
     this.eventHandler = new EventHandler(this.map, eventCallbacks, options.capabilities);
     this.legendBuilder = new LegendBuilder();
     this.controlsManager = new ControlsManager(this.map, {

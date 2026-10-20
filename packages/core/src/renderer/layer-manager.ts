@@ -157,10 +157,22 @@ export class LayerManager {
   private activeSourcePipelines: Set<string>;
   /** FlatGeobuf readers by source id (ml-cnv.3), stopped with their source. */
   private formatLoaders = new Map<string, FlatGeobufLoader>();
+  /** Whether the page registered a URL protocol itself (injected; see options). */
+  private isProtocolRegistered: (scheme: string) => boolean;
 
-  constructor(map: MapLibreMap, callbacks?: LayerManagerCallbacks) {
+  /**
+   * @param options.isProtocolRegistered - Whether a URL protocol (`cog`) is
+   *   registered on the maplibre-gl module. Injected by `MapRenderer` so this
+   *   module never loads maplibre-gl itself; defaults to "none registered".
+   */
+  constructor(
+    map: MapLibreMap,
+    callbacks?: LayerManagerCallbacks,
+    options: { isProtocolRegistered?: (scheme: string) => boolean } = {}
+  ) {
     this.map = map;
     this.callbacks = callbacks || {};
+    this.isProtocolRegistered = options.isProtocolRegistered ?? (() => false);
     this.dataFetcher = new DataFetcher();
     this.pollingManager = new PollingManager();
     this.streamManager = new StreamManager();
@@ -262,7 +274,7 @@ export class LayerManager {
     if (type !== "vector" && type !== "raster" && type !== "raster-dem") {
       return withoutFormatKeys(spec);
     }
-    const resolved = toMapLibreTileSpec(spec);
+    const resolved = toMapLibreTileSpec(spec, this.isProtocolRegistered);
     if (resolved.problem && sourceId) this.callbacks.onSourceError?.(sourceId, resolved.problem);
     return resolved.spec;
   }

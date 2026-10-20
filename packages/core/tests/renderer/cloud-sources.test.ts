@@ -6,12 +6,31 @@
  * MapLibre error.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+// A stand-in maplibre-gl module with a real protocol registry (the parts
+// core reads: `config.REGISTERED_PROTOCOLS`, `addProtocol`, `removeProtocol`,
+// `getVersion`). Not the real package: on the CI matrix's 4.x/5.x legs that
+// is the UMD bundle, which calls URL.createObjectURL at import time (absent
+// in jsdom) — and these tests are about what core does with the module, not
+// about MapLibre.
+vi.mock("maplibre-gl", () => {
+  const REGISTERED_PROTOCOLS: Record<string, unknown> = {};
+  const gl = {
+    config: { REGISTERED_PROTOCOLS },
+    addProtocol: (name: string, fn: unknown) => {
+      REGISTERED_PROTOCOLS[name] = fn;
+    },
+    removeProtocol: (name: string) => {
+      delete REGISTERED_PROTOCOLS[name];
+    },
+    getVersion: () => "6.12.0",
+  };
+  return { default: gl, ...gl };
+});
+
 import { install } from "../../src/formats/pmtiles";
-import {
-  toMapLibreTileSpec,
-  withoutFormatKeys,
-  prepareProtocols,
-} from "../../src/renderer/cloud-sources";
+import { toMapLibreTileSpec, withoutFormatKeys } from "../../src/renderer/cloud-sources";
+import { isProtocolRegistered, prepareProtocols } from "../../src/renderer/cloud-protocols";
 import { maplibregl, removeProtocol } from "../../src/renderer/maplibre-interop";
 import { LayerManager } from "../../src/renderer/layer-manager";
 import { isFormatError } from "../../src/formats/errors";
@@ -71,7 +90,7 @@ describe("pmtiles install()", () => {
   });
 });
 
-describe("prepareProtocols (on the real interop module)", () => {
+describe("prepareProtocols (on the interop-resolved module)", () => {
   afterEach(() => {
     if (registry()["pmtiles"]) removeProtocol("pmtiles");
   });
@@ -140,7 +159,11 @@ describe("toMapLibreTileSpec", () => {
   it("a COG uses the page's own cog:// protocol when one is registered", () => {
     maplibregl.addProtocol("cog", (async () => ({ data: {} })) as never);
     try {
-      const { spec, problem } = toMapLibreTileSpec({ type: "raster", url: "cog://https://h.org/s.tif" });
+      expect(isProtocolRegistered("cog")).toBe(true);
+      const { spec, problem } = toMapLibreTileSpec(
+        { type: "raster", url: "cog://https://h.org/s.tif" },
+        isProtocolRegistered
+      );
       expect(problem).toBeUndefined();
       expect(spec["url"]).toBe("cog://https://h.org/s.tif");
     } finally {
@@ -205,6 +228,13 @@ describe("LayerManager with cloud-native sources", () => {
     expect(callbacks.onSourceError).toHaveBeenCalledTimes(1);
     expect(callbacks.onSourceError.mock.calls[0][0]).toBe("scene");
     expect(map.addSource).toHaveBeenCalledWith("scene", expect.objectContaining({ type: "raster" }));
+  });
+
+  it("asks the injected predicate whether the page registered cog:// (no maplibre-gl import of its own)", () => {
+    const manager = new LayerManager(map, callbacks, { isProtocolRegistered: (s) => s === "cog" });
+    manager.registerSources({ scene: { type: "raster", url: "https://h.org/scene.tif" } });
+    expect(callbacks.onSourceError).not.toHaveBeenCalled();
+    expect(map.addSource).toHaveBeenCalledWith("scene", { type: "raster", url: "cog://https://h.org/scene.tif" });
   });
 
   it("a GeoParquet url: says 'not yet' instead of failing as 'not JSON'", async () => {

@@ -8,7 +8,7 @@
  *
  * - **PMTiles** (`vector` / `raster` / `raster-dem`): the `pmtiles://`
  *   protocol is registered once on the renderer's maplibre-gl module
- *   ({@link prepareProtocols}, host wins), and the source URL is rewritten to
+ *   (`prepareProtocols` in ./cloud-protocols, host wins), and the source URL is rewritten to
  *   the canonical `pmtiles://<absolute URL>` ({@link toMapLibreTileSpec}) —
  *   absolute so the protocol's per-archive cache has one key per file and the
  *   request works wherever MapLibre issues it.
@@ -24,17 +24,13 @@
 
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import {
-  formatsIn,
-  formatOfSource,
-  stripScheme,
-  typeReadsFormat,
-  type CloudFormat,
-} from "../formats/detect";
+import { formatOfSource, stripScheme, typeReadsFormat, type CloudFormat } from "../formats/detect";
 import { getDecoder } from "../formats/decoders";
 import type { FlatGeobufHeader } from "../formats/flatgeobuf";
 import { FormatError, isAbortError, isFormatError } from "../formats/errors";
-import { addProtocol, maplibregl, runtimeVersion } from "./maplibre-interop";
+// No maplibre-gl here: the layer manager imports this module, and it loads
+// without maplibre-gl (types only). Protocol registration, which needs the
+// module, lives in ./cloud-protocols (MapRenderer only).
 
 // ---------------------------------------------------------------------------
 // Size guards and viewport defaults (design §4.4; maintainer-accepted)
@@ -66,54 +62,6 @@ export function withoutFormatKeys<T extends Obj>(spec: T): T {
 }
 
 // ---------------------------------------------------------------------------
-// Protocols
-// ---------------------------------------------------------------------------
-
-/** Whether a URL protocol is already registered on the renderer's module. */
-export function isProtocolRegistered(scheme: string): boolean {
-  const config = (maplibregl as unknown as { config?: { REGISTERED_PROTOCOLS?: Obj } }).config;
-  return Boolean(config?.REGISTERED_PROTOCOLS?.[scheme]);
-}
-
-/** The inline basemap style's sources, when the basemap is an object. */
-function inlineStyleSources(mapStyle: unknown): unknown {
-  return mapStyle && typeof mapStyle === "object" ? (mapStyle as Obj)["sources"] : undefined;
-}
-
-/**
- * Register the protocols a document needs (PMTiles), on the module the
- * renderer constructs maps from. Starts at once and resolves when done;
- * the renderer awaits it before adding the document's sources, never
- * before constructing the map (the basemap loads in parallel).
- *
- * @returns Formats whose reader could not be set up, with the error — their
- *   sources are reported and skipped; everything else renders.
- */
-export function prepareProtocols(
-  sources: unknown,
-  layers: unknown,
-  mapStyle?: unknown
-): Promise<Map<CloudFormat, Error>> | undefined {
-  const needed = formatsIn(sources, layers);
-  for (const f of formatsIn(inlineStyleSources(mapStyle), [])) needed.add(f);
-  if (!needed.has("pmtiles")) return undefined;
-  const failed = new Map<CloudFormat, Error>();
-  return getDecoder("pmtiles")
-    .then((pmtiles) => {
-      pmtiles.install({
-        addProtocol: addProtocol as never,
-        config: (maplibregl as unknown as { config?: { REGISTERED_PROTOCOLS?: Obj } }).config,
-        version: runtimeVersion(),
-        module: maplibregl as unknown as object,
-      });
-    })
-    .catch((error: unknown) => {
-      failed.set("pmtiles", error instanceof Error ? error : new Error(String(error)));
-    })
-    .then(() => failed);
-}
-
-// ---------------------------------------------------------------------------
 // Tile sources (PMTiles, and the COG reservation)
 // ---------------------------------------------------------------------------
 
@@ -142,8 +90,13 @@ export function unsupportedFormatError(format: CloudFormat, url: string): Format
  *   in this version (a COG without a page-registered `cog://`); the spec is
  *   then an empty placeholder of the same type, so layers over it are added
  *   and draw nothing instead of each failing on a missing source.
+ * @param isRegistered - Whether the page registered a URL protocol itself
+ *   (the renderer passes `isProtocolRegistered` from ./cloud-protocols).
  */
-export function toMapLibreTileSpec(spec: Obj): { spec: Obj; problem?: FormatError } {
+export function toMapLibreTileSpec(
+  spec: Obj,
+  isRegistered: (scheme: string) => boolean = () => false
+): { spec: Obj; problem?: FormatError } {
   const clean = withoutFormatKeys(spec);
   const format = formatOfSource(spec);
   const url = spec["url"];
@@ -153,7 +106,7 @@ export function toMapLibreTileSpec(spec: Obj): { spec: Obj; problem?: FormatErro
   if (format === "pmtiles") {
     return { spec: { ...clean, url: `pmtiles://${absoluteUrl(stripScheme(url))}` } };
   }
-  if (format === "cog" && isProtocolRegistered("cog")) {
+  if (format === "cog" && isRegistered("cog")) {
     // The page registered a COG protocol itself (the 0.7 page-JS route): use it.
     return { spec: { ...clean, url: `cog://${absoluteUrl(stripScheme(url))}` } };
   }
