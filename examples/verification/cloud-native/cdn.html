@@ -7,8 +7,9 @@
   <!--
     0.9 (ml-cnv.5): the documented zero-build pattern — one module script
     from the CDN, an import map that maps ONLY maplibre-gl — reads PMTiles and
-    FlatGeobuf with no page JavaScript and no extra downloads: the decoders
-    are inside the one browser bundle (no chunks in 0.9).
+    FlatGeobuf with no page JavaScript. The readers are downloaded on demand
+    from dist/chunks/ next to the bundle (ml-7qa.5), only because this
+    document uses them.
     The e2e server mounts packages/core at /cdn/@maplibre-yaml/core@<version>/,
     the way unpkg/jsDelivr serve the published package. On a real page:
       <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"></script>
