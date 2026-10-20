@@ -2101,7 +2101,7 @@ All map builders (`buildPointMapConfig`, `buildMultiPointMapConfig`, `buildPolyg
 |-------|------|-------------|
 | `title` | `string?` | Application title |
 | `description` | `string?` | Application description |
-| `defaultMapStyle` | `string (URL)?` | Default basemap style for all maps |
+| `defaultMapStyle` | `string (URL)` or `{ pmtiles, flavor?, lang? }`? | Default basemap for all maps: a style URL, or a [Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap) from a `.pmtiles` file in `public/` |
 | `defaultCenter` | `[lng, lat]?` | Default map center |
 | `defaultZoom` | `number (0-24)?` | Default zoom level |
 | `theme` | `"light" \| "dark"` | Default theme (default: `"light"`) |

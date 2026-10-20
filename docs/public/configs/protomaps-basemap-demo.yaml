@@ -1,0 +1,25 @@
+# A Protomaps basemap from one .pmtiles file (0.9): no API key, no tile
+# server, no page JavaScript. The file is a ~0.6 MB extract of DUMBO and
+# Brooklyn Heights from the Protomaps planet build
+# (scripts/fixtures/protomaps-basemap.sh); data © OpenStreetMap contributors.
+type: map
+id: protomaps-basemap-demo
+config:
+  center: [-73.9935, 40.6995]
+  zoom: 14.5
+  minZoom: 12
+  maxBounds: [-74.02, 40.68, -73.97, 40.715]
+  mapStyle:
+    pmtiles: /gallery-assets/protomaps/brooklyn.pmtiles
+    flavor: light
+layers:
+  - id: brooklyn-bridge-park
+    type: circle
+    source:
+      type: geojson
+      data: { type: Point, coordinates: [-73.9967, 40.7003] }
+    paint:
+      circle-radius: 8
+      circle-color: "#e63946"
+      circle-stroke-color: "#ffffff"
+      circle-stroke-width: 2

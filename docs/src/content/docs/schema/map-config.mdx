@@ -39,7 +39,7 @@ Map configuration defines the initial view, interaction settings, controls, and 
 |----------|------|-------------|
 | `center` | [number, number] | Initial map center [longitude, latitude] |
 | `zoom` | number | Initial zoom level (0-24) |
-| `mapStyle` | string \| object | MapLibre style URL or style object |
+| `mapStyle` | string \| object | A MapLibre style URL, a style object, or a Protomaps basemap from a `.pmtiles` file (below) |
 
 ### Example
 
@@ -49,6 +49,41 @@ config:
   zoom: 12
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
+
+### `mapStyle` forms
+
+| Form | Example | Use it for |
+|---|---|---|
+| A style URL | `mapStyle: "https://tiles.openfreemap.org/styles/liberty"` | A hosted basemap (OpenFreeMap, MapTiler, Stadia, …) or a `style.json` on your site |
+| A style object | `mapStyle: { version: 8, sources: {...}, layers: [...] }` | A small style written in the document |
+| A Protomaps basemap | `mapStyle: { pmtiles: data/nyc.pmtiles, flavor: light }` | A full basemap from one `.pmtiles` file, with no API key and no tile server |
+
+The Protomaps form takes these keys:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `pmtiles` | (required) | The `.pmtiles` file: a path (relative to the page, with `base` applied), a URL, or `pmtiles://…` |
+| `flavor` | `light` | `light`, `dark`, `white`, `grayscale` or `black` |
+| `lang` | the page's language, else `en` | Label language, such as `en`, `es`, `fr`, `de`, `ja` or `zh-Hans` |
+| `glyphs` | Protomaps' hosted fonts | A glyph URL template (`…/{fontstack}/{range}.pbf`), to host the fonts yourself |
+| `sprite` | Protomaps' hosted sprite for the flavor | A sprite URL, to host the icons yourself |
+
+```yaml
+config:
+  center: [-73.99, 40.70]
+  zoom: 14
+  mapStyle:
+    pmtiles: data/brooklyn.pmtiles
+    flavor: dark
+```
+
+An object with `version`, `sources` or `layers` is a style object; any other
+object is the Protomaps form, so the two can't be confused. The file has to be
+a Protomaps basemap (one cut from the Protomaps planet build, say); the map
+shows a notice for any other kind of PMTiles. See
+[Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap) for
+making the file and hosting it. In format v2 the same value goes under
+`style.basemap`.
 
 ### What goes inside `config:`
 
