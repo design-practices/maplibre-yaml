@@ -82,6 +82,10 @@ describe('init command (integration)', () => {
       expect(stdout).toContain('cd my-map');
       expect(stdout).toContain('npx serve .');
       expect(stdout).toContain('npx maplibre-yaml validate map.yaml');
+      // Any other server must support range requests (cloud-native files): not "any static server".
+      expect(stdout).not.toContain('Any static web server works');
+      expect(stdout).toContain('range requests');
+      expect(stdout).toContain('python -m http.server does not');
       // A bare `maplibre-yaml …` command only exists after an install.
       expect(stdout).not.toMatch(/^\s*(maplibre-yaml|mlym) /m);
     });

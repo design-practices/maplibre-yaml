@@ -11,6 +11,8 @@
  * Runs on every maplibre-gl leg of the CI matrix (4/5/6).
  */
 import { test, expect, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /** Fail on page errors and off-origin requests (hermeticity). */
 async function guard(page: Page): Promise<string[]> {
@@ -238,6 +240,41 @@ test.describe("GeoParquet with no page JavaScript", () => {
     await waitForFeatures(page, "fallbacks", "unsorted");
     await expect(page.locator("#fallbacks .ml-map-notice")).toHaveCount(0);
     await page.screenshot({ path: "e2e/results/geoparquet_errors.png", fullPage: true });
+    expect(errors).toEqual([]);
+  });
+
+  test("a GeoParquet file named .pq (no format:) is named for what it is, with the fix (ml-aot.123)", async ({
+    page,
+    baseURL,
+  }) => {
+    const errors = await guard(page);
+    const bytes = readFileSync(join(process.cwd(), "docs/public/gallery-assets/cloud-native/districts.parquet"));
+    await page.route("**/renamed/districts.pq", (route) =>
+      route.fulfill({ status: 200, body: bytes, contentType: "application/octet-stream" })
+    );
+    const html = `<!DOCTYPE html><html><head>
+      <link rel="stylesheet" href="${baseURL}/vendor/maplibre-gl.css" />
+      <script type="importmap">{ "imports": { "maplibre-gl": "${baseURL}/vendor/maplibre-gl.esm.js" } }</script>
+      </head><body>
+      <ml-map id="pq" style="display:block;height:300px">
+        <script type="text/yaml">
+type: map
+id: pq
+config: { center: [10.2, 42.15], zoom: 9.6, mapStyle: "/examples/verification/configs/local-style.json" }
+sources:
+  districts: { type: geojson, url: /renamed/districts.pq }
+layers:
+  - { id: districts, type: fill, source: districts, paint: { fill-color: "#e9c46a" } }
+        </script>
+      </ml-map>
+      <script type="module" src="${baseURL}/packages/core/register.js"></script>
+      </body></html>`;
+    await page.route("**/pq-page/index.html", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto("/pq-page/index.html", { waitUntil: "domcontentloaded" });
+    const notice = page.locator("#pq .ml-map-notice");
+    await expect(notice).toContainText("it is a Parquet file, but its name doesn't end in .parquet", { timeout: 30_000 });
+    await expect(notice).toContainText("add format: geoparquet to the source");
+    await expect(notice).not.toContainText("isn't JSON");
     expect(errors).toEqual([]);
   });
 });

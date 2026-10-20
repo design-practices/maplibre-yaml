@@ -106,7 +106,8 @@ export async function protomapsStyle(
   spec: ProtomapsBasemap,
   options: ProtomapsStyleOptions = {}
 ): Promise<Record<string, unknown>> {
-  const flavor = spec.flavor ?? "light";
+  // Any case (`flavor: Dark`), as palette names are.
+  const flavor = typeof spec.flavor === "string" ? (spec.flavor.toLowerCase() as typeof spec.flavor & string) : "light";
   if (!(PROTOMAPS_FLAVORS as readonly string[]).includes(flavor)) {
     throw new Error(
       `The Protomaps basemap has no flavor "${String(flavor)}"; use one of ${PROTOMAPS_FLAVORS.join(", ")}.`

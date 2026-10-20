@@ -657,6 +657,12 @@ export function describeDataProblem(
     reason =
       "CSV files aren't supported — convert it to GeoJSON (e.g. geojson.io or QGIS); " +
       "see https://docs.maplibre-yaml.org/guides/data-sources/#csv-and-spreadsheets";
+  } else if (/^(Parquet|FlatGeobuf) data from .* without a format$/.test(error.message)) {
+    // A cloud-native file read as JSON because its name doesn't say what it is.
+    const parquet = error.message.startsWith("Parquet");
+    reason = parquet
+      ? "it is a Parquet file, but its name doesn't end in .parquet — rename it, or add format: geoparquet to the source"
+      : "it is a FlatGeobuf file, but its name doesn't end in .fgb — rename it, or add format: flatgeobuf to the source";
   } else if (/^Invalid JSON/i.test(error.message)) {
     reason = "it isn't JSON — a wrong path often returns a web page instead";
   } else if (/not valid GeoJSON/i.test(error.message)) {

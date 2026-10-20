@@ -166,8 +166,10 @@ function checkShorthand(value: Record<string, unknown>, ctx: z.RefinementCtx): v
     });
   }
 
+  // Any case (`Dark`), as palette names are.
   const flavor = value["flavor"];
-  if (flavor !== undefined && !(PROTOMAPS_FLAVORS as readonly unknown[]).includes(flavor)) {
+  const flavorName = typeof flavor === "string" ? flavor.toLowerCase() : flavor;
+  if (flavor !== undefined && !(PROTOMAPS_FLAVORS as readonly unknown[]).includes(flavorName)) {
     ctx.addIssue({
       code: z.ZodIssueCode.invalid_enum_value,
       options: [...PROTOMAPS_FLAVORS],
@@ -267,4 +269,11 @@ export const MapStyleSchema = z
   })
   // `mapStyle: data/nyc.pmtiles` is the shorthand with its defaults (light,
   // labels in the page's language): every reader downstream sees one form.
-  .transform((value: unknown) => (isPmtilesBasemapString(value) ? { pmtiles: value.trim() } : value));
+  .transform((value: unknown) => {
+    if (isPmtilesBasemapString(value)) return { pmtiles: value.trim() };
+    // `flavor: Dark` is `dark` (any case is accepted above).
+    if (isProtomapsBasemap(value) && typeof value.flavor === "string" && value.flavor !== value.flavor.toLowerCase()) {
+      return { ...value, flavor: value.flavor.toLowerCase() as ProtomapsFlavor };
+    }
+    return value;
+  });

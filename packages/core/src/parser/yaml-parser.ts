@@ -298,6 +298,7 @@ import {
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
 import { checkDocument, chapterLabel, checkLocaleKeys, missingBasemapWarning, pmtilesBasemapNote } from "./document-checks";
+import { SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { checkSourceFormats } from "./format-checks";
 import { applyCogDefaults, checkCogSources } from "./cog-checks";
 import { reservedPrefixWarnings } from "./reserved-prefix";
@@ -665,9 +666,13 @@ export class YAMLParser {
       const finalErrors = replaceHashCommentErrors([...errors, ...classifyErrors], hashValues);
       // A typo reported as THE error (`config.centre: Unknown key "centre" —
       // did you mean "center"?`) need not be repeated as a warning.
+      // Nor an unknown key an error already names with its own wording
+      // (`flavour:` in a Protomaps basemap).
+      const unknownKey = /^Unknown key "/;
       const repeated = (w: ValidationWarning) =>
-        w.suggestion !== undefined &&
-        finalErrors.some((e) => e.path === w.path && e.suggestion === w.suggestion);
+        (w.suggestion !== undefined &&
+          finalErrors.some((e) => e.path === w.path && e.suggestion === w.suggestion)) ||
+        (unknownKey.test(w.message) && finalErrors.some((e) => e.path === w.path && unknownKey.test(e.message)));
       return {
         success: false,
         errors: finalErrors,
@@ -1032,7 +1037,8 @@ export class YAMLParser {
         ["runtime", "map", "locale"],
         positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
       );
-      return localeWarnings.length === 0 ? v2 : { ...v2, warnings: [...v2.warnings, ...localeWarnings] };
+      const withLocale = localeWarnings.length === 0 ? v2 : { ...v2, warnings: [...v2.warnings, ...localeWarnings] };
+      return withRuntimeKeyHints(withLocale);
     }
 
     // Refs are resolved here too: a standalone block carries its own
@@ -1976,6 +1982,30 @@ function withFormatChecks<T>(
   const seen = new Set(result.errors.map((e) => `${e.path}\u0000${e.message}`));
   const added = checks.errors.filter((e) => !seen.has(`${e.path}\u0000${e.message}`));
   return { success: false, errors: [...result.errors, ...added], warnings } as ParseResult<T>;
+}
+
+/**
+ * A v2 source carrying one of maplibre-yaml's own source keys (`colorRamp:`,
+ * `format:`, `load:`, `columns:`, `refresh:`, …) in its style body instead of
+ * under `runtime:`: say where it goes, not just "Unknown key" — the key is a
+ * real one, in the wrong place (ml-aot.123).
+ */
+function withRuntimeKeyHints<T>(result: ParseResult<T>): ParseResult<T> {
+  const runtimeKeys: readonly string[] = SOURCE_RUNTIME_KEYS;
+  let changed = false;
+  const warnings = result.warnings.map((w) => {
+    const m = /^style\.(?:sources\.[^.]+|layers\.\d+\.source)\.([^.]+)$/.exec(w.path);
+    const key = m?.[1];
+    if (!key || !runtimeKeys.includes(key) || w.message !== `Unknown key "${key}".`) return w;
+    changed = true;
+    return {
+      ...w,
+      message:
+        `${key}: is a maplibre-yaml key, not a MapLibre style one: in a version 2 document it goes ` +
+        `under the source's runtime: block (runtime: { ${key}: … }), next to the style keys.`,
+    };
+  });
+  return changed ? { ...result, warnings } : result;
 }
 
 const UNION_FALLBACK = "Value does not match any of the expected formats";

@@ -116,7 +116,9 @@ export function nextSteps(template: string, cdPath: string | null): string[] {
     lines.push('');
     lines.push('  Then open the http://localhost address it prints (usually http://localhost:3000).');
     lines.push(`  ${pc.dim('Opening index.html by double-clicking does not work: the browser blocks')}`);
-    lines.push(`  ${pc.dim(`it from loading ${file}. Any static web server works instead of serve.`)}`);
+    lines.push(`  ${pc.dim(`it from loading ${file}. Another static server works too if it supports`)}`);
+    lines.push(`  ${pc.dim('range requests, which .pmtiles, .tif, .fgb and .parquet files need')}`);
+    lines.push(`  ${pc.dim('(python -m http.server does not).')}`);
     lines.push('');
     lines.push(`  ${pc.dim(`Edit ${file} and reload the page. Check it for mistakes with:`)}`);
     lines.push(`  ${pc.cyan(`${cli} validate`)} ${file}`);

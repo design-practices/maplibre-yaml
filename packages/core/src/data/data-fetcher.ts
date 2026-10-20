@@ -471,6 +471,10 @@ export class DataFetcher {
           if (looksLikeCsv(url, contentType, body)) {
             throw new Error(`CSV data from ${url} is not supported`);
           }
+          // A GeoParquet or FlatGeobuf file whose name doesn't say so (a
+          // `.pq` file): read as JSON because nothing named its format.
+          if (body.startsWith("PAR1")) throw new Error(`Parquet data from ${url} without a format`);
+          if (body.startsWith("fgb\u0003")) throw new Error(`FlatGeobuf data from ${url} without a format`);
           throw new Error(`Invalid JSON response from ${url}`);
         }
       } else {
@@ -533,6 +537,7 @@ export class DataFetcher {
     if (
       message.includes("invalid json") ||
       message.includes("csv data") ||
+      message.includes("without a format") ||
       message.includes("not valid geojson")
     ) {
       return false;

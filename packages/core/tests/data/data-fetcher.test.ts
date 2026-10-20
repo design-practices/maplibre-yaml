@@ -103,6 +103,21 @@ describe("DataFetcher", () => {
       }
     });
 
+    it("a GeoParquet or FlatGeobuf file with an unhelpful name is named for what it is (ml-aot.123)", async () => {
+      for (const [url, body, expected] of [
+        ["data/tracts.pq", "PAR1\u0015\u0004binary…", /^Parquet data from data\/tracts\.pq without a format$/],
+        ["data/tracts.bin", "fgb\u0003fgb\u0000…", /^FlatGeobuf data from data\/tracts\.bin without a format$/],
+      ] as const) {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => body,
+          headers: new Headers({ "content-type": "application/octet-stream" }),
+        });
+        await expect(fetcher.fetch(url)).rejects.toThrow(expected);
+      }
+    });
+
     it("throws on invalid JSON", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
