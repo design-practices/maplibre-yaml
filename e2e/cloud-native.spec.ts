@@ -334,6 +334,12 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
       { timeout: 45_000 }
     );
     await expect(page.locator("#story .ml-map-notice")).toHaveCount(0);
+    // GeoParquet reads only the columns the story uses: `kind` (the layer's
+    // colour) and `value`, which only a chapter's setFilter names.
+    const keys = await page.evaluate(() =>
+      Object.keys((document.querySelector("#story ml-map") as any).getMap().querySourceFeatures("wells")[0].properties).sort()
+    );
+    expect(keys).toEqual(["kind", "value"]);
     await page.screenshot({ path: "e2e/results/cnv_story.png" });
     expect(errors).toEqual([]);
   });

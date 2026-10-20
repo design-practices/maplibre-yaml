@@ -7,6 +7,7 @@
 import { describe, it, expect } from "vitest";
 import { geoParquetColumns, isGeoParquetSource } from "../../src/formats/columns";
 import { declaredColumns } from "../../src/formats/detect";
+import { storyMapDocument } from "../../src/scrollytelling/engine";
 
 const wells = { type: "geojson", url: "data/wells.parquet" };
 
@@ -137,5 +138,65 @@ layers:
     // What the renderer gets: no `classify:` key, a compiled record instead.
     expect(layers[0]).not.toHaveProperty("classify");
     expect(geoParquetColumns(denormalizeSources(model), layers).get("districts")).toEqual(["cases", "population"]);
+  });
+});
+
+describe("story chapter actions (0.9)", () => {
+  const layers = [
+    { id: "dots", type: "circle", source: "wells", paint: { "circle-color": ["get", "kind"] } },
+    { id: "inline", type: "circle", source: { type: "geojson", url: "data/sites.parquet" } },
+    { id: "other", type: "circle", source: "plain" },
+  ];
+  const sources = { wells, plain: { type: "geojson", url: "x.geojson" } };
+  const actions = [
+    { action: "setFilter", layer: "dots", filter: [">=", ["get", "magnitude"], 5] },
+    // `property` names a paint property, not a column; the value's tokens and gets count.
+    { action: "setPaintProperty", layer: "dots", property: "circle-radius", value: ["get", "depth_m"] },
+    { action: "setLayoutProperty", layer: "inline", property: "text-field", value: "{site}" },
+    { action: "setFilter", layer: "other", filter: ["==", ["get", "unrelated"], 1] },
+    { action: "flyTo" },
+  ];
+
+  it("count for the source their layer draws from, named or inline", () => {
+    const columns = geoParquetColumns(sources, layers, actions);
+    expect(columns.get("wells")).toEqual(["depth_m", "kind", "magnitude"]);
+    expect(columns.get("inline-source")).toEqual(["site"]);
+    // Without the actions, only the layers' references.
+    expect(geoParquetColumns(sources, layers).get("wells")).toEqual(["kind"]);
+  });
+
+  it("storyMapDocument hands the map the columns its chapters read", () => {
+    const doc = storyMapDocument({
+      type: "scrollytelling",
+      id: "s",
+      config: { center: [0, 0], zoom: 2, mapStyle: "x.json" },
+      sources,
+      layers,
+      chapters: [
+        { id: "a", title: "A", center: [0, 0], zoom: 2, onChapterEnter: actions.slice(0, 2), onChapterExit: [] },
+        { id: "b", title: "B", center: [0, 0], zoom: 2, onChapterEnter: [], onChapterExit: actions.slice(2) },
+      ],
+    } as never);
+    const docSources = doc["sources"] as Record<string, Record<string, unknown>>;
+    expect(docSources["wells"]!["columns"]).toEqual(["depth_m", "kind", "magnitude"]);
+    expect(docSources["plain"]).toEqual(sources.plain);
+    const inline = (doc["layers"] as Array<{ id: string; source: Record<string, unknown> }>).find((l) => l.id === "inline")!;
+    expect(inline.source["columns"]).toEqual(["site"]);
+    // The map then reads exactly that list.
+    expect(geoParquetColumns(doc["sources"], doc["layers"]).get("wells")).toEqual(["depth_m", "kind", "magnitude"]);
+  });
+
+  it("an author's columns: stays; a story without actions is untouched", () => {
+    const story = {
+      type: "scrollytelling",
+      id: "s",
+      config: { center: [0, 0], zoom: 2, mapStyle: "x.json" },
+      sources: { wells: { ...wells, columns: ["kind"] } },
+      layers: layers.slice(0, 1),
+      chapters: [{ id: "a", title: "A", center: [0, 0], zoom: 2, onChapterEnter: actions.slice(0, 1), onChapterExit: [] }],
+    };
+    expect((storyMapDocument(story as never)["sources"] as any).wells.columns).toEqual(["kind"]);
+    const plain = { ...story, sources: { wells }, chapters: [{ ...story.chapters[0], onChapterEnter: [] }] };
+    expect((storyMapDocument(plain as never)["sources"] as any).wells).toBe(wells);
   });
 });

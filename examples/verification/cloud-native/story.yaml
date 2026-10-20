@@ -52,6 +52,14 @@ chapters:
     zoom: 9.4
   - id: closer
     title: A closer look
-    description: "<p>Zoomed in: the archives serve only the tiles in view.</p>"
+    description: "<p>Zoomed in: the archives serve only the tiles in view. Only stations with a value of 50 or more show: the chapter filters on a GeoParquet column no layer uses, which is read all the same.</p>"
     center: [10.1, 42.08]
     zoom: 11
+    onChapterEnter:
+      - action: setFilter
+        layer: wells
+        filter: [">=", ["get", "value"], 50]
+    onChapterExit:
+      - action: setFilter
+        layer: wells
+        filter: null

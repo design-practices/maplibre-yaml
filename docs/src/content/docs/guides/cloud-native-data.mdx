@@ -335,8 +335,9 @@ separately, so maplibre-yaml reads the geometry plus the properties the
 document references for that source — here `kind` and `value`, not the rest
 of the file. It looks at `["get", …]` and `["has", …]` in `paint`, `layout`
 and `filter`, `{name}` tokens in text, popup and legend `property:` items,
-`classify:` `field` and `normalize`, and the source's `promoteId`, `filter`
-and `clusterProperties`. On a wide file (dozens of columns) that is most of
+`classify:` `field` and `normalize`, the source's `promoteId`, `filter`
+and `clusterProperties`, and in a story the chapters' `setFilter`,
+`setPaintProperty` and `setLayoutProperty` actions. On a wide file (dozens of columns) that is most of
 the saving. To choose yourself, set `columns:`:
 
 ```yaml
