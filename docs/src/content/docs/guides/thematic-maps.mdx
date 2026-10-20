@@ -282,8 +282,11 @@ follow the page's language. The "No data" and "Other" lines are UI strings you
 can translate in `locale:` like the rest
 ([Accessibility & languages](/guides/accessibility-languages/)):
 `maplibre-yaml.Classify.NoData` and `maplibre-yaml.Classify.Other`. A hand-written layer
-`legend:` entry still wins over the generated lines, and the legend block's
-own `items:` replaces everything. In a story, the pinned legend shows the same
+`legend:` entry still wins over the generated lines. A legend block with its
+own `items:` shows those items first and the generated classes after them;
+when the items describe a layer's colours from before `classify:`, remove
+them (validation and the page's author notes point this out), or write
+`legend: false` on a layer to leave its classes out. In a story, the pinned legend shows the same
 classes (including breaks computed after load).
 
 ## Which paint property

@@ -27,7 +27,7 @@
  */
 
 import type { Document, LineCounter } from "yaml";
-import { positionForKey, positionForPath } from "../parser/validation-utils";
+import { positionForKey, positionForPath, type ValidationWarning } from "../parser/validation-utils";
 import { suggest } from "../utils/suggest";
 import { loadModeOf } from "../formats/detect";
 import { CLASSIFY_COLOR_PROPERTIES, defaultClassifyProperty } from "./compile";
@@ -358,4 +358,61 @@ export function checkClassify(
   const ctx: WalkContext = { errors: [], rootSources, ...(positions ? { pos: positions } : {}) };
   walk(value, [], {}, ctx, false);
   return ctx.errors;
+}
+
+/** The ids of a layer list's classified layers that show their classes. */
+function classifiedInLegend(layers: unknown): string[] {
+  if (!Array.isArray(layers)) return [];
+  const ids: string[] = [];
+  for (const layer of layers) {
+    if (!isObject(layer) || !isObject(layer["classify"])) continue;
+    const runtime = isObject(layer["runtime"]) ? layer["runtime"] : {};
+    const legend = layer["legend"] ?? runtime["legend"];
+    if (legend === false || isObject(legend)) continue;
+    ids.push(typeof layer["id"] === "string" ? layer["id"] : "?");
+  }
+  return ids;
+}
+
+/**
+ * A legend block with its own `items:` beside a classified layer (ml-aot.94):
+ * the hand-written items usually describe the colours the layer had before
+ * `classify:`. The legend shows the items and then the generated classes; a
+ * warning (and an on-page author hint) says so and what to change.
+ *
+ * Covers a v1 map or story (`legend:` beside `layers:`) and a v2 map
+ * (`runtime.legend` beside `style.layers`).
+ */
+export function checkClassifiedLegendItems(
+  value: unknown,
+  positions?: { doc: Document; lineCounter: LineCounter }
+): ValidationWarning[] {
+  if (!isObject(value)) return [];
+  const candidates: Array<{ legend: unknown; path: Path; layers: unknown }> = [
+    { legend: value["legend"], path: ["legend"], layers: value["layers"] },
+  ];
+  const runtime = value["runtime"];
+  const style = value["style"];
+  if (isObject(runtime) && isObject(style)) {
+    candidates.push({ legend: runtime["legend"], path: ["runtime", "legend"], layers: style["layers"] });
+  }
+  const warnings: ValidationWarning[] = [];
+  for (const { legend, path, layers } of candidates) {
+    if (!isObject(legend) || !Array.isArray(legend["items"]) || legend["items"].length === 0) continue;
+    const ids = classifiedInLegend(layers);
+    if (ids.length === 0) continue;
+    const names = ids.map((id) => `"${id}"`).join(", ");
+    const p = positions ? positionForKey(positions.doc, positions.lineCounter, path, "items") : undefined;
+    warnings.push({
+      path: [...path, "items"].join("."),
+      message:
+        `The legend lists its own items:, and layer${ids.length > 1 ? "s" : ""} ${names} ` +
+        `${ids.length > 1 ? "are" : "is"} classified: the legend shows these items, then the classes ` +
+        "classify generates. If the items describe the layer's earlier colours, remove them; to " +
+        "leave a layer's classes out of the legend, write legend: false on that layer.",
+      ...(p ? { line: p.line, column: p.column } : {}),
+      onPage: true,
+    });
+  }
+  return warnings;
 }

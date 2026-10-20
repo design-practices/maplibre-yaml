@@ -271,7 +271,7 @@ import {
   expandSugarInScrollytellingBlock,
   type SugarRemap,
 } from "./expand-sugar";
-import { checkClassify } from "../classify/checks";
+import { checkClassify, checkClassifiedLegendItems } from "../classify/checks";
 import { restoreCategoryOrder } from "../classify/category-order";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
@@ -684,6 +684,9 @@ export class YAMLParser {
     // A `categories:` map with numeric keys keeps the order it was written
     // in (JavaScript would list the numbers first).
     restoreCategoryOrder(result.data, doc);
+
+    // Hand-written legend items beside a classified layer (ml-aot.94).
+    warnings.push(...checkClassifiedLegendItems(value, { doc, lineCounter }));
 
     // A field that tolerates an empty value still lost what the author
     // wrote: say so, as a warning.

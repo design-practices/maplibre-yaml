@@ -97,7 +97,7 @@ export class LegendBuilder {
     if (!el) return;
     this.locale ??= elementLanguage(el);
 
-    const items: LegendEntry[] = config?.items || this.extractItems(layers);
+    const items: LegendEntry[] = this.entries(layers, config);
 
     // Nothing to show → no box. An empty "Legend" panel reads as broken chrome;
     // say what's missing instead (entries come from layers' `legend:` fields
@@ -141,13 +141,20 @@ export class LegendBuilder {
   /**
    * The legend's entries: the block's own `items:`, else every layer's
    * `legend:` field. Empty when there is nothing to show.
+   *
+   * @remarks
+   * A classified layer's classes are shown either way (ml-aot.94): after the
+   * block's `items:` when it lists its own, since those were written by hand
+   * and cannot describe classes computed from the data. A layer opts out with
+   * `legend: false` (or replaces its classes with its own `legend:` entry).
    */
   entries(
     layers: Layer[],
     config?: Partial<LegendConfig>,
     overrides?: ClassifyOverrides
   ): LegendEntry[] {
-    return config?.items || this.extractItems(layers, overrides);
+    if (!config?.items) return this.extractItems(layers, overrides);
+    return [...config.items, ...this.extractItems(layers, overrides, { classifiedOnly: true })];
   }
 
   /**
@@ -211,13 +218,19 @@ export class LegendBuilder {
    * Extract legend items from layers: a layer's authored `legend:` item, or
    * — for a `classify:` layer without one — a heading and one line per class.
    */
-  private extractItems(layers: Layer[], overrides?: ClassifyOverrides): LegendEntry[] {
+  private extractItems(
+    layers: Layer[],
+    overrides?: ClassifyOverrides,
+    options: { classifiedOnly?: boolean } = {}
+  ): LegendEntry[] {
     const items: LegendEntry[] = [];
     for (const layer of layers) {
       // `legend: false`: the layer (and its classify classes) stays out.
       if ((layer as { legend?: unknown }).legend === false) continue;
       if (layer.legend && typeof layer.legend === 'object') {
-        items.push(layer.legend as LegendItem);
+        // Beside the block's own `items:`, a layer's hand-written entry is
+        // the author's to list there; only generated classes are added.
+        if (!options.classifiedOnly) items.push(layer.legend as LegendItem);
         continue;
       }
       const record = this.classifyRecord(layer, overrides);

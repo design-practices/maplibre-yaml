@@ -1396,9 +1396,10 @@ default one at `legendPosition` (v1: root `legend:`, v2: `runtime.legend`);
 when the document declares its own `legend:`, that one wins untouched.
 
 Legend entries come from the layers' `legend:` fields (see
-[the layers reference](/schema/layers/)) or the legend block's own `items:`.
-Nothing is generated from paint colors: a layer without `legend:` doesn't
-appear, and when no layer has one, no legend box is shown (the component
+[the layers reference](/schema/layers/)), the legend block's own `items:`,
+and the classes of a [classified](/guides/thematic-maps/) layer (listed after
+`items:`). Nothing is generated from paint colors: a layer without `legend:`
+or `classify:` doesn't appear, and when no layer has one, no legend box is shown (the component
 warns at build time, and `<ml-map>` warns in the console).
 
 ```yaml

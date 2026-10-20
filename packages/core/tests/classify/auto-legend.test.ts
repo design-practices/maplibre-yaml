@@ -149,6 +149,32 @@ style:
     expect(v2.errors).toEqual([]);
   });
 
+  it("hand-written items: beside a classified layer: items, then the classes, and an author hint (ml-aot.94)", () => {
+    const doc = mapDoc(
+      "legend:\n  items:\n    - { color: green, label: Park }\n    - { color: blue, label: Museum }"
+    );
+    const parsed = YAMLParser.safeParseMapBlock(doc);
+    expect(parsed.errors).toEqual([]);
+    const hint = parsed.warnings.find((w) => w.path === "legend.items");
+    expect(hint?.onPage).toBe(true);
+    expect(hint?.message).toContain('layer "a" is classified');
+    expect(hint?.message).toContain("legend: false");
+    expect(hint?.line).toBe(5);
+
+    const container = render(doc);
+    const lines = [...container.querySelectorAll(".ml-map-legend .legend-group-heading, .ml-map-legend .legend-label")].map(
+      (n) => n.textContent
+    );
+    expect(lines).toEqual(["Park", "Museum", "Value", "3–10", "10–12", "No data"]);
+
+    // The layer opts out: the items alone, and no hint.
+    const optOut = doc.replace("    label: Value\n", "    label: Value\n    legend: false\n");
+    const quiet = YAMLParser.safeParseMapBlock(optOut);
+    expect(quiet.warnings.find((w) => w.path === "legend.items")).toBeUndefined();
+    const only = [...render(optOut).querySelectorAll(".ml-map-legend .legend-label")].map((n) => n.textContent);
+    expect(only).toEqual(["Park", "Museum"]);
+  });
+
   it("an authored legend: block behaves as before", () => {
     const container = render(mapDoc("legend: { position: bottom-right, title: Mine }"));
     const legend = container.querySelector(".ml-map-chrome-bottom-right .ml-map-legend");
