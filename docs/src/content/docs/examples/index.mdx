@@ -8,32 +8,50 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 Explore complete, working examples that demonstrate maplibre-yaml capabilities.
 
 <CardGrid>
-  <Card title="Basic Map" icon="map">
+  <Card title="MapLibre examples in YAML" icon="list-format">
+    Every official MapLibre GL JS example, with the ones the format expresses
+    rebuilt in YAML: a capability matrix you can copy from.
+    [Open the gallery →](/examples/gallery/)
+  </Card>
+
+  <Card title="Large data" icon="seti:db">
+    PMTiles, FlatGeobuf, GeoParquet and Cloud Optimized GeoTIFF files read
+    straight from a static host.
+    [Cloud-native examples →](/examples/gallery/#cloud-native-data)
+  </Card>
+
+  <Card title="Mapzen classics" icon="star">
+    Crosshatch and Blueprint, Tangram-era looks rebuilt as plain MapLibre
+    style, side by side with their exported `style.json`.
+    [View the classics →](/examples/classics/)
+  </Card>
+
+  <Card title="Basic map" icon="map">
     A simple map with markers showing major cities.
     [View example →](/examples/basic-map/)
   </Card>
 
-  <Card title="Thematic Maps" icon="pencil">
+  <Card title="Thematic maps" icon="pencil">
     A choropleth, graduated symbols and a category map with `classify:`.
     [View example →](/examples/thematic-maps/)
   </Card>
 
-  <Card title="Earthquake Tracker" icon="warning">
+  <Card title="Earthquake tracker" icon="warning">
     Live earthquake data from USGS with auto-refresh.
     [View example →](/examples/earthquake-tracker/)
   </Card>
 
-  <Card title="Clustered Data" icon="seti:folder">
+  <Card title="Clustered data" icon="seti:folder">
     Efficiently display thousands of points with clustering.
     [View example →](/examples/clustering/)
   </Card>
 
-  <Card title="Interactive Points" icon="puzzle">
+  <Card title="Interactive points" icon="puzzle">
     Clickable markers with popups and hover effects.
     [View example →](/examples/interactive-points/)
   </Card>
 
-  <Card title="Live Vehicle Tracking" icon="rocket">
+  <Card title="Live vehicle tracking" icon="rocket">
     Real-time vehicle positions with polling updates.
     [View example →](/examples/live-vehicles/)
   </Card>

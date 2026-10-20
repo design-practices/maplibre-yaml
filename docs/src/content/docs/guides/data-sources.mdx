@@ -1,5 +1,5 @@
 ---
-title: Data Sources
+title: Loading data
 description: Loading GeoJSON from URLs, inline data, and remote APIs
 ---
 
@@ -50,6 +50,13 @@ source:
 The file can hold a `FeatureCollection`, a single `Feature`, or a bare
 geometry (`{"type": "Polygon", …}`), as geojson.io or a copied feature gives
 you; a single feature or geometry is read as a one-feature collection.
+
+<Aside type="tip" title="Large files?">
+  A GeoJSON file of tens of megabytes is slow to download and draw. For
+  large datasets, imagery or elevation, use a file made to be read in parts:
+  PMTiles, FlatGeobuf, GeoParquet or a Cloud Optimized GeoTIFF. See
+  [Large data](/guides/cloud-native-data/).
+</Aside>
 
 ### CSV and spreadsheets
 
@@ -248,5 +255,7 @@ Named sources are added to the map before layers, so any layer can reference the
 
 ## Next steps
 
-- [Live Data](/guides/live-data/) - Auto-refresh and streaming
+- [Large data](/guides/cloud-native-data/) - PMTiles, FlatGeobuf, GeoParquet and COG files
+- [Live data & streaming](/guides/live-data/) - Auto-refresh and streaming
+- [Thematic maps & legends](/guides/thematic-maps/) - Colour features by a value, with a legend
 - [Examples](/examples/) - Complete working examples

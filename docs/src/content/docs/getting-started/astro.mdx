@@ -1,0 +1,285 @@
+---
+title: "Quick start: Astro site on GitHub Pages"
+description: From an empty folder to a published map — create an Astro site, add a YAML map, set the base path, and publish it on GitHub Pages with GitHub Actions.
+---
+
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
+This page takes you from an empty folder to a map published on GitHub Pages:
+an Astro site, one YAML map file, and a GitHub Actions workflow that builds
+and publishes the site every time you push. It takes about 15 minutes.
+
+You need [Node.js](https://nodejs.org/) 22.22 or later (Astro 7's
+requirement; check with `node --version`), [git](https://git-scm.com/), and a
+GitHub account. Every command is shown for npm.
+
+<Aside type="tip" title="No build step wanted?">
+  A plain HTML page and a YAML file also publish on GitHub Pages as they are,
+  with no Node.js at all: see
+  [Quick start: a map in an HTML page](/getting-started/quick-start/).
+</Aside>
+
+## 1. Create the site
+
+Pick one way. Both give you the same site.
+
+<Tabs syncKey="astro-start">
+<TabItem label="maplibre-yaml CLI">
+
+The `astro` template creates a site with the map, the page and the
+publishing workflow already in place:
+
+```bash
+npx maplibre-yaml init my-site --template astro
+cd my-site
+npm install
+```
+
+It writes everything in steps 2, 3 and 6 below for you. Read them to see
+what each file does, then continue at [step 4](#4-run-it-on-your-computer).
+
+</TabItem>
+<TabItem label="npm create astro">
+
+Start from Astro's own minimal site and add maplibre-yaml to it:
+
+```bash
+npm create astro@latest -- --template minimal
+```
+
+It asks for a folder name; then `cd` into that folder and install the map
+packages:
+
+```bash
+npm install @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
+```
+
+</TabItem>
+</Tabs>
+
+## 2. Add a map file
+
+Create `public/configs/map.yaml` (make the `configs` folder inside
+`public/`):
+
+```yaml title="public/configs/map.yaml"
+type: map
+id: my-site
+config:
+  center: [-74.006, 40.7128]
+  zoom: 12
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: marker
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry:
+              type: Point
+              coordinates: [-74.006, 40.7128]
+            properties:
+              name: "New York City"
+    paint:
+      circle-radius: 10
+      circle-color: "#3b82f6"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+```
+
+Everything in `public/` is copied to the published site as it is, so this
+file is served at `/configs/map.yaml`. Keep your data files there too, for
+example `public/data/places.geojson`, loaded with
+`url: "/data/places.geojson"`.
+
+## 3. Put the map on a page
+
+Replace the contents of `src/pages/index.astro` with:
+
+```astro title="src/pages/index.astro"
+---
+import { Map } from '@maplibre-yaml/astro';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My map</title>
+  </head>
+  <body>
+    <h1>My map</h1>
+    <Map src="/configs/map.yaml" height="500px" />
+  </body>
+</html>
+```
+
+`src` is the file's address on the site (`public/` is not part of it). The
+component loads MapLibre's stylesheet and sets up its worker for you.
+
+## 4. Run it on your computer
+
+```bash
+npm run dev
+```
+
+Open the address it prints (usually `http://localhost:4321`). You should see
+a street map of New York with a blue dot. If the YAML has a mistake, the map
+shows a card naming the line and the field instead. Stop the server with
+<kbd>Ctrl</kbd>+<kbd>C</kbd> when you're done.
+
+## 5. Set `site` and `base`
+
+A GitHub Pages *project site* lives at `https://<user>.github.io/<repo>/`,
+under the repository's name. Tell Astro both parts in `astro.config.mjs`,
+using your GitHub user name and the name the repository will have:
+
+<Tabs syncKey="astro-start">
+<TabItem label="maplibre-yaml CLI">
+
+The file already has the two lines, commented out. Remove the `//` in front
+of them and fill in your names:
+
+```js title="astro.config.mjs" ins={2-3}
+export default defineConfig({
+  site: "https://<user>.github.io",
+  base: "/<repo>",
+
+  integrations: [maplibreYaml()],
+});
+```
+
+</TabItem>
+<TabItem label="npm create astro">
+
+```js title="astro.config.mjs"
+// @ts-check
+import { defineConfig } from 'astro/config';
+
+export default defineConfig({
+  site: "https://<user>.github.io",
+  base: "/<repo>",
+});
+```
+
+</TabItem>
+</Tabs>
+
+Nothing else changes: keep `src="/configs/map.yaml"` and the paths inside
+your YAML as they are. The `Map` component puts them under the base for you,
+so the same files work locally and on GitHub Pages. (A *user site*, a
+repository named `<user>.github.io`, is served from the root and needs no
+`base`.)
+
+## 6. Add the publishing workflow
+
+Create `.github/workflows/deploy.yml` (the folder name starts with a dot):
+
+```yaml title=".github/workflows/deploy.yml"
+# Builds the site and publishes it on GitHub Pages every time you push to main.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Lets you run it by hand from the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+      - name: Install, build, and upload the site
+        uses: withastro/action@v6
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+```
+
+[`withastro/action`](https://github.com/withastro/action) installs your
+packages, runs the build and hands the result to GitHub Pages. See Astro's
+[GitHub Pages guide](https://docs.astro.build/en/guides/deploy/github/) for
+its options.
+
+## 7. Check the build before you push
+
+```bash
+npm run build && npm run preview
+```
+
+This builds the site exactly as GitHub will and serves it under the base.
+Open `http://localhost:4321/<repo>/` (with your repository's name; the
+address without it shows a 404, as on GitHub Pages). The map should look the
+same as in step 4. If a data file doesn't load, the map lists it in a notice.
+
+The build prints a yellow *Some chunks are larger than 500 kB* warning. That
+is the map engine's size, not an error
+([details](/integrations/astro/#deploying-to-github-pages-or-any-subpath)).
+
+## 8. Push to GitHub
+
+<Steps>
+
+1. On GitHub, create a new, empty repository with the name you used for
+   `base` (no README, no `.gitignore`).
+
+2. In your project folder, commit and push:
+
+   ```bash
+   git init -b main
+   git add -A
+   git commit -m "My map site"
+   git remote add origin https://github.com/<user>/<repo>.git
+   git push -u origin main
+   ```
+
+3. In the repository on GitHub, open **Settings → Pages** and under
+   **Build and deployment → Source** choose **GitHub Actions**.
+
+4. Open the **Actions** tab. The push started *Deploy to GitHub Pages*; if
+   it ran before you changed the Pages setting, it failed: choose
+   **Deploy to GitHub Pages → Run workflow** to run it again. When it shows a
+   green check, the site is live at `https://<user>.github.io/<repo>/`.
+
+</Steps>
+
+From now on, every push to `main` publishes the site again.
+
+## When it doesn't work
+
+| What you see | Look at |
+|---|---|
+| The map works locally but is blank or 404s on GitHub Pages | `base` must be the repository's name exactly, with its capitals: [404 on GitHub Pages](/integrations/astro/#maps-work-locally-but-404-on-github-pages) |
+| The *deploy* job fails, saying GitHub Pages isn't enabled or answering 404 | Settings → Pages → Source is not yet **GitHub Actions** (step 8, item 3); change it and run the workflow again |
+| `npm install` or `npm run build` stops with an engine or Node.js version error | Astro 7 needs Node.js 22.22 or later |
+| An error card on the map | The card names the problem and the line; see [Troubleshooting](/troubleshooting/) |
+
+## Next steps
+
+- [Your first map, explained](/getting-started/first-map/): what each part
+  of the YAML does.
+- [Loading data](/guides/data-sources/): your own GeoJSON files, and
+  [large data](/guides/cloud-native-data/) such as PMTiles.
+- [Story maps in Astro](/integrations/astro/#scrollytelling-component) with
+  `<Scrollytelling>`, and full-window maps with
+  [`<FullPageMap>`](/integrations/astro/#fullpagemap-component).
+- [Astro](/integrations/astro/): everything the components do, including
+  build-time loading and content collections.

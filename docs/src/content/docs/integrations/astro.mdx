@@ -1,5 +1,5 @@
 ---
-title: Astro Integration
+title: Astro
 description: Use maplibre-yaml in Astro sites and components
 ---
 
@@ -24,6 +24,14 @@ Get a map in a new Astro site in 5 minutes. Every command is shown for npm,
 which is what `npm create astro` sets up; use the pnpm or Yarn tab only if your
 project already uses that package manager (mixing them leaves you with two
 lockfiles).
+
+<Aside type="tip" title="Starting from nothing? Two shortcuts">
+  `npx maplibre-yaml init my-site --template astro` (or `mlym init --template
+  astro` with the CLI installed) creates a whole site with a map, ready for
+  GitHub Pages ([init](/cli/reference/#init)). For every step from an empty
+  folder to a published site, follow
+  [Quick start: Astro site on GitHub Pages](/getting-started/astro/).
+</Aside>
 
 <Steps>
 
@@ -1173,7 +1181,8 @@ yarn add @maplibre-yaml/core@latest @maplibre-yaml/astro@latest
 </Tabs>
 
 This rewrites both ranges in `package.json`. Restart `astro dev` afterwards.
-Each release's changes are listed in the packages' changelogs on npm.
+Each release's changes are listed in the packages' changelogs on npm; for
+what changes in 0.9, see [Upgrading to 0.9](/getting-started/upgrading/).
 
 ## Upgrading to 0.6
 

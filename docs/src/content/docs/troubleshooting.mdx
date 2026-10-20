@@ -1,0 +1,118 @@
+---
+title: Troubleshooting
+description: What the map's error card, notice and hints mean, and a list of common symptoms (blank map, 404 on GitHub Pages, worker errors, PMTiles and other large-data errors, CLI and editor problems) with the page that fixes each.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Start with what the map itself says: in most cases it names the problem and
+the fix. Then find your symptom in the tables below; each row links to the
+page that explains it.
+
+## Reading what the map tells you
+
+`<ml-map>` and `<ml-scrollytelling>` (and the Astro components, which render
+them) report problems on the page, not only in the browser console:
+
+- **Error card, in place of the map.** The document can't be drawn at all: a
+  YAML syntax error, a validation error (with the line, the field and, for a
+  typo, a "did you mean"), a `src` file that isn't found (with the address the
+  browser asked for), a page opened as a file (`file://`), or a basemap style
+  that won't load. Fix what the card names and reload.
+- **Notice, over the map.** The map works, but part of it didn't load: a data
+  file, a layer MapLibre rejected, a layer naming a missing source, an image
+  or marker icon. It leads with "Part of this map couldn't load" for
+  visitors, and keeps the fix under "Details for the site's author".
+- **Author hints, in the same notice.** The map works, but the document
+  probably doesn't say what you meant: a "did you mean" for a near-miss name,
+  a key in the wrong place, coordinates that look written latitude-first, a
+  value starting with the reserved `=`. They show **only while you develop**
+  (`localhost`, a `file://` page, `astro dev`, `vite`), not on a published
+  site.
+- **Height hint.** A map with no height is invisible, so the element shows a
+  note saying to give it one.
+
+Two attributes change what shows: **`debug`** shows the author hints on any
+site, which helps when checking a deployed page; **`quiet`** hides the notice
+and the hints (the error card always shows). Everything is also written to
+the browser console, so open the developer tools
+(<kbd>F12</kbd>, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd>;
+<kbd>⌥</kbd>+<kbd>⌘</kbd>+<kbd>I</kbd> on a Mac) when the page says nothing.
+
+The full rules, with the table of when hints show, are in
+[When something goes wrong](/integrations/web-components/#when-something-goes-wrong).
+To catch mistakes before you load the page, run
+`npx maplibre-yaml validate map.yaml` ([The CLI](/cli/getting-started/)) or
+set up [your editor](/guides/editor-setup/) to check the YAML as you type.
+
+## The map doesn't show
+
+| Symptom | Where to look |
+|---|---|
+| Nothing at all where the map should be, no error | The element has no height: [zero height](/integrations/astro/#map-container-has-zero-height), and give it `display: block` ([First map](/getting-started/first-map/#the-host-page)) |
+| A blank page, and *Failed to resolve module specifier "maplibre-gl"* in the console | The import map is missing: [Browser usage (CDN)](/getting-started/installation/#browser-usage-cdn) |
+| The page was opened by double-clicking the HTML file (a `file://` address) | Serve the folder instead: [Run a local server](/getting-started/quick-start/#3-run-a-local-server) |
+| A blank map and *Worker failed to load* | maplibre-gl 6 inside a bundler needs its worker set: [Using a bundler (Vite)](/getting-started/installation/#using-a-bundler-vite), [in Astro](/integrations/astro/#blank-map-and-worker-failed-to-load) |
+| An error card ("Configuration Error") | [Configuration Error card](/integrations/web-components/#configuration-error-card), [YAML parsing errors](/integrations/vanilla-js/#yaml-parsing-errors) |
+| *YAML syntax error … `<!doctype html>`* after `npm run build` | The YAML is next to `index.html` instead of in `public/`: [YAML next to index.html](/getting-started/installation/#using-a-bundler-vite) |
+| The map refuses to load and says it has no basemap | Add `mapStyle:` under `config:`: [Map styles](/getting-started/first-map/#map-styles) |
+| The map is in the ocean, or far from your data | Coordinates are `[longitude, latitude]`: [Coordinates](/getting-started/first-map/#coordinates) |
+
+## The map shows, but your data doesn't
+
+| Symptom | Where to look |
+|---|---|
+| The basemap draws, your layer doesn't | [No layers visible](/integrations/web-components/#map-loads-but-no-layers-visible), [no data appears](/integrations/vanilla-js/#map-shows-but-no-data-appears) |
+| A data file on another site doesn't load (a CORS error in the console) | [CORS considerations](/guides/data-sources/#cors-considerations) |
+| "CSV files aren't supported" | Convert the table to GeoJSON: [CSV and spreadsheets](/guides/data-sources/#csv-and-spreadsheets) |
+| A colour is ignored, or the layer fails validation | Put colours in quotes: in YAML `#` starts a comment ([Adding a simple layer](/getting-started/first-map/#adding-a-simple-layer)) |
+| A warning about a value starting with `=` | [Strings starting with `=` are reserved](/guides/layers/#strings-starting-with--are-reserved) |
+| A local data file isn't found | Paths are relative to the page, not the YAML: [Using your own data file](/getting-started/first-map/#using-your-own-data-file) |
+| Your page's JavaScript never sees the map's events | [Events not firing](/integrations/web-components/#events-not-firing) |
+
+## Works on your computer, not once published
+
+| Symptom | Where to look |
+|---|---|
+| A 404 for the YAML or the data on GitHub Pages (or any site under a subpath) | Set the base: [Astro](/integrations/astro/#maps-work-locally-but-404-on-github-pages), [HTML pages](/integrations/web-components/#sites-under-a-subpath-github-pages), [story pages](/integrations/scrollytelling-html/#sites-under-a-subpath-github-pages) |
+| Author hints you saw while developing are gone | Expected: they show only while you develop; add `debug` to see them ([above](#reading-what-the-map-tells-you)) |
+| Something changed after upgrading | [Upgrading to 0.9](/getting-started/upgrading/#what-behaves-differently) |
+
+## Large data: PMTiles, FlatGeobuf, GeoParquet and COG
+
+When one of these files fails, the rest of the map still draws and the
+notice says why. The common messages, with the fix for each, are in
+[When something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong).
+
+| Symptom | Where to look |
+|---|---|
+| "served without range-request support", often with `python -m http.server` | Use a server with range requests (`npx serve`, GitHub Pages, Netlify, S3): [Hosting](/guides/cloud-native-data/#hosting-range-requests-and-cors) |
+| A *416* status (Range Not Satisfiable) | The file was found, but the server refused the part asked for: the upload may be incomplete, or the server doesn't serve parts of files correctly. Upload the file again, or try another host ([Hosting](/guides/cloud-native-data/#hosting-range-requests-and-cors)) |
+| A file on another site is blocked (CORS) | The other server must allow your site and the `Range` header: [CORS rule](/guides/cloud-native-data/#hosting-range-requests-and-cors) |
+| "is in EPSG:…" (the wrong projection) | FlatGeobuf needs longitude/latitude (EPSG:4326), a COG Web Mercator (EPSG:3857); the notice gives the command that converts it ([details](/guides/cloud-native-data/#when-something-goes-wrong)) |
+| "The … reader (`…/chunks/….js`) couldn't be downloaded", on a site hosting maplibre-yaml's files itself | Copy the whole `dist/` folder, not only `register.js`: [Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself) |
+| A Protomaps basemap draws without labels or icons, or the notice names the fonts or icons | Labels come from Protomaps' font host unless you copy them: [Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap) |
+| "too large to load whole in a browser" | Add `load: viewport` or convert the file: [When something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong) |
+
+## Astro
+
+| Symptom | Where to look |
+|---|---|
+| `ReferenceError: HTMLElement is not defined` | [HTMLElement is not defined](/integrations/astro/#referenceerror-htmlelement-is-not-defined) |
+| A saved YAML change doesn't appear in `astro dev` | [Editing in astro dev](/integrations/astro/#editing-in-astro-dev) |
+| `<Map src>` gives a 404 | `src` is the address on the site, without `public/`: [Incorrect `src` path](/integrations/astro/#incorrect-src-path-for-public-files) |
+| A page using `loadMapConfig` fails with *ENOENT* on a server | [Server output (SSR)](/integrations/astro/#server-output-ssr) |
+| More Astro problems | [Astro troubleshooting](/integrations/astro/#troubleshooting) |
+
+## Tools
+
+| Symptom | Where to look |
+|---|---|
+| `mlym: command not found`, or `npx mlym` fails with a 404 | Use `npx maplibre-yaml`, or install the CLI: [Short alias](/cli/getting-started/#short-alias), [Command not found](/cli/reference/#command-not-found) |
+| No autocomplete or checking in your editor | [Editor setup](/guides/editor-setup/) |
+| `mlym validate` errors don't show in VS Code's Problems panel | [VS Code tasks](/cli/vscode/#errors-dont-appear-in-problems-panel) |
+
+<Aside type="tip" title="Still stuck?">
+  [Open an issue](https://github.com/design-practices/maplibre-yaml/issues)
+  with your YAML, the page's address, and what the map or the console says.
+</Aside>

@@ -5,10 +5,11 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import starlightTypeDoc from "starlight-typedoc";
+import starlightLinksValidator from "starlight-links-validator";
 import { OptionDefaults } from "typedoc";
 import { generateAgentAssets } from "./scripts/generate-agent-assets.mjs";
 import { generateClassicsExport } from "./scripts/classics-export.mjs";
-import rehypeHeadingAnchors from "./scripts/rehype-heading-anchors.mjs";
+import rehypeHeadingAnchors, { remarkHeadingAnchorIds } from "./scripts/rehype-heading-anchors.mjs";
 import { emailOff } from "./scripts/email-off.mjs";
 
 const require = createRequire(import.meta.url);
@@ -90,6 +91,7 @@ export default defineConfig({
   markdown: {
     // `### heading {#id}` -> explicit, stable anchors (used by the generated
     // YAML reference; a no-op for headings without the marker).
+    remarkPlugins: [remarkHeadingAnchorIds],
     rehypePlugins: [rehypeHeadingAnchors],
   },
   integrations: [
@@ -101,6 +103,15 @@ export default defineConfig({
     starlight({
       title: "maplibre-yaml",
       plugins: [
+        /**
+         * Fails the build on a link to a page or a heading anchor that doesn't
+         * exist, so pages can be regrouped and retitled safely.
+         */
+        starlightLinksValidator({
+          // Pages tell readers to open http://localhost:… after starting a
+          // local server; those are instructions, not links into this site.
+          errorOnLocalLinks: false,
+        }),
         /**
          * TypeScript API reference, generated from the core package's public
          * entry points (the `exports` map of packages/core/package.json) on
@@ -148,55 +159,127 @@ export default defineConfig({
         maxHeadingLevel: 4,
       },
 
+      // Grouped by what a reader is trying to do, in the order they need it.
+      // Labels are sentence case and match each page's title. Files never
+      // move to regroup: the sidebar is the only place a page's group lives,
+      // so URLs (pinned by READMEs, error messages and editor modelines) stay.
       sidebar: [
         {
-          label: "Getting Started",
+          label: "Start here",
           items: [
-            { label: "Introduction", link: "/getting-started/introduction/" },
-            { label: "Installation", link: "/getting-started/installation/" },
-            { label: "Quick Start", link: "/getting-started/quick-start/" },
-            { label: "Your First Map", link: "/getting-started/first-map/" },
+            { label: "Choose your path", link: "/getting-started/" },
+            { label: "What is maplibre-yaml?", link: "/getting-started/introduction/" },
+            { label: "Quick start: a map in an HTML page", link: "/getting-started/quick-start/" },
+            { label: "Quick start: Astro site on GitHub Pages", link: "/getting-started/astro/" },
+            { label: "Your first map, explained", link: "/getting-started/first-map/" },
+            { label: "Installation & versions", link: "/getting-started/installation/" },
+            { label: "Upgrading to 0.9", link: "/getting-started/upgrading/" },
           ],
         },
         {
-          label: "Guides",
+          label: "Make a map",
           items: [
-            { label: "Format v2", link: "/guides/format-v2/" },
-            { label: "Interactions & Export to style.json", link: "/guides/interactions/" },
+            { label: "Loading data", link: "/guides/data-sources/" },
+            {
+              label: "Large data: PMTiles, FlatGeobuf, GeoParquet & COG",
+              link: "/guides/cloud-native-data/",
+            },
+            { label: "Live data & streaming", link: "/guides/live-data/" },
+            { label: "Layers & styling", link: "/guides/layers/" },
+            { label: "Thematic maps & legends", link: "/guides/thematic-maps/" },
+            { label: "Popups, hover & controls", link: "/schema/interactivity/" },
+            { label: "Accessibility & languages", link: "/guides/accessibility-languages/" },
+            { label: "Reusing values & blocks", link: "/guides/reuse/" },
+          ],
+        },
+        {
+          label: "Story maps",
+          items: [
+            { label: "Story maps in plain HTML", link: "/integrations/scrollytelling-html/" },
+            {
+              label: "Story maps in Astro",
+              link: "/integrations/astro/#scrollytelling-component",
+            },
+            { label: "Story file reference", link: "/schema/scrollytelling/" },
+          ],
+        },
+        {
+          label: "Examples",
+          items: [
+            { label: "Overview", link: "/examples/" },
+            { label: "Thematic maps", link: "/examples/thematic-maps/" },
+            { label: "Basic map", link: "/examples/basic-map/" },
+            { label: "Interactive points", link: "/examples/interactive-points/" },
+            { label: "Clustered data", link: "/examples/clustering/" },
+            { label: "Earthquake tracker", link: "/examples/earthquake-tracker/" },
+            { label: "Live vehicle tracking", link: "/examples/live-vehicles/" },
+            { label: "MapLibre examples in YAML", link: "/examples/gallery/" },
+            { label: "Mapzen classics", link: "/examples/classics/" },
+          ],
+        },
+        {
+          label: "Put it in your site",
+          items: [
+            { label: "HTML pages: the <ml-map> element", link: "/integrations/web-components/" },
+            { label: "Astro", link: "/integrations/astro/" },
+            { label: "Astro content collections", link: "/guides/collections-integration/" },
+            { label: "React & other frameworks", link: "/integrations/react/" },
+            { label: "JavaScript API", link: "/integrations/vanilla-js/" },
+          ],
+        },
+        { label: "Troubleshooting", link: "/troubleshooting/" },
+        {
+          label: "Tools",
+          items: [
+            { label: "The CLI (mlym)", link: "/cli/getting-started/" },
+            { label: "Editor setup", link: "/guides/editor-setup/" },
+            { label: "VS Code tasks", link: "/cli/vscode/" },
+            { label: "Using AI agents", link: "/guides/ai-agents/" },
+          ],
+        },
+        {
+          label: "Advanced",
+          items: [
+            { label: "Format v2 (opt-in)", link: "/guides/format-v2/" },
+            { label: "Export to style.json", link: "/guides/interactions/" },
             { label: "Export classes", link: "/guides/export-classes/" },
             { label: "Effects (experimental)", link: "/guides/effects/" },
-            { label: "Working with Layers", link: "/guides/layers/" },
-            { label: "Thematic maps (classify)", link: "/guides/thematic-maps/" },
-            { label: "Accessibility & languages", link: "/guides/accessibility-languages/" },
-            { label: "Data Sources", link: "/guides/data-sources/" },
-            { label: "Cloud-native data", link: "/guides/cloud-native-data/" },
-            { label: "Live Data & Streaming", link: "/guides/live-data/" },
-            { label: "Reusing Values & Blocks", link: "/guides/reuse/" },
-            { label: "Editor Setup", link: "/guides/editor-setup/" },
-            { label: "Using AI Agents", link: "/guides/ai-agents/" },
-          ],
-        },
-        {
-          label: "YAML Schema",
-          items: [
-            { label: "Overview", link: "/schema/overview/" },
-            { label: "Root Configuration", link: "/schema/root/" },
-            { label: "Pages & Blocks", link: "/schema/pages/" },
-            { label: "Map Configuration", link: "/schema/map-config/" },
-            { label: "Data Sources", link: "/schema/sources/" },
-            { label: "Layer Types", link: "/schema/layers/" },
-            { label: "Interactivity", link: "/schema/interactivity/" },
-            { label: "Scrollytelling", link: "/schema/scrollytelling/" },
+            {
+              label: "Parsing & validating in your own code",
+              link: "/guides/parsing-and-validating/",
+            },
           ],
         },
         {
           label: "Reference",
           items: [
+            // Generated from the core schemas: the field reference, so it
+            // comes first and open. The hand-written topic pages explain.
             {
-              label: "YAML Reference",
-              collapsed: true,
+              label: "YAML reference: every key",
+              collapsed: false,
               autogenerate: { directory: "reference/yaml" },
             },
+            {
+              label: "Format by topic",
+              collapsed: true,
+              items: [
+                { label: "Overview", link: "/schema/overview/" },
+                { label: "Map configuration", link: "/schema/map-config/" },
+                { label: "Sources", link: "/schema/sources/" },
+                { label: "Layers & popups", link: "/schema/layers/" },
+                { label: "Multi-page documents: root", link: "/schema/root/" },
+                {
+                  label: "Multi-page documents: pages & blocks",
+                  link: "/schema/pages/",
+                },
+              ],
+            },
+            {
+              label: "<ml-map> & <ml-scrollytelling> attributes and events",
+              link: "/integrations/web-components/#component-api-reference",
+            },
+            { label: "CLI commands", link: "/cli/reference/" },
             // Module landing pages only. starlight-typedoc's own sidebar group
             // lists every class/function/type (~330 links) and Starlight
             // renders the whole sidebar into every page of the site — it
@@ -212,51 +295,6 @@ export default defineConfig({
                   link: `/reference/api/${m.name.replace(/^@/, "")}/`,
                 })),
               ],
-            },
-          ],
-        },
-        {
-          label: "Integrations",
-          items: [
-            { label: "Vanilla JavaScript", link: "/integrations/vanilla-js/" },
-            { label: "Scrollytelling in plain HTML", link: "/integrations/scrollytelling-html/" },
-            { label: "Astro", link: "/integrations/astro/" },
-            {
-              label: "Astro Content Collections",
-              link: "/guides/collections-integration/",
-            },
-            { label: "Web Components", link: "/integrations/web-components/" },
-            { label: "React", link: "/integrations/react/" },
-          ],
-        },
-        {
-          label: "CLI Tools",
-          items: [
-            { label: "Getting Started", link: "/cli/getting-started/" },
-            { label: "VSCode Integration", link: "/cli/vscode/" },
-            { label: "Command Reference", link: "/cli/reference/" },
-          ],
-        },
-        {
-          label: "Examples",
-          items: [
-            { label: "Overview", link: "/examples/" },
-            { label: "MapLibre Gallery", link: "/examples/gallery/" },
-            { label: "Mapzen Classics", link: "/examples/classics/" },
-            { label: "Basic Map", link: "/examples/basic-map/" },
-            { label: "Thematic Maps", link: "/examples/thematic-maps/" },
-            {
-              label: "Earthquake Tracker",
-              link: "/examples/earthquake-tracker/",
-            },
-            { label: "Clustered Data", link: "/examples/clustering/" },
-            {
-              label: "Interactive Points",
-              link: "/examples/interactive-points/",
-            },
-            {
-              label: "Live Vehicle Tracking",
-              link: "/examples/live-vehicles/",
             },
           ],
         },

@@ -69,7 +69,7 @@ interface PageDef {
 const PAGES: PageDef[] = [
   {
     slug: "map",
-    title: "Map block (v1)",
+    title: "Map block (v1, default)",
     description: "Every key of a `type: map` block in format v1, generated from the schemas.",
     root: PTR.mapV1,
     prefix: "",
@@ -77,7 +77,7 @@ const PAGES: PageDef[] = [
     intro:
       "A `type: map` block — the unit `<ml-map src>` and `mlym validate` consume. " +
       "This is the default format (`version: 1`, or no `version:` key). " +
-      "For narrative and examples see [Map Configuration](/schema/map-config/).",
+      "For narrative and examples see [Map configuration](/schema/map-config/).",
   },
   {
     slug: "sources",
@@ -90,7 +90,7 @@ const PAGES: PageDef[] = [
     intro:
       "A data source, declared under a block's `sources:` map (then referenced from a " +
       "layer by bare name) or inline as a layer's `source:`. The `type` key selects " +
-      "the variant. For narrative and examples see [Data Sources](/schema/sources/).",
+      "the variant. For narrative and examples see [Sources](/schema/sources/).",
   },
   {
     slug: "layers",
@@ -103,12 +103,12 @@ const PAGES: PageDef[] = [
     intro:
       "An entry of a block's `layers:` list: either a full layer (the `type` key " +
       "selects the variant) or a `$ref` to a named layer in a root document. " +
-      "For narrative and examples see [Layer Types](/schema/layers/) and " +
-      "[Interactivity](/schema/interactivity/).",
+      "For narrative and examples see [Layers & popups](/schema/layers/) and " +
+      "[Popups, hover & controls](/schema/interactivity/).",
   },
   {
     slug: "map-v2",
-    title: "Map block (v2)",
+    title: "Map block (v2, opt-in)",
     description: "Every key of a format-v2 (`style:`/`runtime:`) map block, generated from the schemas.",
     root: PTR.mapV2,
     prefix: "",
@@ -130,7 +130,7 @@ const PAGES: PageDef[] = [
     intro:
       "A `type: scrollytelling` block: one map plus an ordered list of chapters that " +
       "drive the camera and layer visibility as the reader scrolls. For narrative " +
-      "and examples see [Scrollytelling](/schema/scrollytelling/).",
+      "and examples see [Story file reference](/schema/scrollytelling/).",
   },
   {
     slug: "root",
@@ -143,7 +143,7 @@ const PAGES: PageDef[] = [
       "A root document: global `config`, shared named `layers` and `sources`, and a " +
       "`pages:` list whose blocks are content, map, scrollytelling, or mixed blocks. " +
       "Framework integrations render it; it is never the `src` of `<ml-map>`. For " +
-      "narrative see [Root Configuration](/schema/root/) and [Pages & Blocks](/schema/pages/).",
+      "narrative see [Multi-page documents: root](/schema/root/) and [Multi-page documents: pages & blocks](/schema/pages/).",
   },
 ];
 
@@ -784,13 +784,20 @@ const GENERATED_NOTE =
   "Edit the schema, not this page.\n" +
   ":::";
 
-function frontmatter(page: { title: string; description: string; order: number }): string {
+function frontmatter(page: {
+  title: string;
+  description: string;
+  order: number;
+  /** Sidebar label, when it differs from the title. */
+  label?: string;
+}): string {
   return [
     "---",
     `title: ${JSON.stringify(page.title)}`,
     `description: ${JSON.stringify(page.description)}`,
     "editUrl: false",
     "sidebar:",
+    ...(page.label ? [`  label: ${JSON.stringify(page.label)}`] : []),
     `  order: ${page.order}`,
     "---",
     "",
@@ -820,10 +827,12 @@ function renderIndex(): string {
       title: "YAML reference",
       description: "Generated reference for every key of the maplibre-yaml document format.",
       order: 0,
+      // The sidebar group is already called "YAML reference: every key".
+      label: "Overview",
     }) +
     [
       "Every key the maplibre-yaml validator accepts, with its type, default, allowed values, and " +
-        "description. The guides under **YAML Schema** explain *how* to use these keys; this " +
+        "description. The pages under **Format by topic** explain *how* to use these keys; this " +
         "reference lists *all* of them.",
       "",
       GENERATED_NOTE,

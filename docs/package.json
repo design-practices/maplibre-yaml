@@ -26,6 +26,7 @@
   "devDependencies": {
     "@maplibre-yaml/cli": "workspace:^",
     "sharp": "^0.33.0",
+    "starlight-links-validator": "~0.19.2",
     "starlight-typedoc": "~0.21.5",
     "tsx": "^4.19.2",
     "typedoc": "^0.28.20",
