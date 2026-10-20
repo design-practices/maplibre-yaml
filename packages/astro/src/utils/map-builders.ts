@@ -28,7 +28,7 @@
  * ```
  */
 
-import type { MapBlock, MapConfig, GlobalConfig } from "@maplibre-yaml/core";
+import type { MapBlock, MapConfig, GlobalConfig, ProtomapsBasemap } from "@maplibre-yaml/core";
 import { resolveMapConfig } from "@maplibre-yaml/core";
 import type {
   LocationPoint,
@@ -67,8 +67,8 @@ const DEFAULT_LINE_WIDTH = 3;
 export interface PointMapOptions {
   /** Location data with coordinates and optional metadata */
   location: LocationPoint;
-  /** MapLibre style URL (required if no global default) */
-  mapStyle?: string;
+  /** MapLibre style URL, or a Protomaps basemap `{ pmtiles, flavor?, lang? }` (required if no global default) */
+  mapStyle?: string | ProtomapsBasemap;
   /** Override zoom level (defaults to location.zoom, then globalConfig.defaultZoom, then 12) */
   zoom?: number;
   /** Map ID for the block */
@@ -83,8 +83,8 @@ export interface PointMapOptions {
 export interface MultiPointMapOptions {
   /** Array of location points */
   locations: LocationPoint[];
-  /** MapLibre style URL (required if no global default) */
-  mapStyle?: string;
+  /** MapLibre style URL, or a Protomaps basemap `{ pmtiles, flavor?, lang? }` (required if no global default) */
+  mapStyle?: string | ProtomapsBasemap;
   /** Padding around bounds in pixels */
   padding?: number;
   /** Map ID for the block */
@@ -99,8 +99,8 @@ export interface MultiPointMapOptions {
 export interface PolygonMapOptions {
   /** Polygon region data */
   region: RegionPolygon;
-  /** MapLibre style URL (required if no global default) */
-  mapStyle?: string;
+  /** MapLibre style URL, or a Protomaps basemap `{ pmtiles, flavor?, lang? }` (required if no global default) */
+  mapStyle?: string | ProtomapsBasemap;
   /** Override zoom level */
   zoom?: number;
   /** Map ID for the block */
@@ -115,8 +115,8 @@ export interface PolygonMapOptions {
 export interface RouteMapOptions {
   /** Route line data */
   route: RouteLine;
-  /** MapLibre style URL (required if no global default) */
-  mapStyle?: string;
+  /** MapLibre style URL, or a Protomaps basemap `{ pmtiles, flavor?, lang? }` (required if no global default) */
+  mapStyle?: string | ProtomapsBasemap;
   /** Padding around bounds in pixels */
   padding?: number;
   /** Map ID for the block */
@@ -146,7 +146,7 @@ export interface MultiRegionPolygon
 export interface MultiPolygonMapOptions {
   /** MultiPolygon region data */
   region: MultiRegionPolygon;
-  mapStyle?: string;
+  mapStyle?: string | ProtomapsBasemap;
   zoom?: number;
   id?: string;
   interactive?: boolean;
@@ -170,7 +170,7 @@ export interface MultiRouteLine extends Omit<RouteLine, "coordinates"> {
 export interface MultiLineStringMapOptions {
   /** MultiLineString route data */
   route: MultiRouteLine;
-  mapStyle?: string;
+  mapStyle?: string | ProtomapsBasemap;
   id?: string;
   interactive?: boolean;
 }

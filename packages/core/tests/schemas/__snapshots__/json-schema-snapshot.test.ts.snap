@@ -78,9 +78,89 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "type": "string",
                       "format": "uri"
                     },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "pmtiles": {
+                          "type": "string",
+                          "description": "The .pmtiles file: a path (relative to the page), a URL, or pmtiles://…"
+                        },
+                        "flavor": {
+                          "type": "string",
+                          "enum": [
+                            "light",
+                            "dark",
+                            "white",
+                            "grayscale",
+                            "black"
+                          ],
+                          "description": "Color scheme (default light)"
+                        },
+                        "lang": {
+                          "type": "string",
+                          "enum": [
+                            "ar",
+                            "cs",
+                            "bg",
+                            "da",
+                            "de",
+                            "el",
+                            "en",
+                            "es",
+                            "et",
+                            "fa",
+                            "fi",
+                            "fr",
+                            "ga",
+                            "he",
+                            "hi",
+                            "hr",
+                            "hu",
+                            "id",
+                            "it",
+                            "ja",
+                            "ko",
+                            "lt",
+                            "lv",
+                            "ne",
+                            "nl",
+                            "no",
+                            "mr",
+                            "mt",
+                            "pl",
+                            "pt",
+                            "ro",
+                            "ru",
+                            "sk",
+                            "sl",
+                            "sv",
+                            "tr",
+                            "uk",
+                            "ur",
+                            "vi",
+                            "zh-Hans",
+                            "zh-Hant"
+                          ],
+                          "description": "Label language (default: the page's language when the basemap has it, else en)"
+                        },
+                        "glyphs": {
+                          "type": "string",
+                          "description": "Glyph URL template ({fontstack}/{range}.pbf). Default: Protomaps' hosted fonts"
+                        },
+                        "sprite": {
+                          "type": "string",
+                          "description": "Sprite URL. Default: Protomaps' hosted sprite for the flavor"
+                        }
+                      },
+                      "required": [
+                        "pmtiles"
+                      ],
+                      "additionalProperties": true,
+                      "description": "A Protomaps basemap built from a .pmtiles file (no API key)"
+                    },
                     {}
                   ],
-                  "description": "MapLibre style URL or style object. Optional when global config.defaultMapStyle is set."
+                  "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }). Optional when global config.defaultMapStyle is set."
                 },
                 "pitch": {
                   "type": "number",
@@ -4000,9 +4080,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "description": "Application description"
                 },
                 "defaultMapStyle": {
-                  "type": "string",
-                  "format": "uri",
-                  "description": "Default map style URL"
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/mapStyle",
+                  "description": "Default map style: a style URL, a style object, or a Protomaps basemap ({ pmtiles, flavor, lang })"
                 },
                 "theme": {
                   "type": "string",
@@ -4510,9 +4589,89 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "type": "string",
                   "format": "uri"
                 },
+                {
+                  "type": "object",
+                  "properties": {
+                    "pmtiles": {
+                      "type": "string",
+                      "description": "The .pmtiles file: a path (relative to the page), a URL, or pmtiles://…"
+                    },
+                    "flavor": {
+                      "type": "string",
+                      "enum": [
+                        "light",
+                        "dark",
+                        "white",
+                        "grayscale",
+                        "black"
+                      ],
+                      "description": "Color scheme (default light)"
+                    },
+                    "lang": {
+                      "type": "string",
+                      "enum": [
+                        "ar",
+                        "cs",
+                        "bg",
+                        "da",
+                        "de",
+                        "el",
+                        "en",
+                        "es",
+                        "et",
+                        "fa",
+                        "fi",
+                        "fr",
+                        "ga",
+                        "he",
+                        "hi",
+                        "hr",
+                        "hu",
+                        "id",
+                        "it",
+                        "ja",
+                        "ko",
+                        "lt",
+                        "lv",
+                        "ne",
+                        "nl",
+                        "no",
+                        "mr",
+                        "mt",
+                        "pl",
+                        "pt",
+                        "ro",
+                        "ru",
+                        "sk",
+                        "sl",
+                        "sv",
+                        "tr",
+                        "uk",
+                        "ur",
+                        "vi",
+                        "zh-Hans",
+                        "zh-Hant"
+                      ],
+                      "description": "Label language (default: the page's language when the basemap has it, else en)"
+                    },
+                    "glyphs": {
+                      "type": "string",
+                      "description": "Glyph URL template ({fontstack}/{range}.pbf). Default: Protomaps' hosted fonts"
+                    },
+                    "sprite": {
+                      "type": "string",
+                      "description": "Sprite URL. Default: Protomaps' hosted sprite for the flavor"
+                    }
+                  },
+                  "required": [
+                    "pmtiles"
+                  ],
+                  "additionalProperties": true,
+                  "description": "A Protomaps basemap built from a .pmtiles file (no API key)"
+                },
                 {}
               ],
-              "description": "MapLibre style URL or style object. Optional when global config.defaultMapStyle is set."
+              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }). Optional when global config.defaultMapStyle is set."
             },
             "pitch": {
               "type": "number",
@@ -8018,9 +8177,94 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
               "description": "Application description"
             },
             "defaultMapStyle": {
-              "type": "string",
-              "format": "uri",
-              "description": "Default map style URL"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "pmtiles": {
+                      "type": "string",
+                      "description": "The .pmtiles file: a path (relative to the page), a URL, or pmtiles://…"
+                    },
+                    "flavor": {
+                      "type": "string",
+                      "enum": [
+                        "light",
+                        "dark",
+                        "white",
+                        "grayscale",
+                        "black"
+                      ],
+                      "description": "Color scheme (default light)"
+                    },
+                    "lang": {
+                      "type": "string",
+                      "enum": [
+                        "ar",
+                        "cs",
+                        "bg",
+                        "da",
+                        "de",
+                        "el",
+                        "en",
+                        "es",
+                        "et",
+                        "fa",
+                        "fi",
+                        "fr",
+                        "ga",
+                        "he",
+                        "hi",
+                        "hr",
+                        "hu",
+                        "id",
+                        "it",
+                        "ja",
+                        "ko",
+                        "lt",
+                        "lv",
+                        "ne",
+                        "nl",
+                        "no",
+                        "mr",
+                        "mt",
+                        "pl",
+                        "pt",
+                        "ro",
+                        "ru",
+                        "sk",
+                        "sl",
+                        "sv",
+                        "tr",
+                        "uk",
+                        "ur",
+                        "vi",
+                        "zh-Hans",
+                        "zh-Hant"
+                      ],
+                      "description": "Label language (default: the page's language when the basemap has it, else en)"
+                    },
+                    "glyphs": {
+                      "type": "string",
+                      "description": "Glyph URL template ({fontstack}/{range}.pbf). Default: Protomaps' hosted fonts"
+                    },
+                    "sprite": {
+                      "type": "string",
+                      "description": "Sprite URL. Default: Protomaps' hosted sprite for the flavor"
+                    }
+                  },
+                  "required": [
+                    "pmtiles"
+                  ],
+                  "additionalProperties": true,
+                  "description": "A Protomaps basemap built from a .pmtiles file (no API key)"
+                },
+                {}
+              ],
+              "description": "Default map style: a style URL, a style object, or a Protomaps basemap ({ pmtiles, flavor, lang })"
             },
             "theme": {
               "type": "string",
@@ -10986,14 +11230,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "description": "Initial zoom level (0-24)"
                             },
                             "mapStyle": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "format": "uri"
-                                },
-                                {}
-                              ],
-                              "description": "MapLibre style URL or style object. Optional when global config.defaultMapStyle is set."
+                              "$ref": "#/$defs/root/properties/config/properties/defaultMapStyle",
+                              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }). Optional when global config.defaultMapStyle is set."
                             },
                             "pitch": {
                               "type": "number",
@@ -12481,9 +12719,89 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                   "type": "string",
                   "format": "uri"
                 },
+                {
+                  "type": "object",
+                  "properties": {
+                    "pmtiles": {
+                      "type": "string",
+                      "description": "The .pmtiles file: a path (relative to the page), a URL, or pmtiles://…"
+                    },
+                    "flavor": {
+                      "type": "string",
+                      "enum": [
+                        "light",
+                        "dark",
+                        "white",
+                        "grayscale",
+                        "black"
+                      ],
+                      "description": "Color scheme (default light)"
+                    },
+                    "lang": {
+                      "type": "string",
+                      "enum": [
+                        "ar",
+                        "cs",
+                        "bg",
+                        "da",
+                        "de",
+                        "el",
+                        "en",
+                        "es",
+                        "et",
+                        "fa",
+                        "fi",
+                        "fr",
+                        "ga",
+                        "he",
+                        "hi",
+                        "hr",
+                        "hu",
+                        "id",
+                        "it",
+                        "ja",
+                        "ko",
+                        "lt",
+                        "lv",
+                        "ne",
+                        "nl",
+                        "no",
+                        "mr",
+                        "mt",
+                        "pl",
+                        "pt",
+                        "ro",
+                        "ru",
+                        "sk",
+                        "sl",
+                        "sv",
+                        "tr",
+                        "uk",
+                        "ur",
+                        "vi",
+                        "zh-Hans",
+                        "zh-Hant"
+                      ],
+                      "description": "Label language (default: the page's language when the basemap has it, else en)"
+                    },
+                    "glyphs": {
+                      "type": "string",
+                      "description": "Glyph URL template ({fontstack}/{range}.pbf). Default: Protomaps' hosted fonts"
+                    },
+                    "sprite": {
+                      "type": "string",
+                      "description": "Sprite URL. Default: Protomaps' hosted sprite for the flavor"
+                    }
+                  },
+                  "required": [
+                    "pmtiles"
+                  ],
+                  "additionalProperties": true,
+                  "description": "A Protomaps basemap built from a .pmtiles file (no API key)"
+                },
                 {}
               ],
-              "description": "MapLibre style URL or style object. Optional when global config.defaultMapStyle is set."
+              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }). Optional when global config.defaultMapStyle is set."
             },
             "pitch": {
               "type": "number",

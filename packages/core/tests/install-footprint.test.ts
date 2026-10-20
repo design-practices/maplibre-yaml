@@ -56,6 +56,8 @@ describe("install footprint", () => {
     expect(deps).not.toContain("flatgeobuf");
     expect(deps).not.toContain("pmtiles");
     expect(deps).not.toContain("ol");
+    // The Protomaps basemap generator (ml-cnv.7) is bundled the same way.
+    expect(deps).not.toContain("@protomaps/basemaps");
   });
 
   it.skipIf(!built)("the Node build bundles them and imports nothing Node-only", () => {

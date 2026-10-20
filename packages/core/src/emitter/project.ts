@@ -33,7 +33,8 @@ import type { ExportClassDefinition } from "../export";
 import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { sanitizeSourcesAttribution } from "../utils/attribution";
 import { lowerEffectLayer } from "./lower-effects";
-import { lowerSourceFormat, type EmitDataRef } from "./lower-formats";
+import { lowerSourceFormat, PMTILES_ON_EMIT, type EmitDataRef } from "./lower-formats";
+import { isProtomapsBasemap } from "../schemas/basemap.schema";
 
 /**
  * Sanitize every `sources.*.attribution` in an emitted style, in place on the
@@ -721,6 +722,28 @@ export function projectStyle(
   }
   if (imageRefs.length > 0) {
     style["sprite"] = declareDocumentSprite({})["sprite"];
+  }
+  // A Protomaps basemap (ml-cnv.7) is merged in as a full generated style
+  // (resolveBasemap): its file is read through `pmtiles://`, which the
+  // renderer of the emitted style must support, and a relative file path
+  // resolves against whichever page loads that style.
+  const basemap = model.style.basemap;
+  if (isProtomapsBasemap(basemap) && typeof basemap.pmtiles === "string") {
+    const file = basemap.pmtiles.replace(/^pmtiles:\/\//i, "");
+    const relative = !/^[a-z][a-z0-9+.-]*:/i.test(file) && !file.startsWith("//");
+    warnings.push({
+      path: "basemap.pmtiles",
+      kind: "contract",
+      construct: "format.pmtiles",
+      exportClass: "exports",
+      message:
+        `The Protomaps basemap exports as a full style reading \`pmtiles://${file}\` — ${PMTILES_ON_EMIT}` +
+        (relative
+          ? " The file path is relative, so it resolves against the page that loads the style; " +
+            "use an absolute URL for a style used anywhere else."
+          : "") +
+        " Labels and icons load from the style's glyphs and sprite URLs.",
+    });
   }
   // U15's 3D trio: style-spec root properties, compiled verbatim (class
   // `exports`). Terrain carries a cross-reference the spec validates — its

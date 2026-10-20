@@ -20,6 +20,8 @@
 
 import type { EmitResult, EmitWarning } from "./project";
 import { EmitError, sanitizeEmittedAttribution } from "./project";
+import { isProtomapsBasemap } from "../schemas/basemap.schema";
+import { protomapsStyle } from "../formats/protomaps-style";
 
 /**
  * Root properties inherited from the base style.
@@ -283,7 +285,7 @@ const defaultFetcher: BasemapFetcher = async (url) => {
  *
  * @remarks
  * A basemap may be given inline as an object, in which case there is nothing to
- * resolve. A URL is fetched.
+ * resolve. A URL is fetched. A Protomaps basemap shorthand is generated.
  *
  * Failure is an error rather than a degradation, in both modes. Every other
  * unrepresentable thing has a sane fallback — live data becomes a snapshot,
@@ -295,6 +297,17 @@ export async function resolveBasemap(
   basemap: unknown,
   fetcher: BasemapFetcher = defaultFetcher
 ): Promise<unknown> {
+  // A Protomaps basemap (`{ pmtiles, flavor, lang }`, ml-cnv.7) is generated,
+  // not fetched: the full style, layers expanded, its file as `pmtiles://`
+  // written as the document gave it (projectStyle says what that needs).
+  if (isProtomapsBasemap(basemap)) {
+    try {
+      return await protomapsStyle(basemap);
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      throw new EmitError(`Could not build the Protomaps basemap: ${reason}`);
+    }
+  }
   if (isPlainObject(basemap)) return basemap;
 
   if (typeof basemap !== "string") {

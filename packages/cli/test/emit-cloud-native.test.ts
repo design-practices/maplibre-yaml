@@ -165,3 +165,44 @@ layers:
     }
   });
 });
+
+describe('emit: a Protomaps basemap from a .pmtiles file (ml-cnv.7)', () => {
+  const yaml = `
+type: map
+id: pm
+config:
+  center: [-73.99, 40.70]
+  zoom: 14
+  mapStyle:
+    pmtiles: data/nyc.pmtiles
+    flavor: dark
+    lang: es
+layers:
+  - id: dot
+    type: circle
+    source: { type: geojson, data: { type: Point, coordinates: [-73.99, 40.7] } }
+`;
+
+  it('writes the generated style: layers expanded, the file as pmtiles://, the document on top', async () => {
+    const { validateStyleMin } = await import('@maplibre/maplibre-gl-style-spec');
+    const { style, warnings } = await emitStyle(parse(yaml), 'strict', { trust: 'untrusted' }, {
+      documentPath: DOC_PATH,
+    });
+    const sources = style.sources as Record<string, Record<string, unknown>>;
+    expect(sources.protomaps).toMatchObject({ type: 'vector', url: 'pmtiles://data/nyc.pmtiles' });
+    expect(String(sources.protomaps.attribution)).toMatch(/OpenStreetMap/);
+    expect(style.sprite).toBe('https://protomaps.github.io/basemaps-assets/sprites/v4/dark');
+    expect(style.glyphs).toBe('https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf');
+    const ids = (style.layers as Array<{ id: string }>).map((l) => l.id);
+    expect(ids[0]).toBe('background');
+    expect(ids.length).toBeGreaterThan(50);
+    expect(ids[ids.length - 1]).toBe('dot');
+    expect(JSON.stringify(style.layers)).toContain('name:es');
+    // Same note as any exported PMTiles source, plus the relative-path caveat.
+    const note = warnings.find((w) => w.path === 'basemap.pmtiles');
+    expect(note).toMatchObject({ kind: 'contract', construct: 'format.pmtiles' });
+    expect(note!.message).toContain('register it with addProtocol');
+    expect(note!.message).toContain('resolves against the page that loads the style');
+    expect(validateStyleMin(style as never)).toEqual([]);
+  });
+});
