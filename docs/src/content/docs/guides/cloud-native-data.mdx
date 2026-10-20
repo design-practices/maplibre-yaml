@@ -1,6 +1,6 @@
 ---
 title: Cloud-native data
-description: PMTiles and FlatGeobuf straight from YAML — no page JavaScript — and how to host them (range requests, CORS, GitHub Pages)
+description: PMTiles, FlatGeobuf and Cloud Optimized GeoTIFF straight from YAML — no page JavaScript — and how to host them (range requests, CORS, GitHub Pages)
 ---
 
 import LiveMap from "../../../components/LiveMap.astro";
@@ -9,13 +9,14 @@ import { Aside } from "@astrojs/starlight/components";
 "Cloud-native" files are made to be read **in parts**, straight from a web
 server: the browser asks for the bytes it needs (HTTP *range requests*), so a
 map can draw a city from a country-sized file without downloading all of it.
-Since 0.9, maplibre-yaml reads two of them with nothing but YAML — in plain
+Since 0.9, maplibre-yaml reads three of them with nothing but YAML — in plain
 HTML from the CDN, in Astro, and under any bundler:
 
 | Format | File | Holds | Source `type:` |
 |---|---|---|---|
 | **PMTiles** | `.pmtiles` | Vector tiles, raster tiles or elevation, in one file | `vector`, `raster`, `raster-dem` |
 | **FlatGeobuf** | `.fgb` | Features (points, lines, polygons) with their properties | `geojson` |
+| **Cloud Optimized GeoTIFF (COG)** | `.tif`, `.tiff` | One image: imagery, elevation, or a band of values (in Web Mercator) | `raster`, `raster-dem` |
 
 <LiveMap
   src="/configs/cloud-native-demo.yaml"
@@ -74,11 +75,11 @@ sources:
 ```
 
 <Aside type="caution" title="type: pmtiles is a mistake (with a fix)">
-`type: pmtiles`, `type: flatgeobuf`, `type: fgb` and similar are rejected with
-a message that says what to write instead (`type: vector` with the
-`.pmtiles` URL; `type: geojson` with the `.fgb` URL). A `.fgb` file on a
-`vector` source, or a `.pmtiles` file on a `geojson` source, is caught the
-same way. All of this happens at validation time, so `mlym validate` and the
+`type: pmtiles`, `type: flatgeobuf`, `type: fgb`, `type: cog` and similar are
+rejected with a message that says what to write instead (`type: vector` with
+the `.pmtiles` URL; `type: geojson` with the `.fgb` URL; `type: raster` with
+the `.tif` URL). A `.fgb` file on a `vector` source, or a `.pmtiles` or `.tif`
+file on a `geojson` source, is caught the same way. All of this happens at validation time, so `mlym validate` and the
 Astro content loader report it too.
 </Aside>
 
@@ -225,10 +226,170 @@ large and static.
   asks for explicit `breaks:` instead, which work either way. See
   [Thematic maps](/guides/thematic-maps/).
 
+## Cloud Optimized GeoTIFF (COG)
+
+A COG is an ordinary GeoTIFF laid out for the web: its pixels are stored in
+tiles, with smaller copies (overviews) for zoomed-out views, so the browser
+reads only the parts it draws. Satellite and aerial imagery, elevation models
+and gridded measurements (vegetation, temperature) are often published this
+way.
+
+<Aside type="caution" title="COGs must be in Web Mercator (EPSG:3857)">
+maplibre-yaml draws COGs that are in Web Mercator, the projection of web map
+tiles, and does not reproject them in the browser. A COG in another
+projection, such as longitude/latitude (EPSG:4326) or a national grid, is
+refused with a notice that gives the command to convert it (see
+[Making a COG](#making-a-cog)).
+</Aside>
+
+<LiveMap
+  src="/configs/gallery/add-a-cog-raster-source.yaml"
+  height="420px"
+  caption="Imagery from one COG, draped over 3D terrain and a hillshade from a second COG holding elevation."
+/>
+
+### Imagery
+
+A `.tif` URL on a `raster` source:
+
+```yaml
+sources:
+  imagery:
+    type: raster
+    url: data/imagery.tif           # or cog://data/imagery.tif
+layers:
+  - { id: imagery, type: raster, source: imagery }
+```
+
+RGB, greyscale and paletted images draw in their own colours. maplibre-yaml
+sets `tileSize: 256` (the size the COG reader draws), unless you set one
+yourself. A URL without a telling extension takes `format: cog`.
+
+### Elevation: hillshade and terrain
+
+The same kind of file on a `raster-dem` source is read as elevation (in
+metres, from the first band). It drives `hillshade` layers and 3D `terrain:`
+exactly like any other elevation source:
+
+```yaml
+type: map
+id: cog-elevation
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+  pitch: 50
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  elevation:
+    type: raster-dem
+    url: /gallery-assets/cloud-native/elevation.cog.tif
+terrain:
+  source: elevation
+  exaggeration: 1.5
+layers:
+  - id: hills
+    type: hillshade
+    source: elevation
+    paint: { hillshade-exaggeration: 0.5 }
+```
+
+You don't write `encoding:`: the COG reader converts the heights to MapLibre's
+`mapbox` (Terrain-RGB) encoding, and maplibre-yaml sets that for you.
+
+### One band of values: `colorRamp`
+
+A COG with a single band of measurements (a vegetation index, a temperature, a
+probability) has no colours of its own. `colorRamp:` maps the values from
+`min` to `max` onto a palette:
+
+```yaml
+type: map
+id: cog-vegetation
+config:
+  center: [10.2, 42.15]
+  zoom: 9.4
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  vegetation:
+    type: raster
+    url: /gallery-assets/cloud-native/ndvi.cog.tif
+    colorRamp: { palette: YlGn, min: 0, max: 0.85 }
+layers:
+  - { id: vegetation, type: raster, source: vegetation }
+```
+
+<LiveMap
+  src="/configs/cog-vegetation-demo.yaml"
+  height="380px"
+  caption="One band of values (a vegetation index) coloured with colorRamp: YlGn from 0 to 0.85. Pixels with no value (the sea) stay clear."
+/>
+
+| Key | Meaning |
+|---|---|
+| `palette` | A palette name, the same ones [`classify:`](/guides/thematic-maps/) uses: `viridis` (the default), `cividis`, and the ColorBrewer names (`YlGn`, `Blues`, `RdBu`, `Spectral` …). A misspelt name gets a did-you-mean. |
+| `colors` | Your own colours instead of a palette, low to high: `colors: ["#2c7bb6", "#ffffbf", "#d7191c"]` |
+| `min`, `max` | The values drawn in the first and last colour (required). Values outside the range take the end colours. |
+| `reverse` | `true` runs the colours from high to low. |
+| `classes` | A number of flat classes (`classes: 5`) instead of a smooth ramp. |
+
+Pixels the file marks as having no value (its NoData value, or NaN) are left
+transparent. `colorRamp:` applies to `raster` sources only; in a format v2
+document it goes under the source's `runtime:`.
+
+### Making a COG
+
+[GDAL](https://gdal.org/) (3.1 or later; it also ships with QGIS) writes
+COGs. One command reprojects any georeferenced raster to Web Mercator and
+writes it as a COG:
+
+```bash
+gdalwarp -t_srs EPSG:3857 -of COG -co COMPRESS=DEFLATE input.tif output.tif
+```
+
+A GeoTIFF that is already in Web Mercator but isn't cloud-optimized (stored
+in strips, or without overviews) is converted with:
+
+```bash
+gdal_translate -of COG -co COMPRESS=DEFLATE input.tif output.tif
+```
+
+- `-co COMPRESS=DEFLATE` is lossless; `-co COMPRESS=JPEG` makes imagery much
+  smaller (lossy, for photos only, not for elevation or measurements).
+- `-co TILING_SCHEME=GoogleMapsCompatible` (with `gdalwarp` or
+  `gdal_translate`) also aligns the file with web map tiles, which makes reads
+  a little more efficient.
+- Check a file with `gdalinfo output.tif`: it should report
+  `Coordinate System is: … "WGS 84 / Pseudo-Mercator"`, `LAYOUT=COG` and
+  overviews.
+
+An ordinary GeoTIFF still draws, but the browser may have to download most of
+the file to show it, so while you develop the map's notice says so, with the
+`gdal_translate` command.
+
+### Size
+
+A COG can be any size: the browser reads only the tiles in view, at the
+resolution the view needs, through the overviews. The limits are the host's:
+GitHub refuses files over 100 MB in a repository and a GitHub Pages site is
+limited to 1 GB in total, so for a large mosaic use an object store (S3, R2,
+Google Cloud Storage) and point `url:` at it. Clip the file to the area you
+show (`gdalwarp -te …`), and pick the compression that suits the data
+(above), to keep it small.
+
+- **Framing:** `fitTo: { source: imagery }` frames the COG's own extent,
+  read from the file.
+- **A page that registers its own `cog` protocol keeps it.** If your page
+  already calls `addProtocol("cog", …)` through `@maplibre-yaml/core/maplibre`
+  (for example to send request headers), maplibre-yaml leaves it alone.
+- **Content Security Policy:** the COG reader decodes images in background
+  workers it starts from `blob:` URLs. A site with a strict CSP needs
+  `worker-src 'self' blob:`; without it, the map's notice says the COG
+  couldn't be read and why.
+
 ## Hosting: range requests and CORS
 
-PMTiles always, and FlatGeobuf with `load: viewport`, read files **in parts**
-with HTTP range requests. Most static hosts support them:
+PMTiles and COG always, and FlatGeobuf with `load: viewport`, read files
+**in parts** with HTTP range requests. Most static hosts support them:
 
 | Host | Range requests | Notes |
 |---|---|---|
@@ -236,7 +397,7 @@ with HTTP range requests. Most static hosts support them:
 | Netlify, Cloudflare Pages, Vercel | yes | |
 | Amazon S3, Cloudflare R2, Google Cloud Storage | yes | From another site, set CORS (below) |
 | `npx serve`, `astro dev`, `astro preview`, Vite | yes | Good for previewing locally |
-| `python -m http.server` | **no** | PMTiles fail; `load: viewport` falls back to reading the whole file |
+| `python -m http.server` | **no** | PMTiles and COGs fail; `load: viewport` falls back to reading the whole file |
 
 **Files on another site** need CORS: the bucket or server must send
 `Access-Control-Allow-Origin`, allow the `Range` request header, and expose
@@ -257,8 +418,8 @@ with HTTP range requests. Most static hosts support them:
 **GitHub Pages project sites** serve your files under `/repo-name/`. Set the
 `base` attribute (`<ml-map base="/repo-name/">`; Astro passes its own `base`
 automatically) and write paths as you would on your own computer —
-`data/x.pmtiles`, `/data/x.fgb`, and `pmtiles://data/x.pmtiles` all resolve
-under the base.
+`data/x.pmtiles`, `/data/x.fgb`, `data/x.tif` and `pmtiles://data/x.pmtiles`
+all resolve under the base.
 
 ## When something goes wrong
 
@@ -268,17 +429,21 @@ says what happened in plain words. The common cases:
 
 | What happened | What the notice says |
 |---|---|
-| The server doesn't support range requests | "`…/x.pmtiles` was served without range-request support (the server sent the whole file instead of the part asked for). PMTiles and FlatGeobuf files need a web server that supports HTTP range requests: GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` does not — preview locally with `npx serve` instead." |
+| The server doesn't support range requests | "`…/x.pmtiles` was served without range-request support (the server sent the whole file instead of the part asked for). PMTiles, COG and FlatGeobuf files need a web server that supports HTTP range requests: GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` does not — preview locally with `npx serve` instead." |
 | Another site refused (CORS), or it's unreachable | "The browser couldn't read `…`: the server didn't allow this page to load it (CORS), or it couldn't be reached. A PMTiles file on another site needs that site to send `Access-Control-Allow-Origin` and to allow the `Range` header." |
 | A wrong path that returned a web page | "`…/x.pmtiles` isn't a PMTiles file. A wrong path often returns a web page instead — check the file name and folder." |
 | The file isn't there | "`…/x.fgb` didn't load (404 Not Found)", with where the browser looked and the `base` hint for project sites |
 | A FlatGeobuf in the wrong projection | "`…/x.fgb` is in EPSG:3857; MapLibre needs longitude/latitude (EPSG:4326). Reproject it: `ogr2ogr -t_srs EPSG:4326 out.fgb x.fgb`." |
 | Too large to read whole, no index | "`…/x.fgb` is 180 MB, too large to load whole in a browser. Add `load: viewport` to the source (the file needs a spatial index), or convert it to PMTiles." |
 | The format's reader couldn't be downloaded | "The PMTiles reader (`…/chunks/pmtiles.js`) couldn't be downloaded. maplibre-yaml loads its file-format readers on demand from the folder its script came from: if you copied maplibre-yaml to your own site, copy the whole `dist/` folder (not just `register.js`), or load it from the CDN. …" |
+| A COG that isn't in Web Mercator | "`…/x.tif` is in EPSG:4326; a COG must be in Web Mercator (EPSG:3857) to be drawn. Reproject it: `gdalwarp -t_srs EPSG:3857 -of COG -co COMPRESS=DEFLATE x.tif out.tif` (GDAL 3.1 or later)." |
+| A GeoTIFF that isn't cloud-optimized (a hint while developing; it still draws) | "`…/x.tif` is a GeoTIFF but not a Cloud Optimized one (it has no internal tiles or no overviews), so the browser may download most of the file to draw it. Convert it: `gdal_translate -of COG -co COMPRESS=DEFLATE x.tif out.tif`." |
+| A strict Content Security Policy | "The Cloud Optimized GeoTIFF (COG) reader couldn't be set up (this page's Content Security Policy doesn't allow the background workers COG images are decoded in; allow them with `worker-src 'self' blob:`) …" |
 
 The readers for these formats are not part of maplibre-yaml's main script:
-a page downloads the PMTiles reader (about 8 KB) or the FlatGeobuf reader
-(about 12 KB) only when a map uses that format, from `dist/chunks/` next to
+a page downloads the PMTiles reader (about 8 KB), the FlatGeobuf reader
+(about 12 KB) or the COG reader (about 220 KB, with its image codecs) only when a map uses that
+format, from `dist/chunks/` next to
 the script. From a CDN that is automatic; if you host maplibre-yaml's files
 yourself, copy the whole `dist/` folder
 ([Installation](/getting-started/installation/#hosting-the-files-yourself)).
@@ -286,7 +451,7 @@ yourself, copy the whole `dist/` folder
 ## Format v2
 
 In a [format v2](/guides/format-v2/) document the URL stays in the source and
-`format:` / `load:` move under the source's `runtime:`:
+`format:` / `load:` / `colorRamp:` move under the source's `runtime:`:
 
 ```yaml
 version: 2
@@ -303,7 +468,13 @@ style:
       url: /gallery-assets/cloud-native/points.fgb
       runtime:
         load: { mode: viewport, minzoom: 11 }
+    vegetation:
+      type: raster
+      url: /gallery-assets/cloud-native/ndvi.cog.tif
+      runtime:
+        colorRamp: { palette: YlGn, min: 0, max: 0.85 }
   layers:
+    - { id: vegetation, type: raster, source: vegetation }
     - { id: outlines, type: line, source: outlines, source-layer: districts }
     - { id: points, type: circle, source: points }
 ```
@@ -326,6 +497,25 @@ A `style.json` can carry a URL but not a file reader, so:
   In a plain HTML page, import `addProtocol` from the `maplibre-gl` your import
   map names and `Protocol` from `https://esm.sh/pmtiles@4` (esm.sh resolves
   its dependencies; unpkg does not), before the map is created.
+- **COG** sources export as `cog://` URLs, in the form the map itself uses:
+  `#dem` on an elevation source, a `colorRamp:` written out as the COG
+  protocol's `#color:` fragment, and `tileSize: 256`. As with PMTiles, the
+  style then needs the protocol registered — here the one from
+  [`@geomatico/maplibre-cog-protocol`](https://github.com/geomatico/maplibre-cog-protocol),
+  which maplibre-yaml uses itself. With a bundler, after
+  `npm install @geomatico/maplibre-cog-protocol`:
+
+  ```js
+  import maplibregl from "maplibre-gl";
+  import { cogProtocol } from "@geomatico/maplibre-cog-protocol";
+  maplibregl.addProtocol("cog", cogProtocol);
+  ```
+
+  In a plain HTML page, load the plugin's own browser build
+  (`<script src="https://unpkg.com/@geomatico/maplibre-cog-protocol@0.10/dist/index.js"></script>`,
+  which defines `MaplibreCOGProtocol`) and call
+  `addProtocol("cog", MaplibreCOGProtocol.cogProtocol)` on the `maplibre-gl`
+  your import map names, before the map is created.
 - **FlatGeobuf** is converted: `mlym emit` reads the file (next to the YAML,
   in the current folder or its `public/`, or over http(s)) and writes its
   features into the style as GeoJSON. If it can't read the file, the source
@@ -333,18 +523,12 @@ A `style.json` can carry a URL but not a file reader, so:
 
 See [Export classes](/guides/export-classes/) for the full table.
 
-## Coming later: GeoParquet and COG
+## Coming later: GeoParquet
 
-Two more formats are recognized already, so documents written today keep
-their meaning when support arrives:
+One more format is recognized already, so documents written today keep their
+meaning when support arrives: **GeoParquet** (`.parquet`, `.geoparquet`,
+`format: geoparquet`) on a `geojson` source.
 
-- **GeoParquet** (`.parquet`, `.geoparquet`, `format: geoparquet`) on a
-  `geojson` source;
-- **Cloud Optimized GeoTIFF** (`.tif`, `.tiff`, `cog://`, `format: cog`) on a
-  `raster` or `raster-dem` source.
-
-In this version they validate with a warning and show "can't read … yet (it's
+In this version it validates with a warning and shows "can't read … yet (it's
 planned)" on the map instead of a confusing error; the rest of the map draws.
-Until then, convert GeoParquet to FlatGeobuf (`ogr2ogr out.fgb in.parquet`)
-and imagery to raster PMTiles. (A page that registers a `cog://` protocol
-itself — the 0.7 way — still gets its COG sources.)
+Until then, convert GeoParquet to FlatGeobuf (`ogr2ogr out.fgb in.parquet`).
