@@ -14,7 +14,7 @@ import {
   listTemplates,
 } from '../lib/template-engine.js';
 import { logger } from '../lib/logger.js';
-import { CORE_VERSION, ASTRO_VERSION, caretRange } from '../lib/package-versions.js';
+import { CORE_VERSION, ASTRO_VERSION, caretRange, minorPin } from '../lib/package-versions.js';
 import { EXIT_CODES } from '../types.js';
 
 // Get templates directory (bundled with CLI)
@@ -218,6 +218,8 @@ export const initCommand = defineCommand({
         projectName,
         coreRange: caretRange(CORE_VERSION),
         astroRange: caretRange(ASTRO_VERSION),
+        // The plain-HTML templates' CDN pin (`@maplibre-yaml/core@0.9`).
+        coreMinor: minorPin(CORE_VERSION),
       };
 
       // Apply defaults for any missing variables

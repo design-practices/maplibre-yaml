@@ -155,10 +155,11 @@ address) does not work: the browser blocks the page from fetching `map.yaml`.
 
 ### Versions in CDN URLs
 
-`@maplibre-yaml/core@0.8` in the URL means "the newest 0.8.x release": you get
-bug fixes automatically, and a later 0.9 with breaking changes never arrives
-by surprise in the middle of a term. Change the number on purpose when you
-upgrade. `maplibre-gl@6` works the same way for MapLibre.
+The version in `@maplibre-yaml/core@0.8` names a release line: the URL loads
+the newest release in that line, so bug fixes arrive automatically, and the
+next line, which may change behaviour, never arrives by surprise. Change the
+number on purpose when you upgrade; these docs always show the current line.
+`maplibre-gl@6` works the same way for MapLibre.
 
 ### JavaScript API from a CDN
 

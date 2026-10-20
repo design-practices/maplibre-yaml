@@ -29,3 +29,14 @@ export function caretRange(version: string): string {
   const [major = '0', minor = '0'] = version.split('-')[0]!.split('.');
   return `^${major}.${minor}.0`;
 }
+
+/**
+ * The CDN minor pin a plain-HTML scaffold loads: `"0.9.2"` → `"0.9"`
+ * (`https://unpkg.com/@maplibre-yaml/core@0.9/register.js` is the newest
+ * 0.9.x). Taken from the version the CLI was built with, so a scaffold never
+ * points at an older line (ml-aot.92).
+ */
+export function minorPin(version: string): string {
+  const [major = '0', minor = '0'] = version.split('-')[0]!.split('.');
+  return `${major}.${minor}`;
+}

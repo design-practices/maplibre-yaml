@@ -7,8 +7,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 import { parse as parseYAML } from 'yaml';
 import { initArgsError, nextSteps } from '../../src/commands/init';
+import { CORE_VERSION, minorPin } from '../../src/lib/package-versions';
 
 const execAsync = promisify(exec);
+/** The CDN pin the plain-HTML scaffolds load: core's own minor (ml-aot.92). */
+const CORE_MINOR = minorPin(CORE_VERSION);
 const CLI = join(process.cwd(), 'dist/cli.js');
 // Plain output, so assertions do not depend on colour codes.
 const ENV = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' };
@@ -47,7 +50,7 @@ describe('init command (integration)', () => {
       expect(html).toContain('<script type="importmap">');
       expect(html).toContain('"maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs"');
       expect(html).toContain('href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"');
-      expect(html).toContain('src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"');
+      expect(html).toContain(`src="https://unpkg.com/@maplibre-yaml/core@${CORE_MINOR}/register.js"`);
       // The import map must come before the module that needs it.
       expect(html.indexOf('type="importmap"')).toBeLessThan(html.indexOf('register.js'));
       expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
@@ -146,7 +149,7 @@ describe('init command (integration)', () => {
       const html = await readFile(join(dir, 'my-story', 'index.html'), 'utf-8');
       expect(html).toContain('"maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs"');
       expect(html).toContain('href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"');
-      expect(html).toContain('src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"');
+      expect(html).toContain(`src="https://unpkg.com/@maplibre-yaml/core@${CORE_MINOR}/register.js"`);
       expect(html.indexOf('type="importmap"')).toBeLessThan(html.indexOf('register.js'));
       expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
       expect(html).toContain('<ml-scrollytelling src="story.yaml"></ml-scrollytelling>');
