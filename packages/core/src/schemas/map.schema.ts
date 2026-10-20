@@ -23,6 +23,7 @@ import {
 import { LayerOrReferenceSchema, PopupContentSchema } from "./layer.schema";
 import { LayerSourceSchema } from "./source.schema";
 import { markOpenSchema } from "../parser/validation-utils";
+import { MapStyleSchema } from "./basemap.schema";
 
 /**
  * Control position on the map.
@@ -349,13 +350,10 @@ export const MapConfigSchema = z
     // Required
     center: LngLatSchema.describe("Initial map center [longitude, latitude]"),
     zoom: ZoomLevelSchema.describe("Initial zoom level (0-24)"),
-    mapStyle: z
-      .union([z.string().url(), z.any()])
-      .optional()
-      .describe(
-        "MapLibre style URL or style object. " +
-          "Optional when global config.defaultMapStyle is set.",
-      ),
+    mapStyle: MapStyleSchema.optional().describe(
+      "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file " +
+        "({ pmtiles, flavor, lang }). Optional when global config.defaultMapStyle is set.",
+    ),
 
     // View
     pitch: z

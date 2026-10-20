@@ -34,6 +34,7 @@
  * ```
  */
 
+import { prefetchProtomapsBasemap } from "../formats/protomaps-style";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
   YAMLParser,
@@ -909,6 +910,13 @@ export class MLMap extends HTMLElement {
 
     this.appendChild(this.mapContainer);
 
+    // A Protomaps basemap (`mapStyle: { pmtiles: … }`, ml-cnv.7): its style
+    // generator and the PMTiles reader are on-demand chunks on the path to
+    // the first frame, so their download starts as soon as the document is
+    // known, before the DOM-ready wait below.
+    const block = mapBlock as { config?: { mapStyle?: unknown }; style?: { basemap?: unknown } };
+    prefetchProtomapsBasemap(block.config?.mapStyle ?? block.style?.basemap);
+
     // `fitTo` on a fetched source (ml-aot.75): start loading its data NOW,
     // alongside the rest of page start-up, so the map can be built already
     // framed on it instead of loading at center/zoom and jumping.
@@ -1112,11 +1120,16 @@ export class MLMap extends HTMLElement {
           } else if (!terminal && context?.kind === "classify") {
             // The message is the whole notice (renderer/classify-runtime).
             this.reportProblem(error.message);
+          } else if (!terminal && context?.kind === "basemap") {
+            // The message is the whole notice (a pmtiles: file that is not
+            // a Protomaps basemap, ml-cnv.7).
+            this.reportProblem(error.message);
           } else if (!terminal && context?.kind === "source" && context.sourceId) {
             this.reportProblem(
               describeSourceProblem(context.sourceId, error.message, error, {
                 pageUrl: this.ownerDocument.baseURI,
                 base: this.base,
+                ...(context.basemap ? { basemap: true } : {}),
               })
             );
           }

@@ -39,7 +39,8 @@
  *  - `/my-repo/*`                  examples/verification/base-path/site, as
  *                                  GitHub Pages serves a project site
  *                                  (ml-aot.30); `/my-repo/cloud-native/*`
- *                                  is the cloud-native fixture folder
+ *                                  and `/my-repo/protomaps/*` are the
+ *                                  docs' fixture folders of those names
  *  - everything else               static from the repo root, with HTTP
  *                                  range requests (ml-cnv) — and the
  *                                  `/norange/`, `/nocors/`, `/oversize/<MB>/`
@@ -526,9 +527,10 @@ const server = createServer(async (req, res) => {
       return res.end();
     }
     if (path.startsWith("/my-repo/")) {
-      // The cloud-native fixtures (ml-cnv) appear inside the project site
-      // too, so a document can name them by a site path under `base`.
-      const SITE = path.startsWith("/my-repo/cloud-native/")
+      // The cloud-native fixtures (ml-cnv) and the Protomaps basemap
+      // extract (ml-cnv.7) appear inside the project site too, so a
+      // document can name them by a site path under `base`.
+      const SITE = /^\/my-repo\/(cloud-native|protomaps)\//.test(path)
         ? join(ROOT, "docs", "public", "gallery-assets")
         : join(ROOT, "examples", "verification", "base-path", "site");
       const sub = path.slice("/my-repo".length);

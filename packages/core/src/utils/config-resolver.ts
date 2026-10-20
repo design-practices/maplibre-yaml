@@ -27,7 +27,7 @@
  * ```
  */
 
-import type { MapConfig, GlobalConfig, MapBlock } from "../schemas";
+import type { MapConfig, GlobalConfig, MapBlock, ProtomapsBasemap } from "../schemas";
 
 /**
  * Error thrown when map configuration is invalid after resolution.
@@ -234,7 +234,7 @@ export function createSimpleMapConfig(
   options: {
     center: [number, number];
     zoom?: number;
-    mapStyle?: string;
+    mapStyle?: string | ProtomapsBasemap;
     pitch?: number;
     bearing?: number;
     interactive?: boolean;

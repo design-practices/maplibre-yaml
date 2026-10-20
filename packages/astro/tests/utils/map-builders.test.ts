@@ -516,3 +516,21 @@ describe("calculateBounds", () => {
     ]);
   });
 });
+
+describe("a Protomaps basemap as the builders' style (ml-cnv.7)", () => {
+  const protomaps = { pmtiles: "data/nyc.pmtiles", flavor: "dark" as const };
+
+  it("passes the mapStyle option through, and validates as a map", async () => {
+    const block = buildPointMapConfig({ location: singleLocation, mapStyle: protomaps });
+    expect(block.config.mapStyle).toEqual(protomaps);
+    const { MapBlockSchema } = await import("@maplibre-yaml/core/schemas");
+    expect(MapBlockSchema.safeParse(block).success).toBe(true);
+  });
+
+  it("inherits a site-wide defaultMapStyle in that form", async () => {
+    const { GlobalConfigSchema } = await import("@maplibre-yaml/core/schemas");
+    const globalConfig = GlobalConfigSchema.parse({ defaultMapStyle: protomaps });
+    const block = buildRouteMapConfig({ route: { coordinates: [[-74, 40.7], [-73.9, 40.8]] } as RouteLine }, globalConfig);
+    expect(block.config.mapStyle).toEqual(protomaps);
+  });
+});

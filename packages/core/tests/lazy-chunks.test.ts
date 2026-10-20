@@ -43,6 +43,8 @@ const SEAM_NAMES = [
 const LIBRARY_MARKERS: Record<string, string[]> = {
   pmtiles: ["Wrong magic number for PMTiles archive", "Server returned no content-length header"],
   flatgeobuf: ["Not a FlatGeobuf file", "Invalid header size", "FlatBuffers: "],
+  // @protomaps/basemaps (ml-cnv.7): its error and one of its layer ids.
+  "protomaps-basemap": ["Flavor not found", "roads_tunnels_highway_casing"],
 };
 
 /** Static import specifiers (`import … from "x"`, `import "x"`), minified or not. */

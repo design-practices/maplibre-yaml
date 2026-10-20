@@ -1889,6 +1889,7 @@ const MISSING_KEY_EXAMPLES: Record<string, string> = {
   chapters: "a chapters: list",
   layers: "layers: [] (or a list of layers)",
   source: "source: (a source name or an inline source)",
+  pmtiles: "pmtiles: data/basemap.pmtiles (the path or URL of a Protomaps basemap .pmtiles file)",
 };
 
 /**

@@ -392,9 +392,12 @@ export function describeSourceProblem(
   sourceId: string,
   message: string,
   error?: unknown,
-  context: { pageUrl?: string; base?: string | null } = {}
+  context: { pageUrl?: string; base?: string | null; basemap?: boolean } = {}
 ): string {
-  let text = `Source \`${sourceId}\` didn't load: ${message.replace(/\s+$/, "")}`;
+  // The basemap's own file (a Protomaps basemap's pmtiles:, or a PMTiles
+  // source inside a basemap style): the author never named that source.
+  const subject = context.basemap ? "The basemap" : `Source \`${sourceId}\``;
+  let text = `${subject} didn't load: ${message.replace(/\s+$/, "")}`;
   const e = error as { failure?: FormatFailure; cause?: { failure?: FormatFailure } } | undefined;
   // A PMTiles tile error crosses MapLibre's worker boundary as a plain
   // error: the message survives, the failure object does not (ml-aot.102).

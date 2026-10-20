@@ -52,6 +52,15 @@ import { applyAccessibleName } from './accessible-name';
 import { isProtocolRegistered, pmtilesUnavailable, prepareProtocols } from './cloud-protocols';
 import { basemapRequestTransformer, type RequestTransformer } from './basemap-urls';
 import { formatOfSource, type CloudFormat } from '../formats/detect';
+import { isProtomapsBasemap, type ProtomapsBasemap } from '../schemas/basemap.schema';
+import {
+  fallbackBasemapStyle,
+  notAProtomapsBasemap,
+  prefetchProtomapsBasemap,
+  PROTOMAPS_SOURCE_ID,
+  protomapsStyle,
+} from '../formats/protomaps-style';
+import { elementLanguage } from '../i18n/strings';
 
 /** The document's source ids (named, and `<layer>-source` for inline ones) that read `format`. */
 function sourceIdsReading(
@@ -161,6 +170,11 @@ function resolveFitTo(
 const BASEMAP_FILE_FAILURE =
   /^`[^`]+` (didn't load \(|was served without range-request support|isn't a |is compressed)|^The browser couldn't read `/;
 
+/** MapLibre's error for a style layer whose `source-layer` the Protomaps file lacks. */
+const MISSING_PROTOMAPS_LAYER = new RegExp(
+  `^Source layer "[^"]*" does not exist on source "${PROTOMAPS_SOURCE_ID}"`
+);
+
 /**
  * What part of the document a reported error belongs to — the third argument
  * of {@link MapRendererOptions.onError}.
@@ -192,8 +206,16 @@ export interface MapErrorContext {
    * `classify-field`: an author hint, not a failure — the loaded data has no
    * usable value for a classified layer's `field:` / `normalize:` (a
    * misspelt or wrong-case name, or text under numeric classes).
+   * `basemap`: the basemap loaded, but something about it is wrong (a
+   * Protomaps basemap `pmtiles:` file that is some other kind of PMTiles).
+   * The error message is the whole notice.
    */
-  kind: 'style' | 'layer' | 'source' | 'fit' | 'center' | 'classify' | 'classify-field';
+  kind: 'style' | 'layer' | 'source' | 'fit' | 'center' | 'classify' | 'classify-field' | 'basemap';
+  /**
+   * For `source`: the source is the basemap's own (its PMTiles file failed),
+   * not one the document declared.
+   */
+  basemap?: boolean;
   /** For `center`: the center as written. */
   center?: [number, number];
   /** The document layer, for `layer` and `classify` errors. */
@@ -473,6 +495,10 @@ export class MapRenderer {
     // sanitize them before MapLibre ever holds them (GHSA-jrc7-96c5-q579, see
     // utils/attribution.ts). A style URL is covered by the attribution guard.
     let mapStyle: unknown = config.mapStyle;
+    // A Protomaps basemap from a `.pmtiles` file (ml-cnv.7): its style is
+    // generated in the page, on demand, so the map is built without one and
+    // given it when ready (below). `load` waits for it as for any style.
+    const protomaps: ProtomapsBasemap | undefined = isProtomapsBasemap(mapStyle) ? mapStyle : undefined;
     if (mapStyle && typeof mapStyle === 'object' && 'sources' in mapStyle) {
       const styleObject = mapStyle as Record<string, unknown>;
       const sources = sanitizeSourcesAttribution(styleObject['sources']);
@@ -546,7 +572,7 @@ export class MapRenderer {
         ? { canvasContextAttributes: contextAttributes }
         : {}),
       container: typeof container === 'string' ? container : container,
-      style: mapStyle as any,
+      style: (protomaps ? undefined : mapStyle) as any,
       center: config.center as [number, number],
       zoom: config.zoom,
       pitch: config.pitch ?? 0,
@@ -1075,7 +1101,7 @@ export class MapRenderer {
       // reader's plain-language failure, worth the map's notice rather than
       // blank tiles. Other basemap tile errors stay off the page.
       if (typeof e.sourceId === 'string' && BASEMAP_FILE_FAILURE.test(message)) {
-        return { kind: 'source', sourceId: e.sourceId };
+        return { kind: 'source', sourceId: e.sourceId, basemap: true };
       }
       return undefined;
     };
@@ -1098,6 +1124,11 @@ export class MapRenderer {
               ),
               { cause: raw }
             );
+      // A Protomaps basemap on a file that lacks some of its tile layers:
+      // MapLibre reports each basemap layer naming one (dozens). Those are
+      // the basemap's internals, not the document's; the file check
+      // (loadProtomapsBasemap) says what is wrong, once.
+      if (protomaps && MISSING_PROTOMAPS_LAYER.test(error.message)) return;
       const hinted = withWorkerUrlHint(error.message, runtimeVersion());
       if (hinted !== error.message) error = Object.assign(new Error(hinted), { cause: raw });
       const context = classify(e as never, error.message);
@@ -1105,6 +1136,67 @@ export class MapRenderer {
       // draw and `load` never fires.
       options.onError?.(error, context?.kind === 'style', context);
     });
+
+    if (protomaps) this.loadProtomapsBasemap(protomaps, options);
+  }
+
+  /**
+   * Generate a Protomaps basemap's style (`mapStyle: { pmtiles: … }`) and
+   * give it to the map, which was built without a style. Relative URLs
+   * resolve against the page (`base` was applied to the document already);
+   * labels default to the page's language at the map. A generator that
+   * fails to download leaves a plain background under the document's
+   * layers, with the map's notice; so does a file that is not a Protomaps
+   * basemap (the notice only).
+   */
+  private loadProtomapsBasemap(spec: ProtomapsBasemap, options: MapRendererOptions): void {
+    const map = this.map;
+    // Usually started at parse time already (ml-map); harmless if so.
+    prefetchProtomapsBasemap(spec);
+    const pageUrl = typeof document !== 'undefined' ? document.baseURI : undefined;
+    let pageLanguage: string | undefined;
+    try {
+      pageLanguage = elementLanguage(map.getContainer());
+    } catch {
+      pageLanguage = undefined;
+    }
+    let checked = false;
+    map.on('sourcedata', (e: { sourceId?: unknown; sourceDataType?: unknown }) => {
+      if (checked || e.sourceId !== PROTOMAPS_SOURCE_ID || e.sourceDataType !== 'metadata') return;
+      checked = true;
+      const source = map.getSource(PROTOMAPS_SOURCE_ID) as
+        | { vectorLayerIds?: string[]; url?: string }
+        | undefined;
+      const problem = notAProtomapsBasemap(source?.vectorLayerIds, source?.url ?? '');
+      if (!problem) return;
+      console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
+      options.onError?.(new Error(problem), false, { kind: 'basemap' });
+    });
+    protomapsStyle(spec, {
+      ...(pageUrl ? { pageUrl } : {}),
+      ...(pageLanguage ? { pageLanguage } : {}),
+    }).then(
+      (style) => {
+        if (this.destroyed) return;
+        map.setStyle(style as never);
+        // maplibre-gl 3 cannot read pmtiles:// (cloud-protocols).
+        const problem = pmtilesUnavailable();
+        if (problem) {
+          console.warn(`[maplibre-yaml] the basemap uses PMTiles: ${problem.message}`);
+          options.onError?.(problem, false, { kind: 'source', sourceId: PROTOMAPS_SOURCE_ID, basemap: true });
+        }
+      },
+      (error: unknown) => {
+        // The generator didn't download (offline, a blocker, a self-hosted
+        // copy without dist/chunks/): no basemap, but the document's own
+        // layers still draw on a plain background, and the notice says why.
+        if (this.destroyed) return;
+        const cause = error instanceof Error ? error : new Error(String(error));
+        map.setStyle(fallbackBasemapStyle(spec, pageUrl) as never);
+        console.warn(`[maplibre-yaml] the basemap could not be built: ${cause.message.replace(/`/g, '"')}`);
+        options.onError?.(cause, false, { kind: 'basemap' });
+      }
+    );
   }
 
   /**

@@ -280,6 +280,9 @@ importers:
       '@maplibre/maplibre-gl-style-spec':
         specifier: ^26.4.4
         version: 26.4.4
+      '@protomaps/basemaps':
+        specifier: ^5.7.2
+        version: 5.7.2
       '@types/geojson':
         specifier: ^7946.0.14
         version: 7946.0.16
@@ -2119,6 +2122,10 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
+
+  '@protomaps/basemaps@5.7.2':
+    resolution: {integrity: sha512-K1Yk6bWdULulYg+R2QRVXx4NzJZan5YQhpejEG0c1/sXruJrfPIPZuakpf3jwAgVmjIRVQwAv+yRafDeN0aaUQ==}
+    hasBin: true
 
   '@repeaterjs/repeater@3.1.0':
     resolution: {integrity: sha512-TaoVksZRSx2KWYYpyLQtMQXXeS98VsgZImzW65xmiVgbYhXLk+aEsmzPLirqVuE4/XuUapH2iMtxUzaBNDzdSQ==}
@@ -7153,6 +7160,8 @@ snapshots:
       playwright: 1.62.0
 
   '@polka/url@1.0.0-next.29': {}
+
+  '@protomaps/basemaps@5.7.2': {}
 
   '@repeaterjs/repeater@3.1.0': {}
 

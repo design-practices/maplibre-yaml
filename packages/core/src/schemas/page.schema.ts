@@ -19,6 +19,7 @@ import { MapBlockSchema, MapFullPageBlockSchema } from "./map.schema";
 import { ScrollytellingBlockSchema } from "./scrollytelling.schema";
 import { LayerSchema } from "./layer.schema";
 import { LayerSourceSchema } from "./source.schema";
+import { MapStyleSchema } from "./basemap.schema";
 /**
  * Mixed block for combining multiple block types.
  *
@@ -255,11 +256,9 @@ export const GlobalConfigSchema = z
   .object({
     title: z.string().optional().describe("Application title"),
     description: z.string().optional().describe("Application description"),
-    defaultMapStyle: z
-      .string()
-      .url()
-      .optional()
-      .describe("Default map style URL"),
+    defaultMapStyle: MapStyleSchema.optional().describe(
+      "Default map style: a style URL, a style object, or a Protomaps basemap ({ pmtiles, flavor, lang })",
+    ),
     theme: z.enum(["light", "dark"]).default("light").describe("Default theme"),
     defaultZoom: z
       .number()

@@ -66,11 +66,11 @@ import type { CloudFormat } from "./detect";
 const LOADERS = {
   pmtiles: () => import("pmtiles"),
   flatgeobuf: () => import("./lib/flatgeobuf"),
+  "protomaps-basemap": () => import("@protomaps/basemaps"),
   // Reserved for the 0.9 work in flight — each adds one line shaped like the
-  // two above (see "Adding a format" at the top of this file):
+  // ones above (see "Adding a format" at the top of this file):
   //   geoparquet          the hyparquet library
   //   cog                 the @geomatico/maplibre-cog-protocol library
-  //   "protomaps-basemap" the @protomaps/basemaps library
 } satisfies Record<string, () => Promise<unknown>>;
 
 /** The library module behind each on-demand name. */
