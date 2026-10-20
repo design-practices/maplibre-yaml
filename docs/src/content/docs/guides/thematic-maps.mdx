@@ -41,6 +41,13 @@ layers:
 
 <LiveMap src="/configs/classify/choropleth.yaml" height="440px" caption="Five quantile classes computed when the data loads; tracts without a value are light grey" />
 
+The examples on this page use two sample files:
+[sample-tracts.geojson](https://docs.maplibre-yaml.org/data/classify/sample-tracts.geojson)
+and [world-cities.geojson](https://docs.maplibre-yaml.org/data/classify/world-cities.geojson).
+Download them into a `data/classify/` folder of your site (for an Astro site,
+`public/data/classify/`) so the `url:` paths above work, or use the full
+addresses as the `url:`.
+
 `classify:` sits on the layer beside `paint:`. It is **sugar over MapLibre,
 not a new language**: it compiles to the `step` (numeric classes) or `match`
 (categories) expression you would otherwise write, in `paint.fill-color` (or
