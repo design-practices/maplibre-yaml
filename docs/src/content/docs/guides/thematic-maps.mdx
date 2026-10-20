@@ -267,7 +267,10 @@ reads as "no data", never as a dark class.
 
 A classified layer adds its classes to the map's legend: a heading (the
 layer's `label:`, else the field name), one line per class with its **real
-edges**, and a "No data" line:
+edges**, and a "No data" line. A `label:` also gives the layer a visibility
+checkbox in the map's layer panel (top-right, in maps and stories alike); add
+`toggleable: false` to the layer to keep the heading without the checkbox.
+The lines read:
 
 - `< 25,000`, `25,000–50,000`, `≥ 75,000` for explicit breaks;
 - `3–10` … `31–55`, using the data's lowest and highest value, when the data
