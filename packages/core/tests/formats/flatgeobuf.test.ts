@@ -287,6 +287,8 @@ describe("FlatGeobufLoader", () => {
     const { onError } = await run("/oversize/60/points-noindex.fgb");
     const error = onError.mock.calls[0]![0];
     expect(isFormatError(error) && error.failure).toMatchObject({ code: "too-large", size: 60 * 1024 * 1024 });
+    // No console note promising a by-view read that is then refused (ml-aot.103).
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("reading only the part in view"));
   });
 
   it("load: viewport on a file without an index → says so", async () => {

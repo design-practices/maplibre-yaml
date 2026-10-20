@@ -346,11 +346,9 @@ export class FlatGeobufLoader {
           });
     } catch (error) {
       if (!(error instanceof WholeFileTooLarge)) throw error;
-      console.warn(
-        `[maplibre-yaml] ${this.url} is ${mb(error.size)}, too large to load whole; ` +
-          "reading only the part in view instead (add `load: viewport` to say so, or " +
-          "convert the file to PMTiles)."
-      );
+      // The "reading by view instead" note is logged once the header shows
+      // an index (startViewport): an unindexed file is refused instead, and
+      // a note promising the by-view read would contradict that (ml-aot.103).
       await this.startViewport(true, error.size);
       return;
     }
@@ -397,6 +395,13 @@ export class FlatGeobufLoader {
       throw error;
     }
     if (this.destroyed) return;
+    if (auto) {
+      console.warn(
+        `[maplibre-yaml] ${this.url} is ${total !== undefined ? mb(total) : "very large"}, too large ` +
+          "to load whole; reading only the part in view instead (add `load: viewport` to say so, " +
+          "or convert the file to PMTiles)."
+      );
+    }
     this.viewport = true;
     this.map.on("moveend", this.onMoveEnd);
     await this.refresh();
