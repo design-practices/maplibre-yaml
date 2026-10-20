@@ -161,14 +161,34 @@ describe("ClassifyRuntime", () => {
       expect(classifyRecordOf(l)!.breaks).toBeUndefined();
       expect(map.setPaintProperty).not.toHaveBeenCalled();
       expect(changed).not.toHaveBeenCalled();
-      // The no-data colour stays.
-      expect(before).toContain(DEFAULT_NO_DATA_COLOR);
+      // The no-data colour stays: exactly it, not a class colour.
+      expect(l.paint["fill-color"]).toEqual(["to-color", DEFAULT_NO_DATA_COLOR]);
       expect(JSON.stringify(l.paint["fill-color"])).toBe(before);
       expect(onRefused).toHaveBeenCalledTimes(1);
       const [layerId, sourceId, error] = onRefused.mock.calls[0]!;
       expect([layerId, sourceId]).toEqual(["income", "parcels"]);
       expect((error as Error).message).toContain("breaks:");
       expect((error as Error).message).toContain("whole file");
+    });
+
+    it("a FlatGeobuf that switches to by-view after its empty placeholder keeps the no-data colour (ml-aot.106)", async () => {
+      // The source's placeholder is there when the layers are ready, before
+      // the loader has opened the file and switched to reading by view.
+      const data = new Map<string, unknown>([["big", fc([])]]);
+      let byView = false;
+      const map = fakeMap(new Set(["m"]));
+      const l = layer("m", "big");
+      const runtime = new ClassifyRuntime(map as never, [l], {}, (id) => data.get(id), () => {}, {
+        readsByView: () => byView,
+        onRefused: vi.fn(),
+      });
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+      expect(classifyRecordOf(l)!.breaks).toBeUndefined();
+      byView = true;
+      data.set("big", fc([1, 2, 3, 40]));
+      runtime.dataLoaded("big");
+      expect(l.paint["fill-color"]).toEqual(["to-color", DEFAULT_NO_DATA_COLOR]);
+      expect(map.setPaintProperty).not.toHaveBeenCalled();
     });
 
     it("keeps explicit breaks, without edges taken from the part in view", () => {

@@ -134,6 +134,8 @@ export class ClassifyRuntime {
   private readonly refused = new Set<string>();
   /** Layers whose field was already checked against loaded data. */
   private readonly diagnosed = new Set<string>();
+  /** Layers classified from data with features at least once. */
+  private readonly classified = new Set<string>();
   private destroyed = false;
 
   /**
@@ -236,13 +238,24 @@ export class ClassifyRuntime {
       // layer stays on its no-data colour, with one notice.
       if (isPending(template) && !this.refused.has(layer.id)) {
         this.refused.add(layer.id);
+        // Back to the template's paint (the no-data colour) if anything was
+        // drawn from earlier data.
+        const current = classifyRecordOf(layer);
+        if (current && !isPending(current)) this.apply(layer, template);
         this.byView.onRefused(layer.id, sourceId, byViewClassifyError(layer.id, sourceId));
       }
       return;
     }
     const data = this.getSourceData(sourceId);
     if (!isFeatureData(data)) return;
+    // A source's first data can be the empty placeholder it holds until its
+    // read lands (a named url:, a FlatGeobuf still opening): classes computed
+    // from nothing would be one flat palette colour (ml-aot.106), and stats
+    // from nothing would empty the legend. Wait for features; once a layer
+    // has been classified, an empty refresh is real and recomputes.
+    if (featureCount(data) === 0 && !this.classified.has(layer.id)) return;
     this.diagnose(layer, data);
+    this.classified.add(layer.id);
     this.apply(layer, withData(template, data));
   }
 

@@ -365,9 +365,10 @@ export interface CompiledClassify {
  * Compile a record to MapLibre expressions.
  *
  * @remarks
- * A pending record (a `method:` before its data) compiles to a flat colour —
- * the source has no features yet, so nothing is drawn with it — and to its
- * final filter, which never depends on the breaks.
+ * A pending record (a `method:` before its data) compiles to the flat
+ * no-data colour — usually nothing is drawn with it yet, but a source read by
+ * view never gets computed breaks and keeps it — and to its final filter,
+ * which never depends on the breaks.
  */
 export function compileClassify(record: ClassifyRecord): CompiledClassify {
   const paint: Record<string, unknown> = {};
@@ -399,6 +400,8 @@ export function compileClassify(record: ClassifyRecord): CompiledClassify {
   const breaks = record.breaks;
   if (record.property && record.colors && record.colors.length > 0) {
     if (breaks === undefined) {
+      // The no-data colour: nothing may be drawn with a class colour before
+      // the breaks exist (a source read by view never gets them, ml-aot.106).
       // An expression, not a bare literal: the layer is classified, and
       // hover.highlight wraps a classified colour (re-wrapped when the
       // breaks land, renderer/highlight-paint).
@@ -619,7 +622,7 @@ export function classifyLegendEntries(
         shape,
       });
     }
-  } else if (stats !== undefined && stats.count - stats.noData <= 0) {
+  } else if (stats !== undefined && stats.count > 0 && stats.count === stats.noData) {
     // No feature has a value: no class line describes anything on the map
     // (an "All values" line would). Only "No data" below (ml-aot.81).
   } else {
