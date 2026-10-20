@@ -51,4 +51,14 @@ describe("install footprint", () => {
       expect(imports.filter((s) => !allowed.has(s)), file).toEqual([]);
     }
   });
+
+  it.skipIf(!existsSync(join(PKG_ROOT, "dist", "register.browser.js")))(
+    "the CDN build has no bare import a plain page cannot resolve (ml-aot.109)",
+    () => {
+      for (const f of ["register.browser.js", "index.browser.js"]) {
+        const code = readFileSync(join(PKG_ROOT, "dist", f), "utf8");
+        expect(importsOf(code).filter((s) => !s.startsWith(".") && s !== "maplibre-gl"), f).toEqual([]);
+      }
+    }
+  );
 });

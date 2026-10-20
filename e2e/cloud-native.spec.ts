@@ -375,4 +375,25 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     await page.screenshot({ path: "e2e/results/cnv_cdn.png" });
     expect(errors).toEqual([]);
   });
+
+  test("a compressed (Zstandard) FlatGeobuf on a CDN page: a plain notice, no module-resolution error (ml-aot.109)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const consoleLines: string[] = [];
+    page.on("console", (m) => consoleLines.push(m.text()));
+    const zstdRequests: string[] = [];
+    page.on("request", (r) => {
+      if (/zstd-wasm/.test(r.url())) zstdRequests.push(r.url());
+    });
+    await page.goto("/examples/verification/cloud-native/cdn-compressed.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    const notice = page.locator("#map .ml-map-notice");
+    await expect(notice).toContainText("districts-zstd.fgb", { timeout: 30_000 });
+    await expect(notice).toContainText("is compressed (Zstandard)");
+    await expect(notice).toContainText("zstd -d districts-zstd.fgb");
+    expect(zstdRequests).toEqual([]);
+    expect(consoleLines.filter((l) => /Failed to resolve module specifier|zstd-wasm/.test(l))).toEqual([]);
+    expect(errors).toEqual([]);
+  });
 });

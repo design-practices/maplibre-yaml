@@ -24,6 +24,8 @@ export type FormatFailureCode =
   | "cors"
   /** The bytes aren't this format (a wrong path that returned a web page). */
   | "not-format"
+  /** A Zstandard-compressed file (a compressed FlatGeobuf), which this version doesn't read. */
+  | "compressed"
   /** An HTTP error status. */
   | "http"
   /** Too large to load whole (and no index to read part of it). */

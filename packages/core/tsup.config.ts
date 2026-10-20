@@ -70,10 +70,11 @@ export default defineConfig([
     treeshake: true,
     minify: true, // CDN-served raw from unpkg — ship it minified
     // `@bokuweb/zstd-wasm` is flatgeobuf's codec for seekable-zstd files,
-    // reached only through a dynamic import for that rare variant: kept out
-    // of the bundle (a bare dynamic import that fails, with a plain error,
-    // only if such a file is ever read).
-    external: ["maplibre-gl", "@bokuweb/zstd-wasm"],
+    // reached only through a dynamic import that maplibre-yaml never
+    // triggers (compressed files are refused with a plain notice). A CDN
+    // page cannot resolve the bare specifier, so here it resolves to a stub
+    // that fails plainly (ml-aot.109); bundler builds keep the dependency.
+    external: ["maplibre-gl"],
     // Bundle these for browser. The cloud-native decoders (ml-cnv, 0.9) are
     // bundled into the single file — no chunks yet; formats/decoders.ts is
     // the seam lazy loading (ml-7qa.5) will split at.
@@ -86,10 +87,16 @@ export default defineConfig([
       "flatbuffers",
       "slice-source",
       "@repeaterjs/repeater",
+      // Resolved to the stub below (the alias), not the package.
+      "@bokuweb/zstd-wasm",
     ],
     esbuildOptions(options) {
       options.banner = {
         js: "// @maplibre-yaml/core - Browser build with bundled dependencies",
+      };
+      options.alias = {
+        ...(options.alias ?? {}),
+        "@bokuweb/zstd-wasm": "./src/formats/zstd-unavailable.ts",
       };
     },
   },

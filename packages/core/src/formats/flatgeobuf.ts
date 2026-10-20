@@ -136,6 +136,25 @@ export function isLonLat(header: FlatGeobufHeader, raw?: RawHeader): boolean {
   return true;
 }
 
+/** Whether bytes start with a Zstandard frame (`28 B5 2F FD`) or skippable frame. */
+export function isZstd(bytes: Uint8Array): boolean {
+  if (bytes.length < 4) return false;
+  if (bytes[0] === 0x28 && bytes[1] === 0xb5 && bytes[2] === 0x2f && bytes[3] === 0xfd) return true;
+  // Skippable frames (a seekable file may begin with one): 0x184D2A5? little-endian.
+  return (bytes[0]! & 0xf0) === 0x50 && bytes[1] === 0x2a && bytes[2] === 0x4d && bytes[3] === 0x18;
+}
+
+/**
+ * A compressed FlatGeobuf (ml-aot.109). This version reads uncompressed files
+ * only: the reader's seekable-Zstandard mode needs a WebAssembly codec served
+ * next to the script, which no CDN build can promise. Recognized by its
+ * first bytes, so the notice says what the file is instead of "not a
+ * FlatGeobuf file".
+ */
+function compressedFailure(url: string): FormatError {
+  return new FormatError({ code: "compressed", format: "flatgeobuf", url });
+}
+
 /** The plain-language error for what `fetch` threw. */
 function fetchFailure(error: unknown, url: string): unknown {
   if (isAbortError(error)) return error;
@@ -237,13 +256,29 @@ export async function decodeStream(
   options: { isCurrent?: () => boolean; onHeader?: (header: FlatGeobufHeader) => void } = {}
 ): Promise<FeatureCollection | null> {
   const body = opened.response.body;
+  // The file's first bytes, kept to name a compressed file if decoding fails.
+  let head: Uint8Array | undefined;
   try {
-    const input = body ?? new Uint8Array(await opened.response.arrayBuffer());
+    let input: ReadableStream<Uint8Array> | Uint8Array;
+    if (body) {
+      input = body.pipeThrough(
+        new TransformStream<Uint8Array, Uint8Array>({
+          transform(chunk, controller) {
+            head ??= chunk.slice(0, 4);
+            controller.enqueue(chunk);
+          },
+        })
+      );
+    } else {
+      input = new Uint8Array(await opened.response.arrayBuffer());
+      head = input.slice(0, 4);
+    }
     return await collect(
       deserialize(input as never, { headerMetaFn: headerCheck(url, options.onHeader) as never }),
       options.isCurrent ?? (() => true)
     );
   } catch (error) {
+    if (head && isZstd(head) && !isFormatError(error) && !isAbortError(error)) throw compressedFailure(url);
     throw readFailure(error, url);
   }
 }
@@ -256,6 +291,7 @@ export async function decodeStream(
  * @param url - Its name, for messages.
  */
 export async function decodeBytes(bytes: Uint8Array, url: string): Promise<FeatureCollection> {
+  if (isZstd(bytes)) throw compressedFailure(url);
   try {
     const data = await collect(
       deserialize(bytes, { headerMetaFn: headerCheck(url) as never }),
@@ -306,6 +342,7 @@ export async function probe(url: string, signal?: AbortSignal): Promise<ProbeRes
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
   const magic = bytes[0] === 0x66 && bytes[1] === 0x67 && bytes[2] === 0x62;
+  if (!magic && isZstd(bytes)) throw compressedFailure(url);
   if (!magic) throw new FormatError({ code: "not-format", format: "flatgeobuf", url });
   const total = /\/(\d+)\s*$/.exec(response.headers.get("content-range") ?? "")?.[1];
   return { ranges: true, ...(total ? { size: Number(total) } : {}) };

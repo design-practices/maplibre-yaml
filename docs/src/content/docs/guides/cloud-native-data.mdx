@@ -180,6 +180,9 @@ large and static.
 
 - **Coordinates:** the file must be longitude/latitude (EPSG:4326). A file in
   another projection is refused with the `ogr2ogr` command that fixes it.
+- **Compression:** write the file uncompressed. A Zstandard-compressed
+  FlatGeobuf is recognized and refused with a notice saying so (`zstd -d`
+  decompresses it).
 - **Making one:** `ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES out.fgb
   in.geojson` (the index is GDAL's default; QGIS's "Export → FlatGeobuf" works
   too).

@@ -527,6 +527,12 @@ export function describeFormatFailure(failure: FormatFailure): string {
         `The ${label} reader couldn't be set up${failure.detail ? ` (${failure.detail})` : ""}, ` +
         `so ${file} wasn't read. Other layers are unaffected.`
       );
+    case "compressed":
+      return (
+        `${file} is compressed (Zstandard), and this version of maplibre-yaml reads only ` +
+        `uncompressed ${label} files. Decompress it (\`zstd -d ${fileNameOf(failure.url)}\`) or ` +
+        "write it without compression (`ogr2ogr -f FlatGeobuf` writes an uncompressed file)."
+      );
     case "read":
     default:
       return (

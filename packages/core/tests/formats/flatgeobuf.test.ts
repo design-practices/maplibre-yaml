@@ -91,6 +91,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const REPO_ROOT_FOR_ZSTD = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
+
 describe("decodeBytes", () => {
   it("decodes every feature with its properties", async () => {
     const fc = await decodeBytes(fixture("districts.fgb"), "districts.fgb");
@@ -102,6 +104,14 @@ describe("decodeBytes", () => {
   it("refuses projected data with the reprojection command", async () => {
     const error = await decodeBytes(fixture("districts-3857.fgb"), "districts-3857.fgb").catch((e) => e);
     expect(isFormatError(error) && error.failure).toMatchObject({ code: "crs", crs: "EPSG:3857" });
+  });
+
+  it("names a Zstandard-compressed file instead of 'not a FlatGeobuf file' (ml-aot.109)", async () => {
+    const zstd = new Uint8Array(readFileSync(join(REPO_ROOT_FOR_ZSTD, "examples/verification/data/districts-zstd.fgb")));
+    const error = await decodeBytes(zstd, "districts-zstd.fgb").catch((e) => e);
+    expect(isFormatError(error) && error.failure.code).toBe("compressed");
+    expect((error as Error).message).toContain("is compressed (Zstandard)");
+    expect((error as Error).message).toContain("zstd -d districts-zstd.fgb");
   });
 
   it("calls a web page what it is", async () => {
