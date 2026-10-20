@@ -9,9 +9,11 @@ import { cameraForBounds, FIT_TO_REFERENCE_VIEWPORT } from "../../src/emitter/lo
 
 describe("defaultFitPadding", () => {
   it("48 px on a desktop map, less on a phone, the attribution's room at the bottom", () => {
-    expect(defaultFitPadding(1280, 800)).toEqual({ top: 48, right: 48, bottom: 64, left: 48 });
-    // A phone: 8% of 390, and the compact attribution's expanded height.
-    expect(defaultFitPadding(390, 844)).toEqual({ top: 31, right: 31, bottom: 63, left: 31 });
+    expect(defaultFitPadding(1280, 800)).toEqual({ top: 48, right: 48, bottom: 82, left: 48 });
+    // A phone: 8% of 390, and the compact attribution's expanded height (calibrated).
+    expect(defaultFitPadding(390, 844)).toEqual({ top: 31, right: 31, bottom: 85, left: 31 });
+    // Measured room wins over the constants.
+    expect(defaultFitPadding(390, 844, 74).bottom).toBe(31 + 74);
   });
 
   it("never takes more than half the map", () => {

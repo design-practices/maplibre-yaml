@@ -60,7 +60,14 @@ import {
   probeBasemapAssets,
   type BasemapAssets,
 } from './basemap-assets';
-import { fitToPadding, type FitPadding } from '../utils/fit-padding';
+import {
+  ATTRIBUTION_RESERVE_NARROW,
+  ATTRIBUTION_RESERVE_WIDE,
+  bottomControlsReserve,
+  fitToPadding,
+  NARROW_MAP_WIDTH,
+  type FitPadding,
+} from '../utils/fit-padding';
 import { archiveMetadata } from '../formats/pmtiles';
 import {
   basemapLanguage,
@@ -1036,6 +1043,22 @@ export class MapRenderer {
       // that listeners (attached after construction) can hear it.
       if (this.mapReadyFit) {
         this.fitApplied = true;
+        // Built framed before the controls had their credits: if they turn
+        // out taller than the margin kept for them (a long attribution on a
+        // phone, a scale bar), frame again with the measured room.
+        if (fitTo && fitTo.padding === undefined) {
+          const container = this.map.getContainer?.();
+          const measured = bottomControlsReserve(container);
+          const assumed =
+            (container?.clientWidth ?? 0) < NARROW_MAP_WIDTH ? ATTRIBUTION_RESERVE_NARROW : ATTRIBUTION_RESERVE_WIDE;
+          if (measured !== undefined && measured > assumed) {
+            this.map.fitBounds(this.mapReadyFit.bounds as never, {
+              padding: this.fitPadding(fitTo),
+              ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
+              animate: false,
+            });
+          }
+        }
         this.emit('camera:fit', this.mapReadyFit);
       }
 
@@ -1282,7 +1305,11 @@ export class MapRenderer {
   /** `fitTo`'s padding for the map as it is now: the author's, else the default for its size. */
   private fitPadding(fitTo: FitToConfig): number | FitPadding {
     const canvas = this.map?.getContainer?.();
-    return fitToPadding(fitTo, { width: canvas?.clientWidth ?? 0, height: canvas?.clientHeight ?? 0 });
+    return fitToPadding(fitTo, {
+      width: canvas?.clientWidth ?? 0,
+      height: canvas?.clientHeight ?? 0,
+      bottomReserve: bottomControlsReserve(canvas),
+    });
   }
 
   /**
