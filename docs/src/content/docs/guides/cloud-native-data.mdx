@@ -159,11 +159,14 @@ host, with no tile server and no API key. Point `mapStyle:` at the file
 
    ```bash
    pmtiles extract https://build.protomaps.com/<date>.pmtiles nyc.pmtiles \
-     --bbox=-74.26,40.48,-73.70,40.92
+     --bbox=-74.26,40.48,-73.70,40.92 --maxzoom=13
    ```
 
    Pick `<date>` from [build.protomaps.com](https://build.protomaps.com/).
-   The tool reads only the part of the planet it needs.
+   The tool reads only the part of the planet it needs. This extract is about
+   12 MB; without `--maxzoom=13` (all zoom levels, to 15) it is about 95 MB.
+   Zoom 13 is enough for a city map: MapLibre draws closer zooms from the
+   zoom-13 tiles, with fewer minor street names (see **Size** below).
 2. **Put the file in your site**: `public/data/nyc.pmtiles` in an Astro or
    Vite project, or a `data/` folder next to your HTML page.
 3. **Use it** from your document:
@@ -230,12 +233,14 @@ That's the whole basemap. Details:
 - The style generator (`@protomaps/basemaps`) is part of maplibre-yaml and
   loaded only by maps that use this form.
 
-**Size.** A city extract is typically tens of MB; a large region or a country
-can be hundreds of MB or more. GitHub refuses files over 100 MB in a
-repository, and a GitHub Pages site is limited to 1 GB, so keep extracts to
-the area you show (a smaller `--bbox`, or a lower `--maxzoom`, shrinks the
-file). For larger areas, use a host meant for big files, such as an object
-store.
+**Size.** Each extra zoom level makes an extract roughly three times bigger:
+the New York extract above is about 12 MB at `--maxzoom=13` and about 95 MB
+with every zoom level (to 15). GitHub's web upload ("Add file →
+Upload files") takes files up to 25 MB, `git push` warns above 50 MB and
+refuses files over 100 MB, and a GitHub Pages site is limited to 1 GB. To go
+smaller, cut a tighter `--bbox` around the area you show, or lower
+`--maxzoom` (12 still reads well for a whole city). For larger areas, use a
+host meant for big files, such as an object store.
 
 **Hosting.** The file is read with HTTP range requests, like any PMTiles file:
 GitHub Pages, Netlify, Cloudflare, S3 and R2 support them;
