@@ -22,6 +22,7 @@ import type { Document, LineCounter } from "yaml";
 import { positionForKey, positionForPath, type ValidationWarning } from "./validation-utils";
 import { suggest, spellingVariantOf } from "../utils/suggest";
 import { boundsOfPoints, swappedCenter as swappedPair } from "../utils/swapped-center";
+import { toFlatBounds } from "../utils/bounds";
 import { MapBlockSchema, MapConfigSchema } from "../schemas/map.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
 import { DEFAULT_STRINGS, STRINGS_PREFIX } from "../i18n/strings";
@@ -448,6 +449,35 @@ export function checkDocument(
       });
     }
   });
+
+  // ml-aot.76 — bounds written [latitude, longitude] whose numbers are in
+  // range either way (out-of-range ones fail the schema with the same
+  // did-you-mean): flagged by the center rule, on the middle of the box.
+  const rawBounds = isObject(config) ? config["bounds"] : undefined;
+  const flat = toFlatBounds(rawBounds);
+  if (flat && !already.has("config.bounds")) {
+    const refs = [
+      ...places,
+      ...(configCenter ? [configCenter] : []),
+      ...chapterCenters.filter((c): c is Point => c !== undefined),
+    ];
+    const [w, s, e, n] = flat;
+    const middle: Point = [(w + e) / 2, (s + n) / 2];
+    if (refs.length > 0 && swappedPair(middle, boundsOfPoints(refs), refs)) {
+      const corners = Array.isArray(rawBounds) && rawBounds.length === 2;
+      const written = corners ? `[[${w}, ${s}], [${e}, ${n}]]` : `[${w}, ${s}, ${e}, ${n}]`;
+      const meant = corners ? `[[${s}, ${w}], [${n}, ${e}]]` : `[${s}, ${w}, ${n}, ${e}]`;
+      warnings.push({
+        path: "config.bounds",
+        message:
+          `bounds is ${written}, far from this map's places, but it lands on them with ` +
+          `latitude and longitude swapped. Bounds are [west, south, east, north] (or ` +
+          `[[west, south], [east, north]]), longitude first: did you mean ${meant}?`,
+        ...at(positions, ["config", "bounds"]),
+        onPage: true,
+      });
+    }
+  }
 
   // ml-aot.51 — CSV where GeoJSON is expected.
   for (const name of sourceNames) csvSource(sources[name], ["sources", name], positions, warnings);

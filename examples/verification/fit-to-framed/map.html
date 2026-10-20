@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>fitTo: framed on load</title>
+  <!--
+    ml-aot.75 — fitTo on a url: source builds the map already framed.
+    The document's own camera is the whole world (center [0, 0], zoom 1);
+    fitTo names a fetched GeoJSON file of three Brooklyn parks.
+    PASS = the map appears already on Brooklyn, the three green parks in
+    view — no world view first, no jump. The first-frame camera line below
+    the map matches the camera after loading. FAIL = a world map that then
+    jumps to Brooklyn.
+    (e2e/fit-to-framed.spec.ts also delays the file past the wait and checks
+    the fallback: built at the world view, then fitted once, one request.)
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/fit-to-framed/map.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; }
+    ml-map { display: block; height: 420px; }
+    #camera { font: 12px ui-monospace, monospace; margin-top: 6px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <script>
+    // Record the camera of the map's very first frame (and any camera move
+    // after it) for the page and the e2e test: the canvas appears in the
+    // same task that builds the map, before its first frame is drawn.
+    window.__frames = { first: null, moves: 0, fits: 0 };
+    new MutationObserver((records, observer) => {
+      const el = document.querySelector("ml-map");
+      const map = el && el.getMap && el.getMap();
+      if (!map) return;
+      observer.disconnect();
+      const camera = () => {
+        const c = map.getCenter();
+        return { lng: c.lng, lat: c.lat, zoom: map.getZoom() };
+      };
+      map.once("render", () => { window.__frames.first = camera(); });
+      map.on("move", () => { if (window.__frames.first) window.__frames.moves += 1; });
+      el.addEventListener("ml-map:camera-fit", () => { window.__frames.fits += 1; });
+      map.once("idle", () => {
+        const f = window.__frames.first;
+        const now = camera();
+        document.getElementById("camera").textContent =
+          `first frame: ${f.lng.toFixed(3)}, ${f.lat.toFixed(3)} z${f.zoom.toFixed(2)} — ` +
+          `after load: ${now.lng.toFixed(3)}, ${now.lat.toFixed(3)} z${now.zoom.toFixed(2)} — ` +
+          `camera moves after the first frame: ${window.__frames.moves}`;
+      });
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  </script>
+</head>
+<body>
+  <header>PASS = opens on the three Brooklyn parks — no world view first, no jump.</header>
+  <main>
+    <ml-map id="map">
+      <script type="text/yaml">
+type: map
+id: fit-to-framed
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo:
+    source: parks
+    padding: 30
+sources:
+  parks:
+    type: geojson
+    url: "data/parks.geojson"
+layers:
+  - id: parks
+    type: fill
+    source: parks
+    paint:
+      fill-color: "#2a9d8f"
+      fill-opacity: 0.7
+      </script>
+    </ml-map>
+    <div id="camera">first frame: …</div>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

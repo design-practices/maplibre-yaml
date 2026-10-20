@@ -44,6 +44,9 @@ export const DEFAULT_STRINGS = {
 
   // The on-map notice when part of a document didn't load.
   "maplibre-yaml.Notice.Title": "Part of this map couldn't load",
+  // The same notice when it holds only author hints (nothing failed; shown
+  // only while the author is developing or with `debug`).
+  "maplibre-yaml.Notice.HintsTitle": "Notes for this map's author",
   "maplibre-yaml.Notice.AuthorDetails": "Details for the site's author",
   "maplibre-yaml.Notice.Dismiss": "Dismiss this notice",
   "maplibre-yaml.Notice.More": "…and {count} more (see the browser console).",

@@ -104,13 +104,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "maxItems": 4,
                       "items": [
                         {
-                          "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/0"
+                          "type": "number",
+                          "description": "Longitude in degrees (past ±180 to cross the antimeridian)"
                         },
                         {
                           "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
                         },
                         {
-                          "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/0"
+                          "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds/anyOf/0/items/0"
                         },
                         {
                           "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
@@ -120,12 +121,40 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                     },
                     {
                       "type": "array",
-                      "items": {
-                        "type": "number"
-                      }
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "type": "array",
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "items": [
+                            {
+                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds/anyOf/0/items/0"
+                            },
+                            {
+                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "array",
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "items": [
+                            {
+                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds/anyOf/0/items/0"
+                            },
+                            {
+                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/center/items/1"
+                            }
+                          ]
+                        }
+                      ],
+                      "description": "Bounding box as two corners [[west, south], [east, north]]"
                     }
                   ],
-                  "description": "Fit map to bounds"
+                  "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
                 },
                 "fitTo": {
                   "type": "object",
@@ -177,8 +206,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "description": "Maximum pitch"
                 },
                 "maxBounds": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds/anyOf/0",
-                  "description": "Maximum geographic bounds"
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds",
+                  "description": "Maximum geographic bounds, in either bounds form"
                 },
                 "interactive": {
                   "type": "boolean",
@@ -3549,11 +3578,18 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "description": "Filter expression (for setFilter, null to clear)"
                         },
                         "bounds": {
-                          "type": "array",
-                          "items": {
-                            "type": "number"
-                          },
-                          "description": "Bounds array (for fitBounds)"
+                          "anyOf": [
+                            {
+                              "$ref": "#/$defs/any/oneOf/0/properties/config/properties/bounds"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              }
+                            }
+                          ],
+                          "description": "Bounds for fitBounds: [west, south, east, north] or [[west, south], [east, north]]"
                         },
                         "options": {
                           "type": "object",
@@ -4241,13 +4277,14 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "maxItems": 4,
                   "items": [
                     {
-                      "$ref": "#/$defs/map/properties/config/properties/center/items/0"
+                      "type": "number",
+                      "description": "Longitude in degrees (past ±180 to cross the antimeridian)"
                     },
                     {
                       "$ref": "#/$defs/map/properties/config/properties/center/items/1"
                     },
                     {
-                      "$ref": "#/$defs/map/properties/config/properties/center/items/0"
+                      "$ref": "#/$defs/map/properties/config/properties/bounds/anyOf/0/items/0"
                     },
                     {
                       "$ref": "#/$defs/map/properties/config/properties/center/items/1"
@@ -4257,12 +4294,40 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                 },
                 {
                   "type": "array",
-                  "items": {
-                    "type": "number"
-                  }
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": [
+                    {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "$ref": "#/$defs/map/properties/config/properties/bounds/anyOf/0/items/0"
+                        },
+                        {
+                          "$ref": "#/$defs/map/properties/config/properties/center/items/1"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "$ref": "#/$defs/map/properties/config/properties/bounds/anyOf/0/items/0"
+                        },
+                        {
+                          "$ref": "#/$defs/map/properties/config/properties/center/items/1"
+                        }
+                      ]
+                    }
+                  ],
+                  "description": "Bounding box as two corners [[west, south], [east, north]]"
                 }
               ],
-              "description": "Fit map to bounds"
+              "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
             },
             "fitTo": {
               "type": "object",
@@ -4314,8 +4379,8 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
               "description": "Maximum pitch"
             },
             "maxBounds": {
-              "$ref": "#/$defs/map/properties/config/properties/bounds/anyOf/0",
-              "description": "Maximum geographic bounds"
+              "$ref": "#/$defs/map/properties/config/properties/bounds",
+              "description": "Maximum geographic bounds, in either bounds form"
             },
             "interactive": {
               "type": "boolean",
@@ -10212,13 +10277,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "maxItems": 4,
                                   "items": [
                                     {
-                                      "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/0"
+                                      "type": "number",
+                                      "description": "Longitude in degrees (past ±180 to cross the antimeridian)"
                                     },
                                     {
                                       "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
                                     },
                                     {
-                                      "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/0"
+                                      "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds/anyOf/0/items/0"
                                     },
                                     {
                                       "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
@@ -10228,12 +10294,40 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                 },
                                 {
                                   "type": "array",
-                                  "items": {
-                                    "type": "number"
-                                  }
+                                  "minItems": 2,
+                                  "maxItems": 2,
+                                  "items": [
+                                    {
+                                      "type": "array",
+                                      "minItems": 2,
+                                      "maxItems": 2,
+                                      "items": [
+                                        {
+                                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds/anyOf/0/items/0"
+                                        },
+                                        {
+                                          "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "array",
+                                      "minItems": 2,
+                                      "maxItems": 2,
+                                      "items": [
+                                        {
+                                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds/anyOf/0/items/0"
+                                        },
+                                        {
+                                          "$ref": "#/$defs/root/properties/config/properties/defaultCenter/items/1"
+                                        }
+                                      ]
+                                    }
+                                  ],
+                                  "description": "Bounding box as two corners [[west, south], [east, north]]"
                                 }
                               ],
-                              "description": "Fit map to bounds"
+                              "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
                             },
                             "fitTo": {
                               "type": "object",
@@ -10283,8 +10377,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "description": "Maximum pitch"
                             },
                             "maxBounds": {
-                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds/anyOf/0",
-                              "description": "Maximum geographic bounds"
+                              "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds",
+                              "description": "Maximum geographic bounds, in either bounds form"
                             },
                             "interactive": {
                               "type": "boolean",
@@ -11322,11 +11416,18 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                       "description": "Filter expression (for setFilter, null to clear)"
                                     },
                                     "bounds": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "number"
-                                      },
-                                      "description": "Bounds array (for fitBounds)"
+                                      "anyOf": [
+                                        {
+                                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config/properties/bounds"
+                                        },
+                                        {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "number"
+                                          }
+                                        }
+                                      ],
+                                      "description": "Bounds for fitBounds: [west, south, east, north] or [[west, south], [east, north]]"
                                     },
                                     "options": {
                                       "type": "object",
@@ -11638,13 +11739,14 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                   "maxItems": 4,
                   "items": [
                     {
-                      "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/0"
+                      "type": "number",
+                      "description": "Longitude in degrees (past ±180 to cross the antimeridian)"
                     },
                     {
                       "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
                     },
                     {
-                      "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/0"
+                      "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds/anyOf/0/items/0"
                     },
                     {
                       "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
@@ -11654,12 +11756,40 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                 },
                 {
                   "type": "array",
-                  "items": {
-                    "type": "number"
-                  }
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": [
+                    {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds/anyOf/0/items/0"
+                        },
+                        {
+                          "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds/anyOf/0/items/0"
+                        },
+                        {
+                          "$ref": "#/$defs/scrollytelling/properties/config/properties/center/items/1"
+                        }
+                      ]
+                    }
+                  ],
+                  "description": "Bounding box as two corners [[west, south], [east, north]]"
                 }
               ],
-              "description": "Fit map to bounds"
+              "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
             },
             "fitTo": {
               "type": "object",
@@ -11711,8 +11841,8 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
               "description": "Maximum pitch"
             },
             "maxBounds": {
-              "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds/anyOf/0",
-              "description": "Maximum geographic bounds"
+              "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds",
+              "description": "Maximum geographic bounds, in either bounds form"
             },
             "interactive": {
               "type": "boolean",
@@ -14527,11 +14657,18 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                       "description": "Filter expression (for setFilter, null to clear)"
                     },
                     "bounds": {
-                      "type": "array",
-                      "items": {
-                        "type": "number"
-                      },
-                      "description": "Bounds array (for fitBounds)"
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/scrollytelling/properties/config/properties/bounds"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        }
+                      ],
+                      "description": "Bounds for fitBounds: [west, south, east, north] or [[west, south], [east, north]]"
                     },
                     "options": {
                       "type": "object",

@@ -30,6 +30,8 @@ vi.mock("../../src/renderer/map-renderer", () => ({
 }));
 
 import { MLMap } from "../../src/components/ml-map";
+import { MapNotice } from "../../src/components/map-notice";
+import { createStrings } from "../../src/i18n";
 
 const SPANISH = {
   "NavigationControl.ZoomIn": "Acercar",
@@ -108,6 +110,23 @@ describe("<ml-map> languages and accessible name", () => {
     expect(notice.querySelector("strong")!.textContent).toBe("Parte de este mapa no se pudo cargar");
     expect(notice.querySelector("summary")!.textContent).toBe("Detalles para quien hizo el sitio");
     expect(notice.querySelector("button")!.getAttribute("aria-label")).toBe("Cerrar este aviso");
+  });
+
+  it("a hints-only notice (ml-aot.57) leads with the translated hints title, then the failure title", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const notice = new MapNotice(host, {
+      openDetails: true,
+      strings: createStrings({
+        ...SPANISH,
+        "maplibre-yaml.Notice.HintsTitle": "Notas para quien hizo este mapa",
+      }),
+    });
+    notice.add("`centre` is not a key. Did you mean `center`?", "hint");
+    expect(host.querySelector(".ml-map-notice strong")!.textContent).toBe("Notas para quien hizo este mapa");
+    notice.add("Data file `x.geojson` didn't load.", "failure");
+    expect(host.querySelector(".ml-map-notice strong")!.textContent).toBe("Parte de este mapa no se pudo cargar");
+    expect(host.querySelector(".ml-map-notice summary")!.textContent).toBe("Detalles para quien hizo el sitio");
   });
 
   it("an error card for a document that was read is translated too", async () => {

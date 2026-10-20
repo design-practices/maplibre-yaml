@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>bounds: both forms</title>
+  <!--
+    ml-aot.76 — config.bounds takes MapLibre's two forms:
+    four numbers [west, south, east, north], and two corners
+    [[west, south], [east, north]]. Both maps frame the same piece of
+    Manhattan and Brooklyn (the authored center/zoom is the whole world).
+    PASS = two identical maps on New York, no error card.
+    FAIL = "config.bounds.0: Expected number, got array" on the right.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/bounds-forms.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { padding: 12px 16px; display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+    ml-map { display: block; height: 360px; }
+    p { margin: 0 0 4px; font-size: 13px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = both maps framed on the same part of New York.</header>
+  <main>
+    <div>
+      <p><code>bounds: [-74.02, 40.645, -73.92, 40.80]</code></p>
+      <ml-map id="flat">
+        <script type="text/yaml">
+type: map
+id: flat
+config:
+  center: [0, 0]
+  zoom: 1
+  bounds: [-74.02, 40.645, -73.92, 40.80]
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: box
+    type: line
+    source:
+      type: geojson
+      data:
+        type: Feature
+        properties: {}
+        geometry:
+          type: LineString
+          coordinates: [[-74.02, 40.645], [-73.92, 40.645], [-73.92, 40.80], [-74.02, 40.80], [-74.02, 40.645]]
+    paint: { line-color: "#e63946", line-width: 3 }
+        </script>
+      </ml-map>
+    </div>
+    <div>
+      <p><code>bounds: [[-74.02, 40.645], [-73.92, 40.80]]</code></p>
+      <ml-map id="corners">
+        <script type="text/yaml">
+type: map
+id: corners
+config:
+  center: [0, 0]
+  zoom: 1
+  bounds: [[-74.02, 40.645], [-73.92, 40.80]]
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: box
+    type: line
+    source:
+      type: geojson
+      data:
+        type: Feature
+        properties: {}
+        geometry:
+          type: LineString
+          coordinates: [[-74.02, 40.645], [-73.92, 40.645], [-73.92, 40.80], [-74.02, 40.80], [-74.02, 40.645]]
+    paint: { line-color: "#e63946", line-width: 3 }
+        </script>
+      </ml-map>
+    </div>
+  </main>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>
