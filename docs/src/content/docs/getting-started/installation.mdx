@@ -168,6 +168,22 @@ next line, which may change behaviour, never arrives by surprise. Change the
 number on purpose when you upgrade; these docs always show the current line.
 `maplibre-gl@6` works the same way for MapLibre.
 
+### Hosting the files yourself
+
+To serve maplibre-yaml from your own site instead of a CDN, copy the
+package's **whole `dist/` folder** (from `node_modules/@maplibre-yaml/core/`,
+or the package on unpkg) and load `dist/register.browser.js` from it:
+
+```html
+<script type="module" src="/js/maplibre-yaml/dist/register.browser.js"></script>
+```
+
+Some parts of maplibre-yaml load on demand, only for maps that use them —
+the readers for [PMTiles and FlatGeobuf files](/guides/cloud-native-data/)
+are separate files in `dist/chunks/` — and the browser fetches them from
+next to the script. A copy of only `register.browser.js` works for every
+other map; a map that needs a missing reader shows a notice naming the file.
+
 ### JavaScript API from a CDN
 
 To use the JavaScript API (`YAMLParser`, `MapRenderer`) from a CDN instead of the web component, import the package from esm.sh, which resolves `yaml` and `zod` for you. Keep the same import map and add `?external=maplibre-gl` so the library uses the maplibre-gl you pinned, not a second copy chosen by esm.sh:

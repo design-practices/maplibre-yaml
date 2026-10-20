@@ -274,6 +274,14 @@ says what happened in plain words. The common cases:
 | The file isn't there | "`…/x.fgb` didn't load (404 Not Found)", with where the browser looked and the `base` hint for project sites |
 | A FlatGeobuf in the wrong projection | "`…/x.fgb` is in EPSG:3857; MapLibre needs longitude/latitude (EPSG:4326). Reproject it: `ogr2ogr -t_srs EPSG:4326 out.fgb x.fgb`." |
 | Too large to read whole, no index | "`…/x.fgb` is 180 MB, too large to load whole in a browser. Add `load: viewport` to the source (the file needs a spatial index), or convert it to PMTiles." |
+| The format's reader couldn't be downloaded | "The PMTiles reader (`…/chunks/pmtiles.js`) couldn't be downloaded. maplibre-yaml loads its file-format readers on demand from the folder its script came from: if you copied maplibre-yaml to your own site, copy the whole `dist/` folder (not just `register.js`), or load it from the CDN. …" |
+
+The readers for these formats are not part of maplibre-yaml's main script:
+a page downloads the PMTiles reader (about 8 KB) or the FlatGeobuf reader
+(about 12 KB) only when a map uses that format, from `dist/chunks/` next to
+the script. From a CDN that is automatic; if you host maplibre-yaml's files
+yourself, copy the whole `dist/` folder
+([Installation](/getting-started/installation/#hosting-the-files-yourself)).
 
 ## Format v2
 
