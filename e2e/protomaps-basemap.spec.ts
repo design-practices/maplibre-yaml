@@ -134,6 +134,10 @@ test.describe("a Protomaps basemap from a .pmtiles file, YAML only", () => {
 
   test("flavor dark (format v2 basemap:) renders differently, on Protomaps' default asset URLs", async ({ page }) => {
     const { errors, hosted } = await guard(page);
+    // The fonts/icons check reads what it asks for to the end: nothing in the
+    // network log as failed or cancelled.
+    const failed: string[] = [];
+    page.on("requestfailed", (r) => failed.push(`${r.url()} ${r.failure()?.errorText ?? ""}`));
     await page.goto(PAGE, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => typeof (document.getElementById("dark") as any)?.mapReady === "function");
     await ready(page, "self-hosted");
@@ -162,6 +166,9 @@ test.describe("a Protomaps basemap from a .pmtiles file, YAML only", () => {
     // The defaults: Protomaps' hosted sprite for the flavor, and its fonts.
     expect(hosted.some((u) => u.endsWith("/sprites/v4/dark.json"))).toBe(true);
     expect(hosted.some((u) => u.includes("/fonts/Noto%20Sans%20"))).toBe(true);
+    // Give the check (on the first idle) time to have run.
+    await page.waitForTimeout(1500);
+    expect(failed).toEqual([]);
     await page.locator("#dark").screenshot({ path: "e2e/results/protomaps_dark.png" });
     expect(errors).toEqual([]);
   });

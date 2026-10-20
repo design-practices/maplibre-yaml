@@ -185,16 +185,21 @@ export function glyphProbeUrl(template: string): string {
  * Which of a basemap's assets can't be fetched, asked directly. MapLibre
  * reports a font that didn't load only as a console warning (maplibre-gl 5
  * and later) or as a tile error naming no file (4), and a sprite on 4 as a
- * bare "Failed to fetch". The browser's cache answers when MapLibre fetched
- * them already.
+ * bare "Failed to fetch". Each is read in full (a cancelled request is
+ * logged as failed); the browser's cache answers when MapLibre fetched them
+ * already.
  *
  * @returns The assets that failed (empty when both load).
  */
 export async function probeBasemapAssets(assets: BasemapAssets): Promise<BasemapAsset[]> {
+  // Read to the end, not cancelled once the status is known: a cancelled
+  // request shows in the browser's network log as failed, which reads as an
+  // error to anyone who opens it. These are the URLs MapLibre fetches, so
+  // the browser's cache (Protomaps' host sends max-age=600) answers them.
   const loads = async (url: string) => {
     try {
       const response = await fetch(url);
-      void response.body?.cancel().catch(() => undefined);
+      await response.arrayBuffer();
       return response.ok;
     } catch {
       return false;
