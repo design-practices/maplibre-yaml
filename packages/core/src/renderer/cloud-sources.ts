@@ -24,7 +24,14 @@
 
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import { formatOfSource, stripScheme, typeReadsFormat, type CloudFormat } from "../formats/detect";
+import {
+  formatOfSource,
+  loadModeOf,
+  stripScheme,
+  typeReadsFormat,
+  type CloudFormat,
+  type LoadMode,
+} from "../formats/detect";
 import { getDecoder } from "../formats/decoders";
 import type { FlatGeobufHeader } from "../formats/flatgeobuf";
 import { FormatError, isAbortError, isFormatError } from "../formats/errors";
@@ -44,8 +51,9 @@ export const WHOLE_FILE_WARN_BYTES = 10 * 1024 * 1024;
  * reading the part in view; an unindexed one is refused with a notice.
  */
 export const WHOLE_FILE_MAX_BYTES = 50 * 1024 * 1024;
-/** `load: viewport` reads nothing below this zoom unless `minzoom` says otherwise. */
-export const VIEWPORT_DEFAULT_MINZOOM = 10;
+// `load:` is read by `loadModeOf` in formats/detect (side-effect free, so the
+// parser's classify check can use it too); re-exported here for the renderer.
+export { VIEWPORT_DEFAULT_MINZOOM, loadModeOf, type LoadMode } from "../formats/detect";
 /** Pause after the map stops moving before re-reading the view. */
 export const VIEWPORT_DEBOUNCE_MS = 250;
 
@@ -136,25 +144,6 @@ function placeholderTileSpec(type: unknown): Obj {
 // ---------------------------------------------------------------------------
 // FlatGeobuf data provider
 // ---------------------------------------------------------------------------
-
-/** How a FlatGeobuf source is read (`load:`). */
-export interface LoadMode {
-  mode: "all" | "viewport";
-  /** Viewport mode reads nothing below this zoom. */
-  minzoom: number;
-}
-
-/** The source's `load:` key, normalized (`all` when absent or unrecognized). */
-export function loadModeOf(source: Obj): LoadMode {
-  const load = source["load"];
-  if (load === "viewport") return { mode: "viewport", minzoom: VIEWPORT_DEFAULT_MINZOOM };
-  if (load && typeof load === "object") {
-    const o = load as Obj;
-    const minzoom = typeof o["minzoom"] === "number" ? o["minzoom"] : VIEWPORT_DEFAULT_MINZOOM;
-    if (o["mode"] === "viewport") return { mode: "viewport", minzoom };
-  }
-  return { mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM };
-}
 
 /** A whole-file read refused for size: the caller reads by view instead. */
 export class WholeFileTooLarge extends Error {

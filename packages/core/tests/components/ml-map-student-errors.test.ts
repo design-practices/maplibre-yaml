@@ -150,6 +150,18 @@ describe("<ml-map> on-page errors", () => {
       );
     });
 
+    it("classified breaks that can't be computed (a source read by view) show one notice", async () => {
+      const el = await mount();
+      const { byViewClassifyError } = await import("../../src/renderer/classify-runtime");
+      latest().options.onError(byViewClassifyError("income", "parcels"), false, {
+        kind: "classify",
+        layerId: "income",
+        sourceId: "parcels",
+      });
+      expect(noticeText(el)).toContain("can't compute its classes");
+      expect(noticeText(el)).toContain("breaks:");
+    });
+
     it("the same problem is listed once; dismissing hides the notice", async () => {
       const el = await mount();
       const report = () =>

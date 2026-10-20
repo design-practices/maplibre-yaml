@@ -172,6 +172,11 @@ large and static.
   sources in 0.9 — validation says so. Serve GeoJSON for data that changes.
 - **`fitTo`** frames the decoded features; with `load: viewport` it frames
   the extent recorded in the file's header.
+- **`classify:`** with computed classes (`method:`) needs the whole file. On a
+  source read by view — `load: viewport`, or a file over 50 MB that switched
+  to it — validation (for `load: viewport`) or the map (for the size switch)
+  asks for explicit `breaks:` instead, which work either way. See
+  [Thematic maps](/guides/thematic-maps/).
 
 ## Hosting: range requests and CORS
 

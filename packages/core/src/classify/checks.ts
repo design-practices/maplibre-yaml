@@ -13,9 +13,12 @@
  *   (one owner per property: classify, or a raw expression — never both);
  * - `radius:` only on circle layers;
  * - `noData: hide` / `other: hide` combine with an *expression* filter;
- * - `method:` only over a GeoJSON source — a vector tile source never gives
- *   the browser the whole dataset, so computed breaks would describe only
- *   the tiles in view.
+ * - `method:` only over a GeoJSON source read whole — a vector tile source,
+ *   or a FlatGeobuf source read by view (`load: viewport` in any spelling),
+ *   never gives the browser the whole dataset, so computed breaks would
+ *   describe only the part in view. (A FlatGeobuf file too large to read
+ *   whole switches to the by-view read at runtime; the classify runtime
+ *   refuses computed breaks there — see renderer/classify-runtime.)
  *
  * The walk is shape-agnostic (v1 and v2 map blocks, stories, multi-page
  * documents): any object under a `layers` key that carries `classify` is a
@@ -26,6 +29,7 @@
 import type { Document, LineCounter } from "yaml";
 import { positionForKey, positionForPath } from "../parser/validation-utils";
 import { suggest } from "../utils/suggest";
+import { loadModeOf } from "../formats/detect";
 import { CLASSIFY_COLOR_PROPERTIES, defaultClassifyProperty } from "./compile";
 
 /** A classify check failure (the parser's ParseError shape). */
@@ -282,12 +286,15 @@ function checkLayer(
           fix,
         atKey(ctx, cpath, "method")
       );
-    } else if (String(source.spec["load"] ?? "").toLowerCase() === "viewport") {
+    } else if (loadModeOf(source.spec).mode === "viewport") {
+      // Every spelling of the by-view read: `load: viewport`, the object
+      // form `{ mode: viewport }`, v2's `runtime.load`, an inline source.
       push(
         ctx,
         mpath,
         `method: computes breaks from the whole dataset, and ${name}'s source loads only the ` +
-          "features in view (load: viewport). Use load: all, or write breaks: yourself.",
+          "features in view (load: viewport), so breaks computed there would describe part of " +
+          "the data and change as you pan. Use load: all, or write breaks: yourself.",
         atKey(ctx, cpath, "method")
       );
     }

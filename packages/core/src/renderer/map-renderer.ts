@@ -166,6 +166,8 @@ function resolveFitTo(
  *   of the map keeps working.
  * - `source`: one document source failed at runtime (tiles or a TileJSON
  *   that would not load).
+ * - `classify`: a classified layer's computed breaks can't be computed (its
+ *   source is read by view); the layer draws in its no-data colour.
  *
  * Errors with no context (a basemap tile, a glyph) are not the document's.
  */
@@ -174,11 +176,14 @@ export interface MapErrorContext {
    * `fit`: `config.fitTo.source` names no source; the map keeps its authored
    * camera. `center`: `config.center` looks written [latitude, longitude] —
    * far from the document's data, while the swapped pair lands on it.
+   * `classify`: a layer's computed classes (`method:`) can't be computed,
+   * because its source holds only the features in view; the layer draws in
+   * its no-data colour. The error message is the whole notice.
    */
-  kind: 'style' | 'layer' | 'source' | 'fit' | 'center';
+  kind: 'style' | 'layer' | 'source' | 'fit' | 'center' | 'classify';
   /** For `center`: the center as written. */
   center?: [number, number];
-  /** The document layer, for `layer` errors. */
+  /** The document layer, for `layer` and `classify` errors. */
   layerId?: string;
   /** The document source, for `source` errors; the name `fitTo.source` gave, for `fit`. */
   sourceId?: string;
@@ -698,6 +703,13 @@ export class MapRenderer {
       (layerId, record) => {
         this.redrawLegend();
         this.emit('layer:classified', { layerId, classify: record });
+      },
+      {
+        readsByView: (sourceId) => this.layerManager.readsByView?.(sourceId) ?? false,
+        onRefused: (layerId, sourceId, error) => {
+          console.warn(`[maplibre-yaml] ${error.message.replace(/`/g, '"')}`);
+          options.onError?.(error, false, { kind: 'classify', layerId, sourceId });
+        },
       }
     );
     if (classifyRuntime.active) this.classify = classifyRuntime;

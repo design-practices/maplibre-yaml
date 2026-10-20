@@ -6,7 +6,13 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { ClassifyRuntime } from "../../src/renderer/classify-runtime";
-import { resolveClassify, applyClassifyToSpec, classifyRecordOf } from "../../src/classify/compile";
+import {
+  resolveClassify,
+  applyClassifyToSpec,
+  classifyRecordOf,
+  classifyLegendEntries,
+  DEFAULT_NO_DATA_COLOR,
+} from "../../src/classify/compile";
 
 const fc = (values: unknown[]) => ({
   type: "FeatureCollection",
@@ -119,5 +125,65 @@ describe("ClassifyRuntime", () => {
     await runtime.layersReady(fetcher as never);
     expect(fetcher.fetch).toHaveBeenCalledWith("https://example.com/u.geojson");
     expect(classifyRecordOf(l)!.breaks).toEqual([2]);
+  });
+
+  describe("a source read by view (FlatGeobuf over the whole-file limit, or load: viewport)", () => {
+    it("never computes breaks from the features in view, and reports once", async () => {
+      const data = new Map<string, unknown>([["parcels", fc([0, 10, 20, 30])]]);
+      const map = fakeMap(new Set(["income"]));
+      const changed = vi.fn();
+      const onRefused = vi.fn();
+      const l = layer("income", "parcels");
+      const before = JSON.stringify(l.paint["fill-color"]);
+      const runtime = new ClassifyRuntime(map as never, [l], {}, (id) => data.get(id), changed, {
+        readsByView: (id) => id === "parcels",
+        onRefused,
+      });
+      runtime.dataLoaded("parcels");
+      runtime.dataLoaded("parcels"); // the next view's read
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+
+      expect(classifyRecordOf(l)!.breaks).toBeUndefined();
+      expect(map.setPaintProperty).not.toHaveBeenCalled();
+      expect(changed).not.toHaveBeenCalled();
+      // The no-data colour stays.
+      expect(before).toContain(DEFAULT_NO_DATA_COLOR);
+      expect(JSON.stringify(l.paint["fill-color"])).toBe(before);
+      expect(onRefused).toHaveBeenCalledTimes(1);
+      const [layerId, sourceId, error] = onRefused.mock.calls[0]!;
+      expect([layerId, sourceId]).toEqual(["income", "parcels"]);
+      expect((error as Error).message).toContain("breaks:");
+      expect((error as Error).message).toContain("whole file");
+    });
+
+    it("keeps explicit breaks, without edges taken from the part in view", () => {
+      const data = new Map<string, unknown>([["parcels", fc([3, 12, 40])]]);
+      const record = resolveClassify(
+        { field: "v", breaks: [10, 20], colors: ["#000000", "#777777", "#ffffff"] },
+        "fill"
+      );
+      const l = applyClassifyToSpec({ id: "e", type: "fill", source: "parcels" }, record) as never as {
+        paint: Record<string, unknown>;
+      };
+      const map = fakeMap(new Set(["e"]));
+      const onRefused = vi.fn();
+      const runtime = new ClassifyRuntime(map as never, [l as never], {}, (id) => data.get(id), () => {}, {
+        readsByView: () => true,
+        onRefused,
+      });
+      runtime.dataLoaded("parcels");
+      expect(onRefused).not.toHaveBeenCalled();
+      expect(JSON.stringify(l.paint["fill-color"])).toContain('"step"');
+      const current = classifyRecordOf(l)!;
+      expect(current.breaks).toEqual([10, 20]);
+      expect(current.stats).toBeUndefined();
+      expect(classifyLegendEntries(current).map((e) => e.label)).toEqual([
+        "v",
+        "< 10",
+        "10–20",
+        "≥ 20",
+        "No data",
+      ]);
+    });
   });
 });

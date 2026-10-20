@@ -742,6 +742,15 @@ export class LayerManager {
     return loader?.readsByView ? loader.extent : undefined;
   }
 
+  /**
+   * Whether a source holds only the features in view: a FlatGeobuf source
+   * read by view — `load: viewport`, or a file too large to read whole that
+   * switched itself to it. Its data is never the whole dataset.
+   */
+  readsByView(sourceId: string): boolean {
+    return this.formatLoaders.get(sourceId)?.readsByView ?? false;
+  }
+
   /** Whether a source's data comes from a cloud-native reader (no live refresh in 0.9). */
   private isFormatSource(config: GeoJSONSourceConfig): boolean {
     return formatOfSource(config) === "flatgeobuf";

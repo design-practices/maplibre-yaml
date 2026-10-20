@@ -206,6 +206,56 @@ describe("layer checks", () => {
     expect(error!.message).toContain("not a GeoJSON source declared in this document");
   });
 
+  it("refuses method: over a source read by view, in every spelling", () => {
+    const bare = YAMLParser.safeParseMapBlock(
+      HEAD.replace("url: /data/tracts.geojson", "url: /data/tracts.fgb\n    load: viewport") +
+        `  - id: v
+    type: fill
+    source: tracts
+    classify: { field: income, method: quantile }
+`
+    );
+    expect(bare.success).toBe(false);
+    expect(bare.errors[0]!.path).toBe("layers.0.classify.method");
+    expect(bare.errors[0]!.message).toContain("load: viewport");
+
+    // The object form.
+    const object = YAMLParser.safeParseMapBlock(
+      HEAD.replace(
+        "url: /data/tracts.geojson",
+        "url: /data/tracts.fgb\n    load: { mode: viewport, minzoom: 12 }"
+      ) +
+        `  - id: v
+    type: fill
+    source: tracts
+    classify: { field: income, method: quantile }
+`
+    );
+    expect(object.success).toBe(false);
+    expect(object.errors[0]!.path).toBe("layers.0.classify.method");
+
+    // An inline source on the layer.
+    const inline = parse(`  - id: v
+    type: fill
+    source: { type: geojson, url: /data/t.fgb, load: { mode: viewport } }
+    classify: { field: income, method: jenks }
+`);
+    expect(inline.success).toBe(false);
+    expect(inline.errors[0]!.path).toBe("layers.0.classify.method");
+  });
+
+  it("keeps explicit breaks: on a source read by view", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      HEAD.replace("url: /data/tracts.geojson", "url: /data/tracts.fgb\n    load: { mode: viewport }") +
+        `  - id: v
+    type: fill
+    source: tracts
+    classify: { field: income, breaks: [10, 20] }
+`
+    );
+    expect(result.errors).toEqual([]);
+  });
+
   it("refuses classify plus an authored colour on the same property", () => {
     const [error] = only(parse(`  - id: a
     type: fill
@@ -316,6 +366,30 @@ style:
 `);
     expect(bad.success).toBe(false);
     expect(bad.errors[0]!.path).toBe("style.layers.0.classify.method");
+  });
+
+  it("refuses method: over a v2 source whose runtime.load reads by view", () => {
+    const bad = YAMLParser.safeParseMapBlock(`version: 2
+type: map
+id: m
+style:
+  center: [0, 0]
+  zoom: 2
+  sources:
+    parcels:
+      type: geojson
+      url: /p.fgb
+      runtime:
+        load: { mode: viewport, minzoom: 12 }
+  layers:
+    - id: a
+      type: fill
+      source: parcels
+      classify: { field: v, method: quantile }
+`);
+    expect(bad.success).toBe(false);
+    expect(bad.errors[0]!.path).toBe("style.layers.0.classify.method");
+    expect(bad.errors[0]!.message).toContain("load: viewport");
   });
 
   it("validates classify in a story's layers", () => {

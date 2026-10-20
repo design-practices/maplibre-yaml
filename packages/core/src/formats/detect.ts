@@ -151,6 +151,35 @@ export function formatOfSource(source: unknown): CloudFormat | undefined {
   return formatFromUrl(source["url"]);
 }
 
+/** `load: viewport` reads nothing below this zoom unless `minzoom` says otherwise. */
+export const VIEWPORT_DEFAULT_MINZOOM = 10;
+
+/** How a FlatGeobuf source is read (`load:`). */
+export interface LoadMode {
+  mode: "all" | "viewport";
+  /** Viewport mode reads nothing below this zoom. */
+  minzoom: number;
+}
+
+/**
+ * The source's `load:` key, normalized (`all` when absent or unrecognized):
+ * flat (v1, and every source the renderer sees) or under a v2 source's
+ * `runtime:`; the bare string or the `{ mode, minzoom }` object.
+ */
+export function loadModeOf(source: unknown): LoadMode {
+  if (!isObject(source)) return { mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM };
+  const runtime = source["runtime"];
+  const load = source["load"] ?? (isObject(runtime) ? runtime["load"] : undefined);
+  if (typeof load === "string" && load.trim().toLowerCase() === "viewport") {
+    return { mode: "viewport", minzoom: VIEWPORT_DEFAULT_MINZOOM };
+  }
+  if (isObject(load)) {
+    const minzoom = typeof load["minzoom"] === "number" ? load["minzoom"] : VIEWPORT_DEFAULT_MINZOOM;
+    if (load["mode"] === "viewport") return { mode: "viewport", minzoom };
+  }
+  return { mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM };
+}
+
 /**
  * Whether a source type can read a format (`vector` + PMTiles: yes,
  * `geojson` + PMTiles: no). Unknown types are not judged.

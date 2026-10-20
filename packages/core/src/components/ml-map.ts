@@ -1103,6 +1103,9 @@ export class MLMap extends HTMLElement {
           // on the map, not only on the console (ml-aot.15).
           if (!terminal && context?.kind === "layer" && context.layerId) {
             this.reportProblem(describeLayerProblem(context.layerId, error.message));
+          } else if (!terminal && context?.kind === "classify") {
+            // The message is the whole notice (renderer/classify-runtime).
+            this.reportProblem(error.message);
           } else if (!terminal && context?.kind === "source" && context.sourceId) {
             this.reportProblem(
               describeSourceProblem(context.sourceId, error.message, error, {
