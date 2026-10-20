@@ -15,7 +15,8 @@
  * that calls {@link handle} before any map is created.
  *
  * Before the plugin reads a file, {@link handle} reads its first 64 KB once
- * ({@link preflight}), to say plainly what the plugin can't: a server
+ * ({@link preflight}) — and, for a GeoTIFF whose directory lies past them,
+ * the part that holds it — to say plainly what the plugin can't: a server
  * without range requests, a CORS refusal, a missing file, a web page saved
  * under a `.tif` name, a GeoTIFF that isn't in Web Mercator (the plugin
  * would draw it blank, with no error), or one that isn't cloud-optimized (a
@@ -26,7 +27,7 @@
  */
 
 import { getDecoder } from "./decoders";
-import type { CogHeader } from "./cog-header";
+import type { CogHeader, FilePart } from "./cog-header";
 import { FormatError, isAbortError, isFormatError } from "./errors";
 import { describeFormatFailure } from "../components/student-messages.js";
 
@@ -134,6 +135,30 @@ const WORKER_BLOCKED =
   "this page's Content Security Policy doesn't allow the background workers COG images are " +
   "decoded in; allow them with `worker-src 'self' blob:`";
 
+/** How many reads past the first one a header may take (an IFD-last file needs one or two). */
+const MORE_HEADER_READS = 3;
+
+/**
+ * `length` bytes (at least {@link HEADER_BYTES}) of the file from `offset`,
+ * or `undefined` when they can't be had (past the end, a refused range):
+ * the header is then left to the plugin.
+ */
+async function readMore(fileUrl: string, offset: number, length: number): Promise<FilePart | undefined> {
+  try {
+    const response = await fetch(fileUrl, {
+      headers: { Range: `bytes=${offset}-${offset + Math.max(length, HEADER_BYTES) - 1}` },
+    });
+    if (response.status !== 206) {
+      void response.body?.cancel().catch(() => undefined);
+      return undefined;
+    }
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return bytes.length >= length ? { start: offset, bytes } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Preflight results by file URL: a header read once per file per page. */
 const preflights = new Map<string, Promise<CogHeader | undefined>>();
 
@@ -191,10 +216,20 @@ async function readHeader(fileUrl: string, report: CogHintReporter | undefined):
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
   // The header reader travels in the COG chunk (formats/lib/cog.ts).
-  const { readCogHeader, isCloudOptimized } = await getDecoder("cog");
-  const header = readCogHeader(bytes);
+  const { readCogHeaderParts, isCloudOptimized } = await getDecoder("cog");
+  const parts: FilePart[] = [{ start: 0, bytes }];
+  let header = readCogHeaderParts(parts);
+  // A GeoTIFF written "IFD last" (not by GDAL's COG driver) keeps its
+  // directory and GeoKeys past the first read: read where they are, so a
+  // file in the wrong projection is still caught. A few reads at most.
+  for (let reads = 0; typeof header === "object" && "missing" in header && reads < MORE_HEADER_READS; reads++) {
+    const more = await readMore(fileUrl, header.missing.offset, header.missing.length);
+    if (!more) break;
+    parts.push(more);
+    header = readCogHeaderParts(parts);
+  }
   if (header === "not-tiff") throw new FormatError({ ...base, code: "not-format" });
-  if (header === "truncated") return undefined;
+  if ("missing" in header) return undefined; // the plugin reads the file as it can
   if (!header.webMercator) {
     throw new FormatError({ ...base, code: "crs", ...(header.crs ? { crs: header.crs } : {}) });
   }

@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const plugin = vi.hoisted(() => ({ cogProtocol: vi.fn(async () => ({ data: { tilejson: "2.2.0" } })) }));
 vi.mock("@geomatico/maplibre-cog-protocol", () => plugin);
 
-import { isCloudOptimized, isTiff, readCogHeader, type CogHeader } from "../../src/formats/cog-header";
+import { isCloudOptimized, isTiff, readCogHeader, readCogHeaderParts, type CogHeader } from "../../src/formats/cog-header";
 import { cogSourceSpec, cogUrl, colorRampColors, colorRampFragment, normalizeHex } from "../../src/formats/cog-spec";
 import { classifyCogError, fileUrlOf, handle } from "../../src/formats/cog";
 import { cogHintFor, install } from "../../src/formats/cog-protocol";
@@ -84,6 +84,18 @@ describe("readCogHeader — the first bytes of a GeoTIFF", () => {
     expect(plain.webMercator).toBe(false);
   });
 
+  it("a directory past the first 64 KB ('IFD last'): the bytes it needs, then the header from them (ml-cnv.19)", () => {
+    const file = tiff({ big: false, le: true, width: 800, height: 600, geographic: 4326, ifdAt: 70_000 });
+    expect(readCogHeader(file.slice(0, 65536))).toBe("truncated");
+    const first = readCogHeaderParts([{ start: 0, bytes: file.slice(0, 65536) }]);
+    expect(first).toEqual({ missing: { offset: 70_000, length: 2 } });
+    const header = readCogHeaderParts([
+      { start: 0, bytes: file.slice(0, 65536) },
+      { start: 70_000, bytes: file.slice(70_000) },
+    ]);
+    expect(header).toMatchObject({ width: 800, height: 600, crs: "EPSG:4326", webMercator: false });
+  });
+
   it("isCloudOptimized: small images pass either way; a big tiled one needs overviews", () => {
     const base = { webMercator: true, hasOverviews: false } as const;
     expect(isCloudOptimized({ ...base, width: 200, height: 200 })).toBe(true);
@@ -92,7 +104,11 @@ describe("readCogHeader — the first bytes of a GeoTIFF", () => {
   });
 });
 
-/** A minimal (Big)TIFF header with one IFD, for byte orders the fixtures don't cover. */
+/**
+ * A minimal (Big)TIFF header with one IFD, for byte orders and layouts the
+ * fixtures don't cover. `ifdAt` places the directory (and the values it
+ * points to) anywhere in the file — past 64 KB for an "IFD last" file.
+ */
 function tiff(o: {
   big: boolean;
   le: boolean;
@@ -100,52 +116,66 @@ function tiff(o: {
   height: number;
   tile?: number;
   projected?: number;
+  geographic?: number;
   next?: boolean;
+  ifdAt?: number;
 }): Uint8Array {
-  const buf = new ArrayBuffer(1024);
+  const ifd = o.ifdAt ?? (o.big ? 16 : 8);
+  const buf = new ArrayBuffer(Math.max(1024, ifd + 1024));
   const v = new DataView(buf);
   const bytes = new Uint8Array(buf);
+  /** A BigTIFF 64-bit field, high word first on a big-endian file. */
+  const u64 = (at: number, n: number) => {
+    const hi = Math.floor(n / 2 ** 32);
+    const lo = n >>> 0;
+    v.setUint32(at + (o.le ? 0 : 4), lo, o.le);
+    v.setUint32(at + (o.le ? 4 : 0), hi, o.le);
+  };
+  /** An offset or count field: 8 bytes in a BigTIFF, 4 in a classic TIFF. */
+  const field = (at: number, n: number) => (o.big ? u64(at, n) : v.setUint32(at, n, o.le));
   bytes.set(o.le ? [0x49, 0x49] : [0x4d, 0x4d]);
   v.setUint16(2, o.big ? 43 : 42, o.le);
-  const geo = o.projected !== undefined ? [1, 1, 0, 2, 1024, 0, 1, 1, 3072, 0, 1, o.projected] : undefined;
+  const geo =
+    o.projected !== undefined
+      ? [1, 1, 0, 2, 1024, 0, 1, 1, 3072, 0, 1, o.projected]
+      : o.geographic !== undefined
+        ? [1, 1, 0, 2, 1024, 0, 1, 2, 2048, 0, 1, o.geographic]
+        : undefined;
   const entries: [number, number, number[]][] = [
     [256, 4, [o.width]],
     [257, 4, [o.height]],
   ];
   if (o.tile) entries.push([322, 3, [o.tile]], [323, 3, [o.tile]]);
   if (geo) entries.push([34735, 3, geo]);
-  const ifd = o.big ? 16 : 8;
   if (o.big) {
     v.setUint16(4, 8, o.le);
-    v.setUint32(8, ifd, o.le);
-    v.setUint32(12, 0, o.le);
-    v.setUint32(ifd, entries.length, o.le);
+    v.setUint16(6, 0, o.le);
+    u64(8, ifd);
+    u64(ifd, entries.length);
   } else {
     v.setUint32(4, ifd, o.le);
     v.setUint16(ifd, entries.length, o.le);
   }
   const first = ifd + (o.big ? 8 : 2);
   const size = o.big ? 20 : 12;
-  let extra = 600;
+  let extra = ifd + 600;
   entries.forEach(([tag, type, values], i) => {
     const at = first + i * size;
     v.setUint16(at, tag, o.le);
     v.setUint16(at + 2, type, o.le);
-    if (o.big) v.setUint32(at + 4, values.length, o.le);
-    else v.setUint32(at + 4, values.length, o.le);
-    const field = at + (o.big ? 12 : 8);
+    field(at + 4, values.length);
+    const valueField = at + (o.big ? 12 : 8);
     const width = type === 3 ? 2 : 4;
     const inline = values.length * width <= (o.big ? 8 : 4);
-    const target = inline ? field : extra;
+    const target = inline ? valueField : extra;
     if (!inline) {
-      if (o.big) v.setUint32(field, extra, o.le);
-      else v.setUint32(field, extra, o.le);
+      field(valueField, extra);
       extra += values.length * width;
     }
     values.forEach((n, j) => (width === 2 ? v.setUint16(target + j * 2, n, o.le) : v.setUint32(target + j * 4, n, o.le)));
   });
   const nextAt = first + entries.length * size;
-  if (o.next) v.setUint32(nextAt, 900, o.le);
+  if (o.next) field(nextAt, ifd + 900);
   return bytes;
 }
 
@@ -308,6 +338,21 @@ describe("the reader's preflight: one 64 KB read, every failure in plain words",
     // The first 64 KB of an empty file is unsatisfiable: a wrong file, not a 416 "didn't load".
     fetchSpy.mockResolvedValueOnce(respond(null, { status: 416, headers: { "content-range": "bytes */0" } }));
     expect(await failureOf("https://h.org/empty.tif")).toMatchObject({ code: "not-format" });
+  });
+
+  it("an 'IFD last' GeoTIFF in longitude/latitude: a second read finds the projection (ml-cnv.19)", async () => {
+    const file = tiff({ big: false, le: true, width: 800, height: 600, geographic: 4326, ifdAt: 70_000 });
+    fetchSpy.mockImplementation(async (_: unknown, init?: RequestInit) => {
+      // A plain object, read directly (jsdom's Headers drops `Range`).
+      const m = /bytes=(\d+)-(\d+)/.exec((init?.headers as Record<string, string>).Range)!;
+      const start = Number(m[1]);
+      const end = Math.min(Number(m[2]), file.length - 1);
+      return respond(file.slice(start, end + 1), { status: 206 });
+    });
+    expect(await failureOf("https://h.org/ifd-last.tif")).toMatchObject({ code: "crs", crs: "EPSG:4326" });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect((fetchSpy.mock.calls[1]![1] as RequestInit).headers).toEqual({ Range: "bytes=70000-135535" });
+    expect(plugin.cogProtocol).not.toHaveBeenCalled();
   });
 
   it("a failed preflight is not kept: the next request asks again", async () => {

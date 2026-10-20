@@ -65,6 +65,7 @@ import type { CloudFormat } from "./detect";
 interface CogLibrary {
   cogProtocol: (params: { url: string; type?: string }) => Promise<{ data: unknown }>;
   readCogHeader: typeof import("./cog-header").readCogHeader;
+  readCogHeaderParts: typeof import("./cog-header").readCogHeaderParts;
   isCloudOptimized: typeof import("./cog-header").isCloudOptimized;
 }
 

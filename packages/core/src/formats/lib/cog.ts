@@ -11,4 +11,4 @@
  */
 
 export { cogProtocol } from "@geomatico/maplibre-cog-protocol";
-export { isCloudOptimized, readCogHeader } from "../cog-header";
+export { isCloudOptimized, readCogHeader, readCogHeaderParts } from "../cog-header";

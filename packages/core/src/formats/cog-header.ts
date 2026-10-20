@@ -44,6 +44,17 @@ export interface CogHeader {
 /** Why bytes could not be read as a TIFF header. */
 export type CogHeaderProblem = "not-tiff" | "truncated";
 
+/** Some bytes of a file, and where in the file they start. */
+export interface FilePart {
+  start: number;
+  bytes: Uint8Array;
+}
+
+/** The bytes a header read still needs: `length` bytes from `offset`. */
+export interface MissingBytes {
+  missing: { offset: number; length: number };
+}
+
 /** EPSG codes (and the ESRI/legacy aliases) that mean Web Mercator. */
 const WEB_MERCATOR = new Set([3857, 900913, 3785, 102100, 102113]);
 
@@ -79,7 +90,14 @@ export function isTiff(bytes: Uint8Array): boolean {
   return version === 42 || version === 43;
 }
 
-class Truncated extends Error {}
+class Truncated extends Error {
+  constructor(
+    readonly offset: number,
+    readonly length: number
+  ) {
+    super(`needs ${length} bytes at ${offset}`);
+  }
+}
 
 /**
  * Read the header of a (Big)TIFF from its first bytes.
@@ -88,32 +106,67 @@ class Truncated extends Error {}
  * @returns The header, or the problem: `not-tiff` for bytes that aren't a
  *   TIFF at all (a web page served under a `.tif` name), `truncated` when
  *   the header reaches past the bytes given (an unusually laid-out file:
- *   the caller lets the plugin decide).
+ *   {@link readCogHeaderParts} says which bytes it needs).
  */
 export function readCogHeader(bytes: Uint8Array): CogHeader | CogHeaderProblem {
-  if (!isTiff(bytes)) return "not-tiff";
+  const read = readCogHeaderParts([{ start: 0, bytes }]);
+  return typeof read === "object" && "missing" in read ? "truncated" : read;
+}
+
+/**
+ * Read the header of a (Big)TIFF from parts of the file: its start, plus
+ * whatever else has been read. An ordinary GeoTIFF written "IFD last" (by
+ * writers other than GDAL's COG driver) keeps its directory and GeoKeys at
+ * the end of the file, past the first read.
+ *
+ * @param parts - The file's start (`start: 0`) and any other parts read.
+ * @returns The header; `not-tiff`; or the bytes still needed — the caller
+ *   reads them and asks again.
+ */
+export function readCogHeaderParts(parts: readonly FilePart[]): CogHeader | "not-tiff" | MissingBytes {
+  const head = parts.find((p) => p.start === 0);
+  if (!head || !isTiff(head.bytes)) return "not-tiff";
   try {
-    return parse(bytes);
+    return parse(parts, head.bytes);
   } catch (error) {
-    if (error instanceof Truncated || error instanceof RangeError) return "truncated";
+    if (error instanceof Truncated) return { missing: { offset: error.offset, length: error.length } };
+    if (error instanceof RangeError) return { missing: { offset: head.bytes.length, length: 1 } };
     throw error;
   }
 }
 
-function parse(bytes: Uint8Array): CogHeader {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const le = bytes[0] === 0x49;
-  const big = view.getUint16(2, le) === 43;
-  const need = (offset: number, length: number) => {
-    if (offset + length > bytes.length) throw new Truncated();
+function parse(parts: readonly FilePart[], head: Uint8Array): CogHeader {
+  const views = parts.map((p) => ({
+    start: p.start,
+    end: p.start + p.bytes.length,
+    view: new DataView(p.bytes.buffer, p.bytes.byteOffset, p.bytes.byteLength),
+  }));
+  const le = head[0] === 0x49;
+  const big = new DataView(head.buffer, head.byteOffset, head.byteLength).getUint16(2, le) === 43;
+  /** The view holding `length` bytes at `offset`, and where they are in it. */
+  const at = (offset: number, length: number): [DataView, number] => {
+    const part = views.find((v) => offset >= v.start && offset + length <= v.end);
+    if (!part) throw new Truncated(offset, length);
+    return [part.view, offset - part.start];
   };
-  const u16 = (o: number) => (need(o, 2), view.getUint16(o, le));
-  const u32 = (o: number) => (need(o, 4), view.getUint32(o, le));
+  const need = (offset: number, length: number) => void at(offset, length);
+  const u16 = (o: number) => {
+    const [view, i] = at(o, 2);
+    return view.getUint16(i, le);
+  };
+  const u32 = (o: number) => {
+    const [view, i] = at(o, 4);
+    return view.getUint32(i, le);
+  };
   const u64 = (o: number) => {
-    need(o, 8);
-    const lo = view.getUint32(o + (le ? 0 : 4), le);
-    const hi = view.getUint32(o + (le ? 4 : 0), le);
+    const [view, i] = at(o, 8);
+    const lo = view.getUint32(i + (le ? 0 : 4), le);
+    const hi = view.getUint32(i + (le ? 4 : 0), le);
     return hi * 2 ** 32 + lo;
+  };
+  const u8 = (o: number) => {
+    const [view, i] = at(o, 1);
+    return view.getUint8(i);
   };
   const offsetAt = big ? u64 : u32;
 
@@ -129,15 +182,15 @@ function parse(bytes: Uint8Array): CogHeader {
     const n = big ? u64(entry + 4) : u32(entry + 4);
     const size = TYPE_SIZE[type] ?? 1;
     const valueField = entry + (big ? 12 : 8);
-    const at = n * size <= inlineSize ? valueField : offsetAt(valueField);
-    need(at, n * size);
+    const where = n * size <= inlineSize ? valueField : offsetAt(valueField);
+    need(where, n * size);
     const out: number[] = [];
     for (let i = 0; i < n; i++) {
-      const o = at + i * size;
-      if (type === 3) out.push(view.getUint16(o, le));
-      else if (type === 4) out.push(view.getUint32(o, le));
+      const o = where + i * size;
+      if (type === 3) out.push(u16(o));
+      else if (type === 4) out.push(u32(o));
       else if (type === 16) out.push(u64(o));
-      else if (type === 1 || type === 7) out.push(view.getUint8(o));
+      else if (type === 1 || type === 7) out.push(u8(o));
       else out.push(Number.NaN);
     }
     return out;
