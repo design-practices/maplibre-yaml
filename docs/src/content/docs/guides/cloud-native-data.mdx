@@ -1,6 +1,6 @@
 ---
 title: Cloud-native data
-description: PMTiles and FlatGeobuf straight from YAML — no page JavaScript — and how to host them (range requests, CORS, GitHub Pages)
+description: PMTiles, FlatGeobuf and GeoParquet straight from YAML — no page JavaScript — and how to host them (range requests, CORS, GitHub Pages)
 ---
 
 import LiveMap from "../../../components/LiveMap.astro";
@@ -9,13 +9,14 @@ import { Aside } from "@astrojs/starlight/components";
 "Cloud-native" files are made to be read **in parts**, straight from a web
 server: the browser asks for the bytes it needs (HTTP *range requests*), so a
 map can draw a city from a country-sized file without downloading all of it.
-Since 0.9, maplibre-yaml reads two of them with nothing but YAML — in plain
+Since 0.9, maplibre-yaml reads three of them with nothing but YAML — in plain
 HTML from the CDN, in Astro, and under any bundler:
 
 | Format | File | Holds | Source `type:` |
 |---|---|---|---|
 | **PMTiles** | `.pmtiles` | Vector tiles, raster tiles or elevation, in one file | `vector`, `raster`, `raster-dem` |
 | **FlatGeobuf** | `.fgb` | Features (points, lines, polygons) with their properties | `geojson` |
+| **GeoParquet** | `.parquet`, `.geoparquet` | Features in a columnar table: only the columns a map uses are read | `geojson` |
 
 <LiveMap
   src="/configs/cloud-native-demo.yaml"
@@ -74,11 +75,12 @@ sources:
 ```
 
 <Aside type="caution" title="type: pmtiles is a mistake (with a fix)">
-`type: pmtiles`, `type: flatgeobuf`, `type: fgb` and similar are rejected with
-a message that says what to write instead (`type: vector` with the
-`.pmtiles` URL; `type: geojson` with the `.fgb` URL). A `.fgb` file on a
-`vector` source, or a `.pmtiles` file on a `geojson` source, is caught the
-same way. All of this happens at validation time, so `mlym validate` and the
+`type: pmtiles`, `type: flatgeobuf`, `type: fgb`, `type: geoparquet` and
+similar are rejected with a message that says what to write instead
+(`type: vector` with the `.pmtiles` URL; `type: geojson` with the `.fgb` or
+`.parquet` URL). A `.fgb` or `.parquet` file on a `vector` source, or a
+`.pmtiles` file on a `geojson` source, is caught the same way; so is a
+misspelt `format:` (`format: parquet` gets "did you mean `geoparquet`?"). All of this happens at validation time, so `mlym validate` and the
 Astro content loader report it too.
 </Aside>
 
@@ -225,10 +227,144 @@ large and static.
   asks for explicit `breaks:` instead, which work either way. See
   [Thematic maps](/guides/thematic-maps/).
 
+## GeoParquet
+
+A `.parquet` (or `.geoparquet`) file is read into an ordinary GeoJSON source,
+like a FlatGeobuf file: layers, popups, the legend, `fitTo`, clustering and
+`classify:` work as they do for a `.geojson` file.
+
+```yaml
+type: map
+id: geoparquet-wells
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+  fitTo: { source: wells, padding: 20 }
+sources:
+  wells:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+layers:
+  - id: wells
+    type: circle
+    source: wells
+    paint:
+      circle-radius: 4
+      circle-color: ["match", ["get", "kind"], "well", "#e63946", "station", "#457b9d", "#2a9d8f"]
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: kind }]
+          - p: [{ str: "Value: " }, { property: value }]
+```
+
+**Only the columns the map uses are read.** GeoParquet stores each column
+separately, so maplibre-yaml reads the geometry plus the properties the
+document references for that source — here `kind` and `value`, not the rest
+of the file. It looks at `["get", …]` and `["has", …]` in `paint`, `layout`
+and `filter`, `{name}` tokens in text, popup and legend `property:` items,
+`classify:` `field` and `normalize`, and the source's `promoteId`, `filter`
+and `clusterProperties`. On a wide file (dozens of columns) that is most of
+the saving. To choose yourself, set `columns:`:
+
+```yaml
+sources:
+  wells:
+    type: geojson
+    url: data/wells.parquet
+    columns: [kind, value, owner]   # or: columns: all
+```
+
+<Aside type="note" title="Page JavaScript that reads other properties">
+A clicked feature (`ml-map:layer-click`, `queryRenderedFeatures`) carries
+only the columns that were read. If your page's own JavaScript reads other
+properties, list them in `columns:`, or write `columns: all`.
+</Aside>
+
+Two ways to read it, with `load:`, as for FlatGeobuf:
+
+| `load:` | What it reads | Needs |
+|---|---|---|
+| `all` (default) | The columns it uses, from every row | Any web server |
+| `viewport` | Only the rows in view, re-read as the map moves; nothing below `minzoom` (default 10) | A **`bbox` covering column**, row groups **sorted by location**, and a server with **range requests** |
+
+**Reading by view.** A GeoParquet 1.1 file can carry a `bbox` column (each
+row's extent), and the file's footer records each row group's range of those
+values, so row groups outside the view are never downloaded. That only pays
+off when nearby rows sit in the same row groups — a file sorted by location.
+A file whose row groups each span most of the area is read whole instead,
+with a console note; one without a `bbox` column is refused with a notice
+that says how to add it. `fitTo` frames the extent recorded in the file's
+metadata.
+
+**Sizes.** The same limits as FlatGeobuf, counted on the columns the map
+reads (the footer gives their sizes before any data is downloaded): up to
+**10 MB** read whole, **10–50 MB** read whole with a console note, over
+**50 MB** read by view if the file allows it, refused otherwise. A small file
+(under 512 KB) arrives in one request.
+
+**Without range requests** (`python -m http.server`) the first request
+returns the whole file. That is fine for a small file; a file over 50 MB is
+refused before it downloads, and the notice explains why.
+
+- **Geometry encoding:** WKB, the default of GeoPandas, GDAL and DuckDB.
+  GeoArrow-encoded geometry isn't read yet; the notice gives the command that
+  rewrites the file as WKB (`ogr2ogr -f Parquet -lco GEOMETRY_ENCODING=WKB
+  out.parquet in.parquet`, or GeoPandas `to_parquet(...,
+  geometry_encoding="WKB")`).
+- **Coordinates:** longitude/latitude (`OGC:CRS84`, the GeoParquet default,
+  or EPSG:4326). A file in another projection is refused with the `ogr2ogr`
+  command that fixes it.
+- **Compression:** snappy (the usual default), zstd, gzip, lz4 and brotli all
+  work.
+- **A plain Parquet file** — one without GeoParquet's geometry metadata, such
+  as a table with a WKB column written by hand — is named as such in the
+  notice.
+- **Live data** (`refresh:`, `stream:`) isn't available for GeoParquet
+  sources in 0.9 — validation says so.
+- **`classify:`** with computed classes (`method:`) works on a file read
+  whole. On a source read by view, validation (for `load: viewport`) or the
+  map (for a file that switched to it) asks for explicit `breaks:` instead.
+
+### Making a GeoParquet file
+
+**GDAL** (`ogr2ogr`, also inside QGIS):
+
+```bash
+ogr2ogr -f Parquet out.parquet in.geojson -lco COMPRESSION=SNAPPY
+# for load: viewport — a bbox column, rows sorted by location, smaller row groups
+ogr2ogr -f Parquet out.parquet in.geojson -lco WRITE_COVERING_BBOX=YES \
+  -lco SORT_BY_BBOX=YES -lco ROW_GROUP_SIZE=10000
+```
+
+Add `-t_srs EPSG:4326` when the source data is in a projected CRS.
+
+**GeoPandas** (Python):
+
+```python
+import geopandas as gpd
+gdf = gpd.read_file("in.geojson").to_crs(4326)
+gdf.to_parquet("out.parquet")  # WKB geometry, snappy
+# for load: viewport — sort by location, then write the bbox column
+gdf = gdf.iloc[gdf.geometry.hilbert_distance().argsort()]
+gdf.to_parquet("out.parquet", write_covering_bbox=True, row_group_size=10_000)
+```
+
+**DuckDB** (with its spatial extension):
+
+```sql
+INSTALL spatial; LOAD spatial;
+COPY (SELECT * FROM ST_Read('in.geojson')) TO 'out.parquet' (FORMAT parquet);
+```
+
+Whatever writes it, keep the file to the area and columns you show: a smaller
+file loads faster for every visitor.
+
 ## Hosting: range requests and CORS
 
-PMTiles always, and FlatGeobuf with `load: viewport`, read files **in parts**
-with HTTP range requests. Most static hosts support them:
+PMTiles always, FlatGeobuf with `load: viewport`, and GeoParquet read files
+**in parts** with HTTP range requests. Most static hosts support them:
 
 | Host | Range requests | Notes |
 |---|---|---|
@@ -236,7 +372,7 @@ with HTTP range requests. Most static hosts support them:
 | Netlify, Cloudflare Pages, Vercel | yes | |
 | Amazon S3, Cloudflare R2, Google Cloud Storage | yes | From another site, set CORS (below) |
 | `npx serve`, `astro dev`, `astro preview`, Vite | yes | Good for previewing locally |
-| `python -m http.server` | **no** | PMTiles fail; `load: viewport` falls back to reading the whole file |
+| `python -m http.server` | **no** | PMTiles fail; `load: viewport` falls back to reading the whole file; a GeoParquet file over 50 MB is refused |
 
 **Files on another site** need CORS: the bucket or server must send
 `Access-Control-Allow-Origin`, allow the `Range` request header, and expose
@@ -257,8 +393,8 @@ with HTTP range requests. Most static hosts support them:
 **GitHub Pages project sites** serve your files under `/repo-name/`. Set the
 `base` attribute (`<ml-map base="/repo-name/">`; Astro passes its own `base`
 automatically) and write paths as you would on your own computer —
-`data/x.pmtiles`, `/data/x.fgb`, and `pmtiles://data/x.pmtiles` all resolve
-under the base.
+`data/x.pmtiles`, `/data/x.fgb`, `data/x.parquet` and
+`pmtiles://data/x.pmtiles` all resolve under the base.
 
 ## When something goes wrong
 
@@ -268,25 +404,28 @@ says what happened in plain words. The common cases:
 
 | What happened | What the notice says |
 |---|---|
-| The server doesn't support range requests | "`…/x.pmtiles` was served without range-request support (the server sent the whole file instead of the part asked for). PMTiles and FlatGeobuf files need a web server that supports HTTP range requests: GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` does not — preview locally with `npx serve` instead." |
+| The server doesn't support range requests | "`…/x.pmtiles` was served without range-request support (the server sent the whole file instead of the part asked for). PMTiles, FlatGeobuf and GeoParquet files need a web server that supports HTTP range requests: GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` does not — preview locally with `npx serve` instead." |
 | Another site refused (CORS), or it's unreachable | "The browser couldn't read `…`: the server didn't allow this page to load it (CORS), or it couldn't be reached. A PMTiles file on another site needs that site to send `Access-Control-Allow-Origin` and to allow the `Range` header." |
 | A wrong path that returned a web page | "`…/x.pmtiles` isn't a PMTiles file. A wrong path often returns a web page instead — check the file name and folder." |
 | The file isn't there | "`…/x.fgb` didn't load (404 Not Found)", with where the browser looked and the `base` hint for project sites |
 | A FlatGeobuf in the wrong projection | "`…/x.fgb` is in EPSG:3857; MapLibre needs longitude/latitude (EPSG:4326). Reproject it: `ogr2ogr -t_srs EPSG:4326 out.fgb x.fgb`." |
 | Too large to read whole, no index | "`…/x.fgb` is 180 MB, too large to load whole in a browser. Add `load: viewport` to the source (the file needs a spatial index), or convert it to PMTiles." |
+| A GeoParquet file with GeoArrow geometry | "`…/x.parquet` stores its geometry as GeoArrow (`point`), which maplibre-yaml doesn't read yet: it reads GeoParquet with WKB geometry. Rewrite it with WKB: `ogr2ogr -f Parquet -lco GEOMETRY_ENCODING=WKB out.parquet x.parquet`, or GeoPandas `to_parquet(..., geometry_encoding="WKB")`." |
+| A Parquet file without geometry metadata | "`…/x.parquet` is a Parquet file but not GeoParquet (it has no geometry metadata). Write it with GeoPandas `to_parquet`, `ogr2ogr -f Parquet`, or DuckDB's spatial extension." |
 | The format's reader couldn't be downloaded | "The PMTiles reader (`…/chunks/pmtiles.js`) couldn't be downloaded. maplibre-yaml loads its file-format readers on demand from the folder its script came from: if you copied maplibre-yaml to your own site, copy the whole `dist/` folder (not just `register.js`), or load it from the CDN. …" |
 
 The readers for these formats are not part of maplibre-yaml's main script:
-a page downloads the PMTiles reader (about 8 KB) or the FlatGeobuf reader
-(about 12 KB) only when a map uses that format, from `dist/chunks/` next to
-the script. From a CDN that is automatic; if you host maplibre-yaml's files
+a page downloads the PMTiles reader (about 8 KB), the FlatGeobuf reader
+(about 12 KB) or the GeoParquet reader (about __GPKB__ KB, plus about __BRKB__ KB
+for a brotli-compressed file) only when a map uses that format, from
+`dist/chunks/` next to the script. From a CDN that is automatic; if you host maplibre-yaml's files
 yourself, copy the whole `dist/` folder
 ([Installation](/getting-started/installation/#hosting-the-files-yourself)).
 
 ## Format v2
 
 In a [format v2](/guides/format-v2/) document the URL stays in the source and
-`format:` / `load:` move under the source's `runtime:`:
+`format:` / `load:` / `columns:` move under the source's `runtime:`:
 
 ```yaml
 version: 2
@@ -303,7 +442,13 @@ style:
       url: /gallery-assets/cloud-native/points.fgb
       runtime:
         load: { mode: viewport, minzoom: 11 }
+    districts:
+      type: geojson
+      url: /gallery-assets/cloud-native/districts.parquet
+      runtime:
+        columns: [name, category]
   layers:
+    - { id: districts, type: fill, source: districts, paint: { fill-color: "#e9c46a", fill-opacity: 0.5 } }
     - { id: outlines, type: line, source: outlines, source-layer: districts }
     - { id: points, type: circle, source: points }
 ```
@@ -326,25 +471,21 @@ A `style.json` can carry a URL but not a file reader, so:
   In a plain HTML page, import `addProtocol` from the `maplibre-gl` your import
   map names and `Protocol` from `https://esm.sh/pmtiles@4` (esm.sh resolves
   its dependencies; unpkg does not), before the map is created.
-- **FlatGeobuf** is converted: `mlym emit` reads the file (next to the YAML,
-  in the current folder or its `public/`, or over http(s)) and writes its
-  features into the style as GeoJSON. If it can't read the file, the source
-  is emitted empty and reported, and `--strict` refuses.
+- **FlatGeobuf** and **GeoParquet** are converted: `mlym emit` reads the file
+  (next to the YAML, in the current folder or its `public/`, or over
+  http(s)) and writes its features into the style as GeoJSON — for
+  GeoParquet, every column, or the `columns:` you listed. If it can't read
+  the file, the source is emitted empty and reported, and `--strict` refuses.
 
 See [Export classes](/guides/export-classes/) for the full table.
 
-## Coming later: GeoParquet and COG
+## Coming later: COG
 
-Two more formats are recognized already, so documents written today keep
-their meaning when support arrives:
+One more format is recognized already, so documents written today keep their
+meaning when support arrives: **Cloud Optimized GeoTIFF** (`.tif`, `.tiff`,
+`cog://`, `format: cog`) on a `raster` or `raster-dem` source.
 
-- **GeoParquet** (`.parquet`, `.geoparquet`, `format: geoparquet`) on a
-  `geojson` source;
-- **Cloud Optimized GeoTIFF** (`.tif`, `.tiff`, `cog://`, `format: cog`) on a
-  `raster` or `raster-dem` source.
-
-In this version they validate with a warning and show "can't read … yet (it's
+In this version it validates with a warning and shows "can't read … yet (it's
 planned)" on the map instead of a confusing error; the rest of the map draws.
-Until then, convert GeoParquet to FlatGeobuf (`ogr2ogr out.fgb in.parquet`)
-and imagery to raster PMTiles. (A page that registers a `cog://` protocol
-itself — the 0.7 way — still gets its COG sources.)
+Until then, convert imagery to raster PMTiles. (A page that registers a
+`cog://` protocol itself — the 0.7 way — still gets its COG sources.)

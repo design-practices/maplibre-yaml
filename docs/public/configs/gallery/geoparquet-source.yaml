@@ -1,0 +1,51 @@
+# GeoParquet files as GeoJSON sources — YAML only (0.9). The .parquet file
+# name is the only hint; layers, popups, classify, the legend and fitTo work
+# as for a .geojson file, and only the columns this document uses are read.
+# Synthetic, public-domain data (a fictional sea area,
+# scripts/fixtures/cloud-native.py). Hermetic test: e2e/gallery.spec.ts
+# (twin) and e2e/cloud-native-geoparquet.spec.ts.
+type: map
+id: geoparquet-source
+config:
+  center: [10.2, 42.15]
+  zoom: 8
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+  fitTo: { source: districts, padding: 24 }
+legend:
+  title: District population
+sources:
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.parquet
+  points:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+    load: { mode: viewport, minzoom: 11 }
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    label: Population
+    classify:
+      field: population
+      method: quantile
+      classes: 4
+      palette: Blues
+    paint:
+      fill-opacity: 0.75
+      fill-outline-color: "#1d3557"
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: name }]
+          - p: [{ str: "Category: " }, { property: category }]
+          - p: [{ str: "Population " }, { property: population }]
+  - id: points
+    type: circle
+    source: points
+    paint:
+      circle-radius: 4
+      circle-color: ["match", ["get", "kind"], "well", "#e63946", "station", "#264653", "#2a9d8f"]
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    legend: { label: "Stations (from zoom 11)", color: "#264653", shape: circle }
