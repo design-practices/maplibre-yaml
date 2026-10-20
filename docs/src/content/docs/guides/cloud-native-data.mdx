@@ -557,7 +557,7 @@ layers:
 | `colors` | Your own colours instead of a palette, low to high: `colors: ["#2c7bb6", "#ffffbf", "#d7191c"]` |
 | `min`, `max` | The values drawn in the first and last colour (required). Values outside the range take the end colours. |
 | `reverse` | `true` runs the colours from high to low. |
-| `classes` | A number of flat classes (`classes: 5`) instead of a smooth ramp. |
+| `classes` | A number of flat classes (`classes: 5`) instead of a smooth ramp: the palette's own set for that many classes, or that many colours spread along your `colors:`. Qualitative palettes (`okabe-ito`, `Set1` …) need it: as a smooth ramp they blend unrelated colours. |
 
 Pixels the file marks as having no value (its NoData value, or NaN) are left
 transparent. `colorRamp:` applies to `raster` sources only; in a format v2

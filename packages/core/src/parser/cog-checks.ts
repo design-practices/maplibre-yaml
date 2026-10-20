@@ -11,7 +11,9 @@
  * | --- | --- |
  * | `colorRamp.palette` not a palette name | error, with did-you-mean |
  * | `colorRamp.colors` entry not `#rrggbb` | error |
- * | `colorRamp.min` ≥ `max`; `classes` more than the palette has | error |
+ * | `colorRamp.min` ≥ `max` (the message points at `reverse:`); `classes` more than the palette has | error |
+ * | a qualitative palette (`okabe-ito`, `Set1` …) as a smooth ramp | warning: it blends unrelated colours |
+ * | `tileSize` other than 256 on a COG | warning: the reader draws 256-pixel tiles |
  * | `colorRamp:` beside a `#…` fragment in the URL | warning: `colorRamp:` wins |
  * | `colorRamp:` on a raster-dem, or on a source that isn't a COG | warning: no effect |
  * | `encoding:` other than `mapbox` on a COG raster-dem | warning: the COG reader writes mapbox |
@@ -82,6 +84,16 @@ export function checkCogSources(
       });
     }
 
+    if (cog && typeof source["tileSize"] === "number" && source["tileSize"] !== COG_TILE_SIZE) {
+      warnings.push({
+        ...at([...path, "tileSize"]),
+        message:
+          `tileSize: ${source["tileSize"]} on a COG: the COG reader draws 256-pixel tiles, so at ` +
+          `${source["tileSize"]} the image is drawn at the wrong resolution. Remove the line (a COG ` +
+          "source uses 256).",
+      });
+    }
+
     if (ramp === undefined) continue;
     if (!cog) {
       warnings.push({
@@ -110,6 +122,18 @@ export function checkCogSources(
       });
     }
     errors.push(...checkRamp(ramp, rampPath, at));
+    const paletteName = typeof ramp["palette"] === "string" ? ramp["palette"] : undefined;
+    const palette = paletteName ? findPalette(paletteName) : undefined;
+    if (palette?.type === "qualitative" && ramp["classes"] === undefined) {
+      warnings.push({
+        ...at([...rampPath, "palette"]),
+        message:
+          `${palette.name} is a qualitative palette — unrelated colours for categories — so a smooth ` +
+          "ramp blends them into in-between colours that mean nothing. For values, use a sequential " +
+          "palette (viridis, YlGn …) or a diverging one (RdBu …); to keep these colours, add classes: " +
+          "to draw flat classes.",
+      });
+    }
   }
   return { errors, warnings };
 }
@@ -154,7 +178,9 @@ function checkRamp(
   if (typeof min === "number" && typeof max === "number" && !(min < max)) {
     errors.push({
       ...at([...path, "max"]),
-      message: `colorRamp: max (${max}) must be greater than min (${min}).`,
+      message:
+        `colorRamp: max (${max}) must be greater than min (${min}). To run the colours from high ` +
+        "values to low, keep min below max and add reverse: true.",
     });
   }
   const classes = ramp["classes"];

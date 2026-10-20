@@ -229,6 +229,23 @@ describe("cog-spec — a COG source as the plugin reads it", () => {
     );
   });
 
+  it("classes: with your own colors: draws that many classes along them (ml-cnv.17)", () => {
+    // Two classes from three colours: the ends.
+    expect(colorRampFragment({ colors: ["#ff0000", "#00ff00", "#0000ff"], classes: 2, min: 0, max: 1 })).toBe(
+      '#color:["#ff0000","#0000ff"],0,1'
+    );
+    // Five from two: blended between them.
+    expect(colorRampColors({ colors: ["#000000", "#ffffff"], classes: 5 })).toEqual([
+      "#000000",
+      "#404040",
+      "#808080",
+      "#bfbfbf",
+      "#ffffff",
+    ]);
+    // Without classes: the colours as given, smooth.
+    expect(colorRampFragment({ colors: ["#000", "#fff"], min: 0, max: 1 })).toBe('#color:["#000000","#ffffff"],0,1,c');
+  });
+
   it("cogSourceSpec: tileSize 256 unless set, mapbox encoding for elevation, no colorRamp key", () => {
     expect(cogSourceSpec({ type: "raster-dem", url: "e.tif", encoding: "terrarium" })).toEqual({
       type: "raster-dem",

@@ -69,7 +69,10 @@ export function colorRampColors(ramp: Obj): string[] | undefined {
   const classes = typeof ramp["classes"] === "number" ? ramp["classes"] : undefined;
   if (Array.isArray(ramp["colors"])) {
     const colors = ramp["colors"].map(normalizeHex);
-    return colors.length >= 2 && colors.every(Boolean) ? (colors as string[]) : undefined;
+    if (colors.length < 2 || !colors.every(Boolean)) return undefined;
+    // `classes:` with your own colours: that many classes along them (the
+    // reader draws one flat class per colour it is given).
+    return classes !== undefined ? spreadColors(colors as string[], classes) : (colors as string[]);
   }
   const name = typeof ramp["palette"] === "string" ? ramp["palette"] : DEFAULT_RAMP_PALETTE;
   const palette = findPalette(name);
@@ -78,6 +81,26 @@ export function colorRampColors(ramp: Obj): string[] | undefined {
   // A smooth ramp: the palette's richest set of stops.
   const sizes = paletteSizes(palette);
   return paletteColors(palette, sizes[sizes.length - 1]!);
+}
+
+/**
+ * `n` colours along `colors` (low to high): the given colours when there are
+ * `n`; evenly picked ones, keeping both ends, when there are more; colours
+ * blended between them (in RGB) when there are fewer.
+ */
+export function spreadColors(colors: readonly string[], n: number): string[] {
+  if (!Number.isInteger(n) || n < 1 || n === colors.length) return [...colors];
+  const rgb = colors.map((c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)));
+  const hex = (v: number) => Math.round(v).toString(16).padStart(2, "0");
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const at = n === 1 ? (colors.length - 1) / 2 : (i * (colors.length - 1)) / (n - 1);
+    const lo = Math.floor(at);
+    const hi = Math.min(lo + 1, colors.length - 1);
+    const t = at - lo;
+    out.push(`#${[0, 1, 2].map((k) => hex(rgb[lo]![k]! + (rgb[hi]![k]! - rgb[lo]![k]!) * t)).join("")}`);
+  }
+  return out;
 }
 
 /**

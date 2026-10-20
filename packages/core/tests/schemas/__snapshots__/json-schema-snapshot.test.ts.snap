@@ -886,7 +886,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "classes": {
                             "type": "integer",
                             "minimum": 2,
-                            "description": "Draw this many flat classes instead of a smooth ramp"
+                            "description": "Draw this many flat classes instead of a smooth ramp (with colors:, spread along them)"
                           }
                         },
                         "required": [
@@ -5456,7 +5456,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "classes": {
                         "type": "integer",
                         "minimum": 2,
-                        "description": "Draw this many flat classes instead of a smooth ramp"
+                        "description": "Draw this many flat classes instead of a smooth ramp (with colors:, spread along them)"
                       }
                     },
                     "required": [
@@ -8950,7 +8950,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "classes": {
                                     "type": "integer",
                                     "minimum": 2,
-                                    "description": "Draw this many flat classes instead of a smooth ramp"
+                                    "description": "Draw this many flat classes instead of a smooth ramp (with colors:, spread along them)"
                                   }
                                 },
                                 "required": [
@@ -13744,7 +13744,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                       "classes": {
                                         "type": "integer",
                                         "minimum": 2,
-                                        "description": "Draw this many flat classes instead of a smooth ramp"
+                                        "description": "Draw this many flat classes instead of a smooth ramp (with colors:, spread along them)"
                                       }
                                     },
                                     "required": [

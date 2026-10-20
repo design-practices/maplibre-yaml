@@ -146,7 +146,7 @@ export const ColorRampSchema = z
       .int()
       .min(2)
       .optional()
-      .describe("Draw this many flat classes instead of a smooth ramp"),
+      .describe("Draw this many flat classes instead of a smooth ramp (with colors:, spread along them)"),
   })
   .describe("COG: colours for a single band of values (palette or colors, min, max)");
 

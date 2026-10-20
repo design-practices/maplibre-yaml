@@ -42,7 +42,7 @@ keys go with them:
 | `format` | `vector`, `raster`, `raster-dem`, `geojson` | `pmtiles`, `flatgeobuf`, `geoparquet` or `cog` — only for a URL with no telling extension (it wins over the URL) |
 | `load` | FlatGeobuf, GeoParquet (`geojson`) | `all` (default): the whole file; `viewport` or `{ mode: viewport, minzoom }`: only the features in view (needs range requests, and a FlatGeobuf spatial index or a GeoParquet `bbox` covering column) |
 | `columns` | GeoParquet (`geojson`) | The columns to read: by default only the ones the document references (paint, filters, popups, `classify:` …); a list replaces that, `all` reads every column |
-| `colorRamp` | COG (`raster`) | Colours for a single band of values: `{ palette, min, max }` (palette names as in `classify:`, default `viridis`), or `colors: ["#…", "#…"]` instead of `palette`; `reverse: true`; `classes: 5` for flat classes instead of a smooth ramp |
+| `colorRamp` | COG (`raster`) | Colours for a single band of values: `{ palette, min, max }` (palette names as in `classify:`, default `viridis`), or `colors: ["#…", "#…"]` instead of `palette`; `reverse: true`; `classes: 5` for flat classes instead of a smooth ramp (with `colors:`, spread along them) |
 
 ```yaml
 sources:

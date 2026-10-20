@@ -63,7 +63,8 @@ describe("a COG source validates, with tileSize 256 unless the author wrote one"
   big: { type: raster, url: data/big.tif, tileSize: 512 }
   plain: { type: raster, url: https://tiles.example.com/tiles.json }`);
     expect(result.errors).toEqual([]);
-    expect(result.warnings).toEqual([]);
+    // An authored tileSize is kept — with a note that the reader draws 256 (ml-cnv.17).
+    expect(result.warnings.map((w) => w.path)).toEqual(["sources.big.tileSize"]);
     const s = sourcesOf(result);
     expect(s["imagery"]!["tileSize"]).toBe(256);
     expect(s["elevation"]!["tileSize"]).toBe(256);
@@ -122,9 +123,39 @@ describe("colorRamp mistakes", () => {
     colorRamp: { palette: Blues, colors: ["#000", "#fff"], min: 0, max: 1 }`);
     const messages = result.errors.map((e) => `${e.path}: ${e.message}`);
     expect(messages).toContain('sources.a.colorRamp.colors.1: colorRamp colours are written #rrggbb (or #rgb); "red" isn\'t.');
-    expect(messages).toContain("sources.a.colorRamp.max: colorRamp: max (0) must be greater than min (1).");
+    expect(messages).toContain(
+      "sources.a.colorRamp.max: colorRamp: max (0) must be greater than min (1). To run the colours from high " +
+        "values to low, keep min below max and add reverse: true."
+    );
     expect(messages).toContain("sources.b.colorRamp.classes: Blues has at most 9 classes; colorRamp asks for 12.");
     expect(messages).toContain("sources.c.colorRamp.colors: colorRamp: takes palette: or colors:, not both.");
+  });
+
+  it("a qualitative palette as a smooth ramp, and a tileSize the reader doesn't draw, are warned about (ml-cnv.17)", () => {
+    const result = v1(`  a:
+    type: raster
+    url: a.tif
+    colorRamp: { palette: okabe-ito, min: 0, max: 1 }
+  b:
+    type: raster
+    url: b.tif
+    colorRamp: { palette: Set1, classes: 5, min: 0, max: 1 }
+  c:
+    type: raster
+    url: c.tif
+    tileSize: 512
+    colorRamp: { palette: viridis, min: 0, max: 1 }`);
+    expect(result.success).toBe(true);
+    const warnings = result.warnings.map((w) => `${w.path}: ${w.message}`);
+    expect(warnings).toContainEqual(
+      expect.stringContaining("sources.a.colorRamp.palette: okabe-ito is a qualitative palette")
+    );
+    // Flat classes keep a qualitative palette's colours apart: no warning.
+    expect(warnings.some((w) => w.startsWith("sources.b."))).toBe(false);
+    expect(warnings).toContainEqual(
+      expect.stringContaining("sources.c.tileSize: tileSize: 512 on a COG: the COG reader draws 256-pixel tiles")
+    );
+    expect(warnings.some((w) => w.startsWith("sources.a.tileSize"))).toBe(false);
   });
 
   it("min and max are required (the schema says so)", () => {
