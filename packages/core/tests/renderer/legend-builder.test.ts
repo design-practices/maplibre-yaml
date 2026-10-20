@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { LegendBuilder } from "../../src/renderer/legend-builder";
+import { createStrings } from "../../src/i18n";
 
 describe("LegendBuilder", () => {
   let builder: LegendBuilder;
@@ -92,9 +93,56 @@ describe("LegendBuilder", () => {
       const details = container.querySelector("details.maplibre-legend");
       expect(details).not.toBeNull();
       expect(details!.hasAttribute("open")).toBe(true);
-      expect(container.querySelector("summary.legend-title")!.textContent).toBe(
-        "Map Legend"
-      );
+    });
+
+    // 0.9: plain maps match story legends — the toggle says "Legend", the
+    // author's title is a heading inside the panel (0.8 put the title in
+    // the toggle).
+    it("the toggle always reads Legend; a custom title heads the panel", () => {
+      builder.build(container, [], {
+        title: "Map Legend",
+        items: [{ shape: "circle" as const, color: "#ff0000", label: "T" }],
+      });
+
+      expect(container.querySelector("summary.legend-title")!.textContent).toBe("Legend");
+      const heading = container.querySelector("details.maplibre-legend > .legend-heading");
+      expect(heading?.textContent).toBe("Map Legend");
+      // The heading sits inside the collapsible panel, before the entries.
+      expect(heading!.nextElementSibling?.classList.contains("legend-items")).toBe(true);
+    });
+
+    it.each([undefined, "Legend", "legend", "  LEGEND "])(
+      "no heading for title %j (it would repeat the toggle)",
+      (title) => {
+        builder.build(container, [], {
+          ...(title !== undefined ? { title } : {}),
+          items: [{ shape: "circle" as const, color: "#ff0000", label: "T" }],
+        });
+        expect(container.querySelector("summary.legend-title")!.textContent).toBe("Legend");
+        expect(container.querySelector(".legend-heading")).toBeNull();
+      }
+    );
+
+    it("the toggle is translated by locale (maplibre-yaml.Legend.Title)", () => {
+      const translated = new LegendBuilder({
+        strings: createStrings({ "maplibre-yaml.Legend.Title": "Leyenda" }),
+      });
+      translated.build(container, [], {
+        title: "Leyenda",
+        items: [{ shape: "circle" as const, color: "#ff0000", label: "T" }],
+      });
+      expect(container.querySelector("summary.legend-title")!.textContent).toBe("Leyenda");
+      // A title equal to the translated toggle is not repeated as a heading.
+      expect(container.querySelector(".legend-heading")).toBeNull();
+    });
+
+    it("escapes the title heading", () => {
+      builder.build(container, [], {
+        title: "<img src=x onerror=alert(1)>",
+        items: [{ shape: "circle" as const, color: "#ff0000", label: "T" }],
+      });
+      expect(container.querySelector(".legend-heading img")).toBeNull();
+      expect(container.querySelector(".legend-heading")!.textContent).toBe("<img src=x onerror=alert(1)>");
     });
 
     it("collapsed: true starts closed (the field previously did nothing — ml-tfd.8)", () => {

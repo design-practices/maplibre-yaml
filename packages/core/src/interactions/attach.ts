@@ -24,7 +24,7 @@
  */
 
 import type { Map as MapLibreMap, MapMouseEvent, LngLat } from "maplibre-gl";
-import { PopupBuilder } from "../renderer/popup-builder";
+import { PopupBuilder, mapLanguage } from "../renderer/popup-builder";
 import { PopupSlot } from "./popup-slot";
 import { DEFAULT_POLICY, type CapabilityPolicy } from "../capabilities";
 import {
@@ -315,7 +315,7 @@ export function attachInteractions(
   // so `!html` and feature escaping apply exactly as in the renderer. The
   // pinned/hover coexistence contract lives in PopupSlot (KTD8), shared with
   // the renderer host.
-  const popupSlot = new PopupSlot(map, new PopupBuilder(policy));
+  const popupSlot = new PopupSlot(map, new PopupBuilder(policy, { language: mapLanguage(map) }));
 
   const deps: InteractionDeps = {
     showPopup: (content, feature, lngLat, options) =>

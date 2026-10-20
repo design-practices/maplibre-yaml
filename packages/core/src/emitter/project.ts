@@ -699,6 +699,18 @@ export function projectStyle(
   // style.json root `metadata` — the spec carries it, so it is not dropped.
   if (model.style.metadata !== undefined)
     style["metadata"] = model.style.metadata;
+  // The document's `title:` is the spec's root `name` ("a human-readable
+  // name for the style"); `description:` has no spec slot, so it rides
+  // `metadata` under a prefixed key, as the spec asks metadata keys to be.
+  // An authored `metadata` key of the same name wins.
+  if (model.style.title !== undefined) style["name"] = model.style.title;
+  if (model.style.description !== undefined) {
+    const metadata = isPlainObject(style["metadata"]) ? style["metadata"] : {};
+    style["metadata"] = {
+      "maplibre-yaml:description": model.style.description,
+      ...metadata,
+    };
+  }
 
   const runtimeKeys = Object.keys(model.runtime.map).filter(
     (key) => !isSchemaDefault("map", key, model.runtime.map[key])

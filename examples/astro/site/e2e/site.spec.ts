@@ -264,6 +264,30 @@ test.describe("explore: <FullPageMap> with the 0.7 surface", () => {
   });
 });
 
+test.describe("languages: <FullPageMap> in the document's locale (0.9)", () => {
+  const MAP = ".ml-fullpage-map ml-map";
+
+  for (const [path, how] of [
+    ["/explore-es/", "config: labelled at build time"],
+    ["/explore-es-src/", "src: labelled in the browser"],
+  ] as const) {
+    test(`buttons, legend and map name in Spanish — ${how} @dev`, async ({ page }) => {
+      const errors = await guard(page);
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await mapReady(page, MAP);
+      await expect(page.getByRole("region", { name: "Volcanes del Japón" })).toHaveAccessibleDescription(
+        "Los volcanes del arco japonés, marcados con círculos rojos."
+      );
+      await expect(page.getByRole("button", { name: "Acercar" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Alejar" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Restablecer la vista" })).toBeVisible();
+      await expect(page.locator(`${MAP} summary.legend-title`)).toHaveText("Leyenda");
+      await expect(page.locator(`${MAP} .legend-heading`)).toHaveText("Volcanes");
+      expect(errors).toEqual([]);
+    });
+  }
+});
+
 test.describe("story: <Scrollytelling config>", () => {
   const MAP = ".scrollytelling-container ml-map";
 

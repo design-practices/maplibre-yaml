@@ -58,6 +58,7 @@
 
 import type { FullPageMapProps } from "../types";
 import { withBase } from "../utils/base-url";
+import { createStrings, documentLocale } from "@maplibre-yaml/core";
 // MapLibre's stylesheet as PAGE css, imported here rather than in the
 // client script: Astro then links it in the page head in dev and build alike.
 // From the script, astro dev injected it with JS as a <style> the server
@@ -136,6 +137,17 @@ if (showLegend && effectiveConfig) {
 // See the template comment on why this is spread rather than written inline.
 const controlsSlot = { slot: "top-right" };
 
+// The buttons speak the document's language: the zoom buttons use MapLibre's
+// own keys (NavigationControl.ZoomIn/ZoomOut), reset its maplibre-yaml key,
+// all from the one `locale:` table. A `src` document is read in the browser,
+// so the client script below relabels them once it loads.
+const t = createStrings(documentLocale(effectiveConfig));
+const labels = {
+  zoomIn: t("NavigationControl.ZoomIn"),
+  zoomOut: t("NavigationControl.ZoomOut"),
+  reset: t("maplibre-yaml.FullPageMap.ResetView"),
+};
+
 
 // Generate unique ID for this map instance
 const mapId = `fullmap-${Math.random().toString(36).substring(2, 11)}`;
@@ -180,8 +192,8 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
           <button
             class="ml-control-btn ml-zoom-in"
             data-action="zoom-in"
-            aria-label="Zoom in"
-            title="Zoom in"
+            aria-label={labels.zoomIn}
+            title={labels.zoomIn}
           >
             <svg
               width="20"
@@ -201,8 +213,8 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
           <button
             class="ml-control-btn ml-zoom-out"
             data-action="zoom-out"
-            aria-label="Zoom out"
-            title="Zoom out"
+            aria-label={labels.zoomOut}
+            title={labels.zoomOut}
           >
             <svg
               width="20"
@@ -222,8 +234,8 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
           <button
             class="ml-control-btn ml-reset"
             data-action="reset"
-            aria-label="Reset view"
-            title="Reset view"
+            aria-label={labels.reset}
+            title={labels.reset}
           >
             <svg
               width="20"
@@ -325,6 +337,20 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
     if (!buttons) return;
     const documentZoom = mapEl.querySelector(".maplibregl-ctrl-zoom-in") !== null;
     buttons.toggleAttribute("data-document-zoom", documentZoom);
+    // The buttons in the document's language (its `locale:`): a `src`
+    // document is only read in the browser, so the server render could not
+    // label them. Same keys as the server render.
+    const uiString = (mapEl as Partial<MLMap>).uiString?.bind(mapEl);
+    if (!uiString) return;
+    const label = (action: string, text: string) => {
+      const button = buttons.querySelector<HTMLElement>(`[data-action="${action}"]`);
+      if (!button) return;
+      button.setAttribute("aria-label", text);
+      button.title = text;
+    };
+    label("zoom-in", uiString("NavigationControl.ZoomIn"));
+    label("zoom-out", uiString("NavigationControl.ZoomOut"));
+    label("reset", uiString("maplibre-yaml.FullPageMap.ResetView"));
   };
 
   if (firstRun) {

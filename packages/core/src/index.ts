@@ -170,6 +170,31 @@ export {
 } from "./capabilities";
 export type { CapabilityPolicy, TrustContext } from "./capabilities";
 
+// Languages and accessibility (0.9): the one UI string table, overridable
+// through `locale:`, and number formatting with MapLibre's `number-format`
+// vocabulary (popups, the params panel, generated legend labels).
+export {
+  STRINGS_PREFIX,
+  DEFAULT_STRINGS,
+  MAPLIBRE_STRINGS,
+  createStrings,
+  defaultStrings,
+  fillPlaceholders,
+  documentLocale,
+  elementLanguage,
+  formatNumber,
+  toIntlNumberFormatOptions,
+  legacyNumberFormat,
+} from "./i18n";
+export type {
+  StringKey,
+  MapLibreStringKey,
+  StringParams,
+  Strings,
+  NumberFormatOptions,
+  NumberFormat,
+} from "./i18n";
+
 // Utils
 export { escapeHtml, safeUrl, POPUP_TAGS, LINK_TARGETS, html, isHtmlMarker } from "./utils/html";
 export type { HtmlMarker } from "./utils/html";

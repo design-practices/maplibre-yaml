@@ -51,8 +51,17 @@ import {
 } from "../model/index.js";
 import type { MapModel } from "../model/types.js";
 import { createErrorCard, ERROR_CARD_CLASS } from "./error-card.js";
-import { MapNotice, type NoticeKind } from "./map-notice.js";
+import { MapNotice, appendMessage, type NoticeKind } from "./map-notice.js";
 import { showAuthorHints } from "./author-hints.js";
+import {
+  createStrings,
+  defaultStrings,
+  documentLocale,
+  type StringKey,
+  type MapLibreStringKey,
+  type StringParams,
+  type Strings,
+} from "../i18n/strings.js";
 import {
   describeDataProblem,
   describeImageProblem,
@@ -367,6 +376,11 @@ export class MLMap extends HTMLElement {
   private noticeEntries: Array<{ message: string; kind: NoticeKind }> = [];
   /** The current document's `onPage` warnings, shown once its map renders. */
   private documentNotices: string[] = [];
+  /**
+   * The UI strings of the document being rendered (its `locale:`); English
+   * until a document has been read.
+   */
+  private strings: Strings = defaultStrings;
 
   /**
    * Resolved URL of the YAML file the current document came from (`src`),
@@ -840,6 +854,10 @@ export class MLMap extends HTMLElement {
    * Render the map with the given configuration
    */
   private renderMap(mapBlock: MapBlock): void {
+    // The document's own words for the library's UI (its `locale:`), for
+    // everything this render puts on the page: notices, error cards, hints.
+    this.strings = createStrings(documentLocale(mapBlock));
+
     // Standalone <ml-map> has no global config to inherit defaultMapStyle from,
     // so a missing basemap would die inside MapLibre with an opaque error.
     // Surface a friendly error card instead. (Schema keeps it optional because
@@ -1066,10 +1084,10 @@ export class MLMap extends HTMLElement {
             queueMicrotask(() => {
               if (this.renderer !== renderer) return;
               if (isFilePage(this.ownerDocument)) {
-                this.showContentCard(filePageWorkerCard());
+                this.showContentCard(filePageWorkerCard(this.strings));
               } else {
                 this.showErrorCard([{ path: "", message: error.message }], {
-                  title: "Map Error",
+                  title: this.strings("maplibre-yaml.ErrorCard.MapError"),
                 });
               }
             });
@@ -1214,20 +1232,8 @@ export class MLMap extends HTMLElement {
       "box-sizing: border-box; margin: 4px 0; padding: 10px 12px; background: #fffbeb; " +
       "color: #78350f; border: 1px solid #f59e0b; border-radius: 6px; " +
       "font: 14px/1.5 system-ui, -apple-system, sans-serif;";
-    const code = (text: string) => {
-      const el = doc.createElement("code");
-      el.textContent = text;
-      el.style.cssText = "font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;";
-      return el;
-    };
-    hint.append(
-      doc.createTextNode("This map is invisible because the "),
-      code("<ml-map>"),
-      doc.createTextNode(" element has no height. Give it one, for example "),
-      code('<ml-map style="display:block; height:400px">'),
-      doc.createTextNode(" — or in your CSS: "),
-      code("ml-map { display: block; height: 400px; }")
-    );
+    // `backticked` spans of the (translatable) message render as code.
+    appendMessage(doc, hint, this.strings("maplibre-yaml.HeightHint"));
     this.appendChild(hint);
     this.heightHint = hint;
 
@@ -1274,7 +1280,7 @@ export class MLMap extends HTMLElement {
     if (this.quiet || !this.mapContainer) return;
     const hints = showAuthorHints(this);
     if (kind === "hint" && !hints) return;
-    this.notice ??= new MapNotice(this.mapContainer, { openDetails: hints });
+    this.notice ??= new MapNotice(this.mapContainer, { openDetails: hints, strings: this.strings });
     this.notice.add(message, kind);
   }
 
@@ -1306,7 +1312,12 @@ export class MLMap extends HTMLElement {
       this.pendingStyleErrors = null;
       if (!errors || this.renderer !== renderer) return;
       this.showContentCard(
-        styleFailureCard(errors, { url, isV2, filePage: isFilePage(this.ownerDocument) })
+        styleFailureCard(errors, {
+          url,
+          isV2,
+          filePage: isFilePage(this.ownerDocument),
+          strings: this.strings,
+        })
       );
     }, 0);
   }
@@ -1689,7 +1700,7 @@ export class MLMap extends HTMLElement {
     errors: ParseError[],
     {
       showHelp = false,
-      title = "Configuration Error",
+      title = this.strings("maplibre-yaml.ErrorCard.ConfigurationError"),
       hint,
     }: { showHelp?: boolean; title?: string; hint?: string } = {}
   ): void {
@@ -1701,7 +1712,7 @@ export class MLMap extends HTMLElement {
     this.mapContainer?.remove();
 
     this.appendChild(
-      createErrorCard(this.ownerDocument, { title, errors, hint, showHelp })
+      createErrorCard(this.ownerDocument, { title, errors, hint, showHelp, strings: this.strings })
     );
   }
 
@@ -1811,6 +1822,29 @@ export class MLMap extends HTMLElement {
    */
   getMap(): MapLibreMap | null {
     return this.renderer?.getMap() ?? null;
+  }
+
+  /**
+   * One of the UI strings for this map: the document's `locale:` entry for
+   * `key`, else the English default.
+   *
+   * @remarks
+   * For hosts that draw their own chrome next to the map (slot content,
+   * Astro's `<FullPageMap>` buttons) and want it in the map's language.
+   * Takes maplibre-yaml keys (`maplibre-yaml.Legend.Title`, ...) and the
+   * MapLibre keys the library reads (`Map.Title`,
+   * `NavigationControl.ZoomIn`, `NavigationControl.ZoomOut`). English until a
+   * document has been read.
+   *
+   * @example
+   * ```javascript
+   * const el = document.querySelector("ml-map");
+   * await el.mapReady();
+   * button.ariaLabel = el.uiString("NavigationControl.ZoomIn"); // "Zoom in", or its translation
+   * ```
+   */
+  uiString(key: StringKey | MapLibreStringKey, params?: StringParams): string {
+    return this.strings(key, params);
   }
 
   /**

@@ -25,6 +25,7 @@ import { boundsOfPoints, swappedCenter as swappedPair } from "../utils/swapped-c
 import { toFlatBounds } from "../utils/bounds";
 import { MapBlockSchema, MapConfigSchema } from "../schemas/map.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
+import { DEFAULT_STRINGS, STRINGS_PREFIX } from "../i18n/strings";
 
 /** An error a check found (same shape as the parser's ParseError). */
 export interface DocumentCheckError {
@@ -111,6 +112,37 @@ function at(pos: Positions | undefined, path: (string | number)[]) {
 function atKey(pos: Positions | undefined, objectPath: (string | number)[], key: string) {
   const p = pos ? positionForKey(pos.doc, pos.lineCounter, objectPath, key) : undefined;
   return p ? { line: p.line, column: p.column } : {};
+}
+
+/**
+ * A `locale:` table's maplibre-yaml keys (`maplibre-yaml.*`) that the
+ * library has no string for: a typo would silently leave the English text.
+ * MapLibre's own keys are not checked here (MapLibre owns that list).
+ *
+ * @param locale - the table (v1 `config.locale`, v2 `runtime.map.locale`).
+ * @param path - where the table sits, e.g. `["config", "locale"]`.
+ */
+export function checkLocaleKeys(
+  locale: unknown,
+  path: (string | number)[],
+  positions?: Positions
+): ValidationWarning[] {
+  if (!isObject(locale)) return [];
+  const known = Object.keys(DEFAULT_STRINGS);
+  const warnings: ValidationWarning[] = [];
+  for (const key of Object.keys(locale)) {
+    if (!key.startsWith(STRINGS_PREFIX) || known.includes(key)) continue;
+    const hint = suggest(key, known);
+    warnings.push({
+      path: [...path, key].join("."),
+      message:
+        `"${key}" is not a maplibre-yaml string, so this translation is never shown.` +
+        (hint ? ` Did you mean "${hint}"?` : " The docs list every key (Accessibility & languages)."),
+      ...atKey(positions, path, key),
+      ...(hint ? { suggestion: hint } : {}),
+    });
+  }
+  return warnings;
 }
 
 /** `Chapter 3 ("bridge")` — chapters counted from 1, named by id. */
@@ -366,6 +398,9 @@ export function checkDocument(
         ...(hint ? { suggestion: hint } : {}),
       });
     }
+
+    // 0.9 — a `maplibre-yaml.*` string key the library doesn't have.
+    warnings.push(...checkLocaleKeys(config["locale"], ["config", "locale"], positions));
 
     // ml-aot.51 — fitTo names a source the document does not declare.
     const fitTo = config["fitTo"];

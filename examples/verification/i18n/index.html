@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Accessibility &amp; languages (0.9)</title>
+  <!--
+    0.9 accessibility + languages — the browser proof, which is also the demo.
+    ?doc=<name> loads <name>.yaml from this folder into <ml-map>;
+    ?lang=<tag> sets <html lang> first (numbers follow it).
+
+      titled.yaml   title + description, a Spanish locale: table, a legend
+                    with a custom title, popup number formats.
+                    PASS = a screen reader's accessibility tree has a region
+                    "Vulnerabilidad al calor en el Bronx" described by the
+                    description; the zoom buttons are "Acercar"/"Alejar"; the
+                    legend header reads "Leyenda" with "Distritos" as a
+                    heading inside; the notice for the missing data file
+                    is in Spanish; clicking the dot shows "1.234.567,9",
+                    "12,50 €" and "3.14" on ?lang=de.
+      plain.yaml    no title, no locale, a legend titled "Places".
+                    PASS = region "Map"; legend header "Legend", heading
+                    "Places" inside (0.8 put "Places" in the header).
+      v2.yaml       the same keys in a format-v2 document.
+
+    Serve from the repo root (pnpm verify:serve), then open
+    /examples/verification/i18n/index.html?doc=titled&lang=de
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    ml-map { display: block; width: 100%; height: 100vh; }
+  </style>
+</head>
+<body>
+  <ml-map id="map"></ml-map>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const lang = (params.get("lang") || "").replace(/[^a-zA-Z-]/g, "");
+    if (lang) document.documentElement.lang = lang;
+    const doc = (params.get("doc") || "titled").replace(/[^a-z0-9-]/gi, "");
+    document.getElementById("map").setAttribute("src", doc + ".yaml");
+  </script>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

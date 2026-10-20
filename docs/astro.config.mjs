@@ -166,6 +166,7 @@ export default defineConfig({
             { label: "Export classes", link: "/guides/export-classes/" },
             { label: "Effects (experimental)", link: "/guides/effects/" },
             { label: "Working with Layers", link: "/guides/layers/" },
+            { label: "Accessibility & languages", link: "/guides/accessibility-languages/" },
             { label: "Data Sources", link: "/guides/data-sources/" },
             { label: "Live Data & Streaming", link: "/guides/live-data/" },
             { label: "Reusing Values & Blocks", link: "/guides/reuse/" },

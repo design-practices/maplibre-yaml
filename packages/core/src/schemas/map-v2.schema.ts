@@ -50,6 +50,8 @@ import {
   SkySchema,
   ProjectionSchema,
   FitToSchema,
+  MapTitleSchema,
+  MapDescriptionSchema,
   PopupsSchema,
   LightSchema,
 } from "./map.schema";
@@ -509,6 +511,11 @@ export const MapBlockV2Schema: z.ZodObject<any> = z
     version: z.literal(2).describe("Format version — v2 documents state `version: 2`"),
     type: z.literal("map").describe("Block type"),
     id: z.string().describe("Unique block identifier"),
+    // Document metadata, at the root as in v1 (title/description are about
+    // the whole map, not one half): exported as the style's `name` and
+    // `metadata`, wired to the map's accessible name/description live.
+    title: MapTitleSchema.optional(),
+    description: MapDescriptionSchema.optional(),
     style: StyleV2Schema,
     // `.default({})` so a document that omits `runtime:` still normalizes to the
     // same model as its v1 twin — `runtime.map.interactive: true` fires up the

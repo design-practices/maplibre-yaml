@@ -35,6 +35,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               "type": "string",
               "description": "Inline CSS styles for container"
             },
+            "title": {
+              "type": "string",
+              "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+            },
+            "description": {
+              "type": "string",
+              "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+            },
             "config": {
               "type": "object",
               "properties": {
@@ -1104,8 +1112,49 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                               "description": "Fallback value if property missing"
                                             },
                                             "format": {
-                                              "type": "string",
-                                              "description": "Number format string (e.g., \\",.0f\\")"
+                                              "anyOf": [
+                                                {
+                                                  "type": "string"
+                                                },
+                                                {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "locale": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "description": "BCP 47 language tag, e.g. de-DE. Default: the page's language"
+                                                    },
+                                                    "currency": {
+                                                      "type": "string",
+                                                      "pattern": "^[A-Za-z]{3}$",
+                                                      "description": "ISO 4217 currency code (EUR, USD, JPY): format as money"
+                                                    },
+                                                    "unit": {
+                                                      "type": "string",
+                                                      "minLength": 1,
+                                                      "description": "A unit Intl knows (kilometer, percent, celsius, ...); ignored with currency"
+                                                    },
+                                                    "min-fraction-digits": {
+                                                      "type": "integer",
+                                                      "minimum": 0,
+                                                      "maximum": 20,
+                                                      "description": "At least this many decimals"
+                                                    },
+                                                    "max-fraction-digits": {
+                                                      "type": "integer",
+                                                      "minimum": 0,
+                                                      "maximum": 20,
+                                                      "description": "At most this many decimals (rounds)"
+                                                    }
+                                                  },
+                                                  "additionalProperties": false,
+                                                  "description": "MapLibre number-format options",
+                                                  "patternProperties": {
+                                                    "^x-": {}
+                                                  }
+                                                }
+                                              ],
+                                              "description": "How a numeric property is written: MapLibre number-format options (locale, currency, unit, min-fraction-digits, max-fraction-digits), or an older d3-style string such as \\",.0f\\""
                                             },
                                             "href": {
                                               "type": "string",
@@ -3592,6 +3641,12 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
               "type": "string",
               "description": "Footer content (HTML)"
             },
+            "title": {
+              "$ref": "#/$defs/any/oneOf/0/properties/title"
+            },
+            "description": {
+              "$ref": "#/$defs/any/oneOf/0/properties/description"
+            },
             "sources": {
               "$ref": "#/$defs/any/oneOf/0/properties/sources"
             },
@@ -3947,6 +4002,14 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "type": "string",
                               "description": "Inline CSS styles for container"
                             },
+                            "title": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/title",
+                              "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+                            },
+                            "description": {
+                              "$ref": "#/$defs/any/oneOf/0/properties/description",
+                              "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+                            },
                             "config": {
                               "$ref": "#/$defs/any/oneOf/0/properties/config"
                             },
@@ -4144,6 +4207,14 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
         "style": {
           "type": "string",
           "description": "Inline CSS styles for container"
+        },
+        "title": {
+          "type": "string",
+          "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
         },
         "config": {
           "type": "object",
@@ -5214,8 +5285,49 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                           "description": "Fallback value if property missing"
                                         },
                                         "format": {
-                                          "type": "string",
-                                          "description": "Number format string (e.g., \\",.0f\\")"
+                                          "anyOf": [
+                                            {
+                                              "type": "string"
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "locale": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "description": "BCP 47 language tag, e.g. de-DE. Default: the page's language"
+                                                },
+                                                "currency": {
+                                                  "type": "string",
+                                                  "pattern": "^[A-Za-z]{3}$",
+                                                  "description": "ISO 4217 currency code (EUR, USD, JPY): format as money"
+                                                },
+                                                "unit": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "description": "A unit Intl knows (kilometer, percent, celsius, ...); ignored with currency"
+                                                },
+                                                "min-fraction-digits": {
+                                                  "type": "integer",
+                                                  "minimum": 0,
+                                                  "maximum": 20,
+                                                  "description": "At least this many decimals"
+                                                },
+                                                "max-fraction-digits": {
+                                                  "type": "integer",
+                                                  "minimum": 0,
+                                                  "maximum": 20,
+                                                  "description": "At most this many decimals (rounds)"
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "description": "MapLibre number-format options",
+                                              "patternProperties": {
+                                                "^x-": {}
+                                              }
+                                            }
+                                          ],
+                                          "description": "How a numeric property is written: MapLibre number-format options (locale, currency, unit, min-fraction-digits, max-fraction-digits), or an older d3-style string such as \\",.0f\\""
                                         },
                                         "href": {
                                           "type": "string",
@@ -8250,8 +8362,49 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                       "description": "Fallback value if property missing"
                                     },
                                     "format": {
-                                      "type": "string",
-                                      "description": "Number format string (e.g., \\",.0f\\")"
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "locale": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "description": "BCP 47 language tag, e.g. de-DE. Default: the page's language"
+                                            },
+                                            "currency": {
+                                              "type": "string",
+                                              "pattern": "^[A-Za-z]{3}$",
+                                              "description": "ISO 4217 currency code (EUR, USD, JPY): format as money"
+                                            },
+                                            "unit": {
+                                              "type": "string",
+                                              "minLength": 1,
+                                              "description": "A unit Intl knows (kilometer, percent, celsius, ...); ignored with currency"
+                                            },
+                                            "min-fraction-digits": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 20,
+                                              "description": "At least this many decimals"
+                                            },
+                                            "max-fraction-digits": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 20,
+                                              "description": "At most this many decimals (rounds)"
+                                            }
+                                          },
+                                          "additionalProperties": false,
+                                          "description": "MapLibre number-format options",
+                                          "patternProperties": {
+                                            "^x-": {}
+                                          }
+                                        }
+                                      ],
+                                      "description": "How a numeric property is written: MapLibre number-format options (locale, currency, unit, min-fraction-digits, max-fraction-digits), or an older d3-style string such as \\",.0f\\""
                                     },
                                     "href": {
                                       "type": "string",
@@ -10061,6 +10214,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "type": "string",
                           "description": "Inline CSS styles for container"
                         },
+                        "title": {
+                          "type": "string",
+                          "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+                        },
+                        "description": {
+                          "type": "string",
+                          "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+                        },
                         "config": {
                           "type": "object",
                           "properties": {
@@ -10903,6 +11064,14 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                           "type": "string",
                           "description": "Inline CSS styles for container"
                         },
+                        "title": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/title",
+                          "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+                        },
+                        "description": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/description",
+                          "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
+                        },
                         "config": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/config"
                         },
@@ -11309,6 +11478,12 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "footer": {
                           "type": "string",
                           "description": "Footer content (HTML)"
+                        },
+                        "title": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/title"
+                        },
+                        "description": {
+                          "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/description"
                         },
                         "sources": {
                           "$ref": "#/$defs/root/properties/pages/items/properties/blocks/items/anyOf/1/properties/sources"
@@ -12588,8 +12763,49 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                           "description": "Fallback value if property missing"
                                         },
                                         "format": {
-                                          "type": "string",
-                                          "description": "Number format string (e.g., \\",.0f\\")"
+                                          "anyOf": [
+                                            {
+                                              "type": "string"
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "locale": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "description": "BCP 47 language tag, e.g. de-DE. Default: the page's language"
+                                                },
+                                                "currency": {
+                                                  "type": "string",
+                                                  "pattern": "^[A-Za-z]{3}$",
+                                                  "description": "ISO 4217 currency code (EUR, USD, JPY): format as money"
+                                                },
+                                                "unit": {
+                                                  "type": "string",
+                                                  "minLength": 1,
+                                                  "description": "A unit Intl knows (kilometer, percent, celsius, ...); ignored with currency"
+                                                },
+                                                "min-fraction-digits": {
+                                                  "type": "integer",
+                                                  "minimum": 0,
+                                                  "maximum": 20,
+                                                  "description": "At least this many decimals"
+                                                },
+                                                "max-fraction-digits": {
+                                                  "type": "integer",
+                                                  "minimum": 0,
+                                                  "maximum": 20,
+                                                  "description": "At most this many decimals (rounds)"
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "description": "MapLibre number-format options",
+                                              "patternProperties": {
+                                                "^x-": {}
+                                              }
+                                            }
+                                          ],
+                                          "description": "How a numeric property is written: MapLibre number-format options (locale, currency, unit, min-fraction-digits, max-fraction-digits), or an older d3-style string such as \\",.0f\\""
                                         },
                                         "href": {
                                           "type": "string",
@@ -14503,6 +14719,14 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
         "footer": {
           "type": "string",
           "description": "Footer content (HTML)"
+        },
+        "title": {
+          "type": "string",
+          "description": "The map's name, read out by screen readers as its accessible name (default: \\"Map\\", or locale Map.Title)"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the map shows, in a sentence or two — its text alternative, read by screen readers as the map's description"
         },
         "sources": {
           "type": "object",
