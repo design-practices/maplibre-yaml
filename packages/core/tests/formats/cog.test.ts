@@ -41,6 +41,7 @@ describe("readCogHeader — the first bytes of a GeoTIFF", () => {
       hasOverviews: true,
       crs: "EPSG:3857",
       webMercator: true,
+      bounds: [expect.closeTo(10, 6), expect.closeTo(42, 6), expect.closeTo(10.4, 6), expect.closeTo(42.3, 6)],
     });
     expect(isCloudOptimized(h)).toBe(true);
     for (const name of ["elevation.cog.tif", "ndvi.cog.tif"]) {
@@ -48,6 +49,16 @@ describe("readCogHeader — the first bytes of a GeoTIFF", () => {
       expect(other.webMercator, name).toBe(true);
       expect(isCloudOptimized(other), name).toBe(true);
     }
+  });
+
+  it("a Web Mercator COG's extent in longitude/latitude, from its tie point and pixel scale (ml-aot.120)", () => {
+    const h = readCogHeader(head("imagery.cog.tif")) as CogHeader;
+    expect(h.bounds![0]).toBeCloseTo(10.0, 6);
+    expect(h.bounds![1]).toBeCloseTo(42.0, 6);
+    expect(h.bounds![2]).toBeCloseTo(10.4, 6);
+    expect(h.bounds![3]).toBeCloseTo(42.3, 6);
+    // Only for Web Mercator: a longitude/latitude file is refused anyway.
+    expect((readCogHeader(head("imagery-4326.cog.tif")) as CogHeader).bounds).toBeUndefined();
   });
 
   it("a COG in longitude/latitude is EPSG:4326, not Web Mercator", () => {

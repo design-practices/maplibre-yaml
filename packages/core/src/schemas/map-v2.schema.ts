@@ -490,7 +490,7 @@ export const RuntimeV2Schema: z.ZodTypeAny = z
       "Standalone markers — DOM pins live, symbol layers + sprite on export"
     ),
     fitTo: FitToSchema.optional().describe(
-      "Fit the initial camera to a GeoJSON source's data (v1: `config.fitTo`)"
+      "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (v1: `config.fitTo`)"
     ),
     popups: PopupsSchema.optional().describe(
       "Standalone popups open at a coordinate — no layer, no marker"

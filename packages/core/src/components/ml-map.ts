@@ -97,6 +97,11 @@ import type { FeatureCollection } from "geojson";
 import { DataFetcher } from "../data/data-fetcher.js";
 import { isLoadedFromUrl, loadSourceData } from "../data/source-data.js";
 import { geoParquetColumns, isGeoParquetSource } from "../formats/columns.js";
+import { formatOfSource } from "../formats/detect.js";
+import { cogUrl } from "../formats/cog-spec.js";
+import { fileUrlOf } from "../formats/cog.js";
+import { readCogHeaderAhead } from "../formats/cog-protocol.js";
+import { absoluteUrl } from "../renderer/cloud-sources.js";
 import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
 import { displayPath } from "../parser/validation-utils.js";
 import {
@@ -215,6 +220,12 @@ interface FitPrefetch {
   fetcher: DataFetcher;
   /** Set once `data` settles. */
   result: { data: FeatureCollection } | { error: unknown } | null;
+  /**
+   * A COG (ml-aot.120): its header's extent, read ahead (the `cog://`
+   * handler reuses the read); `data` then settles with it and `extent` is
+   * set when the file has one.
+   */
+  extent?: [number, number, number, number];
 }
 
 /**
@@ -227,6 +238,7 @@ function startFitPrefetch(model: MapModel): FitPrefetch | null {
   if (!fitTo) return null;
   const sources = denormalizeSources(model);
   const source = sources?.[fitTo.source];
+  if (isCogFitSource(source)) return startCogFitPrefetch(fitTo.source, source);
   if (!isLoadedFromUrl(source)) return null;
   // A GeoParquet file is read for the columns the document references
   // (ml-cnv.4) — the same list the renderer computes, since it reuses this load.
@@ -246,6 +258,39 @@ function startFitPrefetch(model: MapModel): FitPrefetch | null {
     (data) => (prefetch.result = { data }),
     (error: unknown) => (prefetch.result = { error })
   );
+  return prefetch;
+}
+
+/** A `raster` / `raster-dem` source reading a COG (ml-cnv.2). */
+function isCogFitSource(source: unknown): source is Record<string, unknown> & { url: string } {
+  if (!source || typeof source !== "object") return false;
+  const s = source as Record<string, unknown>;
+  return (
+    (s["type"] === "raster" || s["type"] === "raster-dem") &&
+    typeof s["url"] === "string" &&
+    formatOfSource(s) === "cog"
+  );
+}
+
+/**
+ * Read a `fitTo` COG's header ahead of the map (ml-aot.120), so the map is
+ * built framed on the file's extent like a fetched GeoJSON source — within
+ * the same {@link MLMap.fitToWaitMs} wait. The `cog://` handler reuses the
+ * read. A header without an extent (or a failed read, which the handler
+ * reports) leaves the fit to the reader, once its metadata loads.
+ */
+function startCogFitPrefetch(sourceId: string, source: { url: string }): FitPrefetch {
+  const fileUrl = fileUrlOf(cogUrl(source.url, { absolute: absoluteUrl }));
+  const prefetch: FitPrefetch = {
+    sourceId,
+    data: Promise.resolve({ type: "FeatureCollection", features: [] }),
+    fetcher: new DataFetcher(),
+    result: null,
+  };
+  prefetch.data = readCogHeaderAhead(fileUrl).then((header) => {
+    if (header?.bounds) prefetch.extent = header.bounds;
+    return { type: "FeatureCollection", features: [] } as FeatureCollection;
+  });
   return prefetch;
 }
 
@@ -1028,7 +1073,9 @@ export class MLMap extends HTMLElement {
       // the source awaits it (one request) and the map fits when it lands.
       let sources = denormalizeSources(model);
       let sourceData: MapRendererOptions["sourceData"];
-      if (prefetch && sources?.[prefetch.sourceId]) {
+      // A COG's extent read ahead (ml-aot.120): no data to hand over.
+      const prefetchedExtents = prefetch?.extent ? { [prefetch.sourceId]: prefetch.extent } : undefined;
+      if (prefetch && !isCogFitSource(sources?.[prefetch.sourceId]) && sources?.[prefetch.sourceId]) {
         sourceData = {
           fetcher: prefetch.fetcher,
           pending: { [prefetch.sourceId]: prefetch.data },
@@ -1053,6 +1100,7 @@ export class MLMap extends HTMLElement {
           chrome: slots.chrome,
           legendElement: slots.legendElement,
           ...(sourceData ? { sourceData } : {}),
+          ...(prefetchedExtents ? { prefetchedExtents } : {}),
         onLoad: () => {
           // Load event is also emitted via the event system
         },

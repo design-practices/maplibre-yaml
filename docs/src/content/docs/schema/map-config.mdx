@@ -501,7 +501,7 @@ Control the camera position and orientation.
 | `pitch` | number | `0` | 0-85 | Camera tilt angle in degrees |
 | `bearing` | number | `0` | -180 to 180 | Camera rotation in degrees |
 | `bounds` | array | - | - | Fit map to geographic bounds: `[west, south, east, north]` or `[[west, south], [east, north]]` |
-| `fitTo` | object \| string | - | - | Fit the initial camera to a GeoJSON source's data (see below); a source name is shorthand for `{ source: name }` |
+| `fitTo` | object \| string | - | - | Fit the initial camera to a source's data — GeoJSON, FlatGeobuf, GeoParquet or a COG (see below); a source name is shorthand for `{ source: name }` |
 
 ### Examples
 
@@ -550,12 +550,13 @@ Longitudes past ±180 are allowed, for bounds that cross the antimeridian
 #### Fit to a Source's Data
 
 `fitTo` is the data-driven sibling of `bounds`. Instead of literal
-coordinates it names a GeoJSON entry in `sources:`, and the camera frames
-whatever that source holds.
+coordinates it names an entry in `sources:` — GeoJSON, FlatGeobuf, GeoParquet,
+or a Cloud Optimized GeoTIFF (COG) — and the camera frames whatever that
+source holds.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `source` | string | Name of a GeoJSON entry in `sources:` (required) |
+| `source` | string | Name of an entry in `sources:`: GeoJSON, FlatGeobuf, GeoParquet or COG (required) |
 | `padding` | number | Padding in pixels around the fitted bounds |
 | `maxZoom` | number | Upper zoom limit for the fit. Without it, a single point zooms all the way in. |
 
@@ -595,8 +596,13 @@ layers:
   to the URL as everywhere else. Refreshes don't re-fit, because the user
   owns the camera after load. An `ml-map:camera-fit` event fires when the
   fit applies.
-- **vector / raster / raster-dem**: not supported. Tiled sources have no
-  client-side extent. The renderer warns once and keeps `center`/`zoom`.
+- **A COG** (`raster` / `raster-dem`): framed from the first frame too.
+  `<ml-map>` reads the file's header (its first 64 KB, which the COG reader
+  then reuses) within the same wait, and builds the map on the image's
+  extent.
+- **Other vector / raster / raster-dem sources** (tiles, PMTiles): not
+  supported. Tiled sources have no client-side extent. The renderer warns
+  once and keeps `center`/`zoom`.
 - `fitTo: countries` (just the source name) is shorthand for
   `fitTo: { source: countries }`.
 - `fitTo` wins over `bounds` when both are set. In format v2 it lives at

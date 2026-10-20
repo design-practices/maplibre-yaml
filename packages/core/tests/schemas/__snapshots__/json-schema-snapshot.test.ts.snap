@@ -267,13 +267,13 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "source"
                       ],
                       "additionalProperties": false,
-                      "description": "Fit the initial camera to a GeoJSON source's data",
+                      "description": "Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG)",
                       "patternProperties": {
                         "^x-": {}
                       }
                     }
                   ],
-                  "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)"
+                  "description": "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (wins over \`bounds\`)"
                 },
                 "minZoom": {
                   "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
@@ -4837,13 +4837,13 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                     "source"
                   ],
                   "additionalProperties": false,
-                  "description": "Fit the initial camera to a GeoJSON source's data",
+                  "description": "Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG)",
                   "patternProperties": {
                     "^x-": {}
                   }
                 }
               ],
-              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)"
+              "description": "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (wins over \`bounds\`)"
             },
             "minZoom": {
               "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
@@ -11513,13 +11513,13 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                     "source"
                                   ],
                                   "additionalProperties": false,
-                                  "description": "Fit the initial camera to a GeoJSON source's data",
+                                  "description": "Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG)",
                                   "patternProperties": {
                                     "^x-": {}
                                   }
                                 }
                               ],
-                              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)"
+                              "description": "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (wins over \`bounds\`)"
                             },
                             "minZoom": {
                               "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
@@ -13085,13 +13085,13 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                     "source"
                   ],
                   "additionalProperties": false,
-                  "description": "Fit the initial camera to a GeoJSON source's data",
+                  "description": "Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG)",
                   "patternProperties": {
                     "^x-": {}
                   }
                 }
               ],
-              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)"
+              "description": "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (wins over \`bounds\`)"
             },
             "minZoom": {
               "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",

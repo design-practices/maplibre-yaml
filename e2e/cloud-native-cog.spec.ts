@@ -131,6 +131,28 @@ test.describe("COG with no page JavaScript", () => {
     expect(errors).toEqual([]);
   });
 
+  test("fitTo on a COG: the first frame is already framed, the header read once (ml-aot.120)", async ({ page }) => {
+    const errors = await guard(page);
+    const tif = recordRequests(page, /\/gallery-assets\/cloud-native\/imagery\.cog\.tif$/);
+    await page.goto("/examples/verification/cloud-native/cog-fit-framed.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForTiles(page, "#map", ["imagery"]);
+    await page.waitForFunction(() => !(document.getElementById("map") as any).getMap().isMoving());
+    const f = await page.evaluate(() => (window as any).__frames);
+    expect(f.first, "no first frame recorded").not.toBeNull();
+    // The document says [0, 0] z1; the first frame is already on the imagery.
+    expect(Math.abs(f.first.lng - 10.2), JSON.stringify(f.first)).toBeLessThan(0.05);
+    expect(Math.abs(f.first.lat - 42.15), JSON.stringify(f.first)).toBeLessThan(0.05);
+    expect(f.first.zoom).toBeGreaterThan(8);
+    expect(f.moves).toBe(0);
+    // The cog:// handler reused the header read made ahead of the map: one
+    // 64 KB read of ours, plus geotiff.js's own first block — as on a map
+    // without fitTo.
+    expect(tif.filter((r) => r.range === "bytes=0-65535")).toHaveLength(2);
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
   test("one band coloured by colorRamp; no-data stays clear (v2)", async ({ page }) => {
     const errors = await guard(page);
     await page.goto("/examples/verification/cloud-native/cog.html", { waitUntil: "domcontentloaded" });

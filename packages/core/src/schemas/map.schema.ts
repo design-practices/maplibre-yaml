@@ -241,7 +241,7 @@ const FitToObjectSchema = z
       "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
     ),
   })
-  .describe("Fit the initial camera to a GeoJSON source's data");
+  .describe("Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG)");
 
 /**
  * `fitTo:` — `{ source, padding?, maxZoom? }`, or just the source name
@@ -256,7 +256,7 @@ export const FitToSchema = z
       .describe("Name of a GeoJSON entry in `sources:` (shorthand for { source: name })"),
     FitToObjectSchema,
   ])
-  .describe("Fit the initial camera to a GeoJSON source's data: { source, padding, maxZoom }, or a source name");
+  .describe("Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG): { source, padding, maxZoom }, or a source name");
 
 /** Inferred type for `fitTo`. */
 export type FitToConfig = z.infer<typeof FitToSchema>;
@@ -374,7 +374,7 @@ export const MapConfigSchema = z
         "[[west, south], [east, north]] (longitude first)"
     ),
     fitTo: FitToSchema.optional().describe(
-      "Fit the initial camera to a GeoJSON source's data (wins over `bounds`)"
+      "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (wins over `bounds`)"
     ),
 
     // Constraints

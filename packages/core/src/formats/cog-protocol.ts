@@ -17,7 +17,8 @@
  * Never imports maplibre-gl: the module is injected ({@link install}).
  */
 
-import { handle } from "./cog";
+import { handle, preflight } from "./cog";
+import type { CogHeader } from "./cog-header";
 import { FormatError } from "./errors";
 import type { InstallResult, ProtocolHost } from "./pmtiles";
 
@@ -44,6 +45,23 @@ export function cogHint(fileUrl: string): string | undefined {
  */
 export function cogHintFor(sourceUrl: string): string | undefined {
   return hints.get(fileOf(sourceUrl));
+}
+
+/** Keep a not-cloud-optimized hint for the renderer ({@link cogHint}). */
+function recordHint(fileUrl: string, message: string): void {
+  hints.set(fileUrl, message);
+}
+
+/**
+ * Read a COG's header ahead of its first tile request — the same read (once
+ * per file) the `cog://` handler then reuses: `<ml-map>` frames `fitTo` on
+ * the file's extent before the map is built (ml-aot.120). Never rejects: a
+ * file that can't be read is reported by the handler, as before.
+ *
+ * @param fileUrl - The absolute file URL (no `cog://`, no fragment).
+ */
+export function readCogHeaderAhead(fileUrl: string): Promise<CogHeader | undefined> {
+  return preflight(fileUrl, recordHint).catch(() => undefined);
 }
 
 /** The lowest maplibre-gl the COG plugin supports (its peer range). */
@@ -85,7 +103,7 @@ export function install(host: ProtocolHost): InstallResult {
   }
 
   const handler = (params: { url: string; type?: string }, abortController: AbortController) =>
-    handle(params, abortController, (fileUrl, message) => hints.set(fileUrl, message));
+    handle(params, abortController, recordHint);
   host.addProtocol("cog", handler as never);
   installedOn.add(key);
   return "installed";

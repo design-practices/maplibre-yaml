@@ -39,6 +39,13 @@ export interface CogHeader {
   crs?: string;
   /** Whether {@link crs} is Web Mercator (or can't be judged: user-defined). */
   webMercator: boolean;
+  /**
+   * The image's extent in longitude/latitude, `[west, south, east, north]`,
+   * from its georeferencing (tie point and pixel scale, or a transformation
+   * matrix) — for a Web Mercator file. What `fitTo` frames before the reader
+   * has drawn anything.
+   */
+  bounds?: [number, number, number, number];
 }
 
 /** Why bytes could not be read as a TIFF header. */
@@ -67,7 +74,20 @@ const TAG = {
   TileWidth: 322,
   TileLength: 323,
   GeoKeyDirectory: 34735,
+  ModelPixelScale: 33550,
+  ModelTiepoint: 33922,
+  ModelTransformation: 34264,
 } as const;
+
+/** Web Mercator's sphere radius, in metres. */
+const EARTH_RADIUS = 6378137;
+
+/** A Web Mercator `[x, y]` in metres as `[longitude, latitude]`. */
+function mercatorToLonLat(x: number, y: number): [number, number] {
+  const lon = (x / EARTH_RADIUS) * (180 / Math.PI);
+  const lat = (2 * Math.atan(Math.exp(y / EARTH_RADIUS)) - Math.PI / 2) * (180 / Math.PI);
+  return [Math.max(-180, Math.min(180, lon)), Math.max(-85.051129, Math.min(85.051129, lat))];
+}
 
 const GEOKEY = {
   ModelType: 1024,
@@ -168,6 +188,10 @@ function parse(parts: readonly FilePart[], head: Uint8Array): CogHeader {
     const [view, i] = at(o, 1);
     return view.getUint8(i);
   };
+  const f64 = (o: number) => {
+    const [view, i] = at(o, 8);
+    return view.getFloat64(i, le);
+  };
   const offsetAt = big ? u64 : u32;
 
   const ifd = offsetAt(big ? 8 : 4);
@@ -190,6 +214,7 @@ function parse(parts: readonly FilePart[], head: Uint8Array): CogHeader {
       if (type === 3) out.push(u16(o));
       else if (type === 4) out.push(u32(o));
       else if (type === 16) out.push(u64(o));
+      else if (type === 12) out.push(f64(o));
       else if (type === 1 || type === 7) out.push(u8(o));
       else out.push(Number.NaN);
     }
@@ -242,7 +267,56 @@ function parse(parts: readonly FilePart[], head: Uint8Array): CogHeader {
       header.webMercator = true;
     }
   }
+  if (header.webMercator && header.width > 0 && header.height > 0) {
+    const extent = mercatorExtent(header.width, header.height, tags, values);
+    if (extent) {
+      const [w, s] = mercatorToLonLat(extent[0], extent[1]);
+      const [e, n] = mercatorToLonLat(extent[2], extent[3]);
+      if (w < e && s < n) header.bounds = [w, s, e, n];
+    }
+  }
   return header;
+}
+
+/**
+ * The image's extent in its own (Web Mercator) units, from the tie point and
+ * pixel scale, or from a transformation matrix without rotation.
+ */
+function mercatorExtent(
+  width: number,
+  height: number,
+  tags: Map<number, number>,
+  values: (entry: number) => number[]
+): [number, number, number, number] | undefined {
+  const read = (tag: number) => {
+    const entry = tags.get(tag);
+    return entry === undefined ? undefined : values(entry);
+  };
+  let x0: number | undefined;
+  let y0: number | undefined;
+  let sx: number | undefined;
+  let sy: number | undefined;
+  const scale = read(TAG.ModelPixelScale);
+  const tie = read(TAG.ModelTiepoint);
+  if (scale && tie && scale.length >= 2 && tie.length >= 6) {
+    // Raster point (i, j) is model point (x, y); y grows northward.
+    sx = scale[0]!;
+    sy = scale[1]!;
+    x0 = tie[3]! - tie[0]! * sx;
+    y0 = tie[4]! + tie[1]! * sy;
+  } else {
+    const m = read(TAG.ModelTransformation);
+    if (m && m.length >= 16 && m[1] === 0 && m[4] === 0) {
+      sx = m[0]!;
+      sy = -m[5]!;
+      x0 = m[3]!;
+      y0 = m[7]!;
+    }
+  }
+  if (![x0, y0, sx, sy].every((v) => typeof v === "number" && Number.isFinite(v)) || !(sx! > 0) || !(sy! > 0)) {
+    return undefined;
+  }
+  return [x0!, y0! - height * sy!, x0! + width * sx!, y0!];
 }
 
 /**

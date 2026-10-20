@@ -373,6 +373,13 @@ export interface MapRendererOptions {
    * cache. Optional; without it every source loads itself, as before.
    */
   sourceData?: LayerManagerDataOptions;
+  /**
+   * Extents the host already read, `[west, south, east, north]` by source id
+   * (ml-aot.120): `<ml-map>` reads a `fitTo` COG's header before it builds
+   * the map, so the map is built framed on the file instead of jumping
+   * there once the COG reader reports it.
+   */
+  prefetchedExtents?: Record<string, [number, number, number, number]>;
 }
 
 /** One host-supplied chrome element and the corner it mounts into. */
@@ -548,7 +555,10 @@ export class MapRenderer {
     // constructed already framed (MapLibre's own `bounds` option — no
     // camera jump); fetched data fits once its first load lands (below).
     const { fitTo, ...mapConfig } = config as MapConfig & { fitTo?: FitToConfig };
-    const fit = fitTo ? resolveFitTo(fitTo, sources) : null;
+    let fit = fitTo ? resolveFitTo(fitTo, sources) : null;
+    // A COG whose header the host already read (ml-aot.120): framed now.
+    const extent = fitTo && fit?.kind === 'tile-bounds' ? options.prefetchedExtents?.[fitTo.source] : undefined;
+    if (extent) fit = { kind: 'bounds', bounds: [[extent[0], extent[1]], [extent[2], extent[3]]] as Bounds };
     const initialFit =
       fit && fit.kind === 'bounds'
         ? {
