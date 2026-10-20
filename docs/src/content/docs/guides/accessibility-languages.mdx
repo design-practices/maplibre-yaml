@@ -97,8 +97,10 @@ there:
 - **Reduced motion.** When the reader's system asks for reduced motion,
   camera moves (`flyTo`, story chapter changes) jump instead of animating.
   `config.reduceMotion: true` or `false` overrides the system setting.
-- **Right-to-left text.** maplibre-gl 6 shapes Arabic and Hebrew labels by
-  itself. On maplibre-gl 4 or 5, call `setRTLTextPlugin` from your page.
+- **Right-to-left text.** maplibre-gl 6.9 and later shape Arabic and Hebrew
+  labels by themselves. On an older maplibre-gl, call `setRTLTextPlugin` from
+  your page — except under a Protomaps basemap labelled in Arabic, Hebrew,
+  Persian or Urdu, for which maplibre-yaml sets it.
 
 ## Show the map in another language
 
