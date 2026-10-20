@@ -1146,6 +1146,35 @@ import { Map } from '@maplibre-yaml/astro';
 </script>
 ```
 
+## Upgrading an existing project
+
+A project keeps the versions it was created with. Before 1.0, a range such as
+`"@maplibre-yaml/core": "^0.8.1"` stays within 0.8.x, so `npm install` never
+moves it to a newer minor release on its own, and features documented here
+for a later release are missing until you upgrade. Upgrade core and the Astro
+package together:
+
+<Tabs syncKey="pkg">
+<TabItem label="npm">
+```bash
+npm install @maplibre-yaml/core@latest @maplibre-yaml/astro@latest
+```
+</TabItem>
+<TabItem label="pnpm">
+```bash
+pnpm add @maplibre-yaml/core@latest @maplibre-yaml/astro@latest
+```
+</TabItem>
+<TabItem label="Yarn">
+```bash
+yarn add @maplibre-yaml/core@latest @maplibre-yaml/astro@latest
+```
+</TabItem>
+</Tabs>
+
+This rewrites both ranges in `package.json`. Restart `astro dev` afterwards.
+Each release's changes are listed in the packages' changelogs on npm.
+
 ## Upgrading to 0.6
 
 Three behavior changes matter when you move an Astro project to 0.6:

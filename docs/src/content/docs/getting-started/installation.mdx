@@ -61,6 +61,13 @@ The full setup is under [Using a bundler (Vite)](#using-a-bundler-vite). The
   </TabItem>
 </Tabs>
 
+**Upgrading an existing project.** Before 1.0, a range such as `^0.8.1` in
+`package.json` stays within 0.8.x, so a newer minor release never installs on
+its own. Run `npm install @maplibre-yaml/core@latest` (add
+`@maplibre-yaml/astro@latest` in an Astro project, see
+[Astro](/integrations/astro/#upgrading-an-existing-project)) to move to the
+current release.
+
 ## Required CSS
 
 MapLibre GL JS requires its CSS for proper rendering. Add it to your HTML or import it in your JavaScript:
