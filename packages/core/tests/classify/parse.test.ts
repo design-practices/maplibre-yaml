@@ -119,6 +119,30 @@ describe("block errors — positioned, with did-you-mean", () => {
     expect(error!.message).toMatch(/Blues has colours for up to 9 classes/);
   });
 
+  it("refuses more classes than the default palette can colour (ml-aot.78)", () => {
+    const breaks = Array.from({ length: 12 }, (_, i) => (i + 1) * 10); // 13 classes
+    const [error] = only(parse(`  - id: a
+    type: fill
+    source: tracts
+    classify: { field: v, breaks: [${breaks.join(", ")}] }
+`));
+    expect(error!.path).toBe("layers.0.classify.breaks");
+    expect(error!.message).toContain("13 classes");
+    expect(error!.message).toContain("colors:");
+    // 12 classes still fit viridis; with colors: any count works.
+    expect(parse(`  - id: a
+    type: fill
+    source: tracts
+    classify: { field: v, breaks: [${breaks.slice(0, 11).join(", ")}] }
+`).success).toBe(true);
+    const colors = breaks.map(() => '"#123456"').concat('"#654321"');
+    expect(parse(`  - id: a
+    type: fill
+    source: tracts
+    classify: { field: v, breaks: [${breaks.join(", ")}], colors: [${colors.join(", ")}] }
+`).success).toBe(true);
+  });
+
   it("checks breaks go up", () => {
     const [error] = only(parse(`  - id: a
     type: fill
