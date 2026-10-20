@@ -189,7 +189,7 @@ test.describe("a Protomaps basemap from a .pmtiles file, YAML only", () => {
   test("the generator chunk blocked: a notice, and the document's own layers still draw", async ({ page }) => {
     const { errors } = await guard(page);
     const asked: string[] = [];
-    await page.route("**/chunks/protomaps-basemap.js", (route) => {
+    await page.route("**/chunks/protomaps-basemap.js*", (route) => {
       asked.push(route.request().url());
       return route.abort("blockedbyclient");
     });
@@ -212,7 +212,7 @@ test.describe("a Protomaps basemap from a .pmtiles file, YAML only", () => {
 
   test("the PMTiles reader blocked: the basemap notice, and mapReady() still resolves", async ({ page }) => {
     const { errors } = await guard(page);
-    await page.route("**/chunks/pmtiles.js", (route) => route.abort("blockedbyclient"));
+    await page.route("**/chunks/pmtiles.js*", (route) => route.abort("blockedbyclient"));
     await page.goto(PAGE, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => typeof (document.getElementById("self-hosted") as any)?.mapReady === "function");
     const settled = await page.evaluate(() =>

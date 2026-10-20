@@ -110,26 +110,65 @@ function failedUrlOf(error: unknown): string | undefined {
 }
 
 /**
+ * The file a reader failed to download from, and how many times: what the
+ * next attempt asks for again.
+ */
+const failedFiles = new Map<DecodedFormat, { url: string; attempts: number }>();
+
+/**
+ * Ask again for a reader file that failed. A browser keeps a failed dynamic
+ * import in its module map — `import()` of the same URL rejects again with
+ * no request at all (Chromium, Firefox) — so the retry asks for the same file
+ * under a URL of its own (`?retry=<n>`). A test seam, hence an object.
+ *
+ * @internal
+ */
+export const reimport = {
+  load: (url: string): Promise<unknown> => import(/* @vite-ignore */ /* webpackIgnore: true */ url),
+};
+
+/** `url` (a reader file, no query of its own) asked for afresh: `?retry=<attempt>`. */
+function retryUrl(url: string, attempt: number): string {
+  return `${url}${url.includes("?") ? "&" : "?"}retry=${attempt}`;
+}
+
+/**
  * The on-demand library for `name`, downloaded on first use and shared by
  * every map on the page.
  *
  * @throws {FormatError} (code `"chunk"`) when its file can't be downloaded
  *   (offline, a content blocker or CSP, or a self-hosted copy without the
- *   `chunks/` folder). The rejection is not cached: the next call — a
- *   `reload()`, a pan that asks for another tile — tries again.
+ *   `chunks/` folder). The rejection is not kept: the next call — a
+ *   `reload()`, a pan that asks for another tile — downloads the file again
+ *   (under a `?retry=` URL where the browser named the file, since it would
+ *   otherwise repeat the failure without asking).
  */
 export function getDecoder<F extends DecodedFormat>(name: F): Promise<Decoders[F]> {
   let pending = loading.get(name) as Promise<Decoders[F]> | undefined;
   if (!pending) {
-    pending = (LOADERS[name]() as Promise<Decoders[F]>).catch((error: unknown) => {
-      loading.delete(name);
-      throw new FormatError({
-        code: "chunk",
-        format: name as CloudFormat,
-        url: failedUrlOf(error) ?? `chunks/${name}.js`,
-        detail: String((error as { message?: unknown } | null)?.message ?? error),
-      });
-    });
+    const failed = failedFiles.get(name);
+    const load = failed
+      ? () => reimport.load(retryUrl(failed.url, failed.attempts)) as Promise<Decoders[F]>
+      : (LOADERS[name] as () => Promise<Decoders[F]>);
+    pending = load().then(
+      (library) => {
+        failedFiles.delete(name);
+        return library;
+      },
+      (error: unknown) => {
+        loading.delete(name);
+        // The file as the browser named it (its URL ends at `.js`: a retry's
+        // query is not part of it), else the one already known.
+        const file = failedUrlOf(error) ?? failed?.url;
+        if (file) failedFiles.set(name, { url: file, attempts: (failed?.attempts ?? 0) + 1 });
+        throw new FormatError({
+          code: "chunk",
+          format: name as CloudFormat,
+          url: file ?? `chunks/${name}.js`,
+          detail: String((error as { message?: unknown } | null)?.message ?? error),
+        });
+      }
+    );
     loading.set(name, pending);
   }
   return pending;

@@ -74,9 +74,30 @@ describe("getDecoder", () => {
   it("does not cache a failure: the next call tries again", async () => {
     offline();
     const { getDecoder: fresh } = await import("../../src/formats/decoders");
-    await expect(fresh("pmtiles")).rejects.toMatchObject({ failure: { code: "chunk" } });
+    // Safari names no file: the next call imports the reader as before.
+    await expect(fresh("flatgeobuf")).rejects.toMatchObject({ failure: { code: "chunk" } });
     online();
-    await expect(fresh("pmtiles")).resolves.toHaveProperty("Protocol");
+    await expect(fresh("flatgeobuf")).resolves.toHaveProperty("deserialize");
+  });
+
+  it("asks again for a file the browser named under a URL of its own: the browser keeps a failed import (ml-cnv.19)", async () => {
+    offline();
+    const fresh = await import("../../src/formats/decoders");
+    await expect(fresh.getDecoder("pmtiles")).rejects.toMatchObject({ failure: { code: "chunk" } });
+    // Chromium and Firefox reject an import() of the same URL again without a
+    // request, so the retry asks for `?retry=1`…
+    const load = vi
+      .spyOn(fresh.reimport, "load")
+      .mockRejectedValueOnce(new TypeError(`Failed to fetch dynamically imported module: ${CHUNK_URL}pmtiles.js?retry=1`))
+      .mockResolvedValueOnce({ Protocol: class {} });
+    await expect(fresh.getDecoder("pmtiles")).rejects.toMatchObject({ failure: { url: `${CHUNK_URL}pmtiles.js` } });
+    expect(load).toHaveBeenLastCalledWith(`${CHUNK_URL}pmtiles.js?retry=1`);
+    // …and the next one `?retry=2`, which loads.
+    await expect(fresh.getDecoder("pmtiles")).resolves.toHaveProperty("Protocol");
+    expect(load).toHaveBeenLastCalledWith(`${CHUNK_URL}pmtiles.js?retry=2`);
+    // Loaded: shared from now on.
+    expect(fresh.getDecoder("pmtiles")).toBe(fresh.getDecoder("pmtiles"));
+    expect(load).toHaveBeenCalledTimes(2);
   });
 });
 

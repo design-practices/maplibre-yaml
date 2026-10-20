@@ -225,7 +225,8 @@ layers:
 
   test("a reader blocked by the browser (offline, a blocker, CSP) fails only its format's sources", async ({ page }) => {
     const errors = await guard(page);
-    await page.route("**/chunks/flatgeobuf.js", (route) => route.abort("blockedbyclient"));
+    // Every request for the file, retries (`?retry=1`) included.
+    await page.route("**/chunks/flatgeobuf.js*", (route) => route.abort("blockedbyclient"));
     await page.goto("/examples/verification/cloud-native/cdn.html", { waitUntil: "domcontentloaded" });
     await page.evaluate(() => (document.getElementById("map") as any).mapReady());
     // PMTiles (its reader loaded) still draws…
@@ -236,6 +237,35 @@ layers:
       timeout: 30_000,
     });
     await expect(notice).not.toContainText("PMTiles reader");
+    expect(errors).toEqual([]);
+  });
+
+  test("a reader that failed once downloads again on reload(): the browser's failed import isn't reused", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const asked: string[] = [];
+    let offline = true;
+    await page.route("**/chunks/flatgeobuf.js*", (route) => {
+      asked.push(new URL(route.request().url()).search || "(no query)");
+      return offline ? route.abort("internetdisconnected") : route.fallback();
+    });
+    await page.goto("/examples/verification/cloud-native/cdn.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    const notice = page.locator("#map .ml-map-notice");
+    await expect(notice).toContainText("The FlatGeobuf reader", { timeout: 30_000 });
+    const failedAsks = asked.length;
+    expect(failedAsks).toBeGreaterThan(0);
+    // Back online: reload() asks for the file again — under a URL of its
+    // own, since the browser would repeat the failed import without a
+    // request — and the layer draws.
+    offline = false;
+    await page.evaluate(() => (document.getElementById("map") as any).reload());
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForFeatures(page, "map", "districts");
+    expect(asked.length).toBe(failedAsks + 1);
+    expect(asked.at(-1)).toBe(`?retry=${failedAsks}`);
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 });

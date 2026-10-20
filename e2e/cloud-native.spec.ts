@@ -438,8 +438,8 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     baseURL,
   }) => {
     const errors = await guard(page);
-    await page.route("**/chunks/pmtiles.js", (route) => route.abort("blockedbyclient"));
-    await page.route("**/chunks/cog.js", (route) => route.abort("blockedbyclient"));
+    await page.route("**/chunks/pmtiles.js*", (route) => route.abort("blockedbyclient"));
+    await page.route("**/chunks/cog.js*", (route) => route.abort("blockedbyclient"));
     // A style whose imagery is a COG (cog://), the other protocol whose reader
     // is a file of its own.
     await page.route("**/cog-basemap/style.json", (route) =>

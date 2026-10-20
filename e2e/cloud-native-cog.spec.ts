@@ -305,7 +305,7 @@ test.describe("COG with no page JavaScript", () => {
 
   test("a COG reader the browser couldn't download: a plain notice on the COG sources only", async ({ page }) => {
     const errors = await guard(page);
-    await page.route("**/chunks/cog.js", (route) => route.abort("blockedbyclient"));
+    await page.route("**/chunks/cog.js*", (route) => route.abort("blockedbyclient"));
     await page.goto("/examples/verification/cloud-native/cdn-cog.html", { waitUntil: "domcontentloaded" });
     await page.evaluate(() => (document.getElementById("map") as any).mapReady());
     const notice = page.locator("#map .ml-map-notice");
