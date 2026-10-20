@@ -419,6 +419,20 @@ describe("legend lines (ml-n2e)", () => {
     expect(entries[2]).toMatchObject({ shape: "circle", size: 18 });
   });
 
+  it("all-null data: only the No data line, no class line no feature has (ml-aot.81)", () => {
+    const fc = {
+      type: "FeatureCollection",
+      features: [null, "", "n/a"].map((v) => ({ type: "Feature", properties: { v }, geometry: null })),
+    };
+    for (const config of [
+      { field: "v", method: "quantile" as const, classes: 3 },
+      { field: "v", breaks: [10] },
+    ]) {
+      const record = withData(resolveClassify(config, "fill"), fc);
+      expect(classifyLegendEntries(record).map((e) => e.label)).toEqual(["v", "No data"]);
+    }
+  });
+
   it("shows nothing while computed breaks wait for data", () => {
     expect(classifyLegendEntries(resolveClassify({ field: "v", method: "jenks" }, "fill"))).toEqual([]);
   });

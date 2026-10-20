@@ -615,6 +615,9 @@ export function classifyLegendEntries(
         shape,
       });
     }
+  } else if (stats !== undefined && stats.count - stats.noData <= 0) {
+    // No feature has a value: no class line describes anything on the map
+    // (an "All values" line would). Only "No data" below (ml-aot.81).
   } else {
     const breaks = record.breaks ?? [];
     const labels = classLabels(breaks, stats, record.format, options.locale);
