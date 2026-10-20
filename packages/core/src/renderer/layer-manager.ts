@@ -111,6 +111,11 @@ export interface LayerManagerCallbacks {
    * rather than fail one by one.
    */
   onSourceError?: (sourceId: string, error: Error) => void;
+  /**
+   * An author hint about one layer that was still added (a `before:` naming
+   * no layer on the map: the layer goes on top instead of being dropped).
+   */
+  onLayerHint?: (layerId: string, message: string) => void;
 }
 
 /**
@@ -372,6 +377,33 @@ export class LayerManager {
     }
   }
 
+  /**
+   * The layer's `before:`, when it names a layer that is on the map (or one
+   * of this document's own, still being added). A name that is neither — a
+   * typo, a basemap layer id from another basemap — made MapLibre refuse the
+   * layer, which then vanished with only a console error (ml-aot.119): it
+   * goes on top instead, with an author hint naming the closest layer id.
+   */
+  private beforeOrTop(layer: Layer): string | undefined {
+    const before = layer.before;
+    if (typeof before !== "string") return undefined;
+    if (typeof this.map.getLayer !== "function" || this.map.getLayer(before)) return before;
+    if (this.claimedLayerIds.has(before)) return before;
+    let styleLayers: string[] = [];
+    try {
+      styleLayers = (this.map.getStyle?.()?.layers ?? []).map((l: { id: string }) => l.id);
+    } catch {
+      // No style to read: no did-you-mean.
+    }
+    const near = suggest(before, [...styleLayers, ...this.claimedLayerIds], 3);
+    this.callbacks.onLayerHint?.(
+      layer.id,
+      `Layer \`${layer.id}\`: \`before: ${before}\` names no layer on this map, so the layer is drawn on top instead.` +
+        (near ? ` Did you mean \`${near}\`?` : "")
+    );
+    return undefined;
+  }
+
   private async addClaimedLayer(layer: Layer): Promise<void> {
     // Background layers are sourceless by spec — resolving a source for one
     // dereferenced `layer.source.type` on undefined and threw, so a
@@ -438,7 +470,7 @@ export class LayerManager {
       layerSpec.layout.visibility = "none";
     }
 
-    this.map.addLayer(layerSpec, layer.before as string | undefined);
+    this.map.addLayer(layerSpec, this.beforeOrTop(layer));
 
     // A named source refreshes once for the whole source, not once per layer.
     if (isSourceRef) {

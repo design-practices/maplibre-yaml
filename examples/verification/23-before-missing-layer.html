@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>before: naming a layer the map doesn't have</title>
+  <!--
+    ml-aot.119: `before:` puts a layer under one of the basemap's layers
+    (the cloud-native guide teaches `before: places_subplace`). A typo, or an
+    id from another basemap, used to make MapLibre refuse the layer: the data
+    vanished with only a console error. Now the layer is drawn on top and the
+    author notes (while developing) name the closest layer id.
+      - "inline":  an inline basemap with layers water and places_subplace;
+                   the dot says before: places_subplaces (one letter off)
+      - "url":     a basemap style from a URL (layers landuse, boundaries,
+                   labels); the outline says before: label
+    PASS = both maps show the red dot / dark outline, with a note per map
+    naming the closest id. FAIL = an empty map and no note.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/23-before-missing-layer.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    ml-map { display: block; height: 360px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <main>
+    <ml-map id="inline">
+      <script type="text/yaml">
+type: map
+id: before-inline
+config:
+  center: [0, 0]
+  zoom: 3
+  mapStyle:
+    version: 8
+    sources: {}
+    layers:
+      - { id: water, type: background, paint: { background-color: "#cfe3f0" } }
+      - { id: places_subplace, type: background, paint: { background-color: "rgba(0,0,0,0)" } }
+layers:
+  - id: dot
+    type: circle
+    before: places_subplaces
+    source: { type: geojson, data: { type: Point, coordinates: [0, 0] } }
+    paint: { circle-radius: 14, circle-color: "#e63946" }
+      </script>
+    </ml-map>
+    <ml-map id="url">
+      <script type="text/yaml">
+type: map
+id: before-url
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: /examples/verification/base-path/site/basemap/style.json
+layers:
+  - id: outline
+    type: line
+    before: label
+    source:
+      type: geojson
+      data: { type: Polygon, coordinates: [[[10.0, 42.0], [10.4, 42.0], [10.4, 42.3], [10.0, 42.3], [10.0, 42.0]]] }
+    paint: { line-color: "#1d3557", line-width: 4 }
+      </script>
+    </ml-map>
+  </main>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

@@ -458,12 +458,65 @@ describe("LayerManager", () => {
         before: "existing-layer",
       };
 
+      mockMap.getLayer.mockImplementation((id: string) => (id === "existing-layer" ? { id } : undefined));
       await manager.addLayer(layer);
 
       expect(mockMap.addLayer).toHaveBeenCalledWith(
         expect.anything(),
         "existing-layer"
       );
+    });
+
+    it("a before: naming no layer on the map adds the layer on top, with a did-you-mean hint (ml-aot.119)", async () => {
+      callbacks.onLayerHint = vi.fn();
+      mockMap.getLayer.mockImplementation((id: string) =>
+        ["places_subplace", "water"].includes(id) ? { id } : undefined
+      );
+      mockMap.getStyle = () => ({ layers: [{ id: "water" }, { id: "places_subplace" }] });
+      await manager.addLayer({
+        id: "dot",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: { type: "geojson" as const, data: { type: "FeatureCollection" as const, features: [] } },
+        before: "places_subplaces",
+      });
+      // Added, on top — not refused by MapLibre and lost.
+      expect(mockMap.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: "dot" }), undefined);
+      expect(callbacks.onLayerHint).toHaveBeenCalledWith(
+        "dot",
+        "Layer `dot`: `before: places_subplaces` names no layer on this map, so the layer is drawn on top instead. " +
+          "Did you mean `places_subplace`?"
+      );
+    });
+
+    it("a before: naming another of the document's layers, not added yet, is kept", async () => {
+      callbacks.onLayerHint = vi.fn();
+      // `later` is claimed first (its source still loading), then `dot` asks to go under it.
+      let release!: () => void;
+      const slow = new Promise<void>((r) => (release = r));
+      const original = mockMap.addSource;
+      mockMap.addSource = vi.fn(async () => slow);
+      const first = manager.addLayer({
+        id: "later",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: { type: "geojson" as const, data: { type: "FeatureCollection" as const, features: [] } },
+      });
+      mockMap.addSource = original;
+      await manager.addLayer({
+        id: "dot",
+        type: "circle" as const,
+        visible: true,
+        toggleable: false,
+        source: { type: "geojson" as const, data: { type: "FeatureCollection" as const, features: [] } },
+        before: "later",
+      });
+      release();
+      await first;
+      expect(mockMap.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: "dot" }), "later");
+      expect(callbacks.onLayerHint).not.toHaveBeenCalled();
     });
 
     it("includes optional layer properties", async () => {

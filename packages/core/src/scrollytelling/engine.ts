@@ -47,6 +47,8 @@ export interface StoryMap {
   getBearing(): number;
   getCenter(): { lng: number; lat: number };
   getLayer(id: string): unknown;
+  /** The style, for the basemap's layer ids in a did-you-mean. */
+  getStyle?(): { layers?: Array<{ id: string }> } | undefined;
   setFilter(layer: string, filter: unknown): unknown;
   setPaintProperty(layer: string, property: string, value: unknown): unknown;
   setLayoutProperty(layer: string, property: string, value: unknown): unknown;
@@ -128,6 +130,20 @@ export function storyMapDocument(story: ScrollytellingBlock): Record<string, unk
     ...(chapter.onChapterExit ?? []),
   ]);
   return storyColumns(doc, actions);
+}
+
+/**
+ * Layer ids a chapter could have meant: the story's own, then the basemap's
+ * (a chapter may restyle a basemap layer by id, ml-cnv.7).
+ */
+function layerCandidates(map: StoryMap, own: readonly string[] = []): string[] {
+  let style: string[] = [];
+  try {
+    style = (map.getStyle?.()?.layers ?? []).map((layer) => layer.id);
+  } catch {
+    // No style to read: the story's own ids only.
+  }
+  return [...new Set([...own, ...style])];
 }
 
 /** Whether the reader asked the OS for reduced motion. */
@@ -236,7 +252,7 @@ export function runChapterAction(
     console.warn(
       `[ml-scrollytelling] ${action.action} in chapter "${ctx.chapterId}": no layer "${action.layer ?? ""}" on the map`
     );
-    const near = action.layer ? suggest(action.layer, ctx.layerIds ?? [], 3) : undefined;
+    const near = action.layer ? suggest(action.layer, layerCandidates(map, ctx.layerIds), 3) : undefined;
     ctx.onProblem?.(
       `Chapter \`${ctx.chapterId}\`: its ${action.action} action names layer \`${action.layer ?? ""}\`, but the map has no layer by that name, so it did nothing.` +
         (near ? ` Did you mean \`${near}\`?` : "")
@@ -496,7 +512,7 @@ export function createStoryController(
           }
           // Silently skipped before (ml-aot.51): the route never appeared and
           // nothing said why.
-          const near = suggest(id, layerIds, 3);
+          const near = suggest(id, layerCandidates(map, layerIds), 3);
           problem(
             `Chapter \`${chapter.id}\` ${verb === "show" ? "shows" : "hides"} layer \`${id}\`, but the map has no layer by that name.` +
               (near ? ` Did you mean \`${near}\`?` : "")

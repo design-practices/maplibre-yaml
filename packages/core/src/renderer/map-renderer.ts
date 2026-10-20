@@ -215,6 +215,8 @@ const MISSING_PROTOMAPS_LAYER = new RegExp(
  *   source is read by view); the layer draws in its no-data colour.
  * - `classify-field`: a hint — a classified layer's field has no usable
  *   value in the loaded data, so every feature draws as no data.
+ * - `layer-hint`: a hint — a layer was added, but not as written (a
+ *   `before:` naming no layer on the map: it went on top).
  * - `source-hint`: a hint — a source draws, but its file is served in a
  *   way that makes it slow (a GeoTIFF that isn't cloud-optimized).
  *
@@ -246,7 +248,8 @@ export interface MapErrorContext {
     | 'classify'
     | 'classify-field'
     | 'basemap'
-    | 'source-hint';
+    | 'source-hint'
+    | 'layer-hint';
   /**
    * For `source`: the source is the basemap's own (its PMTiles file failed),
    * not one the document declared.
@@ -813,6 +816,11 @@ export class MapRenderer {
       onSourceError: (sourceId, error) => {
         console.warn(`[maplibre-yaml] ${error.message.replace(/`/g, '"')}`);
         options.onError?.(error, false, { kind: 'source', sourceId });
+      },
+      // A `before:` naming no layer: the layer was added on top (ml-aot.119).
+      onLayerHint: (layerId, message) => {
+        console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+        options.onError?.(new Error(message), false, { kind: 'layer-hint', layerId });
       },
     };
 

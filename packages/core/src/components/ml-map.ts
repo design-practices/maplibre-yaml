@@ -1067,7 +1067,11 @@ export class MLMap extends HTMLElement {
           }
           // A classified field the data has no value for (ml-aot.95): the
           // renderer warned; an author hint on the page too.
-          if (context?.kind === "classify-field" || context?.kind === "source-hint") {
+          if (
+            context?.kind === "classify-field" ||
+            context?.kind === "source-hint" ||
+            context?.kind === "layer-hint"
+          ) {
             this.reportProblem(error.message, { kind: "hint" });
             return;
           }
