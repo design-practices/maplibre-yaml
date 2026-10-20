@@ -320,8 +320,11 @@ function hillsTile(z, x, y) {
  *                         size guard can be exercised without committing a
  *                         big file (ranges still honoured; the padding is
  *                         generated on demand, never held in memory)
+ *  - `/norange/oversize/<MB>/…`  both: a big file on a host without ranges
+ *                         (ml-cnv.4: GeoParquet must refuse it before
+ *                         downloading it, since its footer is at the end)
  */
-const HOSTING_PREFIX = /^\/(norange|nocors|oversize\/(\d+))(\/.*)$/;
+const HOSTING_PREFIX = /^\/(norange\/oversize\/(\d+)|norange|nocors|oversize\/(\d+))(\/.*)$/;
 
 /** Parse a single `Range: bytes=a-b` / `bytes=a-` / `bytes=-n` against `size`. */
 function parseRange(header, size) {
@@ -354,9 +357,9 @@ const server = createServer(async (req, res) => {
 
   const hosting = HOSTING_PREFIX.exec(path);
   const cors = !hosting || hosting[1] !== "nocors";
-  const ranges = !hosting || hosting[1] !== "norange";
-  const padMb = hosting && hosting[2] ? Number(hosting[2]) : 0;
-  if (hosting) path = hosting[3];
+  const ranges = !hosting || !hosting[1].startsWith("norange");
+  const padMb = hosting && (hosting[2] || hosting[3]) ? Number(hosting[2] || hosting[3]) : 0;
+  if (hosting) path = hosting[4];
 
   const corsHeaders = cors
     ? {

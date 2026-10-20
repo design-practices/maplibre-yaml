@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Base path: cloud-native files on a project site</title>
   <!--
-    ml-cnv.1 — PMTiles and FlatGeobuf on a GitHub Pages project site
+    ml-cnv.1 — PMTiles, FlatGeobuf and GeoParquet on a GitHub Pages project site
     (/my-repo/), from a page one folder down. The document names its files
     by site path, with no repo name: `pmtiles:///cloud-native/…` (the path
     INSIDE the pmtiles:// URL is what gets rebased — in 0.8 it was left
@@ -29,7 +29,7 @@
   </script>
 </head>
 <body>
-  <header>Left (base="/my-repo/") PASS = imagery + outlines + districts, no notice. Right (no base) = the files aren't found.</header>
+  <header>Left (base="/my-repo/") PASS = imagery + outlines + districts + points (GeoParquet), no notice. Right (no base) = the files aren't found.</header>
   <main>
     <ml-map id="with-base" base="/my-repo/">
       <script type="text/yaml">
@@ -50,10 +50,14 @@ sources:
   districts:
     type: geojson
     url: /cloud-native/districts.fgb
+  wells:
+    type: geojson
+    url: cloud-native/points.parquet
 layers:
   - { id: imagery, type: raster, source: imagery }
   - { id: districts, type: fill, source: districts, paint: { fill-color: "#e9c46a", fill-opacity: 0.5 } }
   - { id: outlines, type: line, source: outlines, source-layer: districts, paint: { line-color: "#1d3557" } }
+  - { id: wells, type: circle, source: wells, paint: { circle-radius: 3, circle-color: "#264653" } }
       </script>
     </ml-map>
     <ml-map id="no-base">
@@ -75,10 +79,14 @@ sources:
   districts:
     type: geojson
     url: /cloud-native/districts.fgb
+  wells:
+    type: geojson
+    url: cloud-native/points.parquet
 layers:
   - { id: imagery, type: raster, source: imagery }
   - { id: districts, type: fill, source: districts, paint: { fill-color: "#e9c46a", fill-opacity: 0.5 } }
   - { id: outlines, type: line, source: outlines, source-layer: districts, paint: { line-color: "#1d3557" } }
+  - { id: wells, type: circle, source: wells, paint: { circle-radius: 3, circle-color: "#264653" } }
       </script>
     </ml-map>
   </main>

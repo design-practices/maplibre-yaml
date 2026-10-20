@@ -151,8 +151,8 @@ test.describe("home: <Map config> and <Map src>", () => {
   });
 });
 
-test.describe("cloud-native data: PMTiles and FlatGeobuf from YAML (0.9, ml-cnv)", () => {
-  test("both formats render, framed on the data, with no page JavaScript @dev", async ({ page }) => {
+test.describe("cloud-native data: PMTiles, FlatGeobuf and GeoParquet from YAML (0.9, ml-cnv)", () => {
+  test("all three formats render, framed on the data, with no page JavaScript @dev", async ({ page }) => {
     const errors = await guard(page);
     const ranged: number[] = [];
     page.on("response", (r) => {
@@ -162,6 +162,7 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf from YAML (0.9, ml-cnv)
     const map = '[data-testid="cloud-native-map"] ml-map';
     await mapReady(page, map);
     await layerLoaded(page, map, "districts");
+    await layerLoaded(page, map, "population");
     await expect
       .poll(() =>
         page.evaluate(
@@ -173,6 +174,18 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf from YAML (0.9, ml-cnv)
         )
       )
       .toBeGreaterThan(0);
+    // The GeoParquet file's population classes were computed from its features.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (sel) =>
+            JSON.stringify(
+              (document.querySelector(sel) as any).getMap().getPaintProperty("population", "fill-color")
+            ),
+          map
+        )
+      )
+      .toContain('"step"');
     // fitTo framed the decoded FlatGeobuf data (the YAML says zoom 8).
     await expect.poll(async () => (await camera(page, map)).zoom).toBeGreaterThan(9);
     // The archive was read in parts (HTTP range requests), as on any static host.
