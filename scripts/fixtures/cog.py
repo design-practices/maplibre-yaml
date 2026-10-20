@@ -25,6 +25,8 @@ at /gallery-assets/cloud-native/ and by e2e/server.mjs for the browser tests):
                            hillshade and 3D terrain
     ndvi.cog.tif           a vegetation index (Float32, -0.1 to 0.85), EPSG:3857, 256 px,
                            NaN over the sea: one band for a colour ramp
+    imagery-jpeg.cog.tif   the same imagery, JPEG-compressed (the codec that
+                           lives in its own chunk, chunks/cog-jpeg.js)
     imagery-4326.cog.tif   the imagery as a COG in EPSG:4326 (longitude/
                            latitude): the wrong-projection case
     imagery-plain.tif      the imagery as an ordinary GeoTIFF in EPSG:3857,
@@ -175,6 +177,16 @@ if __name__ == "__main__":
     z = elevation(lon, lat)
     rgb = np.moveaxis(imagery(z, cell), -1, 0)
     write(os.path.join(OUT, "imagery.cog.tif"), rgb, "EPSG:3857", transform, **cog)
+    write(
+        os.path.join(OUT, "imagery-jpeg.cog.tif"),
+        rgb,
+        "EPSG:3857",
+        transform,
+        BLOCKSIZE=256,
+        COMPRESS="JPEG",
+        QUALITY=85,
+        OVERVIEWS="AUTO",
+    )
 
     lon, lat, transform, cell = grid_3857(384)
     z = elevation(lon, lat)
@@ -237,6 +249,7 @@ if __name__ == "__main__":
 
     for name in (
         "imagery.cog.tif",
+        "imagery-jpeg.cog.tif",
         "elevation.cog.tif",
         "ndvi.cog.tif",
         "imagery-4326.cog.tif",

@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, realpathSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 import { defineConfig, type Options } from "tsup";
 
 // ---------------------------------------------------------------------------
@@ -115,6 +116,51 @@ const seamChunksExternal = {
   },
 };
 
+/**
+ * The COG chunk's codecs (ml-cnv.11), CDN build only: geotiff.js reaches its
+ * per-compression decoders with `import("./<codec>.js")` from
+ * `compression/index.js`. Built into `chunks/cog.js` they would be inlined;
+ * instead each heavy one becomes its own file next to it,
+ * `chunks/cog-<codec>.js` — stable names, loaded relative to `chunks/cog.js`
+ * only when the main thread decodes that compression. Each is a
+ * self-contained entry (its small shared helpers are duplicated), so nothing
+ * else on the page — and no other format's chunk — changes. The npm build
+ * already splits these (`dist/shared/`).
+ */
+const COG_CODECS = ["deflate", "jpeg", "lerc", "zstd"] as const;
+
+/** geotiff.js's `compression/` folder, as esbuild resolves it for the COG library (its ESM build). */
+function geotiffCompressionDir(): string {
+  const plugin = realpathSync(resolve("node_modules/@geomatico/maplibre-cog-protocol"));
+  const main = createRequire(join(plugin, "package.json")).resolve("geotiff");
+  // …/geotiff/dist-node/geotiff.js → …/geotiff/dist-module/compression
+  return join(dirname(dirname(main)), "dist-module", "compression");
+}
+
+const cogCodecChunks = {
+  name: "maplibre-yaml-cog-codecs",
+  setup(build: {
+    onResolve: (
+      o: { filter: RegExp },
+      cb: (args: { path: string; importer: string; kind: string }) => { path: string; external: boolean } | undefined
+    ) => void;
+  }) {
+    const filter = new RegExp(`^\\./(${COG_CODECS.join("|")})\\.js$`);
+    build.onResolve({ filter }, (args) => {
+      if (args.kind !== "dynamic-import" || !/[\\/]geotiff[\\/]dist-module[\\/]compression[\\/]index\.js$/.test(args.importer)) {
+        return undefined;
+      }
+      return { path: `./cog-${filter.exec(args.path)![1]}.js`, external: true };
+    });
+  },
+};
+
+/** `{ "chunks/cog-<codec>": file }` for the CDN build. */
+function cogCodecEntries(): Record<string, string> {
+  const dir = geotiffCompressionDir();
+  return Object.fromEntries(COG_CODECS.map((c) => [`chunks/cog-${c}`, join(dir, `${c}.js`)]));
+}
+
 /** The npm build's public entries (and the only ones with declarations). */
 const NPM_ENTRIES = {
   index: "src/index.ts",
@@ -214,7 +260,10 @@ function browserBuild(entry: Record<string, string>, chunks: boolean): Options {
       "@bokuweb/zstd-wasm",
       ...Object.values(seam).filter((spec) => !spec.startsWith(".")),
     ],
-    esbuildPlugins: [geotiffBrowserOnly as never, ...(chunks ? [seamChunksExternal as never] : [])],
+    esbuildPlugins: [
+      geotiffBrowserOnly as never,
+      ...(chunks ? [seamChunksExternal as never, cogCodecChunks as never] : []),
+    ],
     esbuildOptions(options) {
       options.banner = {
         js: "// @maplibre-yaml/core - Browser build with bundled dependencies",
@@ -228,7 +277,7 @@ function browserBuild(entry: Record<string, string>, chunks: boolean): Options {
         ...(options.alias ?? {}),
         "@bokuweb/zstd-wasm": "./src/formats/zstd-unavailable.ts",
       };
-      if (chunks) addEntries(options, seamEntries("chunks"));
+      if (chunks) addEntries(options, { ...seamEntries("chunks"), ...cogCodecEntries() });
     },
   };
 }

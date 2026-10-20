@@ -110,6 +110,21 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
     }
   });
 
+  it("the COG chunk keeps its heavy codecs in their own files next to it (ml-cnv.11)", () => {
+    const cog = read("chunks/cog.js");
+    const codecs = ["deflate", "jpeg", "lerc", "zstd"];
+    expect(dynamicImports(cog).sort()).toEqual(codecs.map((c) => `./cog-${c}.js`));
+    for (const codec of codecs) {
+      const code = read(`chunks/cog-${codec}.js`);
+      expect(staticImports(code), codec).toEqual([]);
+      expect(dynamicImports(code), codec).toEqual([]);
+    }
+    // The codec libraries are in their files, not in chunks/cog.js.
+    expect(read("chunks/cog-lerc.js")).toContain("LercDecode");
+    expect(cog.includes("LercDecode")).toBe(false);
+    expect(read("chunks/cog-jpeg.js")).toContain("JPEGTables");
+  });
+
   it("keeps index.browser.js one file (tooling pages), readers inlined", () => {
     const code = read("index.browser.js");
     expect(staticImports(code)).toEqual(["maplibre-gl"]);

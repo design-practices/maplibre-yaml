@@ -109,6 +109,12 @@ export function classifyCogError(error: unknown, url: string): unknown {
   const message = String((error as { message?: unknown } | null)?.message ?? error);
   const base = { format: "cog" as const, url };
   if (/responded with full file/i.test(message)) return new FormatError({ ...base, code: "no-range" });
+  // An image codec in its own file next to the reader (chunks/cog-<codec>.js,
+  // ml-cnv.11) that couldn't be downloaded: the seam's "chunk" notice.
+  const codec = /\S*cog-(?:deflate|jpeg|lerc|zstd)\.js/.exec(message);
+  if (codec && /dynamically imported module|importing a module script failed|failed to fetch/i.test(message)) {
+    return new FormatError({ code: "chunk", format: "cog", url: codec[0], detail: message });
+  }
   const projection = /COG projection (EPSG:\d+)/i.exec(message);
   if (projection) return new FormatError({ ...base, code: "crs", crs: projection[1]! });
   if (/invalid (byte order|magic)|not a (valid )?tiff|unsupported (tiff|file)/i.test(message)) {

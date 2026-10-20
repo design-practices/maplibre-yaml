@@ -247,13 +247,59 @@ test.describe("COG with no page JavaScript", () => {
     const land = await pixelAt(page, "#map", [10.2, 42.15]);
     expect(distance(land, BACKGROUND), `land pixel ${land}`).toBeGreaterThan(60);
     await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
-    // The bundle, and the one reader this document needs, from dist/chunks/.
+    // The bundle, and the one reader this document needs, from dist/chunks/ —
+    // and no codec file (chunks/cog-<codec>.js): these COGs are DEFLATE.
+    expect(scripts.filter((p) => /\/chunks\/cog-/.test(p))).toEqual([]);
     expect([...new Set(scripts.filter((p) => p.startsWith("/cdn/")))].sort()).toEqual([
       "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/cog.js",
       "/cdn/@maplibre-yaml/core@0.9.0/dist/register.browser.js",
       "/cdn/@maplibre-yaml/core@0.9.0/register.js",
     ]);
     await page.screenshot({ path: "e2e/results/cog_cdn.png" });
+    expect(errors).toEqual([]);
+  });
+
+  test("a JPEG-compressed COG draws; its tiles decode in the reader's workers, no codec file fetched (ml-cnv.11)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const scripts: string[] = [];
+    page.on("request", (r) => {
+      if (/\.m?js(\?|$)/.test(r.url())) scripts.push(new URL(r.url()).pathname);
+    });
+    const tif = recordRequests(page, /imagery-jpeg\.cog\.tif/);
+    await page.goto("/examples/verification/cloud-native/cdn-cog-jpeg.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    await waitForTiles(page, "#map", ["imagery"]);
+    await page.waitForTimeout(300);
+    const land = await pixelAt(page, "#map", [10.2, 42.15]);
+    expect(distance(land, BACKGROUND), `land pixel ${land}`).toBeGreaterThan(60);
+    const sea = await pixelAt(page, "#map", [10.02, 42.02]);
+    expect(sea[2], `sea pixel ${sea}`).toBeGreaterThan(sea[0]); // blue water, decoded from JPEG
+    expect(tif.length).toBeGreaterThan(0);
+    expect([...new Set(scripts.filter((p) => p.startsWith("/cdn/")))].sort()).toEqual([
+      "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/cog.js",
+      "/cdn/@maplibre-yaml/core@0.9.0/dist/register.browser.js",
+      "/cdn/@maplibre-yaml/core@0.9.0/register.js",
+    ]);
+    await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test("the codec files load next to chunks/cog.js, each a self-contained decoder (ml-cnv.11)", async ({ page }) => {
+    const errors = await guard(page);
+    await page.goto("/examples/verification/cloud-native/cdn-cog.html", { waitUntil: "domcontentloaded" });
+    const found = await page.evaluate(async () => {
+      // Resolved the way chunks/cog.js resolves them: relative to its own URL.
+      const cog = new URL("/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/cog.js", location.href);
+      const out: Record<string, boolean> = {};
+      for (const codec of ["deflate", "jpeg", "lerc", "zstd"]) {
+        const m = await import(new URL(`./cog-${codec}.js`, cog).href);
+        out[codec] = typeof m.default === "function" && typeof m.default.prototype.decodeBlock === "function";
+      }
+      return out;
+    });
+    expect(found).toEqual({ deflate: true, jpeg: true, lerc: true, zstd: true });
     expect(errors).toEqual([]);
   });
 

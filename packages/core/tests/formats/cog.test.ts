@@ -344,6 +344,15 @@ describe("classifyCogError — what the plugin and geotiff.js throw", () => {
     expect((error as { failure?: { code?: string } }).failure?.code).toBe(code);
   });
 
+  it("a codec file that couldn't be downloaded is the seam's 'chunk' failure, naming the file", () => {
+    const error = classifyCogError(
+      new TypeError("Failed to fetch dynamically imported module: https://cdn.example/dist/chunks/cog-jpeg.js"),
+      "/x.tif"
+    ) as { failure?: { code?: string; url?: string }; message: string };
+    expect(error.failure).toMatchObject({ code: "chunk", url: "https://cdn.example/dist/chunks/cog-jpeg.js" });
+    expect(error.message).toContain("couldn't be downloaded");
+  });
+
   it("fileUrlOf drops the scheme, the fragment and the tile suffix", () => {
     expect(fileUrlOf("cog://https://h.org/a.tif#dem/3/4/5")).toBe("https://h.org/a.tif");
     expect(fileUrlOf("cog://https://h.org/a.tif/3/4/5")).toBe("https://h.org/a.tif");
