@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Base path: a story on a Protomaps basemap</title>
+  <!--
+    ml-cnv.7 — <ml-scrollytelling> whose map is a Protomaps basemap built
+    from a .pmtiles file on a /my-repo/ project site. The second chapter
+    recolours the basemap's own "water" layer by id (onChapterEnter
+    setPaintProperty); leaving it restores the colour.
+    PASS = a light Brooklyn basemap with labels; at "The river" the East
+    River turns red; back at "DUMBO" it is blue again. No error card.
+    Open: http://localhost:4174/my-repo/protomaps-story.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>/my-repo/ story on a Protomaps basemap — PASS = labels; the river turns red at "The river".</header>
+  <ml-scrollytelling id="story" src="/stories/protomaps.yaml" base="/my-repo/"></ml-scrollytelling>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>
