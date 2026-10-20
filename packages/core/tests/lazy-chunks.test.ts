@@ -52,6 +52,9 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
   cog: ["Invalid COG protocol URL", "Server responded with full file", "GDAL_NODATA"],
 };
 
+/** geotiff's codecs, in chunks/cog-<codec>.js (ml-cnv.11): never in a main bundle either. */
+const CODEC_MARKERS = ["LercDecode", "JPEGTables"];
+
 /** Static import specifiers (`import … from "x"`, `import "x"`), minified or not. */
 function staticImports(code: string): string[] {
   const found = new Set<string>();
@@ -83,8 +86,12 @@ function staticClosure(files: string[]): string[] {
 
 describe("the seam", () => {
   it("names the readers this version loads on demand", () => {
-    expect(SEAM_NAMES).toEqual(expect.arrayContaining(["pmtiles", "flatgeobuf", "geoparquet", "geoparquet-brotli"]));
-    for (const name of Object.keys(LIBRARY_MARKERS)) expect(SEAM_NAMES).toContain(name);
+    expect([...SEAM_NAMES].sort()).toEqual(
+      ["cog", "flatgeobuf", "geoparquet", "geoparquet-brotli", "pmtiles", "protomaps-basemap"]
+    );
+    // Every on-demand library has markers, so the "not in the main bundle"
+    // checks below cover all of them.
+    expect(Object.keys(LIBRARY_MARKERS).sort()).toEqual([...SEAM_NAMES].sort());
   });
 });
 
@@ -103,6 +110,7 @@ describe.skipIf(!built)("CDN build: register.browser.js + chunks/", () => {
     for (const [name, markers] of Object.entries(LIBRARY_MARKERS)) {
       for (const marker of markers) expect(main.includes(marker), `${name}: ${marker}`).toBe(false);
     }
+    for (const marker of CODEC_MARKERS) expect(main.includes(marker), `cog codec: ${marker}`).toBe(false);
   });
 
   it("emits every chunk, self-contained, holding its library", () => {
@@ -172,6 +180,7 @@ describe.skipIf(!built)("npm build: readers in dist/formats/, reached by import(
       for (const [name, markers] of Object.entries(LIBRARY_MARKERS)) {
         for (const marker of markers) expect(code.includes(marker), `${file} has ${name}: ${marker}`).toBe(false);
       }
+      for (const marker of CODEC_MARKERS) expect(code.includes(marker), `${file} has a cog codec: ${marker}`).toBe(false);
       const statics = staticImports(code).filter((s) => /\/formats\//.test(s));
       expect(statics, file).toEqual([]);
     }
