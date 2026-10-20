@@ -121,7 +121,7 @@ export interface EmitResult {
    */
   images?: EmitImageRef[];
   /**
-   * FlatGeobuf sources to convert (ml-cnv.3). Core emits each as an empty
+   * FlatGeobuf / GeoParquet sources to convert (ml-cnv.3/.4). Core emits each as an empty
    * GeoJSON source and describes the file here; the CLI reads it and inlines
    * the features (`mlym emit`). A direct caller holds the same obligation.
    * Absent when the document has none.
@@ -505,7 +505,7 @@ export function projectStyle(
 ): EmitResult {
   const warnings: EmitWarning[] = [];
   const sources: Record<string, unknown> = {};
-  // FlatGeobuf sources the caller reads and inlines (ml-cnv; core describes).
+  // FlatGeobuf / GeoParquet sources the caller reads and inlines (ml-cnv; core describes).
   const dataRefs: EmitDataRef[] = [];
 
   for (const [name, source] of Object.entries(model.style.sources)) {

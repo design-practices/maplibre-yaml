@@ -28,7 +28,7 @@
   </script>
 </head>
 <body>
-  <header>CDN build, plain HTML — PASS = imagery + outlines + coloured districts, no notice.</header>
+  <header>CDN build, plain HTML — PASS = imagery + outlines + coloured districts + stations (GeoParquet, zstd), no notice.</header>
   <ml-map id="map">
     <script type="text/yaml">
 type: map
@@ -48,6 +48,9 @@ sources:
   districts:
     type: geojson
     url: /gallery-assets/cloud-native/districts.fgb
+  stations:
+    type: geojson
+    url: /gallery-assets/cloud-native/points-zstd.parquet
 layers:
   - { id: imagery, type: raster, source: imagery }
   - id: districts
@@ -57,6 +60,7 @@ layers:
       fill-color: ["match", ["get", "category"], "park", "#2a9d8f", "residential", "#e9c46a", "industrial", "#e76f51", "#8d99ae"]
       fill-opacity: 0.55
   - { id: outlines, type: line, source: outlines, source-layer: districts, paint: { line-color: "#1d3557" } }
+  - { id: stations, type: circle, source: stations, paint: { circle-radius: 3, circle-color: ["match", ["get", "kind"], "well", "#e63946", "#264653"] } }
     </script>
   </ml-map>
   <script type="module" src="/cdn/@maplibre-yaml/core@0.9.0/register.js"></script>

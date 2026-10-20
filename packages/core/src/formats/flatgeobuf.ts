@@ -31,6 +31,7 @@
  */
 
 import type { Feature, FeatureCollection } from "geojson";
+import { isLonLatCrs } from "./crs";
 import { getDecoder, type Decoders } from "./decoders";
 import { FormatError, isAbortError, isFormatError } from "./errors";
 
@@ -56,51 +57,6 @@ interface RawHeader {
   crs?: { org?: string | null; code?: number; code_string?: string | null } | null;
 }
 
-/**
- * Geographic (longitude/latitude) EPSG codes MapLibre can draw as-is: WGS 84
- * and the national datums that differ from it by metres at most. Any
- * EPSG:4xxx code below 4400 is a geographic 2D CRS by the registry's own
- * numbering; these are the ones outside that block.
- */
-const LON_LAT_CODES = new Set([
-  4326, 4979, // WGS 84 (2D, 3D)
-  4269, 6318, 4152, 4759, // NAD83 and its realizations
-  4258, 4937, // ETRS89
-  4283, 7844, // GDA94, GDA2020
-  4612, 6668, // JGD2000, JGD2011
-  4617, 4619, 4148, 4674, 4686, 4490, 4167, 4624, 4171, 5340, 4818, 9777,
-]);
-
-/**
- * Projected EPSG codes that are common enough to name outright, so a file
- * whose small extent happens to fit inside ±180/±90 is still refused: Web
- * Mercator (and its legacy aliases), World Mercator, and the UTM zones.
- */
-function isKnownProjected(code: number): boolean {
-  return (
-    code === 3857 ||
-    code === 900913 ||
-    code === 3395 ||
-    code === 102100 ||
-    code === 102113 ||
-    (code >= 32601 && code <= 32660) || // WGS 84 / UTM north
-    (code >= 32701 && code <= 32760) || // WGS 84 / UTM south
-    (code >= 25828 && code <= 25838) || // ETRS89 / UTM
-    (code >= 26901 && code <= 26923) // NAD83 / UTM
-  );
-}
-
-/** Whether an EPSG code is a known geographic CRS. */
-function isGeographicCode(code: number): boolean {
-  return LON_LAT_CODES.has(code) || (code >= 4000 && code < 4400);
-}
-
-/** Whether an extent lies within longitude/latitude bounds (a little slack). */
-function withinLonLat(env: readonly number[]): boolean {
-  const [w, s, e, n] = env as [number, number, number, number];
-  return Math.abs(w) <= 180.5 && Math.abs(e) <= 180.5 && Math.abs(s) <= 90.5 && Math.abs(n) <= 90.5;
-}
-
 /** Normalize the library's header. */
 function toHeader(raw: RawHeader): FlatGeobufHeader {
   const env = raw.envelope;
@@ -122,26 +78,15 @@ function toHeader(raw: RawHeader): FlatGeobufHeader {
 }
 
 /**
- * Whether a header describes longitude/latitude data.
- *
- * @remarks
- * - A known geographic EPSG code (4326, the national datums) or `CRS84`:
- *   yes — unless the extent says otherwise (a mislabelled file).
- * - A known projected code (Web Mercator, UTM): no.
- * - Any other code, or none: the extent decides — within ±180/±90 is
- *   longitude/latitude; a projected file's coordinates run far past it.
- *   With no extent either, the file is given the benefit of the doubt.
+ * Whether a header describes longitude/latitude data (the shared rule in
+ * ./crs: a known code, else the extent decides).
  */
 export function isLonLat(header: FlatGeobufHeader, raw?: RawHeader): boolean {
-  const env = header.envelope;
-  if (env && !withinLonLat(env)) return false;
-  const code = raw?.crs?.code;
-  const org = (raw?.crs?.org ?? "EPSG").toUpperCase();
-  if (code && org === "EPSG") {
-    if (isGeographicCode(code)) return true;
-    if (isKnownProjected(code)) return false;
-  }
-  return true;
+  return isLonLatCrs({
+    org: raw?.crs?.org,
+    code: raw?.crs?.code,
+    ...(header.envelope ? { envelope: header.envelope } : {}),
+  });
 }
 
 /** Whether bytes start with a Zstandard frame (`28 B5 2F FD`) or skippable frame. */

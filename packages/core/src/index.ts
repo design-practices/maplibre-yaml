@@ -160,7 +160,7 @@ export type { EffectLowering } from "./emitter/lower-effects";
 
 // Cloud-native formats (0.9, ml-cnv): detection (shared by validation, the
 // renderer and the emitter), the plain-language error type, and the
-// FlatGeobuf decoder `mlym emit` converts files with.
+// FlatGeobuf and GeoParquet decoders `mlym emit` converts files with.
 export {
   CLOUD_FORMATS,
   SUPPORTED_FORMATS,
@@ -171,6 +171,7 @@ export {
 export { FormatError, isFormatError } from "./formats/errors";
 export type { FormatFailure, FormatFailureCode } from "./formats/errors";
 export { decodeBytes as decodeFlatGeobuf } from "./formats/flatgeobuf";
+export { decodeBytes as decodeGeoParquet } from "./formats/geoparquet";
 
 // Capability policy — what a document may do, given where it is compiled
 export {

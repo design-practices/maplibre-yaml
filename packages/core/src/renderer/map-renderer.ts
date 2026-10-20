@@ -61,6 +61,7 @@ import {
   protomapsStyle,
 } from '../formats/protomaps-style';
 import { elementLanguage } from '../i18n/strings';
+import { geoParquetColumns } from '../formats/columns';
 
 /** The document's source ids (named, and `<layer>-source` for inline ones) that read `format`. */
 function sourceIdsReading(
@@ -705,8 +706,8 @@ export class MapRenderer {
         // after that the user owns the camera, and a refresh must not yank it.
         if (fitTo && fit && fit.kind === 'deferred' && !this.fitApplied) {
           const data = this.layerManager.getSourceData(fitTo.source);
-          // A source read by view (FlatGeobuf `load: viewport`, ml-cnv.3)
-          // holds only the part in view: frame the file's own extent.
+          // A source read by view (FlatGeobuf or GeoParquet `load: viewport`,
+          // ml-cnv.3/.4) holds only the part in view: frame the file's own extent.
           const bounds =
             this.layerManager.getSourceExtent?.(fitTo.source) ??
             (data ? geojsonBounds(data) : null);
@@ -752,9 +753,13 @@ export class MapRenderer {
       onHover: (layerId, feature, lngLat) => this.emit('layer:hover', { layerId, feature, lngLat }),
     };
 
+    // GeoParquet reads only the columns the document references (ml-cnv.4):
+    // decided here, where every layer that draws from a source is known.
+    const parquetColumns = geoParquetColumns(sources, layers);
     this.layerManager = new LayerManager(this.map, layerCallbacks, {
       ...options.sourceData,
       isProtocolRegistered,
+      columnsFor: (sourceId) => parquetColumns.get(sourceId),
     });
     const classifyRuntime = new ClassifyRuntime(
       this.map,

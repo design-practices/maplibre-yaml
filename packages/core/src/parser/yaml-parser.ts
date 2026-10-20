@@ -1945,7 +1945,7 @@ function withDocumentChecks<T>(
 /**
  * Merge the cloud-native source checks ({@link checkSourceFormats}, ml-cnv)
  * into a block's result: a format on a source type that can't draw it, or
- * live data on a FlatGeobuf source, fails the document; the rest warn.
+ * live data on a FlatGeobuf or GeoParquet source, fails the document; the rest warn.
  */
 function withFormatChecks<T>(
   result: ParseResult<T>,

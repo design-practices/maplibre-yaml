@@ -96,6 +96,7 @@ import type {
 import type { FeatureCollection } from "geojson";
 import { DataFetcher } from "../data/data-fetcher.js";
 import { isLoadedFromUrl, loadSourceData } from "../data/source-data.js";
+import { geoParquetColumns, isGeoParquetSource } from "../formats/columns.js";
 import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
 import { displayPath } from "../parser/validation-utils.js";
 import {
@@ -224,12 +225,18 @@ interface FitPrefetch {
 function startFitPrefetch(model: MapModel): FitPrefetch | null {
   const fitTo = model.runtime.fitTo;
   if (!fitTo) return null;
-  const source = denormalizeSources(model)?.[fitTo.source];
+  const sources = denormalizeSources(model);
+  const source = sources?.[fitTo.source];
   if (!isLoadedFromUrl(source)) return null;
+  // A GeoParquet file is read for the columns the document references
+  // (ml-cnv.4) — the same list the renderer computes, since it reuses this load.
+  const columns = isGeoParquetSource(source)
+    ? geoParquetColumns(sources, denormalizeLayers(model)).get(fitTo.source)
+    : undefined;
   const fetcher = new DataFetcher();
   const prefetch: FitPrefetch = {
     sourceId: fitTo.source,
-    data: loadSourceData(source, { fetcher }),
+    data: loadSourceData(columns ? { ...source, columns } : source, { fetcher }),
     fetcher,
     result: null,
   };

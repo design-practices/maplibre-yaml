@@ -14,9 +14,9 @@
  * - `radius:` only on circle layers;
  * - `noData: hide` / `other: hide` combine with an *expression* filter;
  * - `method:` only over a GeoJSON source read whole — a vector tile source,
- *   or a FlatGeobuf source read by view (`load: viewport` in any spelling),
- *   never gives the browser the whole dataset, so computed breaks would
- *   describe only the part in view. (A FlatGeobuf file too large to read
+ *   or a FlatGeobuf or GeoParquet source read by view (`load: viewport` in
+ *   any spelling), never gives the browser the whole dataset, so computed
+ *   breaks would describe only the part in view. (A file too large to read
  *   whole switches to the by-view read at runtime; the classify runtime
  *   refuses computed breaks there — see renderer/classify-runtime.)
  *

@@ -24,7 +24,7 @@
  * is written onto the layer object the renderer is about to add, and
  * {@link ClassifyRuntime.layersReady} catches up once every layer is in.
  *
- * **Sources read by view.** A FlatGeobuf source read by view — asked for
+ * **Sources read by view.** A FlatGeobuf or GeoParquet source read by view — asked for
  * (`load: viewport`, which validation already refuses under `method:`), or
  * switched to because the file is too large to read whole — only ever holds
  * the features in view. Breaks computed from those would describe part of
@@ -98,8 +98,8 @@ export function classifyFieldMessage(layerId: string, problem: ClassifyFieldProb
 /** How the runtime learns that a source is read by view, and reports it. */
 export interface ClassifyByView {
   /**
-   * Whether a source holds only the features in view (a FlatGeobuf source
-   * read by view: LayerManager.readsByView).
+   * Whether a source holds only the features in view (a FlatGeobuf or
+   * GeoParquet source read by view: LayerManager.readsByView).
    */
   readsByView: (sourceId: string) => boolean;
   /**
@@ -119,7 +119,7 @@ export interface ClassifyByView {
 export function byViewClassifyError(layerId: string, sourceId: string): Error {
   return new Error(
     `Layer \`${layerId}\` can't compute its classes: source \`${sourceId}\` is read by view ` +
-      "(only the features in view are loaded — load: viewport, or a FlatGeobuf file too large " +
+      "(only the features in view are loaded — load: viewport, or a FlatGeobuf or GeoParquet file too large " +
       "to load whole), and computed classes need the whole file. Write the class thresholds " +
       "yourself with breaks:, for example breaks: [10, 25, 50]."
   );

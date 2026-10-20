@@ -1,8 +1,9 @@
-# Cloud-native data (0.9): a PMTiles archive and a FlatGeobuf file, named in
-# YAML like any other file — no page JavaScript. Synthetic, public-domain
-# fixtures (scripts/fixtures/cloud-native.py) in public/data/cloud-native/.
-# Both formats are read with HTTP range requests (or, for .fgb, one plain
-# download): astro dev, astro preview and GitHub Pages all serve them.
+# Cloud-native data (0.9): a PMTiles archive, a FlatGeobuf file and a
+# GeoParquet file, named in YAML like any other file — no page JavaScript.
+# Synthetic, public-domain fixtures (scripts/fixtures/cloud-native.py) in
+# public/data/cloud-native/. They are read with HTTP range requests (or, for
+# .fgb, one plain download): astro dev, astro preview and GitHub Pages all
+# serve them.
 type: map
 id: cloud-native
 config:
@@ -19,7 +20,16 @@ sources:
   districts:
     type: geojson
     url: /data/cloud-native/districts.fgb
+  population:
+    type: geojson
+    url: /data/cloud-native/districts.parquet
 layers:
+  - id: population
+    type: fill
+    source: population
+    label: "Population (GeoParquet)"
+    classify: { field: population, method: quantile, classes: 4, palette: Blues }
+    paint: { fill-opacity: 0.35 }
   - id: districts
     type: fill
     source: districts

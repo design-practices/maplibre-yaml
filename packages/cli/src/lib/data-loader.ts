@@ -17,6 +17,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   decodeFlatGeobuf,
+  decodeGeoParquet,
   formatFromUrl,
   type ClassifyDataLoader,
   type CloudFormat,
@@ -54,8 +55,12 @@ export function localDataCandidates(url: string, documentPath?: string): string[
   return [...new Set(candidates)];
 }
 
-/** Read a FlatGeobuf file (http(s) or local, same rules as below) and decode it. */
-async function loadFlatGeobuf(url: string, documentPath?: string): Promise<unknown> {
+/** Read a FlatGeobuf or GeoParquet file (http(s) or local, same rules as below) and decode it. */
+async function loadFeatureFile(
+  url: string,
+  format: 'flatgeobuf' | 'geoparquet',
+  documentPath?: string
+): Promise<unknown> {
   let bytes: Uint8Array;
   if (/^https?:\/\//i.test(url)) {
     let response: Response;
@@ -77,7 +82,7 @@ async function loadFlatGeobuf(url: string, documentPath?: string): Promise<unkno
     }
     bytes = new Uint8Array(readFileSync(found));
   }
-  return decodeFlatGeobuf(bytes, url);
+  return format === 'geoparquet' ? decodeGeoParquet(bytes, url) : decodeFlatGeobuf(bytes, url);
 }
 
 /**
@@ -86,11 +91,13 @@ async function loadFlatGeobuf(url: string, documentPath?: string): Promise<unkno
  */
 export function createDataLoader(documentPath?: string): ClassifyDataLoader {
   return async (url: string, options?: { format?: CloudFormat }) => {
-    // A FlatGeobuf file (ml-cnv.3) is decoded to GeoJSON, so classify breaks
-    // can be computed from it like from a .geojson file. The source's
-    // `format:` wins over the URL (an extensionless API URL), as in the browser.
-    if ((options?.format ?? formatFromUrl(url)) === 'flatgeobuf') {
-      return loadFlatGeobuf(url, documentPath);
+    // A FlatGeobuf or GeoParquet file (ml-cnv.3/.4) is decoded to GeoJSON,
+    // so classify breaks can be computed from it like from a .geojson file.
+    // The source's `format:` wins over the URL (an extensionless API URL),
+    // as in the browser.
+    const format = options?.format ?? formatFromUrl(url);
+    if (format === 'flatgeobuf' || format === 'geoparquet') {
+      return loadFeatureFile(url, format, documentPath);
     }
     if (/^https?:\/\//i.test(url)) {
       let response: Response;

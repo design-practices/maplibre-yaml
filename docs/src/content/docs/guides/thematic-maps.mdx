@@ -106,14 +106,15 @@ exist.
 <Aside type="caution" title="Whole-file sources only">
 `method:` needs the whole dataset. A **vector tile** source (including
 PMTiles and a basemap's sources) only ever gives the browser the tiles in
-view, and so does a **FlatGeobuf source read by view** — breaks computed there
-would describe part of the data and change as you pan. So:
+view, and so does a **FlatGeobuf or GeoParquet source read by view** — breaks
+computed there would describe part of the data and change as you pan. So:
 
-- Validation refuses `method:` on a tiled source, and on a FlatGeobuf source
-  with `load: viewport` (in any form, including `{ mode: viewport }` and a
-  version 2 source's `runtime.load`).
-- A FlatGeobuf file over 50 MB switches itself to reading by view even with
-  `load: all` (see [Cloud-native data](/guides/cloud-native-data/#flatgeobuf)).
+- Validation refuses `method:` on a tiled source, and on a FlatGeobuf or
+  GeoParquet source with `load: viewport` (in any form, including
+  `{ mode: viewport }` and a version 2 source's `runtime.load`).
+- A FlatGeobuf or GeoParquet file over 50 MB switches itself to reading by
+  view even with `load: all` (see [Cloud-native
+  data](/guides/cloud-native-data/#flatgeobuf)).
   Validation can't know a file's size, so the map checks when it reads the
   file: the layer stays in its no-data colour and a notice asks for
   `breaks:`.

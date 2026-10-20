@@ -165,9 +165,10 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
   video, with polling, Server-Sent Events and WebSocket updates
   ([Live Data](https://docs.maplibre-yaml.org/guides/live-data/)).
 - **Cloud-native data, YAML only:** PMTiles archives (`url: data/x.pmtiles`
-  on a `vector`/`raster`/`raster-dem` source) and FlatGeobuf files
-  (`url: data/x.fgb` on a `geojson` source), read with range requests and no
-  page JavaScript ([Cloud-native data](https://docs.maplibre-yaml.org/guides/cloud-native-data/)).
+  on a `vector`/`raster`/`raster-dem` source), FlatGeobuf files
+  (`url: data/x.fgb`) and GeoParquet files (`url: data/x.parquet`) on a
+  `geojson` source, read with range requests and no page JavaScript
+  ([Cloud-native data](https://docs.maplibre-yaml.org/guides/cloud-native-data/)).
 - **Interactivity:** popups, hover states, markers, legends, a parameters
   panel, and Format v2 declarative interactions.
 - **Export:** `mlym emit` (from `@maplibre-yaml/cli`) turns a map document
@@ -189,7 +190,7 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
 | `@maplibre-yaml/core/maplibre` | The maplibre-gl module `<ml-map>` renders with (for `addProtocol` plugins) |
 | `@maplibre-yaml/core/react` | JSX types for `<ml-map>` in React ([React](https://docs.maplibre-yaml.org/integrations/react/)) |
 | `@maplibre-yaml/core/schemas/json/*` | JSON Schema files (`map.schema.json`, …) |
-| `register.js` (CDN) | Browser bundle of `/register`, with `maplibre-gl` left to the import map. Format readers (PMTiles, FlatGeobuf) load on demand from `dist/chunks/`: to self-host, copy the whole `dist/` folder |
+| `register.js` (CDN) | Browser bundle of `/register`, with `maplibre-gl` left to the import map. Format readers (PMTiles, FlatGeobuf, GeoParquet) load on demand from `dist/chunks/`: to self-host, copy the whole `dist/` folder |
 
 ## Compatibility
 

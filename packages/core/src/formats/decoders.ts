@@ -67,9 +67,12 @@ const LOADERS = {
   pmtiles: () => import("pmtiles"),
   flatgeobuf: () => import("./lib/flatgeobuf"),
   "protomaps-basemap": () => import("@protomaps/basemaps"),
+  geoparquet: () => import("./lib/geoparquet"),
+  // Brotli's decoder is mostly a dictionary (~68 KB gzip): its own chunk,
+  // fetched only for a GeoParquet file whose footer says brotli.
+  "geoparquet-brotli": () => import("./lib/geoparquet-brotli"),
   // Reserved for the 0.9 work in flight — each adds one line shaped like the
   // ones above (see "Adding a format" at the top of this file):
-  //   geoparquet          the hyparquet library
   //   cog                 the @geomatico/maplibre-cog-protocol library
 } satisfies Record<string, () => Promise<unknown>>;
 

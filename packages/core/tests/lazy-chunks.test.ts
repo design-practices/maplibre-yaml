@@ -45,6 +45,10 @@ const LIBRARY_MARKERS: Record<string, string[]> = {
   flatgeobuf: ["Not a FlatGeobuf file", "Invalid header size", "FlatBuffers: "],
   // @protomaps/basemaps (ml-cnv.7): its error and one of its layer ids.
   "protomaps-basemap": ["Flavor not found", "roads_tunnels_highway_casing"],
+  // hyparquet, plus fzstd (zstd) — the main bundle's formats/geoparquet.ts
+  // names none of these.
+  geoparquet: ['parquet filter requires rowFormat: "object"', "parquet requires metadata", "invalid zstd data"],
+  "geoparquet-brotli": ["copyUncompressedBlockToOutput: not enough bytes", "Invalid size nibble"],
 };
 
 /** Static import specifiers (`import … from "x"`, `import "x"`), minified or not. */
@@ -72,7 +76,7 @@ function jsFiles(dir: string): string[] {
 
 describe("the seam", () => {
   it("names the readers this version loads on demand", () => {
-    expect(SEAM_NAMES).toEqual(expect.arrayContaining(["pmtiles", "flatgeobuf"]));
+    expect(SEAM_NAMES).toEqual(expect.arrayContaining(["pmtiles", "flatgeobuf", "geoparquet", "geoparquet-brotli"]));
     for (const name of Object.keys(LIBRARY_MARKERS)) expect(SEAM_NAMES).toContain(name);
   });
 });

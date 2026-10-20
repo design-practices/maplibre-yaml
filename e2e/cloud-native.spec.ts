@@ -272,10 +272,6 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
 
     const reserved = page.locator("#reserved .ml-map-notice");
     await expect(reserved).toContainText(
-      "Layer wells has no data: /gallery-assets/cloud-native/wells.parquet is a GeoParquet file, which this " +
-        "version of maplibre-yaml can't read yet (it's planned)."
-    );
-    await expect(reserved).toContainText(
       "Source scene didn't load: /gallery-assets/cloud-native/scene.tif is a Cloud Optimized GeoTIFF (COG), " +
         "which this version of maplibre-yaml can't read on its own yet (it's planned)."
     );
@@ -306,7 +302,7 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     expect(errors).toEqual([]);
   });
 
-  test("on a project site, base applies to the file inside pmtiles:// (and to .fgb)", async ({ page }) => {
+  test("on a project site, base applies to the file inside pmtiles:// (and to .fgb and .parquet)", async ({ page }) => {
     const errors = await guard(page);
     const notFound: string[] = [];
     page.on("response", (r) => {
@@ -316,6 +312,8 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     await page.evaluate(() => (document.getElementById("with-base") as any).mapReady());
     await waitForFeatures(page, "with-base", "districts");
     await waitForFeatures(page, "with-base", "outlines", "districts");
+    // GeoParquet (ml-cnv.4): a relative path resolves under base too.
+    await waitForFeatures(page, "with-base", "wells");
     const spec = await page.evaluate(
       () => (document.getElementById("with-base") as any).getMap().getStyle().sources
     );
@@ -326,12 +324,15 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     await expect(page.locator("#no-base .ml-map-notice")).toContainText(
       "Source outlines didn't load: /cloud-native/districts.pmtiles didn't load (404 Not Found)."
     );
+    await expect(page.locator("#no-base .ml-map-notice")).toContainText(
+      "Data file cloud-native/points.parquet didn't load (404 Not Found), so layer wells has no data."
+    );
     expect(notFound.filter((p) => p.startsWith("/my-repo/cloud-native/"))).toEqual([]);
     await page.screenshot({ path: "e2e/results/cnv_base_path.png" });
     expect(errors).toEqual([]);
   });
 
-  test("<ml-scrollytelling> reads PMTiles and FlatGeobuf too", async ({ page }) => {
+  test("<ml-scrollytelling> reads PMTiles, FlatGeobuf and GeoParquet too", async ({ page }) => {
     const errors = await guard(page);
     await page.goto("/examples/verification/cloud-native/story.html", { waitUntil: "domcontentloaded" });
     await page.evaluate(() => (document.getElementById("story") as any).mapReady());
@@ -343,6 +344,7 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
           map &&
             map.getSource("districts") &&
             map.querySourceFeatures("districts").length > 0 &&
+            map.querySourceFeatures("wells").length > 0 &&
             map.querySourceFeatures("outlines", { sourceLayer: "districts" }).length > 0
         );
       },
@@ -366,13 +368,17 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     await page.evaluate(() => (document.getElementById("map") as any).mapReady());
     await waitForFeatures(page, "map", "districts");
     await waitForFeatures(page, "map", "outlines", "districts");
+    // GeoParquet (zstd) from the CDN build, with nothing more in the import map.
+    await waitForFeatures(page, "map", "stations");
     await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
     // The package's own downloads: the entry, the browser bundle, and the
     // two readers this document needs, on demand from dist/chunks/ next to
     // the bundle (ml-7qa.5) — nothing else.
     const fromPackage = [...new Set(scripts.filter((p) => p.startsWith("/cdn/")))].sort();
+    // GeoParquet's reader, but not its brotli codec: this file is zstd.
     expect(fromPackage).toEqual([
       "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/flatgeobuf.js",
+      "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/geoparquet.js",
       "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/pmtiles.js",
       "/cdn/@maplibre-yaml/core@0.9.0/dist/register.browser.js",
       "/cdn/@maplibre-yaml/core@0.9.0/register.js",

@@ -1,9 +1,9 @@
 /**
  * Cloud-native sources on emit (0.9, ml-cnv): style.json carries a URL, not
  * a decoder. PMTiles export as canonical `pmtiles://` URLs (contract);
- * FlatGeobuf exports as GeoJSON the CLI reads in (core describes it with an
- * `EmitDataRef`); GeoParquet, not read yet, exports empty (lossy). Every
- * emitted style must pass MapLibre's own validator.
+ * FlatGeobuf and GeoParquet export as GeoJSON the CLI reads in (core
+ * describes each with an `EmitDataRef`). Every emitted style must pass
+ * MapLibre's own validator.
  */
 import { describe, it, expect } from "vitest";
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
@@ -108,17 +108,54 @@ style:
   });
 });
 
-describe("GeoParquet (not read yet)", () => {
-  it("emits empty, lossy — so --strict refuses", () => {
+describe("GeoParquet", () => {
+  it("emits an empty placeholder plus a data ref for the CLI (contract, exports-with-fallback)", () => {
     const doc = {
       ...base,
       sources: { wells: { type: "geojson", url: "data/wells.parquet" } },
       layers: [{ id: "w", type: "circle", source: "wells" }],
     };
-    expect(() => emit(doc, "strict")).toThrow(EmitError);
-    const { style, warnings } = emit(doc);
-    expect(warnings).toContainEqual(expect.objectContaining({ construct: "format.geoparquet", kind: "lossy" }));
+    const { style, warnings, data } = emit(doc, "strict");
+    expect(data).toEqual([{ source: "wells", url: "data/wells.parquet", format: "geoparquet" }]);
+    expect((style as { sources: Record<string, unknown> }).sources["wells"]).toEqual({
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    });
+    expect(warnings).toContainEqual(
+      expect.objectContaining({
+        construct: "format.geoparquet",
+        kind: "contract",
+        exportClass: "exports-with-fallback",
+      })
+    );
     expect(validateStyleMin(style as never)).toEqual([]);
+  });
+
+  it("an author's columns: travels on the data ref; load: and columns: never reach the style", () => {
+    const parsed = YAMLParser.safeParseMapBlock(`version: 2
+type: map
+id: m
+style:
+  center: [10.2, 42.15]
+  zoom: 10
+  sources:
+    wells:
+      type: geojson
+      url: https://x.org/api/wells
+      runtime: { format: geoparquet, columns: [kind, depth_m], load: viewport }
+  layers:
+    - { id: w, type: circle, source: wells }
+`);
+    expect(parsed.success).toBe(true);
+    const result = projectStyle(toModel(parsed.data as never));
+    expect(result.data).toEqual([
+      { source: "wells", url: "https://x.org/api/wells", format: "geoparquet", columns: ["kind", "depth_m"] },
+    ]);
+    expect(JSON.stringify(result.style)).not.toMatch(/"columns"|"load"|"format"/);
+    expect(result.warnings.map((w) => w.construct)).toEqual(
+      expect.arrayContaining(["format.geoparquet", "source.columns", "source.load"])
+    );
+    expect(validateStyleMin(result.style as never)).toEqual([]);
   });
 });
 
@@ -127,9 +164,10 @@ describe("registrations", () => {
     expect(exportClasses.require("format.pmtiles").class).toBe("exports");
     expect(exportClasses.require("format.flatgeobuf").class).toBe("exports-with-fallback");
     expect(exportClasses.require("format.cog").class).toBe("exports");
-    expect(exportClasses.require("format.geoparquet").class).toBe("no-export");
+    expect(exportClasses.require("format.geoparquet").class).toBe("exports-with-fallback");
     expect(exportClasses.require("source.format").class).toBe("exports");
     expect(exportClasses.require("source.load").class).toBe("no-export");
+    expect(exportClasses.require("source.columns").class).toBe("no-export");
   });
 
   it("the flatgeobuf export() hook shares the projection's lowering", () => {

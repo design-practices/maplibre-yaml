@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cloud-native data: GeoParquet, YAML only</title>
+  <!--
+    0.9 (ml-cnv.4): GeoParquet with no page JavaScript.
+      - "whole":    districts.parquet read whole (the default): a quantile
+                    classify on population, a click popup, and fitTo frames the
+                    districts from an authored world view; points.parquet read by
+                    view (load: viewport, minzoom 11, Hilbert-sorted row groups).
+                    Only the columns the document references are read.
+      - "v2":       the same, as a format v2 document (load/columns under runtime:),
+                    plus a brotli-compressed file (the separately loaded codec).
+      - "failures" / "hosting": every way a GeoParquet source commonly fails,
+                    each said in plain words in the notice — GeoArrow geometry,
+                    a projected file, plain Parquet, a web page under a .parquet
+                    name; a missing file, a host without CORS, load: viewport on
+                    a file without a bbox covering column, and a big file on a
+                    host without range requests (python -m http.server).
+      - "fallbacks": what must WORK anyway: a small file on a host without range
+                    requests (read whole from the one response), and load:
+                    viewport on a file whose row groups aren't spatially sorted
+                    (read whole instead).
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/geoparquet.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 380px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = blue-classed districts framed on the data in the top maps (click one for a popup); each failure explained in words; the two "works anyway" layers draw.</header>
+  <main>
+    <section>
+      <h2>v1: whole file + classify + popup + fitTo, and points by view</h2>
+      <ml-map id="whole">
+        <script type="text/yaml">
+type: map
+id: geoparquet-whole
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo: { source: districts, padding: 20 }
+legend:
+  position: bottom-left
+sources:
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.parquet
+  points:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+    load: { mode: viewport, minzoom: 11 }
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    label: Population
+    classify:
+      field: population
+      method: quantile
+      classes: 4
+      palette: Blues
+    paint:
+      fill-opacity: 0.8
+    # `population` is read for classify alone (nothing else names it).
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: name }]
+          - p: [{ str: "Category: " }, { property: category }]
+  - id: points
+    type: circle
+    source: points
+    paint:
+      circle-radius: 4
+      circle-color: ["match", ["get", "kind"], "well", "#e63946", "station", "#457b9d", "#2a9d8f"]
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>v2: format and load under runtime:</h2>
+      <ml-map id="v2">
+        <script type="text/yaml">
+version: 2
+type: map
+id: geoparquet-v2
+style:
+  basemap: "/examples/verification/configs/local-style.json"
+  center: [10.2, 42.15]
+  zoom: 9
+  sources:
+    districts:
+      type: geojson
+      url: /gallery-assets/cloud-native/districts-nobbox.parquet
+    points:
+      type: geojson
+      url: /gallery-assets/cloud-native/points.parquet?map=v2
+      runtime:
+        format: geoparquet
+        load: { mode: viewport, minzoom: 11 }
+        columns: [kind]
+    brotli:
+      type: geojson
+      url: /gallery-assets/cloud-native/points-brotli.parquet
+  layers:
+    - id: districts
+      type: fill
+      source: districts
+      paint:
+        fill-color: ["match", ["get", "category"], "park", "#2a9d8f", "residential", "#e9c46a", "industrial", "#e76f51", "#8d99ae"]
+        fill-opacity: 0.6
+    - id: points
+      type: circle
+      source: points
+      paint: { circle-radius: 4, circle-color: "#264653" }
+    - id: brotli
+      type: circle
+      source: brotli
+      paint: { circle-radius: 2, circle-color: "#e63946" }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>GeoParquet failures, in plain words: the file itself</h2>
+      <ml-map id="failures">
+        <script type="text/yaml">
+type: map
+id: geoparquet-failures
+config:
+  center: [10.2, 42.15]
+  zoom: 9.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  geoarrow:
+    type: geojson
+    url: /gallery-assets/cloud-native/points-geoarrow.parquet
+  mercator:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts-3857.parquet
+  plain:
+    type: geojson
+    url: /gallery-assets/cloud-native/plain.parquet
+  webpage:
+    type: geojson
+    url: /gallery-assets/cloud-native/not-really.parquet
+layers:
+  - { id: geoarrow, type: circle, source: geoarrow }
+  - { id: mercator, type: fill, source: mercator }
+  - { id: plain, type: fill, source: plain }
+  - { id: webpage, type: fill, source: webpage }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>GeoParquet failures, in plain words: where and how it's served</h2>
+      <ml-map id="hosting">
+        <script type="text/yaml">
+type: map
+id: geoparquet-hosting
+config:
+  center: [10.2, 42.15]
+  zoom: 9.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  missing:
+    type: geojson
+    url: /gallery-assets/cloud-native/missing.parquet
+  blocked:
+    type: geojson
+    url: "{{OTHER_ORIGIN}}/nocors/gallery-assets/cloud-native/districts.parquet"
+  nobbox:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts-nobbox.parquet
+    load: viewport
+  norange:
+    type: geojson
+    url: /norange/oversize/60/gallery-assets/cloud-native/points.parquet
+layers:
+  - { id: missing, type: fill, source: missing }
+  - { id: blocked, type: fill, source: blocked }
+  - { id: nobbox, type: fill, source: nobbox }
+  - { id: norange, type: circle, source: norange }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Works anyway: no ranges (read whole), unsorted file (read whole)</h2>
+      <ml-map id="fallbacks">
+        <script type="text/yaml">
+type: map
+id: geoparquet-fallbacks
+config:
+  center: [10.2, 42.15]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  norange:
+    type: geojson
+    url: /norange/gallery-assets/cloud-native/districts.parquet
+  unsorted:
+    type: geojson
+    url: /gallery-assets/cloud-native/points-zstd.parquet
+    load: viewport
+layers:
+  - { id: norange, type: fill, source: norange, paint: { fill-color: "#e9c46a", fill-opacity: 0.6 } }
+  - { id: unsorted, type: circle, source: unsorted, paint: { circle-radius: 4, circle-color: "#264653" } }
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script>
+    // The CORS case needs another origin: the same server, reached as
+    // 127.0.0.1 instead of localhost. Classic script, so it runs before the
+    // elements upgrade (register.js is a module, run after parsing).
+    for (const s of document.querySelectorAll('script[type="text/yaml"]')) {
+      s.textContent = s.textContent.replaceAll("{{OTHER_ORIGIN}}", `http://127.0.0.1:${location.port}`);
+    }
+  </script>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>
