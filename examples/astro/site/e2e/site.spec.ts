@@ -452,8 +452,16 @@ test.describe("story: the shared <ml-scrollytelling> engine (ml-aot.1)", () => {
     await mapReady(page, MAP);
     await goToChapter(page, "boundaries");
     await expectCameraNear(page, MAP, [-170, 15], 1.5);
-    // Settled on the chapter's own zoom before the wheel turns.
+    // Settled on the chapter's own zoom before the wheel turns: sample only
+    // once the camera has stopped (a rounded zoom can match mid-ease, and the
+    // ease finishing would then look like the wheel zooming — ml-aot.91).
+    await expect
+      .poll(() => page.evaluate((sel) => (document.querySelector(sel) as any).getMap().isMoving(), MAP))
+      .toBe(false);
     await expect.poll(async () => Math.round((await camera(page, MAP)).zoom * 1000) / 1000).toBe(1.5);
+    await expect
+      .poll(() => page.evaluate((sel) => (document.querySelector(sel) as any).getMap().isMoving(), MAP))
+      .toBe(false);
     const zoom = (await camera(page, MAP)).zoom;
     const before = await page.evaluate(() => scrollY);
     // Right-hand side of the map, clear of the left-aligned card.
