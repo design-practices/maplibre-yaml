@@ -124,6 +124,7 @@ export {
   EmitConfigSchema,
   InteractiveConfigSchema,
   LegendItemSchema,
+  LayerLegendSchema,
   BaseLayerPropertiesSchema,
   CircleLayerSchema,
   LineLayerSchema,

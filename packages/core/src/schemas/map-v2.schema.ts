@@ -81,7 +81,7 @@ import {
   ColorReliefLayerSchema,
   BackgroundLayerSchema,
   InteractiveConfigSchema,
-  LegendItemSchema,
+  LayerLegendSchema,
   EffectConfigSchema,
 } from "./layer.schema";
 import { GeoJSONSchema } from "./geojson.schema";
@@ -307,7 +307,7 @@ export const LayerRuntimeSchema = z
     interactive: InteractiveConfigSchema.describe(
       "Interactive event configuration"
     ),
-    legend: LegendItemSchema.optional().describe("Legend entry for this layer"),
+    legend: LayerLegendSchema.optional(),
     label: z.string().optional().describe("Human-readable layer label"),
     toggleable: z
       .boolean()

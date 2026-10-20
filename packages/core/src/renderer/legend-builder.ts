@@ -214,6 +214,8 @@ export class LegendBuilder {
   private extractItems(layers: Layer[], overrides?: ClassifyOverrides): LegendEntry[] {
     const items: LegendEntry[] = [];
     for (const layer of layers) {
+      // `legend: false`: the layer (and its classify classes) stays out.
+      if ((layer as { legend?: unknown }).legend === false) continue;
       if (layer.legend && typeof layer.legend === 'object') {
         items.push(layer.legend as LegendItem);
         continue;
@@ -260,6 +262,7 @@ export class LegendBuilder {
   /** Whether some classify layer is still waiting for its data. */
   private hasPendingClassify(layers: Layer[]): boolean {
     return layers.some((layer) => {
+      if ((layer as { legend?: unknown }).legend === false) return false;
       const record = this.classifyRecord(layer);
       return record !== undefined && isPending(record);
     });

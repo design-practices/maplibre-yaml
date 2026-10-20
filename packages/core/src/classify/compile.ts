@@ -458,13 +458,17 @@ export function applyClassifyToSpec(
 
 /**
  * Whether any layer is classified — compiled (metadata record) or still a raw
- * `classify:` block (a story's own `layers:`).
+ * `classify:` block (a story's own `layers:`) — and in the legend: a layer
+ * with `legend: false` asks for no legend lines.
  */
 export function hasClassifiedLayer(layers: readonly unknown[] | undefined): boolean {
   return (layers ?? []).some(
     (layer) =>
-      classifyRecordOf(layer) !== undefined ||
-      (layer !== null && typeof layer === "object" && typeof (layer as Record<string, unknown>)["classify"] === "object")
+      layer !== null &&
+      typeof layer === "object" &&
+      (layer as Record<string, unknown>)["legend"] !== false &&
+      (classifyRecordOf(layer) !== undefined ||
+        typeof (layer as Record<string, unknown>)["classify"] === "object")
   );
 }
 

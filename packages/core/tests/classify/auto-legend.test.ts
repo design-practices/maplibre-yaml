@@ -112,6 +112,43 @@ describe("plain map", () => {
     expect(container.querySelector(".ml-map-legend")).toBeNull();
   });
 
+  it("legend: false on a layer leaves it (and its classes) out — and validates (ml-aot.96)", () => {
+    const one = mapDoc("", "legend: false\n    classify: { field: v, breaks: [10], colors: [red, blue] }");
+    expect(YAMLParser.safeParseMapBlock(one).errors).toEqual([]);
+    // The only classified layer is out: no automatic legend at all.
+    expect(render(one).querySelector(".ml-map-legend")).toBeNull();
+
+    // Beside another classified layer: only that one's classes.
+    const two = one.replace(
+      "layers:\n",
+      "layers:\n  - { id: b, type: circle, source: pts, label: Other, classify: { field: v, breaks: [5], colors: [green, black] } }\n"
+    );
+    const container = render(two);
+    const lines = [...container.querySelectorAll(".ml-map-legend .legend-group-heading, .ml-map-legend .legend-label")].map(
+      (n) => n.textContent
+    );
+    expect(lines[0]).toBe("Other");
+    expect(lines).not.toContain("Value");
+
+    // Format v2: under the layer's runtime.
+    const v2 = YAMLParser.safeParseMapBlock(`version: 2
+type: map
+id: m
+style:
+  center: [0, 0]
+  zoom: 2
+  basemap: "https://example.com/style.json"
+  sources: { pts: { type: geojson, data: ${DATA} } }
+  layers:
+    - id: a
+      type: circle
+      source: pts
+      classify: { field: v, breaks: [10], colors: [red, blue] }
+      runtime: { legend: false }
+`);
+    expect(v2.errors).toEqual([]);
+  });
+
   it("an authored legend: block behaves as before", () => {
     const container = render(mapDoc("legend: { position: bottom-right, title: Mine }"));
     const legend = container.querySelector(".ml-map-chrome-bottom-right .ml-map-legend");

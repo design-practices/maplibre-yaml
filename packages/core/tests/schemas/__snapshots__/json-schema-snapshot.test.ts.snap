@@ -1380,41 +1380,50 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             }
                           },
                           "legend": {
-                            "type": "object",
-                            "properties": {
-                              "color": {
-                                "type": "string",
-                                "description": "CSS color value"
-                              },
-                              "label": {
-                                "type": "string",
-                                "description": "Legend label text"
-                              },
-                              "shape": {
-                                "type": "string",
-                                "enum": [
-                                  "circle",
-                                  "square",
-                                  "line",
-                                  "icon"
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "color": {
+                                    "type": "string",
+                                    "description": "CSS color value"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "description": "Legend label text"
+                                  },
+                                  "shape": {
+                                    "type": "string",
+                                    "enum": [
+                                      "circle",
+                                      "square",
+                                      "line",
+                                      "icon"
+                                    ],
+                                    "default": "square",
+                                    "description": "Symbol shape"
+                                  },
+                                  "icon": {
+                                    "type": "string",
+                                    "description": "Icon name or URL (for shape: icon)"
+                                  }
+                                },
+                                "required": [
+                                  "color",
+                                  "label"
                                 ],
-                                "default": "square",
-                                "description": "Symbol shape"
+                                "additionalProperties": false,
+                                "description": "Legend item configuration",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
                               },
-                              "icon": {
-                                "type": "string",
-                                "description": "Icon name or URL (for shape: icon)"
+                              {
+                                "type": "boolean",
+                                "const": false
                               }
-                            },
-                            "required": [
-                              "color",
-                              "label"
                             ],
-                            "additionalProperties": false,
-                            "description": "Legend configuration",
-                            "patternProperties": {
-                              "^x-": {}
-                            }
+                            "description": "This layer's legend entry, or false to leave it (and its classify classes) out of the legend"
                           },
                           "effect": {
                             "type": "object",
@@ -5793,41 +5802,50 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         }
                       },
                       "legend": {
-                        "type": "object",
-                        "properties": {
-                          "color": {
-                            "type": "string",
-                            "description": "CSS color value"
-                          },
-                          "label": {
-                            "type": "string",
-                            "description": "Legend label text"
-                          },
-                          "shape": {
-                            "type": "string",
-                            "enum": [
-                              "circle",
-                              "square",
-                              "line",
-                              "icon"
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "color": {
+                                "type": "string",
+                                "description": "CSS color value"
+                              },
+                              "label": {
+                                "type": "string",
+                                "description": "Legend label text"
+                              },
+                              "shape": {
+                                "type": "string",
+                                "enum": [
+                                  "circle",
+                                  "square",
+                                  "line",
+                                  "icon"
+                                ],
+                                "default": "square",
+                                "description": "Symbol shape"
+                              },
+                              "icon": {
+                                "type": "string",
+                                "description": "Icon name or URL (for shape: icon)"
+                              }
+                            },
+                            "required": [
+                              "color",
+                              "label"
                             ],
-                            "default": "square",
-                            "description": "Symbol shape"
+                            "additionalProperties": false,
+                            "description": "Legend item configuration",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
                           },
-                          "icon": {
-                            "type": "string",
-                            "description": "Icon name or URL (for shape: icon)"
+                          {
+                            "type": "boolean",
+                            "const": false
                           }
-                        },
-                        "required": [
-                          "color",
-                          "label"
                         ],
-                        "additionalProperties": false,
-                        "description": "Legend configuration",
-                        "patternProperties": {
-                          "^x-": {}
-                        }
+                        "description": "This layer's legend entry, or false to leave it (and its classify classes) out of the legend"
                       },
                       "effect": {
                         "type": "object",
@@ -9101,41 +9119,50 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                     }
                   },
                   "legend": {
-                    "type": "object",
-                    "properties": {
-                      "color": {
-                        "type": "string",
-                        "description": "CSS color value"
-                      },
-                      "label": {
-                        "type": "string",
-                        "description": "Legend label text"
-                      },
-                      "shape": {
-                        "type": "string",
-                        "enum": [
-                          "circle",
-                          "square",
-                          "line",
-                          "icon"
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "color": {
+                            "type": "string",
+                            "description": "CSS color value"
+                          },
+                          "label": {
+                            "type": "string",
+                            "description": "Legend label text"
+                          },
+                          "shape": {
+                            "type": "string",
+                            "enum": [
+                              "circle",
+                              "square",
+                              "line",
+                              "icon"
+                            ],
+                            "default": "square",
+                            "description": "Symbol shape"
+                          },
+                          "icon": {
+                            "type": "string",
+                            "description": "Icon name or URL (for shape: icon)"
+                          }
+                        },
+                        "required": [
+                          "color",
+                          "label"
                         ],
-                        "default": "square",
-                        "description": "Symbol shape"
+                        "additionalProperties": false,
+                        "description": "Legend item configuration",
+                        "patternProperties": {
+                          "^x-": {}
+                        }
                       },
-                      "icon": {
-                        "type": "string",
-                        "description": "Icon name or URL (for shape: icon)"
+                      {
+                        "type": "boolean",
+                        "const": false
                       }
-                    },
-                    "required": [
-                      "color",
-                      "label"
                     ],
-                    "additionalProperties": false,
-                    "description": "Legend configuration",
-                    "patternProperties": {
-                      "^x-": {}
-                    }
+                    "description": "This layer's legend entry, or false to leave it (and its classify classes) out of the legend"
                   },
                   "effect": {
                     "type": "object",
@@ -13742,41 +13769,50 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                         }
                       },
                       "legend": {
-                        "type": "object",
-                        "properties": {
-                          "color": {
-                            "type": "string",
-                            "description": "CSS color value"
-                          },
-                          "label": {
-                            "type": "string",
-                            "description": "Legend label text"
-                          },
-                          "shape": {
-                            "type": "string",
-                            "enum": [
-                              "circle",
-                              "square",
-                              "line",
-                              "icon"
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "color": {
+                                "type": "string",
+                                "description": "CSS color value"
+                              },
+                              "label": {
+                                "type": "string",
+                                "description": "Legend label text"
+                              },
+                              "shape": {
+                                "type": "string",
+                                "enum": [
+                                  "circle",
+                                  "square",
+                                  "line",
+                                  "icon"
+                                ],
+                                "default": "square",
+                                "description": "Symbol shape"
+                              },
+                              "icon": {
+                                "type": "string",
+                                "description": "Icon name or URL (for shape: icon)"
+                              }
+                            },
+                            "required": [
+                              "color",
+                              "label"
                             ],
-                            "default": "square",
-                            "description": "Symbol shape"
+                            "additionalProperties": false,
+                            "description": "Legend item configuration",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
                           },
-                          "icon": {
-                            "type": "string",
-                            "description": "Icon name or URL (for shape: icon)"
+                          {
+                            "type": "boolean",
+                            "const": false
                           }
-                        },
-                        "required": [
-                          "color",
-                          "label"
                         ],
-                        "additionalProperties": false,
-                        "description": "Legend configuration",
-                        "patternProperties": {
-                          "^x-": {}
-                        }
+                        "description": "This layer's legend entry, or false to leave it (and its classify classes) out of the legend"
                       },
                       "effect": {
                         "type": "object",

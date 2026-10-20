@@ -264,7 +264,9 @@ edges**, and a "No data" line:
 A map with a classified layer gets its legend **automatically** — even with
 no `legend:` block — in the default place (top-left, open, headed "Legend");
 a story pins one by its usual rules. Write a `legend:` block to place or title
-it, or `legend: false` to have none. Number formatting follows the reader's
+it, or `legend: false` at the top level to have none. To keep one classified
+layer out of the legend, write `legend: false` on that layer. Number
+formatting follows the reader's
 locale; set it with MapLibre's own `number-format` option names:
 
 ```yaml
