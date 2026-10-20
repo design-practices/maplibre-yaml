@@ -40,6 +40,7 @@ import type { FlatGeobufHeader } from "../formats/flatgeobuf";
 import * as gp from "../formats/geoparquet";
 import type { ColumnChoice, GeoParquetFile } from "../formats/geoparquet";
 import { FormatError, isAbortError, isFormatError } from "../formats/errors";
+import { BodyTooLarge } from "../formats/http";
 import { registerSourceDataLoader, type SourceDataLoader } from "../data/source-data";
 // No maplibre-gl here: the layer manager imports this module, and it loads
 // without maplibre-gl (types only). Protocol registration, which needs the
@@ -177,23 +178,40 @@ export class WholeFileTooLarge extends Error {
  */
 export async function loadFlatGeobufWhole(
   url: string,
-  options: { isCurrent?: () => boolean; onHeader?: (header: FlatGeobufHeader) => void } = {}
+  options: {
+    isCurrent?: () => boolean;
+    onHeader?: (header: FlatGeobufHeader) => void;
+    /** The size guards (tests pass smaller ones). */
+    limits?: SizeLimits;
+  } = {}
 ): Promise<FeatureCollection | null> {
+  const limits = options.limits ?? DEFAULT_LIMITS;
   // The reader (an on-demand chunk) downloads while the file's GET starts.
   prefetchDecoder("flatgeobuf");
   const opened = await fgb.openWhole(url);
-  if (opened.size !== undefined && opened.size > WHOLE_FILE_MAX_BYTES) {
+  if (opened.size !== undefined && opened.size > limits.max) {
     fgb.discard(opened);
     throw new WholeFileTooLarge(opened.size);
   }
-  if (opened.size !== undefined && opened.size > WHOLE_FILE_WARN_BYTES) {
+  if (opened.size !== undefined && opened.size > limits.warn) {
     console.warn(
       `[maplibre-yaml] ${url} is ${mb(opened.size)}; loading it whole may take a ` +
         "few seconds. For big files add `load: viewport` (needs a spatial index) or " +
         "convert to PMTiles."
     );
   }
-  return fgb.decodeStream(opened, url, options);
+  // Without Content-Length (a chunked or compressed response) the guard
+  // counts the bytes as they stream.
+  try {
+    return await fgb.decodeStream(opened, url, {
+      ...(options.isCurrent ? { isCurrent: options.isCurrent } : {}),
+      ...(options.onHeader ? { onHeader: options.onHeader } : {}),
+      ...(opened.size === undefined ? { maxBytes: limits.max } : {}),
+    });
+  } catch (error) {
+    if (error instanceof BodyTooLarge) throw new WholeFileTooLarge(error.size);
+    throw error;
+  }
 }
 
 /**

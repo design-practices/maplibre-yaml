@@ -34,6 +34,7 @@ import type { Feature, FeatureCollection } from "geojson";
 import { isLonLatCrs } from "./crs";
 import { getDecoder, type Decoders } from "./decoders";
 import { FormatError, isAbortError, isFormatError } from "./errors";
+import { BodyTooLarge } from "./http";
 
 /** The library's `deserialize` (`flatgeobuf/geojson`), loaded on demand. */
 type Deserialize = Decoders["flatgeobuf"]["deserialize"];
@@ -206,7 +207,16 @@ export async function openWhole(url: string, signal?: AbortSignal): Promise<Open
 export async function decodeStream(
   opened: OpenedFile,
   url: string,
-  options: { isCurrent?: () => boolean; onHeader?: (header: FlatGeobufHeader) => void } = {}
+  options: {
+    isCurrent?: () => boolean;
+    onHeader?: (header: FlatGeobufHeader) => void;
+    /**
+     * Stop (with {@link BodyTooLarge}) once this many bytes have streamed —
+     * the size guard for a response that didn't say its size
+     * (`Content-Length` missing on a chunked or compressed response).
+     */
+    maxBytes?: number;
+  } = {}
 ): Promise<FeatureCollection | null> {
   let deserialize: Deserialize;
   try {
@@ -221,10 +231,17 @@ export async function decodeStream(
   try {
     let input: ReadableStream<Uint8Array> | Uint8Array;
     if (body) {
+      let streamed = 0;
+      const max = options.maxBytes;
       input = body.pipeThrough(
         new TransformStream<Uint8Array, Uint8Array>({
           transform(chunk, controller) {
             head ??= chunk.slice(0, 4);
+            streamed += chunk.byteLength;
+            if (max !== undefined && streamed > max) {
+              controller.error(new BodyTooLarge(streamed));
+              return;
+            }
             controller.enqueue(chunk);
           },
         })
@@ -232,12 +249,16 @@ export async function decodeStream(
     } else {
       input = new Uint8Array(await opened.response.arrayBuffer());
       head = input.slice(0, 4);
+      if (options.maxBytes !== undefined && input.byteLength > options.maxBytes) {
+        throw new BodyTooLarge(input.byteLength);
+      }
     }
     return await collect(
       deserialize(input as never, { headerMetaFn: headerCheck(url, options.onHeader) as never }),
       options.isCurrent ?? (() => true)
     );
   } catch (error) {
+    if (error instanceof BodyTooLarge) throw error;
     if (head && isZstd(head) && !isFormatError(error) && !isAbortError(error)) throw compressedFailure(url);
     throw readFailure(error, url);
   }

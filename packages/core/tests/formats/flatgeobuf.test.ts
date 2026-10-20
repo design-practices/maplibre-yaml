@@ -212,6 +212,36 @@ describe("the fitTo prefetch seam (data/source-data, ml-aot.75)", () => {
   });
 });
 
+describe("the whole-file guard without Content-Length (ml-cnv.19)", () => {
+  /** points.fgb (60 KB) as a chunked response: 4 KB at a time, no Content-Length. */
+  const chunked = () =>
+    vi.fn(async () => {
+      const bytes = fixture("points.fgb");
+      let at = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (at >= bytes.length) return controller.close();
+          controller.enqueue(bytes.slice(at, (at += 4096)));
+        },
+      });
+      return new Response(body, { status: 200 });
+    });
+
+  it("stops once the bytes streamed pass the guard, so the reader can switch to the view", async () => {
+    vi.stubGlobal("fetch", chunked());
+    const error = await loadFlatGeobufWhole("/points.fgb", { limits: { warn: 10_000, max: 20_000 } }).catch((e) => e);
+    expect(error).toBeInstanceOf(WholeFileTooLarge);
+    expect(error.size).toBeGreaterThan(20_000);
+    expect(error.size).toBeLessThan(fixture("points.fgb").length);
+  });
+
+  it("a file under the guard still decodes", async () => {
+    vi.stubGlobal("fetch", chunked());
+    const fc = await loadFlatGeobufWhole("/points.fgb", { limits: { warn: 1e6, max: 2e6 } });
+    expect(fc!.features.length).toBeGreaterThan(100);
+  });
+});
+
 describe("loadModeOf", () => {
   it("normalizes load:", () => {
     expect(loadModeOf({})).toEqual({ mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM });
