@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>fitTo: a story's map framed on load</title>
+  <!--
+    ml-aot.75 — the story's map (an <ml-map> the story builds) gets the same
+    fitTo prefetch: its document's camera is the whole world, fitTo names a
+    fetched file of three Brooklyn parks.
+    PASS = the map's first frame is already on Brooklyn (the camera line in
+    the first card says so); chapter 1's camera then settles it.
+    FAIL = a first frame on the whole world.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/fit-to-framed/story.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+  <script>
+    window.__frames = { first: null, moves: 0, fits: 0 };
+    new MutationObserver((records, observer) => {
+      const el = document.querySelector("ml-map");
+      const map = el && el.getMap && el.getMap();
+      if (!map) return;
+      observer.disconnect();
+      map.once("render", () => {
+        const c = map.getCenter();
+        window.__frames.first = { lng: c.lng, lat: c.lat, zoom: map.getZoom() };
+        const line = document.getElementById("camera");
+        if (line) line.textContent = `First frame: ${c.lng.toFixed(3)}, ${c.lat.toFixed(3)} at zoom ${map.getZoom().toFixed(2)}.`;
+      });
+      map.on("move", () => { if (window.__frames.first) window.__frames.moves += 1; });
+      el.addEventListener("ml-map:camera-fit", () => { window.__frames.fits += 1; });
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  </script>
+</head>
+<body>
+  <ml-scrollytelling id="story">
+    <script type="text/yaml">
+type: scrollytelling
+id: fit-to-story
+config:
+  center: [0, 0]
+  zoom: 1
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo:
+    source: parks
+    padding: 30
+sources:
+  parks:
+    type: geojson
+    url: "data/parks.geojson"
+layers:
+  - id: parks
+    type: fill
+    source: parks
+    paint:
+      fill-color: "#2a9d8f"
+      fill-opacity: 0.7
+chapters:
+  - id: parks
+    title: Three parks
+    description: "<p id='camera'>First frame: …</p>"
+    center: [-73.983, 40.684]
+    zoom: 11.5
+  - id: prospect
+    title: Prospect Park
+    description: "<p>The largest of the three.</p>"
+    center: [-73.97, 40.661]
+    zoom: 13.5
+    </script>
+  </ml-scrollytelling>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

@@ -10,6 +10,12 @@
  *
  * The check runs only when `import.meta.env.DEV` is true: Vite replaces it
  * with `false` in a production build and drops the code.
+ *
+ * It also tells core this is a development build, so the maps' author hints
+ * (did-you-mean, misplaced keys, swapped coordinates) show on the page in
+ * `astro dev` wherever it is served — a Codespaces or LAN address included —
+ * and stay off the built site (ml-aot.57). Core reads the flag; it is not a
+ * public switch (pages use the `debug` attribute / prop).
  */
 
 /** The console message (exported for tests). */
@@ -35,6 +41,10 @@ export function warnIfNoViewport(doc: Document = document): boolean {
   return true;
 }
 
+/** Read by core's `showAuthorHints` (packages/core/src/components/author-hints.ts). */
+const DEV_FLAG = "__MAPLIBRE_YAML_DEV__";
+
 if (import.meta.env.DEV && typeof document !== "undefined") {
+  (globalThis as Record<string, unknown>)[DEV_FLAG] = true;
   warnIfNoViewport();
 }

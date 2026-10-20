@@ -62,7 +62,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 interface Props extends MapProps {}
 
-const { src, config, height = "400px", class: className, style, base, quiet = false } = Astro.props;
+const { src, config, height = "400px", class: className, style, base, quiet = false, debug = false } = Astro.props;
 
 // Validate that either src or config is provided
 if (!src && !config) {
@@ -112,6 +112,7 @@ const documentBase = base === false ? undefined : (base ?? import.meta.env.BASE_
     src={serializedConfig ? undefined : resolvedSrc}
     base={documentBase}
     quiet={quiet ? "" : undefined}
+    debug={debug ? "" : undefined}
   >
     {/*
       Corner slots (ml-l4y.3). Astro reads a child's `slot="top-left"` as a

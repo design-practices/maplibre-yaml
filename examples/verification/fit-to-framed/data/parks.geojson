@@ -1,0 +1,53 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Prospect Park" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-73.9772, 40.6716],
+            [-73.9622, 40.6716],
+            [-73.9622, 40.6517],
+            [-73.9772, 40.6517],
+            [-73.9772, 40.6716]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "McCarren Park" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-73.9545, 40.7228],
+            [-73.9488, 40.7228],
+            [-73.9488, 40.7182],
+            [-73.9545, 40.7182],
+            [-73.9545, 40.7228]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Sunset Park" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-74.0049, 40.6487],
+            [-74.0008, 40.6487],
+            [-74.0008, 40.6455],
+            [-74.0049, 40.6455],
+            [-74.0049, 40.6487]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -78,6 +78,7 @@ export {
   LatitudeSchema,
   LngLatSchema,
   LngLatBoundsSchema,
+  LngLatBoundsLikeSchema,
   ColorSchema,
   ExpressionSchema,
   NumberOrExpressionSchema,

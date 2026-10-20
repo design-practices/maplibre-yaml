@@ -78,6 +78,13 @@ export type MLMapProps = DetailedHTMLProps<HTMLAttributes<MLMap>, MLMap> & {
    */
   quiet?: boolean | "";
   /**
+   * Show author hints (did-you-mean suggestions, misplaced keys, swapped
+   * coordinates) on the page wherever it is served. Without it they show
+   * only while developing (localhost, `vite` dev); failures always show.
+   * A boolean attribute, like `quiet` (on React 18, `debug=""`).
+   */
+  debug?: boolean | "";
+  /**
    * Where the site paths in the document start, for a site deployed under a
    * subpath (`"/my-repo/"` on a GitHub Pages project site). Vite exposes it
    * as `import.meta.env.BASE_URL`.

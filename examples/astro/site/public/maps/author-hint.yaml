@@ -1,0 +1,20 @@
+# Loaded at RUNTIME by /author-hints. `legend:` is nested under `config:`
+# on purpose: an author hint (it does nothing there), shown on the page
+# while developing, or anywhere with <Map debug> (ml-aot.57).
+type: map
+id: author-hint
+config:
+  center: [136.5, 34]
+  zoom: 4.3
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  legend:
+    position: top-left
+layers:
+  - id: volcanoes
+    type: circle
+    source:
+      type: geojson
+      url: "/data/volcanoes.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#d62828"

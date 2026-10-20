@@ -29,6 +29,7 @@ import type {
 } from "../schemas/scrollytelling.schema";
 import { STORY_MAP_KEYS } from "./keys";
 import { suggest } from "../utils/suggest";
+import { boundsProblem, toFlatBounds } from "../utils/bounds";
 import { misplacedRootKeys } from "../parser/document-checks";
 
 /** The slice of a maplibre `Map` the engine drives. */
@@ -195,7 +196,7 @@ function fitWithin(
  * loading it, or the id is a typo -- warned once per call). Camera actions
  * take their camera from `options` (`center`, `zoom`, `bearing`, `pitch`,
  * `duration`, ...); `fitBounds` takes `bounds: [west, south, east, north]`
- * and frames them top-down at the chapter's own pitch/bearing (default 0)
+ * (or the corners `[[west, south], [east, north]]`) and frames them top-down at the chapter's own pitch/bearing (default 0)
  * unless its options say otherwise. Under reduced motion every camera action
  * is instant unless its options set `essential: true`. `custom` runs nothing
  * itself: it dispatches {@link ACTION_EVENT}.
@@ -255,18 +256,23 @@ export function runChapterAction(
       else map.easeTo({ ...options });
       break;
     case "fitBounds": {
-      const b = action.bounds;
-      if (!b || b.length !== 4) {
+      // Either bounds form (ml-aot.76); out-of-range values (latitude and
+      // longitude swapped) would make MapLibre throw: say so instead.
+      const b = toFlatBounds(action.bounds);
+      const problem = b ? boundsProblem(b) : undefined;
+      if (!b || problem) {
         console.warn(
-          `[ml-scrollytelling] fitBounds in chapter "${ctx.chapterId}" needs bounds: [west, south, east, north]`
+          `[ml-scrollytelling] fitBounds in chapter "${ctx.chapterId}": ` +
+            (problem ?? "needs bounds: [west, south, east, north] or [[west, south], [east, north]]")
         );
+        if (problem) ctx.onProblem?.(`Chapter \`${ctx.chapterId}\`: its fitBounds action did nothing: ${problem}`);
         break;
       }
       // fitBounds keeps the CURRENT pitch/bearing unless told otherwise, and
       // it interrupts the chapter's own camera move, so the chapter's
       // pitch 0 / bearing 0 never applied: a "top-down" framing stayed tilted
       // from the previous chapter (ml-aot.9).
-      const [west, south, east, north] = b as [number, number, number, number];
+      const [west, south, east, north] = b;
       // The action interrupts the chapter's camera move mid-flight, padding
       // included: settle the padding first, so the bounds are framed in the
       // part of the map the chapter's card leaves visible.
