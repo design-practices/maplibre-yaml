@@ -625,8 +625,17 @@ PMTiles, COG and GeoParquet always, and FlatGeobuf with `load: viewport`, read f
 | GitHub Pages | yes | On a project site (`user.github.io/repo/`) set `base` — see below |
 | Netlify, Cloudflare Pages, Vercel | yes | |
 | Amazon S3, Cloudflare R2, Google Cloud Storage | yes | From another site, set CORS (below) |
-| `npx serve`, `astro dev`, `astro preview`, Vite | yes | Good for previewing locally |
+| `npx serve`, `astro dev`, `astro preview`, Vite | yes | Good for previewing locally; `npx serve` is the one to use |
+| raw.githubusercontent.com, fastly.jsdelivr.net | yes | Fine for a file in a public GitHub repository |
+| cdn.jsdelivr.net (`/gh/…` mirrors of GitHub repos) | **not reliably** | It sometimes answers range requests from a compressed copy of the file: PMTiles and FlatGeobuf read by view then fail (the notice says why); whole files and COGs work. Use fastly.jsdelivr.net, or serve data from your own site |
+| `npx http-server` | partly | Answers 416 to every request for the end of a file, so a GeoParquet file is downloaded whole; prefer `npx serve` |
 | `python -m http.server` | **no** | PMTiles and COGs fail; `load: viewport` falls back to reading the whole file; a GeoParquet file over 50 MB is refused |
+
+Serving data from your own site — next to the page, on GitHub Pages,
+Netlify or the like — is the safest choice. Some hosts answer a request
+for the end of a small file with "416 Range Not Satisfiable" (GitHub Pages,
+`npx serve`) or don't let a page on another site read the file's size
+(GitHub Pages); maplibre-yaml handles both.
 
 **Files on another site** need CORS: the bucket or server must send
 `Access-Control-Allow-Origin`, allow the `Range` request header, and expose
@@ -659,6 +668,7 @@ says what happened in plain words. The common cases:
 | What happened | What the notice says |
 |---|---|
 | The server doesn't support range requests | "`…/x.pmtiles` was served without range-request support (the server sent the whole file instead of the part asked for). PMTiles, FlatGeobuf, GeoParquet and COG files need a web server that supports HTTP range requests: GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` does not — preview locally with `npx serve` instead." |
+| A host that compresses the parts of files it sends (cdn.jsdelivr.net) | "`…/x.pmtiles` comes from a server that compresses the parts of files it sends, so the PMTiles reader can't read the file a part at a time. Put the file on your own site (GitHub Pages, Netlify and `npx serve` work); a file mirrored from GitHub works from fastly.jsdelivr.net, not cdn.jsdelivr.net." |
 | Another site refused (CORS), or it's unreachable | "The browser couldn't read `…`: the server didn't allow this page to load it (CORS), or it couldn't be reached. A PMTiles file on another site needs that site to send `Access-Control-Allow-Origin` and to allow the `Range` header." |
 | A wrong path that returned a web page | "`…/x.pmtiles` isn't a PMTiles file. A wrong path often returns a web page instead — check the file name and folder." |
 | The file isn't there | "`…/x.fgb` didn't load (404 Not Found)", with where the browser looked and the `base` hint for project sites |

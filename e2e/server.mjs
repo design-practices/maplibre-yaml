@@ -54,7 +54,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deflateSync } from "node:zlib";
+import { brotliCompressSync, deflateSync } from "node:zlib";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -338,20 +338,27 @@ function hillsTile(z, x, y) {
  *                         what GitHub Pages and raw.githubusercontent.com send
  *  - `/fastly/…`          both of the above: GitHub Pages as a page on
  *                         another site sees it
+ *  - `/brotlirange/…`     the file served brotli-compressed (`Content-Encoding:
+ *                         br` on a whole reply), and ranges cut from that
+ *                         compressed copy, without saying so, with a
+ *                         `Content-Range` over the compressed size — what a
+ *                         browser sees from jsDelivr's Cloudflare leg
+ *                         (cdn.jsdelivr.net); headers exposed
  *
  * Prefixes combine in any order (`/norange/oversize/60/…`).
  */
-const HOSTING_SEGMENT = /^\/(norange|nocors|oversize\/(\d+)|suffix416|noexpose|fastly)(?=\/)/;
+const HOSTING_SEGMENT = /^\/(norange|nocors|oversize\/(\d+)|suffix416|noexpose|fastly|brotlirange)(?=\/)/;
 
 /** Strip the hosting prefixes off `path`; what they ask for. */
 function hostingOf(path) {
-  const hosting = { path, cors: true, expose: true, ranges: true, suffix416: false, padMb: 0 };
+  const hosting = { path, cors: true, expose: true, ranges: true, suffix416: false, padMb: 0, brotli: false };
   for (let m = HOSTING_SEGMENT.exec(hosting.path); m; m = HOSTING_SEGMENT.exec(hosting.path)) {
     const [whole, name, mb] = m;
     if (name === "norange") hosting.ranges = false;
     else if (name === "nocors") hosting.cors = false;
     else if (name === "suffix416") hosting.suffix416 = true;
     else if (name === "noexpose") hosting.expose = false;
+    else if (name === "brotlirange") hosting.brotli = true;
     else if (name === "fastly") {
       hosting.suffix416 = true;
       hosting.expose = false;
@@ -395,14 +402,14 @@ const server = createServer(async (req, res) => {
   let path = decodeURIComponent(url.pathname);
 
   const hosting = hostingOf(path);
-  const { cors, ranges, padMb, suffix416, expose } = hosting;
+  const { cors, ranges, padMb, suffix416, expose, brotli } = hosting;
   path = hosting.path;
 
   const corsHeaders = cors
     ? {
         "access-control-allow-origin": "*",
         ...(expose
-          ? { "access-control-expose-headers": "Content-Range, Content-Length, Accept-Ranges, ETag" }
+          ? { "access-control-expose-headers": "Content-Range, Content-Length, Content-Encoding, Accept-Ranges, ETag" }
           : {}),
       }
     : {};
@@ -435,7 +442,9 @@ const server = createServer(async (req, res) => {
     res.end(body);
   };
 
-  const sendFile = (file, type) => {
+  const sendFile = (original, type) => {
+    // jsDelivr's Cloudflare leg: every response is cut from a brotli copy.
+    const file = brotli ? brotliCompressSync(original) : original;
     const size = Math.max(file.length, padMb * 1024 * 1024);
     const headers = {
       "content-type": type,
@@ -457,7 +466,7 @@ const server = createServer(async (req, res) => {
       });
       return res.end(req.method === "HEAD" ? undefined : body);
     }
-    res.writeHead(200, { ...headers, "content-length": size });
+    res.writeHead(200, { ...headers, ...(brotli ? { "content-encoding": "br" } : {}), "content-length": size });
     if (req.method === "HEAD") return res.end();
     if (size === file.length) return res.end(file);
     // Padded: stream the file, then zeros, until done or the client hangs up.

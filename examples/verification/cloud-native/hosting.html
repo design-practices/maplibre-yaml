@@ -22,7 +22,11 @@
     FlatGeobuf points read by view, GeoParquet districts read whole (thick
     outlines), GeoParquet points read by view, and a COG image.
     PASS = both maps show the imagery, the outlined and filled districts, and two
-    kinds of points, with no notice. FAIL = a "didn't load (416)" or "isn't a
+    kinds of points, with no notice. A third map reads from a host that
+    compresses the parts of files it sends (/brotlirange/, as cdn.jsdelivr.net's
+    Cloudflare leg does): the GeoParquet file draws (read whole, which the
+    browser decodes), and the PMTiles and by-view FlatGeobuf sources say why
+    they can't be read there. FAIL = a "didn't load (416)" or "isn't a
     GeoParquet file" notice.
     Serve from the repo root:  pnpm verify:serve
     Then open: http://localhost:4174/examples/verification/cloud-native/hosting.html
@@ -121,6 +125,34 @@ layers:
   - { id: outlines, type: line, source: outlines, source-layer: districts, paint: { line-color: "#e76f51", line-width: 1 } }
   - { id: fgbpoints, type: circle, source: fgbpoints, paint: { circle-radius: 4, circle-color: "#1d3557" } }
   - { id: parquetpoints, type: circle, source: parquetpoints, paint: { circle-radius: 2, circle-color: ["match", ["get", "kind"], "a", "#ffffff", "#ff006e"] } }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>A host that compresses the parts of files it sends (cdn.jsdelivr.net's Cloudflare leg)</h2>
+      <ml-map id="encoded">
+        <script type="text/yaml">
+type: map
+id: hosting-encoded
+config:
+  center: [10.05, 42.04]
+  zoom: 11.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  outlines:
+    type: vector
+    url: "{{HOST}}/brotlirange/gallery-assets/cloud-native/districts.pmtiles"
+  fgbpoints:
+    type: geojson
+    url: "{{HOST}}/brotlirange/gallery-assets/cloud-native/points.fgb"
+    load: { mode: viewport, minzoom: 11 }
+  parquet:
+    type: geojson
+    url: "{{HOST}}/brotlirange/gallery-assets/cloud-native/districts.parquet"
+layers:
+  - { id: parquet, type: line, source: parquet, paint: { line-color: "#264653", line-width: 3 } }
+  - { id: outlines, type: line, source: outlines, source-layer: districts, paint: { line-color: "#e76f51", line-width: 1 } }
+  - { id: fgbpoints, type: circle, source: fgbpoints, paint: { circle-radius: 4, circle-color: "#1d3557" } }
         </script>
       </ml-map>
     </section>

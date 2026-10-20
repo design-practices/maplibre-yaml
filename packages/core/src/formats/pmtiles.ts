@@ -27,7 +27,8 @@
 
 import type { Protocol } from "pmtiles";
 import { getDecoder } from "./decoders";
-import { classifyPmtilesError, FormatError } from "./errors";
+import { classifyPmtilesError, FormatError, isFormatError } from "./errors";
+import { rangeRepliesUnreadable } from "./http";
 
 /** The slice of the maplibre-gl module this decoder needs (injected). */
 export interface ProtocolHost {
@@ -98,6 +99,8 @@ export function install(host: ProtocolHost): InstallResult {
   // vector_layers, bounds, min/max zoom and attribution.
   // A reader that failed to download is dropped, so a later request retries.
   let reader: Promise<Protocol> | undefined;
+  /** Per archive: whether its range replies can't be read (asked on a failure). */
+  const encoded: Record<string, Promise<boolean>> = {};
   const handler = async (params: { url: string }, abortController: AbortController) => {
     const current = (reader ??= getDecoder("pmtiles").then((m) => new m.Protocol({ metadata: true })));
     try {
@@ -107,7 +110,19 @@ export function install(host: ProtocolHost): InstallResult {
       });
       return await protocol.tile(params as never, abortController);
     } catch (error) {
-      throw classifyPmtilesError(error, displayUrl(archiveUrl(params.url)));
+      const archive = archiveUrl(params.url);
+      const classified = classifyPmtilesError(error, displayUrl(archive));
+      // A reply that couldn't be read, or bytes that aren't the archive's, from
+      // a host that serves the file compressed: its range replies are cut
+      // from the compressed copy (jsDelivr's Cloudflare leg). Asked once per file.
+      const code = isFormatError(classified) ? classified.failure.code : undefined;
+      if (code === "cors" || code === "not-format") {
+        encoded[archive] ??= rangeRepliesUnreadable(archive);
+        if (await encoded[archive]) {
+          throw new FormatError({ code: "encoded-range", format: "pmtiles", url: displayUrl(archive) });
+        }
+      }
+      throw classified;
     }
   };
   host.addProtocol("pmtiles", handler as never);

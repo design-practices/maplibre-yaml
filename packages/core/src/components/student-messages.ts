@@ -495,6 +495,12 @@ export function describeFormatFailure(failure: FormatFailure): string {
         `${file} was served without range-request support (the server sent the whole ` +
         `file instead of the part asked for). ${RANGE_REQUEST_HINT}`
       );
+    case "encoded-range":
+      return (
+        `${file} comes from a server that compresses the parts of files it sends, so the ${label} reader ` +
+        "can't read the file a part at a time. Put the file on your own site (GitHub Pages, Netlify and " +
+        "`npx serve` work); a file mirrored from GitHub works from fastly.jsdelivr.net, not cdn.jsdelivr.net."
+      );
     case "cors":
       return (
         `The browser couldn't read ${file}: the server didn't allow this page to load it ` +

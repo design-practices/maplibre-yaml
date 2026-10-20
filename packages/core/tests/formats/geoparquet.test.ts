@@ -319,6 +319,28 @@ describe("open: the footer in one suffix-range request", () => {
     expect((await readAll(source))!.features).toHaveLength(48);
   });
 
+  it("ranges cut from a compressed copy (jsDelivr's Cloudflare leg, saying nothing): read whole instead (ml-zm7)", async () => {
+    const { brotliCompressSync } = await import("node:zlib");
+    const file = fixture("districts.parquet");
+    const packed = new Uint8Array(brotliCompressSync(file));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_: string, init?: RequestInit) => {
+        if (init?.method === "HEAD") return new Response(null, { status: 200, headers: { "content-encoding": "br" } });
+        const range = new Headers(init?.headers ?? {}).get("Range");
+        if (!range) return new Response(file, { status: 200 }); // a whole reply: the browser decodes it
+        const start = Math.max(0, packed.length - 524288);
+        return new Response(packed.slice(start), {
+          status: 206,
+          headers: { "content-range": `bytes ${start}-${packed.length - 1}/${packed.length}` },
+        });
+      })
+    );
+    const source = await open("https://cdn.example/districts.parquet");
+    expect(source.byteLength).toBe(file.length);
+    expect((await readAll(source))!.features).toHaveLength(48);
+  });
+
   it("an oversized suffix answered 416 on a host that also hides the size: still read whole", async () => {
     vi.stubGlobal("fetch", fixtureFetch());
     const source = await open("/suffix416/noexpose/points.parquet");

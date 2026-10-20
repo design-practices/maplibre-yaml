@@ -34,7 +34,7 @@ import type { Feature, FeatureCollection } from "geojson";
 import { isLonLatCrs } from "./crs";
 import { getDecoder, type Decoders } from "./decoders";
 import { FormatError, isAbortError, isFormatError } from "./errors";
-import { BodyTooLarge } from "./http";
+import { BodyTooLarge, rangeRepliesUnreadable, isEncodedRange } from "./http";
 
 /** The library's `deserialize` (`flatgeobuf/geojson`), loaded on demand. */
 type Deserialize = Decoders["flatgeobuf"]["deserialize"];
@@ -314,7 +314,13 @@ export async function probe(url: string, signal?: AbortSignal): Promise<ProbeRes
   try {
     response = await fetch(url, { headers: { Range: "bytes=0-7" }, ...(signal ? { signal } : {}) });
   } catch (error) {
-    throw fetchFailure(error, url);
+    const failure = fetchFailure(error, url);
+    // A reply that wouldn't decode: a host that compresses the parts of files
+    // it sends (jsDelivr's Cloudflare leg)?
+    if (isFormatError(failure) && failure.failure.code === "cors" && (await rangeRepliesUnreadable(url))) {
+      throw new FormatError({ code: "encoded-range", format: "flatgeobuf", url });
+    }
+    throw failure;
   }
   if (!response.ok) throw httpError(response, url);
   if (response.status !== 206) {
@@ -322,9 +328,18 @@ export async function probe(url: string, signal?: AbortSignal): Promise<ProbeRes
     void response.body?.cancel().catch(() => undefined);
     return { ranges: false, ...(Number.isFinite(length) && length > 0 ? { size: length } : {}) };
   }
+  if (isEncodedRange(response)) {
+    // Parts of a compressed copy (jsDelivr's Cloudflare leg): the index
+    // can't be read a part at a time from this host.
+    void response.body?.cancel().catch(() => undefined);
+    throw new FormatError({ code: "encoded-range", format: "flatgeobuf", url });
+  }
   const bytes = new Uint8Array(await response.arrayBuffer());
   const magic = bytes[0] === 0x66 && bytes[1] === 0x67 && bytes[2] === 0x62;
   if (!magic && isZstd(bytes)) throw compressedFailure(url);
+  if (!magic && (await rangeRepliesUnreadable(url))) {
+    throw new FormatError({ code: "encoded-range", format: "flatgeobuf", url });
+  }
   if (!magic) throw new FormatError({ code: "not-format", format: "flatgeobuf", url });
   const total = /\/(\d+)\s*$/.exec(response.headers.get("content-range") ?? "")?.[1];
   return { ranges: true, ...(total ? { size: Number(total) } : {}) };

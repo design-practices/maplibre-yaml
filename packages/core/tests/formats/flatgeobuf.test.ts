@@ -212,6 +212,38 @@ describe("the fitTo prefetch seam (data/source-data, ml-aot.75)", () => {
   });
 });
 
+describe("a host that answers ranges from a compressed copy (ml-zm7)", () => {
+  it("probe: bytes that aren't the file, from a host that serves it compressed, are said for what they are", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_: string, init?: RequestInit) =>
+        init?.method === "HEAD"
+          ? new Response(null, { status: 200, headers: { "content-encoding": "br" } })
+          : new Response(new Uint8Array([27, 7, 234, 17, 213, 188, 30, 34]), {
+              status: 206,
+              headers: { "content-range": "bytes 0-7/13862" },
+            })
+      )
+    );
+    const error = await probe("https://cdn.example/points.fgb").catch((e) => e);
+    expect(isFormatError(error) && error.failure.code).toBe("encoded-range");
+    expect((error as Error).message).toContain("fastly.jsdelivr.net, not cdn.jsdelivr.net");
+  });
+
+  it("…while a web page under a .fgb name is still 'isn't a FlatGeobuf file'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_: string, init?: RequestInit) =>
+        init?.method === "HEAD"
+          ? new Response(null, { status: 200 })
+          : new Response(new TextEncoder().encode("<!doctype"), { status: 206 })
+      )
+    );
+    const error = await probe("https://h.example/x.fgb").catch((e) => e);
+    expect(isFormatError(error) && error.failure.code).toBe("not-format");
+  });
+});
+
 describe("the whole-file guard without Content-Length (ml-cnv.19)", () => {
   /** points.fgb (60 KB) as a chunked response: 4 KB at a time, no Content-Length. */
   const chunked = () =>

@@ -122,4 +122,28 @@ test.describe("cloud-native files on GitHub Pages / jsDelivr-like hosts", () => 
     await page.screenshot({ path: "e2e/results/hosting_cross.png" });
     expect(errors).toEqual([]);
   });
+
+  test("a host that compresses the parts of files it sends (jsDelivr's Cloudflare leg): said plainly (ml-zm7)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    await page.goto("/examples/verification/cloud-native/hosting.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("encoded") as any).mapReady());
+    const notice = page.locator("#encoded .ml-map-notice");
+    await expect(notice).toContainText(
+      "/brotlirange/gallery-assets/cloud-native/districts.pmtiles comes from a server that compresses the parts of files it sends",
+      { timeout: 30_000 }
+    );
+    await expect(notice).toContainText(
+      "/brotlirange/gallery-assets/cloud-native/points.fgb comes from a server that compresses the parts of files it sends"
+    );
+    await expect(notice).toContainText("fastly.jsdelivr.net, not cdn.jsdelivr.net");
+    // GeoParquet: read whole instead (the browser decodes the compressed reply).
+    await page.waitForFunction(
+      () => (document.getElementById("encoded") as any).getMap().querySourceFeatures("parquet").length > 0,
+      undefined,
+      { timeout: 30_000 }
+    );
+    expect(errors).toEqual([]);
+  });
 });

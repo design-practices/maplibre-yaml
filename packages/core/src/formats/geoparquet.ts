@@ -50,7 +50,15 @@ import { isLonLatCrs } from "./crs";
 import { getDecoder } from "./decoders";
 import { recordPropertyNames } from "../data/property-names";
 import { FormatError, isAbortError, isFormatError } from "./errors";
-import { BodyTooLarge, fetchTail, httpError, type Tail } from "./http";
+import {
+  BodyTooLarge,
+  fetchTail,
+  fetchWhole,
+  httpError,
+  isEncodedRange,
+  rangeRepliesUnreadable,
+  type Tail,
+} from "./http";
 
 /** The first read: the file's last 512 KiB — the footer, and all of a small file. */
 export const TAIL_BYTES = 512 * 1024;
@@ -163,6 +171,10 @@ function rangeReader(
         void response.body?.cancel().catch(() => undefined);
         throw new FormatError({ code: "no-range", format: "geoparquet", url });
       }
+      if (isEncodedRange(response)) {
+        void response.body?.cancel().catch(() => undefined);
+        throw new FormatError({ code: "encoded-range", format: "geoparquet", url });
+      }
       return response.arrayBuffer();
     },
   };
@@ -220,11 +232,28 @@ export async function open(url: string, options: OpenOptions = {}): Promise<GeoP
     throw fetchFailure(error, url);
   }
 
-  const held = { start: tail.start, bytes: tail.bytes };
-  const bytes = new Uint8Array(held.bytes);
-  if (bytes.length < 12 || !hasMagic(bytes, bytes.length - 4) || (held.start === 0 && !hasMagic(bytes, 0))) {
-    throw new FormatError({ code: "not-format", format: "geoparquet", url });
+  const looksRight = (t: Tail) => {
+    const b = new Uint8Array(t.bytes);
+    return b.length >= 12 && hasMagic(b, b.length - 4) && (t.start !== 0 || hasMagic(b, 0));
+  };
+  if (!looksRight(tail) && tail.ranges && (await rangeRepliesUnreadable(url))) {
+    // A host that answers ranges from a compressed copy (jsDelivr's
+    // Cloudflare leg): the whole file, which the browser decodes, is right.
+    try {
+      tail = await fetchWhole(url, {
+        ...(signal ? { signal } : {}),
+        ...(options.maxWholeBytes !== undefined ? { maxWholeBytes: options.maxWholeBytes } : {}),
+      });
+    } catch (error) {
+      if (error instanceof BodyTooLarge) {
+        throw new FormatError({ code: "encoded-range", format: "geoparquet", url });
+      }
+      if (typeof (error as { status?: unknown } | null)?.status === "number") throw error;
+      throw fetchFailure(error, url);
+    }
   }
+  if (!looksRight(tail)) throw new FormatError({ code: "not-format", format: "geoparquet", url });
+  const held = { start: tail.start, bytes: tail.bytes };
   const file = rangeReader(url, tail.size, held, tail.ranges, signal);
   const { parquetMetadataAsync } = await library;
   let metadata: FileMetaData;

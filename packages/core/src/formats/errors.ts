@@ -20,6 +20,12 @@ import type { CloudFormat } from "./detect";
 export type FormatFailureCode =
   /** The server ignored `Range:` and sent the whole file (python -m http.server). */
   | "no-range"
+  /**
+   * The server compresses the parts of a file it sends (a range response
+   * with `Content-Encoding`, as jsDelivr's Cloudflare leg does), so a part
+   * can't be decoded on its own.
+   */
+  | "encoded-range"
   /** The request never completed: CORS refusal or an unreachable host. */
   | "cors"
   /** The bytes aren't this format (a wrong path that returned a web page). */

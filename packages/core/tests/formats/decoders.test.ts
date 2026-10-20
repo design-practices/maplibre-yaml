@@ -134,6 +134,32 @@ describe("the readers' callers", () => {
     expect(tile).toHaveBeenCalledTimes(1);
   });
 
+  it("pmtiles: an archive whose host serves it compressed gets the encoded-range notice (ml-zm7)", async () => {
+    const decoders = await import("../../src/formats/decoders");
+    vi.spyOn(decoders.reimport, "load");
+    const { install: freshInstall } = await import("../../src/formats/pmtiles");
+    const addProtocol = vi.fn();
+    freshInstall({ addProtocol, config: { REGISTERED_PROTOCOLS: {} }, module: {} });
+    const handler = addProtocol.mock.calls[0]![1] as (
+      p: { url: string; type?: string },
+      a: AbortController
+    ) => Promise<unknown>;
+    // The archive's first bytes are compressed bytes: "Wrong magic number".
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_: string, init?: RequestInit) =>
+        init?.method === "HEAD"
+          ? new Response(null, { status: 200, headers: { "content-encoding": "br" } })
+          : new Response(new Uint8Array(16384).fill(7), { status: 206, headers: { "content-length": "16384" } })
+      )
+    );
+    const error = await handler({ url: "pmtiles://https://cdn.example/x.pmtiles", type: "json" }, new AbortController()).catch(
+      (e) => e
+    );
+    expect(isFormatError(error) && error.failure).toMatchObject({ code: "encoded-range", format: "pmtiles" });
+    vi.unstubAllGlobals();
+  });
+
   it("pmtiles: registering needs no reader download (sync, before new Map())", () => {
     const addProtocol = vi.fn();
     install({ addProtocol, config: { REGISTERED_PROTOCOLS: {} }, module: {} });

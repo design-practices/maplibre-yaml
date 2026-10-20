@@ -164,6 +164,9 @@ async function headSize(url: string, signal?: AbortSignal): Promise<number | und
  *   gives — and when even that fails, the file is read whole.
  * - **200**: the server ignored `Range:` and sent the whole file
  *   (`ranges: false`).
+ * - **A range reply that can't be read at all** (jsDelivr's Cloudflare leg
+ *   compresses it, and the browser can't decode a part): the file is read
+ *   whole, when a plain `GET` of it works.
  *
  * A whole-file read stops at `maxWholeBytes` (with {@link BodyTooLarge}),
  * whether or not the server sent `Content-Length`.
@@ -194,7 +197,15 @@ export async function fetchTail(url: string, length: number, options: TailOption
     return body(response, true);
   };
 
-  const response = await fetch(url, { ...init, headers: { Range: `bytes=-${length}` } });
+  let response: Response;
+  try {
+    response = await fetch(url, { ...init, headers: { Range: `bytes=-${length}` } });
+  } catch (error) {
+    // A reply that couldn't be read — a host that compresses the parts of
+    // files it sends — while the whole file comes through: read it whole.
+    if (!(await rangeRepliesUnreadable(url))) throw error;
+    return whole();
+  }
   if (response.status === 416) {
     // Fastly's answer to a suffix longer than the file: the file is short.
     discardBody(response);
@@ -232,4 +243,56 @@ export async function fetchTail(url: string, length: number, options: TailOption
     return { start: size - bytes.byteLength, bytes, size, ranges: true };
   }
   return whole();
+}
+
+/**
+ * Whether a range response is compressed (`Content-Encoding` other than
+ * identity): its bytes are part of a compressed copy, which can't be decoded
+ * on its own. jsDelivr's Cloudflare leg answers this way; the header is
+ * readable cross-origin only where the host exposes it (jsDelivr does).
+ */
+export function isEncodedRange(response: Response): boolean {
+  if (response.status !== 206) return false;
+  const encoding = response.headers.get("content-encoding")?.trim().toLowerCase();
+  return Boolean(encoding && encoding !== "identity");
+}
+
+/**
+ * Whether a host's replies to range requests are cut from a compressed copy
+ * of the file — jsDelivr's Cloudflare leg serves its files brotli-compressed
+ * and answers a range from the compressed bytes (with or without saying so),
+ * so a part is either undecodable or not the file's bytes at all. Asked with
+ * a plain `HEAD`, whose `Content-Encoding` says the file is served compressed.
+ * Only for a reader whose range reads already failed: `false` when it can't
+ * tell.
+ */
+export async function rangeRepliesUnreadable(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, { method: "HEAD" });
+    const encoding = response.headers.get("content-encoding")?.trim().toLowerCase();
+    return response.ok && Boolean(encoding && encoding !== "identity");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The whole file, with one plain `GET` (the browser decodes a compressed
+ * one), stopping at `maxWholeBytes`.
+ *
+ * @throws The `HTTP <status>` shape; whatever `fetch` threw; {@link BodyTooLarge}.
+ */
+export async function fetchWhole(url: string, options: TailOptions = {}): Promise<Tail> {
+  const response = await fetch(url, options.signal ? { signal: options.signal } : {});
+  if (!response.ok) {
+    discardBody(response);
+    throw httpError(response, url);
+  }
+  try {
+    const bytes = await readCapped(response, options.maxWholeBytes);
+    return { start: 0, bytes, size: bytes.byteLength, ranges: true };
+  } catch (error) {
+    if (error instanceof BodyTooLarge) error.ranges = true;
+    throw error;
+  }
 }
