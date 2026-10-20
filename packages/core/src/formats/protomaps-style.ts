@@ -189,3 +189,31 @@ export function notAProtomapsBasemap(vectorLayerIds: readonly string[] | undefin
     "it as a source and give it layers instead."
   );
 }
+
+/**
+ * When a Protomaps basemap file was built with the older tile schema (v3,
+ * before late 2024) — whose features carry `pmap:kind` / `pmap:min_zoom`
+ * where the current style reads `kind` / `min_zoom`, so only earth and water
+ * draw — the message to show; otherwise `undefined`.
+ *
+ * @param metadata - The archive's JSON metadata.
+ * @param url - The `pmtiles://` URL the source reads.
+ */
+export function olderProtomapsSchema(metadata: unknown, url: string): string | undefined {
+  if (!metadata || typeof metadata !== "object") return undefined;
+  const m = metadata as Record<string, unknown>;
+  const version = typeof m["version"] === "string" ? m["version"] : undefined;
+  const major = version ? Number(version.split(".")[0]) : NaN;
+  const fields = Array.isArray(m["vector_layers"])
+    ? (m["vector_layers"] as Array<{ fields?: Record<string, unknown> }>).flatMap((l) => Object.keys(l?.fields ?? {}))
+    : [];
+  const v3 = (Number.isFinite(major) && major < 4) || fields.some((f) => f.startsWith("pmap:"));
+  if (!v3) return undefined;
+  return (
+    `\`${fileOf(url)}\` is a Protomaps basemap built with an older tile schema` +
+    (version ? ` (version ${version})` : "") +
+    ", so only land and water draw: roads, buildings, labels and places need a basemap cut from " +
+    "the current schema (version 4 or later). Cut a new extract with `pmtiles extract` from " +
+    "https://build.protomaps.com."
+  );
+}

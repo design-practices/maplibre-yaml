@@ -40,6 +40,12 @@ vi.mock("maplibre-gl", () => {
   return { default: { Map: MockMap, AttributionControl }, Map: MockMap, AttributionControl };
 });
 
+const pmtiles = vi.hoisted(() => ({ metadata: vi.fn(async (): Promise<unknown> => ({ version: "4.13.0" })) }));
+vi.mock("../../src/formats/pmtiles", async (load) => ({
+  ...(await load<object>()),
+  archiveMetadata: pmtiles.metadata,
+}));
+
 import { MapRenderer } from "../../src/renderer/map-renderer";
 
 const until = async (check: () => boolean) => {
@@ -105,5 +111,33 @@ describe("MapRenderer: a Protomaps basemap from a .pmtiles file", () => {
       sourceId: "protomaps",
       basemap: true,
     });
+  });
+
+  it("a Protomaps file from the older tile schema (v3) gets a notice to cut a new extract (ml-aot.126)", async () => {
+    pmtiles.metadata.mockResolvedValueOnce({
+      version: "3.7.1",
+      vector_layers: [{ id: "roads", fields: { "pmap:kind": "String", "pmap:min_zoom": "Number" } }],
+    });
+    const { map, onError } = render({ pmtiles: "https://h/firenze.pmtiles" });
+    map.getSource.mockReturnValue({
+      vectorLayerIds: ["earth", "water", "roads", "places", "buildings"],
+      url: "pmtiles://https://h/firenze.pmtiles",
+    });
+    map.emit("sourcedata", { sourceId: "protomaps", sourceDataType: "metadata" });
+    await until(() => onError.mock.calls.length > 0);
+    const notices = onError.mock.calls.filter((c) => c[2]?.kind === "basemap");
+    expect(notices).toHaveLength(1);
+    expect(notices[0][0].message).toContain(
+      "is a Protomaps basemap built with an older tile schema (version 3.7.1), so only land and water draw"
+    );
+    expect(pmtiles.metadata).toHaveBeenCalledWith("pmtiles://https://h/firenze.pmtiles");
+  });
+
+  it("a current one says nothing", async () => {
+    const { map, onError } = render({ pmtiles: "https://h/nyc.pmtiles" });
+    map.getSource.mockReturnValue({ vectorLayerIds: ["earth", "water", "roads", "places"], url: "pmtiles://https://h/nyc.pmtiles" });
+    map.emit("sourcedata", { sourceId: "protomaps", sourceDataType: "metadata" });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(onError.mock.calls.filter((c) => c[2]?.kind === "basemap")).toEqual([]);
   });
 });

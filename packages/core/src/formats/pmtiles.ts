@@ -48,6 +48,33 @@ export type InstallResult = "installed" | "host" | "already";
 /** Modules this core has registered on (one registration per module per page). */
 const installedOn = new WeakSet<object>();
 
+/** The reader core's handler created last: its archives' headers are already read. */
+let latestReader: Promise<Protocol> | undefined;
+
+/**
+ * An archive's JSON metadata (`name`, `version`, `vector_layers` …), read
+ * through the reader core's `pmtiles://` handler already holds for it when
+ * there is one (its header is cached; the metadata is one more range read),
+ * else through a reader of its own.
+ *
+ * @param url - The archive URL, `pmtiles://` scheme or not.
+ * @returns `undefined` when it can't be read.
+ */
+export async function archiveMetadata(url: string): Promise<Record<string, unknown> | undefined> {
+  const archive = url.replace(/^pmtiles:\/\//i, "");
+  try {
+    const protocol = latestReader ? await latestReader : undefined;
+    const held = (protocol as unknown as { tiles?: Map<string, { getMetadata(): Promise<unknown> }> } | undefined)?.tiles?.get(
+      archive
+    );
+    if (held) return (await held.getMetadata()) as Record<string, unknown>;
+    const lib = await getDecoder("pmtiles");
+    return (await new lib.PMTiles(archive).getMetadata()) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The archive URL inside a `pmtiles://` request URL (tile suffix dropped). */
 function archiveUrl(requestUrl: string): string {
   const inner = requestUrl.replace(/^pmtiles:\/\//i, "");
@@ -103,6 +130,7 @@ export function install(host: ProtocolHost): InstallResult {
   const encoded: Record<string, Promise<boolean>> = {};
   const handler = async (params: { url: string }, abortController: AbortController) => {
     const current = (reader ??= getDecoder("pmtiles").then((m) => new m.Protocol({ metadata: true })));
+    latestReader = current;
     try {
       const protocol = await current.catch((error: unknown) => {
         if (reader === current) reader = undefined;

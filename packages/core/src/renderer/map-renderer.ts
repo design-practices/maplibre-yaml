@@ -61,10 +61,12 @@ import {
   type BasemapAssets,
 } from './basemap-assets';
 import { fitToPadding, type FitPadding } from '../utils/fit-padding';
+import { archiveMetadata } from '../formats/pmtiles';
 import {
   basemapLanguage,
   fallbackBasemapStyle,
   notAProtomapsBasemap,
+  olderProtomapsSchema,
   prefetchProtomapsBasemap,
   PROTOMAPS_SOURCE_ID,
   protomapsStyle,
@@ -1341,7 +1343,18 @@ export class MapRenderer {
         return;
       }
       const problem = notAProtomapsBasemap(source.vectorLayerIds, source.url);
-      if (!problem) return;
+      if (!problem) {
+        // A Protomaps file from the older tile schema draws only land and
+        // water, silently (ml-aot.126): its metadata says which it is.
+        const url = source.url;
+        void archiveMetadata(url).then((metadata) => {
+          const older = olderProtomapsSchema(metadata, url);
+          if (!older || this.destroyed) return;
+          console.warn(`[maplibre-yaml] ${older.replace(/`/g, '"')}`);
+          options.onError?.(new Error(older), false, { kind: 'basemap' });
+        });
+        return;
+      }
       console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
       options.onError?.(new Error(problem), false, { kind: 'basemap' });
     });
