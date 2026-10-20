@@ -191,12 +191,24 @@ export function documentLocale(doc: unknown): Record<string, unknown> | undefine
  * element, an ancestor such as `<ml-map lang>`, or `<html lang>`), or
  * `undefined` when none is set — the browser's own language then applies.
  * Numbers are formatted for it unless a format names its own `locale`.
+ * `en_US` is read as `en-US` ({@link normalizeLocale}).
  */
 export function elementLanguage(element: Element | null | undefined): string | undefined {
   try {
-    const lang = element?.closest?.("[lang]")?.getAttribute("lang")?.trim();
-    return lang ? lang : undefined;
+    const lang = element?.closest?.("[lang]")?.getAttribute("lang");
+    return normalizeLocale(lang);
   } catch {
     return undefined;
   }
+}
+
+/**
+ * A language tag as `Intl` takes it: trimmed, with the POSIX `_` separator
+ * (`en_US`, as server templates often write `lang`) turned into BCP 47's
+ * `-`. `undefined` for an empty or missing tag.
+ */
+export function normalizeLocale(tag: unknown): string | undefined {
+  if (typeof tag !== "string") return undefined;
+  const trimmed = tag.trim().replace(/_/g, "-");
+  return trimmed === "" ? undefined : trimmed;
 }

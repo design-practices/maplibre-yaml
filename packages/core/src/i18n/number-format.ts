@@ -14,6 +14,8 @@
  * see {@link elementLanguage}), then the browser's.
  */
 
+import { normalizeLocale } from "./strings";
+
 /**
  * MapLibre `number-format` options.
  *
@@ -95,6 +97,13 @@ function formatter(locale: string | undefined, intl: Intl.NumberFormatOptions): 
 /**
  * Format a number with MapLibre `number-format` options.
  *
+ * @remarks
+ * Locale tags are read with {@link normalizeLocale} (`en_US` → `en-US`). A
+ * locale or option `Intl` rejects never loses more than it must: the
+ * options are tried under the default locale, then the browser's, then
+ * grouping and fraction digits alone — the bare `String(value)` is the last
+ * resort.
+ *
  * @param value - the number.
  * @param format - `{ locale, currency, unit, min-fraction-digits,
  *   max-fraction-digits }`, or an older `",.2f"` string.
@@ -121,10 +130,8 @@ export function formatNumber(value: number, format: NumberFormat = {}, defaultLo
   } else {
     options = format && typeof format === "object" ? format : {};
   }
-  const locale =
-    typeof options.locale === "string" && options.locale.trim() !== ""
-      ? options.locale.trim()
-      : defaultLocale;
+  const fallbackLocale = normalizeLocale(defaultLocale);
+  const locale = normalizeLocale(options.locale) ?? fallbackLocale;
   const intl = toIntlNumberFormatOptions(options);
   if (!grouping) intl.useGrouping = false;
   try {
@@ -136,14 +143,31 @@ export function formatNumber(value: number, format: NumberFormat = {}, defaultLo
       warned.add(key);
       console.warn(
         `[maplibre-yaml] number format ${JSON.stringify(format)} isn't usable here (${message}); ` +
-          "showing the number without it."
+          "showing the number with what can be kept of it."
       );
     }
-    try {
-      // Keep what can be kept: the locale alone, then nothing.
-      return formatter(defaultLocale, grouping ? {} : { useGrouping: false }).format(value);
-    } catch {
-      return String(value);
+    // Keep what can be kept, in steps: the options under the default locale,
+    // then the browser's; then grouping and fraction digits alone (an
+    // unknown currency or unit) under each; `String()` only last.
+    const plain: Intl.NumberFormatOptions = {};
+    for (const k of ["useGrouping", "minimumFractionDigits", "maximumFractionDigits"] as const) {
+      if (intl[k] !== undefined) (plain as Record<string, unknown>)[k] = intl[k];
     }
+    const attempts: Array<[string | undefined, Intl.NumberFormatOptions]> = [
+      [fallbackLocale, intl],
+      [undefined, intl],
+      [locale, plain],
+      [fallbackLocale, plain],
+      [undefined, plain],
+    ];
+    for (const [l, o] of attempts) {
+      if (l === locale && o === intl) continue;
+      try {
+        return formatter(l, o).format(value);
+      } catch {
+        /* next step */
+      }
+    }
+    return String(value);
   }
 }

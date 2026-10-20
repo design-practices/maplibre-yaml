@@ -85,6 +85,9 @@ describe("the string table", () => {
     expect(elementLanguage(inner)).toBe("de-DE");
     inner.setAttribute("lang", "fr");
     expect(elementLanguage(inner)).toBe("fr");
+    // A server template's POSIX tag is read as BCP 47.
+    inner.setAttribute("lang", "en_US");
+    expect(elementLanguage(inner)).toBe("en-US");
     inner.setAttribute("lang", "");
     expect(elementLanguage(inner)).toBeUndefined();
     expect(elementLanguage(null)).toBeUndefined();
