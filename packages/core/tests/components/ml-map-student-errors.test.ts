@@ -162,6 +162,16 @@ describe("<ml-map> on-page errors", () => {
       expect(noticeText(el)).toContain("breaks:");
     });
 
+    it("a classified field the data has no value for is an author hint on the page (ml-aot.95)", async () => {
+      const el = await mount();
+      latest().options.onError(
+        new Error('Layer `income`: classify field: "Median_Income" is not a property of any feature.'),
+        false,
+        { kind: "classify-field", layerId: "income" }
+      );
+      expect(noticeText(el)).toContain('"Median_Income" is not a property of any feature');
+    });
+
     it("the same problem is listed once; dismissing hides the notice", async () => {
       const el = await mount();
       const report = () =>

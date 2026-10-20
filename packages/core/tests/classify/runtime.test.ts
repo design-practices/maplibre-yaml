@@ -5,7 +5,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { ClassifyRuntime } from "../../src/renderer/classify-runtime";
+import { ClassifyRuntime, classifyFieldMessage } from "../../src/renderer/classify-runtime";
+import { classifyFieldProblems } from "../../src/classify/breaks";
 import {
   resolveClassify,
   applyClassifyToSpec,
@@ -198,6 +199,66 @@ describe("ClassifyRuntime", () => {
         "≥ 20",
         "No data",
       ]);
+    });
+  });
+
+  describe("a field the loaded data has no value for (ml-aot.95)", () => {
+    const rows = (props: Array<Record<string, unknown>>) => ({
+      type: "FeatureCollection",
+      features: props.map((p) => ({ type: "Feature", properties: p, geometry: null })),
+    });
+    const TRACTS = rows([
+      { name: "a", median_income: 30000, population: 100, zone: "residential" },
+      { name: "b", median_income: 60000, population: 200, zone: "commercial" },
+    ]);
+
+    it("names a wrong-case or misspelt field, with a did-you-mean and the data's properties", () => {
+      const [p] = classifyFieldProblems(TRACTS, { field: "Median_Income", kind: "numeric" });
+      expect(p).toMatchObject({ key: "field", reason: "missing", suggestion: "median_income" });
+      const message = classifyFieldMessage("income", p!);
+      expect(message).toContain('classify field: "Median_Income" is not a property of any feature');
+      expect(message).toContain('Did you mean "median_income"?');
+      expect(message).toContain('"population"');
+    });
+
+    it("names a text field under numeric classes", () => {
+      const [p] = classifyFieldProblems(TRACTS, { field: "zone", kind: "numeric" });
+      expect(p).toMatchObject({ reason: "not-numeric", sample: "residential" });
+      expect(classifyFieldMessage("z", p!)).toContain("holds no numbers");
+      // The same field is fine for categories.
+      expect(classifyFieldProblems(TRACTS, { field: "zone", kind: "categorical" })).toEqual([]);
+    });
+
+    it("checks normalize: too, and says nothing when the fields have values", () => {
+      const [p] = classifyFieldProblems(TRACTS, { field: "median_income", kind: "numeric", normalize: "populaton" });
+      expect(p).toMatchObject({ key: "normalize", reason: "missing", suggestion: "population" });
+      expect(
+        classifyFieldProblems(TRACTS, { field: "median_income", kind: "numeric", normalize: "population" })
+      ).toEqual([]);
+      expect(classifyFieldProblems(rows([]), { field: "x", kind: "numeric" })).toEqual([]);
+    });
+
+    it("the runtime reports it once per layer, for fetched and inline data", async () => {
+      const data = new Map<string, unknown>([["s", TRACTS]]);
+      const onFieldProblem = vi.fn();
+      const fetched = layer("f", "s"); // field "v": on no feature
+      const record = resolveClassify({ field: "Median_Income", breaks: [50000], colors: ["#000000", "#ffffff"] }, "fill");
+      const inline = applyClassifyToSpec({ id: "i", type: "fill", source: "s2" }, record) as never;
+      data.set("s2", TRACTS);
+      const runtime = new ClassifyRuntime(
+        fakeMap(new Set(["f", "i"])) as never,
+        [fetched, inline],
+        {},
+        (id) => data.get(id),
+        () => {},
+        { readsByView: () => false, onRefused: vi.fn(), onFieldProblem }
+      );
+      runtime.dataLoaded("s");
+      runtime.dataLoaded("s");
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+      expect(onFieldProblem).toHaveBeenCalledTimes(2);
+      expect(onFieldProblem.mock.calls.map((c) => c[0]).sort()).toEqual(["f", "i"]);
+      expect(String(onFieldProblem.mock.calls.find((c) => c[0] === "i")![1])).toContain('"median_income"');
     });
   });
 });

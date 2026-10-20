@@ -44,7 +44,7 @@ import {
   CLASSIFY_METADATA_KEY,
   type ClassifyRecord,
 } from "../classify/compile";
-import { isFeatureData } from "../classify/breaks";
+import { classifyFieldProblems, isFeatureData, type ClassifyFieldProblem } from "../classify/breaks";
 import { DataFetcher } from "../data/data-fetcher";
 import { classifiedHighlightProperty, withHighlight } from "./highlight-paint";
 
@@ -61,6 +61,33 @@ interface RuntimeLayer {
 const isObject = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object" && !Array.isArray(v);
 
+/** One plain-language line for a {@link ClassifyFieldProblem} (an author hint). */
+export function classifyFieldMessage(layerId: string, problem: ClassifyFieldProblem): string {
+  const where = `Layer \`${layerId}\`: classify ${problem.key}: "${problem.name}"`;
+  const props =
+    problem.available.length > 0
+      ? ` The data's properties: ${problem.available.map((n) => `"${n}"`).join(", ")}.`
+      : "";
+  if (problem.reason === "missing") {
+    return (
+      `${where} is not a property of any feature, so every feature is drawn as no data.` +
+      (problem.suggestion ? ` Did you mean "${problem.suggestion}"?` : "") +
+      props
+    );
+  }
+  const sample =
+    typeof problem.sample === "string" || typeof problem.sample === "number" || typeof problem.sample === "boolean"
+      ? ` (for example "${String(problem.sample)}")`
+      : "";
+  return (
+    `${where} holds no numbers${sample}, so numeric classes draw every feature as no data.` +
+    (problem.key === "field"
+      ? " Classify a numeric property, or list its values with categories:."
+      : " normalize: needs a numeric property to divide by.") +
+    props
+  );
+}
+
 /** How the runtime learns that a source is read by view, and reports it. */
 export interface ClassifyByView {
   /**
@@ -73,6 +100,12 @@ export interface ClassifyByView {
    * computed. Called once per layer, with a plain-language error.
    */
   onRefused: (layerId: string, sourceId: string, error: Error) => void;
+  /**
+   * The loaded data has no usable value for a layer's `field:` (or
+   * `normalize:`): a misspelt or wrong-case name, or text under numeric
+   * classes (ml-aot.95). Called once per layer, with an author hint.
+   */
+  onFieldProblem?: (layerId: string, message: string) => void;
 }
 
 /** The notice for a computed-break layer over a source read by view. */
@@ -92,6 +125,8 @@ export class ClassifyRuntime {
   private readonly layers = new Map<string, RuntimeLayer>();
   /** Layers already reported as unable to compute (one notice each). */
   private readonly refused = new Set<string>();
+  /** Layers whose field was already checked against loaded data. */
+  private readonly diagnosed = new Set<string>();
   private destroyed = false;
 
   /**
@@ -154,9 +189,26 @@ export class ClassifyRuntime {
   async layersReady(fetcher: DataFetcher = new DataFetcher()): Promise<void> {
     for (const layer of this.layers.values()) {
       const record = classifyRecordOf(layer);
-      if (record && isPending(record)) this.compute(layer);
+      if (record && isPending(record)) {
+        this.compute(layer);
+      } else {
+        // Inline data never passes through a delivery: check its field here.
+        const sourceId = this.sourceIdOf(layer);
+        const data = this.getSourceData(sourceId);
+        if (!this.byView?.readsByView(sourceId) && isFeatureData(data)) this.diagnose(layer, data);
+      }
     }
     await this.loadUrlData(fetcher);
+  }
+
+  /** Once per layer: report a field the loaded data has no value for. */
+  private diagnose(layer: RuntimeLayer, data: unknown): void {
+    const template = this.templates.get(layer.id);
+    if (!template || this.diagnosed.has(layer.id) || !this.byView?.onFieldProblem) return;
+    this.diagnosed.add(layer.id);
+    for (const problem of classifyFieldProblems(data, template)) {
+      this.byView.onFieldProblem(layer.id, classifyFieldMessage(layer.id, problem));
+    }
   }
 
   private compute(layer: RuntimeLayer): void {
@@ -174,6 +226,7 @@ export class ClassifyRuntime {
     }
     const data = this.getSourceData(sourceId);
     if (!isFeatureData(data)) return;
+    this.diagnose(layer, data);
     this.apply(layer, withData(template, data));
   }
 
@@ -194,6 +247,7 @@ export class ClassifyRuntime {
           .fetch(url)
           .then((result) => {
             if (this.destroyed || !isFeatureData(result.data)) return;
+            this.diagnose(layer, result.data);
             this.apply(layer, withData(template, result.data));
           })
           .catch((error: unknown) => {

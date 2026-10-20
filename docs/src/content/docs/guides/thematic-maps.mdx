@@ -241,6 +241,13 @@ classify:
 `noData: hide` leaves those features off the map instead (it adds a condition
 to the layer's `filter:`).
 
+When **every** feature is no data, the field name is usually the problem:
+property names are case-sensitive (`Median_Income` is not `median_income`),
+and numeric classes need a numeric property. Once the data has loaded, the
+console (and, while you develop, a note on the map) names the field and the
+data's actual property names, with a did-you-mean. The same goes for
+`normalize:`. The legend then shows only the "No data" line.
+
 <Aside type="note" title="Why this matters">
 In plain MapLibre, a `step` whose input is null — or a string, even `"15"` —
 does not fall into the first class: the expression fails, MapLibre logs a

@@ -168,6 +168,8 @@ function resolveFitTo(
  *   that would not load).
  * - `classify`: a classified layer's computed breaks can't be computed (its
  *   source is read by view); the layer draws in its no-data colour.
+ * - `classify-field`: a hint — a classified layer's field has no usable
+ *   value in the loaded data, so every feature draws as no data.
  *
  * Errors with no context (a basemap tile, a glyph) are not the document's.
  */
@@ -179,8 +181,11 @@ export interface MapErrorContext {
    * `classify`: a layer's computed classes (`method:`) can't be computed,
    * because its source holds only the features in view; the layer draws in
    * its no-data colour. The error message is the whole notice.
+   * `classify-field`: an author hint, not a failure — the loaded data has no
+   * usable value for a classified layer's `field:` / `normalize:` (a
+   * misspelt or wrong-case name, or text under numeric classes).
    */
-  kind: 'style' | 'layer' | 'source' | 'fit' | 'center' | 'classify';
+  kind: 'style' | 'layer' | 'source' | 'fit' | 'center' | 'classify' | 'classify-field';
   /** For `center`: the center as written. */
   center?: [number, number];
   /** The document layer, for `layer` and `classify` errors. */
@@ -709,6 +714,11 @@ export class MapRenderer {
         onRefused: (layerId, sourceId, error) => {
           console.warn(`[maplibre-yaml] ${error.message.replace(/`/g, '"')}`);
           options.onError?.(error, false, { kind: 'classify', layerId, sourceId });
+        },
+        // An author hint: the console always, the page while developing.
+        onFieldProblem: (layerId, message) => {
+          console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+          options.onError?.(new Error(message), false, { kind: 'classify-field', layerId });
         },
       }
     );

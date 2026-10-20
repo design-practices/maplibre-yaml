@@ -1050,6 +1050,12 @@ export class MLMap extends HTMLElement {
             });
             return;
           }
+          // A classified field the data has no value for (ml-aot.95): the
+          // renderer warned; an author hint on the page too.
+          if (context?.kind === "classify-field") {
+            this.reportProblem(error.message, { kind: "hint" });
+            return;
+          }
           // `center: [lat, lng]` (ml-aot.65): the renderer warned; show it.
           if (context?.kind === "center" && context.center && context.swapped) {
             this.reportProblem(describeSwappedCenter(context.center, context.swapped), {
