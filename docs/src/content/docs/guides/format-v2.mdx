@@ -1,9 +1,12 @@
 ---
-title: Format v2
+title: Format v2 (opt-in)
 description: The style/runtime split — additive, opt-in, and deep-equal to your v1 documents
 ---
 
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+Format v1 is the default, and every page outside *Advanced* uses it; you can
+skip this page unless you want the split it describes.
 
 Format v2 gives a maplibre-yaml document one new idea: a visible line between
 the parts of your map that become a MapLibre `style.json` and the parts that
@@ -13,9 +16,8 @@ level, with two sections — `style:` and `runtime:`.
 ## The headline: same map, two ways
 
 **v2 is additive and opt-in.** A v2 document and its v1 twin parse to the
-**deep-equal internal model** and render and emit **identically**. This is the
-AE2 guarantee: adopting v2 requires no migration, and nothing you have already
-written in v1 breaks. You move to v2 when the split earns its keep — not because
+**deep-equal internal model** and render and emit **identically**, so adopting
+v2 requires no migration, and nothing you have already written in v1 breaks. You move to v2 when the split earns its keep — not because
 a version bump forced your hand.
 
 Here is one map, authored both ways. They produce the same model, so `<ml-map>`
@@ -269,7 +271,7 @@ runtime:
 ```
 
 <Aside>
-  For AE2 compatibility with v1 (which reads `state:` and `parameters:` at the
+  For compatibility with v1 (which reads `state:` and `parameters:` at the
   block root), v2 also accepts both keys at the document root. The nested
   positions shown above are canonical; when a key appears in both places, the
   nested one wins.

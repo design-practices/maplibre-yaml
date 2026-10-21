@@ -1,5 +1,5 @@
 ---
-title: Installation
+title: "Installation & versions"
 description: How to install maplibre-yaml in your project
 ---
 
@@ -13,84 +13,9 @@ There are two ways to load maplibre-yaml:
 - **From npm, with a bundler** such as Vite. See
   [Using a bundler (Vite)](#using-a-bundler-vite).
 
-## Supported maplibre-gl versions
-
-maplibre-yaml works with maplibre-gl **v4, v5 and v6** (v6 recommended for new
-projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`. Every
-example below pins major 6 (`maplibre-gl@^6` for npm, `maplibre-gl@6` for the
-CSS and the import map). Pin whichever supported major your project uses, and
-keep the CSS on the same major as the JS.
-
-maplibre-gl v6 is ESM-only: the browser entry is `dist/maplibre-gl.mjs` (there
-is no `maplibre-gl.js` UMD file any more), so an import map points at that file
-directly. It loads its worker (`maplibre-gl-worker.mjs`) from next to its own
-module, which works as-is from a CDN or any static server.
-
-**Bundlers (Vite, webpack, …) on v6:** inside a bundle MapLibre cannot find its
-worker, and every map fails with *"Worker failed to load"* (maplibre-yaml's
-`ml-map:error` then spells out this fix). Tell MapLibre where the worker is
-in the same entry file that imports maplibre-yaml. With Vite:
-
-```ts
-import { setWorkerUrl } from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-
-setWorkerUrl(workerUrl);
-```
-
-The full setup is under [Using a bundler (Vite)](#using-a-bundler-vite). The
-`@maplibre-yaml/astro` components do this for you. v4 and v5 need nothing.
-
-## Package installation
-
-<Tabs>
-  <TabItem label="npm">
-    ```bash
-    npm install @maplibre-yaml/core maplibre-gl@^6
-    ```
-  </TabItem>
-  <TabItem label="pnpm">
-    ```bash
-    pnpm add @maplibre-yaml/core maplibre-gl@^6
-    ```
-  </TabItem>
-  <TabItem label="yarn">
-    ```bash
-    yarn add @maplibre-yaml/core maplibre-gl@^6
-    ```
-  </TabItem>
-</Tabs>
-
-**Upgrading an existing project.** Before 1.0, a range such as `^0.8.1` in
-`package.json` stays within 0.8.x, so a newer minor release never installs on
-its own. Run `npm install @maplibre-yaml/core@latest` (add
-`@maplibre-yaml/astro@latest` in an Astro project, see
-[Astro](/integrations/astro/#upgrading-an-existing-project)) to move to the
-current release.
-
-## Required CSS
-
-MapLibre GL JS requires its CSS for proper rendering. Add it to your HTML or import it in your JavaScript:
-
-<Tabs>
-  <TabItem label="HTML">
-    ```html
-    <link
-      href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
-      rel="stylesheet"
-    />
-    ```
-  </TabItem>
-  <TabItem label="JavaScript">
-    ```javascript
-    import 'maplibre-gl/dist/maplibre-gl.css';
-    ```
-  </TabItem>
-</Tabs>
-
 ## Browser usage (CDN)
 
-For quick prototypes, class projects and simple pages, you can use
+For prototypes, small sites and simple pages, you can use
 maplibre-yaml directly from a CDN: no install, no build tools. An
 [import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap)
 tells the browser where to find `maplibre-gl`, which the register bundle keeps
@@ -205,6 +130,82 @@ To use the JavaScript API (`YAMLParser`, `MapRenderer`) from a CDN instead of th
   // Your map code here
 </script>
 ```
+
+## Supported maplibre-gl versions
+
+maplibre-yaml works with maplibre-gl **v4, v5 and v6** (v6 recommended for new
+projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`. Every
+example on this page pins major 6 (`maplibre-gl@^6` for npm, `maplibre-gl@6` for the
+CSS and the import map). Pin whichever supported major your project uses, and
+keep the CSS on the same major as the JS.
+
+maplibre-gl v6 is ESM-only: the browser entry is `dist/maplibre-gl.mjs` (there
+is no `maplibre-gl.js` UMD file any more), so an import map points at that file
+directly. It loads its worker (`maplibre-gl-worker.mjs`) from next to its own
+module, which works as-is from a CDN or any static server.
+
+**Bundlers (Vite, webpack, …) on v6:** inside a bundle MapLibre cannot find its
+worker, and every map fails with *"Worker failed to load"* (maplibre-yaml's
+`ml-map:error` then spells out this fix). Tell MapLibre where the worker is
+in the same entry file that imports maplibre-yaml. With Vite:
+
+```ts
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+
+setWorkerUrl(workerUrl);
+```
+
+The full setup is under [Using a bundler (Vite)](#using-a-bundler-vite). The
+`@maplibre-yaml/astro` components do this for you. v4 and v5 need nothing.
+
+## Package installation
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npm install @maplibre-yaml/core maplibre-gl@^6
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add @maplibre-yaml/core maplibre-gl@^6
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn add @maplibre-yaml/core maplibre-gl@^6
+    ```
+  </TabItem>
+</Tabs>
+
+**Upgrading an existing project.** Before 1.0, a range such as `^0.8.1` in
+`package.json` stays within 0.8.x, so a newer minor release never installs on
+its own. Run `npm install @maplibre-yaml/core@latest` (add
+`@maplibre-yaml/astro@latest` in an Astro project, see
+[Astro](/integrations/astro/#upgrading-an-existing-project)) to move to the
+current release. [Upgrading to 0.9](/getting-started/upgrading/) lists what
+changes, for npm and CDN pages alike.
+
+## Required CSS
+
+MapLibre GL JS requires its CSS for proper rendering. Add it to your HTML or import it in your JavaScript:
+
+<Tabs>
+  <TabItem label="HTML">
+    ```html
+    <link
+      href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    ```
+  </TabItem>
+  <TabItem label="JavaScript">
+    ```javascript
+    import 'maplibre-gl/dist/maplibre-gl.css';
+    ```
+  </TabItem>
+</Tabs>
 
 ## Using a bundler (Vite)
 
@@ -324,6 +325,8 @@ if (result.success) {
 ## Next steps
 
 Now that you have maplibre-yaml installed, follow the
-[Quick Start](/getting-started/quick-start/) to build your first map, then
-read [Your First Map](/getting-started/first-map/) for what each part of the
-YAML does.
+[Quick start](/getting-started/quick-start/) to build your first map (or the
+[Astro quick start](/getting-started/astro/) for an Astro site), then
+read [Your first map, explained](/getting-started/first-map/) for what each
+part of the YAML does. Something not working? See
+[Troubleshooting](/troubleshooting/).

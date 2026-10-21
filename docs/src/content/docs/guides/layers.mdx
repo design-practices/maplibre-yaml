@@ -1,5 +1,5 @@
 ---
-title: Adding Layers
+title: "Layers & styling"
 description: Learn about layer types, paint properties, and data-driven styling
 ---
 
@@ -95,6 +95,10 @@ Fill layers shade polygon areas:
 />
 
 ## Data-driven styling
+
+For a choropleth or another classed map, use `classify:`: it writes the
+expression and the legend for you. See
+[Thematic maps & legends](/guides/thematic-maps/).
 
 The real power of maplibre-yaml is data-driven styling. Style features based on their properties using expressions.
 
@@ -232,6 +236,7 @@ Show only features matching certain criteria:
 
 ## Next steps
 
-- [Data Sources](/guides/data-sources/) - Load data from URLs
-- [Live Data](/guides/live-data/) - Auto-refresh and streaming
-- [Interactivity](/schema/interactivity/) - Popups and hover effects
+- [Loading data](/guides/data-sources/) - Load data from URLs
+- [Thematic maps & legends](/guides/thematic-maps/) - Classed colours and sizes with `classify:`
+- [Live data & streaming](/guides/live-data/) - Auto-refresh and streaming
+- [Popups, hover & controls](/schema/interactivity/) - Popups and hover effects

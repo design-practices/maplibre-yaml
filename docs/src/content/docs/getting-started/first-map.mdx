@@ -1,5 +1,5 @@
 ---
-title: Your First Map
+title: Your first map, explained
 description: Understanding the basics of maplibre-yaml configuration
 ---
 
@@ -7,6 +7,12 @@ import LiveMap from "../../../components/LiveMap.astro";
 import { Aside } from "@astrojs/starlight/components";
 
 This guide walks you through the fundamentals of maplibre-yaml configuration. By the end, you'll understand how to create maps, configure their appearance, and add basic layers.
+
+<Aside type="note" title="Format v1, the default">
+  This page uses format v1, the default; every page outside *Advanced* uses
+  it. [Format v2](/guides/format-v2/) is an opt-in alternative that renders
+  the same maps, so there is nothing to migrate.
+</Aside>
 
 ## Map structure
 
@@ -341,3 +347,13 @@ Now that you understand the basics, learn about:
 - [Popup content](/schema/layers/#popups)
 - [Loading data from URLs](/guides/data-sources/)
 - [Live data updates](/guides/live-data/)
+- [Thematic maps & legends](/guides/thematic-maps/): colour each feature by
+  a value, with a legend made for you
+- [Large data](/guides/cloud-native-data/): PMTiles, FlatGeobuf, GeoParquet
+  and COG files
+- [Story maps](/integrations/scrollytelling-html/): a map that moves as the
+  reader scrolls
+- [Accessibility & languages](/guides/accessibility-languages/): a title and
+  description for screen readers, and translations
+- [Troubleshooting](/troubleshooting/): when the map doesn't show what you
+  expect

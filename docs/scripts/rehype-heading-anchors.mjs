@@ -12,6 +12,10 @@
  *
  * Only a marker at the very end of a heading is recognised; any other page is
  * unaffected.
+ *
+ * `remarkHeadingAnchorIds` (below) sets the same id one step earlier, on the
+ * markdown heading, where starlight-links-validator collects each page's
+ * anchors; without it every `#config-center` link would be reported invalid.
  */
 
 const MARKER = /\s*\{#([A-Za-z0-9_-]+)\}\s*$/;
@@ -32,6 +36,24 @@ export default function rehypeHeadingAnchors() {
       last.value = last.value.slice(0, match.index);
       if (last.value === "") node.children.pop();
       node.properties = { ...node.properties, id: match[1] };
+    });
+  };
+}
+
+/**
+ * remark companion: record a trailing `{#id}` marker as the heading's id on
+ * the markdown tree (`data.hProperties.id`). The rehype plugin above still
+ * strips the marker from the text and sets the same id on the HTML heading.
+ */
+export function remarkHeadingAnchorIds() {
+  return (tree) => {
+    visit(tree, (node) => {
+      if (node.type !== "heading") return;
+      const last = node.children?.[node.children.length - 1];
+      if (!last || last.type !== "text") return;
+      const match = MARKER.exec(last.value);
+      if (!match) return;
+      node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id: match[1] } };
     });
   };
 }
