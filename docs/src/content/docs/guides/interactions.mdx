@@ -75,6 +75,16 @@ maplibre-gl, maplibre-native, a third-party tool that eats style JSON — with
 nothing from this library present at runtime. That is the export guarantee: your
 map is not locked to `<ml-map>`.
 
+The quickest way to get that file is the CLI:
+`npx maplibre-yaml emit map.yaml --out dist/` writes `dist/style.json`, with
+the basemap merged in, computed [`classify:`](/guides/thematic-maps/) breaks
+baked in, FlatGeobuf and GeoParquet files converted to GeoJSON, markers
+lowered to a symbol layer, and `fitTo` on inline data lowered to a fixed
+camera. Every loss is
+printed as a warning; see [`emit`](/cli/reference/#emit) and
+[Export classes](/guides/export-classes/). The rest of this section does the
+core step by hand, in JavaScript.
+
 The other half of the guarantee is the honest half: **the compiled style is
 inert.** Nothing in the MapLibre style specification can express "open a popup
 on click" or "fly the camera to this feature." Those verbs do not exist in the
@@ -87,6 +97,7 @@ import {
   YAMLParser,
   normalizeMapBlock,
   projectStyle,
+  resolveBasemap,
   mergeBasemap,
 } from "@maplibre-yaml/core";
 
@@ -95,8 +106,12 @@ const model = normalizeMapBlock(parsed.data);
 
 // Compile the style half. The interactive half is NOT in here.
 const projected = projectStyle(model, "with-fallbacks");
+// The basemap is a URL (fetched), an inline style, or a Protomaps shorthand
+// (generated): resolveBasemap turns any of them into a style object to merge.
 const base = model.style.basemap;
-const { style } = base ? mergeBasemap(base, projected) : projected;
+const { style } = base
+  ? mergeBasemap(await resolveBasemap(base), projected)
+  : projected;
 
 // A plain MapLibre map over the compiled style. Nothing from this library
 // participates in rendering — and nothing makes the layers interactive.
@@ -224,8 +239,8 @@ registered handler under an untrusted policy does nothing. It **needs BOTH.**
   untrusted policy and registers no host handlers, so every `emit` fails closed
   — a silent no-op — even in a document you authored yourself. This is
   intentional fail-closed behavior, not a bug: `emit` targets the
-  `attachInteractions` path, and wiring it into the renderer is tracked
-  follow-up work (bead `ml-1lz`). Do not reach for `emit` expecting it to fire
+  `attachInteractions` path, and wiring it into the renderer is planned
+  follow-up work. Do not reach for `emit` expecting it to fire
   from a plain `<ml-map>` mount.
 </Aside>
 
@@ -239,5 +254,7 @@ reference](/schema/interactivity/#emit).
   the full `emit` payload vocabulary, and the deprecated `action` key
 - [Format v2](/guides/format-v2/) — the style/runtime split that makes the export
   boundary legible
-- [Working with Layers](/guides/layers/) — the paint, layout, and filter that
+- [Layers & styling](/guides/layers/) — the paint, layout, and filter that
   compile straight through to `style.json`
+- [`mlym emit`](/cli/reference/#emit) — export a document to `style.json` from
+  the command line

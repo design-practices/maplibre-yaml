@@ -85,11 +85,18 @@ Every argument is checked and reported. A file name that doesn't exist prints
 
 #### Output Formats
 
+Besides errors, `validate` reports **warnings** (something that probably
+isn't what you meant, such as a layer naming an undeclared source, or a map
+with no basemap) and **notes** (how a valid value is read, such as a basemap
+written as just a `.pmtiles` file). Notes never make a file invalid, and
+`--strict` never turns them into errors.
+
 **human** (default)
 
 - Human-readable colored output
 - Shows file paths with checkmarks/X marks
-- Displays errors with paths and messages
+- Displays errors (`error`), warnings (`warning`) and notes (`ℹ note`) with
+  their path, message, line and column
 - Includes summary with counts
 
 **json**
@@ -98,20 +105,23 @@ Every argument is checked and reported. A file name that doesn't exist prints
 - Machine-parseable
 - Ideal for CI/CD pipelines
 - Includes detailed error information with line/column numbers
+- Notes are listed with the warnings, marked `"severity": "note"`, and
+  counted in `summary.noteCount` (not in `warningCount`)
 
 **sarif**
 
 - [SARIF v2.1.0](https://sarifweb.azurewebsites.net/) format
 - Compatible with GitHub Code Scanning
 - Integrates with GitHub Advanced Security
-- Provides rich error context
+- Provides rich error context; notes have the SARIF level `note`
 
 **vscode**
 
-- VSCode Problem Matcher compatible format
-- Format: `file:line:column: severity: [path] message`
-- Use with VSCode Tasks for IDE integration
-- See [VSCode Integration](/cli/vscode)
+- VS Code problem matcher compatible format
+- Format: `file:line:column: severity: [path] message`, where `severity` is
+  `error`, `warning`, or `info` for a note
+- Use with VS Code tasks for IDE integration
+- See [VS Code tasks](/cli/vscode/)
 
 #### Exit Codes
 
@@ -166,7 +176,7 @@ Watch mode for development:
 npx maplibre-yaml validate "configs/**/*.yaml" --watch
 ```
 
-VSCode Problem Matcher format:
+VS Code problem matcher format:
 
 ```bash
 npx maplibre-yaml validate config.yaml --format vscode
@@ -266,9 +276,9 @@ have) prints an error and exits with code `1`, and nothing is created.
 
 | Template | Creates | Run it with |
 | -------- | ------- | ----------- |
-| `basic` | `index.html` (CDN import map, `<ml-map>` with a height, viewport meta tag) and `map.yaml` (a street basemap and one clickable point) | `npx serve .` in the folder, then open the address it prints. Needs no install or build |
+| `basic` | `index.html` (CDN import map, `<ml-map>` with a height, viewport meta tag; core loads from the CDN at the release line this CLI was built with) and `map.yaml` (a street basemap and one clickable point) | `npx serve .` in the folder, then open the address it prints. Needs no install or build. Another local server works if it supports range requests (which PMTiles, FlatGeobuf, GeoParquet and COG files need); `python -m http.server` doesn't |
 | `story` | `index.html` and a scrollytelling `story.yaml` | A story map with no build step: the page loads `<ml-scrollytelling>` from the CDN, at the release line this CLI was built with. Serve the folder (`npx serve .`) and scroll; see [Story maps in plain HTML](/integrations/scrollytelling-html/) |
-| `astro` | An Astro 7 site: a layout (with the viewport meta tag) and a page rendering `public/configs/map.yaml` with `@maplibre-yaml/astro`'s `<Map>`, the [optional integration](/integrations/astro/#editing-in-astro-dev) in `astro.config.mjs` with commented-out `site`/`base` lines for GitHub Pages, and a `.github/workflows/deploy.yml` that publishes it with `withastro/action`. Its `@maplibre-yaml/core` and `@maplibre-yaml/astro` ranges are the versions this CLI release was built with | `npm install`, then `npm run dev`. For GitHub Pages, set `site` and `base` in `astro.config.mjs` and push (see [Deploying to GitHub Pages](/integrations/astro/#deploying-to-github-pages-or-any-subpath)) |
+| `astro` | An Astro 7 site: a layout (with the viewport meta tag) and a page rendering `public/configs/map.yaml` with `@maplibre-yaml/astro`'s `<Map>`, the [optional integration](/integrations/astro/#editing-in-astro-dev) in `astro.config.mjs` with commented-out `site`/`base` lines for GitHub Pages, and a `.github/workflows/deploy.yml` that publishes it with `withastro/action`. Its `@maplibre-yaml/core` and `@maplibre-yaml/astro` ranges are the versions this CLI release was built with (`^0.9.0` and `^0.7.0` for CLI 0.6), and its `package.json` asks for Node.js 22.22 or later | `npm install`, then `npm run dev`. For GitHub Pages, set `site` and `base` in `astro.config.mjs` and push (see [Deploying to GitHub Pages](/integrations/astro/#deploying-to-github-pages-or-any-subpath)) |
 
 Every YAML file the templates write starts with the
 [schema modeline](/guides/editor-setup/), so editors with the YAML extension
@@ -323,7 +333,7 @@ npx maplibre-yaml emit <file> [options]
 | Option | Alias | Type | Default | Description |
 | ------ | ----- | ---- | ------- | ----------- |
 | `--out` | `-o` | string | stdout | Write the style to this file. A folder (one that exists, or a path ending in `/`, like `dist/`) gets `style.json` inside it |
-| `--with-fallbacks` | | boolean | on | Export what has a style.json fallback (markers become a symbol layer with pin sprites, `fitTo` becomes a fixed camera) and print a warning for each loss |
+| `--with-fallbacks` | | boolean | on | Export what has a style.json fallback (markers become a symbol layer with pin sprites, `fitTo` on inline data becomes a fixed camera, framed with the same default margin as the live map; on a `url:` source the authored `center`/`zoom` is kept, with a warning) and print a warning for each loss |
 | `--strict` | | boolean | off | Refuse the export (exit `1`) if anything would change what the map shows. Cannot be combined with `--with-fallbacks` |
 | `--target` | | string | | The maplibre-gl version the style is for, e.g. `5.6.0`. Features that version lacks (such as `state:` below its minimum, or `color-relief` below 5.6) are reported |
 | `--trust` | | string | `untrusted` | `trusted` or `untrusted`: how far the document's author is trusted. `trusted` lets capability-gated content (raw `!html`, `emit` interactions) through; see [Interactions](/guides/interactions/) |
@@ -331,6 +341,24 @@ npx maplibre-yaml emit <file> [options]
 
 Warnings go to stderr, so `npx maplibre-yaml emit map.yaml > style.json`
 keeps the JSON clean.
+
+Some documents need their data or files at export time. `emit` reads them
+the way the published site would serve them: an `https://` URL is fetched,
+and a local path resolves against the YAML file's folder, then the site
+root and its `public/` folder.
+
+- A [`classify:`](/guides/thematic-maps/) layer with computed breaks
+  (`method:`) has its source's data loaded, and the breaks are written into
+  the style. If the data can't be loaded, the export fails and says why.
+- A GeoJSON `url:` source is written as `data: <url>`, as the style spec
+  expects, so the exported style loads it.
+- [FlatGeobuf and GeoParquet](/guides/cloud-native-data/) files are converted
+  to inline GeoJSON (a file that can't be read leaves the source empty, with
+  a warning that `--strict` refuses).
+- PMTiles sources are written as `pmtiles://` URLs, COG sources as `cog://`
+  URLs, and a Protomaps basemap shorthand as the full style it builds. The
+  page showing the exported style must register those protocols itself; see
+  [Exporting with `mlym emit`](/guides/cloud-native-data/#exporting-with-mlym-emit).
 
 #### Exit codes
 
@@ -470,7 +498,7 @@ Create `maplibre-yaml.config.json` in your project root to set default options
 | ---------------- | -------- | ------- | ------------------------ |
 | `format`         | string   | `human` | Default output format    |
 | `strict`         | boolean  | on in CI | Treat warnings as errors |
-| `ignorePatterns` | string[] | `[]`    | Glob patterns to ignore  |
+| `ignorePatterns` | string[] | `["**/node_modules/**", "**/dist/**"]` | Glob patterns to ignore. Setting it replaces the default, so list those two again if you still want them skipped |
 
 #### preview
 
@@ -505,7 +533,9 @@ The CLI is optimized for speed:
 
 ### Parallel Processing
 
-The validate command processes files in parallel with a default concurrency of 10. For large file sets (>10 files), a progress indicator shows validation status in real-time.
+The validate command checks up to 10 files at a time. For more than 10 files
+(with `human` or `vscode` output), it checks them one after another and shows
+a progress bar.
 
 ### Watch Mode Caching
 
@@ -539,12 +569,19 @@ fi
 
 ## Environment Variables
 
-### NODE_ENV
+### CI
 
-Set to `production` to disable debug output:
+When `CI` is set (GitHub Actions and other CI services set it), `validate`
+runs in strict mode unless you pass `--no-strict`. See
+[Options](#options).
+
+### DEBUG
+
+Set to any value to print debug messages and the stack trace of an
+unexpected error, for a bug report:
 
 ```bash
-NODE_ENV=production npx maplibre-yaml validate "**/*.yaml"
+DEBUG=1 npx maplibre-yaml validate "**/*.yaml"
 ```
 
 ### NO_COLOR
@@ -584,8 +621,10 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: npx maplibre-yaml validate "**/*.yaml" --format json --strict
 ```
 
@@ -600,10 +639,12 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: npx maplibre-yaml validate "**/*.yaml" --format sarif > results.sarif
-      - uses: github/codeql-action/upload-sarif@v2
+      - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
 ```
@@ -653,7 +694,7 @@ git diff --cached --name-only --diff-filter=ACM -- '*.yaml' '*.yml' \
 
 ## See Also
 
-- [Getting Started](/cli/getting-started) - Installation and basic usage
+- [The CLI (mlym)](/cli/getting-started/) - Installation and basic usage
 - [VS Code tasks](/cli/vscode/) - Set up IDE integration
 - [YAML reference](/reference/yaml/) - Every key of the format
-- [Examples](/examples) - Sample configurations
+- [Examples](/examples/) - Sample configurations
