@@ -10,9 +10,13 @@ on:
       # once main has released a newer minor (see scripts/release.sh).
       - "release/**"
 
+# Queue, never cancel: a push that lands while a version PR's merge is
+# publishing must not cancel that run mid-publish (it happened to
+# 0.6.0-alpha.1, ml-tfd.9). A queued run re-checks state and publishes
+# nothing new, so waiting is safe.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   release:
