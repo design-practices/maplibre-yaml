@@ -560,11 +560,9 @@ coordinates it names an entry in `sources:` — GeoJSON, FlatGeobuf, GeoParquet,
 or a Cloud Optimized GeoTIFF (COG) — and the camera frames whatever that
 source holds.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `source` | string | Name of an entry in `sources:`: GeoJSON, FlatGeobuf, GeoParquet or COG (required) |
-| `padding` | number | Padding in pixels around the fitted bounds. Without it, a margin scaled to the map: 8% of its shorter side (12 to 48 px), plus, at the bottom, the room MapLibre's controls take there with the attribution expanded. `0` frames the data's exact extent. |
-| `maxZoom` | number | Upper zoom limit for the fit. Without it, a single point zooms all the way in. |
+It takes `source` (required), `padding` and `maxZoom`
+([`fitTo` in the reference](/reference/yaml/map/#config-fitto)); padding is
+explained below. Without `maxZoom`, a single point zooms all the way in.
 
 ```yaml
 type: map
@@ -631,13 +629,13 @@ For a fetched source the authored camera stands in, also reported as lossy.
 
 Limit user interaction to specific zoom levels, pitch angles, or geographic areas.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `minZoom` | number | Minimum zoom level (0-24) |
-| `maxZoom` | number | Maximum zoom level (0-24) |
-| `minPitch` | number | Minimum pitch angle (0-85) |
-| `maxPitch` | number | Maximum pitch angle (0-85) |
-| `maxBounds` | array | Maximum geographic bounds: `[west, south, east, north]` or `[[west, south], [east, north]]` |
+- `minZoom` / `maxZoom`: the zoom range the reader can reach (0–24).
+- `minPitch` / `maxPitch`: the tilt range, in degrees (0–85).
+- `maxBounds`: the area the reader can pan to, in either
+  [`bounds` form](#fit-to-bounds).
+
+Keeping readers near the data with zoom limits and `maxBounds` helps most on
+a small map embedded in a page, where a stray scroll can lose the data.
 
 ### Example
 
@@ -653,7 +651,9 @@ config:
 
 ## Interaction Settings
 
-Control user interaction capabilities.
+Which ways the reader can move the map. Each is a MapLibre map option, with
+MapLibre's default ([`config` in the reference](/reference/yaml/map/#config-interactive)
+lists them all).
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -681,17 +681,32 @@ config:
 
 ### Custom Interaction
 
-Disable specific interactions:
+Disable specific interactions. On phones, `touchPitch: false` stops a
+two-finger drag from tilting the map by accident, and `dragRotate: false`
+keeps north up:
 
 ```yaml
 config:
   center: [-74.006, 40.7128]
   zoom: 12
   dragRotate: false      # Disable rotation
-  touchPitch: false      # Disable pitch on mobile
+  touchPitch: false      # Disable pitch on touch screens
   doubleClickZoom: false # Disable double-click zoom
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
+
+### Keyboard shortcuts
+
+With `keyboard: true` (the default), a focused map answers these keys;
+`keyboard: false` turns them off.
+
+| Keys | Action |
+|------|--------|
+| `+` / `=` | Zoom in |
+| `-` | Zoom out |
+| Arrow keys | Pan map |
+| Shift + Arrow keys | Rotate map |
+| Shift + `+` / `-` | Increase/decrease pitch |
 
 ## Display Options
 
@@ -718,18 +733,19 @@ config:
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
+With `hash: true` the page's address follows the view as the reader moves the
+map (`https://example.com/map#12/40.7128/-74.006`: zoom, latitude,
+longitude, then bearing and pitch when set), so a view can be bookmarked or
+shared.
+
 ## Rendering Options
 
-Advanced rendering configuration.
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `antialias` | boolean | `false` | Enable antialiasing |
-| `refreshExpiredTiles` | boolean | `true` | Refresh expired tiles |
-| `renderWorldCopies` | boolean | `true` | Render multiple world copies |
-| `maxTileCacheSize` | number | - | Maximum tiles to cache |
-| `preserveDrawingBuffer` | boolean | `false` | Preserve drawing buffer for export |
-| `failIfMajorPerformanceCaveat` | boolean | `false` | Fail if WebGL performance is poor |
+Advanced MapLibre options, passed through as they are, with MapLibre's
+defaults: `antialias` (smoother 3D edges, off by default),
+`preserveDrawingBuffer` (needed to save the canvas as an image),
+`renderWorldCopies`, `refreshExpiredTiles`, `maxTileCacheSize` and
+`failIfMajorPerformanceCaveat`. Each is listed under
+[`config` in the reference](/reference/yaml/map/#config-antialias).
 
 ### Example
 
@@ -774,15 +790,18 @@ Configure which controls are displayed and where. The how-to
 [Popups, hover & controls](/guides/popups/#add-map-controls) shows them in a
 complete map.
 
-### Controls Structure
+Each control is `true` (on, in its default corner) or
+`{ enabled: true, position: … }`, where `position` is `top-left`,
+`top-right`, `bottom-left` or `bottom-right`
+([`controls` in the reference](/reference/yaml/map/#controls)).
 
 ```yaml
 controls:
-  navigation: true | { enabled: true, position: "top-right" }
-  geolocate: true | { enabled: true, position: "top-right" }
-  scale: true | { enabled: true, position: "bottom-left" }
-  fullscreen: true | { enabled: true, position: "top-right" }
-  attribution: true | { enabled: true, position: "bottom-right" }
+  navigation: true           # default corner: top-right
+  scale:
+    enabled: true
+    position: bottom-right
+  fullscreen: true
 ```
 
 ### Available Controls
@@ -797,47 +816,31 @@ controls:
 | `globe` | `top-right` | Globe/mercator projection toggle (maplibre-gl ≥ 5.0.0; older runtimes warn and omit it) |
 | `terrain` | `top-right` | 3D terrain on/off toggle for the document's [`terrain:`](#terrain-sky--projection) (warns and is omitted when the document declares none) |
 
-### Control Positions
+Each control's button labels come from MapLibre's `locale:` keys
+(`NavigationControl.ZoomIn` …), so `config.locale` translates them
+([Localization](#localization)).
 
-- `top-left`
-- `top-right`
-- `bottom-left`
-- `bottom-right`
+### Attribution
 
-### Examples
-
-#### Enable All Controls
+`attribution` renders a real attribution control and additionally accepts
+MapLibre's own options:
 
 ```yaml
 controls:
-  navigation: true
-  geolocate: true
-  scale: true
-  fullscreen: true
+  attribution:
+    position: bottom-right    # default
+    compact: true             # collapse behind an (i) button
+    customAttribution: "© Example Data"
 ```
 
-#### Custom Positions
+Configuring it suppresses MapLibre's built-in attribution so only one control
+renders. Leave it unset and the built-in one still appears: attribution is a
+licensing obligation for most tile providers, so it is never removed silently.
 
-```yaml
-controls:
-  navigation:
-    enabled: true
-    position: top-left
-  scale:
-    enabled: true
-    position: bottom-right
-  fullscreen:
-    enabled: true
-    position: top-right
-```
-
-#### Minimal Controls
-
-```yaml
-controls:
-  navigation: true
-  scale: true
-```
+`customAttribution`, like every source `attribution`, is sanitized before
+MapLibre renders it: text and `http:`/`https:`/`mailto:` links survive, other
+markup shows as literal text. See
+[Trust and attribution](/integrations/web-components/#trust-and-attribution).
 
 ## Legend
 
@@ -889,12 +892,9 @@ document needs no change: the title now appears as the panel's heading.
 
 ### Legend Item Properties
 
-| Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `color` | string | Yes | - | Item color (CSS color) |
-| `label` | string | Yes | - | Item label text |
-| `shape` | string | No | `"square"` | Symbol shape: `circle`, `square`, `line`, `icon` |
-| `icon` | string | No | - | Icon name or URL (when `shape: icon`) |
+Each item needs a `color` (any CSS colour) and a `label`. `shape` is
+`square` (the default), `circle`, `line` or `icon`; an `icon` item names its
+image in `icon` ([`legend.items` in the reference](/reference/yaml/map/#legend-items)).
 
 ### Examples
 
@@ -929,11 +929,11 @@ legend:
       shape: circle
 ```
 
-#### Line Legend
+#### Line and Icon Entries
 
 ```yaml
 legend:
-  title: "Routes"
+  title: "Transportation"
   position: bottom-left
   items:
     - color: "#3b82f6"
@@ -942,23 +942,10 @@ legend:
     - color: "#10b981"
       label: "Local Road"
       shape: line
-```
-
-#### Icon Legend
-
-```yaml
-legend:
-  title: "Points of Interest"
-  position: top-left
-  items:
     - color: "#000000"
       label: "Restaurant"
       shape: icon
       icon: "restaurant"
-    - color: "#000000"
-      label: "Hotel"
-      shape: icon
-      icon: "hotel"
 ```
 
 ## Complete Examples

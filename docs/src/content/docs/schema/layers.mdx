@@ -275,54 +275,10 @@ layers:
   caption="Circle layer with data-driven radius"
 />
 
-### Circle Paint Properties
-
-<SchemaTable
-  properties={[
-    {
-      name: "circle-radius",
-      type: "number | Expression",
-      default: "5",
-      description: "Circle radius in pixels",
-    },
-    {
-      name: "circle-color",
-      type: "color | Expression",
-      default: '"#000000"',
-      description: "Fill color",
-    },
-    {
-      name: "circle-opacity",
-      type: "number | Expression",
-      default: "1",
-      description: "Fill opacity (0-1)",
-    },
-    {
-      name: "circle-stroke-width",
-      type: "number | Expression",
-      default: "0",
-      description: "Stroke width in pixels",
-    },
-    {
-      name: "circle-stroke-color",
-      type: "color | Expression",
-      default: '"#000000"',
-      description: "Stroke color",
-    },
-    {
-      name: "circle-stroke-opacity",
-      type: "number | Expression",
-      default: "1",
-      description: "Stroke opacity (0-1)",
-    },
-    {
-      name: "circle-blur",
-      type: "number | Expression",
-      default: "0",
-      description: "Blur amount",
-    },
-  ]}
-/>
+`circle-radius`, `circle-color`, `circle-opacity`, `circle-stroke-width`,
+`circle-stroke-color` and the other circle properties are MapLibre's, each
+with its default and the expressions it takes in the style spec:
+[`circle`](https://maplibre.org/maplibre-style-spec/layers/#circle).
 
 ### Example
 

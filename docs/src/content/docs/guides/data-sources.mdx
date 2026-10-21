@@ -250,11 +250,11 @@ layers:
       circle-color: "#ef4444"
 ```
 
-Named sources are added to the map before layers, so any layer can reference them by string ID. Inline sources on individual layers still work — the two approaches can be mixed freely.
-
-<Aside type="tip">
-  Use named sources when multiple layers share the same data (e.g., a fill layer and an outline layer from the same GeoJSON). Use inline sources for single-layer convenience.
-</Aside>
+Use a named source when several layers draw the same data (a fill and its
+outline, clusters and their counts); a live named source is polled once for
+all of them. Inline sources on single layers still work, and the two mix
+freely. The rules (`$ref`, sharing data across the pages of a multi-page
+document) are in [Named source definitions](/schema/sources/#named-source-definitions).
 
 ## Next steps
 

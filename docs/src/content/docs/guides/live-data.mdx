@@ -143,15 +143,16 @@ source:
 3. Browser automatically reconnects if connection drops
 4. Each message updates the map
 
-### SSE configuration options
+### Stream options
 
-| Option                 | Default       | Description                  |
-| ---------------------- | ------------- | ---------------------------- |
-| `reconnect`            | `true`        | Auto-reconnect on disconnect |
-| `reconnectMaxAttempts` | `10`          | Max reconnection attempts    |
-| `reconnectDelay`       | `1000`        | Initial delay (ms)           |
-| `reconnectMaxDelay`    | `30000`       | Max delay between retries    |
-| `eventTypes`           | `['message']` | Event types to listen for    |
+`reconnect` is on by default: after a dropped connection the stream retries
+up to `reconnectMaxAttempts` times (10), waiting `reconnectDelay` (1 second)
+and doubling the wait each time up to `reconnectMaxDelay` (30 seconds). An
+SSE stream listens for the `message` event unless `eventTypes` names others;
+a WebSocket can ask for sub-`protocols`. Every `stream:` and `refresh:` key,
+with its type and default, is in the
+[sources reference](/reference/yaml/sources/#geojson-stream)
+([`refresh:` keys](/reference/yaml/sources/#geojson-refresh)).
 
 ## WebSocket streaming
 
@@ -268,4 +269,5 @@ controls:
 ## Next steps
 
 - [Popups, hover & controls](/guides/popups/) - Add popups and hover effects
+- [Named sources](/schema/sources/#named-source-definitions) - One live source feeding several layers, polled once
 - [Examples](/examples/) - See complete working examples
