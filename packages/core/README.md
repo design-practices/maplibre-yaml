@@ -33,7 +33,7 @@ scroll-driven story maps, and exports the parser, schemas and renderer.
     <!-- Register the <ml-map> web component -->
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
     ></script>
     <style>
       body {
@@ -139,7 +139,7 @@ if (result.success) {
 }
 ```
 
-From a CDN, import it from `https://esm.sh/@maplibre-yaml/core@0.8?external=maplibre-gl`.
+From a CDN, import it from `https://esm.sh/@maplibre-yaml/core@0.9?external=maplibre-gl`.
 See [Vanilla JavaScript](https://docs.maplibre-yaml.org/integrations/vanilla-js/)
 and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/maplibre-yaml/core/).
 

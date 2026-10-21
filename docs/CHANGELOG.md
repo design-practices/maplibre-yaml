@@ -1,5 +1,35 @@
 # @maplibre-yaml/docs
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [3823e6d]
+- Updated dependencies [009fbf3]
+- Updated dependencies [7481a5e]
+- Updated dependencies [009fbf3]
+- Updated dependencies [bdad6ab]
+- Updated dependencies [dc16ded]
+- Updated dependencies [87cbabb]
+- Updated dependencies [b8c7715]
+- Updated dependencies [b345024]
+- Updated dependencies [009fbf3]
+- Updated dependencies [377e4d7]
+- Updated dependencies [c70afac]
+- Updated dependencies [10b7101]
+- Updated dependencies [3c09355]
+- Updated dependencies [4383762]
+- Updated dependencies [c70afac]
+- Updated dependencies [df0ea66]
+- Updated dependencies [c70afac]
+- Updated dependencies [009fbf3]
+- Updated dependencies [dd2f167]
+- Updated dependencies [c70afac]
+- Updated dependencies [5f95ed6]
+  - @maplibre-yaml/astro@0.7.0
+  - @maplibre-yaml/core@0.9.0
+  - @maplibre-yaml/effects@0.1.1
+
 ## 0.1.7
 
 ### Patch Changes

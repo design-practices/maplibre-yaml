@@ -1,6 +1,6 @@
 {
   "name": "maplibre-yaml",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Runs @maplibre-yaml/cli as `npx maplibre-yaml` (init, validate, preview, emit, schema, bake) with no install.",
   "type": "module",
   "bin": {
