@@ -22,8 +22,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MLMap } from "../src/components/ml-map";
-import { MLScrollytelling } from "../src/components/ml-scrollytelling";
+// The base alone, not the element modules: those pull in maplibre-gl, whose
+// v4 UMD build calls URL.createObjectURL at load (absent in jsdom).
+import { BaseElement } from "../src/components/base-element";
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const built = ["index.js", "register.js", "components/index.js", "scrollytelling/index.js", "register.browser.js"].every(
@@ -99,9 +100,8 @@ describe.skipIf(!built)("importing the built entry points in Node (no DOM)", () 
   });
 });
 
-describe("in a DOM the elements are still real HTMLElements", () => {
-  it("MLMap and MLScrollytelling extend HTMLElement", () => {
-    expect(MLMap.prototype).toBeInstanceOf(HTMLElement);
-    expect(MLScrollytelling.prototype).toBeInstanceOf(HTMLElement);
+describe("in a DOM the elements still extend HTMLElement", () => {
+  it("the elements' base class is HTMLElement itself", () => {
+    expect(BaseElement).toBe(HTMLElement);
   });
 });
