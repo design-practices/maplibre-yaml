@@ -6,7 +6,7 @@
  * Runs a real `tsc` over tests/fixtures/collection-types/consumer.ts twice,
  * with `astro/zod` mapped to a copy of the module each Astro major ships
  * (zod 3, zod 4 via `zod/v4`). The fixture is the guides'
- * collections-integration Quick Start reduced to types: `entry.data.title`
+ * astro-collections Quick Start reduced to types: `entry.data.title`
  * must be a `string`, `entry.data.location.coordinates` a tuple, custom
  * fields present.
  *
