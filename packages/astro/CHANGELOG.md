@@ -1,5 +1,76 @@
 # @maplibre-yaml/astro
 
+## 0.7.0
+
+### Minor Changes
+
+- 009fbf3: The on-page notice now separates what failed from hints for the author. Failures (a data file that didn't load, a layer MapLibre rejected) always show, as before: one plain line for visitors with the fix under "Details for the site's author". Author hints — did-you-mean suggestions, keys nested under `config:`, a `fitTo` typo, coordinates that look written [latitude, longitude], a chapter naming a missing layer, a value starting with the reserved `=` — now show only while you develop: on `localhost`/`127.0.0.1`/`[::1]`/`file:` pages (and `0.0.0.0`/`[::]`, the addresses a dev server started with `--host` prints) and in bundler dev builds (`astro dev`, `vite`), so visitors to a published site no longer see them. A new `debug` attribute on `<ml-map>` and `<ml-scrollytelling>` (and `debug` prop on the Astro `Map`, `FullPageMap` and `Scrollytelling` components) shows them anywhere, for checking a deploy; `quiet` still hides everything, and the console keeps every hint. A notice holding only hints reads "Notes for this map's author". `showAuthorHints()` / `authorHintsDecision()` (from `@maplibre-yaml/core/components`) expose the rule.
+- 87cbabb: PMTiles, FlatGeobuf, GeoParquet and Cloud Optimized GeoTIFF (COG) files now work from YAML alone, with no page JavaScript — in plain HTML from the CDN, under Vite and Astro, in `<ml-map>` and `<ml-scrollytelling>`, and in v1 and v2 documents. A full basemap can come from a single `.pmtiles` file too.
+
+  **Pointing a source at a file.** Keep `type:` as the MapLibre source type and point `url:` at the file; add `format:` only for a URL without a telling extension.
+  - `.pmtiles` (or `pmtiles://`) on a `vector`, `raster` or `raster-dem` source
+  - `.fgb`, `.parquet` or `.geoparquet` on a `geojson` source
+  - `.tif`/`.tiff` (or `cog://`) on a `raster` or `raster-dem` source
+
+  Core registers the `pmtiles://` and `cog://` protocols once on the maplibre-gl module it renders with, before any map is created, and keeps a page's own registration. So a basemap style loaded from a URL can use `pmtiles://` too, and relative URLs inside such a style (the file inside `pmtiles://`, TileJSON, tiles, sprite and glyphs) resolve against the style.json itself.
+
+  **Where the files can live.** Any static host with HTTP range requests: your own site on GitHub Pages, Netlify or the like, raw.githubusercontent.com, fastly.jsdelivr.net, S3, R2, and locally `npx serve`, `astro dev` and `astro preview`. Hosts that answer a request for the end of a small file with 416 (GitHub Pages, raw.githubusercontent.com, fastly.jsdelivr.net, `npx serve`), or that don't let a page on another site read `Content-Range` (GitHub Pages), are handled, and a 416 that remains says the file was found rather than to check its name. cdn.jsdelivr.net sometimes answers range requests from a compressed copy of the file: GeoParquet is then read whole, and PMTiles and FlatGeobuf read by view get a notice that says so (use fastly.jsdelivr.net, or serve the file from your own site).
+
+  **Protomaps basemap shorthand.** `mapStyle: { pmtiles: data/nyc.pmtiles, flavor: dark, lang: es }` builds the Protomaps basemap style in the page around a Protomaps `.pmtiles` extract — no API key, no tile server. It is also accepted as `basemap:` in v2, as `defaultMapStyle`, and by the Astro map builders' `mapStyle` option.
+  - A basemap written as just the file, `mapStyle: data/nyc.pmtiles` (or a `pmtiles://` URL), is the same Protomaps basemap with its defaults — the light flavor, labels in the page's language — and validation notes how it is read.
+  - Flavors: `light`, `dark`, `white`, `grayscale`, `black`, in any case.
+  - Labels in `lang:`, or else in the page's language. Arabic, Hebrew, Persian and Urdu labels are drawn right to left: maplibre-gl 6.9 and later do it themselves; with an older maplibre-gl, core sets MapLibre's right-to-left text plugin, downloaded from unpkg.com the first time such a label is drawn.
+  - OpenStreetMap and Protomaps attribution.
+  - Protomaps' hosted fonts and icons, unless `glyphs:` and `sprite:` name your own copies. When the fonts, the icons or both can't load, the map's notice says which, names the host (or your path) and the fix; on maplibre-gl 4, whose basemap draws nothing without its fonts, the labels are left out so the rest of the basemap draws.
+  - A Protomaps file cut with the older tile schema (before late 2024), which would draw only land and water, gets a notice to cut a new extract.
+  - The document's layers draw on top; `before:` and story chapters can name the basemap's layers by id.
+
+  **FlatGeobuf and GeoParquet** are read into an ordinary GeoJSON source, so popups, legends, `classify:`, `fitTo` and clustering work unchanged.
+  - `load: viewport` reads only the features in view from a large file — one with a FlatGeobuf spatial index, or a GeoParquet `bbox` covering column and location-sorted row groups.
+  - Size guards keep a too-big file from freezing the tab, also when the server doesn't say how big the file is.
+  - GeoParquet reads only the columns the document uses — its layers, popups, labels (`{Site Name}` tokens included), filters, `classify:` and a story's chapter actions; `columns:` chooses them, `columns: all` reads every one. It usually opens a file with one request (a host that answers 416 for a small file costs a second), and reads WKB geometry from snappy, zstd, gzip, lz4 or brotli files.
+  - A misspelt `classify:` field on a GeoParquet source still gets the did-you-mean and the file's column names, and a column that `columns:` leaves out is named as such.
+
+  **COG.**
+  - On a `raster` source a COG draws as imagery; on a `raster-dem` source it is elevation for `hillshade` layers and 3D `terrain:`.
+  - A single band of values (a vegetation index, a temperature) is coloured with `colorRamp: { palette, min, max }`, using the `classify:` palette names or your own `colors:`; `classes:` draws flat classes, along your `colors:` too.
+  - `fitTo` frames a COG's own extent, already on the first frame: `<ml-map>` reads the file's header while the page starts, within the same `fitTo` wait as a GeoJSON file (`MLMap.fitToWaitMs`, 1.5 seconds), and the reader reuses that read, so a COG's first 64 KB are requested once.
+  - COGs must be in Web Mercator (EPSG:3857): a file in another projection is refused with the `gdalwarp` command that converts it, also when its header lies at the end of the file. A GeoTIFF that isn't cloud-optimized still draws, with an author hint giving the `gdal_translate -of COG` command.
+  - COGs need maplibre-gl 4.5 or later.
+
+  **GitHub Pages project sites.** `base` now applies to the file inside a `pmtiles://` or `cog://` URL and to the basemap shorthand's `pmtiles:`, `glyphs:` and `sprite:`, so relative paths work there.
+
+  **When a file fails**, the map's notice says why in plain words, and the rest of the map still draws:
+  - a server without range requests (`python -m http.server`), or CORS;
+  - a wrong path that returned a web page, or a missing file;
+  - a GeoParquet or FlatGeobuf file whose name doesn't say what it is (a `.pq` file, read as JSON), with the fix: rename it or add `format:`;
+  - a host that compresses the parts of files it sends (cdn.jsdelivr.net);
+  - a file in the wrong projection;
+  - a Zstandard-compressed FlatGeobuf;
+  - GeoArrow-encoded GeoParquet geometry (with the command that rewrites it as WKB), or a Parquet file without geometry metadata;
+  - a PMTiles file that isn't a Protomaps basemap, or a basemap's reader that couldn't be downloaded (the map still loads);
+  - a file too large to read whole;
+  - a Content Security Policy that refuses the COG reader's `blob:` workers (the notice names `worker-src 'self' blob:`).
+
+  **Validation** reports each of these with the fix: `type: pmtiles` / `flatgeobuf` / `geoparquet` / `cog` / `mbtiles`; a format on the wrong source type; live data (`refresh:` / `stream:`) on a FlatGeobuf or GeoParquet source; `format: parquet` (did you mean `geoparquet`); a misspelt basemap flavor, key, language or palette; a basemap `pmtiles:` that isn't a `.pmtiles` file; a GeoParquet `columns:` list that leaves out a property the map uses (a popup, label, filter, `classify:` or chapter action), naming each one; a qualitative palette (`okabe-ito`, `Set1` …) used as a smooth `colorRamp:`, a `colorRamp:` whose `max` isn't above `min` (with `reverse: true` for high-to-low colours), and a COG `tileSize` the reader doesn't draw; and, in a v2 document, a maplibre-yaml source key (`colorRamp:`, `format:`, `load:`, `columns:`) written outside the source's `runtime:`.
+
+  **`mlym emit`**
+  - writes PMTiles sources as `pmtiles://` URLs, a Protomaps basemap as the full style it generates, and COG sources as `cog://` URLs (with `#dem`, the `colorRamp:` as `#color:`, and `tileSize: 256`); the exported style then needs those protocols registered;
+  - converts FlatGeobuf and GeoParquet files to inline GeoJSON, and classify breaks computed at export read both.
+
+  **Size.** The readers are bundled inside core, so there is nothing extra to install, but they are not part of core's main script: a page downloads a reader only when a map uses its format (see the entry on on-demand format readers). Cloud-native support adds about 24 KB gzip to `register.browser.js`. Across the whole 0.9 release (including thematic maps, translatable UI strings and number formatting), `register.browser.js` grows from about 125 KB to about 175 KB gzip (+50 KB) since 0.8.1.
+
+### Patch Changes
+
+- 3823e6d: `@maplibre-yaml/astro` now declares `@maplibre-yaml/core >=0.9.0` as its peer (was `>=0.8.0`). The components pass 0.9 options straight to core — the `debug` prop, a Protomaps `mapStyle: { pmtiles, flavor }` in the map builders, translated FullPageMap buttons — which core 0.8 ignores or rejects. Upgrade both packages together: `npm install @maplibre-yaml/astro@latest @maplibre-yaml/core@latest`.
+- dc16ded: Thematic maps from YAML: a layer's new `classify:` block makes a choropleth, graduated symbols or a category map without hand-writing a `step`/`match` expression. Give explicit `breaks:` (MapLibre `step` convention: n breaks make n + 1 classes, and a value equal to a break takes the class above), or `method: quantile | equal | jenks` with `classes:` to compute breaks from a GeoJSON source's data when it loads, or `categories:` for a `match` with an `other:` colour (a `value: colour` map keeps the order you wrote, numeric codes included). Map a rate instead of a count with `normalize:` (and `multiply:`, e.g. `100000` for "per 100,000"): the division is guarded, so a missing, zero or non-numeric divisor counts as no data rather than Infinity, and breaks and legend labels are in the rate's units. Colours come from a named palette (the ColorBrewer set, `viridis`, `cividis`, `okabe-ito`; case-insensitive, with a did-you-mean that prefers the palette a short name starts) or a `colors:` list; `radius:` sizes circles per class. Missing, empty and non-numeric values draw a `noData:` colour (light grey by default) or are hidden, instead of the black MapLibre paints when a `step` input is null or a string; numeric strings from CSV-derived GeoJSON are read as numbers. `hover.highlight` works on classified layers like on any other.
+
+  Computed breaks need the whole dataset, so vector tile sources and FlatGeobuf or GeoParquet sources read by view take explicit `breaks:`. Validation explains why for tiles and for `load: viewport` in any form. A FlatGeobuf or GeoParquet file large enough to switch itself to reading by view draws in its no-data colour, with a notice asking for `breaks:`, rather than classes computed from the features in view. When the loaded data has no usable value for `field:` or `normalize:` (a misspelt or differently capitalized name, or text under numeric classes), the console and, while you develop, the map's author notes name the field, suggest the closest property name and list the data's properties.
+
+  A map or story with a classified layer gets a legend automatically, even without a `legend:` block (`legend: false` turns it off). It lists each class with its real edges, formatted with the shared `formatNumber` (MapLibre `number-format` option names, the page's language by default), and "No data"/"Other" lines that only appear when they occur, translatable as `maplibre-yaml.Classify.NoData`/`.Other` in `locale:`. A legend block with its own `items:` lists them first and the generated classes after them; validation and the author notes point out the combination, since hand-written items usually describe the colours a layer had before it was classified. The Astro `FullPageMap` no longer warns that such a map has no legend entries. `classify:` compiles to plain MapLibre (class `exports`) and records the classes in the layer's `metadata["maplibre-yaml:classify"]`, in v1 and v2 alike; `mlym emit` bakes computed breaks into the style, loading a `url:` source's data at export (a FlatGeobuf or GeoParquet file too, recognized by its extension or the source's `format:`) and failing clearly when it cannot. `<ml-map>` fires `ml-map:layer-classified` with the classes as drawn.
+
+- c70afac: Every piece of text the library puts on a map can now be translated through the same `locale:` table MapLibre reads for its controls (`config.locale`, or `runtime.map.locale` in v2). The library's keys start with `maplibre-yaml.` — `maplibre-yaml.Legend.Title`, `maplibre-yaml.Notice.Title`, `maplibre-yaml.Story.Chapters`, and so on — so one table translates MapLibre's zoom buttons and the legend, the "part of this map couldn't load" notice, error-card titles, the height hint, the params panel's notice, and a story's chapter rail, legend button and missing-image note. English stays the default and the only bundled language; the new "Accessibility & languages" guide lists every key. A misspelt `maplibre-yaml.*` key is reported by validation with a did-you-mean, and also in the map's author notes while you develop. The table is exported as `DEFAULT_STRINGS` / `createStrings()`, and `<ml-map>` gains `uiString(key)` so host chrome can use the document's text. Astro's `<FullPageMap>` labels its zoom and reset buttons from the same table (MapLibre's `NavigationControl.ZoomIn`/`ZoomOut` and `maplibre-yaml.FullPageMap.ResetView`).
+
 ## 0.6.1
 
 ### Patch Changes

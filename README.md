@@ -39,7 +39,7 @@ and developers who want a working map without writing map code.
     <!-- Register the <ml-map> web component -->
     <script
       type="module"
-      src="https://unpkg.com/@maplibre-yaml/core@0.8/register.js"
+      src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
     ></script>
   </head>
   <body>
