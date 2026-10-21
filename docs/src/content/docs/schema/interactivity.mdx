@@ -1,7 +1,11 @@
 ---
-title: "Popups, hover & controls"
-description: User interactions, events, and dynamic behavior
+title: "Interactivity"
+description: "Reference for the interactive parts of a map document: map controls and their positions, legends, interaction settings (scroll zoom, rotation, keyboard, touch, URL hash), and a layer's interactive: block (hover, click, popups, flyTo, zoomToFeature, emit)."
 ---
+
+New to popups and hover? The how-to
+[Popups, hover & controls](/guides/popups/) builds them up step by step. This
+page is the reference for the same keys.
 
 :::tip[Complete field reference]
 This guide explains the fields and shows them in use. For every key — type, default, allowed values, and description, generated from the schemas so it always matches the validator — see the generated [Layers reference](/reference/yaml/layers/#interactive).
@@ -192,6 +196,8 @@ config:
 
 Layers declare interactivity through an `interactive:` block. These are real
 schema fields handled by the renderer — not something you wire up yourself.
+For a walk-through with complete maps, see
+[Popups, hover & controls](/guides/popups/).
 This layer entry (it goes under a document's `layers:`) reads the live USGS
 earthquake feed, whose features carry `title` and `place` properties:
 
@@ -344,7 +350,7 @@ The `projection` you pass in must carry `emit` in the first place: it fires only
 when `projectInteractions(model, policy)` *also* ran under a trusted policy. An
 untrusted (or omitted) projection policy drops the `emit` block at projection
 time — fail-closed — so `attachInteractions` never sees it, no matter how it is
-configured. The [Export to style.json guide](/guides/interactions/) shows the
+configured. The [Export to style.json guide](/guides/export/) shows the
 end-to-end wiring (`projectInteractions(model, { trust: "trusted" })` →
 `attachInteractions`).
 
@@ -475,10 +481,10 @@ https://example.com/map#12/40.7128/-74.006
 
 ## Cursor Styling
 
-The map automatically changes the cursor to indicate interactivity:
-- Default cursor over the map
-- Pointer cursor over interactive features
-- Grab cursor when dragging
+MapLibre shows its own cursors: the default arrow over the map and a grab
+hand while dragging. A layer's features get a different cursor only when the
+layer asks for one with `interactive.hover.cursor` (usually `pointer`); a
+`click:` block alone does not change the cursor.
 
 ## Complete Examples
 

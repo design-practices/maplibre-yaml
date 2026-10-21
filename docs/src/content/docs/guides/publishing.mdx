@@ -1,0 +1,281 @@
+---
+title: Publishing & subpaths
+description: Put a map or story on the web — GitHub Pages, Netlify, Cloudflare Pages or any static host. Sites under a subpath and the `base` setting (HTML pages and Astro), previewing locally, which hosts serve PMTiles, FlatGeobuf, GeoParquet and COG files (range requests and CORS), and hosting maplibre-yaml's own files.
+---
+
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
+A maplibre-yaml map is static files: an HTML page (or an Astro build), the
+YAML, and your data. Any static host can serve it: GitHub Pages, Netlify,
+Cloudflare Pages, Vercel, an S3 or R2 bucket, a university or company web
+server. Nothing runs on the server.
+
+Two things change between your computer and the published site, and they
+cause most "works locally, broken online" problems:
+
+- **The address of your files.** On a GitHub Pages *project* site everything
+  lives under `/<repo>/`, so paths that worked at the root of
+  `localhost` 404. See [Sites under a subpath](#sites-under-a-subpath-github-pages).
+- **How the server sends large files.** PMTiles, FlatGeobuf, GeoParquet and
+  COG files are read in parts, and the host must support that. See
+  [Large files: range requests and CORS](#large-files-range-requests-and-cors).
+
+## Publishing on GitHub Pages
+
+<Tabs syncKey="site-kind">
+<TabItem label="HTML page">
+
+An HTML page needs no build, so GitHub Pages can publish the repository as it
+is:
+
+<Steps>
+
+1. Put `index.html`, the YAML and your data files in a repository and push
+   it to GitHub.
+
+2. In the repository on GitHub, open **Settings → Pages**. Under
+   **Build and deployment → Source** choose **Deploy from a branch**, pick
+   `main` and the `/ (root)` folder, and save.
+
+3. After a minute the site is at `https://<user>.github.io/<repo>/`. That is
+   a subpath: add `base="/<repo>/"` to each `<ml-map>` and
+   `<ml-scrollytelling>`, as [below](#html-pages-the-base-attribute).
+
+</Steps>
+
+</TabItem>
+<TabItem label="Astro site">
+
+An Astro site is built by a GitHub Actions workflow on every push. The
+[Astro quick start](/getting-started/astro/) walks through it from an empty
+folder: [set `site` and `base`](/getting-started/astro/#5-set-site-and-base),
+[add the workflow](/getting-started/astro/#6-add-the-publishing-workflow),
+[check the build](/getting-started/astro/#7-check-the-build-before-you-push)
+and [push](/getting-started/astro/#8-push-to-github). The components then
+handle the subpath for you: see [Astro sites](#astro-sites).
+
+</TabItem>
+</Tabs>
+
+A *user* or organization site (the repository named `<user>.github.io`) and a
+site on a custom domain are served from the root: they need no `base`.
+
+On Netlify, Cloudflare Pages or Vercel, connect the repository (an Astro site
+builds with `npm run build` into `dist/`) or upload the folder. These serve
+the site from the root of its own domain, so they need no `base` either.
+
+## Sites under a subpath (GitHub Pages)
+
+A GitHub Pages *project* site is published at
+`https://<user>.github.io/<repo>/`, so your files live under `/<repo>/`:
+`data/cities.geojson` in the repository is
+`https://<user>.github.io/<repo>/data/cities.geojson`. A path in your YAML
+that starts with `/` (`/data/cities.geojson`) points at the domain root and
+404s, and a relative path only works on pages at the top of the site. The
+`base` setting fixes both without changing the YAML.
+
+### HTML pages: the `base` attribute
+
+Add `base` with the subpath to the element, and leave the YAML as it is:
+
+```html
+<ml-map src="maps/city.yaml" base="/<repo>/"></ml-map>
+<ml-scrollytelling src="story.yaml" base="/<repo>/"></ml-scrollytelling>
+```
+
+With a base, every path to a file of your own resolves against it, whichever
+page the map is on:
+
+| Written in the document | Loads (with `base="/my-repo/"`) |
+| --- | --- |
+| `/data/cities.geojson` | `/my-repo/data/cities.geojson` |
+| `data/cities.geojson` or `./data/cities.geojson` | `/my-repo/data/cities.geojson` |
+| `/my-repo/data/cities.geojson` | used as written (the base is never doubled) |
+| `https://…`, `//cdn…`, `blob:`, `data:` | used as written |
+
+It applies to the `src` attribute and to these fields of the document:
+`mapStyle` (v2: `style.basemap`) when it is a path, and the `sprite`, `glyphs`
+and source URLs of an inline style object; source `url`, `tiles` and video
+`urls`, a GeoJSON `data` written as a path, and `stream.url`, in `sources:`
+and in a layer's own `source:`; the file inside a `pmtiles://` or `cog://`
+URL; a [Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap)'s
+`pmtiles:`, `glyphs:` and `sprite:`; `images:`; marker `icon:`; and `href`
+links in popups (layer, marker and standalone `popups:`). In a story, chapter
+`image:` and `video:` paths too. URLs inside a style JSON or GeoJSON file you
+load are not rewritten.
+
+`base="/<repo>"` and `base="<repo>"` mean the same thing. Without `base`,
+nothing changes: relative paths resolve against the page and `/…` against the
+domain root. Setting the `base` property (`map.base = "/my-repo/"`) re-renders
+the map. If a `/…` path 404s on a page that sits under a subpath, the notice
+on the map suggests the `base` to add.
+
+**Why not `<base href>`?** A `<base href="/<repo>/">` in the page's `<head>`
+makes the browser resolve every *relative* URL on the page against it, the
+map's included, so `data/cities.geojson` loads from `/<repo>/data/`. It does
+not change paths that start with `/`, and it also changes every other relative
+link and image on the page. The `base` attribute covers both kinds of path and
+only affects the map.
+
+### Astro sites
+
+Astro's [GitHub Pages guide](https://docs.astro.build/en/guides/deploy/github/)
+has you set `site` and `base` for a project site:
+
+```js
+// astro.config.mjs
+import { defineConfig } from "astro/config";
+
+export default defineConfig({
+  site: "https://<user>.github.io",
+  base: "/<repo>",
+});
+```
+
+Everything under `public/` is then served under the base:
+`public/configs/hero-map.yaml` is at `/<repo>/configs/hero-map.yaml`.
+
+- **`Map`, `FullPageMap`, `Scrollytelling` and `Chapter`: nothing to
+  change.** Keep writing `src="/configs/hero-map.yaml"`, and keep the paths
+  *inside* your YAML as they are. The components hand the site's base to
+  `<ml-map>` and `<ml-scrollytelling>`, which put every path to your own files
+  under it (the list [above](#html-pages-the-base-attribute)).
+
+  ```yaml no-validate
+  sources:
+    volcanoes:
+      type: geojson
+      url: "/data/volcanoes.geojson"   # public/data/volcanoes.geojson
+  images:
+    pin: "images/pin.png"              # public/images/pin.png
+  ```
+
+  Both spellings load from `public/` on every page of your site, including
+  nested ones like `/<repo>/blog/my-post/`. A path that already includes the
+  base (`/<repo>/data/volcanoes.geojson`) is used as written, and full
+  `https://` URLs are never changed.
+- **Your own `<ml-map>` components** (see
+  [Component Patterns](/integrations/astro/#component-patterns)) add one
+  attribute, `base={import.meta.env.BASE_URL}`. It applies to the element's
+  `src` too, so pass `src` unchanged:
+
+  ```astro
+  <ml-map
+    src={src}
+    base={import.meta.env.BASE_URL}
+    style="height: 400px; display: block;"
+  ></ml-map>
+  ```
+
+- **Links and images in your own pages** need the base too, as in any Astro
+  site (see Astro's
+  [`base` docs](https://docs.astro.build/en/reference/configuration-reference/#base)).
+- **Build-time paths do not change.** `loadMapConfig('./src/...')`,
+  `loadGlobalMapConfig` and `feature_ref.source` are files on disk, read at
+  build time.
+
+**Relative paths mean "from `public/`", with or without a base.** The
+components pass the base even when it is the default `/`, so
+`url: "data/volcanoes.geojson"` loads `public/data/volcanoes.geojson` on every
+page. To resolve a map's paths against its page instead, pass `base={false}`
+to that component.
+
+<Aside type="note" title="&quot;Some chunks are larger than 500 kB&quot; is expected">
+  Every build of a site with a map prints a yellow warning. On Astro 7.4 it
+  reads:
+
+  ```text
+  [WARN] [vite] [plugin builtin:vite-reporter]
+  (!) Some chunks are larger than 500 kB after minification.
+  ```
+
+  (older Astro versions print it on one line). That chunk is the map engine
+  (maplibre-gl plus maplibre-yaml, about 1.5 MB before compression, loaded
+  only by pages with a map); it is a size notice, not an error, and the
+  build succeeded. To quiet it, raise Vite's limit in `astro.config.mjs`:
+  `vite: { build: { chunkSizeWarningLimit: 2000 } }`.
+</Aside>
+
+### Previewing a subpath on your computer
+
+With a base, files are looked up under `/<repo>/` on your computer too.
+
+- **HTML page.** `npx serve .` run *inside* the repository folder puts the
+  page at `http://localhost:3000/`, outside `/my-repo/`, so every file 404s
+  (the error card says so). Run `npx serve` from the folder *above* the
+  repository instead and open `http://localhost:3000/my-repo/`, or leave
+  `base` off until you publish. The repository folder must be named exactly
+  like the base: a GitHub **Download ZIP** unpacks to `my-repo-main`, which is
+  served at `/my-repo-main/`, so rename it to `my-repo` first.
+- **Astro site.** `npm run build && npm run preview` serves the built site
+  under the base: open `http://localhost:4321/<repo>/`. Every map should show
+  its data; a data file that doesn't load is listed in a notice on the map.
+  `astro dev` serves under the base too.
+
+The notes for the map's author (did-you-mean hints, misplaced keys) show on
+`localhost` but not on the published site. Add the `debug` attribute (or the
+`debug` prop on the Astro components) to see them on a deployed page while you
+check it ([Troubleshooting](/troubleshooting/#reading-what-the-map-tells-you)).
+
+## Large files: range requests and CORS
+
+PMTiles, COG and GeoParquet always, and FlatGeobuf with `load: viewport`, read
+files **in parts** with HTTP range requests, so they don't download a whole
+dataset to draw one view. Most static hosts support range requests:
+
+| Host | Range requests | Notes |
+|---|---|---|
+| GitHub Pages | yes | On a project site set `base` ([above](#sites-under-a-subpath-github-pages)) |
+| Netlify, Cloudflare Pages, Vercel | yes | |
+| Amazon S3, Cloudflare R2, Google Cloud Storage | yes | From another site, set CORS (below) |
+| `npx serve`, `astro dev`, `astro preview`, Vite | yes | Good for previewing locally; `npx serve` is the one to use |
+| raw.githubusercontent.com, fastly.jsdelivr.net | yes | Fine for a file in a public GitHub repository |
+| cdn.jsdelivr.net (`/gh/…` mirrors of GitHub repos) | **not reliably** | It sometimes answers range requests from a compressed copy of the file: PMTiles and FlatGeobuf read by view then fail (the notice says why); whole files and COGs work. Use fastly.jsdelivr.net, or serve data from your own site |
+| `npx http-server` | partly | Answers 416 to every request for the end of a file, so a GeoParquet file is downloaded whole; prefer `npx serve` |
+| `python -m http.server` | **no** | PMTiles and COGs fail; `load: viewport` falls back to reading the whole file; a GeoParquet file over 50 MB is refused |
+
+Serving data from your own site (next to the page, on GitHub Pages, Netlify
+or the like) is the safest choice. Some hosts answer a request for the end of
+a small file with "416 Range Not Satisfiable" (GitHub Pages, `npx serve`) or
+don't let a page on another site read the file's size (GitHub Pages);
+maplibre-yaml handles both.
+
+**Files on another site** need CORS: the bucket or server must send
+`Access-Control-Allow-Origin`, allow the `Range` request header, and expose
+`Content-Range` and `Content-Length`. For S3 or R2, a CORS rule like:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://you.github.io"],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["Range", "If-Match"],
+    "ExposeHeaders": ["Content-Range", "Content-Length", "ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+
+An ordinary GeoJSON file on another site needs CORS too (without the range
+headers): see [CORS considerations](/guides/data-sources/#cors-considerations).
+What each large-data error means, and its fix, is in
+[Large data: when something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong).
+
+## Hosting maplibre-yaml's own files
+
+Pages that load maplibre-yaml from unpkg or jsDelivr need nothing more. To
+serve it from your own site instead (an intranet, a site with a strict
+Content Security Policy), copy the package's **whole `dist/` folder**, not
+only `register.browser.js`: the readers for large-data formats and the
+Protomaps basemap load on demand from `dist/chunks/` next to it. See
+[Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself).
+
+## Works locally, not once published
+
+| What you see | Where to look |
+|---|---|
+| The YAML or a data file 404s on GitHub Pages | Set the base: [HTML pages](#html-pages-the-base-attribute), [Astro](#astro-sites). On Astro, `base` must match the repository name exactly, capitals included |
+| Every file 404s locally after adding `base` | Serve the folder above the repository, or preview the Astro build: [Previewing a subpath](#previewing-a-subpath-on-your-computer) |
+| A PMTiles, FlatGeobuf, GeoParquet or COG file fails on one host but not another | [Range requests and CORS](#large-files-range-requests-and-cors) |
+| Notes you saw on the map locally are gone | Expected: author hints show only while you develop; add `debug` to see them |
+| Something else | [Troubleshooting](/troubleshooting/) |

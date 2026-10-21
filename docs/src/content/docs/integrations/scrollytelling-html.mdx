@@ -11,7 +11,7 @@ camera, showing and hiding layers and running actions as each chapter comes
 into view. It is a web component, so it works in a plain HTML page loaded from
 a CDN: no npm, no bundler, no framework.
 
-It is the same engine Astro's [`<Scrollytelling>`](/integrations/astro/#scrollytelling-component)
+It is the same engine Astro's [`<Scrollytelling>`](/integrations/astro-stories/)
 renders, so a story file works unchanged in both. For every field a story
 takes, see the [Story file reference](/schema/scrollytelling/).
 
@@ -130,7 +130,7 @@ takes, see the [Story file reference](/schema/scrollytelling/).
   Pages (or any static host) to publish. A story with PMTiles, FlatGeobuf,
   GeoParquet or COG files needs a server with range requests: `npx serve` has
   them, `python3 -m http.server` doesn't (see
-  [Hosting](/guides/cloud-native-data/#hosting-range-requests-and-cors)). To
+  [Hosting](/guides/publishing/#large-files-range-requests-and-cors)). To
   keep everything in one file instead, put the YAML inline (next section).
 </Aside>
 
@@ -202,7 +202,7 @@ chapters:
   card listing each problem with its line number and any did-you-mean hint
   (`centre` → `center`), instead of a map. A story map that is slow to start
   shows a small "Loading map…" until its basemap draws, as
-  [`<ml-map>` does](/integrations/web-components/#when-something-goes-wrong).
+  [`<ml-map>` does](/troubleshooting/#reading-what-the-map-tells-you).
 
 ## In the middle of a page
 
@@ -232,25 +232,18 @@ is sticky only while the story's chapters are on screen:
 ## Sites under a subpath (GitHub Pages)
 
 A GitHub Pages *project* site lives at `https://<user>.github.io/<repo>/`, so
-a path written for the site, like `/images/photo.jpg` or
-`/data/places.geojson`, would load from the domain root and 404. Add `base`
-with the subpath and leave the YAML alone:
+a path written for the site, like `/images/photo.jpg`, would load from the
+domain root and 404. Add `base` with the subpath and leave the YAML alone:
 
 ```html
 <ml-scrollytelling src="story.yaml" base="/my-repo/"></ml-scrollytelling>
 ```
 
-The story's `src`, every path in its map document (data, images, marker icons,
-a site-hosted style) and chapter `image` / `video` paths then resolve under
-`/my-repo/`. Full `https://` URLs are never changed. It works exactly like
-[`<ml-map base>`](/integrations/web-components/#sites-under-a-subpath-github-pages).
-
-To preview it locally, serve the folder *above* the repository (so the page
-opens at `http://localhost:3000/my-repo/`), or leave `base` off while you
-work: `npx serve .` inside the repository puts the page at `/`, outside
-`/my-repo/`, and the story's files 404. The repository folder must be named
-exactly like the base (a GitHub **Download ZIP** unpacks to `my-repo-main`:
-rename it to `my-repo`).
+The story's `src`, every path in its map document and chapter `image` /
+`video` paths then resolve under `/my-repo/`; full `https://` URLs are never
+changed. It works exactly like `<ml-map base>`: the details, and how to
+preview a subpath on your computer, are in
+[Publishing & subpaths](/guides/publishing/#sites-under-a-subpath-github-pages).
 
 ## Corner slots
 
@@ -268,16 +261,12 @@ built-in entries.
 
 ## Reacting to the story from JavaScript
 
-The element dispatches bubbling events and carries the active chapter's id in
-`data-active-chapter`:
-
-| Event | `detail` | When |
-|-------|----------|------|
-| `ml-scrollytelling:chapter` | `{ chapterId, previousChapterId, index, callback, map }` | A chapter became active. `callback` is the chapter's `callback:` value. |
-| `ml-scrollytelling:action` | `{ action, chapterId, phase, map }` | A `custom` action ran (`phase` is `"enter"` or `"exit"`). |
-| `ml-scrollytelling:error` | `{ errors, warnings, source }` | The story could not be loaded or validated. |
-
-`map` is the MapLibre map, so a page script can do anything MapLibre can:
+The element dispatches bubbling events: `ml-scrollytelling:chapter` when a
+chapter becomes active, `ml-scrollytelling:action` when a `custom` action
+runs, and `ml-scrollytelling:error` when the story can't be loaded or
+validated. It also carries the active chapter's id in `data-active-chapter`.
+The chapter and action events carry `map`, the MapLibre map, so a page script
+can do anything MapLibre can:
 
 ```html
 <script type="module">
@@ -296,19 +285,19 @@ The element dispatches bubbling events and carries the active chapter's id in
 </script>
 ```
 
-| Property / method | What it does |
-|-------------------|--------------|
-| `src` attribute | URL of the story's YAML |
-| `base` attribute / property | Where the story's own paths start, for a site under a subpath ([above](#sites-under-a-subpath-github-pages)) |
-| `story` (alias `config`) property | Set the story as an object (or JSON string) instead |
-| `debug` attribute | Outline each chapter (green when active), and show the story's author hints (a chapter naming a layer that doesn't exist, a key under `config:` that belongs at the top level) on the map wherever the page is served. Without it, hints show only while you develop (`localhost`, a `file://` page, a bundler dev build); failures always show. Passed on to the story's map. |
-| `quiet` attribute | Hide the on-page notes for a finished site: the map's "Part of this map couldn't load" notice and a chapter's "image didn't load" note. Every message stays in the browser console; a story that can't load at all still shows its error card, and a slow map still shows "Loading map…". Passed on to the story's map. |
-| `story` getter | The validated story, or `null` |
-| `activeChapterId` | The active chapter's `id` |
-| `mapElement` | The story's own `<ml-map>`, once the story has rendered (its [methods and events](/integrations/web-components/#component-api-reference) work as on any `<ml-map>`) |
-| `mapReady()` | Promise of the MapLibre map once it has loaded |
-| `getMap()` | The MapLibre map, or `null` before it loads |
-| `goToChapter(id)` | Scroll to a chapter and make it active (what the rail does) |
+Two attributes help while you work on a story and once it is published.
+`debug` outlines each chapter (green when active) and shows the story's author
+hints, such as a chapter naming a layer that doesn't exist, wherever the page
+is served; without it they show only while you develop. `quiet` hides the
+on-page notes on a finished site (the map's "Part of this map couldn't load"
+notice and a chapter's "image didn't load" note); the console keeps them.
+
+Every attribute (`src`, `base`, `debug`, `quiet`), property, method
+(`mapReady()`, `goToChapter(id)`, …), event and its `detail`, slot and styling
+hook is listed in the
+[`<ml-scrollytelling>` reference](/reference/elements/#ml-scrollytelling).
+`mapElement` gives you the story's own `<ml-map>`, whose
+[methods and events](/reference/elements/#ml-map) work as on any map.
 
 ## Styling
 

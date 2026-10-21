@@ -1,110 +1,27 @@
 ---
 title: JavaScript API
-description: Use maplibre-yaml in plain JavaScript projects
+description: Parse and render maplibre-yaml documents from your own JavaScript with YAMLParser and MapRenderer, from a CDN or with a bundler.
 ---
 
-import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Aside, Steps } from "@astrojs/starlight/components";
 
-This guide covers using maplibre-yaml in vanilla JavaScript projects - no frameworks, no build tools required.
-
-You have two options:
-1. **Web Component** (`<ml-map>`) - Zero JavaScript, just HTML (recommended for simplicity)
-2. **JavaScript API** (`YAMLParser` + `MapRenderer`) - More control and customization
+This page covers maplibre-yaml's JavaScript API: `YAMLParser` to parse and
+validate a document, and `MapRenderer` to draw it into a `<div>` you control.
+Use it when your own code drives the map. For a map with no JavaScript at
+all, the `<ml-map>` element is simpler.
 
 For a scroll-driven story map, the same setup gives you `<ml-scrollytelling>`:
-see [Scrollytelling in plain HTML](/integrations/scrollytelling-html/).
+see [Story maps in plain HTML](/integrations/scrollytelling-html/).
 
 ## Quick Start: Web Component (Recommended)
 
-The fastest way to get started - no JavaScript code needed!
-
-<Steps>
-
-1. **Create an HTML file**
-
-   ```html
-   <!DOCTYPE html>
-   <html lang="en">
-     <head>
-       <meta charset="utf-8" />
-       <meta name="viewport" content="width=device-width, initial-scale=1" />
-       <title>My Map</title>
-       <link
-         href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
-         rel="stylesheet"
-       />
-       <!-- Tell the browser where to find maplibre-gl -->
-       <script type="importmap">
-         { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-       </script>
-       <!-- Register the <ml-map> web component -->
-       <script
-         type="module"
-         src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
-       ></script>
-       <style>
-         body {
-           margin: 0;
-         }
-         /* <ml-map> has no size of its own: without a height the map is invisible */
-         ml-map {
-           display: block;
-           width: 100%;
-           height: 100vh;
-         }
-       </style>
-     </head>
-     <body>
-       <ml-map src="./map.yaml"></ml-map>
-     </body>
-   </html>
-   ```
-
-2. **Create a YAML configuration file**
-
-   Create `map.yaml`:
-
-   ```yaml
-   type: map
-   id: my-first-map
-   config:
-     center: [-74.006, 40.7128]
-     zoom: 12
-     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-   layers:
-     - id: points
-       type: circle
-       source:
-         type: geojson
-         data:
-           type: FeatureCollection
-           features:
-             - type: Feature
-               geometry:
-                 type: Point
-                 coordinates: [-74.006, 40.7128]
-               properties:
-                 name: "New York City"
-       paint:
-         circle-radius: 10
-         circle-color: "#3b82f6"
-   ```
-
-3. **Serve and view**
-
-   ```bash
-   npx serve .
-   ```
-
-   Open the address it prints (usually http://localhost:3000). Opening the
-   HTML file directly does not work: a `file://` page cannot fetch `map.yaml`.
-
-</Steps>
-
-<Aside type="tip">
-  That's it! No JavaScript code needed. The `<ml-map>` component automatically
-  fetches, parses, and renders your YAML configuration.
-</Aside>
+If you don't need to drive the map from code, use the `<ml-map>` element: one
+HTML page and one YAML file, with no JavaScript to write. The
+[Quick start](/getting-started/quick-start/) walks through it, and
+[HTML pages: the `<ml-map>` element](/integrations/web-components/) covers the
+element in full. A page that starts with `<ml-map>` can still reach the map
+from a script later: `mapReady()` resolves with the MapLibre map, and
+`getRenderer()` returns the `MapRenderer` this page describes.
 
 ## Quick Start: JavaScript API (More Control)
 
@@ -148,7 +65,33 @@ For cases where you need programmatic control or want to use the lower-level API
 
 2. **Create a YAML configuration file**
 
-   Create `map.yaml` (same as above)
+   Create `map.yaml` next to it:
+
+   ```yaml
+   type: map
+   id: my-first-map
+   config:
+     center: [-74.006, 40.7128]
+     zoom: 12
+     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+   layers:
+     - id: points
+       type: circle
+       source:
+         type: geojson
+         data:
+           type: FeatureCollection
+           features:
+             - type: Feature
+               geometry:
+                 type: Point
+                 coordinates: [-74.006, 40.7128]
+               properties:
+                 name: "New York City"
+       paint:
+         circle-radius: 10
+         circle-color: "#3b82f6"
+   ```
 
 3. **Create your JavaScript file**
 
@@ -203,16 +146,16 @@ For cases where you need programmatic control or want to use the lower-level API
 ## Which Approach Should I Use?
 
 **Use the Web Component (`<ml-map>`) if:**
-- ✅ You want the simplest possible integration
-- ✅ You don't need programmatic control
-- ✅ You're embedding maps in static pages
-- ✅ You want zero JavaScript code
+- You want the simplest possible integration
+- You don't need programmatic control
+- You're embedding maps in static pages
+- You want zero JavaScript code
 
 **Use the JavaScript API (`YAMLParser` + `MapRenderer`) if:**
-- ✅ You need to programmatically modify the map
-- ✅ You want to build custom UI controls
-- ✅ You need access to the MapLibre GL instance
-- ✅ You're building a complex interactive application
+- You need to programmatically modify the map
+- You want to build custom UI controls
+- You need access to the MapLibre GL instance
+- You're building a complex interactive application
 
 <Aside type="tip">
   You can also use **both approaches together** - start with `<ml-map>` for basic rendering,
@@ -221,75 +164,18 @@ For cases where you need programmatic control or want to use the lower-level API
 
 ## Installation Options
 
-### CDN (No Build Tools)
+**From a CDN**, with no build step: keep the import map from the quick start
+above and import the API from esm.sh with `?external=maplibre-gl`, so the
+library renders with the maplibre-gl you pinned instead of a second copy esm.sh
+picks. The CDN page, versions in CDN URLs and hosting the files yourself are in
+[Installation](/getting-started/installation/#browser-usage-cdn).
 
-For quick prototypes or simple projects. To use the web component, provide `maplibre-gl` via an import map and load the register bundle:
-
-```html
-<script type="importmap">
-  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-</script>
-<script
-  type="module"
-  src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
-></script>
-```
-
-To use the JavaScript API, import the package from esm.sh, which resolves `yaml` and `zod` for you. Keep the same import map and add `?external=maplibre-gl`, so the library renders with the maplibre-gl you pinned instead of a second copy esm.sh picks:
-
-```html
-<script type="importmap">
-  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-</script>
-<script type="module">
-  import {
-    YAMLParser,
-    MapRenderer,
-    toModel,
-  } from "https://esm.sh/@maplibre-yaml/core@0.9?external=maplibre-gl";
-  // Your code here
-</script>
-```
-
-<Aside type="note" title="maplibre-gl version">
-  maplibre-yaml supports maplibre-gl **v4, v5 and v6** (peer range
-  `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`). The examples pin major 6 everywhere:
-  the import map, the CSS URL, and `npm install`. v6 is ESM-only, so its import
-  map entry is `dist/maplibre-gl.mjs`; under a bundler it also needs
-  `setWorkerUrl()` — see [Installation](/getting-started/installation/#supported-maplibre-gl-versions).
-</Aside>
-
-### npm (With Build Tools)
-
-For production projects with bundlers:
-
-<Tabs>
-<TabItem label="npm">
-
-```bash
-npm install @maplibre-yaml/core maplibre-gl@^6
-```
-
-</TabItem>
-<TabItem label="pnpm">
-
-```bash
-pnpm add @maplibre-yaml/core maplibre-gl@^6
-```
-
-</TabItem>
-<TabItem label="yarn">
-
-```bash
-yarn add @maplibre-yaml/core maplibre-gl@^6
-```
-
-</TabItem>
-</Tabs>
-
-In your entry file, point maplibre-gl 6 at its worker before you render a
-map. Inside a bundle maplibre-gl cannot find its worker file by itself, and
-without these lines every map fails with *"Worker failed to load"*. With Vite:
+**With npm and a bundler**, install `@maplibre-yaml/core` and `maplibre-gl@^6`
+([Installation](/getting-started/installation/#using-a-bundler-vite) has the
+npm, pnpm and yarn lines and the supported maplibre-gl versions). In your
+entry file, point maplibre-gl 6 at its worker before you render a map:
+inside a bundle it cannot find its worker file by itself, and without these
+lines every map fails with *"Worker failed to load"*. With Vite:
 
 ```javascript
 // src/main.js
@@ -319,9 +205,7 @@ if (result.success) {
 
 Put `map.yaml` and the data files it loads in Vite's **`public/`** folder.
 A file next to `index.html` loads in `npm run dev` but is not copied by
-`npm run build`. On maplibre-gl 4 or 5, leave out the worker lines. The
-step-by-step Vite setup, for both `<ml-map>` and the API, is in
-[Installation → Using a bundler](/getting-started/installation/#using-a-bundler-vite).
+`npm run build`. On maplibre-gl 4 or 5, leave out the worker lines.
 
 ## Loading YAML Configuration
 
@@ -771,26 +655,21 @@ Two guides cover capabilities that apply directly to the vanilla-JS path:
 - **[Format v2](/guides/format-v2/)** — the additive, opt-in `style:` / `runtime:`
   split. A v2 document parses to the same internal model as its v1 twin, so
   `YAMLParser` and `MapRenderer` consume it unchanged.
-- **[Export to style.json](/guides/interactions/)** — how declarative
+- **[Export to style.json](/guides/export/)** — how declarative
   interactions are authored, why a compiled `style.json` is inert on its own
   (the export guarantee), and how `attachInteractions` wires behavior back onto
   any `maplibregl.Map`. This is also where the `emit` interaction and its
   trusted-policy gate are documented in full.
 
-## Upgrading to 0.6
-
-Three behavior changes are worth knowing when you move to 0.6:
-
-- **`!html` is trust-gated, not unconditional.** A popup `!html` value renders
-  as raw markup only under a **trusted** capability policy; otherwise it is
-  escaped and shown as text.
-- **Malformed inline GeoJSON now warns.** A v1 document with malformed inline
-  GeoJSON `data` emits a warning (promoted to an error under `mlym validate
-  --strict` / CI). Pre-check inline geometry.
-- **v2 `style.metadata` flows through.** In Format v2, `style.metadata` is
-  carried to the emitted `style.json` root `metadata` slot.
-
 ## Troubleshooting
+
+These problems are specific to the JavaScript API. A map with no size, an
+invalid document and the other problems every page shares are in
+[Troubleshooting](/troubleshooting/), for example
+[the map has no height](/troubleshooting/#the-map-has-no-height) and
+[an error card instead of the map](/troubleshooting/#an-error-card-instead-of-the-map),
+which lists the usual YAML mistakes. With `MapRenderer` there is no error
+card: `safeParseMapBlock` returns them as `errors`, each with its `path`.
 
 ### Map Shows But No Data Appears
 
@@ -826,65 +705,13 @@ renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
    `https://<user>.github.io/<repo>/`) and the paths in the YAML start with
    `/` (`/data/x.geojson`), so they point at the domain root. With
    `<ml-map>`, add `base="/<repo>/"`
-   ([details](/integrations/web-components/#sites-under-a-subpath-github-pages)).
+   ([details](/guides/publishing/#html-pages-the-base-attribute)).
    With `MapRenderer`, resolve the paths before rendering, as the element
    does: `const model = applyDocumentBase(toModel(block), "/<repo>/")`, then
    build the renderer from `denormalizeConfig(model)`,
    `denormalizeLayers(model)`, `denormalizeOptions(model)` and
    `denormalizeSources(model)` (all exported by `@maplibre-yaml/core`). For a
    single URL, `resolveDocumentUrl(url, "/<repo>/")`.
-
-### YAML Parsing Errors
-
-**Symptoms:** `safeParseMapBlock` returns `success: false` with errors.
-
-**Common Causes:**
-
-1. **Indentation issues**
-
-   YAML requires consistent indentation (2 spaces recommended):
-
-```yaml
-   # ✅ Correct
-   config:
-     center: [-74, 40]
-     zoom: 10
-
-   # ❌ Wrong - inconsistent indentation
-   config:
-     center: [-74, 40]
-      zoom: 10
-```
-
-2. **Missing required fields**
-
-```yaml
-   # ❌ Missing required fields
-   type: map
-   layers: []
-
-   # ✅ Correct - has the required fields, and a basemap
-   # (without mapStyle, validation warns and <ml-map> shows an error card)
-   type: map
-   id: my-map
-   config:
-     center: [0, 0]
-     zoom: 2
-     mapStyle: "https://..."
-   layers: []
-```
-
-3. **Invalid values**
-
-```yaml
-   # ❌ center must be [longitude, latitude]
-   config:
-     center: "New York"
-
-   # ✅ Correct
-   config:
-     center: [-74.006, 40.7128]
-```
 
 ### Template Literal YAML Issues
 
@@ -924,30 +751,6 @@ Indent with spaces only: YAML rejects tab indentation.
 
 **Best Practice:** Use external YAML files whenever possible.
 
-### Map Container Has Zero Size
-
-**Symptoms:** Map doesn't render, or renders as a tiny sliver.
-
-**Cause:** The container element needs explicit dimensions.
-
-```css
-/* ❌ Container has no size */
-#map {
-}
-
-/* ✅ Explicit dimensions */
-#map {
-  width: 100%;
-  height: 400px;
-}
-
-/* ✅ Or fill viewport */
-#map {
-  width: 100vw;
-  height: 100vh;
-}
-```
-
 ### Events Not Firing
 
 **Symptoms:** `renderer.on('load', ...)` callback never runs.
@@ -984,7 +787,7 @@ const renderer = MapRenderer.fromModel(container, toModel(block), {
 ## Next Steps
 
 - [Format v2](/guides/format-v2/) - The `style:` / `runtime:` split
-- [Export to style.json](/guides/interactions/) - Interactions, the export guarantee, and `attachInteractions`
+- [Export to style.json](/guides/export/) - Interactions, the export guarantee, and `attachInteractions`
 - [`examples/vanilla/export-and-attach.html`](https://github.com/design-practices/maplibre-yaml/blob/main/examples/vanilla/export-and-attach.html) - A runnable export → `attachInteractions` demo: compile a document to a self-contained `style.json`, render it in a plain `new maplibregl.Map(...)`, then reattach the declarative interactions so a click opens a popup
 - [Web Components Integration](/integrations/web-components/) - Even simpler HTML-only approach
 - [Astro Integration](/integrations/astro/) - For Astro-based sites

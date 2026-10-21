@@ -619,47 +619,18 @@ show (`gdalwarp -te …`), and pick the compression that suits the data
 
 ## Hosting: range requests and CORS
 
-PMTiles, COG and GeoParquet always, and FlatGeobuf with `load: viewport`, read files
-**in parts** with HTTP range requests. Most static hosts support them:
+PMTiles, COG and GeoParquet always, and FlatGeobuf with `load: viewport`, read
+files **in parts** with HTTP range requests. GitHub Pages, Netlify, Cloudflare
+Pages, Vercel, S3, R2, raw.githubusercontent.com and fastly.jsdelivr.net
+support them, and so do `npx serve`, `astro dev` and `astro preview` on your
+computer; `python -m http.server` doesn't, and cdn.jsdelivr.net doesn't
+reliably. A file on another site also needs CORS that allows the `Range`
+header and exposes `Content-Range`. On a GitHub Pages project site, set
+`base` and write paths as you would locally (`data/x.pmtiles`,
+`pmtiles://data/x.pmtiles`).
 
-| Host | Range requests | Notes |
-|---|---|---|
-| GitHub Pages | yes | On a project site (`user.github.io/repo/`) set `base` — see below |
-| Netlify, Cloudflare Pages, Vercel | yes | |
-| Amazon S3, Cloudflare R2, Google Cloud Storage | yes | From another site, set CORS (below) |
-| `npx serve`, `astro dev`, `astro preview`, Vite | yes | Good for previewing locally; `npx serve` is the one to use |
-| raw.githubusercontent.com, fastly.jsdelivr.net | yes | Fine for a file in a public GitHub repository |
-| cdn.jsdelivr.net (`/gh/…` mirrors of GitHub repos) | **not reliably** | It sometimes answers range requests from a compressed copy of the file: PMTiles and FlatGeobuf read by view then fail (the notice says why); whole files and COGs work. Use fastly.jsdelivr.net, or serve data from your own site |
-| `npx http-server` | partly | Answers 416 to every request for the end of a file, so a GeoParquet file is downloaded whole; prefer `npx serve` |
-| `python -m http.server` | **no** | PMTiles and COGs fail; `load: viewport` falls back to reading the whole file; a GeoParquet file over 50 MB is refused |
-
-Serving data from your own site — next to the page, on GitHub Pages,
-Netlify or the like — is the safest choice. Some hosts answer a request
-for the end of a small file with "416 Range Not Satisfiable" (GitHub Pages,
-`npx serve`) or don't let a page on another site read the file's size
-(GitHub Pages); maplibre-yaml handles both.
-
-**Files on another site** need CORS: the bucket or server must send
-`Access-Control-Allow-Origin`, allow the `Range` request header, and expose
-`Content-Range` and `Content-Length`. For S3 or R2, a CORS rule like:
-
-```json
-[
-  {
-    "AllowedOrigins": ["https://you.github.io"],
-    "AllowedMethods": ["GET", "HEAD"],
-    "AllowedHeaders": ["Range", "If-Match"],
-    "ExposeHeaders": ["Content-Range", "Content-Length", "ETag"],
-    "MaxAgeSeconds": 3000
-  }
-]
-```
-
-**GitHub Pages project sites** serve your files under `/repo-name/`. Set the
-`base` attribute (`<ml-map base="/repo-name/">`; Astro passes its own `base`
-automatically) and write paths as you would on your own computer —
-`data/x.pmtiles`, `/data/x.fgb`, `data/x.parquet`, `data/x.tif` and
-`pmtiles://data/x.pmtiles` all resolve under the base.
+The full table of hosts, the CORS rule for S3 and R2, and `base` are in
+[Publishing & subpaths](/guides/publishing/#large-files-range-requests-and-cors).
 
 ## When something goes wrong
 

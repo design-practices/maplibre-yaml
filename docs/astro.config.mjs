@@ -11,6 +11,7 @@ import { generateAgentAssets } from "./scripts/generate-agent-assets.mjs";
 import { generateClassicsExport } from "./scripts/classics-export.mjs";
 import rehypeHeadingAnchors, { remarkHeadingAnchorIds } from "./scripts/rehype-heading-anchors.mjs";
 import { emailOff } from "./scripts/email-off.mjs";
+import { PAGE_REDIRECTS } from "./redirects.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -84,10 +85,9 @@ const API_MODULES = [
 export default defineConfig({
   site: "https://docs.maplibre-yaml.org",
   base: "/",
-  // 0.7 renamed "eject" to "export" (to style.json); keep old links working.
-  redirects: {
-    "/guides/eject-classes/": "/guides/export-classes/",
-  },
+  // Moved pages keep working: meta-refresh pages here, and HTTP 301s in
+  // public/_redirects for Cloudflare Pages, both from docs/redirects.mjs.
+  redirects: PAGE_REDIRECTS,
   markdown: {
     // `### heading {#id}` -> explicit, stable anchors (used by the generated
     // YAML reference; a no-op for headings without the marker).
@@ -187,7 +187,7 @@ export default defineConfig({
             { label: "Live data & streaming", link: "/guides/live-data/" },
             { label: "Layers & styling", link: "/guides/layers/" },
             { label: "Thematic maps & legends", link: "/guides/thematic-maps/" },
-            { label: "Popups, hover & controls", link: "/schema/interactivity/" },
+            { label: "Popups, hover & controls", link: "/guides/popups/" },
             { label: "Accessibility & languages", link: "/guides/accessibility-languages/" },
             { label: "Reusing values & blocks", link: "/guides/reuse/" },
           ],
@@ -196,10 +196,7 @@ export default defineConfig({
           label: "Story maps",
           items: [
             { label: "Story maps in plain HTML", link: "/integrations/scrollytelling-html/" },
-            {
-              label: "Story maps in Astro",
-              link: "/integrations/astro/#scrollytelling-component",
-            },
+            { label: "Story maps in Astro", link: "/integrations/astro-stories/" },
             { label: "Story file reference", link: "/schema/scrollytelling/" },
           ],
         },
@@ -222,9 +219,10 @@ export default defineConfig({
           items: [
             { label: "HTML pages: the <ml-map> element", link: "/integrations/web-components/" },
             { label: "Astro", link: "/integrations/astro/" },
-            { label: "Astro content collections", link: "/guides/collections-integration/" },
+            { label: "Astro content collections", link: "/integrations/astro-collections/" },
             { label: "React & other frameworks", link: "/integrations/react/" },
             { label: "JavaScript API", link: "/integrations/vanilla-js/" },
+            { label: "Publishing & subpaths", link: "/guides/publishing/" },
           ],
         },
         { label: "Troubleshooting", link: "/troubleshooting/" },
@@ -233,7 +231,6 @@ export default defineConfig({
           items: [
             { label: "The CLI (mlym)", link: "/cli/getting-started/" },
             { label: "Editor setup", link: "/guides/editor-setup/" },
-            { label: "VS Code tasks", link: "/cli/vscode/" },
             { label: "Using AI agents", link: "/guides/ai-agents/" },
           ],
         },
@@ -241,7 +238,7 @@ export default defineConfig({
           label: "Advanced",
           items: [
             { label: "Format v2 (opt-in)", link: "/guides/format-v2/" },
-            { label: "Export to style.json", link: "/guides/interactions/" },
+            { label: "Export to style.json", link: "/guides/export/" },
             { label: "Export classes", link: "/guides/export-classes/" },
             { label: "Effects (experimental)", link: "/guides/effects/" },
             {
@@ -268,6 +265,7 @@ export default defineConfig({
                 { label: "Map configuration", link: "/schema/map-config/" },
                 { label: "Sources", link: "/schema/sources/" },
                 { label: "Layers & popups", link: "/schema/layers/" },
+                { label: "Interactivity", link: "/schema/interactivity/" },
                 { label: "Multi-page documents: root", link: "/schema/root/" },
                 {
                   label: "Multi-page documents: pages & blocks",
@@ -276,8 +274,8 @@ export default defineConfig({
               ],
             },
             {
-              label: "<ml-map> & <ml-scrollytelling> attributes and events",
-              link: "/integrations/web-components/#component-api-reference",
+              label: "<ml-map> & <ml-scrollytelling> reference",
+              link: "/reference/elements/",
             },
             { label: "CLI commands", link: "/cli/reference/" },
             // Module landing pages only. starlight-typedoc's own sidebar group

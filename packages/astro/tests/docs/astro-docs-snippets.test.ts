@@ -25,7 +25,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..", "..", "..");
 const DOCS = [
   "docs/src/content/docs/integrations/astro.mdx",
-  "docs/src/content/docs/guides/collections-integration.mdx",
+  "docs/src/content/docs/integrations/astro-stories.mdx",
+  "docs/src/content/docs/integrations/astro-collections.mdx",
+  "docs/src/content/docs/getting-started/astro.mdx",
   "packages/astro/README.md",
 ];
 
@@ -54,6 +56,38 @@ function fences(file: string): Fence[] {
 }
 
 const ALL = DOCS.flatMap(fences);
+const ASTRO = "docs/src/content/docs/integrations/astro.mdx";
+const STORIES = "docs/src/content/docs/integrations/astro-stories.mdx";
+
+/**
+ * The text under a heading path, e.g. ["## FullPageMap Component",
+ * "### Basic Usage"]: from the last heading to the next heading of the same
+ * or a higher level.
+ */
+function docSection(file: string, path: readonly string[]): string {
+  const doc = readFileSync(join(REPO, file), "utf8");
+  let from = 0;
+  for (const heading of path) {
+    const at = doc.indexOf(`\n${heading}\n`, from);
+    expect(at, `${file}: ${path.join(" > ")}`).toBeGreaterThanOrEqual(0);
+    from = at + 1;
+  }
+  // The next heading of the same or a higher level, outside code fences
+  // (a YAML comment line starts with `# ` too).
+  const level = path[path.length - 1].match(/^#+/)![0].length;
+  const lines = doc.slice(from).split("\n");
+  let inFence = false;
+  let end = lines.length;
+  for (let i = 1; i < lines.length; i++) {
+    if (/^\s*```/.test(lines[i])) inFence = !inFence;
+    const h = !inFence && lines[i].match(/^(#+) /);
+    if (h && h[1].length <= level) {
+      end = i;
+      break;
+    }
+  }
+  return lines.slice(0, end).join("\n");
+}
 const ENTRIES: Record<string, Record<string, unknown>> = {
   "@maplibre-yaml/astro": rootEntry,
   "@maplibre-yaml/astro/utils": utilsEntry,
@@ -144,7 +178,7 @@ describe("the documented story renders through <Scrollytelling config>", () => {
   it("puts a valid map document on <ml-map>", async () => {
     const story = ALL.find(
       (f) =>
-        f.file.endsWith("astro.mdx") &&
+        f.file.endsWith("integrations/astro-stories.mdx") &&
         f.lang === "yaml" &&
         /^type: scrollytelling$/m.test(f.body)
     );
@@ -194,7 +228,6 @@ describe("full-page snippets work on a phone (ml-aot.33)", () => {
   // chapter text unreadable. Every complete page the docs show must carry one,
   // and the FullPageMap / Scrollytelling "Basic Usage" snippets — the ones
   // readers copy first — must be complete pages.
-  const astroDoc = readFileSync(join(REPO, "docs/src/content/docs/integrations/astro.mdx"), "utf8");
   const pages = ALL.filter((f) => f.lang === "astro" && /<html[\s>]/.test(f.body));
 
   it("finds the full-page snippets", () => {
@@ -205,19 +238,15 @@ describe("full-page snippets work on a phone (ml-aot.33)", () => {
     expect((f as Fence).body).toMatch(/<meta\s+name="viewport"\s+content="width=device-width/);
   });
 
-  /** The astro fences in `### Basic Usage` under the given `## …` section. */
-  function basicUsage(section: string): string[] {
-    const start = astroDoc.indexOf(`## ${section}`);
-    const from = astroDoc.indexOf("### Basic Usage", start);
-    const to = astroDoc.indexOf("\n### ", from + 1);
-    const slice = astroDoc.slice(from, to);
-    return [...slice.matchAll(/```astro[^\n]*\n([\s\S]*?)```/g)].map((m) => m[1]);
-  }
-
-  it.each([["FullPageMap Component"], ["Scrollytelling Component"]])(
-    "%s: Basic Usage is a complete page with a viewport meta and no body margin",
-    (section) => {
-      const snippets = basicUsage(section).filter((s) => /<(FullPageMap|Scrollytelling)\b/.test(s));
+  it.each([
+    ["FullPageMap: Basic Usage", ASTRO, ["## FullPageMap Component", "### Basic Usage"]],
+    ["Story maps in Astro: Quick start", STORIES, ["## Quick start"]],
+  ] as const)(
+    "%s is a complete page with a viewport meta and no body margin",
+    (_label, file, path) => {
+      const snippets = [...docSection(file, path).matchAll(/```astro[^\n]*\n([\s\S]*?)```/g)]
+        .map((m) => m[1])
+        .filter((s) => /<(FullPageMap|Scrollytelling)\b/.test(s));
       expect(snippets.length).toBeGreaterThan(0);
       const complete = snippets.filter((s) => /<html[\s>]/.test(s));
       expect(complete.length).toBeGreaterThan(0);
@@ -235,46 +264,35 @@ describe("entry-point snippets only name files the page provides (ml-aot.49)", (
   // Every file those load (`src`, `loadMapConfig`, `loadScrollytellingConfig`)
   // and every local `url:` / `image:` / `video:` in them must be on the page
   // as a fence titled with its path — otherwise the reader's first page 404s.
-  const FILE = "docs/src/content/docs/integrations/astro.mdx";
-  const doc = readFileSync(join(REPO, FILE), "utf8");
-  const SECTIONS: Array<[string, string]> = [
-    ["FullPageMap Component", "Basic Usage"],
-    ["Scrollytelling Component", "Basic Usage"],
-    ["Scrollytelling Component", "YAML Configuration"],
-    ["Scrollytelling Component", "Full Example Story"],
-  ];
+  // [label, file, heading path]: the sections a reader copies first.
+  const SECTIONS = [
+    ["FullPageMap Component > Basic Usage", ASTRO, ["## FullPageMap Component", "### Basic Usage"]],
+    ["Story maps in Astro > Quick start", STORIES, ["## Quick start"]],
+  ] as const;
 
   /** `./src/stories/x.yaml`, `/stories/x.yaml`, `public/stories/x.yaml` → `stories/x.yaml`. */
   const normalize = (p: string) => p.replace(/^\.\//, "").replace(/^\//, "").replace(/^(public|src)\//, "");
 
-  const provided = new Set(
-    ALL.filter((f) => f.file === FILE)
-      .map((f) => f.meta.match(/title="([^"]+)"/)?.[1])
-      .filter((t): t is string => !!t)
-      .map(normalize)
-  );
+  /** Files a page provides: its fences titled with a path. */
+  const provided = (file: string) =>
+    new Set(
+      ALL.filter((f) => f.file === file)
+        .map((f) => f.meta.match(/title="([^"]+)"/)?.[1])
+        .filter((t): t is string => !!t)
+        .map(normalize)
+    );
 
-  function section(top: string, sub: string): string {
-    const start = doc.indexOf(`## ${top}`);
-    expect(start, top).toBeGreaterThanOrEqual(0);
-    const from = doc.indexOf(`### ${sub}`, start);
-    expect(from, `${top} > ${sub}`).toBeGreaterThan(start);
-    const ends = [doc.indexOf("\n### ", from + 1), doc.indexOf("\n## ", from + 1)].filter((i) => i > 0);
-    return doc.slice(from, Math.min(...ends));
-  }
-
-  const referenced: Array<{ where: string; path: string }> = [];
-  for (const [top, sub] of SECTIONS) {
-    const where = `${top} > ${sub}`;
-    for (const m of section(top, sub).matchAll(/```(\w+)([^\n]*)\n([\s\S]*?)```/g)) {
+  const referenced: Array<{ where: string; file: string; path: string }> = [];
+  for (const [where, file, path] of SECTIONS) {
+    for (const m of docSection(file, path).matchAll(/```(\w+)([^\n]*)\n([\s\S]*?)```/g)) {
       const [, lang, meta, body] = m;
       if (/title="examples\/astro\/site\//.test(meta)) continue; // the example site has its files
       if (lang === "astro") {
-        for (const r of body.matchAll(/load(?:Map|Scrollytelling)Config\(\s*['"]([^'"]+)['"]/g)) referenced.push({ where, path: r[1] });
-        for (const r of body.matchAll(/\ssrc="([^"]+)"/g)) referenced.push({ where, path: r[1] });
+        for (const r of body.matchAll(/load(?:Map|Scrollytelling)Config\(\s*['"]([^'"]+)['"]/g)) referenced.push({ where, file, path: r[1] });
+        for (const r of body.matchAll(/\ssrc="([^"]+)"/g)) referenced.push({ where, file, path: r[1] });
       }
       if (lang === "yaml") {
-        for (const r of body.matchAll(/^\s*(?:url|image|video):\s*["']?([^"'\s#]+)/gm)) referenced.push({ where, path: r[1] });
+        for (const r of body.matchAll(/^\s*(?:url|image|video):\s*["']?([^"'\s#]+)/gm)) referenced.push({ where, file, path: r[1] });
       }
     }
   }
@@ -285,8 +303,8 @@ describe("entry-point snippets only name files the page provides (ml-aot.49)", (
   });
 
   it.each(local.map((r) => [`${r.where}: ${r.path}`, r]))("%s is provided on the page", (_l, r) => {
-    const ref = r as { where: string; path: string };
-    expect([...provided], `no fence titled with ${ref.path}`).toContain(normalize(ref.path));
+    const ref = r as { where: string; file: string; path: string };
+    expect([...provided(ref.file)], `no fence titled with ${ref.path}`).toContain(normalize(ref.path));
   });
 });
 

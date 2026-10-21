@@ -1,0 +1,297 @@
+---
+title: "Popups, hover & controls"
+description: Make a map respond — a popup when a feature is clicked, what it shows (properties, links, images), numbers formatted in the reader's language, hover cursors, highlights and tooltips, flying to a feature, and the zoom, scale, fullscreen and other map controls. Points to legends.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A map from YAML is already pannable and zoomable. This guide adds the parts
+that answer a reader's "what is this?": a popup when they click a feature, a
+highlight and a tooltip while they point at one, a camera that moves to what
+they chose, and the buttons around the map. Everything here goes in the
+layer's `interactive:` block or the document's `controls:` block; there is no
+JavaScript to write.
+
+Each complete document below (it starts with `type: map`) runs as printed:
+save it as a `.yaml` file and load it with `<ml-map src="…">`. Snippets that
+start with `popup:`, `interactive:` or `controls:` are one part of a document.
+
+## Show a popup on click
+
+Give the layer an `interactive:` block with a `click.popup`. The popup is a
+list of HTML elements; each one lists what goes inside it:
+
+```yaml
+type: map
+id: cities
+config:
+  center: [-82, 41]
+  zoom: 4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+            properties: { name: "New York", population: 8336817, nickname: "The Big Apple" }
+          - type: Feature
+            geometry: { type: Point, coordinates: [-87.623, 41.881] }
+            properties: { name: "Chicago", population: 2693976 }
+    paint:
+      circle-radius: 10
+      circle-color: "#ef4444"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3: [{ property: name }]
+          - p:
+              - str: "Population: "
+              - property: population
+                format: { max-fraction-digits: 0 }
+```
+
+Click New York and the popup reads **New York** over "Population:
+8,336,817". `cursor: pointer` turns the pointer into a hand over the circles,
+so readers can tell they are clickable. One popup is open at a time; clicking
+elsewhere closes it.
+
+## Choose what the popup shows
+
+`- h3: [{ property: name }]` becomes `<h3>New York</h3>`: the key is the
+element, and its list holds **items** whose output is joined inside it.
+
+| Item | Shows |
+|------|-------|
+| `str: "Population: "` | The text as written |
+| `property: population` | The clicked feature's `population` property |
+| `property: nickname` with `else: "none recorded"` | The fallback when the property is missing or `null` (without `else`, nothing) |
+| `property: population` with `format: { … }` | A formatted number ([below](#format-numbers)) |
+| `href: "https://…"` with `str: "Read more"` | A link with that text |
+| `src: "https://…/photo.jpg"` with `alt: "…"` | An image |
+
+```yaml
+popup:
+  - h3: [{ property: name }]
+  - p:
+      - str: "Nickname: "
+      - property: nickname
+        else: "none recorded"
+  - p:
+      - str: "Read about it on Wikipedia"
+        href: "https://en.wikipedia.org/wiki/New_York_City"
+  - p:
+      - src: "https://maplibre.org/img/maplibre-logo-big.svg"
+        alt: "MapLibre logo"
+```
+
+Put links and images inside `p:` (or `div:`). Elements don't nest: a `ul:`
+can't contain `li:` entries. Feature values are always shown as text, never
+as markup, so data can't inject HTML into your page. A link opens in a new
+tab unless you write `target: _self`, and its URL is fixed text: it can't be
+built from a property. Every tag, item and link rule is in
+[Layers › Popups](/schema/layers/#popups).
+
+## Format numbers
+
+A `property` item with `format:` formats a number with the browser's
+`Intl.NumberFormat`, using the option names of MapLibre's
+[`number-format`](https://maplibre.org/maplibre-style-spec/expressions/#number-format)
+expression, the same ones a label's `text-field` uses:
+
+```yaml
+popup:
+  - p:
+      - str: "Population: "
+      - property: population
+        format: { max-fraction-digits: 0 }                  # 8,336,817
+  - p:
+      - str: "Median rent: "
+      - property: rent
+        format: { currency: EUR, max-fraction-digits: 0 }   # €1,240
+  - p:
+      - str: "Area: "
+      - property: area_km2
+        format: { unit: kilometer, max-fraction-digits: 1 } # 12.5 km
+```
+
+Numbers follow the page's language: the `lang` on `<ml-map>` or on `<html>`,
+then the browser's. On a page with `<html lang="de">` the population reads
+"8.336.817" and the rent "1.240 €". Write `locale: en-US` in a format to fix
+one regardless of the page. A number stored as text (`"54000"`, as CSV data
+often is) is formatted like the number; a property without `format:` is
+shown exactly as stored, so years and ids are never grouped. More in
+[Number formats](/schema/layers/#number-formats) and
+[Accessibility & languages](/guides/accessibility-languages/#number-formats).
+
+## Respond to hover
+
+The `hover:` part of `interactive:` takes three things, alone or together:
+
+- **`cursor`**: the CSS cursor over a feature, usually `pointer`.
+- **`highlight: true`**: recolours the feature under the pointer. The source
+  needs feature ids for this: set `generateId: true` on it (or `promoteId`
+  to use a property as the id).
+- **`popup`**: a tooltip, in the same format as `click.popup`, shown while
+  the pointer is over a feature and gone when it leaves. It has no close
+  button. A popup opened by a click stays, and hover tooltips wait until it
+  is closed. Touch screens have no hover: a tap opens `click.popup`.
+
+```yaml
+type: map
+id: states
+config:
+  center: [-98, 39]
+  zoom: 3
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: states
+    type: fill
+    source:
+      type: geojson
+      url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
+      generateId: true
+    paint:
+      fill-color: "#94a3b8"
+      fill-opacity: 0.6
+    interactive:
+      hover:
+        cursor: pointer
+        highlight: true
+        popup:
+          - strong: [{ property: STATE_NAME }]
+      click:
+        popup:
+          - h3: [{ property: STATE_NAME }]
+          - p: [{ str: "One of the 50 states." }]
+```
+
+`highlight` changes the layer's main colour (`fill-color` here) for the
+hovered feature, and works on [classified](/guides/thematic-maps/) layers too.
+If that colour is already your own expression, `highlight` leaves it alone
+and warns; to choose the highlight colour yourself, use
+`["feature-state", "hover"]` in the paint, as in
+[Custom highlight styling](/schema/interactivity/#custom-highlight-styling).
+
+## Move the camera to a feature
+
+Two click actions move the map to what the reader picked. They work with or
+without a popup; with one, the popup opens first and travels with the map.
+
+```yaml
+interactive:
+  click:
+    flyTo:
+      zoom: 8          # optional; center defaults to the clicked point
+      duration: 600    # optional, milliseconds
+```
+
+```yaml
+interactive:
+  click:
+    zoomToFeature:
+      padding: 40      # pixels around the feature (optional)
+      maxZoom: 12      # don't zoom closer than this (optional)
+```
+
+`flyTo` centres on the clicked point (or a `center:` you give) at a zoom you
+choose, which suits points. `zoomToFeature` fits the clicked feature's own
+outline in view, which suits areas and lines of different sizes.
+
+## Add map controls
+
+`controls:` adds MapLibre's buttons around the map. `true` puts a control in
+its usual corner; an object picks the corner:
+
+```yaml
+type: map
+id: with-controls
+config:
+  center: [-74.006, 40.7128]
+  zoom: 11
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+controls:
+  navigation: true          # zoom in/out and compass, top-right
+  scale: true               # distance scale, bottom-left
+  fullscreen: true          # top-right
+  geolocate:                # "show my location", asks the reader's permission
+    enabled: true
+    position: top-left
+```
+
+| Control | What it adds | Default corner |
+|---------|--------------|----------------|
+| `navigation` | Zoom buttons and a compass that resets the bearing | `top-right` |
+| `scale` | A distance scale | `bottom-left` |
+| `fullscreen` | Fullscreen toggle | `top-right` |
+| `geolocate` | Show the reader's location (the browser asks first) | `top-right` |
+| `globe` | Globe / flat map toggle (maplibre-gl 5 or later) | `top-right` |
+| `terrain` | 3D terrain on/off, for a document with [`terrain:`](/schema/map-config/#terrain-sky--projection) | `top-right` |
+| `attribution` | The data credits, with `compact` and `customAttribution` options | `bottom-right` |
+
+The corners are `top-left`, `top-right`, `bottom-left` and `bottom-right`.
+Without an `attribution` entry, MapLibre's own attribution still shows in
+the bottom-right corner: crediting the map data is a licensing obligation for
+most map tiles.
+
+Button labels ("Zoom in", "Zoom out" …) come from MapLibre's `locale:` keys,
+so a `config.locale` table translates them along with everything else the
+library draws ([Show the map in another language](/guides/accessibility-languages/#show-the-map-in-another-language)).
+
+To turn off ways of moving the map instead (scroll zoom, rotation, a fully
+static map), see [Interaction settings](/schema/interactivity/#map-interaction-settings).
+
+## Legends
+
+A legend explains the colours. A [classified](/guides/thematic-maps/) layer,
+or a layer with its own entry (`legend: { label, color }`), makes the map show
+one by itself; a `legend:` block places and titles it, and `legend: false`
+turns it off. See [Thematic maps & legends](/guides/thematic-maps/#the-legend)
+and [Map configuration › Legend](/schema/map-config/#legend).
+
+## Reacting from your own JavaScript
+
+Popups, highlights and camera moves need no code. To do something else when
+a feature is clicked (update a chart, fill in a side panel), listen for the
+element's events. They fire for features of a layer with an `interactive:`
+block:
+
+```js
+const map = document.querySelector("ml-map");
+map.addEventListener("ml-map:layer-click", (event) => {
+  const { layerId, feature, lngLat } = event.detail;
+  console.log(layerId, feature.properties);
+});
+```
+
+`ml-map:layer-hover` carries the same details for hover.
+[HTML pages: the `<ml-map>` element](/integrations/web-components/) lists
+every event.
+
+<Aside type="note" title="Popups and hover stay on the page">
+  Popups, hover and click actions are page behaviour, not part of a MapLibre
+  style: `mlym emit` leaves them out of the exported `style.json` and says
+  so. [Export to style.json](/guides/export/) shows how to attach them to an
+  exported map with `attachInteractions`, and
+  [Export classes](/guides/export-classes/) lists what carries over.
+</Aside>
+
+## Look it up
+
+- [Interactivity](/schema/interactivity/): every `interactive:` and control
+  key with its options, including `emit` for host code and the interaction
+  settings.
+- [Layers › Popups](/schema/layers/#popups): the full popup content format,
+  links and escaping.
+- [Map configuration › Popups](/schema/map-config/#popups): popups open at
+  fixed coordinates, with no feature under them.
+- The generated [layer reference](/reference/yaml/layers/#interactive): every
+  key, from the schema the validator uses.

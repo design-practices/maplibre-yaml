@@ -1,6 +1,6 @@
 ---
 title: Editor setup
-description: In-editor autocomplete, hover docs, and validation for maplibre-yaml via yaml-language-server and JSON Schema
+description: Autocomplete, hover docs and checking as you type for maplibre-yaml files (yaml-language-server and JSON Schema), and a VS Code task that runs the full validator on save and lists its findings in the Problems panel.
 ---
 
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
@@ -100,9 +100,16 @@ extension). This is the no-modeline alternative:
     "https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json": [
       "**/*.story.yaml"
     ]
+  },
+  "files.associations": {
+    "*.map.yaml": "yaml",
+    "**/configs/**/*.yaml": "yaml"
   }
 }
 ```
+
+A complete example is in the repository:
+[settings.json](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/settings.json).
 
 <Aside type="tip">
 Modelines win over `yaml.schemas` when both are present, so you can set a broad
@@ -149,3 +156,123 @@ matches the version `mlym validate` enforces.
 Unknown top-level keys are flagged; `x-*` keys are always allowed, for
 extensions. Arbitrary MapLibre GL options inside `config:` and
 extra source options stay permissive, matching the runtime.
+
+## Validate on save (VS Code task)
+
+The schema checks structure as you type, but not the validator's own rules:
+a layer naming a source the document doesn't declare (with a "did you mean"),
+a misspelt `fitTo` source, or a map with no basemap. There is no
+maplibre-yaml extension for VS Code; a **task** runs `mlym validate` instead,
+and VS Code lists its errors, warnings and notes in the **Problems** panel,
+next to the lines they belong to.
+
+### Step 1: Add the task
+
+Create or update `.vscode/tasks.json` in your project:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "maplibre-yaml: Validate Current File",
+      "type": "shell",
+      "command": "npx",
+      "args": ["maplibre-yaml", "validate", "${file}", "--format", "vscode"],
+      "problemMatcher": {
+        "owner": "maplibre-yaml",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+):(\\d+):(\\d+): (error|warning|info): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "group": "build"
+    }
+  ]
+}
+```
+
+With the CLI installed in the project (`npm install --save-dev @maplibre-yaml/cli`),
+`npx` uses that copy; otherwise it downloads it on first run.
+
+### Step 2: Run the task
+
+1. Open a `.yaml` file.
+2. Press <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (Mac) or
+   <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (Windows/Linux).
+3. Type "Run Task" and choose **maplibre-yaml: Validate Current File**.
+
+To run it from a shortcut instead, open **Keyboard Shortcuts**
+(<kbd>Cmd</kbd>+<kbd>K</kbd> <kbd>Cmd</kbd>+<kbd>S</kbd>, or
+<kbd>Ctrl</kbd>+<kbd>K</kbd> <kbd>Ctrl</kbd>+<kbd>S</kbd>), search for
+"Run Task", and bind a key such as <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>
+to it.
+
+### Step 3: Read the Problems panel
+
+Findings appear in the **Problems** panel
+(<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> /
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>), each with its file, line and
+column: click one to jump to it, and <kbd>F8</kbd> / <kbd>Shift</kbd>+<kbd>F8</kbd>
+move to the next and previous one. Errors appear as errors; warnings (for
+example a map with no basemap, or a style value starting with the reserved
+`=`) as warnings; and notes, which explain how a valid value is read (such as
+a basemap written as just a `.pmtiles` file), as information.
+
+### Output format
+
+`--format vscode` prints one line per finding, in the shape the problem
+matcher reads, `file:line:column: severity: [path] message`, where severity is
+`error`, `warning`, or `info` for a note:
+
+```bash
+npx maplibre-yaml validate config.yaml --format vscode
+```
+
+```text
+/path/to/config.yaml:4:11: error: [config.center] center needs square brackets: center: [0, 0]
+/path/to/config.yaml:3:1: warning: [config.mapStyle] No mapStyle: this map has no basemap. …
+/path/to/other.yaml:6:3: info: [config.mapStyle] mapStyle: "data/nyc.pmtiles" names a .pmtiles file, so it is read as a Protomaps basemap …
+```
+
+The paths are absolute, which is why the task sets `"fileLocation": "absolute"`.
+
+### Complete tasks.json
+
+The repository has a [complete tasks.json](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/tasks.json)
+with three tasks, whose problem matchers pick up errors, warnings and notes:
+
+- **Validate Current File**: validates the open file.
+- **Validate All Configs**: validates every YAML file under `configs/`, with
+  the findings grouped by file in the Problems panel.
+- **Watch and Validate**: runs in the background with `--watch` and updates
+  the Problems panel each time you save.
+
+### Errors Don't Appear in Problems Panel
+
+1. Check that the task includes `problemMatcher`.
+2. Check that `--format vscode` is in the args.
+3. Check that `fileLocation` is `"absolute"`: the CLI prints full paths.
+4. Check the Problems panel's filter settings.
+5. Notes missing? The `regexp` must match `info` as well as `error` and
+   `warning`.
+
+### Task Not Found
+
+1. Check that `.vscode/tasks.json` is in the folder you opened in VS Code.
+2. Reload the VS Code window.
+3. Check that the JSON is valid.
+
+On the first run, VS Code may ask whether to allow the task to run: choose
+**Allow**. See VS Code's [Tasks documentation](https://code.visualstudio.com/docs/editor/tasks)
+and [problem matchers](https://code.visualstudio.com/docs/editor/tasks#_defining-a-problem-matcher)
+for more.

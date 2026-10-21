@@ -1,6 +1,6 @@
 /**
  * What a site's `src/content.config.ts` + `[...slug].astro` see when they use
- * the collection-item helpers (guides/collections-integration.mdx Quick
+ * the collection-item helpers (integrations/astro-collections.mdx Quick
  * Start). `astro/zod` is mapped by the tsconfig to zod 3 (Astro 4/5) or
  * zod 4 (Astro 6/7); Astro types `entry.data` as the schema's output.
  *

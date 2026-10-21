@@ -19,7 +19,7 @@ build step; any static host (GitHub Pages included) can publish it.
 - **Start:** [Quick start: a map in an HTML page](/getting-started/quick-start/)
 - **Then:** [Your first map, explained](/getting-started/first-map/) ·
   [Loading data](/guides/data-sources/) · [Layers & styling](/guides/layers/) ·
-  [Popups, hover & controls](/schema/interactivity/)
+  [Popups, hover & controls](/guides/popups/)
 - **Look up:** [HTML pages: the `<ml-map>` element](/integrations/web-components/) ·
   [YAML reference](/reference/yaml/)
 
@@ -31,7 +31,7 @@ push.
 - **Start:** [Quick start: Astro site on GitHub Pages](/getting-started/astro/)
 - **Then:** [Your first map, explained](/getting-started/first-map/) ·
   [Astro](/integrations/astro/) (build-time loading, `<FullPageMap>`) ·
-  [Astro content collections](/guides/collections-integration/)
+  [Astro content collections](/integrations/astro-collections/)
 - **Look up:** [Astro components](/integrations/astro/#map-component-api) ·
   [YAML reference](/reference/yaml/)
 
@@ -41,7 +41,7 @@ A map that moves as the reader scrolls through chapters of text and images
 (often called *scrollytelling*).
 
 - **Start:** [Story maps in plain HTML](/integrations/scrollytelling-html/),
-  or [Story maps in Astro](/integrations/astro/#scrollytelling-component)
+  or [Story maps in Astro](/integrations/astro-stories/)
 - **Then:** [Story file reference](/schema/scrollytelling/) (chapters, camera
   moves and actions)
 - **Look up:** [Scrollytelling block reference](/reference/yaml/scrollytelling/)
@@ -64,7 +64,7 @@ host yourself: PMTiles, FlatGeobuf, GeoParquet and Cloud Optimized GeoTIFF
 files, read in parts straight from a static host.
 
 - **Start:** [Large data: PMTiles, FlatGeobuf, GeoParquet & COG](/guides/cloud-native-data/)
-- **Then:** [Hosting: range requests and CORS](/guides/cloud-native-data/#hosting-range-requests-and-cors) ·
+- **Then:** [Hosting: range requests and CORS](/guides/publishing/#large-files-range-requests-and-cors) ·
   [Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap)
 - **Look up:** [Sources reference](/reference/yaml/sources/) ·
   [Cloud-native examples](/examples/gallery/#cloud-native-data)
@@ -80,7 +80,7 @@ and stories, written in the same file.
 - **Start:** [JavaScript next to the YAML](/getting-started/introduction/#how-it-works),
   then the [MapLibre examples in YAML](/examples/gallery/): every official
   MapLibre example, with which ones the format expresses on its own
-- **Then:** [Export to style.json](/guides/interactions/): `mlym emit` turns a
+- **Then:** [Export to style.json](/guides/export/): `mlym emit` turns a
   document into a plain `style.json`, and
   [Export classes](/guides/export-classes/) lists what each construct becomes
 - **Look up:** [JavaScript API](/integrations/vanilla-js/) ·

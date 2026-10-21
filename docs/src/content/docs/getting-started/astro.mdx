@@ -243,7 +243,7 @@ same as in step 4. If a data file doesn't load, the map lists it in a notice.
 
 The build prints a yellow *Some chunks are larger than 500 kB* warning. That
 is the map engine's size, not an error
-([details](/integrations/astro/#deploying-to-github-pages-or-any-subpath)).
+([details](/guides/publishing/#astro-sites)).
 
 ## 8. Push to GitHub
 
@@ -278,7 +278,7 @@ From now on, every push to `main` publishes the site again.
 
 | What you see | Look at |
 |---|---|
-| The map works locally but is blank or 404s on GitHub Pages | `base` must be the repository's name exactly, with its capitals: [404 on GitHub Pages](/integrations/astro/#maps-work-locally-but-404-on-github-pages) |
+| The map works locally but is blank or 404s on GitHub Pages | `base` must be the repository's name exactly, with its capitals: [404 on GitHub Pages](/guides/publishing/#works-locally-not-once-published) |
 | The *deploy* job fails, saying GitHub Pages isn't enabled or answering 404 | Settings → Pages → Source is not yet **GitHub Actions** (step 8, item 3); change it and run the workflow again |
 | `npm install` or `npm run build` stops with an engine or Node.js version error | Astro 7 needs Node.js 22.22 or later |
 | An error card on the map | The card names the problem and the line; see [Troubleshooting](/troubleshooting/) |
@@ -290,8 +290,9 @@ From now on, every push to `main` publishes the site again.
   of the YAML does.
 - [Loading data](/guides/data-sources/): your own GeoJSON files, and
   [large data](/guides/cloud-native-data/) such as PMTiles.
-- [Story maps in Astro](/integrations/astro/#scrollytelling-component) with
+- [Story maps in Astro](/integrations/astro-stories/) with
   `<Scrollytelling>`, and full-window maps with
   [`<FullPageMap>`](/integrations/astro/#fullpagemap-component).
 - [Astro](/integrations/astro/): everything the components do, including
-  build-time loading and content collections.
+  build-time loading, and [Astro content collections](/integrations/astro-collections/)
+  for a map on each page of a collection.
