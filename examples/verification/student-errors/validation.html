@@ -9,7 +9,8 @@
     card names the field and the fix: centre → did you mean "center"; an
     unquoted #hex → colours starting with # must be quoted; "bleu" → did you
     mean "blue"; curly quotes → retype as straight quotes; [lat, lng] → did you
-    mean [-98, 39]; "10px" → write a plain number.
+    mean [-98, 39]; "10px" → write a plain number; a layer naming a
+    source that doesn't exist → did you mean "cities" (ml-aot.133).
     Serve from the repo root:  pnpm verify:serve
     Then open: http://localhost:4174/examples/verification/student-errors/validation.html
   -->
@@ -26,7 +27,7 @@
   </script>
 </head>
 <body>
-  <header>PASS = six cards, each naming the field and the fix.</header>
+  <header>PASS = seven cards, each naming the field and the fix.</header>
   <main>
     <h2>centre</h2>
     <ml-map id="centre" style="height: 200px">
@@ -140,6 +141,25 @@
               url: "data/cities.geojson"
             paint:
               circle-radius: "10px"
+      </script>
+    </ml-map>
+    <h2>undefined source (ml-aot.133)</h2>
+    <ml-map id="nosource" style="height: 200px">
+      <script type="text/yaml">
+        type: map
+        id: v
+        config:
+          center: [-98, 39]
+          zoom: 3
+          mapStyle: "/examples/verification/configs/local-style.json"
+        sources:
+          cities:
+            type: geojson
+            url: "data/cities.geojson"
+        layers:
+          - id: dots
+            type: circle
+            source: citeis
       </script>
     </ml-map>
   </main>

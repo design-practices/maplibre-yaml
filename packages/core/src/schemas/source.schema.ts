@@ -265,27 +265,33 @@ export const StreamConfigSchema = z.object({
 export type StreamConfig = z.infer<typeof StreamConfigSchema>;
 
 /**
- * Loading UI configuration for data fetching.
+ * Appended to the "needs url, data or prefetchedData" error when the source
+ * has a `stream:` (ml-aot.134): a stream adds to data the source already
+ * has, so a stream-only source is refused, and this says how to start empty.
  *
- * @remarks
- * Controls the loading experience while data is being fetched.
- *
- * @example
- * ```yaml
- * loading:
- *   enabled: true
- *   message: "Loading earthquake data..."
- *   showErrorOverlay: true
- * ```
+ * @internal
  */
-export const LoadingConfigSchema = z.object({
-  enabled: z.boolean().default(false).describe("Enable loading UI overlays"),
-  message: z.string().optional().describe("Custom loading message to display"),
-  showErrorOverlay: z
-    .boolean()
-    .default(true)
-    .describe("Show error overlay on fetch failure"),
-});
+export const STREAM_START_HINT =
+  " A stream: adds to the source's data, so it needs somewhere to start: to start empty " +
+  "until the first message arrives, add data: { type: FeatureCollection, features: [] }.";
+
+/**
+ * A source's `loading:` block.
+ *
+ * @deprecated Has no effect: no per-source loading overlay is drawn
+ * (ml-aot.132). Still accepted, with a deprecation warning. While a map
+ * starts, `<ml-map>` shows its own "Loading map…" and sets `aria-busy`, and a
+ * data file that fails to load is reported in the notice on the map.
+ */
+export const LoadingConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false).describe("No effect (deprecated)"),
+    message: z.string().optional().describe("No effect (deprecated)"),
+    showErrorOverlay: z.boolean().default(true).describe("No effect (deprecated)"),
+  })
+  .describe(
+    'Deprecated, no effect: no per-source loading overlay is drawn. The map shows "Loading map…" while it starts'
+  );
 
 /** Inferred type for loading configuration. */
 export type LoadingConfig = z.infer<typeof LoadingConfigSchema>;
@@ -392,8 +398,11 @@ export type RefreshConfig = z.infer<typeof RefreshConfigSchema>;
  *
  * **Data Sources (one required):**
  * - `url` - Fetch GeoJSON from URL at runtime
- * - `data` - Inline GeoJSON object
- * - `stream` - Real-time WebSocket or SSE connection
+ * - `data` - Inline GeoJSON object (an empty FeatureCollection to start blank)
+ * - `prefetchedData` - Data fetched at build time
+ *
+ * A `stream` (WebSocket or SSE) adds to one of these; it is not a data source
+ * on its own, and it connects only beside a `refresh` block.
  *
  * **Fetch Strategy:**
  * - `runtime` (default) - Fetch when map loads, keeps bundle small
@@ -402,8 +411,8 @@ export type RefreshConfig = z.infer<typeof RefreshConfigSchema>;
  *
  * **Real-time Updates:**
  * - Use `refreshInterval` for polling (minimum 1000ms)
- * - Use `stream` for WebSocket/SSE
- * - Configure `updateStrategy` for merge vs replace
+ * - Use `stream` for WebSocket/SSE, with a `refresh` block beside it
+ * - Configure `refresh.updateStrategy` for merge vs replace
  *
  * @example Basic URL Source
  * ```yaml
@@ -432,20 +441,21 @@ export type RefreshConfig = z.infer<typeof RefreshConfigSchema>;
  * source:
  *   type: geojson
  *   url: "https://api.example.com/live-data"
- *   refreshInterval: 15000
- *   loading:
- *     message: "Loading live data..."
+ *   refresh:
+ *     refreshInterval: 15000
  * ```
  *
  * @example WebSocket Streaming
  * ```yaml
  * source:
  *   type: geojson
+ *   data: { type: FeatureCollection, features: [] }  # empty until messages arrive
  *   stream:
  *     type: websocket
  *     url: "wss://api.example.com/stream"
- *   updateStrategy: merge
- *   updateKey: "id"
+ *   refresh:
+ *     updateStrategy: merge
+ *     updateKey: "id"
  * ```
  *
  * @example Clustered Points
@@ -459,7 +469,6 @@ export type RefreshConfig = z.infer<typeof RefreshConfigSchema>;
  * ```
  *
  * @see {@link StreamConfigSchema} for streaming options
- * @see {@link LoadingConfigSchema} for loading UI options
  * @see {@link https://maplibre.org/maplibre-style-spec/sources/#geojson | MapLibre GeoJSON Source}
  */
 export const GeoJSONSourceSchema = z
@@ -512,9 +521,7 @@ export const GeoJSONSourceSchema = z
       .string()
       .optional()
       .describe("Update key (legacy, use refresh.updateKey)"),
-    loading: LoadingConfigSchema.optional().describe(
-      "Loading UI configuration"
-    ),
+    loading: LoadingConfigSchema.optional(),
     cache: CacheConfigSchema.optional().describe("Cache configuration"),
     // MapLibre clustering options
     cluster: z.boolean().optional().describe("Enable point clustering"),
@@ -578,7 +585,8 @@ export const GeoJSONSourceSchema = z
         message:
           "GeoJSON source requires at least one of: url, data, or prefetchedData. " +
           'Use "url" to fetch from an endpoint, "data" for inline GeoJSON, ' +
-          'or "prefetchedData" for build-time fetched data.',
+          'or "prefetchedData" for build-time fetched data.' +
+          (d.stream ? STREAM_START_HINT : ""),
       });
       return;
     }

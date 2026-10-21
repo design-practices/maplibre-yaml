@@ -137,16 +137,22 @@ export type ChapterAction = z.infer<typeof ChapterActionSchema>;
  * Chapter layer visibility configuration.
  *
  * @remarks
- * Controls which layers are visible during this chapter.
+ * Controls which layers are visible during this chapter. The ids name layers
+ * of the story (its `layers:`) or of the basemap style.
  *
  * @example
  * ```yaml
- * layers:
- *   show:
- *     - earthquakes
- *     - fault-lines
- *   hide:
- *     - buildings
+ * chapters:
+ *   - id: faults
+ *     title: Along the fault
+ *     center: [-122.4, 37.7]
+ *     zoom: 8
+ *     layers:
+ *       show:
+ *         - earthquakes
+ *         - fault-lines
+ *       hide:
+ *         - buildings
  * ```
  */
 export const ChapterLayersSchema = z

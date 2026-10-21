@@ -623,6 +623,21 @@ const DEPRECATIONS: DeprecationRule[] = [
       `Move it into a "refresh:" block (refresh.${field}).`,
     suggestion: "refresh",
   })),
+  {
+    // A source's `loading:` block (ml-aot.132) was accepted from the start
+    // and never drawn: the overlay it configures was never wired up. 0.9's
+    // map-level "Loading map…" indicator and the on-map data notices cover
+    // what it promised, so it is deprecated rather than built. v1: on the
+    // GeoJSON source itself; v2: under the source's `runtime:` (one in a v2
+    // source body already warns that it belongs there).
+    field: "loading",
+    applies: (value: Record<string, unknown>, path: (string | number)[]) =>
+      (value.type === "geojson" && path[0] !== "style") || path[path.length - 1] === "runtime",
+    message:
+      '"loading:" has no effect: maplibre-yaml draws no loading overlay for a source. ' +
+      'The map already shows "Loading map…" while it starts, and a data file that fails ' +
+      "to load is reported on the map. Remove loading:.",
+  },
   ...DEPRECATED_ACTION_TRIGGERS.map((trigger) => ({
     field: "action",
     applies: (_value: Record<string, unknown>, path: (string | number)[]) =>
@@ -863,49 +878,4 @@ export function hashSyntaxHint(yaml: string, line: number | undefined): string |
     }
   }
   return undefined;
-}
-
-/**
- * Warn when a layer's `source:` names a source the document does not
- * declare but almost does (`citeis` for `cities`).
- *
- * @remarks
- * Only a near-miss warns: a name matching nothing may be a source from the
- * basemap style (`openmaptiles`), which is legitimate and only checkable at
- * runtime — where the renderer reports a genuinely missing one on the page.
- * v1 declares sources under `sources:`; v2 under `style.sources:`.
- */
-export function checkSourceReferences(
-  value: unknown,
-  doc: Document,
-  lineCounter: LineCounter
-): ValidationWarning[] {
-  if (!isPlainObject(value)) return [];
-  const style = isPlainObject(value["style"]) ? value["style"] : undefined;
-  const v1 = Array.isArray(value["layers"]);
-  const declared = v1 ? value["sources"] : style?.["sources"];
-  const layers = v1 ? value["layers"] : style?.["layers"];
-  if (!isPlainObject(declared) || !Array.isArray(layers)) return [];
-  const layersPath = v1 ? ["layers"] : ["style", "layers"];
-  const names = Object.keys(declared);
-  const warnings: ValidationWarning[] = [];
-  layers.forEach((layer: unknown, index: number) => {
-    if (!isPlainObject(layer)) return;
-    const source = layer["source"];
-    if (typeof source !== "string" || names.includes(source)) return;
-    const hint = suggest(source, names);
-    if (!hint) return;
-    const path = [...layersPath, index, "source"];
-    const pos = positionForPath(doc, lineCounter, path);
-    const id = typeof layer["id"] === "string" ? `Layer "${layer["id"]}"` : "This layer";
-    warnings.push({
-      path: path.join("."),
-      message:
-        `${id} uses source "${source}", which is not declared under sources:. ` +
-        `Did you mean "${hint}"?`,
-      ...(pos ? { line: pos.line, column: pos.column } : {}),
-      suggestion: hint,
-    });
-  });
-  return warnings;
 }

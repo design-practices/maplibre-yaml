@@ -19,6 +19,7 @@
  * | `format:` disagreeing with the URL | warning: `format:` wins |
  * | `load:` on a source that isn't FlatGeobuf or GeoParquet | warning: no effect |
  * | `columns:` on a source that isn't GeoParquet | warning: no effect |
+ * | `stream:` without `refresh:` (or `refreshInterval:`) | warning: the stream never connects |
  * | a GeoParquet `columns:` list without a property the document uses | warning: names each one (it would read as missing) |
  *
  * Cross-field rules live here, not as schema refinements: another chained
@@ -188,6 +189,25 @@ export function checkSourceFormats(
           "columns: only applies to GeoParquet sources (a .parquet URL or format: geoparquet); " +
           "it does nothing here.",
         ...at([...runtimePath, "columns"]),
+      });
+    }
+
+    // A stream connects only beside a refresh: block, whose updateStrategy
+    // says how each message is applied (ml-aot.134). Live data on a
+    // FlatGeobuf / GeoParquet source is an error below instead.
+    if (
+      runtime["stream"] !== undefined &&
+      runtime["refresh"] === undefined &&
+      runtime["refreshInterval"] === undefined &&
+      !FEATURE_FILE_FORMATS.has(format)
+    ) {
+      warnings.push({
+        path: [...runtimePath, "stream"].join("."),
+        message:
+          "stream: connects only when the source also has a refresh: block, which says how each " +
+          "message is applied; without one the stream never opens. Add one next to stream:, e.g. " +
+          "refresh: { updateStrategy: merge, updateKey: id } (or updateStrategy: replace).",
+        ...at([...runtimePath, "stream"]),
       });
     }
 

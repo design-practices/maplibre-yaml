@@ -85,7 +85,7 @@ export interface MultiPointMapOptions {
   locations: LocationPoint[];
   /** MapLibre style URL, or a Protomaps basemap `{ pmtiles, flavor?, lang? }` (required if no global default) */
   mapStyle?: string | ProtomapsBasemap;
-  /** Padding around bounds in pixels */
+  /** Padding in pixels between the fitted bounds and the map edge, on every side (default 50) */
   padding?: number;
   /** Map ID for the block */
   id?: string;
@@ -117,7 +117,7 @@ export interface RouteMapOptions {
   route: RouteLine;
   /** MapLibre style URL, or a Protomaps basemap `{ pmtiles, flavor?, lang? }` (required if no global default) */
   mapStyle?: string | ProtomapsBasemap;
-  /** Padding around bounds in pixels */
+  /** Padding in pixels between the fitted bounds and the map edge, on every side (default 50) */
   padding?: number;
   /** Map ID for the block */
   id?: string;
@@ -603,6 +603,9 @@ export function buildMultiPointMapConfig(
       center,
       zoom: globalConfig?.defaultZoom ?? 10, // Will be overridden by bounds
       bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
+      // MapLibre's own option for the constructor's `bounds` fit: `padding`
+      // was accepted (and documented) but never reached the map (ml-aot.131).
+      fitBoundsOptions: { padding },
       mapStyle,
       interactive,
     },
@@ -735,7 +738,7 @@ export function buildRouteMapConfig(
   options: RouteMapOptions,
   globalConfig?: GlobalConfig,
 ): MapBlock {
-  const { route, mapStyle, id, interactive = true } = options;
+  const { route, mapStyle, padding = 50, id, interactive = true } = options;
 
   const center = calculateCenter(route.coordinates);
   const bounds = calculateBounds(route.coordinates);
@@ -745,6 +748,7 @@ export function buildRouteMapConfig(
       center,
       zoom: globalConfig?.defaultZoom ?? 10, // Will be overridden by bounds
       bounds: [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]],
+      fitBoundsOptions: { padding }, // see buildMultiPointMapConfig (ml-aot.131)
       mapStyle,
       interactive,
     },

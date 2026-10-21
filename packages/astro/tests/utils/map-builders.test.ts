@@ -19,6 +19,7 @@ import {
   expandGeoSugar,
   project,
   isSugarError,
+  YAMLParser,
 } from "@maplibre-yaml/core";
 import type { SugarKey } from "@maplibre-yaml/core";
 
@@ -188,6 +189,41 @@ describe("buildRouteMapConfig", () => {
     expect(lineLayer.layout!["line-cap"]).toBe("round");
     expect(lineLayer.layout!["line-join"]).toBe("round");
   });
+});
+
+// ── padding reaches the map (ml-aot.131) ─────────────────────────────
+//
+// `padding` was declared, documented and defaulted, then dropped: the built
+// config fitted `bounds` edge to edge. It now travels as MapLibre's own
+// `fitBoundsOptions`, which the renderer hands to the constructor with
+// `bounds` (renderer coverage: core u14-renderer.test.ts).
+
+describe("builder padding (ml-aot.131)", () => {
+  const cases = [
+    ["buildMultiPointMapConfig", (padding?: number) =>
+      buildMultiPointMapConfig({ locations: locationsArray, mapStyle: STYLE_URL, padding })],
+    ["buildRouteMapConfig", (padding?: number) =>
+      buildRouteMapConfig({ route, mapStyle: STYLE_URL, padding })],
+  ] as const;
+
+  for (const [name, build] of cases) {
+    it(`${name} applies the padding option to the bounds fit`, () => {
+      const config = build(12).config as Record<string, unknown>;
+      expect(config.bounds).toBeDefined();
+      expect(config.fitBoundsOptions).toEqual({ padding: 12 });
+    });
+
+    it(`${name} defaults the padding to 50, as documented`, () => {
+      const config = build(undefined).config as Record<string, unknown>;
+      expect(config.fitBoundsOptions).toEqual({ padding: 50 });
+    });
+
+    it(`${name}'s config with padding still validates`, () => {
+      const result = YAMLParser.safeParseMapBlockValue(build(0));
+      expect(result.errors).toEqual([]);
+      expect(result.success).toBe(true);
+    });
+  }
 });
 
 // ── Core-expander shape agreement (R7 / U4, ml-4jq) ─────────────────

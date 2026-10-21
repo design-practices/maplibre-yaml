@@ -645,20 +645,20 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "enabled": {
                             "type": "boolean",
                             "default": false,
-                            "description": "Enable loading UI overlays"
+                            "description": "No effect (deprecated)"
                           },
                           "message": {
                             "type": "string",
-                            "description": "Custom loading message to display"
+                            "description": "No effect (deprecated)"
                           },
                           "showErrorOverlay": {
                             "type": "boolean",
                             "default": true,
-                            "description": "Show error overlay on fetch failure"
+                            "description": "No effect (deprecated)"
                           }
                         },
                         "additionalProperties": false,
-                        "description": "Loading UI configuration",
+                        "description": "Deprecated, no effect: no per-source loading overlay is drawn. The map shows \\"Loading map…\\" while it starts",
                         "patternProperties": {
                           "^x-": {}
                         }
@@ -5215,20 +5215,20 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "enabled": {
                         "type": "boolean",
                         "default": false,
-                        "description": "Enable loading UI overlays"
+                        "description": "No effect (deprecated)"
                       },
                       "message": {
                         "type": "string",
-                        "description": "Custom loading message to display"
+                        "description": "No effect (deprecated)"
                       },
                       "showErrorOverlay": {
                         "type": "boolean",
                         "default": true,
-                        "description": "Show error overlay on fetch failure"
+                        "description": "No effect (deprecated)"
                       }
                     },
                     "additionalProperties": false,
-                    "description": "Loading UI configuration",
+                    "description": "Deprecated, no effect: no per-source loading overlay is drawn. The map shows \\"Loading map…\\" while it starts",
                     "patternProperties": {
                       "^x-": {}
                     }
@@ -8709,20 +8709,20 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "enabled": {
                                     "type": "boolean",
                                     "default": false,
-                                    "description": "Enable loading UI overlays"
+                                    "description": "No effect (deprecated)"
                                   },
                                   "message": {
                                     "type": "string",
-                                    "description": "Custom loading message to display"
+                                    "description": "No effect (deprecated)"
                                   },
                                   "showErrorOverlay": {
                                     "type": "boolean",
                                     "default": true,
-                                    "description": "Show error overlay on fetch failure"
+                                    "description": "No effect (deprecated)"
                                   }
                                 },
                                 "additionalProperties": false,
-                                "description": "Loading UI configuration",
+                                "description": "Deprecated, no effect: no per-source loading overlay is drawn. The map shows \\"Loading map…\\" while it starts",
                                 "patternProperties": {
                                   "^x-": {}
                                 }
@@ -13503,20 +13503,20 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                       "enabled": {
                                         "type": "boolean",
                                         "default": false,
-                                        "description": "Enable loading UI overlays"
+                                        "description": "No effect (deprecated)"
                                       },
                                       "message": {
                                         "type": "string",
-                                        "description": "Custom loading message to display"
+                                        "description": "No effect (deprecated)"
                                       },
                                       "showErrorOverlay": {
                                         "type": "boolean",
                                         "default": true,
-                                        "description": "Show error overlay on fetch failure"
+                                        "description": "No effect (deprecated)"
                                       }
                                     },
                                     "additionalProperties": false,
-                                    "description": "Loading UI configuration",
+                                    "description": "Deprecated, no effect: no per-source loading overlay is drawn. The map shows \\"Loading map…\\" while it starts",
                                     "patternProperties": {
                                       "^x-": {}
                                     }

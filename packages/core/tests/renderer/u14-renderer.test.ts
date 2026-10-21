@@ -122,6 +122,19 @@ describe("fitTo (U14)", () => {
     expect(opts.fitBoundsOptions).toEqual({ padding: 10 });
   });
 
+  it("bounds: with fitBoundsOptions (the Astro builders' padding, ml-aot.131) reach the constructor", () => {
+    const renderer = new MapRenderer(
+      document.createElement("div"),
+      { ...BASE, bounds: [-77.03, 38.88, -77.0, 38.89], fitBoundsOptions: { padding: 50 } } as any,
+      [],
+      {},
+      {}
+    );
+    const opts = (renderer.getMap() as any).ctorOptions;
+    expect(opts.bounds).toEqual([-77.03, 38.88, -77.0, 38.89]);
+    expect(opts.fitBoundsOptions).toEqual({ padding: 50 });
+  });
+
   it("announces the inline fit on load as camera:fit", () => {
     const renderer = new MapRenderer(
       document.createElement("div"),

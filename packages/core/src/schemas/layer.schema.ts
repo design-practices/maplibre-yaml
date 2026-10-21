@@ -43,8 +43,15 @@ import { LINK_TARGET_VALUES } from "../utils/html";
  *     url: "https://example.com/boundaries.geojson"
  *
  * pages:
- *   - blocks:
+ *   - path: "/"
+ *     title: "Boundaries"
+ *     blocks:
  *       - type: map
+ *         id: boundary-map
+ *         config:
+ *           center: [-74.006, 40.7128]
+ *           zoom: 10
+ *           mapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *         layers:
  *           - id: outline
  *             type: line
@@ -1401,17 +1408,30 @@ export type Layer = z.infer<typeof LayerSchema>;
  *
  * @example
  * ```yaml
- * # Global definition
+ * # Global definition (a multi-page root document)
  * layers:
  *   bikeLayer:
  *     id: bikes
  *     type: line
- *     # ...
+ *     source:
+ *       type: geojson
+ *       url: "https://example.com/bikes.geojson"
+ *     paint:
+ *       line-color: "#16a34a"
+ *       line-width: 2
  *
- * # Reference in map
+ * # Reference in a map
  * pages:
- *   - blocks:
- *       - layers:
+ *   - path: "/"
+ *     title: "Bike lanes"
+ *     blocks:
+ *       - type: map
+ *         id: bike-map
+ *         config:
+ *           center: [-74.006, 40.7128]
+ *           zoom: 12
+ *           mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+ *         layers:
  *           - $ref: "#/layers/bikeLayer"
  * ```
  */

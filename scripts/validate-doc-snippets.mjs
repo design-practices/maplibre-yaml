@@ -12,7 +12,9 @@
  *    `id:` and a layer `type:`), or a mapping whose keys are all map-block
  *    keys (`config:`, `layers:`, `sources:`, `controls:`, `legend:` …). The
  *    fragment is wrapped in a minimal map (a placeholder center, zoom and
- *    basemap fill in what it leaves out) and validated as part of it.
+ *    basemap fill in what it leaves out, and an empty GeoJSON source stands
+ *    in for each source a layers-only fragment names) and validated as part
+ *    of it.
  *
  * Other YAML (a layer's `paint:` on its own, frontmatter, CI workflows) is
  * skipped. A fence that is deliberately partial or wrong (an error example,
@@ -94,13 +96,30 @@ function wrapFragment(content) {
   } else {
     return null;
   }
+  // A layers-only fragment names sources the surrounding page defines
+  // elsewhere; since core 0.9.1 an undefined name is a validation error
+  // (ml-aot.133), so stand in an empty GeoJSON source for each. A fragment
+  // that writes its own `sources:` gets no stand-ins: a typo there still fails.
+  const sources = block.sources ?? placeholderSources(block.layers);
   return YAML.stringify({
     type: "map",
     id: "snippet",
     ...block,
+    ...(sources ? { sources } : {}),
     config: { ...PLACEHOLDER_CONFIG, ...(block.config ?? {}) },
     layers: block.layers ?? [],
   });
+}
+
+/** An empty GeoJSON source for each source name a layer list uses, or undefined for none. */
+function placeholderSources(layers) {
+  if (!Array.isArray(layers)) return undefined;
+  const names = layers
+    .map((l) => (l && typeof l === "object" ? l.source : undefined))
+    .filter((s) => typeof s === "string" && s !== "");
+  if (names.length === 0) return undefined;
+  const empty = { type: "geojson", data: { type: "FeatureCollection", features: [] } };
+  return Object.fromEntries(names.map((name) => [name, empty]));
 }
 
 /** True for a root document: no top-level `type:`, a top-level `pages:` key. */

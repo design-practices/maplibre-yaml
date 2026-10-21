@@ -32,7 +32,7 @@ export type AuthorHintsReason =
   | "quiet"
   /** The element (or its story) has the `debug` attribute. */
   | "debug"
-  /** The page is served from this computer: localhost, 127.x, [::1], file:. */
+  /** The page is served from this computer: localhost, *.localhost, 127.x, [::1], 0.0.0.0, [::], file:. */
   | "local"
   /** A bundler development build (Vite/Astro `import.meta.env.DEV`). */
   | "dev-build"

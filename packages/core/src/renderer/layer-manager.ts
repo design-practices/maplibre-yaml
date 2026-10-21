@@ -544,12 +544,10 @@ export class LayerManager {
         if (geojsonSource.attribution !== undefined) sourceSpec.attribution = geojsonSource.attribution;
 
         this.addMapSource(sourceId, sourceSpec);
-      } else if (geojsonSource.stream) {
-        this.addMapSource(sourceId, {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: [] },
-        });
       }
+      // No stream-only branch: validation refuses a GeoJSON source with only
+      // `stream:` (it starts from `url:` or `data:`), so one never reaches
+      // here from a validated document (ml-aot.134).
     } else if (source.type === "vector") {
       const vectorSource = this.resolveTileSource(
         source as unknown as Record<string, unknown>,

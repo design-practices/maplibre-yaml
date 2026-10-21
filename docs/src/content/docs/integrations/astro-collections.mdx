@@ -394,6 +394,10 @@ const config = buildMultiPointMapConfig({
 });
 ```
 
+`buildMultiPointMapConfig` and `buildRouteMapConfig` also take `padding`: the
+pixels kept between the data and the map edge when the map fits it (default
+50; applied from astro 0.7.1).
+
 ### buildPolygonMapConfig
 
 Creates a map displaying a polygon region:
