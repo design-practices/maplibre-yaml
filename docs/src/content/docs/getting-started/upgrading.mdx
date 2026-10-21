@@ -117,7 +117,7 @@ and what to do about each, if anything.
   `localhost`, in a `file://` page and under `astro dev` or `vite`, not on
   your published site. Add the `debug` attribute (or the `debug` prop on the
   Astro components) to see them on a deployed page; the console always has
-  them. ([When something goes wrong](/integrations/web-components/#when-something-goes-wrong))
+  them. ([Reading what the map tells you](/troubleshooting/#reading-what-the-map-tells-you))
 - **Strings that start with `=` in a style value now warn.** The format
   reserves them for a future shorthand: `text-field: "=upper({name})"` used to
   draw the text as written and now gets a warning suggesting a MapLibre
@@ -213,3 +213,47 @@ See [Troubleshooting](/troubleshooting/). If a map that worked on 0.8 stops
 working on 0.9 and the notes above don't explain it, please
 [open an issue](https://github.com/design-practices/maplibre-yaml/issues)
 with the YAML and what you see.
+
+## Older releases
+
+Moving a project from an older line, such as 0.5, straight to 0.9? Read the
+notes for each line you skip, oldest first. Each package's changelog on npm
+has the full list.
+
+### Upgrading to 0.6
+
+Three behaviour changes matter when you move to 0.6:
+
+- **`!html` in popups is trust-gated, not unconditional.** A popup `!html`
+  value renders as raw markup only under a **trusted** capability policy;
+  otherwise it is escaped and shown as text. `<ml-map>` is untrusted by
+  default, so there `!html` content is escaped. In Astro, `loadYAML` and
+  `loadFromGlob` now parse with core's own options, so an `!html` tag reaches
+  the map as the same `{ $html }` value core produces (before, the Astro
+  loader silently turned it into a plain string); it then renders under the
+  same trust rule.
+- **Malformed inline GeoJSON now warns.** A v1 document whose inline GeoJSON
+  `data` is malformed gets a warning, which `mlym validate --strict` and CI
+  runs treat as an error. Check inline geometry before upgrading.
+- **Format v2 `style.metadata` carries through.** In a v2 document,
+  `style.metadata` is copied to the root `metadata` of the emitted
+  `style.json`.
+
+### Astro with core 0.6.0 or earlier
+
+With `@maplibre-yaml/core` 0.6.0 or earlier, every `@maplibre-yaml/astro`
+component fails under `astro dev` with *Failed to create map: Map is not a
+constructor*, while `astro build` works: Vite never pre-bundles maplibre-gl
+when only a dependency's `.astro` file imports it. Current releases are not
+affected; upgrade core and the Astro package together
+([How to upgrade](#how-to-upgrade)). If a project must stay on core 0.6.0,
+tell Vite to pre-bundle maplibre-gl:
+
+```js
+// astro.config.mjs
+import { defineConfig } from "astro/config";
+
+export default defineConfig({
+  vite: { optimizeDeps: { include: ["maplibre-gl"] } },
+});
+```

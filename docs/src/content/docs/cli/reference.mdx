@@ -121,7 +121,7 @@ written as just a `.pmtiles` file). Notes never make a file invalid, and
 - Format: `file:line:column: severity: [path] message`, where `severity` is
   `error`, `warning`, or `info` for a note
 - Use with VS Code tasks for IDE integration
-- See [VS Code tasks](/cli/vscode/)
+- See [VS Code tasks](/guides/editor-setup/#validate-on-save-vs-code-task)
 
 #### Exit Codes
 
@@ -278,7 +278,7 @@ have) prints an error and exits with code `1`, and nothing is created.
 | -------- | ------- | ----------- |
 | `basic` | `index.html` (CDN import map, `<ml-map>` with a height, viewport meta tag; core loads from the CDN at the release line this CLI was built with) and `map.yaml` (a street basemap and one clickable point) | `npx serve .` in the folder, then open the address it prints. Needs no install or build. Another local server works if it supports range requests (which PMTiles, FlatGeobuf, GeoParquet and COG files need); `python -m http.server` doesn't |
 | `story` | `index.html` and a scrollytelling `story.yaml` | A story map with no build step: the page loads `<ml-scrollytelling>` from the CDN, at the release line this CLI was built with. Serve the folder (`npx serve .`) and scroll; see [Story maps in plain HTML](/integrations/scrollytelling-html/) |
-| `astro` | An Astro 7 site: a layout (with the viewport meta tag) and a page rendering `public/configs/map.yaml` with `@maplibre-yaml/astro`'s `<Map>`, the [optional integration](/integrations/astro/#editing-in-astro-dev) in `astro.config.mjs` with commented-out `site`/`base` lines for GitHub Pages, and a `.github/workflows/deploy.yml` that publishes it with `withastro/action`. Its `@maplibre-yaml/core` and `@maplibre-yaml/astro` ranges are the versions this CLI release was built with (`^0.9.0` and `^0.7.0` for CLI 0.6), and its `package.json` asks for Node.js 22.22 or later | `npm install`, then `npm run dev`. For GitHub Pages, set `site` and `base` in `astro.config.mjs` and push (see [Deploying to GitHub Pages](/integrations/astro/#deploying-to-github-pages-or-any-subpath)) |
+| `astro` | An Astro 7 site: a layout (with the viewport meta tag) and a page rendering `public/configs/map.yaml` with `@maplibre-yaml/astro`'s `<Map>`, the [optional integration](/integrations/astro/#editing-in-astro-dev) in `astro.config.mjs` with commented-out `site`/`base` lines for GitHub Pages, and a `.github/workflows/deploy.yml` that publishes it with `withastro/action`. Its `@maplibre-yaml/core` and `@maplibre-yaml/astro` ranges are the versions this CLI release was built with (`^0.9.0` and `^0.7.0` for CLI 0.6), and its `package.json` asks for Node.js 22.22 or later | `npm install`, then `npm run dev`. For GitHub Pages, set `site` and `base` in `astro.config.mjs` and push (see [Publishing & subpaths](/guides/publishing/#astro-sites)) |
 
 Every YAML file the templates write starts with the
 [schema modeline](/guides/editor-setup/), so editors with the YAML extension
@@ -336,7 +336,7 @@ npx maplibre-yaml emit <file> [options]
 | `--with-fallbacks` | | boolean | on | Export what has a style.json fallback (markers become a symbol layer with pin sprites, `fitTo` on inline data becomes a fixed camera, framed with the same default margin as the live map; on a `url:` source the authored `center`/`zoom` is kept, with a warning) and print a warning for each loss |
 | `--strict` | | boolean | off | Refuse the export (exit `1`) if anything would change what the map shows. Cannot be combined with `--with-fallbacks` |
 | `--target` | | string | | The maplibre-gl version the style is for, e.g. `5.6.0`. Features that version lacks (such as `state:` below its minimum, or `color-relief` below 5.6) are reported |
-| `--trust` | | string | `untrusted` | `trusted` or `untrusted`: how far the document's author is trusted. `trusted` lets capability-gated content (raw `!html`, `emit` interactions) through; see [Interactions](/guides/interactions/) |
+| `--trust` | | string | `untrusted` | `trusted` or `untrusted`: how far the document's author is trusted. `trusted` lets capability-gated content (raw `!html`, `emit` interactions) through; see [Interactions](/guides/export/) |
 | `--sprite-base` | | string | | Absolute URL where the folder holding the style will be served. Required, with `--out`, when the document generates sprite images (markers, `images:`), because MapLibre rejects relative sprite URLs |
 
 Warnings go to stderr, so `npx maplibre-yaml emit map.yaml > style.json`
@@ -695,6 +695,6 @@ git diff --cached --name-only --diff-filter=ACM -- '*.yaml' '*.yml' \
 ## See Also
 
 - [The CLI (mlym)](/cli/getting-started/) - Installation and basic usage
-- [VS Code tasks](/cli/vscode/) - Set up IDE integration
+- [VS Code tasks](/guides/editor-setup/#validate-on-save-vs-code-task) - Set up IDE integration
 - [YAML reference](/reference/yaml/) - Every key of the format
 - [Examples](/examples/) - Sample configurations
