@@ -1,6 +1,9 @@
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
-# Classic-style example: blueprint — a drafting sheet in the Mapzen spirit,
-# not a port of a Tangram original.
+# Classic-style example: blueprint — a drafting sheet after Tangram's
+# blueprint style (tangrams/tangram-sandbox styles/blueprint.yaml,
+# @patriciogv 2015, MIT), reinterpreted rather than ported. Tangram drew
+# white wall edges and roof-height outlines; the style spec can draw
+# neither, so this static document's buildings have no edges.
 #
 # The static tier: every layer is plain style spec, so this document is its
 # own export — `mlym emit --strict` compiles it with nothing lost. A

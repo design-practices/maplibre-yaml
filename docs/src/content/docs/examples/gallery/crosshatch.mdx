@@ -4,7 +4,7 @@ description: "Mapzen classic — Tangram's crosshatch, rebuilt as a pure style-s
 ---
 
 import LiveMap from '../../../../components/LiveMap.astro';
-import { Code } from '@astrojs/starlight/components';
+import { Aside, Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/crosshatch.yaml?raw';
 
 A Mapzen classic. Lower Manhattan as a pen-and-ink drawing, after the
@@ -12,6 +12,12 @@ A Mapzen classic. Lower Manhattan as a pen-and-ink drawing, after the
 Patricio Gonzalez Vivo wrote for Mapzen's Tangram in 2015. Ground, parks and
 water use Tangram's own hatch and paper textures. Buildings are hatched
 extrusions, and labels are set in a serif italic.
+
+<Aside title="Static version, no shader effect">
+This map is plain style spec, exactly what `mlym emit` exports. The live
+version, with the `tonal-hatch` effect shading every building face, is on
+[Mapzen classics](/examples/classics/#crosshatch).
+</Aside>
 
 <LiveMap src="/configs/gallery/crosshatch.yaml" height="520px" />
 

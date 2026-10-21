@@ -26,7 +26,7 @@ const doc = `/classics/${name}.yaml`;
 const style = `/classics/${name}/exported/style.json`;
 ---
 
-<section class="classic" data-classic={name} style={`--classic-pane-height: ${height}`}>
+<section class="classic" data-classic={name} data-effect={effect} style={`--classic-pane-height: ${height}`}>
   <!-- not-content: opt out of Starlight's markdown flow margins, which
        would push each map (and the map inside <ml-map>) down 1rem. -->
   <div class="classic-panes not-content">
@@ -47,6 +47,7 @@ const style = `/classics/${name}/exported/style.json`;
       <div class="classic-map" data-pane="exported" data-style={style}></div>
     </figure>
   </div>
+  <p class="classic-fallback not-content" data-fx-notice role="status" hidden></p>
   <p class="classic-links">
     <a href={doc} download={`${name}.yaml`} data-download="document">Download <code>{name}.yaml</code></a>
     <span aria-hidden="true">·</span>
@@ -101,15 +102,30 @@ const style = `/classics/${name}/exported/style.json`;
     return effects;
   }
 
-  /** Report honestly whether the live pane is running its effect. */
+  /**
+   * Report honestly whether the live pane is running its effect. When it is
+   * not, the badge turns into a warning and a notice under the panes says
+   * why, so a reader knows the live pane is showing the static fallback.
+   */
   async function watchEffect(section: HTMLElement, map: MLMap): Promise<void> {
     const status = section.querySelector<HTMLElement>("[data-fx-status]")!;
-    const set = (state: string, text: string) => {
+    const notice = section.querySelector<HTMLElement>("[data-fx-notice]")!;
+    const effectName = section.dataset.effect ?? "shader";
+    const set = (state: string, text: string, reason?: string) => {
       status.dataset.state = state;
       status.textContent = text;
+      status.title = reason ?? "";
+      if (state === "static") {
+        notice.textContent =
+          `The ${effectName} effect is not running in this browser` +
+          (reason ? ` (${reason})` : "") +
+          ", so the live pane shows the static fallback: the same map as the exported pane.";
+        notice.hidden = false;
+      } else notice.hidden = true;
     };
+    const fallback = (reason: string) => set("static", "static fallback: effect not running", reason);
     const fx = await loadEffects();
-    if (!fx) return set("static", "static fallback (effects unavailable)");
+    if (!fx) return fallback("the effects package failed to load");
     // For e2e/classics.spec.ts: what is attached to the live map right now.
     (section as HTMLElement & { __effects?: () => unknown[] }).__effects = () => fx.getAttachedEffects(map);
     // <ml-map> attaches once the package registers and its map has loaded.
@@ -119,13 +135,25 @@ const style = `/classics/${name}/exported/style.json`;
         // ready() resolves once visible tiles are built, or at once when the
         // effect declared absence — only then is `active` the final word.
         await Promise.all(attached.map((e) => e.handle?.ready()));
-        const off = attached.find((e) => !e.active);
-        if (off) return set("static", `static fallback (${off.reason ?? "effect unavailable here"})`);
-        return set("on", `effect on: ${attached.map((e) => e.type).join(", ")}`);
+        const report = () => {
+          const off = attached.find((e) => !e.active);
+          if (off) fallback(off.reason ?? "unavailable here");
+          else set("on", `effect on: ${attached.map((e) => e.type).join(", ")}`);
+          return !!off;
+        };
+        // An effect can also give up later (a shader that fails on first
+        // draw, tiles without bytes): re-check whenever the map settles.
+        if (!report()) {
+          const recheck = () => {
+            if (report()) map.off("idle", recheck);
+          };
+          map.on("idle", recheck);
+        }
+        return;
       }
       await new Promise((r) => setTimeout(r, 250));
     }
-    set("static", "static fallback (effect did not attach)");
+    fallback("the effect did not attach");
   }
 
   /** Serve a production-origin URL from this page's origin (PR previews, astro dev). */
@@ -246,6 +274,23 @@ const style = `/classics/${name}/exported/style.json`;
   .classic-fx[data-state="on"] {
     border-color: var(--sl-color-accent);
     color: var(--sl-color-accent-high);
+  }
+  /* The live pane fell back: say so loudly (the exported pane's badge stays neutral). */
+  .classic-fx[data-fx-status][data-state="static"] {
+    border-color: var(--sl-color-orange);
+    background: var(--sl-color-orange-low);
+    color: var(--sl-color-orange-high);
+    font-weight: 600;
+  }
+  .classic-fallback {
+    margin: 0.6rem 0 0;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--sl-color-orange);
+    border-left-width: 4px;
+    border-radius: 6px;
+    background: var(--sl-color-orange-low);
+    color: var(--sl-color-orange-high);
+    font-size: var(--sl-text-sm);
   }
   .classic-map {
     display: block;
