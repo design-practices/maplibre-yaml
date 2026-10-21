@@ -12,7 +12,8 @@
  *  - quick-start.mdx step 1 HTML + step 2 YAML (`<ml-map src>` via the CDN
  *    import-map pattern), and the "Add interactivity" YAML (click → popup),
  *    also on a phone-sized viewport (the viewport meta tag);
- *  - first-map.mdx host page + "Putting it together" YAML (formatted popup);
+ *  - first-map.mdx "Putting it together" YAML (formatted popup), on the
+ *    canonical CDN page from installation.mdx, which first-map links;
  *  - vanilla-js.mdx "JavaScript API" quick start (esm.sh `?external=maplibre-gl`
  *    + `MapRenderer.fromModel(toModel(...))`);
  *  - web-components.mdx Quick Start steps and the Slots example;
@@ -272,7 +273,8 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     page,
     baseURL,
   }) => {
-    const [html] = fences("getting-started/first-map.mdx", "html");
+    // First map uses the canonical CDN page from Installation (it links it).
+    const html = fences("getting-started/installation.mdx", "html").find((h) => h.includes('src="./map.yaml"'))!;
     const [structure] = fences("getting-started/first-map.mdx", "yaml");
     const fragment = fences("getting-started/first-map.mdx", "yaml").find((y) => y.includes("./data/places.geojson"))!;
     const [geojson] = fences("getting-started/first-map.mdx", "json");
@@ -282,7 +284,7 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     expect(yaml).toContain("id: my-places");
     const errors = await serveSnippet(page, baseURL!, "first-map-data", {
       "index.html": html,
-      "my-map.yaml": yaml,
+      "map.yaml": yaml,
       "data/places.geojson": geojson,
     });
     await page.goto(`/__docs/first-map-data/`, { waitUntil: "domcontentloaded" });
@@ -398,16 +400,17 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     page,
     baseURL,
   }) => {
-    const [html] = fences("getting-started/first-map.mdx", "html");
+    // First map uses the canonical CDN page from Installation (it links it).
+    const html = fences("getting-started/installation.mdx", "html").find((h) => h.includes('src="./map.yaml"'))!;
     const yaml = fences("getting-started/first-map.mdx", "yaml").find((y) =>
       y.includes("id: complete-example")
     )!;
-    expect(html).toContain('src="./my-map.yaml"');
+    expect(html).toContain('src="./map.yaml"');
     expectKnownUrls(baseURL!, html, yaml);
 
     const errors = await serveSnippet(page, baseURL!, "first-map", {
       "index.html": html,
-      "my-map.yaml": yaml,
+      "map.yaml": yaml,
     });
     await page.goto(`/__docs/first-map/`, { waitUntil: "domcontentloaded" });
     await orReport(waitForRenderedLayer(page, "cities"), errors);
@@ -435,13 +438,14 @@ test.describe("docs: getting-started snippets render verbatim", () => {
       hasTouch: true,
     });
     const page = await context.newPage();
-    const [html] = fences("getting-started/first-map.mdx", "html");
+    // First map uses the canonical CDN page from Installation (it links it).
+    const html = fences("getting-started/installation.mdx", "html").find((h) => h.includes('src="./map.yaml"'))!;
     const yaml = fences("getting-started/first-map.mdx", "yaml").find((y) =>
       y.includes("id: complete-example")
     )!;
     const errors = await serveSnippet(page, baseURL!, "first-map-mobile", {
       "index.html": html,
-      "my-map.yaml": yaml,
+      "map.yaml": yaml,
     });
     await page.goto(`/__docs/first-map-mobile/`, { waitUntil: "domcontentloaded" });
     await orReport(waitForRenderedLayer(page, "cities"), errors);
@@ -502,18 +506,18 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("README (core): the CDN page + earthquake-map.yaml render the earthquake layer", async ({
+  test("README (core): the CDN page + map.yaml render the earthquake layer", async ({
     page,
     baseURL,
   }) => {
     const [html] = readmeFences("packages/core/README.md", "html");
     const [yaml] = readmeFences("packages/core/README.md", "yaml");
-    expect(html).toContain('src="./earthquake-map.yaml"');
+    expect(html).toContain('src="./map.yaml"');
     expectKnownUrls(baseURL!, html, yaml);
 
     const errors = await serveSnippet(page, baseURL!, "readme-core", {
       "index.html": html,
-      "earthquake-map.yaml": yaml,
+      "map.yaml": yaml,
     });
     await page.goto(`/__docs/readme-core/`, { waitUntil: "domcontentloaded" });
     await orReport(waitForRenderedLayer(page, "earthquakes"), errors);

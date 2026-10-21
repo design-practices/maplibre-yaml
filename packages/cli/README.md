@@ -96,10 +96,12 @@ the same version accepts.
 
 ## Documentation
 
-- [CLI Getting Started](https://docs.maplibre-yaml.org/cli/getting-started/)
-- [Command Reference](https://docs.maplibre-yaml.org/cli/reference/) (every option, exit codes, config file)
-- [VSCode Integration](https://docs.maplibre-yaml.org/cli/vscode/) ·
-  [Editor Setup](https://docs.maplibre-yaml.org/guides/editor-setup/)
+- [The CLI (mlym)](https://docs.maplibre-yaml.org/cli/getting-started/)
+- [Command reference](https://docs.maplibre-yaml.org/cli/reference/) (every option, exit codes, config file)
+- [Editor setup](https://docs.maplibre-yaml.org/guides/editor-setup/): schema completion as you type,
+  and validate on save in VS Code
+- [Troubleshooting](https://docs.maplibre-yaml.org/troubleshooting/) ·
+  [Upgrading](https://docs.maplibre-yaml.org/getting-started/upgrading/)
 
 ## Related packages
 
