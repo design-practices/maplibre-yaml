@@ -271,7 +271,8 @@ import {
   expandSugarInScrollytellingBlock,
   type SugarRemap,
 } from "./expand-sugar";
-import { checkClassify } from "../classify/checks";
+import { checkClassify, checkClassifiedLegendItems } from "../classify/checks";
+import { restoreCategoryOrder } from "../classify/category-order";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
 import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
@@ -296,8 +297,10 @@ import {
   type ValidationWarning,
 } from "./validation-utils";
 import { isLikelyMisspelling } from "../utils/suggest";
-import { checkDocument, chapterLabel, checkLocaleKeys } from "./document-checks";
+import { checkDocument, chapterLabel, checkLocaleKeys, missingBasemapWarning, pmtilesBasemapNote } from "./document-checks";
+import { SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { checkSourceFormats } from "./format-checks";
+import { applyCogDefaults, checkCogSources } from "./cog-checks";
 import { reservedPrefixWarnings } from "./reserved-prefix";
 import { boundsProblem } from "../utils/bounds";
 import { explainIndentationError, explainQuoteError } from "./yaml-errors";
@@ -663,9 +666,13 @@ export class YAMLParser {
       const finalErrors = replaceHashCommentErrors([...errors, ...classifyErrors], hashValues);
       // A typo reported as THE error (`config.centre: Unknown key "centre" —
       // did you mean "center"?`) need not be repeated as a warning.
+      // Nor an unknown key an error already names with its own wording
+      // (`flavour:` in a Protomaps basemap).
+      const unknownKey = /^Unknown key "/;
       const repeated = (w: ValidationWarning) =>
-        w.suggestion !== undefined &&
-        finalErrors.some((e) => e.path === w.path && e.suggestion === w.suggestion);
+        (w.suggestion !== undefined &&
+          finalErrors.some((e) => e.path === w.path && e.suggestion === w.suggestion)) ||
+        (unknownKey.test(w.message) && finalErrors.some((e) => e.path === w.path && unknownKey.test(e.message)));
       return {
         success: false,
         errors: finalErrors,
@@ -679,6 +686,13 @@ export class YAMLParser {
     if (classifyErrors.length > 0) {
       return { success: false, errors: classifyErrors, warnings };
     }
+
+    // A `categories:` map with numeric keys keeps the order it was written
+    // in (JavaScript would list the numbers first).
+    restoreCategoryOrder(result.data, doc);
+
+    // Hand-written legend items beside a classified layer (ml-aot.94).
+    warnings.push(...checkClassifiedLegendItems(value, { doc, lineCounter }));
 
     // A field that tolerates an empty value still lost what the author
     // wrote: say so, as a warning.
@@ -977,6 +991,19 @@ export class YAMLParser {
     // `cities`) validates — the name could be a basemap source — but is
     // almost certainly a typo; say so with a did-you-mean (ml-aot.15).
     const sourceRefWarnings = checkSourceReferences(m.value, m.doc, m.lineCounter);
+    // No basemap: valid under the Astro builders, refused by <ml-map>.
+    const noBasemap = missingBasemapWarning(
+      m.value,
+      detected.version === 2 ? 2 : 1,
+      positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
+    );
+    if (noBasemap) sourceRefWarnings.push(noBasemap);
+    const pmtilesNote = pmtilesBasemapNote(
+      m.value,
+      detected.version === 2 ? 2 : 1,
+      positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
+    );
+    if (pmtilesNote) sourceRefWarnings.push(pmtilesNote);
     const withSourceRefWarnings = <T>(result: ParseResult<T>): ParseResult<T> =>
       sourceRefWarnings.length === 0
         ? result
@@ -1010,7 +1037,8 @@ export class YAMLParser {
         ["runtime", "map", "locale"],
         positioned ? { doc: m.doc, lineCounter: m.lineCounter } : undefined
       );
-      return localeWarnings.length === 0 ? v2 : { ...v2, warnings: [...v2.warnings, ...localeWarnings] };
+      const withLocale = localeWarnings.length === 0 ? v2 : { ...v2, warnings: [...v2.warnings, ...localeWarnings] };
+      return withRuntimeKeyHints(withLocale);
     }
 
     // Refs are resolved here too: a standalone block carries its own
@@ -1874,6 +1902,7 @@ const MISSING_KEY_EXAMPLES: Record<string, string> = {
   chapters: "a chapters: list",
   layers: "layers: [] (or a list of layers)",
   source: "source: (a source name or an inline source)",
+  pmtiles: "pmtiles: data/basemap.pmtiles (the path or URL of a Protomaps basemap .pmtiles file)",
 };
 
 /**
@@ -1929,7 +1958,7 @@ function withDocumentChecks<T>(
 /**
  * Merge the cloud-native source checks ({@link checkSourceFormats}, ml-cnv)
  * into a block's result: a format on a source type that can't draw it, or
- * live data on a FlatGeobuf source, fails the document; the rest warn.
+ * live data on a FlatGeobuf or GeoParquet source, fails the document; the rest warn.
  */
 function withFormatChecks<T>(
   result: ParseResult<T>,
@@ -1938,12 +1967,45 @@ function withFormatChecks<T>(
   positions: { doc: Document; lineCounter: LineCounter } | undefined
 ): ParseResult<T> {
   const checks = checkSourceFormats(value, version, positions);
+  // COG sources (ml-cnv.2): colorRamp/encoding checks, and tileSize 256
+  // unless the author wrote one.
+  const cog = checkCogSources(value, version, positions);
+  if (result.success) applyCogDefaults(result.data, value, version);
+  checks.errors.push(...cog.errors);
+  // A specific colorRamp warning replaces the generic "Unknown key" one.
+  const specific = new Set(cog.warnings.map((w) => w.path));
+  result = { ...result, warnings: result.warnings.filter((w) => !specific.has(w.path)) };
+  checks.warnings.push(...cog.warnings);
   if (checks.errors.length === 0 && checks.warnings.length === 0) return result;
   const warnings = [...result.warnings, ...checks.warnings];
   if (checks.errors.length === 0) return { ...result, warnings };
   const seen = new Set(result.errors.map((e) => `${e.path}\u0000${e.message}`));
   const added = checks.errors.filter((e) => !seen.has(`${e.path}\u0000${e.message}`));
   return { success: false, errors: [...result.errors, ...added], warnings } as ParseResult<T>;
+}
+
+/**
+ * A v2 source carrying one of maplibre-yaml's own source keys (`colorRamp:`,
+ * `format:`, `load:`, `columns:`, `refresh:`, …) in its style body instead of
+ * under `runtime:`: say where it goes, not just "Unknown key" — the key is a
+ * real one, in the wrong place (ml-aot.123).
+ */
+function withRuntimeKeyHints<T>(result: ParseResult<T>): ParseResult<T> {
+  const runtimeKeys: readonly string[] = SOURCE_RUNTIME_KEYS;
+  let changed = false;
+  const warnings = result.warnings.map((w) => {
+    const m = /^style\.(?:sources\.[^.]+|layers\.\d+\.source)\.([^.]+)$/.exec(w.path);
+    const key = m?.[1];
+    if (!key || !runtimeKeys.includes(key) || w.message !== `Unknown key "${key}".`) return w;
+    changed = true;
+    return {
+      ...w,
+      message:
+        `${key}: is a maplibre-yaml key, not a MapLibre style one: in a version 2 document it goes ` +
+        `under the source's runtime: block (runtime: { ${key}: … }), next to the style keys.`,
+    };
+  });
+  return changed ? { ...result, warnings } : result;
 }
 
 const UNION_FALLBACK = "Value does not match any of the expected formats";

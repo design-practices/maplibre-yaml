@@ -242,7 +242,8 @@ style:
       /refresh/.test(w.path)
     );
     expect(refreshWarning).toBeDefined();
-    expect(refreshWarning?.message).toMatch(/unknown key/i);
+    // Not just "unknown": it is a real key in the wrong place (ml-aot.123).
+    expect(refreshWarning?.message).toContain("goes under the source's runtime: block");
   });
 
   it("warns on a typo'd top-level `stlye:` key", () => {

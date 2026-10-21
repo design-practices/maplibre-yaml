@@ -23,6 +23,7 @@
  * and the export registry's `export()` hook.
  */
 
+import { fitToPadding, type FitPadding } from "../utils/fit-padding";
 import type { MapModel } from "../model/types";
 import type { FitToConfig } from "../schemas/map.schema";
 import type { EmitWarning } from "./project";
@@ -66,17 +67,19 @@ function round(value: number, digits: number): number {
 export function cameraForBounds(
   bounds: Bounds,
   viewport: { width: number; height: number } = FIT_TO_REFERENCE_VIEWPORT,
-  padding = 0,
+  padding: number | FitPadding = 0,
   maxZoom = DEFAULT_MAX_ZOOM
 ): { center: [number, number]; zoom: number } {
+  const pad: FitPadding =
+    typeof padding === "number" ? { top: padding, right: padding, bottom: padding, left: padding } : padding;
   const [[west, south], [east, north]] = bounds;
   const x0 = mercatorX(west);
   const x1 = mercatorX(east);
   const y0 = mercatorY(north);
   const y1 = mercatorY(south);
 
-  const usableW = Math.max(1, viewport.width - 2 * padding);
-  const usableH = Math.max(1, viewport.height - 2 * padding);
+  const usableW = Math.max(1, viewport.width - pad.left - pad.right);
+  const usableH = Math.max(1, viewport.height - pad.top - pad.bottom);
   const spanX = (x1 - x0) * WORLD_SIZE_Z0;
   const spanY = (y1 - y0) * WORLD_SIZE_Z0;
   const scale = Math.min(
@@ -85,8 +88,11 @@ export function cameraForBounds(
   );
   const zoom = Math.max(0, Math.min(maxZoom, Number.isFinite(scale) ? Math.log2(scale) : maxZoom));
 
-  const mx = (x0 + x1) / 2;
-  const my = (y0 + y1) / 2;
+  // Uneven padding moves the data off-centre: the map's centre sits half the
+  // difference away from the data's, as MapLibre's fitBounds places it.
+  const worldSize = WORLD_SIZE_Z0 * 2 ** zoom;
+  const mx = (x0 + x1) / 2 + (pad.right - pad.left) / 2 / worldSize;
+  const my = (y0 + y1) / 2 + (pad.bottom - pad.top) / 2 / worldSize;
   const lng = mx * 360 - 180;
   const lat = (Math.atan(Math.sinh(Math.PI * (1 - 2 * my))) * 180) / Math.PI;
 
@@ -139,7 +145,7 @@ export function buildFitToLowering(fitTo: FitToConfig, model: MapModel): FitToLo
   const camera = cameraForBounds(
     bounds,
     FIT_TO_REFERENCE_VIEWPORT,
-    fitTo.padding ?? 0,
+    fitToPadding(fitTo, FIT_TO_REFERENCE_VIEWPORT),
     fitTo.maxZoom ?? DEFAULT_MAX_ZOOM
   );
   const { width, height } = FIT_TO_REFERENCE_VIEWPORT;

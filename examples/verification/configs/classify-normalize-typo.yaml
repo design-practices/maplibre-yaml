@@ -1,0 +1,24 @@
+# classify field hint (ml-aot.95 / ml-aot.105): a NAMED url: source with a
+# misspelt normalize: divisor ("populaton") under computed breaks.
+type: map
+id: classify-normalize-typo
+config:
+  center: [1.5, 1]
+  zoom: 6.5
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  districts:
+    type: geojson
+    url: "/examples/verification/data/classify-rates.geojson"
+layers:
+  - id: typo-normalize
+    type: fill
+    source: districts
+    label: Cases per 100k
+    classify:
+      field: cases
+      normalize: populaton
+      multiply: 100000
+      method: quantile
+      classes: 3
+      palette: Purples

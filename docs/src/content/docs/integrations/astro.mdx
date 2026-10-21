@@ -1146,6 +1146,35 @@ import { Map } from '@maplibre-yaml/astro';
 </script>
 ```
 
+## Upgrading an existing project
+
+A project keeps the versions it was created with. Before 1.0, a range such as
+`"@maplibre-yaml/core": "^0.8.1"` stays within 0.8.x, so `npm install` never
+moves it to a newer minor release on its own, and features documented here
+for a later release are missing until you upgrade. Upgrade core and the Astro
+package together:
+
+<Tabs syncKey="pkg">
+<TabItem label="npm">
+```bash
+npm install @maplibre-yaml/core@latest @maplibre-yaml/astro@latest
+```
+</TabItem>
+<TabItem label="pnpm">
+```bash
+pnpm add @maplibre-yaml/core@latest @maplibre-yaml/astro@latest
+```
+</TabItem>
+<TabItem label="Yarn">
+```bash
+yarn add @maplibre-yaml/core@latest @maplibre-yaml/astro@latest
+```
+</TabItem>
+</Tabs>
+
+This rewrites both ranges in `package.json`. Restart `astro dev` afterwards.
+Each release's changes are listed in the packages' changelogs on npm.
+
 ## Upgrading to 0.6
 
 Three behavior changes matter when you move an Astro project to 0.6:
@@ -1367,9 +1396,10 @@ default one at `legendPosition` (v1: root `legend:`, v2: `runtime.legend`);
 when the document declares its own `legend:`, that one wins untouched.
 
 Legend entries come from the layers' `legend:` fields (see
-[the layers reference](/schema/layers/)) or the legend block's own `items:`.
-Nothing is generated from paint colors: a layer without `legend:` doesn't
-appear, and when no layer has one, no legend box is shown (the component
+[the layers reference](/schema/layers/)), the legend block's own `items:`,
+and the classes of a [classified](/guides/thematic-maps/) layer (listed after
+`items:`). Nothing is generated from paint colors: a layer without `legend:`
+or `classify:` doesn't appear, and when no layer has one, no legend box is shown (the component
 warns at build time, and `<ml-map>` warns in the console).
 
 ```yaml
@@ -2071,7 +2101,7 @@ All map builders (`buildPointMapConfig`, `buildMultiPointMapConfig`, `buildPolyg
 |-------|------|-------------|
 | `title` | `string?` | Application title |
 | `description` | `string?` | Application description |
-| `defaultMapStyle` | `string (URL)?` | Default basemap style for all maps |
+| `defaultMapStyle` | `string (URL)` or `{ pmtiles, flavor?, lang? }`? | Default basemap for all maps: a style URL, or a [Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap) from a `.pmtiles` file in `public/` |
 | `defaultCenter` | `[lng, lat]?` | Default map center |
 | `defaultZoom` | `number (0-24)?` | Default zoom level |
 | `theme` | `"light" \| "dark"` | Default theme (default: `"light"`) |

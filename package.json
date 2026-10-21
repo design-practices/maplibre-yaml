@@ -31,6 +31,8 @@
     "docs:validate-snippets": "node scripts/validate-doc-snippets.mjs",
     "changeset": "changeset",
     "version": "changeset version",
+    "version-packages": "changeset version && node scripts/sync-cdn-pins.mjs",
+    "sync-cdn-pins": "node scripts/sync-cdn-pins.mjs",
     "release": "bash scripts/release.sh",
     "verify:serve": "node e2e/server.mjs",
     "verify:docs-gallery": "node scripts/verify-docs-gallery.mjs",

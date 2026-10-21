@@ -138,6 +138,19 @@ mapStyle: "https://your-server.com/styles/dark.json"
 mapStyle: "https://api.maptiler.com/maps/streets/style.json?key=YOUR_KEY"
 ```
 
+It can also be a basemap you host yourself: one `.pmtiles` file of
+OpenStreetMap data next to your page, with no API key and no tile server.
+Three lines of YAML draw it:
+
+```yaml
+mapStyle:
+  pmtiles: data/brooklyn.pmtiles   # the file, next to your page (public/ in Astro)
+  flavor: light                    # or dark, white, grayscale, black
+```
+
+See [Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap)
+for making the file.
+
 ## Adding a simple layer
 
 Layers display data on your map. Here's a minimal circle layer:

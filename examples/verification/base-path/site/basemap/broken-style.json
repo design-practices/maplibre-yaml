@@ -1,0 +1,9 @@
+{
+  "version": 8,
+  "name": "self-hosted basemap with a wrong file name (verification)",
+  "sources": { "protomaps": { "type": "vector", "url": "pmtiles://not-here.pmtiles" } },
+  "layers": [
+    { "id": "background", "type": "background", "paint": { "background-color": "#f2efe9" } },
+    { "id": "landuse", "type": "fill", "source": "protomaps", "source-layer": "districts", "paint": { "fill-color": "#cde6c0" } }
+  ]
+}

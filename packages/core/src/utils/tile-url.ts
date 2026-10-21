@@ -51,3 +51,28 @@ export function absolutizeVectorTiles<T extends Record<string, unknown>>(spec: T
     ),
   };
 }
+
+/**
+ * A tile source's own URLs made absolute against the page: `tiles` (every
+ * tile type) and a relative TileJSON `url`. MapLibre fetches some of these
+ * in its worker (a relative URL then loads nothing), and a basemap style's
+ * relative URLs are resolved against the style instead (renderer/
+ * basemap-urls): a document source that is already absolute can never be
+ * mistaken for one of those.
+ */
+export function absolutizeSourceUrls<T extends Record<string, unknown>>(spec: T): T {
+  const type = spec["type"];
+  if (type !== "vector" && type !== "raster" && type !== "raster-dem") return spec;
+  let out: Record<string, unknown> = spec;
+  const url = spec["url"];
+  if (typeof url === "string" && url !== "" && !HAS_SCHEME.test(url)) {
+    out = { ...out, url: absolutizeTileTemplate(url) };
+  }
+  if (Array.isArray(spec["tiles"])) {
+    out = {
+      ...out,
+      tiles: (spec["tiles"] as unknown[]).map((t) => (typeof t === "string" ? absolutizeTileTemplate(t) : t)),
+    };
+  }
+  return out as T;
+}

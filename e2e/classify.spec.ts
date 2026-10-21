@@ -14,7 +14,7 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 import { PNG } from "pngjs";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 
 const PAGE = "/examples/verification/18-classify.html";
 const STORY = "/examples/verification/story-layout/index.html?doc=classify";
@@ -281,3 +281,74 @@ test("classify + fitTo on one url: source: one fetch, built framed, first frame 
   expect(requests).toBe(1);
   expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
 });
+
+test("a field the fetched data does not have: console warning and author note, for a named url: source (ml-aot.95/.105)", async ({ page }) => {
+  const errors = await guard(page);
+  const warnings: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "warning") warnings.push(m.text());
+  });
+  await page.goto("/examples/verification/21-classify-field-hint.html", { waitUntil: "domcontentloaded" });
+
+  // field: Cases — the data has "cases" (a named source, fetched after the
+  // layers are added: the hint must judge the fetched data, not the empty
+  // placeholder the source starts with).
+  const field = page.locator("#field .ml-map-notice");
+  await expect(field).toContainText("Notes for this map's author", { timeout: 60_000 });
+  await expect(field).toContainText('classify field: "Cases" is not a property of any feature');
+  await expect(field).toContainText('Did you mean "cases"?');
+  await expect(field).toContainText('"population"');
+
+  // normalize: populaton under computed breaks.
+  const normalize = page.locator("#normalize .ml-map-notice");
+  await expect(normalize).toContainText('classify normalize: "populaton" is not a property of any feature', {
+    timeout: 60_000,
+  });
+  await expect(normalize).toContainText('Did you mean "population"?');
+
+  expect(warnings.some((w) => w.includes('classify field: "Cases"') && w.includes('Did you mean "cases"?'))).toBe(true);
+  expect(warnings.some((w) => w.includes('classify normalize: "populaton"'))).toBe(true);
+  mkdirSync("e2e/screenshots", { recursive: true });
+  await page.screenshot({ path: "e2e/screenshots/classify-field-hint.png", fullPage: true });
+  expect(errors).toEqual([]);
+});
+
+for (const doc of ["choropleth", "rate"]) {
+  test(`phone width: the legend and the layer panel share the top edge without overlapping — ${doc} (ml-aot.111)`, async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const page = await context.newPage();
+    const errors = await guard(page);
+    // The docs site's own config, with a local basemap and the data file
+    // where this server has it.
+    await page.route(`**/docs/public/configs/classify/choropleth.yaml`, async (route) => {
+      const yaml = readFileSync(`docs/public/configs/classify/${doc}.yaml`, "utf8")
+        .replace(/mapStyle: .*/, 'mapStyle: "/examples/verification/configs/local-style.json"')
+        .replace(/url: \/data\/classify\//g, "url: /docs/public/data/classify/");
+      await route.fulfill({ body: yaml, contentType: "text/yaml" });
+    });
+    await page.goto("/examples/verification/22-classify-phone.html", { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#map .ml-map-legend .legend-label", { timeout: 60_000 });
+    await page.waitForSelector("#map .ml-map-params");
+    const boxes = await page.evaluate(() => {
+      const r = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
+      const legend = r("#map .ml-map-legend details");
+      const panel = r("#map .ml-map-params");
+      const map = r("#map");
+      return {
+        overlap:
+          legend.left < panel.right - 1 &&
+          panel.left < legend.right - 1 &&
+          legend.top < panel.bottom - 1 &&
+          panel.top < legend.bottom - 1,
+        inside: legend.left >= map.left && panel.right <= map.right,
+      };
+    });
+    expect(boxes).toEqual({ overlap: false, inside: true });
+    mkdirSync("e2e/screenshots", { recursive: true });
+    await page.screenshot({ path: `e2e/screenshots/classify-phone-${doc}.png` });
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+}

@@ -33,6 +33,7 @@
     "yaml": "^2.4.0"
   },
   "devDependencies": {
+    "@maplibre/maplibre-gl-style-spec": "^26.4.4",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^1.4.0",
     "tsup": "^8.0.0",

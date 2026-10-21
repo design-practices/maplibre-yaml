@@ -34,15 +34,14 @@ export function formatTypeMessage(received: unknown): string | undefined {
       );
     case "geoparquet":
       return (
-        `${word} is a file format, not a source type: GeoParquet files are read with ` +
-        "type: geojson. This version of maplibre-yaml can't read GeoParquet yet (it's " +
-        "planned) — convert the file to FlatGeobuf or GeoJSON for now."
+        `${word} is a file format, not a source type. Keep the url: and set type: geojson — ` +
+        "the .parquet (or .geoparquet) file name tells maplibre-yaml to read it as GeoParquet."
       );
     case "cog":
       return (
-        `${word} is a file format, not a source type: a Cloud Optimized GeoTIFF is read ` +
-        "with type: raster (or raster-dem for elevation). This version of maplibre-yaml " +
-        "can't read COGs on its own yet (it's planned)."
+        `${word} is a file format, not a source type. Keep the url: and set type: raster ` +
+        "(or raster-dem for elevation) — the .tif file name (or a cog:// URL) tells " +
+        "maplibre-yaml to read it as a Cloud Optimized GeoTIFF."
       );
     case "mbtiles":
       return (

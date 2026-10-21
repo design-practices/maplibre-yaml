@@ -1,0 +1,7 @@
+type: map
+id: pmtiles-string
+config:
+  center: [-73.99, 40.70]
+  zoom: 12
+  mapStyle: data/nyc.pmtiles
+layers: []

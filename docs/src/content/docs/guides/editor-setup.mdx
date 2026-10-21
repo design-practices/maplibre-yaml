@@ -35,13 +35,14 @@ To pin a version, use the copy that ships inside the npm package, served by a
 CDN. It exists for every release from 0.4 on and never moves:
 
 ```text
-https://cdn.jsdelivr.net/npm/@maplibre-yaml/core@0.7/schemas/map.schema.json
+https://cdn.jsdelivr.net/npm/@maplibre-yaml/core@0.8/schemas/map.schema.json
 ```
 
-Change `0.7` to the version you use (`@0.7` is the newest 0.7.x; `@0.7.1` is
-exactly that release). The docs site also serves the current release under
-`https://docs.maplibre-yaml.org/schema/v0.7/<block>.schema.json`; addresses
-for older versions there (such as `/schema/v0.6/`) redirect to the CDN copy.
+Change the version after `core@` to the one your project uses: a release line
+such as `@0.8` is the newest release in that line, and a full version such as
+`@0.8.1` is exactly that release. The docs site also serves the current
+release under `https://docs.maplibre-yaml.org/schema/v0.8/<block>.schema.json`;
+addresses for older versions there redirect to the CDN copy.
 
 ## Option 1: The modeline (recommended)
 

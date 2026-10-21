@@ -119,6 +119,30 @@ describe("block errors — positioned, with did-you-mean", () => {
     expect(error!.message).toMatch(/Blues has colours for up to 9 classes/);
   });
 
+  it("refuses more classes than the default palette can colour (ml-aot.78)", () => {
+    const breaks = Array.from({ length: 12 }, (_, i) => (i + 1) * 10); // 13 classes
+    const [error] = only(parse(`  - id: a
+    type: fill
+    source: tracts
+    classify: { field: v, breaks: [${breaks.join(", ")}] }
+`));
+    expect(error!.path).toBe("layers.0.classify.breaks");
+    expect(error!.message).toContain("13 classes");
+    expect(error!.message).toContain("colors:");
+    // 12 classes still fit viridis; with colors: any count works.
+    expect(parse(`  - id: a
+    type: fill
+    source: tracts
+    classify: { field: v, breaks: [${breaks.slice(0, 11).join(", ")}] }
+`).success).toBe(true);
+    const colors = breaks.map(() => '"#123456"').concat('"#654321"');
+    expect(parse(`  - id: a
+    type: fill
+    source: tracts
+    classify: { field: v, breaks: [${breaks.join(", ")}], colors: [${colors.join(", ")}] }
+`).success).toBe(true);
+  });
+
   it("checks breaks go up", () => {
     const [error] = only(parse(`  - id: a
     type: fill
@@ -182,6 +206,47 @@ describe("block errors — positioned, with did-you-mean", () => {
   });
 });
 
+describe("categories map order (ml-aot.80)", () => {
+  it("keeps the authored order of numeric keys, as the list form", async () => {
+    const { resolveClassify, classifyLegendEntries } = await import("../../src/classify/compile");
+    const result = parse(`  - id: zones
+    type: fill
+    source: tracts
+    classify:
+      field: code
+      categories:
+        10: red
+        2: green
+        b: blue
+        1: black
+`);
+    expect(result.errors).toEqual([]);
+    const classify = (result.data as never as { layers: Array<{ classify: never }> }).layers[0]!.classify;
+    const record = resolveClassify(classify, "fill");
+    expect(record.categories).toEqual([
+      { value: "10", color: "red" },
+      { value: "2", color: "green" },
+      { value: "b", color: "blue" },
+      { value: "1", color: "black" },
+    ]);
+    expect(classifyLegendEntries(record).slice(1, 5).map((e) => e.label)).toEqual(["10", "2", "b", "1"]);
+  });
+
+  it("leaves a map JavaScript would not reorder as written", () => {
+    const result = parse(`  - id: zones
+    type: fill
+    source: tracts
+    classify:
+      field: zone
+      categories: { residential: "#f6e8c3", commercial: "#d8b365" }
+`);
+    const classify = (result.data as never as { layers: Array<{ classify: Record<string, unknown> }> }).layers[0]!
+      .classify;
+    expect(classify["categories"]).toEqual({ residential: "#f6e8c3", commercial: "#d8b365" });
+    expect(classify["colors"]).toBeUndefined();
+  });
+});
+
 describe("layer checks", () => {
   it("refuses method: over a vector tile source, and says why", () => {
     const [error] = only(parse(`  - id: v
@@ -204,6 +269,56 @@ describe("layer checks", () => {
     classify: { field: income, method: jenks }
 `));
     expect(error!.message).toContain("not a GeoJSON source declared in this document");
+  });
+
+  it("refuses method: over a source read by view, in every spelling", () => {
+    const bare = YAMLParser.safeParseMapBlock(
+      HEAD.replace("url: /data/tracts.geojson", "url: /data/tracts.fgb\n    load: viewport") +
+        `  - id: v
+    type: fill
+    source: tracts
+    classify: { field: income, method: quantile }
+`
+    );
+    expect(bare.success).toBe(false);
+    expect(bare.errors[0]!.path).toBe("layers.0.classify.method");
+    expect(bare.errors[0]!.message).toContain("load: viewport");
+
+    // The object form.
+    const object = YAMLParser.safeParseMapBlock(
+      HEAD.replace(
+        "url: /data/tracts.geojson",
+        "url: /data/tracts.fgb\n    load: { mode: viewport, minzoom: 12 }"
+      ) +
+        `  - id: v
+    type: fill
+    source: tracts
+    classify: { field: income, method: quantile }
+`
+    );
+    expect(object.success).toBe(false);
+    expect(object.errors[0]!.path).toBe("layers.0.classify.method");
+
+    // An inline source on the layer.
+    const inline = parse(`  - id: v
+    type: fill
+    source: { type: geojson, url: /data/t.fgb, load: { mode: viewport } }
+    classify: { field: income, method: jenks }
+`);
+    expect(inline.success).toBe(false);
+    expect(inline.errors[0]!.path).toBe("layers.0.classify.method");
+  });
+
+  it("keeps explicit breaks: on a source read by view", () => {
+    const result = YAMLParser.safeParseMapBlock(
+      HEAD.replace("url: /data/tracts.geojson", "url: /data/tracts.fgb\n    load: { mode: viewport }") +
+        `  - id: v
+    type: fill
+    source: tracts
+    classify: { field: income, breaks: [10, 20] }
+`
+    );
+    expect(result.errors).toEqual([]);
   });
 
   it("refuses classify plus an authored colour on the same property", () => {
@@ -316,6 +431,30 @@ style:
 `);
     expect(bad.success).toBe(false);
     expect(bad.errors[0]!.path).toBe("style.layers.0.classify.method");
+  });
+
+  it("refuses method: over a v2 source whose runtime.load reads by view", () => {
+    const bad = YAMLParser.safeParseMapBlock(`version: 2
+type: map
+id: m
+style:
+  center: [0, 0]
+  zoom: 2
+  sources:
+    parcels:
+      type: geojson
+      url: /p.fgb
+      runtime:
+        load: { mode: viewport, minzoom: 12 }
+  layers:
+    - id: a
+      type: fill
+      source: parcels
+      classify: { field: v, method: quantile }
+`);
+    expect(bad.success).toBe(false);
+    expect(bad.errors[0]!.path).toBe("style.layers.0.classify.method");
+    expect(bad.errors[0]!.message).toContain("load: viewport");
   });
 
   it("validates classify in a story's layers", () => {

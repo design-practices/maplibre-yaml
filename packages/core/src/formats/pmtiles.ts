@@ -15,12 +15,20 @@
  * neither replaces nor wraps it. Same rule as `setWorkerModuleUrl`.
  *
  * This module never imports maplibre-gl: the module is injected
- * ({@link install}), so it can become an on-demand chunk later without
- * pulling a second maplibre-gl into it.
+ * ({@link install}).
+ *
+ * **The reader is downloaded on demand** (`chunks/pmtiles.js`, see
+ * formats/decoders), but the protocol is still registered synchronously,
+ * before the map is constructed: {@link install} registers a thin handler
+ * at once, and the handler awaits the reader on the first TileJSON or tile
+ * request. MapLibre's protocol handlers are async, so a basemap style's first
+ * requests can never race the registration — they just wait for the reader.
  */
 
-import { Protocol } from "pmtiles";
-import { classifyPmtilesError, FormatError } from "./errors";
+import type { Protocol } from "pmtiles";
+import { getDecoder } from "./decoders";
+import { classifyPmtilesError, FormatError, isFormatError } from "./errors";
+import { rangeRepliesUnreadable } from "./http";
 
 /** The slice of the maplibre-gl module this decoder needs (injected). */
 export interface ProtocolHost {
@@ -39,6 +47,33 @@ export type InstallResult = "installed" | "host" | "already";
 
 /** Modules this core has registered on (one registration per module per page). */
 const installedOn = new WeakSet<object>();
+
+/** The reader core's handler created last: its archives' headers are already read. */
+let latestReader: Promise<Protocol> | undefined;
+
+/**
+ * An archive's JSON metadata (`name`, `version`, `vector_layers` …), read
+ * through the reader core's `pmtiles://` handler already holds for it when
+ * there is one (its header is cached; the metadata is one more range read),
+ * else through a reader of its own.
+ *
+ * @param url - The archive URL, `pmtiles://` scheme or not.
+ * @returns `undefined` when it can't be read.
+ */
+export async function archiveMetadata(url: string): Promise<Record<string, unknown> | undefined> {
+  const archive = url.replace(/^pmtiles:\/\//i, "");
+  try {
+    const protocol = latestReader ? await latestReader : undefined;
+    const held = (protocol as unknown as { tiles?: Map<string, { getMetadata(): Promise<unknown> }> } | undefined)?.tiles?.get(
+      archive
+    );
+    if (held) return (await held.getMetadata()) as Record<string, unknown>;
+    const lib = await getDecoder("pmtiles");
+    return (await new lib.PMTiles(archive).getMetadata()) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
 
 /** The archive URL inside a `pmtiles://` request URL (tile suffix dropped). */
 function archiveUrl(requestUrl: string): string {
@@ -86,14 +121,36 @@ export function install(host: ProtocolHost): InstallResult {
     });
   }
 
+  // One reader per registration, created when the first request arrives.
   // `metadata: true`: the TileJSON MapLibre receives carries the archive's
   // vector_layers, bounds, min/max zoom and attribution.
-  const protocol = new Protocol({ metadata: true });
+  // A reader that failed to download is dropped, so a later request retries.
+  let reader: Promise<Protocol> | undefined;
+  /** Per archive: whether its range replies can't be read (asked on a failure). */
+  const encoded: Record<string, Promise<boolean>> = {};
   const handler = async (params: { url: string }, abortController: AbortController) => {
+    const current = (reader ??= getDecoder("pmtiles").then((m) => new m.Protocol({ metadata: true })));
+    latestReader = current;
     try {
+      const protocol = await current.catch((error: unknown) => {
+        if (reader === current) reader = undefined;
+        throw error;
+      });
       return await protocol.tile(params as never, abortController);
     } catch (error) {
-      throw classifyPmtilesError(error, displayUrl(archiveUrl(params.url)));
+      const archive = archiveUrl(params.url);
+      const classified = classifyPmtilesError(error, displayUrl(archive));
+      // A reply that couldn't be read, or bytes that aren't the archive's, from
+      // a host that serves the file compressed: its range replies are cut
+      // from the compressed copy (jsDelivr's Cloudflare leg). Asked once per file.
+      const code = isFormatError(classified) ? classified.failure.code : undefined;
+      if (code === "cors" || code === "not-format") {
+        encoded[archive] ??= rangeRepliesUnreadable(archive);
+        if (await encoded[archive]) {
+          throw new FormatError({ code: "encoded-range", format: "pmtiles", url: displayUrl(archive) });
+        }
+      }
+      throw classified;
     }
   };
   host.addProtocol("pmtiles", handler as never);

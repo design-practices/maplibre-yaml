@@ -1,8 +1,8 @@
 /**
- * @file Convert FlatGeobuf sources to GeoJSON at emit time (0.9, ml-cnv.3)
+ * @file Convert FlatGeobuf and GeoParquet sources to GeoJSON at emit time (0.9, ml-cnv.3/.4)
  *
  * @description
- * style.json can't carry a FlatGeobuf decoder, so `mlym emit` converts the
+ * style.json can't carry a FlatGeobuf or GeoParquet decoder, so `mlym emit` converts the
  * file: core's projection emits an empty GeoJSON source plus an
  * `EmitDataRef`; this reads the file (an http(s) URL, or a path on disk) and
  * inlines its features — the same core/CLI split as `images:` (core
@@ -16,7 +16,12 @@
 
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { decodeFlatGeobuf, type EmitDataRef, type EmitWarning } from '@maplibre-yaml/core';
+import {
+  decodeFlatGeobuf,
+  decodeGeoParquet,
+  type EmitDataRef,
+  type EmitWarning,
+} from '@maplibre-yaml/core';
 import { localDataCandidates } from './data-loader.js';
 
 /** Inline data larger than this gets a note: the style file grows by as much. */
@@ -44,8 +49,16 @@ export const defaultReader: DataReader = async (url, documentPath) => {
   return new Uint8Array(await readFile(found));
 };
 
+/** Decode one file by its format (GeoParquet keeps the `columns:` an author listed). */
+function decode(bytes: Uint8Array, ref: EmitDataRef): Promise<unknown> {
+  if (ref.format === 'geoparquet') {
+    return decodeGeoParquet(bytes, ref.url, ref.columns ? { columns: ref.columns } : {});
+  }
+  return decodeFlatGeobuf(bytes, ref.url);
+}
+
 /**
- * Read and convert every FlatGeobuf source the projection described.
+ * Read and convert every FlatGeobuf / GeoParquet source the projection described.
  *
  * @returns The features per source, and warnings (`lossy` for a source that
  *   couldn't be read, which then stays empty).
@@ -60,14 +73,14 @@ export async function resolveDataRefs(
   for (const ref of refs) {
     try {
       const bytes = await reader(ref.url, options.documentPath);
-      const data = await decodeFlatGeobuf(bytes, ref.url);
+      const data = await decode(bytes, ref);
       resolved.push({ source: ref.source, data });
       const size = JSON.stringify(data).length;
       if (size > LARGE_INLINE_BYTES) {
         warnings.push({
           path: `sources.${ref.source}.data`,
           kind: 'contract',
-          construct: 'format.flatgeobuf',
+          construct: `format.${ref.format}`,
           exportClass: 'exports-with-fallback',
           message:
             `\`${ref.url}\` converted to ${Math.round(size / 1024 / 1024)} MB of inline GeoJSON; ` +
@@ -78,7 +91,7 @@ export async function resolveDataRefs(
       warnings.push({
         path: `sources.${ref.source}.data`,
         kind: 'lossy',
-        construct: 'format.flatgeobuf',
+        construct: `format.${ref.format}`,
         exportClass: 'exports-with-fallback',
         message:
           `\`${ref.url}\` couldn't be read at emit time (${(error as Error).message.replace(/`/g, '"')}); ` +

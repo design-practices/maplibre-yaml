@@ -4,7 +4,7 @@
  */
 
 import { suggest } from "../utils/suggest";
-import { absolutizeTileTemplate, absolutizeVectorTiles } from "../utils/tile-url";
+import { absolutizeSourceUrls, absolutizeTileTemplate, absolutizeVectorTiles } from "../utils/tile-url";
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { z } from "zod";
 import type { FeatureCollection } from "geojson";
@@ -17,10 +17,15 @@ import {
   ImageSourceSchema,
   VideoSourceSchema,
 } from "../schemas";
-// Import the constant from its submodule rather than the interactions barrel:
-// the barrel now re-exports `attachInteractions`, which eagerly loads the
-// maplibre-gl `Popup` value, and this module needs only a maplibre-free string.
-import { HOVER_FEATURE_STATE_KEY } from "../interactions/built-ins";
+// maplibre-gl free (it imports the hover key from its submodule, not the
+// interactions barrel, which eagerly loads maplibre-gl's `Popup`).
+import {
+  HIGHLIGHT_PAINT_PROPERTY,
+  classifiedHighlightProperty,
+  isHighlightEnabled,
+  isHighlightWrapped,
+  withHighlight,
+} from "./highlight-paint";
 import { DataFetcher } from "../data/data-fetcher";
 import { loadSourceData } from "../data/source-data";
 import { PollingManager } from "../data/polling-manager";
@@ -29,13 +34,14 @@ import { DataMerger } from "../data/merge/data-merger";
 import { LoadingManager } from "../ui/loading-manager";
 import { sanitizeAttribution } from "../utils/attribution";
 import type { MergeStrategy } from "../data/merge/data-merger";
-import { formatOfSource, typeReadsFormat } from "../formats/detect";
+import { declaredColumns, formatOfSource, typeReadsFormat } from "../formats/detect";
 import {
   FlatGeobufLoader,
+  GeoParquetLoader,
   loadModeOf,
   toMapLibreTileSpec,
-  unsupportedFormatError,
   withoutFormatKeys,
+  type FormatLoader,
 } from "./cloud-sources";
 
 type Layer = z.infer<typeof LayerSchema>;
@@ -47,47 +53,19 @@ type ImageSourceConfig = z.infer<typeof ImageSourceSchema>;
 type VideoSourceConfig = z.infer<typeof VideoSourceSchema>;
 
 /**
- * The paint property each layer type highlights through.
- *
- * @remarks
- * Types absent here (heatmap, raster, hillshade, background) have no
- * per-feature color to drive, so highlight does not apply to them.
- */
-const HIGHLIGHT_PAINT_PROPERTY: Record<string, string> = {
-  circle: "circle-color",
-  line: "line-color",
-  fill: "fill-color",
-  "fill-extrusion": "fill-extrusion-color",
-  symbol: "text-color",
-};
-
-/**
- * Colour a highlighted feature takes.
- *
- * @remarks
- * `hover.highlight` is a boolean, so the colour cannot be authored. Authors who
- * want control write their own `["feature-state", "hover"]` paint expression
- * instead, which this rewrite deliberately leaves untouched.
- */
-const HIGHLIGHT_COLOR = "#ffd700";
-
-/** Whether a layer asks for hover highlighting. */
-function isHighlightEnabled(layer: Layer): boolean {
-  const interactive = (layer as { interactive?: { hover?: { highlight?: unknown } } })
-    .interactive;
-  return interactive?.hover?.highlight === true;
-}
-
-/**
  * Wrap the layer's primary colour in a feature-state `case`, so a highlighted
  * feature renders differently.
  *
  * @remarks
- * Only rewrites a plain literal colour. An authored expression is left alone
- * and warned about: overwriting it would silently discard data-driven styling,
- * and merging arbitrary expressions is not something we can do correctly.
+ * Rewrites a plain literal colour, and a colour `classify:` generated (the
+ * library's own expression, re-wrapped by the classify runtime when computed
+ * breaks land). An authored expression is left alone and warned about:
+ * overwriting it would silently discard data-driven styling, and merging
+ * arbitrary expressions is not something we can do correctly. The layer's
+ * own `paint` object is not modified (a re-add must not wrap twice).
  */
-function applyHighlightPaint(layerSpec: any, layerType: string): void {
+function applyHighlightPaint(layerSpec: any, layer: Layer): void {
+  const layerType = layer.type;
   const property = HIGHLIGHT_PAINT_PROPERTY[layerType];
   if (!property) {
     console.warn(
@@ -97,10 +75,15 @@ function applyHighlightPaint(layerSpec: any, layerType: string): void {
     return;
   }
 
-  const paint = (layerSpec.paint ??= {});
+  const paint = (layerSpec.paint = { ...(layerSpec.paint ?? {}) });
   const authored = paint[property];
+  if (isHighlightWrapped(authored)) return;
 
   if (Array.isArray(authored)) {
+    if (classifiedHighlightProperty(layer) === property) {
+      paint[property] = withHighlight(authored);
+      return;
+    }
     console.warn(
       `[maplibre-yaml] hover.highlight left "${property}" on layer ` +
         `"${layerSpec.id}" untouched because it is already an expression. ` +
@@ -110,13 +93,8 @@ function applyHighlightPaint(layerSpec: any, layerType: string): void {
     return;
   }
 
-  paint[property] = [
-    "case",
-    ["boolean", ["feature-state", HOVER_FEATURE_STATE_KEY], false],
-    HIGHLIGHT_COLOR,
-    // MapLibre's default for every colour paint property we highlight through.
-    authored ?? "#000000",
-  ];
+  // MapLibre's default for every colour paint property we highlight through.
+  paint[property] = withHighlight(authored ?? "#000000");
 }
 
 /**
@@ -133,6 +111,11 @@ export interface LayerManagerCallbacks {
    * rather than fail one by one.
    */
   onSourceError?: (sourceId: string, error: Error) => void;
+  /**
+   * An author hint about one layer that was still added (a `before:` naming
+   * no layer on the map: the layer goes on top instead of being dropped).
+   */
+  onLayerHint?: (layerId: string, message: string) => void;
 }
 
 /**
@@ -151,11 +134,18 @@ export interface LayerManagerDataOptions {
    */
   pending?: Record<string, Promise<FeatureCollection>>;
   /**
-   * Whether a URL protocol (`cog`) is registered on the maplibre-gl module
+   * Whether a URL protocol is registered on the maplibre-gl module (unused
+   * since COG is read YAML-only, ml-cnv.2; kept for callers)
    * (ml-cnv). Injected by `MapRenderer` so this module never loads
    * maplibre-gl itself; defaults to "none registered".
    */
   isProtocolRegistered?: (scheme: string) => boolean;
+  /**
+   * The GeoParquet columns the document reads per source id (ml-cnv.4,
+   * `formats/columns`): injected by `MapRenderer`, which sees every layer
+   * that draws from a source. Absent: every column is read.
+   */
+  columnsFor?: (sourceId: string) => readonly string[] | "all" | undefined;
 }
 
 /**
@@ -181,10 +171,12 @@ export class LayerManager {
   private activeSourcePipelines: Set<string>;
   /** First loads a host already started, by source id (consumed once). */
   private pendingData: Map<string, Promise<FeatureCollection>>;
-  /** FlatGeobuf readers by source id (ml-cnv.3), stopped with their source. */
-  private formatLoaders = new Map<string, FlatGeobufLoader>();
+  /** FlatGeobuf / GeoParquet readers by source id (ml-cnv.3/.4), stopped with their source. */
+  private formatLoaders = new Map<string, FormatLoader>();
   /** Whether the page registered a URL protocol itself (see LayerManagerDataOptions). */
   private isProtocolRegistered: (scheme: string) => boolean;
+  /** The GeoParquet columns the document reads (see LayerManagerDataOptions). */
+  private columnsFor: (sourceId: string) => readonly string[] | "all" | undefined;
 
   constructor(
     map: MapLibreMap,
@@ -196,6 +188,7 @@ export class LayerManager {
     this.dataFetcher = data.fetcher ?? new DataFetcher();
     this.pendingData = new Map(Object.entries(data.pending ?? {}));
     this.isProtocolRegistered = data.isProtocolRegistered ?? (() => false);
+    this.columnsFor = data.columnsFor ?? (() => undefined);
     this.pollingManager = new PollingManager();
     this.streamManager = new StreamManager();
     this.dataMerger = new DataMerger();
@@ -298,7 +291,9 @@ export class LayerManager {
     }
     const resolved = toMapLibreTileSpec(spec, this.isProtocolRegistered);
     if (resolved.problem && sourceId) this.callbacks.onSourceError?.(sourceId, resolved.problem);
-    return resolved.spec;
+    // Absolute against the page: the worker fetches some of these, and a
+    // relative URL is reserved for a basemap style's own files (basemap-urls).
+    return absolutizeSourceUrls(resolved.spec);
   }
 
   /**
@@ -382,6 +377,33 @@ export class LayerManager {
     }
   }
 
+  /**
+   * The layer's `before:`, when it names a layer that is on the map (or one
+   * of this document's own, still being added). A name that is neither — a
+   * typo, a basemap layer id from another basemap — made MapLibre refuse the
+   * layer, which then vanished with only a console error (ml-aot.119): it
+   * goes on top instead, with an author hint naming the closest layer id.
+   */
+  private beforeOrTop(layer: Layer): string | undefined {
+    const before = layer.before;
+    if (typeof before !== "string") return undefined;
+    if (typeof this.map.getLayer !== "function" || this.map.getLayer(before)) return before;
+    if (this.claimedLayerIds.has(before)) return before;
+    let styleLayers: string[] = [];
+    try {
+      styleLayers = (this.map.getStyle?.()?.layers ?? []).map((l: { id: string }) => l.id);
+    } catch {
+      // No style to read: no did-you-mean.
+    }
+    const near = suggest(before, [...styleLayers, ...this.claimedLayerIds], 3);
+    this.callbacks.onLayerHint?.(
+      layer.id,
+      `Layer \`${layer.id}\`: \`before: ${before}\` names no layer on this map, so the layer is drawn on top instead.` +
+        (near ? ` Did you mean \`${near}\`?` : "")
+    );
+    return undefined;
+  }
+
   private async addClaimedLayer(layer: Layer): Promise<void> {
     // Background layers are sourceless by spec — resolving a source for one
     // dereferenced `layer.source.type` on undefined and threw, so a
@@ -434,7 +456,7 @@ export class LayerManager {
     // `hover.highlight` is only visible if some paint property reads the hover
     // feature-state, so wire it into the layer's primary color here.
     if (isHighlightEnabled(layer)) {
-      applyHighlightPaint(layerSpec, layer.type);
+      applyHighlightPaint(layerSpec, layer);
     }
     if ("layout" in layer && layer.layout) layerSpec.layout = layer.layout;
     if ("source-layer" in layer && layer["source-layer"])
@@ -448,7 +470,7 @@ export class LayerManager {
       layerSpec.layout.visibility = "none";
     }
 
-    this.map.addLayer(layerSpec, layer.before as string | undefined);
+    this.map.addLayer(layerSpec, this.beforeOrTop(layer));
 
     // A named source refreshes once for the whole source, not once per layer.
     if (isSourceRef) {
@@ -654,18 +676,16 @@ export class LayerManager {
 
     this.sourceData.set(sourceId, initialData);
 
-    // Cloud-native vector data (ml-cnv): a FlatGeobuf file is decoded into
-    // this GeoJSON source by its own data provider instead of the JSON
-    // fetch below; a GeoParquet file (recognized, not read yet) says so
-    // rather than failing as "not JSON".
+    // Cloud-native vector data (ml-cnv): a FlatGeobuf or GeoParquet file is
+    // decoded into this GeoJSON source by its own data provider instead of
+    // the JSON fetch below.
     const format = config.url && !config.prefetchedData ? formatOfSource(config) : undefined;
     if (format === "flatgeobuf") {
       await this.startFlatGeobuf(sourceId, layerId, config);
       return;
     }
     if (format === "geoparquet" && typeReadsFormat(config.type, format)) {
-      this.pendingData.delete(sourceId);
-      this.callbacks.onDataError?.(layerId, unsupportedFormatError(format, config.url!));
+      await this.startGeoParquet(sourceId, layerId, config);
       return;
     }
 
@@ -733,18 +753,63 @@ export class LayerManager {
   }
 
   /**
+   * Read a GeoParquet `url:` into its GeoJSON source (ml-cnv.4): the
+   * columns the document reads (an author's `columns:` wins), the whole file
+   * or — `load: viewport`, or a file too large to load whole — the rows in
+   * view, re-read as the map moves. Events fire as for a GeoJSON `url:`.
+   */
+  private async startGeoParquet(
+    sourceId: string,
+    layerId: string,
+    config: GeoJSONSourceConfig
+  ): Promise<void> {
+    this.formatLoaders.get(sourceId)?.destroy();
+    this.callbacks.onDataLoading?.(layerId);
+    const columns = declaredColumns(config) ?? this.columnsFor(sourceId) ?? "all";
+    const loader = new GeoParquetLoader(
+      this.map,
+      config.url!,
+      loadModeOf(config as unknown as Record<string, unknown>),
+      columns,
+      {
+        onData: (data) => {
+          this.sourceData.set(sourceId, data);
+          const source = this.map.getSource(sourceId) as GeoJSONSource | undefined;
+          source?.setData?.(data);
+          this.callbacks.onDataLoaded?.(layerId, data.features.length);
+        },
+        onError: (error) => this.callbacks.onDataError?.(layerId, error),
+      }
+    );
+    this.formatLoaders.set(sourceId, loader);
+    const pending = this.pendingData.get(sourceId);
+    this.pendingData.delete(sourceId);
+    await loader.start(pending);
+  }
+
+  /**
    * The full extent of a source read by view (`load: viewport`), from the
-   * file's header — what `fitTo` frames, since the source's data is only the
-   * part in view. Undefined for every other source.
+   * file's header or metadata — what `fitTo` frames, since the source's data
+   * is only the part in view. Undefined for every other source.
    */
   getSourceExtent(sourceId: string): [[number, number], [number, number]] | undefined {
     const loader = this.formatLoaders.get(sourceId);
     return loader?.readsByView ? loader.extent : undefined;
   }
 
+  /**
+   * Whether a source holds only the features in view: a FlatGeobuf or
+   * GeoParquet source read by view — `load: viewport`, or a file too large to read whole that
+   * switched itself to it. Its data is never the whole dataset.
+   */
+  readsByView(sourceId: string): boolean {
+    return this.formatLoaders.get(sourceId)?.readsByView ?? false;
+  }
+
   /** Whether a source's data comes from a cloud-native reader (no live refresh in 0.9). */
   private isFormatSource(config: GeoJSONSourceConfig): boolean {
-    return formatOfSource(config) === "flatgeobuf";
+    const format = formatOfSource(config);
+    return format === "flatgeobuf" || format === "geoparquet";
   }
 
   /**
@@ -755,12 +820,12 @@ export class LayerManager {
     sourceId: string,
     config: GeoJSONSourceConfig
   ): Promise<void> {
-    // Validation rejects live data on a FlatGeobuf source in 0.9; a document
-    // that skipped validation must not poll a binary file with the JSON
-    // fetcher.
+    // Validation rejects live data on a FlatGeobuf or GeoParquet source in
+    // 0.9; a document that skipped validation must not poll a binary file
+    // with the JSON fetcher.
     if (this.isFormatSource(config)) {
       console.warn(
-        `[maplibre-yaml] live refresh isn't available for FlatGeobuf sources yet; ` +
+        `[maplibre-yaml] live refresh isn't available for FlatGeobuf or GeoParquet sources yet; ` +
           `\`refresh:\`/\`stream:\` on "${sourceId}" is ignored.`
       );
       return;

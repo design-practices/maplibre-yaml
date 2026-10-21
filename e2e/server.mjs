@@ -39,12 +39,14 @@
  *  - `/my-repo/*`                  examples/verification/base-path/site, as
  *                                  GitHub Pages serves a project site
  *                                  (ml-aot.30); `/my-repo/cloud-native/*`
- *                                  is the cloud-native fixture folder
+ *                                  and `/my-repo/protomaps/*` are the
+ *                                  docs' fixture folders of those names
  *  - everything else               static from the repo root, with HTTP
  *                                  range requests (ml-cnv) — and the
- *                                  `/norange/`, `/nocors/`, `/oversize/<MB>/`
+ *                                  `/norange/`, `/nocors/`, `/oversize/<MB>/`,
+ *                                  `/suffix416/`, `/noexpose/`, `/fastly/`
  *                                  hosting variants described at
- *                                  HOSTING_PREFIX
+ *                                  HOSTING_SEGMENT
  */
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
@@ -52,7 +54,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deflateSync } from "node:zlib";
+import { brotliCompressSync, deflateSync } from "node:zlib";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -320,17 +322,64 @@ function hillsTile(z, x, y) {
  *                         size guard can be exercised without committing a
  *                         big file (ranges still honoured; the padding is
  *                         generated on demand, never held in memory)
+ *  - `/norange/oversize/<MB>/…`  both: a big file on a host without ranges
+ *                         (ml-cnv.4: GeoParquet must refuse it before
+ *                         downloading it, since its footer is at the end)
+ *  - `/suffix416/…`       a suffix range longer than the file (`bytes=-524288`
+ *                         on a 28 KB file) answers 416 with
+ *                         `Content-Range: bytes *\/<size>` instead of the
+ *                         whole file — what Fastly does (GitHub Pages,
+ *                         raw.githubusercontent.com, jsDelivr's Fastly leg);
+ *                         explicit ranges past the end are still clamped
+ *  - `/noexpose/…`        CORS open (`Access-Control-Allow-Origin: *`) but no
+ *                         `Access-Control-Expose-Headers`: a page on another
+ *                         origin can't read `Content-Range` (`Content-Length`
+ *                         is always readable), and a preflight is refused —
+ *                         what GitHub Pages and raw.githubusercontent.com send
+ *  - `/fastly/…`          both of the above: GitHub Pages as a page on
+ *                         another site sees it
+ *  - `/brotlirange/…`     the file served brotli-compressed (`Content-Encoding:
+ *                         br` on a whole reply), and ranges cut from that
+ *                         compressed copy, without saying so, with a
+ *                         `Content-Range` over the compressed size — what a
+ *                         browser sees from jsDelivr's Cloudflare leg
+ *                         (cdn.jsdelivr.net); headers exposed
+ *
+ * Prefixes combine in any order (`/norange/oversize/60/…`).
  */
-const HOSTING_PREFIX = /^\/(norange|nocors|oversize\/(\d+))(\/.*)$/;
+const HOSTING_SEGMENT = /^\/(norange|nocors|oversize\/(\d+)|suffix416|noexpose|fastly|brotlirange)(?=\/)/;
 
-/** Parse a single `Range: bytes=a-b` / `bytes=a-` / `bytes=-n` against `size`. */
-function parseRange(header, size) {
+/** Strip the hosting prefixes off `path`; what they ask for. */
+function hostingOf(path) {
+  const hosting = { path, cors: true, expose: true, ranges: true, suffix416: false, padMb: 0, brotli: false };
+  for (let m = HOSTING_SEGMENT.exec(hosting.path); m; m = HOSTING_SEGMENT.exec(hosting.path)) {
+    const [whole, name, mb] = m;
+    if (name === "norange") hosting.ranges = false;
+    else if (name === "nocors") hosting.cors = false;
+    else if (name === "suffix416") hosting.suffix416 = true;
+    else if (name === "noexpose") hosting.expose = false;
+    else if (name === "brotlirange") hosting.brotli = true;
+    else if (name === "fastly") {
+      hosting.suffix416 = true;
+      hosting.expose = false;
+    } else hosting.padMb = Number(mb);
+    hosting.path = hosting.path.slice(whole.length);
+  }
+  return hosting;
+}
+
+/**
+ * Parse a single `Range: bytes=a-b` / `bytes=a-` / `bytes=-n` against `size`.
+ * `suffix416`: a suffix longer than the file is unsatisfiable (Fastly).
+ */
+function parseRange(header, size, suffix416 = false) {
   const m = /^bytes=(\d*)-(\d*)$/.exec(String(header).trim());
   if (!m || (m[1] === "" && m[2] === "")) return null;
   let start;
   let end;
   if (m[1] === "") {
     const suffix = Number(m[2]);
+    if (suffix416 && suffix > size) return { unsatisfiable: true };
     start = Math.max(0, size - suffix);
     end = size - 1;
   } else {
@@ -352,19 +401,25 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   let path = decodeURIComponent(url.pathname);
 
-  const hosting = HOSTING_PREFIX.exec(path);
-  const cors = !hosting || hosting[1] !== "nocors";
-  const ranges = !hosting || hosting[1] !== "norange";
-  const padMb = hosting && hosting[2] ? Number(hosting[2]) : 0;
-  if (hosting) path = hosting[3];
+  const hosting = hostingOf(path);
+  const { cors, ranges, padMb, suffix416, expose, brotli } = hosting;
+  path = hosting.path;
 
   const corsHeaders = cors
     ? {
         "access-control-allow-origin": "*",
-        "access-control-expose-headers": "Content-Range, Content-Length, Accept-Ranges, ETag",
+        ...(expose
+          ? { "access-control-expose-headers": "Content-Range, Content-Length, Content-Encoding, Accept-Ranges, ETag" }
+          : {}),
       }
     : {};
 
+  if (req.method === "OPTIONS" && !expose) {
+    // GitHub Pages refuses a preflight (403/405): a reader must manage
+    // with what a simple request may send (one `Range:` is safelisted).
+    res.writeHead(405, corsHeaders);
+    return res.end();
+  }
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       ...corsHeaders,
@@ -387,7 +442,9 @@ const server = createServer(async (req, res) => {
     res.end(body);
   };
 
-  const sendFile = (file, type) => {
+  const sendFile = (original, type) => {
+    // jsDelivr's Cloudflare leg: every response is cut from a brotli copy.
+    const file = brotli ? brotliCompressSync(original) : original;
     const size = Math.max(file.length, padMb * 1024 * 1024);
     const headers = {
       "content-type": type,
@@ -395,7 +452,7 @@ const server = createServer(async (req, res) => {
       "cache-control": "no-store",
       ...(ranges ? { "accept-ranges": "bytes" } : {}),
     };
-    const range = ranges && req.headers.range ? parseRange(req.headers.range, size) : null;
+    const range = ranges && req.headers.range ? parseRange(req.headers.range, size, suffix416) : null;
     if (range && range.unsatisfiable) {
       res.writeHead(416, { ...headers, "content-range": `bytes */${size}` });
       return res.end();
@@ -409,7 +466,7 @@ const server = createServer(async (req, res) => {
       });
       return res.end(req.method === "HEAD" ? undefined : body);
     }
-    res.writeHead(200, { ...headers, "content-length": size });
+    res.writeHead(200, { ...headers, ...(brotli ? { "content-encoding": "br" } : {}), "content-length": size });
     if (req.method === "HEAD") return res.end();
     if (size === file.length) return res.end(file);
     // Padded: stream the file, then zeros, until done or the client hangs up.
@@ -526,9 +583,10 @@ const server = createServer(async (req, res) => {
       return res.end();
     }
     if (path.startsWith("/my-repo/")) {
-      // The cloud-native fixtures (ml-cnv) appear inside the project site
-      // too, so a document can name them by a site path under `base`.
-      const SITE = path.startsWith("/my-repo/cloud-native/")
+      // The cloud-native fixtures (ml-cnv) and the Protomaps basemap
+      // extract (ml-cnv.7) appear inside the project site too, so a
+      // document can name them by a site path under `base`.
+      const SITE = /^\/my-repo\/(cloud-native|protomaps)\//.test(path)
         ? join(ROOT, "docs", "public", "gallery-assets")
         : join(ROOT, "examples", "verification", "base-path", "site");
       const sub = path.slice("/my-repo".length);

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A COG in a story map</title>
+  <!--
+    0.9 (ml-cnv.2): Cloud Optimized GeoTIFFs in <ml-scrollytelling>, YAML
+    only (cog-story.yaml): imagery, and a DEM driving a hillshade layer.
+    PASS = the story's map shows the shaded island; no notice. Scroll to the
+    second chapter: the map tilts over the summit.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/cog-story.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-scrollytelling id="story" src="cog-story.yaml"></ml-scrollytelling>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

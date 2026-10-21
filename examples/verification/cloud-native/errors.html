@@ -17,7 +17,7 @@
       - a FlatGeobuf in Web Mercator (wrong CRS)
       - a FlatGeobuf too large to load whole with no index (/oversize/60/…)
       - load: viewport on a FlatGeobuf without an index
-      - GeoParquet and COG: recognized, not read by this version yet
+    GeoParquet failures: geoparquet.html; COG failures: cog.html.
     And two that must WORK: load: viewport on a server without ranges (read
     whole instead), and an oversized indexed file (read by view instead).
     Every map still draws its basemap; other layers are unaffected.
@@ -107,33 +107,6 @@ layers:
   - { id: mercator, type: fill, source: mercator }
   - { id: huge, type: circle, source: huge }
   - { id: unindexed, type: circle, source: unindexed }
-        </script>
-      </ml-map>
-    </section>
-    <section>
-      <h2>Not read by this version yet (GeoParquet, COG) — the rest still draws</h2>
-      <ml-map id="reserved">
-        <script type="text/yaml">
-type: map
-id: reserved
-config:
-  center: [10.2, 42.15]
-  zoom: 9.5
-  mapStyle: "/examples/verification/configs/local-style.json"
-sources:
-  wells:
-    type: geojson
-    url: /gallery-assets/cloud-native/wells.parquet
-  scene:
-    type: raster
-    url: /gallery-assets/cloud-native/scene.tif
-  districts:
-    type: geojson
-    url: /gallery-assets/cloud-native/districts.fgb
-layers:
-  - { id: scene, type: raster, source: scene }
-  - { id: districts, type: fill, source: districts, paint: { fill-color: "#2a9d8f", fill-opacity: 0.6 } }
-  - { id: wells, type: circle, source: wells }
         </script>
       </ml-map>
     </section>

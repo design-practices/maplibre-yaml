@@ -39,7 +39,7 @@ Map configuration defines the initial view, interaction settings, controls, and 
 |----------|------|-------------|
 | `center` | [number, number] | Initial map center [longitude, latitude] |
 | `zoom` | number | Initial zoom level (0-24) |
-| `mapStyle` | string \| object | MapLibre style URL or style object |
+| `mapStyle` | string \| object | A MapLibre style URL, a style object, or a Protomaps basemap from a `.pmtiles` file (below) |
 
 ### Example
 
@@ -49,6 +49,42 @@ config:
   zoom: 12
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
+
+### `mapStyle` forms
+
+| Form | Example | Use it for |
+|---|---|---|
+| A style URL | `mapStyle: "https://tiles.openfreemap.org/styles/liberty"` | A hosted basemap (OpenFreeMap, MapTiler, Stadia, …) or a `style.json` on your site |
+| A style object | `mapStyle: { version: 8, sources: {...}, layers: [...] }` | A small style written in the document |
+| A Protomaps basemap | `mapStyle: { pmtiles: data/nyc.pmtiles, flavor: light }` | A full basemap from one `.pmtiles` file, with no API key and no tile server |
+| A `.pmtiles` file | `mapStyle: data/nyc.pmtiles` | The same Protomaps basemap with its defaults (light, labels in the page's language) |
+
+The Protomaps form takes these keys:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `pmtiles` | (required) | The `.pmtiles` file: a path (relative to the page, with `base` applied), a URL, or `pmtiles://…` |
+| `flavor` | `light` | `light`, `dark`, `white`, `grayscale` or `black` |
+| `lang` | the page's language, else `en` | Label language, such as `en`, `es`, `fr`, `de`, `ja` or `zh-Hans` |
+| `glyphs` | Protomaps' hosted fonts | A glyph URL template (`…/{fontstack}/{range}.pbf`), to host the fonts yourself |
+| `sprite` | Protomaps' hosted sprite for the flavor | A sprite URL, to host the icons yourself |
+
+```yaml
+config:
+  center: [-73.99, 40.70]
+  zoom: 14
+  mapStyle:
+    pmtiles: data/brooklyn.pmtiles
+    flavor: dark
+```
+
+An object with `version`, `sources` or `layers` is a style object; any other
+object is the Protomaps form, so the two can't be confused. The file has to be
+a Protomaps basemap (one cut from the Protomaps planet build, say); the map
+shows a notice for any other kind of PMTiles. See
+[Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap) for
+making the file and hosting it. In format v2 the same value goes under
+`style.basemap`.
 
 ### What goes inside `config:`
 
@@ -465,7 +501,7 @@ Control the camera position and orientation.
 | `pitch` | number | `0` | 0-85 | Camera tilt angle in degrees |
 | `bearing` | number | `0` | -180 to 180 | Camera rotation in degrees |
 | `bounds` | array | - | - | Fit map to geographic bounds: `[west, south, east, north]` or `[[west, south], [east, north]]` |
-| `fitTo` | object | - | - | Fit the initial camera to a GeoJSON source's data (see below) |
+| `fitTo` | object \| string | - | - | Fit the initial camera to a source's data — GeoJSON, FlatGeobuf, GeoParquet or a COG (see below); a source name is shorthand for `{ source: name }` |
 
 ### Examples
 
@@ -514,13 +550,14 @@ Longitudes past ±180 are allowed, for bounds that cross the antimeridian
 #### Fit to a Source's Data
 
 `fitTo` is the data-driven sibling of `bounds`. Instead of literal
-coordinates it names a GeoJSON entry in `sources:`, and the camera frames
-whatever that source holds.
+coordinates it names an entry in `sources:` — GeoJSON, FlatGeobuf, GeoParquet,
+or a Cloud Optimized GeoTIFF (COG) — and the camera frames whatever that
+source holds.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `source` | string | Name of a GeoJSON entry in `sources:` (required) |
-| `padding` | number | Padding in pixels around the fitted bounds |
+| `source` | string | Name of an entry in `sources:`: GeoJSON, FlatGeobuf, GeoParquet or COG (required) |
+| `padding` | number | Padding in pixels around the fitted bounds. Without it, a margin scaled to the map: 8% of its shorter side (12 to 48 px), plus, at the bottom, the room MapLibre's controls take there with the attribution expanded. `0` frames the data's exact extent. |
 | `maxZoom` | number | Upper zoom limit for the fit. Without it, a single point zooms all the way in. |
 
 ```yaml
@@ -559,8 +596,22 @@ layers:
   to the URL as everywhere else. Refreshes don't re-fit, because the user
   owns the camera after load. An `ml-map:camera-fit` event fires when the
   fit applies.
-- **vector / raster / raster-dem**: not supported. Tiled sources have no
-  client-side extent. The renderer warns once and keeps `center`/`zoom`.
+- **A COG** (`raster` / `raster-dem`): framed from the first frame too.
+  `<ml-map>` reads the file's header (its first 64 KB, which the COG reader
+  then reuses) within the same wait, and builds the map on the image's
+  extent.
+- **Other vector / raster / raster-dem sources** (tiles, PMTiles): not
+  supported. Tiled sources have no client-side extent. The renderer warns
+  once and keeps `center`/`zoom`.
+- **Padding.** Without `padding:`, the data keeps a margin so the features at
+  its edges are drawn whole: 8% of the map's shorter side, between 12 and
+  48 pixels (48 on a desktop window, about 30 on a phone), and at the bottom
+  the room MapLibre's controls take there (the attribution, a scale bar),
+  measured with the attribution expanded, so tapping its (i) button never
+  covers the data. `padding:` (pixels, every side)
+  replaces it; `padding: 0` frames the exact extent, as 0.8 did by default.
+- `fitTo: countries` (just the source name) is shorthand for
+  `fitTo: { source: countries }`, with the default padding.
 - `fitTo` wins over `bounds` when both are set. In format v2 it lives at
   `runtime.fitTo`.
 
@@ -784,10 +835,11 @@ controls:
 
 Display a map legend showing layer information.
 
-A map with a [`classify:`](/guides/thematic-maps/) layer gets a legend even
+A map with a [`classify:`](/guides/thematic-maps/) layer, or with a layer
+that writes its own entry (`legend: { label, color }`), gets a legend even
 without a `legend:` block — the default one below (top-left, open, headed
-"Legend"), listing each classified layer's classes. Write `legend: false` to
-turn it off, or a `legend:` block to place and title it yourself.
+"Legend"), listing those layers. Write `legend: false` to turn it off, or a
+`legend:` block to place and title it yourself.
 
 ### Legend Structure
 

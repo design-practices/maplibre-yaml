@@ -11,7 +11,6 @@
  * maplibre-gl 4+, the floor of that matrix.
  */
 import { test, expect, type Page } from "@playwright/test";
-import { PNG } from "pngjs";
 
 /** Fail on page errors and off-origin requests (hermeticity). */
 async function guard(page: Page, allow: RegExp = /^$/): Promise<string[]> {
@@ -228,7 +227,7 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
   test("every failure is explained on the map in plain words", async ({ page }) => {
     const errors = await guard(page);
     await page.goto("/examples/verification/cloud-native/errors.html", { waitUntil: "domcontentloaded" });
-    for (const id of ["pmtiles-errors", "fgb-errors", "reserved", "fallbacks"]) {
+    for (const id of ["pmtiles-errors", "fgb-errors", "fallbacks"]) {
       await page.evaluate((id) => (document.getElementById(id) as any).mapReady(), id);
     }
 
@@ -270,29 +269,8 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
       "Layer unindexed has no data: /gallery-assets/cloud-native/points-noindex.fgb has no spatial index"
     );
 
-    const reserved = page.locator("#reserved .ml-map-notice");
-    await expect(reserved).toContainText(
-      "Layer wells has no data: /gallery-assets/cloud-native/wells.parquet is a GeoParquet file, which this " +
-        "version of maplibre-yaml can't read yet (it's planned)."
-    );
-    await expect(reserved).toContainText(
-      "Source scene didn't load: /gallery-assets/cloud-native/scene.tif is a Cloud Optimized GeoTIFF (COG), " +
-        "which this version of maplibre-yaml can't read on its own yet (it's planned)."
-    );
-    // The rest of a map with a failed source still draws.
-    await waitForFeatures(page, "reserved", "districts");
-    // ...and the COG's placeholder draws nothing: away from the districts the
-    // map shows the basemap's own background (#cfe8c9).
-    const box = (await page.locator("#reserved").boundingBox())!;
-    await page.waitForTimeout(500);
-    const shot = PNG.sync.read(
-      await page.screenshot({ clip: { x: box.x + 8, y: box.y + box.height - 60, width: 4, height: 4 } })
-    );
-    const [r, g, b] = [shot.data[0]!, shot.data[1]!, shot.data[2]!];
-    expect(Math.abs(r - 0xcf) + Math.abs(g - 0xe8) + Math.abs(b - 0xc9), `pixel ${r},${g},${b}`).toBeLessThan(12);
-
     // Never a raw library message.
-    for (const id of ["pmtiles-errors", "fgb-errors", "reserved"]) {
+    for (const id of ["pmtiles-errors", "fgb-errors"]) {
       const text = (await page.locator(`#${id} .ml-map-notice`).textContent()) ?? "";
       expect(text).not.toMatch(/magic number|Failed to fetch|content-length|Byte Serving|Not a FlatGeobuf|Bad response code|Unexpected token/i);
     }
@@ -306,7 +284,7 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     expect(errors).toEqual([]);
   });
 
-  test("on a project site, base applies to the file inside pmtiles:// (and to .fgb)", async ({ page }) => {
+  test("on a project site, base applies to the file inside pmtiles:// (and to .fgb and .parquet)", async ({ page }) => {
     const errors = await guard(page);
     const notFound: string[] = [];
     page.on("response", (r) => {
@@ -316,6 +294,8 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     await page.evaluate(() => (document.getElementById("with-base") as any).mapReady());
     await waitForFeatures(page, "with-base", "districts");
     await waitForFeatures(page, "with-base", "outlines", "districts");
+    // GeoParquet (ml-cnv.4): a relative path resolves under base too.
+    await waitForFeatures(page, "with-base", "wells");
     const spec = await page.evaluate(
       () => (document.getElementById("with-base") as any).getMap().getStyle().sources
     );
@@ -326,12 +306,15 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     await expect(page.locator("#no-base .ml-map-notice")).toContainText(
       "Source outlines didn't load: /cloud-native/districts.pmtiles didn't load (404 Not Found)."
     );
+    await expect(page.locator("#no-base .ml-map-notice")).toContainText(
+      "Data file cloud-native/points.parquet didn't load (404 Not Found), so layer wells has no data."
+    );
     expect(notFound.filter((p) => p.startsWith("/my-repo/cloud-native/"))).toEqual([]);
     await page.screenshot({ path: "e2e/results/cnv_base_path.png" });
     expect(errors).toEqual([]);
   });
 
-  test("<ml-scrollytelling> reads PMTiles and FlatGeobuf too", async ({ page }) => {
+  test("<ml-scrollytelling> reads PMTiles, FlatGeobuf and GeoParquet too", async ({ page }) => {
     const errors = await guard(page);
     await page.goto("/examples/verification/cloud-native/story.html", { waitUntil: "domcontentloaded" });
     await page.evaluate(() => (document.getElementById("story") as any).mapReady());
@@ -343,6 +326,7 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
           map &&
             map.getSource("districts") &&
             map.querySourceFeatures("districts").length > 0 &&
+            map.querySourceFeatures("wells").length > 0 &&
             map.querySourceFeatures("outlines", { sourceLayer: "districts" }).length > 0
         );
       },
@@ -350,11 +334,19 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
       { timeout: 45_000 }
     );
     await expect(page.locator("#story .ml-map-notice")).toHaveCount(0);
+    // GeoParquet reads only the columns the story uses: `kind` (the layer's
+    // colour) and `value`, which only a chapter's setFilter names.
+    const keys = await page.evaluate(() =>
+      Object.keys((document.querySelector("#story ml-map") as any).getMap().querySourceFeatures("wells")[0].properties).sort()
+    );
+    expect(keys).toEqual(["kind", "value"]);
     await page.screenshot({ path: "e2e/results/cnv_story.png" });
     expect(errors).toEqual([]);
   });
 
-  test("plain HTML from the CDN build: only maplibre-gl in the import map, nothing extra downloaded", async ({ page }) => {
+  test("plain HTML from the CDN build: only maplibre-gl in the import map, readers fetched next to the bundle", async ({
+    page,
+  }) => {
     const errors = await guard(page);
     const scripts: string[] = [];
     page.on("request", (r) => {
@@ -364,15 +356,196 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     await page.evaluate(() => (document.getElementById("map") as any).mapReady());
     await waitForFeatures(page, "map", "districts");
     await waitForFeatures(page, "map", "outlines", "districts");
+    // GeoParquet (zstd) from the CDN build, with nothing more in the import map.
+    await waitForFeatures(page, "map", "stations");
     await expect(page.locator("#map .ml-map-notice")).toHaveCount(0);
-    // The package's own downloads: the entry and the one browser bundle —
-    // no decoder chunks in 0.9.
+    // The package's own downloads: the entry, the browser bundle, and the
+    // two readers this document needs, on demand from dist/chunks/ next to
+    // the bundle (ml-7qa.5) — nothing else.
     const fromPackage = [...new Set(scripts.filter((p) => p.startsWith("/cdn/")))].sort();
+    // GeoParquet's reader, but not its brotli codec: this file is zstd.
     expect(fromPackage).toEqual([
+      "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/flatgeobuf.js",
+      "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/geoparquet.js",
+      "/cdn/@maplibre-yaml/core@0.9.0/dist/chunks/pmtiles.js",
       "/cdn/@maplibre-yaml/core@0.9.0/dist/register.browser.js",
       "/cdn/@maplibre-yaml/core@0.9.0/register.js",
     ]);
     await page.screenshot({ path: "e2e/results/cnv_cdn.png" });
+    expect(errors).toEqual([]);
+  });
+
+  test("a compressed (Zstandard) FlatGeobuf on a CDN page: a plain notice, no module-resolution error (ml-aot.109)", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const consoleLines: string[] = [];
+    page.on("console", (m) => consoleLines.push(m.text()));
+    const zstdRequests: string[] = [];
+    page.on("request", (r) => {
+      if (/zstd-wasm/.test(r.url())) zstdRequests.push(r.url());
+    });
+    await page.goto("/examples/verification/cloud-native/cdn-compressed.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("map") as any).mapReady());
+    const notice = page.locator("#map .ml-map-notice");
+    await expect(notice).toContainText("districts-zstd.fgb", { timeout: 30_000 });
+    await expect(notice).toContainText("is compressed (Zstandard)");
+    await expect(notice).toContainText("zstd -d districts-zstd.fgb");
+    expect(zstdRequests).toEqual([]);
+    expect(consoleLines.filter((l) => /Failed to resolve module specifier|zstd-wasm/.test(l))).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a self-hosted PMTiles basemap: a style URL under base, its file named relative to the style, no page JS", async ({
+    page,
+  }) => {
+    const errors = await guard(page);
+    const notFound: string[] = [];
+    page.on("response", (r) => {
+      if (r.status() === 404) notFound.push(new URL(r.url()).pathname);
+    });
+    await page.goto("/my-repo/blog/basemap.html", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => (document.getElementById("self-hosted") as any).mapReady());
+    await waitForFeatures(page, "self-hosted", "protomaps", "districts");
+    const source = await page.evaluate(
+      () => (document.getElementById("self-hosted") as any).getMap().getStyle().sources.protomaps
+    );
+    // The style said "pmtiles://region.pmtiles"; it was read next to the style.
+    expect(source.url).toBe("pmtiles://region.pmtiles");
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const map = (document.getElementById("self-hosted") as any).getMap();
+          return map.queryRenderedFeatures(undefined, { layers: ["landuse"] }).length;
+        })
+      )
+      .toBeGreaterThan(0);
+    await expect(page.locator("#self-hosted .ml-map-notice")).toHaveCount(0);
+    expect(
+      notFound.filter((p) => (p.startsWith("/my-repo/basemap/") || p.startsWith("/glyphs/")) && !p.includes("not-here"))
+    ).toEqual([]);
+
+    // The same style with a wrong file name: a notice on the map, not a
+    // silently blank basemap.
+    await expect(page.locator("#broken .ml-map-notice")).toContainText("not-here.pmtiles", { timeout: 30_000 });
+    await expect(page.locator("#broken .ml-map-notice")).toContainText("didn't load (404");
+    await page.screenshot({ path: "e2e/results/cnv_self_hosted_basemap.png" });
+    expect(errors).toEqual([]);
+  });
+
+  test("a basemap's reader that can't be downloaded: the basemap notice, and mapReady() still resolves", async ({
+    page,
+    baseURL,
+  }) => {
+    const errors = await guard(page);
+    await page.route("**/chunks/pmtiles.js*", (route) => route.abort("blockedbyclient"));
+    await page.route("**/chunks/cog.js*", (route) => route.abort("blockedbyclient"));
+    // A style whose imagery is a COG (cog://), the other protocol whose reader
+    // is a file of its own.
+    await page.route("**/cog-basemap/style.json", (route) =>
+      route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          version: 8,
+          sources: {
+            imagery: { type: "raster", tileSize: 256, url: `cog://${baseURL}/gallery-assets/cloud-native/imagery.cog.tif` },
+          },
+          layers: [
+            { id: "background", type: "background", paint: { "background-color": "#eeeeee" } },
+            { id: "imagery", type: "raster", source: "imagery" },
+          ],
+        }),
+      })
+    );
+    const html = `<!DOCTYPE html><html><head>
+      <link rel="stylesheet" href="${baseURL}/vendor/maplibre-gl.css" />
+      <script type="importmap">{ "imports": { "maplibre-gl": "${baseURL}/vendor/maplibre-gl.esm.js" } }</script>
+      </head><body>
+      <ml-map id="cog-basemap" style="display:block;height:300px">
+        <script type="text/yaml">
+type: map
+id: cog-basemap
+config: { center: [10.2, 42.15], zoom: 9.6, mapStyle: "${baseURL}/cog-basemap/style.json" }
+layers: []
+        </script>
+      </ml-map>
+      <script type="module" src="${baseURL}/packages/core/register.js"></script>
+      </body></html>`;
+    await page.route("**/cog-basemap/index.html", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    /** mapReady(), or "TIMEOUT" after 20 s: it must settle, never hang. */
+    const settles = (id: string) =>
+      page.evaluate(
+        (id) =>
+          Promise.race([
+            (document.getElementById(id) as any).mapReady().then(
+              () => "ready",
+              () => "rejected"
+            ),
+            new Promise((resolve) => setTimeout(() => resolve("TIMEOUT"), 20_000)),
+          ]),
+        id
+      );
+
+    // A self-hosted basemap (style URL, pmtiles:// source), its reader blocked.
+    await page.goto("/my-repo/blog/basemap.html", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("self-hosted") as any)?.mapReady === "function");
+    expect(await settles("self-hosted")).toBe("ready");
+    const notice = page.locator("#self-hosted .ml-map-notice");
+    await expect(notice).toContainText("The basemap didn't load: The PMTiles reader (");
+    await expect(notice).toContainText("chunks/pmtiles.js) couldn't be downloaded");
+
+    // A basemap style with a COG source, its reader blocked.
+    await page.goto("/cog-basemap/index.html", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("cog-basemap") as any)?.mapReady === "function");
+    expect(await settles("cog-basemap")).toBe("ready");
+    await expect(page.locator("#cog-basemap .ml-map-notice")).toContainText(
+      /The basemap didn't load: The Cloud Optimized GeoTIFF \(COG\) reader \(.*chunks\/cog\.js\) couldn't be downloaded/
+    );
+    expect(errors).toEqual([]);
+  });
+
+  test("a basemap style with an absolute pmtiles://https://… source, no page JS", async ({ page, baseURL }) => {
+    const errors = await guard(page);
+    // A "remote" style (served here, so the suite stays hermetic) whose
+    // source names its archive by an absolute URL.
+    await page.route("**/remote-basemap/style.json", (route) =>
+      route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          version: 8,
+          sources: {
+            remote: { type: "vector", url: `pmtiles://${baseURL}/gallery-assets/cloud-native/districts.pmtiles` },
+          },
+          layers: [
+            { id: "background", type: "background", paint: { "background-color": "#eeeeee" } },
+            { id: "remote-fill", type: "fill", source: "remote", "source-layer": "districts", paint: { "fill-color": "#8ab" } },
+          ],
+        }),
+      })
+    );
+    const html = `<!DOCTYPE html><html><head>
+      <link rel="stylesheet" href="${baseURL}/vendor/maplibre-gl.css" />
+      <script type="importmap">{ "imports": { "maplibre-gl": "${baseURL}/vendor/maplibre-gl.esm.js" } }</script>
+      </head><body>
+      <ml-map id="remote" style="display:block;height:400px">
+        <script type="text/yaml">
+type: map
+id: remote-basemap
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "${baseURL}/remote-basemap/style.json"
+layers: []
+        </script>
+      </ml-map>
+      <script type="module" src="${baseURL}/packages/core/register.js"></script>
+      </body></html>`;
+    await page.route("**/remote-basemap/index.html", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto("/remote-basemap/index.html", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof (document.getElementById("remote") as any)?.mapReady === "function");
+    await page.evaluate(() => (document.getElementById("remote") as any).mapReady());
+    await waitForFeatures(page, "remote", "remote", "districts");
+    await expect(page.locator("#remote .ml-map-notice")).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 });

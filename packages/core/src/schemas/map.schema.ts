@@ -23,6 +23,7 @@ import {
 import { LayerOrReferenceSchema, PopupContentSchema } from "./layer.schema";
 import { LayerSourceSchema } from "./source.schema";
 import { markOpenSchema } from "../parser/validation-utils";
+import { MapStyleSchema } from "./basemap.schema";
 
 /**
  * Control position on the map.
@@ -219,11 +220,13 @@ export type LegendConfig = z.infer<typeof LegendConfigSchema>;
  * arrives, the camera when the fit cannot apply, and the fallback emit uses
  * when the data is not inline. `fitTo` wins over `bounds` when both are set.
  *
+ * `fitTo: tracts` is shorthand for `fitTo: { source: tracts }`.
+ *
  * On emit (`fallback` class) an inline source's bounds compile to a
  * concrete `center`/`zoom` computed for a 1024×768 reference viewport —
  * lossy, because a live map fits its own container.
  */
-export const FitToSchema = z
+const FitToObjectSchema = z
   .object({
     source: z
       .string()
@@ -233,12 +236,29 @@ export const FitToSchema = z
       .number()
       .min(0)
       .optional()
-      .describe("Padding in pixels around the fitted bounds"),
+      .describe(
+        "Padding in pixels around the fitted bounds. Default: 8% of the map's shorter side (12-48 px), plus room for the attribution at the bottom"
+      ),
     maxZoom: ZoomLevelSchema.optional().describe(
       "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
     ),
   })
-  .describe("Fit the initial camera to a GeoJSON source's data");
+  .describe("Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG)");
+
+/**
+ * `fitTo:` — `{ source, padding?, maxZoom? }`, or just the source name
+ * (`fitTo: tracts`, the shorthand for `fitTo: { source: tracts }`).
+ */
+export const FitToSchema = z
+  .union([
+    z
+      .string()
+      .min(1)
+      .transform((source): z.output<typeof FitToObjectSchema> => ({ source }))
+      .describe("Name of a GeoJSON entry in `sources:` (shorthand for { source: name })"),
+    FitToObjectSchema,
+  ])
+  .describe("Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG): { source, padding, maxZoom }, or a source name");
 
 /** Inferred type for `fitTo`. */
 export type FitToConfig = z.infer<typeof FitToSchema>;
@@ -332,13 +352,11 @@ export const MapConfigSchema = z
     // Required
     center: LngLatSchema.describe("Initial map center [longitude, latitude]"),
     zoom: ZoomLevelSchema.describe("Initial zoom level (0-24)"),
-    mapStyle: z
-      .union([z.string().url(), z.any()])
-      .optional()
-      .describe(
-        "MapLibre style URL or style object. " +
-          "Optional when global config.defaultMapStyle is set.",
-      ),
+    mapStyle: MapStyleSchema.optional().describe(
+      "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file " +
+        "({ pmtiles, flavor, lang }, or the file's path alone for the defaults). Optional when " +
+        "global config.defaultMapStyle is set.",
+    ),
 
     // View
     pitch: z
@@ -358,7 +376,7 @@ export const MapConfigSchema = z
         "[[west, south], [east, north]] (longitude first)"
     ),
     fitTo: FitToSchema.optional().describe(
-      "Fit the initial camera to a GeoJSON source's data (wins over `bounds`)"
+      "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (wins over `bounds`)"
     ),
 
     // Constraints

@@ -66,7 +66,9 @@ import {
   StreamConfigSchema,
   CacheConfigSchema,
   LoadingConfigSchema,
+  SourceColumnsSchema,
   SourceFormatSchema,
+  ColorRampSchema,
   SourceLoadSchema,
 } from "./source.schema";
 import {
@@ -81,7 +83,7 @@ import {
   ColorReliefLayerSchema,
   BackgroundLayerSchema,
   InteractiveConfigSchema,
-  LegendItemSchema,
+  LayerLegendSchema,
   EffectConfigSchema,
 } from "./layer.schema";
 import { GeoJSONSchema } from "./geojson.schema";
@@ -144,6 +146,8 @@ export const SourceRuntimeSchema = z
     // Cloud-native formats (0.9, ml-cnv): how the file is read.
     format: SourceFormatSchema.optional(),
     load: SourceLoadSchema.optional(),
+    columns: SourceColumnsSchema.optional(),
+    colorRamp: ColorRampSchema.optional(),
   })
   .passthrough()
   .describe("Per-source live-data configuration (v2 `source.runtime`)");
@@ -284,7 +288,7 @@ export const SourceV2Schema: z.ZodTypeAny = z.union([
     "Vector"
   ),
   requireUrlOrTiles(
-    withSourceRuntime(baseObject(RasterSourceSchema).omit({ format: true })),
+    withSourceRuntime(baseObject(RasterSourceSchema).omit({ format: true, colorRamp: true })),
     "Raster"
   ),
   requireUrlOrTiles(
@@ -307,7 +311,7 @@ export const LayerRuntimeSchema = z
     interactive: InteractiveConfigSchema.describe(
       "Interactive event configuration"
     ),
-    legend: LegendItemSchema.optional().describe("Legend entry for this layer"),
+    legend: LayerLegendSchema.optional(),
     label: z.string().optional().describe("Human-readable layer label"),
     toggleable: z
       .boolean()
@@ -486,7 +490,7 @@ export const RuntimeV2Schema: z.ZodTypeAny = z
       "Standalone markers — DOM pins live, symbol layers + sprite on export"
     ),
     fitTo: FitToSchema.optional().describe(
-      "Fit the initial camera to a GeoJSON source's data (v1: `config.fitTo`)"
+      "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (v1: `config.fitTo`)"
     ),
     popups: PopupsSchema.optional().describe(
       "Standalone popups open at a coordinate — no layer, no marker"

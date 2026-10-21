@@ -82,6 +82,20 @@ describe("runChapterAction covers every action the schema accepts", () => {
     warn.mockRestore();
   });
 
+  it("a chapter naming a missing basemap layer gets a did-you-mean from the basemap's own ids (ml-aot.119)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { map } = fakeMap(["water", "roads_minor"]);
+    map.getStyle = () => ({ layers: [{ id: "water" }, { id: "roads_minor" }] });
+    const onProblem = vi.fn();
+    runChapterAction(
+      map,
+      { action: "setPaintProperty", layer: "road_minor", property: "line-color", value: "#f00" },
+      { ...ctx(), layerIds: ["quakes"], onProblem }
+    );
+    expect(String(onProblem.mock.calls[0]![0])).toContain("Did you mean `roads_minor`?");
+    warn.mockRestore();
+  });
+
   it("flyTo / easeTo take their camera from options", () => {
     const { map, calls } = fakeMap();
     runChapterAction(map, { action: "flyTo", options: { center: [1, 2], zoom: 5 } }, ctx());

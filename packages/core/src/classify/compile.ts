@@ -365,9 +365,10 @@ export interface CompiledClassify {
  * Compile a record to MapLibre expressions.
  *
  * @remarks
- * A pending record (a `method:` before its data) compiles to a flat colour —
- * the source has no features yet, so nothing is drawn with it — and to its
- * final filter, which never depends on the breaks.
+ * A pending record (a `method:` before its data) compiles to the flat
+ * no-data colour — usually nothing is drawn with it yet, but a source read by
+ * view never gets computed breaks and keeps it — and to its final filter,
+ * which never depends on the breaks.
  */
 export function compileClassify(record: ClassifyRecord): CompiledClassify {
   const paint: Record<string, unknown> = {};
@@ -399,8 +400,11 @@ export function compileClassify(record: ClassifyRecord): CompiledClassify {
   const breaks = record.breaks;
   if (record.property && record.colors && record.colors.length > 0) {
     if (breaks === undefined) {
-      // An expression, not a bare literal: hover.highlight rewrites a
-      // literal colour, and that rewrite would be lost when the breaks land.
+      // The no-data colour: nothing may be drawn with a class colour before
+      // the breaks exist (a source read by view never gets them, ml-aot.106).
+      // An expression, not a bare literal: the layer is classified, and
+      // hover.highlight wraps a classified colour (re-wrapped when the
+      // breaks land, renderer/highlight-paint).
       paint[record.property] = [
         "to-color",
         hideNoData ? record.colors[Math.floor((record.colors.length - 1) / 2)] : record.noData,
@@ -457,20 +461,42 @@ export function applyClassifyToSpec(
 
 /**
  * Whether any layer is classified — compiled (metadata record) or still a raw
- * `classify:` block (a story's own `layers:`).
+ * `classify:` block (a story's own `layers:`) — and in the legend: a layer
+ * with `legend: false` asks for no legend lines.
  */
 export function hasClassifiedLayer(layers: readonly unknown[] | undefined): boolean {
   return (layers ?? []).some(
     (layer) =>
-      classifyRecordOf(layer) !== undefined ||
-      (layer !== null && typeof layer === "object" && typeof (layer as Record<string, unknown>)["classify"] === "object")
+      layer !== null &&
+      typeof layer === "object" &&
+      (layer as Record<string, unknown>)["legend"] !== false &&
+      (classifyRecordOf(layer) !== undefined ||
+        typeof (layer as Record<string, unknown>)["classify"] === "object")
   );
+}
+
+/** Whether any layer has a legend entry of its own (`legend: { label, color }`). */
+export function hasLayerLegendEntry(layers: readonly unknown[] | undefined): boolean {
+  return (layers ?? []).some((layer) => {
+    if (layer === null || typeof layer !== "object") return false;
+    const entry = (layer as Record<string, unknown>)["legend"];
+    return entry !== null && typeof entry === "object";
+  });
+}
+
+/**
+ * Whether a map without a `legend:` block gets one anyway (0.9): a layer is
+ * classified (a thematic map without its key is not readable), or a layer
+ * wrote its own legend entry — which, without a block, used to show nowhere.
+ */
+export function wantsAutomaticLegend(layers: readonly unknown[] | undefined): boolean {
+  return hasClassifiedLayer(layers) || hasLayerLegendEntry(layers);
 }
 
 /**
  * The legend a map builds (0.9): the authored `legend:` block; else, when a
- * layer is classified, an automatic one with the schema's defaults (a
- * thematic map without its key is not readable); `legend: false` — none.
+ * layer is classified or has its own legend entry, an automatic one with the
+ * schema's defaults; `legend: false` — none.
  */
 export function effectiveLegend<T extends object>(
   legend: T | false | undefined,
@@ -479,7 +505,7 @@ export function effectiveLegend<T extends object>(
 ): T | undefined {
   if (legend === false) return undefined;
   if (legend !== undefined) return legend;
-  return hasClassifiedLayer(layers) ? automatic : undefined;
+  return wantsAutomaticLegend(layers) ? automatic : undefined;
 }
 
 /** The record a layer (spec or renderer layer) carries in its metadata, if any. */
@@ -614,6 +640,9 @@ export function classifyLegendEntries(
         shape,
       });
     }
+  } else if (stats !== undefined && stats.count > 0 && stats.count === stats.noData) {
+    // No feature has a value: no class line describes anything on the map
+    // (an "All values" line would). Only "No data" below (ml-aot.81).
   } else {
     const breaks = record.breaks ?? [];
     const labels = classLabels(breaks, stats, record.format, options.locale);

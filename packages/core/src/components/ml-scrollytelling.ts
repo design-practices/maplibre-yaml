@@ -602,7 +602,7 @@ export class MLScrollytelling extends HTMLElement {
           ? ` (line ${warning.line}${warning.column !== undefined ? `, column ${warning.column}` : ""})`
           : "";
       if (warning.onPage) this.pageWarnings.push(`${warning.message}${where}`);
-      console.warn(
+      (warning.kind === "note" ? console.info : console.warn)(
         `[ml-scrollytelling] ${source ? `${source}: ` : ""}${displayPath(warning) ? `${displayPath(warning)}: ` : ""}${warning.message}${where}`
       );
     }

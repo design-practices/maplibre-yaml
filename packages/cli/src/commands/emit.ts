@@ -67,11 +67,11 @@ export async function emitStyle(
      */
     loadData?: ClassifyDataLoader;
     /**
-     * The document's path: FlatGeobuf files (ml-cnv.3) are looked up the way
+     * The document's path: FlatGeobuf / GeoParquet files (ml-cnv.3/.4) are looked up the way
      * `loadData` looks up GeoJSON (beside it, then the site root / public/).
      */
     documentPath?: string;
-    /** An injectable FlatGeobuf file reader, for tests. */
+    /** An injectable FlatGeobuf / GeoParquet file reader, for tests. */
     reader?: DataReader;
   } = {},
 ): Promise<{
@@ -124,7 +124,7 @@ export async function emitStyle(
   }
   projected = { ...projected, warnings: [...loweringWarnings, ...projected.warnings] };
 
-  // FlatGeobuf sources (ml-cnv.3): core emitted each empty and described
+  // FlatGeobuf / GeoParquet sources (ml-cnv.3/.4): core emitted each empty and described
   // the file; read and inline the features now. An unreadable file stays
   // empty and is reported lossy, so the strict check below refuses it.
   if (projected.data && projected.data.length > 0) {

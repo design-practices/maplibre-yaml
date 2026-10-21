@@ -283,6 +283,7 @@ function rebaseImages(images: unknown, base: string): unknown {
 /**
  * An inline basemap style object: `sprite` (a URL or `[{ id, url }]`),
  * `glyphs` (a template — `{fontstack}/{range}` kept), and its `sources`.
+ * The Protomaps basemap shorthand has `pmtiles`, `glyphs` and `sprite`.
  */
 function rebaseInlineStyle(style: unknown, base: string): unknown {
   if (!isObject(style)) return style;
@@ -302,6 +303,7 @@ function rebaseInlineStyle(style: unknown, base: string): unknown {
       : rebaseString(sprite, base),
     glyphs: rebaseString(style["glyphs"], base),
     sources: isObject(sources) ? patch(sources, sourceChanges) : sources,
+    pmtiles: rebaseString(style["pmtiles"], base),
   });
 }
 
@@ -320,7 +322,7 @@ function rebaseInlineStyle(style: unknown, base: string): unknown {
  *
  * | Where | Field |
  * | --- | --- |
- * | `config.mapStyle` / `style.basemap` | the style URL; for an inline style object, its `sprite`, `glyphs` and `sources` |
+ * | `config.mapStyle` / `style.basemap` | the style URL; for an inline style object, its `sprite`, `glyphs` and `sources`; for a Protomaps basemap, its `pmtiles`, `glyphs` and `sprite` |
  * | `sources.*` and inline `layers[].source` | `url`, `tiles[]`, `urls[]` (video), `data` when it is a string, `stream.url` |
  * | `images.*` | the URL string, or `url` |
  * | `markers[]` | `icon`, and `href`s in its `popup` |

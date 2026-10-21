@@ -14,6 +14,18 @@ import {
 } from "../utils/html";
 import { allowsHtml, DEFAULT_POLICY, type CapabilityPolicy } from "../capabilities";
 import { formatNumber, type NumberFormat } from "../i18n/number-format";
+import { numericValue } from "../classify/breaks";
+
+/**
+ * The number a popup `format:` formats: a finite number, or a non-blank
+ * string that reads as one the way `classify:` reads it (`"54000"`,
+ * `"1.5e3"`). `"n/a"`, `""` and anything else stay text.
+ */
+function formattableNumber(value: unknown): number | undefined {
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  const n = numericValue(value);
+  return n !== undefined && Number.isFinite(n) ? n : undefined;
+}
 import { elementLanguage } from "../i18n/strings";
 
 /**
@@ -127,9 +139,12 @@ export class PopupBuilder {
       if (value !== undefined && value !== null) {
         // A number with a `format:` (MapLibre number-format options, or the
         // older ",.0f" string) goes through Intl, in the page's language
-        // unless the format names a locale. Text is escaped like any value.
-        if (item.format && typeof value === "number") {
-          return escapeHtml(formatNumber(value, item.format as NumberFormat, this.language()));
+        // unless the format names a locale. A numeric string ("100700", as a
+        // CSV or ogr2ogr-written text column carries it) is that number, as
+        // `classify:` reads it; other text is escaped like any value.
+        const number = item.format ? formattableNumber(value) : undefined;
+        if (number !== undefined) {
+          return escapeHtml(formatNumber(number, item.format as NumberFormat, this.language()));
         }
         return escapeHtml(String(value));
       }

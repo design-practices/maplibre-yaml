@@ -146,7 +146,7 @@ describe("projectStyle — the runtime half degrades", () => {
         {
           ...base,
           sources: {
-            s: { type: "geojson", url: "/live.geojson", refresh: { refreshInterval: 5000 } },
+            s: { type: "geojson", stream: { type: "websocket", url: "wss://example.com/live" } },
           },
           layers: [{ id: "a", type: "circle", source: "s" }],
         },

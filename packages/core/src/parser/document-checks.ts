@@ -24,6 +24,7 @@ import { suggest, spellingVariantOf } from "../utils/suggest";
 import { boundsOfPoints, swappedCenter as swappedPair } from "../utils/swapped-center";
 import { toFlatBounds } from "../utils/bounds";
 import { MapBlockSchema, MapConfigSchema } from "../schemas/map.schema";
+import { isPmtilesBasemapString } from "../schemas/basemap.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
 import { DEFAULT_STRINGS, STRINGS_PREFIX } from "../i18n/strings";
 
@@ -140,6 +141,9 @@ export function checkLocaleKeys(
         (hint ? ` Did you mean "${hint}"?` : " The docs list every key (Accessibility & languages)."),
       ...atKey(positions, path, key),
       ...(hint ? { suggestion: hint } : {}),
+      // The page shows the untranslated text with no reason otherwise: an
+      // author hint on the map too (dev-only), not only the console.
+      onPage: true,
     });
   }
   return warnings;
@@ -365,6 +369,10 @@ export function checkDocument(
   duplicateIds(value["layers"], ["layers"], "layer", positions, { errors, warnings });
   if (kind === "scrollytelling") {
     duplicateIds(value["chapters"], ["chapters"], "chapter", positions, { errors, warnings });
+    // A story's basemap string naming a .pmtiles file (maps get this note
+    // with their other basemap checks).
+    const note = pmtilesBasemapNote(value, 1, positions);
+    if (note && !already.has(note.path)) warnings.push(note);
   }
 
   // ml-aot.48 — keys under config: that belong at the root, and keys no one reads.
@@ -403,9 +411,11 @@ export function checkDocument(
     warnings.push(...checkLocaleKeys(config["locale"], ["config", "locale"], positions));
 
     // ml-aot.51 — fitTo names a source the document does not declare.
+    // `fitTo: name` is shorthand for `fitTo: { source: name }`.
     const fitTo = config["fitTo"];
-    if (isObject(fitTo) && typeof fitTo["source"] === "string" && !sourceNames.includes(fitTo["source"])) {
-      const name = fitTo["source"];
+    const fitName = typeof fitTo === "string" ? fitTo : isObject(fitTo) ? fitTo["source"] : undefined;
+    if (typeof fitName === "string" && !sourceNames.includes(fitName)) {
+      const name = fitName;
       const hint = nearMiss(name, sourceNames);
       warnings.push({
         path: "config.fitTo.source",
@@ -414,7 +424,7 @@ export function checkDocument(
           (sourceNames.length > 0 ? ` (${sourceNames.join(", ")})` : " (there are none)") +
           `, so the map keeps its center and zoom.` +
           (hint ? ` Did you mean "${hint}"?` : ""),
-        ...at(positions, ["config", "fitTo", "source"]),
+        ...at(positions, typeof fitTo === "string" ? ["config", "fitTo"] : ["config", "fitTo", "source"]),
         ...(hint ? { suggestion: hint } : {}),
       });
     }
@@ -537,4 +547,63 @@ export function checkDocument(
   }
 
   return { errors, warnings };
+}
+
+/**
+ * A basemap written as a string naming a `.pmtiles` file (`mapStyle:
+ * data/nyc.pmtiles`): valid — it is the Protomaps basemap shorthand with its
+ * defaults — and explained, since it reads like a style URL. A `note`, never
+ * promoted to an error under `--strict`.
+ *
+ * @param version - 1 (`config.mapStyle`, maps and stories) or 2 (`style.basemap`).
+ */
+export function pmtilesBasemapNote(
+  value: unknown,
+  version: 1 | 2,
+  positions?: Positions
+): ValidationWarning | undefined {
+  if (!isObject(value)) return undefined;
+  const parentKey = version === 2 ? "style" : "config";
+  const parent = value[parentKey];
+  const key = version === 2 ? "basemap" : "mapStyle";
+  if (!isObject(parent) || !isPmtilesBasemapString(parent[key])) return undefined;
+  const file = String(parent[key]).trim();
+  return {
+    path: `${parentKey}.${key}`,
+    message:
+      `${key}: "${file}" names a .pmtiles file, so it is read as a Protomaps basemap (the light ` +
+      `flavor, labels in the page's language). To choose a flavor or a language, write it as ` +
+      `${key}: { pmtiles: ${file}, flavor: dark, lang: es }.`,
+    kind: "note",
+    ...atKey(positions, [parentKey], key),
+  };
+}
+
+/**
+ * A standalone map with no basemap (ml-aot.97). The schema keeps it optional
+ * because the Astro builders can inherit `defaultMapStyle`, but `<ml-map>`
+ * has nothing to inherit and refuses the map with an error card; validation
+ * says the same, as a warning (it is not wrong under the Astro builders).
+ *
+ * @param version - 1 (`config.mapStyle`) or 2 (`style.basemap`).
+ */
+export function missingBasemapWarning(
+  value: unknown,
+  version: 1 | 2,
+  positions?: Positions
+): ValidationWarning | undefined {
+  if (!isObject(value)) return undefined;
+  const parent = version === 2 ? value["style"] : value["config"];
+  if (!isObject(parent)) return undefined;
+  const key = version === 2 ? "basemap" : "mapStyle";
+  if (parent[key]) return undefined;
+  const path = version === 2 ? ["style"] : ["config"];
+  return {
+    path: [...path, key].join("."),
+    message:
+      `No ${key}: this map has no basemap. <ml-map> needs one and shows an error instead of the ` +
+      `map; add ${key}: "https://demotiles.maplibre.org/style.json" (or another style URL) under ` +
+      `${path[0]}:. Only the Astro builders can fill it in from a site-wide defaultMapStyle.`,
+    ...atKey(positions, [], path[0]!),
+  };
 }

@@ -107,8 +107,9 @@ describe("type: <a file format> is an error with the fix", () => {
     ["pmtiles", 'Keep the url: and set type: vector (or raster / raster-dem for image or elevation tiles)'],
     ["flatgeobuf", "Keep the url: and set type: geojson"],
     ["fgb", "Keep the url: and set type: geojson"],
-    ["geoparquet", "GeoParquet files are read with type: geojson. This version of maplibre-yaml can't read GeoParquet yet"],
-    ["cog", "a Cloud Optimized GeoTIFF is read with type: raster (or raster-dem for elevation)"],
+    ["geoparquet", "Keep the url: and set type: geojson — the .parquet (or .geoparquet) file name tells maplibre-yaml to read it as GeoParquet"],
+    ["parquet", "Keep the url: and set type: geojson — the .parquet (or .geoparquet) file name tells maplibre-yaml to read it as GeoParquet"],
+    ["cog", "Keep the url: and set type: raster (or raster-dem for elevation)"],
     ["mbtiles", "Convert it to PMTiles (pmtiles convert in.mbtiles out.pmtiles)"],
   ])("type: %s", (word, fix) => {
     const result = v1(`  data:
@@ -206,13 +207,153 @@ describe("load:", () => {
     const result = v1(`  a:\n    type: geojson\n    url: data/a.geojson\n    load: viewport`);
     expect(result.success).toBe(true);
     expect(result.warnings).toContainEqual(
-      expect.objectContaining({ path: "sources.a.load", message: expect.stringContaining("only applies to FlatGeobuf") })
+      expect.objectContaining({
+        path: "sources.a.load",
+        message: expect.stringContaining("only applies to FlatGeobuf and GeoParquet"),
+      })
     );
+  });
+
+  it("applies to GeoParquet, flat in v1 and under runtime: in v2", () => {
+    const flat = v1(`  a:\n    type: geojson\n    url: data/a.parquet\n    load: { mode: viewport, minzoom: 12 }`);
+    expect(flat.errors).toEqual([]);
+    expect(flat.warnings).toEqual([]);
+    const nested = v2(`    a:
+      type: geojson
+      url: https://example.com/api/wells
+      runtime:
+        format: geoparquet
+        load: viewport
+        columns: [kind, depth_m]`);
+    expect(nested.errors).toEqual([]);
+    expect(nested.warnings).toEqual([]);
   });
 
   it("rejects an unknown mode", () => {
     const result = v1(`  a:\n    type: geojson\n    url: data/a.fgb\n    load: lazy`);
     expect(result.success).toBe(false);
+  });
+});
+
+describe("columns:", () => {
+  it("a list or all on a GeoParquet source", () => {
+    for (const columns of ["[name, depth_m]", "all"]) {
+      const result = v1(`  a:\n    type: geojson\n    url: data/a.parquet\n    columns: ${columns}`);
+      expect(result.errors, columns).toEqual([]);
+      expect(result.warnings, columns).toEqual([]);
+    }
+  });
+
+  it("warns where it does nothing", () => {
+    const result = v1(`  a:\n    type: geojson\n    url: data/a.fgb\n    columns: [name]`);
+    expect(result.success).toBe(true);
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ path: "sources.a.columns", message: expect.stringContaining("only applies to GeoParquet") })
+    );
+  });
+
+  it("a list that leaves out a property the map uses warns, naming each one (ml-aot.117)", () => {
+    const result = v1(
+      `  t:\n    type: geojson\n    url: data/tracts.parquet\n    columns: [tract]`,
+      `layers:
+  - id: t
+    type: fill
+    source: t
+    paint: { fill-color: "#ccc" }
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: tract }]
+          - p: [{ str: "Population: " }, { property: population }]
+  - id: labels
+    type: symbol
+    source: t
+    layout: { text-field: "{ Tract Name }" }
+  - id: inline
+    type: circle
+    source: { type: geojson, url: data/wells.parquet, columns: [id] }
+    filter: [">", ["get", "depth"], 10]`
+    );
+    expect(result.success).toBe(true);
+    const at = (path: string) => result.warnings.filter((w) => w.path === path);
+    expect(at("sources.t.columns")).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('columns: leaves out "Tract Name", "population", which this map uses'),
+        line: 11,
+      }),
+    ]);
+    expect(at("layers.2.source.columns")[0]?.message).toContain('leaves out "depth"');
+  });
+
+  it("…and counts a story chapter's actions; a complete list, all, or no list doesn't warn", () => {
+    const parquet = `  w:\n    type: geojson\n    url: data/w.parquet\n    columns: [kind]`;
+    const doc = (sources: string) =>
+      YAMLParser.safeParseScrollytellingBlock(`type: scrollytelling
+id: s
+config: { center: [10.2, 42.15], zoom: 9, mapStyle: https://example.com/style.json }
+sources:
+${sources}
+layers:
+  - { id: w, type: circle, source: w, paint: { circle-color: ["get", "kind"] } }
+chapters:
+  - id: a
+    title: A
+    center: [10.2, 42.15]
+    zoom: 9
+    onChapterEnter:
+      - { action: setFilter, layer: w, filter: [">=", ["get", "value"], 50] }
+`);
+    expect(doc(parquet).warnings.find((w) => w.path === "sources.w.columns")?.message).toContain('leaves out "value"');
+    for (const columns of ["[kind, value]", "all"]) {
+      expect(doc(parquet.replace("[kind]", columns)).warnings.filter((w) => w.path === "sources.w.columns")).toEqual([]);
+    }
+    expect(doc(parquet.replace("\n    columns: [kind]", "")).warnings).toEqual([]);
+  });
+
+  it("rejects an empty list and a bare word other than all", () => {
+    expect(v1(`  a:\n    type: geojson\n    url: data/a.parquet\n    columns: []`).success).toBe(false);
+    expect(v1(`  a:\n    type: geojson\n    url: data/a.parquet\n    columns: some`).success).toBe(false);
+  });
+});
+
+describe("format: geoparquet", () => {
+  it("format: parquet gets the format name", () => {
+    const result = v1(`  a:\n    type: geojson\n    url: https://x.org/a\n    format: parquet`);
+    expect(result.success).toBe(false);
+    expect(result.errors.map((e) => e.message).join("\n")).toMatch(/Did you mean "geoparquet"\?/);
+  });
+
+  it("a GeoParquet file on a tile source is an error with the fix", () => {
+    const result = v1(`  p:\n    type: vector\n    url: data/wells.parquet`);
+    expect(result.success).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        path: "sources.p.type",
+        message: '"data/wells.parquet" is a GeoParquet file: it holds features, not tiles. Use type: geojson.',
+      })
+    );
+  });
+
+  it("refresh: / stream: are refused, in v1 and v2", () => {
+    const flat = v1(`  a:
+    type: geojson
+    url: data/a.parquet
+    refresh: { refreshInterval: 5000 }`);
+    expect(flat.success).toBe(false);
+    expect(flat.errors).toContainEqual(
+      expect.objectContaining({
+        path: "sources.a.refresh",
+        message:
+          "refresh: live data isn't available for GeoParquet sources yet. Remove it, or serve the data as GeoJSON for live updates.",
+      })
+    );
+    const nested = v2(`    a:
+      type: geojson
+      url: data/a.parquet
+      runtime:
+        stream: { type: sse, url: https://example.com/s }`);
+    expect(nested.success).toBe(false);
+    expect(nested.errors.map((e) => e.path)).toContain("style.sources.a.runtime.stream");
   });
 });
 
@@ -243,26 +384,26 @@ describe("live data on FlatGeobuf is not available in 0.9", () => {
   });
 });
 
-describe("GeoParquet and COG are reserved: recognized, not read yet", () => {
-  it("warns (not an error: the rest of the map still renders)", () => {
+describe("GeoParquet and COG are both read: neither is reported as 'not yet'", () => {
+  it("both validate clean", () => {
     const result = v1(`  wells:
     type: geojson
     url: data/wells.parquet
+  also:
+    type: geojson
+    url: data/wells.geoparquet
   scene:
     type: raster
     url: data/scene.tif`);
     expect(result.success).toBe(true);
     const messages = result.warnings.map((w) => w.message).join("\n");
-    expect(messages).toContain(
-      '"data/wells.parquet" is a GeoParquet file. This version of maplibre-yaml can\'t read GeoParquet yet (it\'s planned)'
-    );
-    expect(messages).toContain(
-      '"data/scene.tif" is a Cloud Optimized GeoTIFF. This version of maplibre-yaml can\'t read COGs on its own yet'
-    );
-    expect(result.warnings.every((w) => w.kind === "unimplemented")).toBe(true);
+    expect(messages).not.toContain("GeoParquet");
+    expect(messages).not.toContain("scene.tif");
+    expect(messages).not.toMatch(/not supported yet|can't read/);
+    expect(result.warnings).toHaveLength(0);
   });
 
-  it("format: geoparquet / cog validate (the syntax is reserved, not rejected)", () => {
+  it("format: geoparquet / cog validate", () => {
     expect(v1(`  a:\n    type: geojson\n    url: https://x.org/a\n    format: geoparquet`).success).toBe(true);
     expect(v1(`  a:\n    type: raster\n    url: https://x.org/a\n    format: cog`).success).toBe(true);
   });

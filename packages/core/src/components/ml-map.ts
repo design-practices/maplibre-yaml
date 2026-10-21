@@ -34,6 +34,7 @@
  * ```
  */
 
+import { prefetchProtomapsBasemap } from "../formats/protomaps-style";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
   YAMLParser,
@@ -95,6 +96,13 @@ import type {
 import type { FeatureCollection } from "geojson";
 import { DataFetcher } from "../data/data-fetcher.js";
 import { isLoadedFromUrl, loadSourceData } from "../data/source-data.js";
+import { geoParquetColumns, isGeoParquetSource } from "../formats/columns.js";
+import { LoadingIndicator } from "./loading-indicator.js";
+import { formatOfSource } from "../formats/detect.js";
+import { cogUrl } from "../formats/cog-spec.js";
+import { fileUrlOf } from "../formats/cog.js";
+import { readCogHeaderAhead } from "../formats/cog-protocol.js";
+import { absoluteUrl } from "../renderer/cloud-sources.js";
 import { CHROME_CORNERS, type ChromeCorner } from "../renderer/chrome-layout.js";
 import { displayPath } from "../parser/validation-utils.js";
 import {
@@ -213,6 +221,12 @@ interface FitPrefetch {
   fetcher: DataFetcher;
   /** Set once `data` settles. */
   result: { data: FeatureCollection } | { error: unknown } | null;
+  /**
+   * A COG (ml-aot.120): its header's extent, read ahead (the `cog://`
+   * handler reuses the read); `data` then settles with it and `extent` is
+   * set when the file has one.
+   */
+  extent?: [number, number, number, number];
 }
 
 /**
@@ -223,12 +237,19 @@ interface FitPrefetch {
 function startFitPrefetch(model: MapModel): FitPrefetch | null {
   const fitTo = model.runtime.fitTo;
   if (!fitTo) return null;
-  const source = denormalizeSources(model)?.[fitTo.source];
+  const sources = denormalizeSources(model);
+  const source = sources?.[fitTo.source];
+  if (isCogFitSource(source)) return startCogFitPrefetch(fitTo.source, source);
   if (!isLoadedFromUrl(source)) return null;
+  // A GeoParquet file is read for the columns the document references
+  // (ml-cnv.4) — the same list the renderer computes, since it reuses this load.
+  const columns = isGeoParquetSource(source)
+    ? geoParquetColumns(sources, denormalizeLayers(model)).get(fitTo.source)
+    : undefined;
   const fetcher = new DataFetcher();
   const prefetch: FitPrefetch = {
     sourceId: fitTo.source,
-    data: loadSourceData(source, { fetcher }),
+    data: loadSourceData(columns ? { ...source, columns } : source, { fetcher }),
     fetcher,
     result: null,
   };
@@ -238,6 +259,39 @@ function startFitPrefetch(model: MapModel): FitPrefetch | null {
     (data) => (prefetch.result = { data }),
     (error: unknown) => (prefetch.result = { error })
   );
+  return prefetch;
+}
+
+/** A `raster` / `raster-dem` source reading a COG (ml-cnv.2). */
+function isCogFitSource(source: unknown): source is Record<string, unknown> & { url: string } {
+  if (!source || typeof source !== "object") return false;
+  const s = source as Record<string, unknown>;
+  return (
+    (s["type"] === "raster" || s["type"] === "raster-dem") &&
+    typeof s["url"] === "string" &&
+    formatOfSource(s) === "cog"
+  );
+}
+
+/**
+ * Read a `fitTo` COG's header ahead of the map (ml-aot.120), so the map is
+ * built framed on the file's extent like a fetched GeoJSON source — within
+ * the same {@link MLMap.fitToWaitMs} wait. The `cog://` handler reuses the
+ * read. A header without an extent (or a failed read, which the handler
+ * reports) leaves the fit to the reader, once its metadata loads.
+ */
+function startCogFitPrefetch(sourceId: string, source: { url: string }): FitPrefetch {
+  const fileUrl = fileUrlOf(cogUrl(source.url, { absolute: absoluteUrl }));
+  const prefetch: FitPrefetch = {
+    sourceId,
+    data: Promise.resolve({ type: "FeatureCollection", features: [] }),
+    fetcher: new DataFetcher(),
+    result: null,
+  };
+  prefetch.data = readCogHeaderAhead(fileUrl).then((header) => {
+    if (header?.bounds) prefetch.extent = header.bounds;
+    return { type: "FeatureCollection", features: [] } as FeatureCollection;
+  });
   return prefetch;
 }
 
@@ -383,6 +437,13 @@ export class MLMap extends HTMLElement {
    * until a document has been read.
    */
   private strings: Strings = defaultStrings;
+
+  /** `aria-busy` and a delayed "Loading map…" until the basemap draws (ml-aot.121). */
+  private readonly loading = new LoadingIndicator(
+    this,
+    () => this.mapContainer,
+    () => this.strings("maplibre-yaml.Loading")
+  );
 
   /**
    * Resolved URL of the YAML file the current document came from (`src`),
@@ -574,6 +635,9 @@ export class MLMap extends HTMLElement {
     if (!this.style.display || this.style.display === "inline") {
       this.style.display = "block";
     }
+
+    // A quiet "Loading map…" if the map takes a while (ml-aot.121).
+    this.loading.start();
 
     // Initialize configuration loading
     this.initialize();
@@ -909,6 +973,13 @@ export class MLMap extends HTMLElement {
 
     this.appendChild(this.mapContainer);
 
+    // A Protomaps basemap (`mapStyle: { pmtiles: … }`, ml-cnv.7): its style
+    // generator and the PMTiles reader are on-demand chunks on the path to
+    // the first frame, so their download starts as soon as the document is
+    // known, before the DOM-ready wait below.
+    const block = mapBlock as { config?: { mapStyle?: unknown }; style?: { basemap?: unknown } };
+    prefetchProtomapsBasemap(block.config?.mapStyle ?? block.style?.basemap);
+
     // `fitTo` on a fetched source (ml-aot.75): start loading its data NOW,
     // alongside the rest of page start-up, so the map can be built already
     // framed on it instead of loading at center/zoom and jumping.
@@ -1013,7 +1084,9 @@ export class MLMap extends HTMLElement {
       // the source awaits it (one request) and the map fits when it lands.
       let sources = denormalizeSources(model);
       let sourceData: MapRendererOptions["sourceData"];
-      if (prefetch && sources?.[prefetch.sourceId]) {
+      // A COG's extent read ahead (ml-aot.120): no data to hand over.
+      const prefetchedExtents = prefetch?.extent ? { [prefetch.sourceId]: prefetch.extent } : undefined;
+      if (prefetch && !isCogFitSource(sources?.[prefetch.sourceId]) && sources?.[prefetch.sourceId]) {
         sourceData = {
           fetcher: prefetch.fetcher,
           pending: { [prefetch.sourceId]: prefetch.data },
@@ -1038,6 +1111,7 @@ export class MLMap extends HTMLElement {
           chrome: slots.chrome,
           legendElement: slots.legendElement,
           ...(sourceData ? { sourceData } : {}),
+          ...(prefetchedExtents ? { prefetchedExtents } : {}),
         onLoad: () => {
           // Load event is also emitted via the event system
         },
@@ -1050,6 +1124,16 @@ export class MLMap extends HTMLElement {
             });
             return;
           }
+          // A classified field the data has no value for (ml-aot.95): the
+          // renderer warned; an author hint on the page too.
+          if (
+            context?.kind === "classify-field" ||
+            context?.kind === "source-hint" ||
+            context?.kind === "layer-hint"
+          ) {
+            this.reportProblem(error.message, { kind: "hint" });
+            return;
+          }
           // `center: [lat, lng]` (ml-aot.65): the renderer warned; show it.
           if (context?.kind === "center" && context.center && context.swapped) {
             this.reportProblem(describeSwappedCenter(context.center, context.swapped), {
@@ -1060,7 +1144,9 @@ export class MLMap extends HTMLElement {
           // Loud by default: with no `ml-map:error` listener attached, a
           // dispatched event is invisible and the document fails silently
           // (ml-tfd.8 contract audit). Hosts still get the event.
-          console.error("[maplibre-yaml] map error:", error);
+          // A basemap notice was already logged by the renderer, as a warning
+          // in plain words: once is enough (ml-aot.125).
+          if (context?.kind !== "basemap") console.error("[maplibre-yaml] map error:", error);
           // MapLibre reports a worker that could not start as a runtime
           // error, but the map can never load without one: treat it as
           // terminal and put it on the page, not only on the console — a
@@ -1103,11 +1189,19 @@ export class MLMap extends HTMLElement {
           // on the map, not only on the console (ml-aot.15).
           if (!terminal && context?.kind === "layer" && context.layerId) {
             this.reportProblem(describeLayerProblem(context.layerId, error.message));
+          } else if (!terminal && context?.kind === "classify") {
+            // The message is the whole notice (renderer/classify-runtime).
+            this.reportProblem(error.message);
+          } else if (!terminal && context?.kind === "basemap") {
+            // The message is the whole notice (a pmtiles: file that is not
+            // a Protomaps basemap, ml-cnv.7).
+            this.reportProblem(error.message);
           } else if (!terminal && context?.kind === "source" && context.sourceId) {
             this.reportProblem(
               describeSourceProblem(context.sourceId, error.message, error, {
                 pageUrl: this.ownerDocument.baseURI,
                 base: this.base,
+                ...(context.basemap ? { basemap: true } : {}),
               })
             );
           }
@@ -1156,7 +1250,8 @@ export class MLMap extends HTMLElement {
             })`
           : "";
       const path = displayPath(warning) ? `${displayPath(warning)}: ` : "";
-      console.warn(`[ml-map] ${path}${warning.message}${location}`);
+      // A note explains how a valid value is read: information, not a warning.
+      (warning.kind === "note" ? console.info : console.warn)(`[ml-map] ${path}${warning.message}${location}`);
       // A valid document where part of it silently does nothing (a root key
       // nested under config:): also say so on the page (ml-aot.48). Still
       // the non-fatal notice, never the error card.
@@ -1407,11 +1502,19 @@ export class MLMap extends HTMLElement {
   private setupEventForwarding(): void {
     if (!this.renderer) return;
 
+    // The basemap's first full draw ends the loading state (ml-aot.121).
+    this.loading.start();
+    const map = (this.renderer as { getMap?: () => unknown }).getMap?.() as
+      | { once?: (type: string, listener: () => void) => unknown }
+      | undefined;
+    map?.once?.("load", () => this.loading.stop());
+
     // Map load event — the renderer emits this after the basemap is ready
     // AND every document layer was added, so it is the document-level
     // readiness signal mapReady()'s fast path keys on.
     this.renderer.on("load", () => {
       this.documentLoaded = true;
+      this.loading.stop();
       if (this.cssCheckPending) {
         this.cssCheckPending = false;
         void this.warnIfMapLibreCssMissing();
@@ -1592,7 +1695,9 @@ export class MLMap extends HTMLElement {
   private createMapContainer(): HTMLDivElement {
     const el = document.createElement("div");
     el.className = MAP_CONTAINER_CLASS;
-    el.style.cssText = "width: 100%; height: 100%;";
+    // Positioned, so the loading label centres on it before MapLibre's own
+    // class (which is positioned too) arrives.
+    el.style.cssText = "position: relative; width: 100%; height: 100%;";
     return el;
   }
 
@@ -1722,6 +1827,7 @@ export class MLMap extends HTMLElement {
       hint,
     }: { showHelp?: boolean; title?: string; hint?: string } = {}
   ): void {
+    this.loading.stop();
     // Targeted replacement (KTD9): the error card takes the map container's
     // place; author children (inline YAML, parked slot children) survive so
     // a fixed document can reload() into the same element.
@@ -1809,6 +1915,7 @@ export class MLMap extends HTMLElement {
    * Clean up resources when component is removed
    */
   private destroy(): void {
+    this.loading.stop();
     this.cancelEmptyConfigCheck();
     this.teardownRenderer();
     this.appliedConfigKey = null;

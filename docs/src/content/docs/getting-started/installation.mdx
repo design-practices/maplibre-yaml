@@ -61,6 +61,13 @@ The full setup is under [Using a bundler (Vite)](#using-a-bundler-vite). The
   </TabItem>
 </Tabs>
 
+**Upgrading an existing project.** Before 1.0, a range such as `^0.8.1` in
+`package.json` stays within 0.8.x, so a newer minor release never installs on
+its own. Run `npm install @maplibre-yaml/core@latest` (add
+`@maplibre-yaml/astro@latest` in an Astro project, see
+[Astro](/integrations/astro/#upgrading-an-existing-project)) to move to the
+current release.
+
 ## Required CSS
 
 MapLibre GL JS requires its CSS for proper rendering. Add it to your HTML or import it in your JavaScript:
@@ -149,16 +156,37 @@ layers:
       circle-color: "#e63946"
 ```
 
-Serve the folder with any static web server, for example `npx serve .`, and
-open the address it prints. Opening the HTML file directly (a `file://`
+Serve the folder with `npx serve .` and open the address it prints. (Another
+static server works too if it supports range requests, which PMTiles,
+FlatGeobuf, GeoParquet and COG files need; `python -m http.server` doesn't.) Opening the HTML file directly (a `file://`
 address) does not work: the browser blocks the page from fetching `map.yaml`.
 
 ### Versions in CDN URLs
 
-`@maplibre-yaml/core@0.8` in the URL means "the newest 0.8.x release": you get
-bug fixes automatically, and a later 0.9 with breaking changes never arrives
-by surprise in the middle of a term. Change the number on purpose when you
-upgrade. `maplibre-gl@6` works the same way for MapLibre.
+The version in `@maplibre-yaml/core@0.8` names a release line: the URL loads
+the newest release in that line, so bug fixes arrive automatically, and the
+next line, which may change behaviour, never arrives by surprise. Change the
+number on purpose when you upgrade; these docs always show the current line.
+`maplibre-gl@6` works the same way for MapLibre.
+
+### Hosting the files yourself
+
+To serve maplibre-yaml from your own site instead of a CDN, copy the
+package's **whole `dist/` folder** (from `node_modules/@maplibre-yaml/core/`,
+or the package on unpkg) and load `dist/register.browser.js` from it:
+
+```html
+<script type="module" src="/js/maplibre-yaml/dist/register.browser.js"></script>
+```
+
+Some parts of maplibre-yaml load on demand, only for maps that use them, and
+the browser fetches them from `dist/chunks/` next to the script: the readers
+for [PMTiles, FlatGeobuf, GeoParquet and COG files](/guides/cloud-native-data/)
+(`pmtiles.js`, `flatgeobuf.js`, `geoparquet.js` and `geoparquet-brotli.js`,
+`cog.js` with its image codecs `cog-deflate.js`, `cog-jpeg.js`, `cog-lerc.js`
+and `cog-zstd.js`) and the [Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap)
+style generator (`protomaps-basemap.js`). A copy of only `register.browser.js` works for every
+other map; a map that needs a missing reader shows a notice naming the file.
 
 ### JavaScript API from a CDN
 

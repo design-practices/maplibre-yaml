@@ -49,8 +49,37 @@ import { applyProjection, applySky, applyTerrain, type Scene3DMap } from './scen
 import { createStrings, type Strings } from '../i18n';
 import { mapLanguage } from './popup-builder';
 import { applyAccessibleName } from './accessible-name';
-import { isProtocolRegistered, prepareProtocols } from './cloud-protocols';
+import { isProtocolRegistered, pmtilesUnavailable, prepareProtocols } from './cloud-protocols';
+import { cogHintFor } from '../formats/cog-protocol';
+import { basemapRequestTransformer, type RequestTransformer } from './basemap-urls';
 import { formatOfSource, type CloudFormat } from '../formats/detect';
+import { protomapsBasemapOf, type ProtomapsBasemap } from '../schemas/basemap.schema';
+import {
+  basemapAssetMessage,
+  ensureRightToLeftLabels,
+  probeBasemapAssets,
+  type BasemapAssets,
+} from './basemap-assets';
+import {
+  ATTRIBUTION_RESERVE_NARROW,
+  ATTRIBUTION_RESERVE_WIDE,
+  bottomControlsReserve,
+  fitToPadding,
+  NARROW_MAP_WIDTH,
+  type FitPadding,
+} from '../utils/fit-padding';
+import { archiveMetadata } from '../formats/pmtiles';
+import {
+  basemapLanguage,
+  fallbackBasemapStyle,
+  notAProtomapsBasemap,
+  olderProtomapsSchema,
+  prefetchProtomapsBasemap,
+  PROTOMAPS_SOURCE_ID,
+  protomapsStyle,
+} from '../formats/protomaps-style';
+import { elementLanguage } from '../i18n/strings';
+import { geoParquetColumns } from '../formats/columns';
 
 /** The document's source ids (named, and `<layer>-source` for inline ones) that read `format`. */
 function sourceIdsReading(
@@ -104,12 +133,15 @@ function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
  *
  * - `bounds` — inline data: known before the map exists.
  * - `deferred` — a fetched geojson source: fit on its first data load.
+ * - `tile-bounds` — a COG (ml-cnv.2): fit to the extent its reader reports
+ *   once the source's metadata loads.
  * - `unsupported` — missing name, non-geojson source, or empty data: the
  *   authored center/zoom stand, with one warning naming why.
  */
 type FitResolution =
   | { kind: 'bounds'; bounds: Bounds }
   | { kind: 'deferred' }
+  | { kind: 'tile-bounds' }
   | { kind: 'unsupported'; reason: string; missing?: { suggestion?: string } };
 
 function resolveFitTo(
@@ -129,12 +161,18 @@ function resolveFitTo(
       missing: { suggestion },
     };
   }
+  if (
+    (source['type'] === 'raster' || source['type'] === 'raster-dem') &&
+    formatOfSource(source) === 'cog'
+  ) {
+    return { kind: 'tile-bounds' };
+  }
   if (source['type'] !== 'geojson') {
     return {
       kind: 'unsupported',
       reason:
         `fitTo.source "${fitTo.source}" is a ${String(source['type'])} source; only ` +
-        `GeoJSON sources have a client-side extent to fit (tiled sources do not); ${keep}`,
+        `GeoJSON sources and COGs have an extent to fit (other tiled sources do not); ${keep}`,
     };
   }
   const inline = source['data'] ?? source['prefetchedData'];
@@ -154,6 +192,22 @@ function resolveFitTo(
 }
 
 /**
+ * The reader's own plain-language failures (formats/errors), as they reach an
+ * `error` event from a style's PMTiles (or COG) source — the file's, and the
+ * reader's own: a reader file that couldn't be downloaded (`chunks/pmtiles.js`
+ * offline, blocked, or missing from a self-hosted copy) or set up. A tile
+ * error crosses MapLibre's worker boundary as a plain error, so the wording
+ * is what is matched.
+ */
+const BASEMAP_FILE_FAILURE =
+  /^`[^`]+` (didn't load \(|was served without range-request support|isn't a |is compressed|couldn't be read as )|^The browser couldn't read `|^The [^`]+? reader (\(`[^`]+`\) couldn't be downloaded|couldn't be set up)/;
+
+/** MapLibre's error for a style layer whose `source-layer` the Protomaps file lacks. */
+const MISSING_PROTOMAPS_LAYER = new RegExp(
+  `^Source layer "[^"]*" does not exist on source "${PROTOMAPS_SOURCE_ID}"`
+);
+
+/**
  * What part of the document a reported error belongs to — the third argument
  * of {@link MapRendererOptions.onError}.
  *
@@ -166,6 +220,14 @@ function resolveFitTo(
  *   of the map keeps working.
  * - `source`: one document source failed at runtime (tiles or a TileJSON
  *   that would not load).
+ * - `classify`: a classified layer's computed breaks can't be computed (its
+ *   source is read by view); the layer draws in its no-data colour.
+ * - `classify-field`: a hint — a classified layer's field has no usable
+ *   value in the loaded data, so every feature draws as no data.
+ * - `layer-hint`: a hint — a layer was added, but not as written (a
+ *   `before:` naming no layer on the map: it went on top).
+ * - `source-hint`: a hint — a source draws, but its file is served in a
+ *   way that makes it slow (a GeoTIFF that isn't cloud-optimized).
  *
  * Errors with no context (a basemap tile, a glyph) are not the document's.
  */
@@ -174,11 +236,37 @@ export interface MapErrorContext {
    * `fit`: `config.fitTo.source` names no source; the map keeps its authored
    * camera. `center`: `config.center` looks written [latitude, longitude] —
    * far from the document's data, while the swapped pair lands on it.
+   * `classify`: a layer's computed classes (`method:`) can't be computed,
+   * because its source holds only the features in view; the layer draws in
+   * its no-data colour. The error message is the whole notice.
+   * `classify-field`: an author hint, not a failure — the loaded data has no
+   * usable value for a classified layer's `field:` / `normalize:` (a
+   * misspelt or wrong-case name, or text under numeric classes).
+   * `basemap`: the basemap loaded, but something about it is wrong (a
+   * Protomaps basemap `pmtiles:` file that is some other kind of PMTiles).
+   * The error message is the whole notice.
+   * `source-hint`: an author hint, not a failure — a source draws, but its
+   * file could be served better (a GeoTIFF that isn't cloud-optimized).
    */
-  kind: 'style' | 'layer' | 'source' | 'fit' | 'center';
+  kind:
+    | 'style'
+    | 'layer'
+    | 'source'
+    | 'fit'
+    | 'center'
+    | 'classify'
+    | 'classify-field'
+    | 'basemap'
+    | 'source-hint'
+    | 'layer-hint';
+  /**
+   * For `source`: the source is the basemap's own (its PMTiles file failed),
+   * not one the document declared.
+   */
+  basemap?: boolean;
   /** For `center`: the center as written. */
   center?: [number, number];
-  /** The document layer, for `layer` errors. */
+  /** The document layer, for `layer` and `classify` errors. */
   layerId?: string;
   /** The document source, for `source` errors; the name `fitTo.source` gave, for `fit`. */
   sourceId?: string;
@@ -294,6 +382,13 @@ export interface MapRendererOptions {
    * cache. Optional; without it every source loads itself, as before.
    */
   sourceData?: LayerManagerDataOptions;
+  /**
+   * Extents the host already read, `[west, south, east, north]` by source id
+   * (ml-aot.120): `<ml-map>` reads a `fitTo` COG's header before it builds
+   * the map, so the map is built framed on the file instead of jumping
+   * there once the COG reader reports it.
+   */
+  prefetchedExtents?: Record<string, [number, number, number, number]>;
 }
 
 /** One host-supplied chrome element and the corner it mounts into. */
@@ -455,6 +550,10 @@ export class MapRenderer {
     // sanitize them before MapLibre ever holds them (GHSA-jrc7-96c5-q579, see
     // utils/attribution.ts). A style URL is covered by the attribution guard.
     let mapStyle: unknown = config.mapStyle;
+    // A Protomaps basemap from a `.pmtiles` file (ml-cnv.7): its style is
+    // generated in the page, on demand, so the map is built without one and
+    // given it when ready (below). `load` waits for it as for any style.
+    const protomaps: ProtomapsBasemap | undefined = protomapsBasemapOf(mapStyle);
     if (mapStyle && typeof mapStyle === 'object' && 'sources' in mapStyle) {
       const styleObject = mapStyle as Record<string, unknown>;
       const sources = sanitizeSourcesAttribution(styleObject['sources']);
@@ -465,13 +564,20 @@ export class MapRenderer {
     // constructed already framed (MapLibre's own `bounds` option — no
     // camera jump); fetched data fits once its first load lands (below).
     const { fitTo, ...mapConfig } = config as MapConfig & { fitTo?: FitToConfig };
-    const fit = fitTo ? resolveFitTo(fitTo, sources) : null;
+    let fit = fitTo ? resolveFitTo(fitTo, sources) : null;
+    // A COG whose header the host already read (ml-aot.120): framed now.
+    const extent = fitTo && fit?.kind === 'tile-bounds' ? options.prefetchedExtents?.[fitTo.source] : undefined;
+    if (extent) fit = { kind: 'bounds', bounds: [[extent[0], extent[1]], [extent[2], extent[3]]] as Bounds };
     const initialFit =
       fit && fit.kind === 'bounds'
         ? {
             bounds: fit.bounds,
             fitBoundsOptions: {
-              ...(fitTo!.padding !== undefined ? { padding: fitTo!.padding } : {}),
+              // The author's padding, else a margin for the map's size (ml-aot.124).
+              padding: fitToPadding(fitTo!, {
+                width: this.containerEl?.clientWidth ?? 0,
+                height: this.containerEl?.clientHeight ?? 0,
+              }),
               ...(fitTo!.maxZoom !== undefined ? { maxZoom: fitTo!.maxZoom } : {}),
             },
           }
@@ -479,11 +585,11 @@ export class MapRenderer {
     if (fit && fit.kind === 'unsupported') console.warn(`[maplibre-yaml] ${fit.reason}`);
 
     // Cloud-native formats (ml-cnv): register the protocols this document's
-    // sources need (PMTiles) on the module the map is built from. Started
-    // before the map exists — never blocking it: the basemap loads in
-    // parallel — and awaited in the load handler, before the document's own
-    // sources are added (the first point anything reads them).
-    const formatsReady = prepareProtocols(sources, layers, mapStyle);
+    // sources need (PMTiles, COG) on the module the map is built from, and
+    // start downloading their readers. Started before the map exists and
+    // never waited for: each protocol handler waits for its own reader, so
+    // no other source waits for a reader it doesn't use.
+    const protocolsPrepared = prepareProtocols(sources, layers, mapStyle);
 
     // The document's `title:` is the map's accessible name. MapLibre names
     // its canvas from `locale["Map.Title"]`, so hand it the title there too:
@@ -498,15 +604,37 @@ export class MapRenderer {
         : authorLocale;
 
     // Initialize MapLibre map
+    // A basemap style loaded from a URL: its relative URLs (a self-hosted
+    // `pmtiles://nyc.pmtiles`, sprite, glyphs) resolve against the style
+    // itself (renderer/basemap-urls), and a `pmtiles://` source it asks for
+    // while the protocol is unusable (maplibre-gl 3) is reported once.
+    const hostTransform = (mapConfig as { transformRequest?: unknown }).transformRequest;
+    let pmtilesReported = false;
+    const transformRequest =
+      typeof mapStyle === 'string'
+        ? basemapRequestTransformer(
+            mapStyle,
+            typeof hostTransform === 'function' ? (hostTransform as RequestTransformer) : undefined,
+            () => {
+              const problem = pmtilesUnavailable();
+              if (!problem || pmtilesReported) return;
+              pmtilesReported = true;
+              console.warn(`[maplibre-yaml] the basemap style uses PMTiles: ${problem.message}`);
+              options.onError?.(problem, false, { kind: 'source', sourceId: 'basemap' });
+            }
+          )
+        : undefined;
+
     this.map = new MapLibreMap({
       ...mapConfig,
+      ...(transformRequest ? { transformRequest } : {}),
       ...(locale !== undefined ? { locale } : {}),
       ...initialFit,
       ...(Object.keys(contextAttributes).length > 0
         ? { canvasContextAttributes: contextAttributes }
         : {}),
       container: typeof container === 'string' ? container : container,
-      style: mapStyle as any,
+      style: (protomaps ? undefined : mapStyle) as any,
       center: config.center as [number, number],
       zoom: config.zoom,
       pitch: config.pitch ?? 0,
@@ -543,6 +671,39 @@ export class MapRenderer {
           sourceId: fitTo.source,
           ...(missing.suggestion ? { suggestion: missing.suggestion } : {}),
         });
+      });
+    }
+
+    // COG sources (ml-cnv.2): once a source's metadata has loaded, its reader
+    // knows the file's extent (fitTo) and whether it is cloud-optimized (an
+    // author hint when not).
+    const cogSources = new Set(sourceIdsReading('cog', sources, layers));
+    if (cogSources.size > 0 || (fitTo && fit && fit.kind === 'tile-bounds')) {
+      const hinted = new Set<string>();
+      this.map.on('sourcedata', (e: { sourceId?: string; sourceDataType?: string }) => {
+        if (this.destroyed || e.sourceDataType !== 'metadata' || !e.sourceId) return;
+        const source = this.map.getSource(e.sourceId) as { url?: unknown; bounds?: unknown } | undefined;
+        if (!source) return;
+        if (fitTo && fit && fit.kind === 'tile-bounds' && e.sourceId === fitTo.source && !this.fitApplied) {
+          const b = source.bounds;
+          if (Array.isArray(b) && b.length === 4 && b.every((n) => typeof n === 'number')) {
+            const bounds: Bounds = [[b[0], b[1]], [b[2], b[3]]] as Bounds;
+            this.fitApplied = true;
+            this.map.fitBounds(bounds, {
+              padding: this.fitPadding(fitTo),
+              ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
+              animate: false,
+            });
+            this.emit('camera:fit', { source: fitTo.source, bounds });
+          }
+        }
+        if (cogSources.has(e.sourceId) && !hinted.has(e.sourceId) && typeof source.url === 'string') {
+          const hint = cogHintFor(source.url);
+          if (hint) {
+            hinted.add(e.sourceId);
+            options.onError?.(new Error(hint), false, { kind: 'source-hint', sourceId: e.sourceId });
+          }
+        }
       });
     }
 
@@ -639,15 +800,15 @@ export class MapRenderer {
         // after that the user owns the camera, and a refresh must not yank it.
         if (fitTo && fit && fit.kind === 'deferred' && !this.fitApplied) {
           const data = this.layerManager.getSourceData(fitTo.source);
-          // A source read by view (FlatGeobuf `load: viewport`, ml-cnv.3)
-          // holds only the part in view: frame the file's own extent.
+          // A source read by view (FlatGeobuf or GeoParquet `load: viewport`,
+          // ml-cnv.3/.4) holds only the part in view: frame the file's own extent.
           const bounds =
             this.layerManager.getSourceExtent?.(fitTo.source) ??
             (data ? geojsonBounds(data) : null);
           if (bounds) {
             this.fitApplied = true;
             this.map.fitBounds(bounds, {
-              ...(fitTo.padding !== undefined ? { padding: fitTo.padding } : {}),
+              padding: this.fitPadding(fitTo),
               ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
               animate: false,
             });
@@ -679,6 +840,11 @@ export class MapRenderer {
         console.warn(`[maplibre-yaml] ${error.message.replace(/`/g, '"')}`);
         options.onError?.(error, false, { kind: 'source', sourceId });
       },
+      // A `before:` naming no layer: the layer was added on top (ml-aot.119).
+      onLayerHint: (layerId, message) => {
+        console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+        options.onError?.(new Error(message), false, { kind: 'layer-hint', layerId });
+      },
     };
 
     const eventCallbacks: EventHandlerCallbacks = {
@@ -686,9 +852,13 @@ export class MapRenderer {
       onHover: (layerId, feature, lngLat) => this.emit('layer:hover', { layerId, feature, lngLat }),
     };
 
+    // GeoParquet reads only the columns the document references (ml-cnv.4):
+    // decided here, where every layer that draws from a source is known.
+    const parquetColumns = geoParquetColumns(sources, layers);
     this.layerManager = new LayerManager(this.map, layerCallbacks, {
       ...options.sourceData,
       isProtocolRegistered,
+      columnsFor: (sourceId) => parquetColumns.get(sourceId),
     });
     const classifyRuntime = new ClassifyRuntime(
       this.map,
@@ -698,6 +868,18 @@ export class MapRenderer {
       (layerId, record) => {
         this.redrawLegend();
         this.emit('layer:classified', { layerId, classify: record });
+      },
+      {
+        readsByView: (sourceId) => this.layerManager.readsByView?.(sourceId) ?? false,
+        onRefused: (layerId, sourceId, error) => {
+          console.warn(`[maplibre-yaml] ${error.message.replace(/`/g, '"')}`);
+          options.onError?.(error, false, { kind: 'classify', layerId, sourceId });
+        },
+        // An author hint: the console always, the page while developing.
+        onFieldProblem: (layerId, message) => {
+          console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+          options.onError?.(new Error(message), false, { kind: 'classify-field', layerId });
+        },
       }
     );
     if (classifyRuntime.active) this.classify = classifyRuntime;
@@ -708,24 +890,23 @@ export class MapRenderer {
       beforeAttribution: () => this.attributionGuard.scrub(),
     });
 
-    // Set up load handler. With cloud-native sources, the document's sources
-    // wait for their readers (ml-cnv) — a microtask while the decoders are
-    // bundled; a reader that failed to set up skips its sources with a
-    // notice and everything else renders.
+    // Set up load handler. A cloud-native reader that can't be used (set up
+    // or downloaded, ml-7qa.5) is reported on the sources that read it, with
+    // a notice; everything else renders — without waiting for any reader.
     this.map.on('load', () => {
-      if (!formatsReady) {
-        onStyleLoaded();
-        return;
-      }
-      void formatsReady.then((failed) => {
-        if (this.destroyed) return;
-        for (const [format, error] of failed) {
-          for (const sourceId of sourceIdsReading(format, sources, layers)) {
-            options.onError?.(error, false, { kind: 'source', sourceId });
+      if (protocolsPrepared) {
+        const report = (failed: Map<CloudFormat, Error>) => {
+          if (this.destroyed) return;
+          for (const [format, error] of failed) {
+            for (const sourceId of sourceIdsReading(format, sources, layers)) {
+              options.onError?.(error, false, { kind: 'source', sourceId });
+            }
           }
-        }
-        onStyleLoaded();
-      });
+        };
+        report(protocolsPrepared.failed);
+        void protocolsPrepared.readers.then(report);
+      }
+      onStyleLoaded();
     });
     const onStyleLoaded = () => {
       this.isLoaded = true;
@@ -862,6 +1043,22 @@ export class MapRenderer {
       // that listeners (attached after construction) can hear it.
       if (this.mapReadyFit) {
         this.fitApplied = true;
+        // Built framed before the controls had their credits: if they turn
+        // out taller than the margin kept for them (a long attribution on a
+        // phone, a scale bar), frame again with the measured room.
+        if (fitTo && fitTo.padding === undefined) {
+          const container = this.map.getContainer?.();
+          const measured = bottomControlsReserve(container);
+          const assumed =
+            (container?.clientWidth ?? 0) < NARROW_MAP_WIDTH ? ATTRIBUTION_RESERVE_NARROW : ATTRIBUTION_RESERVE_WIDE;
+          if (measured !== undefined && measured > assumed) {
+            this.map.fitBounds(this.mapReadyFit.bounds as never, {
+              padding: this.fitPadding(fitTo),
+              ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
+              animate: false,
+            });
+          }
+        }
         this.emit('camera:fit', this.mapReadyFit);
       }
 
@@ -1017,6 +1214,13 @@ export class MapRenderer {
       if (typeof e.sourceId === 'string' && documentSourceIds.has(e.sourceId)) {
         return { kind: 'source', sourceId: e.sourceId };
       }
+      // A basemap style's own PMTiles file that failed (a self-hosted
+      // basemap with a wrong path, a server without range requests): the
+      // reader's plain-language failure, worth the map's notice rather than
+      // blank tiles. Other basemap tile errors stay off the page.
+      if (typeof e.sourceId === 'string' && BASEMAP_FILE_FAILURE.test(message)) {
+        return { kind: 'source', sourceId: e.sourceId, basemap: true };
+      }
       return undefined;
     };
 
@@ -1025,7 +1229,18 @@ export class MapRenderer {
     // a basemap style that never loaded (classified above).
     // maplibre-gl v6 types `e.error` as `{ message }` (ErrorLike), not
     // Error; normalise so onError's contract holds on every major.
+    // MapLibre fires `load` from a render frame in which every source has
+    // settled, and a source whose TileJSON request failed settles without
+    // asking for another frame. When the failure comes late — a basemap's
+    // `pmtiles://` source waiting on a reader file that then didn't download
+    // — no frame follows, `load` never fires and `mapReady()` would wait
+    // forever. One more frame after a pre-load error lets MapLibre see it.
+    let mapLoadFired = false;
+    this.map.on('load', () => {
+      mapLoadFired = true;
+    });
     this.map.on('error', (e) => {
+      if (!mapLoadFired && !this.destroyed) this.map.triggerRepaint?.();
       const raw = e.error as unknown;
       let error =
         raw instanceof Error
@@ -1038,13 +1253,217 @@ export class MapRenderer {
               ),
               { cause: raw }
             );
+      // A Protomaps basemap on a file that lacks some of its tile layers:
+      // MapLibre reports each basemap layer naming one (dozens). Those are
+      // the basemap's internals, not the document's; the file check
+      // (loadProtomapsBasemap) says what is wrong, once.
+      if (protomaps && MISSING_PROTOMAPS_LAYER.test(error.message)) return;
       const hinted = withWorkerUrlHint(error.message, runtimeVersion());
       if (hinted !== error.message) error = Object.assign(new Error(hinted), { cause: raw });
       const context = classify(e as never, error.message);
       // A basemap style that never loads is fatal: without it no layer can
       // draw and `load` never fires.
       options.onError?.(error, context?.kind === 'style', context);
+      if (context?.basemap && context.sourceId && !mapLoadFired) {
+        const sourceId = context.sourceId;
+        setTimeout(() => this.dropDeadBasemapSource(sourceId), 0);
+      }
     });
+
+    if (protomaps) this.loadProtomapsBasemap(protomaps, options);
+  }
+
+  /**
+   * Leave a Protomaps basemap's label layers out (maplibre-gl 4 with its
+   * fonts unreachable: every basemap tile fails to parse, so nothing of the
+   * basemap draws). The style is set again in full — the tiles that failed
+   * are only requested again by a fresh load — keeping every other layer.
+   *
+   * @returns Whether labels were removed.
+   */
+  private hideBasemapLabels(): boolean {
+    try {
+      const style = this.map.getStyle() as { layers?: Array<Record<string, unknown>> };
+      const layers = style.layers ?? [];
+      const kept = layers.filter(
+        (layer) =>
+          !(
+            layer['type'] === 'symbol' &&
+            layer['source'] === PROTOMAPS_SOURCE_ID &&
+            (layer['layout'] as Record<string, unknown> | undefined)?.['text-field'] !== undefined
+          )
+      );
+      if (kept.length === layers.length) return false;
+      this.map.setStyle({ ...style, layers: kept } as never, { diff: false });
+      return true;
+    } catch (error) {
+      console.warn('[maplibre-yaml] the basemap labels could not be left out:', error);
+      return false;
+    }
+  }
+
+  /** `fitTo`'s padding for the map as it is now: the author's, else the default for its size. */
+  private fitPadding(fitTo: FitToConfig): number | FitPadding {
+    const canvas = this.map?.getContainer?.();
+    return fitToPadding(fitTo, {
+      width: canvas?.clientWidth ?? 0,
+      height: canvas?.clientHeight ?? 0,
+      bottomReserve: bottomControlsReserve(canvas),
+    });
+  }
+
+  /**
+   * A basemap source whose file couldn't be read before the map loaded,
+   * on a maplibre-gl that counts it as still loading (4.x: a source whose
+   * TileJSON request failed never reports itself loaded, so MapLibre never
+   * fires `load` and `mapReady()` would wait forever). Its layers can draw
+   * nothing; they and the source are removed so the map loads. The notice
+   * already said why. Later releases count the failed source as settled and
+   * keep it.
+   */
+  private dropDeadBasemapSource(sourceId: string): void {
+    if (this.destroyed || !this.map) return;
+    const source = this.map.getSource(sourceId) as { loaded?: () => boolean } | undefined;
+    if (!source || typeof source.loaded !== 'function' || source.loaded()) return;
+    try {
+      for (const layer of this.map.getStyle()?.layers ?? []) {
+        if ((layer as { source?: unknown }).source === sourceId) this.map.removeLayer(layer.id);
+      }
+      this.map.removeSource(sourceId);
+      this.map.triggerRepaint?.();
+    } catch (error) {
+      console.warn(`[maplibre-yaml] the basemap source "${sourceId}" could not be removed:`, error);
+    }
+  }
+
+  /**
+   * Generate a Protomaps basemap's style (`mapStyle: { pmtiles: … }`) and
+   * give it to the map, which was built without a style. Relative URLs
+   * resolve against the page (`base` was applied to the document already);
+   * labels default to the page's language at the map. A generator that
+   * fails to download leaves a plain background under the document's
+   * layers, with the map's notice; so does a file that is not a Protomaps
+   * basemap (the notice only).
+   */
+  private loadProtomapsBasemap(spec: ProtomapsBasemap, options: MapRendererOptions): void {
+    const map = this.map;
+    // Usually started at parse time already (ml-map); harmless if so.
+    prefetchProtomapsBasemap(spec);
+    const pageUrl = typeof document !== 'undefined' ? document.baseURI : undefined;
+    let pageLanguage: string | undefined;
+    try {
+      pageLanguage = elementLanguage(map.getContainer());
+    } catch {
+      pageLanguage = undefined;
+    }
+    let checked = false;
+    map.on('sourcedata', (e: { sourceId?: unknown; sourceDataType?: unknown }) => {
+      if (checked || e.sourceId !== PROTOMAPS_SOURCE_ID || e.sourceDataType !== 'metadata') return;
+      checked = true;
+      const source = map.getSource(PROTOMAPS_SOURCE_ID) as
+        | { vectorLayerIds?: string[]; url?: string; loaded?: () => boolean }
+        | undefined;
+      // A source whose file didn't load (maplibre-gl 4 announces metadata
+      // for it too) has nothing to judge: its own notice says why.
+      if (!source?.url) {
+        checked = false;
+        return;
+      }
+      const problem = notAProtomapsBasemap(source.vectorLayerIds, source.url);
+      if (!problem) {
+        // A Protomaps file from the older tile schema draws only land and
+        // water, silently (ml-aot.126): its metadata says which it is.
+        const url = source.url;
+        void archiveMetadata(url).then((metadata) => {
+          const older = olderProtomapsSchema(metadata, url);
+          if (!older || this.destroyed) return;
+          console.warn(`[maplibre-yaml] ${older.replace(/`/g, '"')}`);
+          options.onError?.(new Error(older), false, { kind: 'basemap' });
+        });
+        return;
+      }
+      console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
+      options.onError?.(new Error(problem), false, { kind: 'basemap' });
+    });
+    // A basemap icon its sprite lacks (the generator names "townhall", which
+    // Protomaps' hosted sprite doesn't have): a blank image instead of a
+    // MapLibre console warning on every load. The document's own image
+    // names keep their warning (the styleimagemissing handler above).
+    map.on('styleimagemissing', (e: { id: string }) => {
+      if (this.imageRefs.names.has(e.id) || this.imageRefs.dynamic || map.hasImage(e.id)) return;
+      map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
+    });
+    // Right-to-left labels on a maplibre-gl older than 6.9 need MapLibre's
+    // plugin (renderer/basemap-assets).
+    const language = basemapLanguage(spec, pageLanguage);
+    ensureRightToLeftLabels(language, (pluginUrl) => {
+      if (this.destroyed) return;
+      const problem =
+        `The basemap's ${language} labels need MapLibre's right-to-left text plugin, which couldn't ` +
+        `be downloaded from ${new URL(pluginUrl).host}, so they may draw unjoined or reversed. ` +
+        'maplibre-gl 6.9 or later draws them without it.';
+      console.warn(`[maplibre-yaml] ${problem}`);
+      options.onError?.(new Error(problem), false, { kind: 'basemap' });
+    });
+    protomapsStyle(spec, {
+      ...(pageUrl ? { pageUrl } : {}),
+      ...(pageLanguage ? { pageLanguage } : {}),
+    }).then(
+      (style) => {
+        if (this.destroyed) return;
+        map.setStyle(style as never);
+        // Fonts or icons that don't load (Protomaps' host unreachable, a
+        // self-hosted path that 404s): one notice, naming the host and the fix.
+        const assets: BasemapAssets = {
+          glyphs: String(style['glyphs'] ?? ''),
+          sprite: String(style['sprite'] ?? ''),
+          hostedGlyphs: typeof spec.glyphs !== 'string',
+          hostedSprite: typeof spec.sprite !== 'string',
+        };
+        // Checked once: on the first error that may be about them (a style
+        // error; on maplibre-gl 4 a basemap tile error, which is how missing
+        // fonts show there), else after the map first goes idle — MapLibre
+        // reports a font that didn't load only on the console (5 and later).
+        let assetsChecked = false;
+        const checkAssets = () => {
+          if (assetsChecked || this.destroyed) return;
+          assetsChecked = true;
+          void probeBasemapAssets(assets).then((failed) => {
+            if (this.destroyed || failed.length === 0) return;
+            // maplibre-gl 4 parses no basemap tile whose labels lack their
+            // fonts: leave the labels out so the rest of the basemap draws.
+            const major = Number(runtimeVersion()?.split('.')[0]);
+            const labelsHidden = failed.includes('glyphs') && major > 0 && major < 5 && this.hideBasemapLabels();
+            const problem = basemapAssetMessage(failed, assets, { labelsHidden });
+            console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
+            options.onError?.(new Error(problem), false, { kind: 'basemap' });
+          });
+        };
+        map.on('error', (event) => {
+          const e = event as unknown as { sourceId?: unknown; tile?: unknown; layer?: unknown };
+          if (e.layer !== undefined) return;
+          if (e.sourceId === undefined && e.tile === undefined) checkAssets();
+          else if (e.sourceId === PROTOMAPS_SOURCE_ID) checkAssets();
+        });
+        map.on('idle', checkAssets); // checkAssets runs once
+        // maplibre-gl 3 cannot read pmtiles:// (cloud-protocols).
+        const problem = pmtilesUnavailable();
+        if (problem) {
+          console.warn(`[maplibre-yaml] the basemap uses PMTiles: ${problem.message}`);
+          options.onError?.(problem, false, { kind: 'source', sourceId: PROTOMAPS_SOURCE_ID, basemap: true });
+        }
+      },
+      (error: unknown) => {
+        // The generator didn't download (offline, a blocker, a self-hosted
+        // copy without dist/chunks/): no basemap, but the document's own
+        // layers still draw on a plain background, and the notice says why.
+        if (this.destroyed) return;
+        const cause = error instanceof Error ? error : new Error(String(error));
+        map.setStyle(fallbackBasemapStyle(spec, pageUrl) as never);
+        console.warn(`[maplibre-yaml] the basemap could not be built: ${cause.message.replace(/`/g, '"')}`);
+        options.onError?.(cause, false, { kind: 'basemap' });
+      }
+    );
   }
 
   /**
@@ -1094,12 +1513,9 @@ export class MapRenderer {
     }
     noteLayerImageRefs(this.imageRefs, layer);
     // A layer added after load may bring its own PMTiles source (ml-cnv).
-    const formatsReady = prepareProtocols(undefined, [layer]);
-    if (formatsReady) {
-      const failed = await formatsReady;
-      const [first] = failed.values();
-      if (first) throw first;
-    }
+    const prepared = prepareProtocols(undefined, [layer]);
+    const [unusable] = prepared?.failed.values() ?? [];
+    if (unusable) throw unusable;
     layer = this.withBasemapTextFont(layer);
     await this.layerManager.addLayer(layer);
     this.eventHandler.attachEvents(layer);

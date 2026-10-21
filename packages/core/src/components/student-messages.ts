@@ -287,10 +287,20 @@ const STATUS_TEXT: Record<number, string> = {
   401: "Unauthorized",
   403: "Forbidden",
   404: "Not Found",
+  416: "Range Not Satisfiable",
   429: "Too Many Requests",
   500: "Internal Server Error",
   503: "Service Unavailable",
 };
+
+/**
+ * A 416 means the file is there: the server refused the part of it a reader
+ * asked for. Pointing at the file name or the folder would send the author
+ * the wrong way (ml-aot.114).
+ */
+const RANGE_REFUSED_HINT =
+  "The file was found, but the server refused the part of it that was asked for: the file may " +
+  "be incomplete (upload it again), or the server doesn't serve parts of files correctly.";
 
 /** Status-bearing error shapes MapLibre throws (`AJAXError`). */
 function statusOf(error: Error): { status?: number; statusText?: string } {
@@ -392,18 +402,36 @@ export function describeSourceProblem(
   sourceId: string,
   message: string,
   error?: unknown,
-  context: { pageUrl?: string; base?: string | null } = {}
+  context: { pageUrl?: string; base?: string | null; basemap?: boolean } = {}
 ): string {
-  let text = `Source \`${sourceId}\` didn't load: ${message.replace(/\s+$/, "")}`;
+  // The basemap's own file (a Protomaps basemap's pmtiles:, or a PMTiles
+  // source inside a basemap style): the author never named that source.
+  const subject = context.basemap ? "The basemap" : `Source \`${sourceId}\``;
+  let text = `${subject} didn't load: ${message.replace(/\s+$/, "")}`;
   const e = error as { failure?: FormatFailure; cause?: { failure?: FormatFailure } } | undefined;
-  const failure = e?.failure ?? e?.cause?.failure;
+  // A PMTiles tile error crosses MapLibre's worker boundary as a plain
+  // error: the message survives, the failure object does not (ml-aot.102).
+  const failure = e?.failure ?? e?.cause?.failure ?? httpFailureOf(message);
   if (failure?.code === "http" && failure.status === 404 && context.pageUrl) {
+    // Where the browser looked, as for a data file that 404'd.
+    const resolved = resolveUrl(failure.url, context.pageUrl);
+    if (resolved !== failure.url) text += ` The browser looked for ${resolved}.`;
     const hint =
       baseLookupHint(failure.url, context.pageUrl, context.base) ??
       subpathBaseHint(pathOfSameOrigin(failure.url, context.pageUrl), context.pageUrl, context.base);
     if (hint) text += ` ${hint}`;
   }
   return text;
+}
+
+/**
+ * The HTTP failure a {@link describeFormatFailure} message states
+ * (`` `/data/x.pmtiles` didn't load (404 Not Found). ``), for an error that
+ * lost its `failure` on the way.
+ */
+function httpFailureOf(message: string): FormatFailure | undefined {
+  const m = /^`([^`]+)` didn't load \((\d{3})\b/.exec(message);
+  return m ? { code: "http", format: "pmtiles", url: m[1]!, status: Number(m[2]) } : undefined;
 }
 
 /** `https://host/x/y` on a page at `https://host/…` → `/x/y`; otherwise unchanged. */
@@ -417,9 +445,9 @@ function pathOfSameOrigin(url: string, pageUrl: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Cloud-native formats (0.9, ml-cnv): PMTiles, FlatGeobuf — and the two the
-// syntax reserves (GeoParquet, COG). One sentence per failure, written for
-// the student who just pointed a map at a file.
+// Cloud-native formats (0.9, ml-cnv): PMTiles, FlatGeobuf, GeoParquet and
+// COG. One sentence per failure, written for whoever just pointed a map at a
+// file.
 // ---------------------------------------------------------------------------
 
 /** The format's everyday name, for messages. */
@@ -428,6 +456,7 @@ const FORMAT_LABELS: Record<string, string> = {
   flatgeobuf: "FlatGeobuf",
   geoparquet: "GeoParquet",
   cog: "Cloud Optimized GeoTIFF (COG)",
+  "protomaps-basemap": "Protomaps basemap",
 };
 
 /** The file name at the end of a URL, for command examples. */
@@ -447,7 +476,7 @@ function megabytes(bytes: number): string {
  * advice every range failure ends with.
  */
 export const RANGE_REQUEST_HINT =
-  "PMTiles and FlatGeobuf files need a web server that supports HTTP range requests: " +
+  "PMTiles, FlatGeobuf, GeoParquet and COG files need a web server that supports HTTP range requests: " +
   "GitHub Pages, Netlify, Cloudflare, S3 and R2 do; `python -m http.server` does not — " +
   "preview locally with `npx serve` instead.";
 
@@ -466,6 +495,12 @@ export function describeFormatFailure(failure: FormatFailure): string {
         `${file} was served without range-request support (the server sent the whole ` +
         `file instead of the part asked for). ${RANGE_REQUEST_HINT}`
       );
+    case "encoded-range":
+      return (
+        `${file} comes from a server that compresses the parts of files it sends, so the ${label} reader ` +
+        "can't read the file a part at a time. Put the file on your own site (GitHub Pages, Netlify and " +
+        "`npx serve` work); a file mirrored from GitHub works from fastly.jsdelivr.net, not cdn.jsdelivr.net."
+      );
     case "cors":
       return (
         `The browser couldn't read ${file}: the server didn't allow this page to load it ` +
@@ -479,38 +514,86 @@ export function describeFormatFailure(failure: FormatFailure): string {
       );
     case "http": {
       const text = failure.statusText?.trim() || STATUS_TEXT[failure.status ?? 0] || "";
-      return `${file} didn't load (${failure.status ?? "HTTP error"}${text ? ` ${text}` : ""}).`;
+      const line = `${file} didn't load (${failure.status ?? "HTTP error"}${text ? ` ${text}` : ""}).`;
+      return failure.status === 416 ? `${line} ${RANGE_REFUSED_HINT}` : line;
     }
     case "too-large":
+      if (failure.format === "geoparquet") {
+        return (
+          `${file} is ${failure.size !== undefined ? megabytes(failure.size) : "very large"} ` +
+          "(the columns this map reads), too large to load whole in a browser. Add " +
+          "`load: viewport` to the source (the file needs a `bbox` covering column and " +
+          "spatially sorted row groups), list fewer `columns:`, or convert it to PMTiles."
+        );
+      }
       return (
         `${file} is ${failure.size !== undefined ? megabytes(failure.size) : "very large"}, ` +
         "too large to load whole in a browser. Add `load: viewport` to the source (the file " +
         "needs a spatial index), or convert it to PMTiles."
       );
     case "no-index":
+      if (failure.format === "geoparquet") {
+        return (
+          `${file} has no \`bbox\` covering column, so it can't be read one part at a time ` +
+          "(`load: viewport`). Write it with one — GeoPandas `to_parquet(..., " +
+          "write_covering_bbox=True)`, or `ogr2ogr -f Parquet -lco WRITE_COVERING_BBOX=YES " +
+          `out.parquet ${fileNameOf(failure.url)}\` — or use \`load: all\`.`
+        );
+      }
       return (
         `${file} has no spatial index, so it can't be read one part at a time ` +
         "(`load: viewport`). Re-create it with an index — `ogr2ogr -f FlatGeobuf -lco " +
         `SPATIAL_INDEX=YES out.fgb ${fileNameOf(failure.url)}\` — or use \`load: all\`.`
       );
     case "crs":
+      if (failure.format === "cog") return describeCogProjection(failure);
       return (
         `${file} is in ${failure.crs ?? "a projected coordinate system"}; MapLibre needs ` +
         "longitude/latitude (EPSG:4326). Reproject it: " +
-        `\`ogr2ogr -t_srs EPSG:4326 out.fgb ${fileNameOf(failure.url)}\`.`
+        `\`ogr2ogr -t_srs EPSG:4326 out.${failure.format === "geoparquet" ? "parquet" : "fgb"} ` +
+        `${fileNameOf(failure.url)}\`.`
+      );
+    case "not-geoparquet":
+      return (
+        `${file} is a Parquet file but not GeoParquet (it has no geometry metadata). Write it ` +
+        "with GeoPandas `to_parquet`, `ogr2ogr -f Parquet`, or DuckDB's spatial extension."
+      );
+    case "encoding":
+      return (
+        `${file} stores its geometry as GeoArrow${failure.encoding ? ` (\`${failure.encoding}\`)` : ""}, ` +
+        "which maplibre-yaml doesn't read yet: it reads GeoParquet with WKB geometry. Rewrite " +
+        `it with WKB: \`ogr2ogr -f Parquet -lco GEOMETRY_ENCODING=WKB out.parquet ` +
+        `${fileNameOf(failure.url)}\`, or GeoPandas \`to_parquet(..., geometry_encoding="WKB")\`.`
       );
     case "unsupported":
-      return failure.format === "cog"
-        ? `${file} is a ${label}, which this version of maplibre-yaml can't read on its ` +
-            "own yet (it's planned). For now, convert it to PMTiles raster tiles, or " +
-            "register the `cog://` protocol from page JavaScript."
-        : `${file} is a ${label} file, which this version of maplibre-yaml can't read yet ` +
-            "(it's planned). For now, convert it to FlatGeobuf or GeoJSON: " +
-            `\`ogr2ogr out.fgb ${fileNameOf(failure.url)}\`.`;
+      return (
+        `${file} is a ${label} file, which this version of maplibre-yaml can't read. ` +
+        "Update maplibre-yaml, or convert the file to a format this version reads."
+      );
+    case "not-cloud-optimized":
+      return (
+        `${file} is a GeoTIFF but not a Cloud Optimized one (it has no internal tiles or no ` +
+        "overviews), so the browser may download most of the file to draw it. Convert it: " +
+        `\`gdal_translate -of COG -co COMPRESS=DEFLATE ${fileNameOf(failure.url)} out.tif\`.`
+      );
     case "decoder":
       return (
         `The ${label} reader couldn't be set up${failure.detail ? ` (${failure.detail})` : ""}, ` +
         `so ${file} wasn't read. Other layers are unaffected.`
+      );
+    case "chunk":
+      return (
+        `The ${label} reader (${file}) couldn't be downloaded. maplibre-yaml loads its ` +
+        "file-format readers on demand from the folder its script came from: if you copied " +
+        "maplibre-yaml to your own site, copy the whole `dist/` folder (not just `register.js`), " +
+        "or load it from the CDN. Offline or a content blocker can also stop it. Other layers " +
+        "are unaffected."
+      );
+    case "compressed":
+      return (
+        `${file} is compressed (Zstandard), and this version of maplibre-yaml reads only ` +
+        `uncompressed ${label} files. Decompress it (\`zstd -d ${fileNameOf(failure.url)}\`) or ` +
+        "write it without compression (`ogr2ogr -f FlatGeobuf` writes an uncompressed file)."
       );
     case "read":
     default:
@@ -519,6 +602,28 @@ export function describeFormatFailure(failure: FormatFailure): string {
         (failure.detail ? `: ${failure.detail.replace(/[.\s]+$/, "")}.` : ".")
       );
   }
+}
+
+/**
+ * A COG that isn't in Web Mercator — the one projection the COG reader
+ * draws — or has no coordinates at all, with the GDAL command that fixes it.
+ */
+function describeCogProjection(failure: FormatFailure): string {
+  const file = `\`${failure.url}\``;
+  const name = fileNameOf(failure.url);
+  const fix =
+    `\`gdalwarp -t_srs EPSG:3857 -of COG -co COMPRESS=DEFLATE ${name} out.tif\`` +
+    " (GDAL 3.1 or later).";
+  if (failure.crs === undefined) {
+    return (
+      `${file} has no map coordinates (a plain TIFF image, not a GeoTIFF), so it can't be ` +
+      `placed on the map. Georeference it, then make a Web Mercator COG: ${fix}`
+    );
+  }
+  return (
+    `${file} is in ${failure.crs}; a COG must be in Web Mercator (EPSG:3857) to be drawn. ` +
+    `Reproject it: ${fix}`
+  );
 }
 
 /**
@@ -549,6 +654,19 @@ export function describeDataProblem(
   const url = error.url;
   const what = url ? `Data file \`${url}\`` : `The data for layer \`${layerId}\``;
 
+  // A cloud-native file read as JSON because its name doesn't say what it is
+  // (ml-aot.123): it loaded fine, so no "didn't load" and no path advice
+  // (ml-aot.128).
+  const misnamed = /^(Parquet|FlatGeobuf) data from .* without a format$/.exec(error.message);
+  if (misnamed) {
+    const parquet = misnamed[1] === "Parquet";
+    return (
+      `${what} was read as JSON, but it is a ${parquet ? "Parquet" : "FlatGeobuf"} file, so layer ` +
+      `\`${layerId}\` has no data. Its name doesn't end in ${parquet ? ".parquet" : ".fgb"}: rename it, ` +
+      `or add \`format: ${parquet ? "geoparquet" : "flatgeobuf"}\` to the source.`
+    );
+  }
+
   let reason: string;
   const http = error.message.match(/^HTTP (\d+):\s*(.*?)\s+for\s/);
   if (http) {
@@ -569,7 +687,10 @@ export function describeDataProblem(
   }
 
   let text = `${what} didn't load (${reason}), so layer \`${layerId}\` has no data.`;
-  if (url && context.pageUrl) {
+  if (http?.[1] === "416") {
+    // The file is there: no "check the file name" or base advice.
+    text += ` ${RANGE_REFUSED_HINT}`;
+  } else if (url && context.pageUrl) {
     const resolved = resolveUrl(url, context.pageUrl);
     if (resolved !== url) text += ` The browser looked for ${resolved}`;
     if (

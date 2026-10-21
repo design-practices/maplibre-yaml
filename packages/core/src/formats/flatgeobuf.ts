@@ -21,13 +21,23 @@
  * advice).
  *
  * The library's own logging: its `dist/esm` build carries no `console.debug`
- * range chatter (the `lib/mjs` build does), which is why this imports the
+ * range chatter (the `lib/mjs` build does), which is why the seam imports the
  * `flatgeobuf/geojson` export.
+ *
+ * **The library is downloaded on demand** (`chunks/flatgeobuf.js`, through
+ * formats/decoders): this module stays in the main bundle and fetches it the
+ * first time a file is decoded. A download failure is a {@link FormatError}
+ * of code `"chunk"`.
  */
 
-import { deserialize } from "flatgeobuf/geojson";
 import type { Feature, FeatureCollection } from "geojson";
+import { isLonLatCrs } from "./crs";
+import { getDecoder, type Decoders } from "./decoders";
 import { FormatError, isAbortError, isFormatError } from "./errors";
+import { BodyTooLarge, rangeRepliesUnreadable, isEncodedRange } from "./http";
+
+/** The library's `deserialize` (`flatgeobuf/geojson`), loaded on demand. */
+type Deserialize = Decoders["flatgeobuf"]["deserialize"];
 
 /** What the file's header says, in the shape callers need. */
 export interface FlatGeobufHeader {
@@ -47,9 +57,6 @@ interface RawHeader {
   envelope?: ArrayLike<number> | null;
   crs?: { org?: string | null; code?: number; code_string?: string | null } | null;
 }
-
-/** Longitude/latitude CRS codes MapLibre can draw as-is. */
-const LON_LAT_CODES = new Set([4326, 4269, 4258, 4283, 4619, 4148, 4674]);
 
 /** Normalize the library's header. */
 function toHeader(raw: RawHeader): FlatGeobufHeader {
@@ -72,26 +79,34 @@ function toHeader(raw: RawHeader): FlatGeobufHeader {
 }
 
 /**
- * Whether a header describes longitude/latitude data.
- *
- * @remarks
- * By the declared code when there is one (EPSG:4326 and the other
- * geographic datums), else by the extent: a projected file's coordinates
- * run far past ±180/±90.
+ * Whether a header describes longitude/latitude data (the shared rule in
+ * ./crs: a known code, else the extent decides).
  */
 export function isLonLat(header: FlatGeobufHeader, raw?: RawHeader): boolean {
-  const code = raw?.crs?.code;
-  const org = (raw?.crs?.org ?? "EPSG").toUpperCase();
-  if (code && org === "EPSG" && !LON_LAT_CODES.has(code)) return false;
-  if (raw?.crs?.code_string && /CRS84/i.test(raw.crs.code_string)) return true;
-  const env = header.envelope;
-  if (env) {
-    const [w, s, e, n] = env;
-    if (Math.abs(w) > 180.5 || Math.abs(e) > 180.5 || Math.abs(s) > 90.5 || Math.abs(n) > 90.5) {
-      return false;
-    }
-  }
-  return true;
+  return isLonLatCrs({
+    org: raw?.crs?.org,
+    code: raw?.crs?.code,
+    ...(header.envelope ? { envelope: header.envelope } : {}),
+  });
+}
+
+/** Whether bytes start with a Zstandard frame (`28 B5 2F FD`) or skippable frame. */
+export function isZstd(bytes: Uint8Array): boolean {
+  if (bytes.length < 4) return false;
+  if (bytes[0] === 0x28 && bytes[1] === 0xb5 && bytes[2] === 0x2f && bytes[3] === 0xfd) return true;
+  // Skippable frames (a seekable file may begin with one): 0x184D2A5? little-endian.
+  return (bytes[0]! & 0xf0) === 0x50 && bytes[1] === 0x2a && bytes[2] === 0x4d && bytes[3] === 0x18;
+}
+
+/**
+ * A compressed FlatGeobuf (ml-aot.109). This version reads uncompressed files
+ * only: the reader's seekable-Zstandard mode needs a WebAssembly codec served
+ * next to the script, which no CDN build can promise. Recognized by its
+ * first bytes, so the notice says what the file is instead of "not a
+ * FlatGeobuf file".
+ */
+function compressedFailure(url: string): FormatError {
+  return new FormatError({ code: "compressed", format: "flatgeobuf", url });
 }
 
 /** The plain-language error for what `fetch` threw. */
@@ -192,16 +207,59 @@ export async function openWhole(url: string, signal?: AbortSignal): Promise<Open
 export async function decodeStream(
   opened: OpenedFile,
   url: string,
-  options: { isCurrent?: () => boolean; onHeader?: (header: FlatGeobufHeader) => void } = {}
+  options: {
+    isCurrent?: () => boolean;
+    onHeader?: (header: FlatGeobufHeader) => void;
+    /**
+     * Stop (with {@link BodyTooLarge}) once this many bytes have streamed —
+     * the size guard for a response that didn't say its size
+     * (`Content-Length` missing on a chunked or compressed response).
+     */
+    maxBytes?: number;
+  } = {}
 ): Promise<FeatureCollection | null> {
-  const body = opened.response.body;
+  let deserialize: Deserialize;
   try {
-    const input = body ?? new Uint8Array(await opened.response.arrayBuffer());
+    ({ deserialize } = await getDecoder("flatgeobuf"));
+  } catch (error) {
+    discard(opened);
+    throw error;
+  }
+  const body = opened.response.body;
+  // The file's first bytes, kept to name a compressed file if decoding fails.
+  let head: Uint8Array | undefined;
+  try {
+    let input: ReadableStream<Uint8Array> | Uint8Array;
+    if (body) {
+      let streamed = 0;
+      const max = options.maxBytes;
+      input = body.pipeThrough(
+        new TransformStream<Uint8Array, Uint8Array>({
+          transform(chunk, controller) {
+            head ??= chunk.slice(0, 4);
+            streamed += chunk.byteLength;
+            if (max !== undefined && streamed > max) {
+              controller.error(new BodyTooLarge(streamed));
+              return;
+            }
+            controller.enqueue(chunk);
+          },
+        })
+      );
+    } else {
+      input = new Uint8Array(await opened.response.arrayBuffer());
+      head = input.slice(0, 4);
+      if (options.maxBytes !== undefined && input.byteLength > options.maxBytes) {
+        throw new BodyTooLarge(input.byteLength);
+      }
+    }
     return await collect(
       deserialize(input as never, { headerMetaFn: headerCheck(url, options.onHeader) as never }),
       options.isCurrent ?? (() => true)
     );
   } catch (error) {
+    if (error instanceof BodyTooLarge) throw error;
+    if (head && isZstd(head) && !isFormatError(error) && !isAbortError(error)) throw compressedFailure(url);
     throw readFailure(error, url);
   }
 }
@@ -214,6 +272,8 @@ export async function decodeStream(
  * @param url - Its name, for messages.
  */
 export async function decodeBytes(bytes: Uint8Array, url: string): Promise<FeatureCollection> {
+  if (isZstd(bytes)) throw compressedFailure(url);
+  const { deserialize } = await getDecoder("flatgeobuf");
   try {
     const data = await collect(
       deserialize(bytes, { headerMetaFn: headerCheck(url) as never }),
@@ -254,7 +314,13 @@ export async function probe(url: string, signal?: AbortSignal): Promise<ProbeRes
   try {
     response = await fetch(url, { headers: { Range: "bytes=0-7" }, ...(signal ? { signal } : {}) });
   } catch (error) {
-    throw fetchFailure(error, url);
+    const failure = fetchFailure(error, url);
+    // A reply that wouldn't decode: a host that compresses the parts of files
+    // it sends (jsDelivr's Cloudflare leg)?
+    if (isFormatError(failure) && failure.failure.code === "cors" && (await rangeRepliesUnreadable(url))) {
+      throw new FormatError({ code: "encoded-range", format: "flatgeobuf", url });
+    }
+    throw failure;
   }
   if (!response.ok) throw httpError(response, url);
   if (response.status !== 206) {
@@ -262,8 +328,18 @@ export async function probe(url: string, signal?: AbortSignal): Promise<ProbeRes
     void response.body?.cancel().catch(() => undefined);
     return { ranges: false, ...(Number.isFinite(length) && length > 0 ? { size: length } : {}) };
   }
+  if (isEncodedRange(response)) {
+    // Parts of a compressed copy (jsDelivr's Cloudflare leg): the index
+    // can't be read a part at a time from this host.
+    void response.body?.cancel().catch(() => undefined);
+    throw new FormatError({ code: "encoded-range", format: "flatgeobuf", url });
+  }
   const bytes = new Uint8Array(await response.arrayBuffer());
   const magic = bytes[0] === 0x66 && bytes[1] === 0x67 && bytes[2] === 0x62;
+  if (!magic && isZstd(bytes)) throw compressedFailure(url);
+  if (!magic && (await rangeRepliesUnreadable(url))) {
+    throw new FormatError({ code: "encoded-range", format: "flatgeobuf", url });
+  }
   if (!magic) throw new FormatError({ code: "not-format", format: "flatgeobuf", url });
   const total = /\/(\d+)\s*$/.exec(response.headers.get("content-range") ?? "")?.[1];
   return { ranges: true, ...(total ? { size: Number(total) } : {}) };
@@ -281,6 +357,7 @@ export async function readBbox(
   options: { isCurrent?: () => boolean; onHeader?: (header: FlatGeobufHeader) => void } = {}
 ): Promise<FeatureCollection | null> {
   const [minX, minY, maxX, maxY] = bbox;
+  const { deserialize } = await getDecoder("flatgeobuf");
   try {
     return await collect(
       deserialize(url, {

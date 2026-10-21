@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>classify: a field the data does not have</title>
+  <!--
+    PASS = both maps grey (every feature is no data), and each shows a
+    "Notes for this map's author" notice naming the field — "Cases" with
+    did you mean "cases"; "populaton" with did you mean "population" —
+    and listing the data's properties. The console says the same.
+    FAIL = grey maps with no note (the hint never ran on the fetched data).
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/21-classify-field-hint.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    ml-map { display: block; width: 600px; height: 360px; margin-bottom: 8px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = each map carries an author note naming the misspelt field, with a did-you-mean.</header>
+  <ml-map id="field" src="./configs/classify-field-typo.yaml"></ml-map>
+  <ml-map id="normalize" src="./configs/classify-normalize-typo.yaml"></ml-map>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

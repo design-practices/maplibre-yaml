@@ -28,6 +28,14 @@ describe("palette lookup", () => {
     expect(suggestPalette("rdbuu")).toBe("RdBu");
   });
 
+  it("prefers the palette a cut-short name starts (ml-aot.100)", () => {
+    expect(suggestPalette("Blu")).toBe("Blues");
+    expect(suggestPalette("blu")).toBe("Blues");
+    expect(suggestPalette("Purp")).toBe("Purples");
+    expect(suggestPalette("YlOrRed")).toBe("YlOrRd");
+    expect(["Greens", "Greys"]).toContain(suggestPalette("Gre"));
+  });
+
   it("carries the ColorBrewer set, viridis, cividis and okabe-ito", () => {
     const names = listPalettes().map((p) => p.name);
     expect(names).toHaveLength(38);

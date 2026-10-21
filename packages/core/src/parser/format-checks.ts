@@ -13,10 +13,13 @@
  * | `type: pmtiles` / `fgb` / `parquet` / `cog` / `mbtiles` … | error at `type` with the fix ({@link formatTypeMessage}, via the parser's unknown-type path) |
  * | `.fgb` / `.parquet` URL (or `format:`) on a tile source | error: features, not tiles — use `type: geojson` |
  * | `.pmtiles` / `.tif` URL (or `format:`) on `type: geojson` | error: tiles, not features — use `type: vector` / `raster` |
- * | `refresh:` / `stream:` on a FlatGeobuf source | error: live data isn't available for FlatGeobuf yet |
- * | GeoParquet or COG | warning: recognized, not read by this version yet |
+ * | `refresh:` / `stream:` on a FlatGeobuf or GeoParquet source | error: live data isn't available for them yet |
+ * | a recognized format this version doesn't read (none in 0.9) | warning: recognized, not read by this version |
+ * | COG `colorRamp:`, `encoding:`, `tileSize:` | see `cog-checks.ts` |
  * | `format:` disagreeing with the URL | warning: `format:` wins |
- * | `load:` on a source that isn't FlatGeobuf | warning: no effect |
+ * | `load:` on a source that isn't FlatGeobuf or GeoParquet | warning: no effect |
+ * | `columns:` on a source that isn't GeoParquet | warning: no effect |
+ * | a GeoParquet `columns:` list without a property the document uses | warning: names each one (it would read as missing) |
  *
  * Cross-field rules live here, not as schema refinements: another chained
  * refinement on a source schema pushes the layer union past TypeScript's
@@ -32,6 +35,7 @@ import {
   SUPPORTED_FORMATS,
   type CloudFormat,
 } from "../formats/detect";
+import { columnsLeftOut } from "../formats/columns";
 import { positionForPath, type ValidationWarning } from "./validation-utils";
 
 /** An error a check found (the parser's ParseError shape). */
@@ -48,7 +52,7 @@ const isObject = (v: unknown): v is Obj => typeof v === "object" && v !== null &
 export { formatTypeMessage } from "./format-messages";
 
 /** One source the checks visit: the object, its path, and where its runtime keys sit. */
-interface SourceAt {
+export interface SourceAt {
   source: Obj;
   path: (string | number)[];
   /** The object holding `format`/`load`/`refresh` (the source in v1, `runtime:` in v2). */
@@ -57,7 +61,7 @@ interface SourceAt {
 }
 
 /** Every source object of a document (named, then inline on layers). */
-function sourcesOf(value: Obj, version: 1 | 2): SourceAt[] {
+export function sourcesOf(value: Obj, version: 1 | 2): SourceAt[] {
   const root = version === 2 ? value["style"] : value;
   if (!isObject(root)) return [];
   const base: (string | number)[] = version === 2 ? ["style"] : [];
@@ -106,17 +110,25 @@ function mismatchMessage(format: CloudFormat, url: unknown): string {
   }
 }
 
-/** The "recognized, not read yet" warning for GeoParquet and COG. */
+/**
+ * The "recognized, not read" warning for a format in CLOUD_FORMATS that this
+ * version doesn't read. Every format is read in 0.9, so this only fires if a
+ * format is recognized ahead of its reader again.
+ */
 function notYetMessage(format: CloudFormat, url: unknown): string {
   const file = fileLabel(url, format);
-  return format === "cog"
-    ? `${file} is a Cloud Optimized GeoTIFF. This version of maplibre-yaml can't read COGs ` +
-        "on its own yet (it's planned): the source stays empty unless the page registers " +
-        "the cog:// protocol itself. Convert the image to PMTiles to use it today."
-    : `${file} is a GeoParquet file. This version of maplibre-yaml can't read GeoParquet yet ` +
-        "(it's planned): the source stays empty. Convert it to FlatGeobuf (.fgb) or GeoJSON " +
-        "to use it today.";
+  return (
+    `${file} is a ${FORMAT_INFO[format].label} file, which this version of maplibre-yaml ` +
+    "can't read: the source stays empty. Update maplibre-yaml, or convert the file to a " +
+    "format this version reads."
+  );
 }
+
+/** Formats read into a GeoJSON source, where `load:` applies. */
+const FEATURE_FILE_FORMATS: ReadonlySet<CloudFormat | undefined> = new Set<CloudFormat | undefined>([
+  "flatgeobuf",
+  "geoparquet",
+]);
 
 /**
  * Run the cloud-native source checks on a materialized document.
@@ -157,14 +169,25 @@ export function checkSourceFormats(
       });
     }
 
-    // `load:` only means something for FlatGeobuf.
-    if (runtime["load"] !== undefined && format !== "flatgeobuf") {
+    // `load:` only means something for FlatGeobuf and GeoParquet.
+    if (runtime["load"] !== undefined && !FEATURE_FILE_FORMATS.has(format)) {
       warnings.push({
         path: [...runtimePath, "load"].join("."),
         message:
-          "load: only applies to FlatGeobuf sources (a .fgb URL or format: flatgeobuf); " +
-          "it does nothing here.",
+          "load: only applies to FlatGeobuf and GeoParquet sources (a .fgb or .parquet URL, " +
+          "or format: flatgeobuf / geoparquet); it does nothing here.",
         ...at([...runtimePath, "load"]),
+      });
+    }
+
+    // `columns:` only means something for GeoParquet.
+    if (runtime["columns"] !== undefined && format !== "geoparquet") {
+      warnings.push({
+        path: [...runtimePath, "columns"].join("."),
+        message:
+          "columns: only applies to GeoParquet sources (a .parquet URL or format: geoparquet); " +
+          "it does nothing here.",
+        ...at([...runtimePath, "columns"]),
       });
     }
 
@@ -183,14 +206,14 @@ export function checkSourceFormats(
       }
     }
 
-    // Live data on a FlatGeobuf source: rejected in 0.9.
-    if (format === "flatgeobuf") {
+    // Live data on a FlatGeobuf or GeoParquet source: rejected in 0.9.
+    if (FEATURE_FILE_FORMATS.has(format)) {
       for (const key of ["refresh", "refreshInterval", "stream"]) {
         if (runtime[key] === undefined) continue;
         errors.push({
           path: [...runtimePath, key].join("."),
           message:
-            `${key}: live data isn't available for FlatGeobuf sources yet. Remove it, or ` +
+            `${key}: live data isn't available for ${info.label} sources yet. Remove it, or ` +
             "serve the data as GeoJSON for live updates.",
           ...at([...runtimePath, key]),
         });
@@ -207,5 +230,44 @@ export function checkSourceFormats(
       });
     }
   }
+
+  // A GeoParquet `columns:` list replaces the inference: a property the
+  // document uses (a popup, a label token, a filter, classify, a story
+  // chapter's action) that the list leaves out reads as missing.
+  const root = version === 2 ? value["style"] : value;
+  if (isObject(root)) {
+    const chapters = Array.isArray(value["chapters"]) ? value["chapters"].filter(isObject) : [];
+    const actions = chapters.flatMap((chapter) => [
+      ...(Array.isArray(chapter["onChapterEnter"]) ? chapter["onChapterEnter"] : []),
+      ...(Array.isArray(chapter["onChapterExit"]) ? chapter["onChapterExit"] : []),
+    ]);
+    const leftOut = columnsLeftOut(root["sources"], root["layers"], actions);
+    for (const { path, runtimePath } of leftOut.size > 0 ? sourcesOf(value, version) : []) {
+      const id = sourceIdAt(root, path);
+      const missing = id === undefined ? undefined : leftOut.get(id);
+      if (!missing) continue;
+      const names = missing.map((name) => `"${name}"`).join(", ");
+      warnings.push({
+        path: [...runtimePath, "columns"].join("."),
+        message:
+          `columns: leaves out ${names}, which this map uses (in a popup, label, filter, ` +
+          "classify: or chapter action). Columns that aren't read show blank or as no data: add " +
+          `${missing.length === 1 ? "it" : "them"} to columns:, or remove columns: to read every ` +
+          "column the map uses.",
+        ...at([...runtimePath, "columns"]),
+      });
+    }
+  }
   return { errors, warnings };
+}
+
+/** The id the renderer gives the source at `path`: its name, or `<layer id>-source` inline. */
+function sourceIdAt(root: Obj, path: (string | number)[]): string | undefined {
+  if (path[path.length - 2] === "sources") return String(path[path.length - 1]);
+  const tail = path.slice(-3);
+  if (tail[0] === "layers" && tail[2] === "source") {
+    const layer = Array.isArray(root["layers"]) ? root["layers"][tail[1] as number] : undefined;
+    return isObject(layer) && typeof layer["id"] === "string" ? `${layer["id"]}-source` : undefined;
+  }
+  return undefined;
 }

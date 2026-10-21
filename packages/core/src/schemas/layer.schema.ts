@@ -585,6 +585,19 @@ export const LegendItemSchema = z
 export type LegendItem = z.infer<typeof LegendItemSchema>;
 
 /**
+ * A layer's `legend:` — its entry, or `false` to leave the layer out of the
+ * legend (a classified layer's generated classes included).
+ *
+ * @example
+ * ```yaml
+ * legend: false
+ * ```
+ */
+export const LayerLegendSchema = z
+  .union([LegendItemSchema, z.literal(false)])
+  .describe("This layer's legend entry, or false to leave it (and its classify classes) out of the legend");
+
+/**
  * A layer's `effect:` block — **experimental** (0.7, `@maplibre-yaml/effects`).
  *
  * @remarks
@@ -677,7 +690,7 @@ export const BaseLayerPropertiesSchema = z.object({
   interactive: InteractiveConfigSchema.describe(
     "Interactive event configuration"
   ),
-  legend: LegendItemSchema.optional().describe("Legend configuration"),
+  legend: LayerLegendSchema.optional(),
   effect: EffectConfigSchema.optional(),
   // Thematic classes (0.9, ml-6x0): compiles to a step/match paint
   // expression; the layer-type checks live in classify/checks.ts.

@@ -21,7 +21,7 @@
  * style; any other off-origin request fails the test.
  */
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(__dirname, "..");
@@ -1531,3 +1531,55 @@ test.describe("docs: Scrollytelling in plain HTML, run verbatim", () => {
     await context.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// The map notice beside the story's pinned legend on a phone (ml-aot.108):
+// readers see a failure notice ("Part of this map couldn't load"), so it must
+// stay readable with the legend closed or open.
+// ---------------------------------------------------------------------------
+for (const viewport of [
+  { width: 390, height: 844 },
+  { width: 844, height: 390 },
+]) {
+  test(`a phone story's legend never covers the map notice: ${viewport.width}x${viewport.height} (ml-aot.108)`, async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport, isMobile: true, hasTouch: true, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    await page.goto("/examples/verification/story-layout/index.html?doc=notice", { waitUntil: "domcontentloaded" });
+    await storyReady(page, "grid");
+    const notice = page.locator("ml-scrollytelling .ml-map-notice");
+    await expect(notice).toContainText("Part of this map couldn't load", { timeout: 30_000 });
+    await page.waitForSelector(".scrolly-legend");
+
+    const overlap = () =>
+      page.evaluate(() => {
+        const root = document.querySelector<HTMLElement>("ml-scrollytelling .scrolly-legend")!;
+        const n = document.querySelector<HTMLElement>("ml-scrollytelling .ml-map-notice")!;
+        const parts = [root.querySelector(".scrolly-legend-toggle")!, root.querySelector(".scrolly-legend-panel")!]
+          .map((e) => e.getBoundingClientRect())
+          .filter((r) => r.width > 0);
+        const b = n.getBoundingClientRect();
+        const hit = (a: DOMRect) =>
+          a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+        const heading = n.querySelector("strong")!.getBoundingClientRect();
+        const atHeading = document.elementFromPoint(heading.left + 4, heading.top + heading.height / 2);
+        return {
+          overlaps: parts.some(hit),
+          headingVisible: n.contains(atHeading),
+          inMap: b.left >= 0 && b.right <= innerWidth,
+        };
+      });
+
+    mkdirSync("e2e/screenshots", { recursive: true });
+    const closed = await page.evaluate(() =>
+      document.querySelector(".scrolly-legend-panel")!.hasAttribute("hidden")
+    );
+    for (const state of closed ? ["closed", "open"] : ["open", "closed"]) {
+      if (state !== (closed ? "closed" : "open")) await page.locator(".scrolly-legend-toggle").click();
+      await expect.poll(overlap).toEqual({ overlaps: false, headingVisible: true, inMap: true });
+      await page.screenshot({ path: `e2e/screenshots/story-notice-${viewport.width}x${viewport.height}-${state}.png` });
+    }
+    await context.close();
+  });
+}

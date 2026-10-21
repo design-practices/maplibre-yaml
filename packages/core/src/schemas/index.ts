@@ -124,6 +124,7 @@ export {
   EmitConfigSchema,
   InteractiveConfigSchema,
   LegendItemSchema,
+  LayerLegendSchema,
   BaseLayerPropertiesSchema,
   CircleLayerSchema,
   LineLayerSchema,
@@ -199,6 +200,17 @@ export type {
   ProjectionConfig,
   LightConfig,
 } from "./map.schema";
+
+// The basemap value: a style URL, a style object, or a Protomaps basemap (0.9)
+export {
+  MapStyleSchema,
+  ProtomapsBasemapSchema,
+  PROTOMAPS_FLAVORS,
+  PROTOMAPS_LANGUAGES,
+  isProtomapsBasemap,
+  protomapsBasemapOf,
+} from "./basemap.schema";
+export type { ProtomapsBasemap, ProtomapsFlavor } from "./basemap.schema";
 
 // Format-v2 map schema (U2 — validation only)
 export {

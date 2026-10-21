@@ -67,6 +67,9 @@ export const DEFAULT_STRINGS = {
     '"npx serve ." in a terminal there, or use VS Code\'s "Live Server" ' +
     "extension — then open the http://localhost address it prints.",
 
+  // Shown in the middle of a map that takes more than a second to draw.
+  "maplibre-yaml.Loading": "Loading map…",
+
   // Shown on the page when `<ml-map>` has no height.
   "maplibre-yaml.HeightHint":
     "This map is invisible because the `<ml-map>` element has no height. Give it one, " +
@@ -191,12 +194,24 @@ export function documentLocale(doc: unknown): Record<string, unknown> | undefine
  * element, an ancestor such as `<ml-map lang>`, or `<html lang>`), or
  * `undefined` when none is set — the browser's own language then applies.
  * Numbers are formatted for it unless a format names its own `locale`.
+ * `en_US` is read as `en-US` ({@link normalizeLocale}).
  */
 export function elementLanguage(element: Element | null | undefined): string | undefined {
   try {
-    const lang = element?.closest?.("[lang]")?.getAttribute("lang")?.trim();
-    return lang ? lang : undefined;
+    const lang = element?.closest?.("[lang]")?.getAttribute("lang");
+    return normalizeLocale(lang);
   } catch {
     return undefined;
   }
+}
+
+/**
+ * A language tag as `Intl` takes it: trimmed, with the POSIX `_` separator
+ * (`en_US`, as server templates often write `lang`) turned into BCP 47's
+ * `-`. `undefined` for an empty or missing tag.
+ */
+export function normalizeLocale(tag: unknown): string | undefined {
+  if (typeof tag !== "string") return undefined;
+  const trimmed = tag.trim().replace(/_/g, "-");
+  return trimmed === "" ? undefined : trimmed;
 }

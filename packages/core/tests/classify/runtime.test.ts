@@ -5,8 +5,15 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { ClassifyRuntime } from "../../src/renderer/classify-runtime";
-import { resolveClassify, applyClassifyToSpec, classifyRecordOf } from "../../src/classify/compile";
+import { ClassifyRuntime, classifyFieldMessage } from "../../src/renderer/classify-runtime";
+import { classifyFieldProblems } from "../../src/classify/breaks";
+import {
+  resolveClassify,
+  applyClassifyToSpec,
+  classifyRecordOf,
+  classifyLegendEntries,
+  DEFAULT_NO_DATA_COLOR,
+} from "../../src/classify/compile";
 
 const fc = (values: unknown[]) => ({
   type: "FeatureCollection",
@@ -106,6 +113,20 @@ describe("ClassifyRuntime", () => {
     expect(classifyRecordOf(l)!.colors).toEqual(["#000000", "#ffffff"]);
   });
 
+  it("keeps hover.highlight on a classified colour when computed breaks land", () => {
+    const data = new Map<string, unknown>([["s", fc([0, 10])]]);
+    const map = fakeMap(new Set(["h"]));
+    const l = Object.assign(layer("h", "s"), { interactive: { hover: { highlight: true } } });
+    const runtime = new ClassifyRuntime(map as never, [l], {}, (id) => data.get(id), () => {});
+    runtime.dataLoaded("s");
+    const [, property, value] = map.setPaintProperty.mock.calls[0]!;
+    expect(property).toBe("fill-color");
+    expect((value as unknown[]).slice(0, 2)).toEqual(["case", ["boolean", ["feature-state", "hover"], false]]);
+    expect(JSON.stringify((value as unknown[])[3])).toContain('"step"');
+    // The layer object stays unwrapped: it is what a (re-)add wraps.
+    expect((l.paint["fill-color"] as unknown[])[0]).toBe("let");
+  });
+
   it("fetches a data: URL string MapLibre loads by itself", async () => {
     const l = layer("u", "named");
     const fetcher = { fetch: vi.fn(async () => ({ data: fc([0, 4]) })) };
@@ -119,5 +140,184 @@ describe("ClassifyRuntime", () => {
     await runtime.layersReady(fetcher as never);
     expect(fetcher.fetch).toHaveBeenCalledWith("https://example.com/u.geojson");
     expect(classifyRecordOf(l)!.breaks).toEqual([2]);
+  });
+
+  describe("a source read by view (FlatGeobuf over the whole-file limit, or load: viewport)", () => {
+    it("never computes breaks from the features in view, and reports once", async () => {
+      const data = new Map<string, unknown>([["parcels", fc([0, 10, 20, 30])]]);
+      const map = fakeMap(new Set(["income"]));
+      const changed = vi.fn();
+      const onRefused = vi.fn();
+      const l = layer("income", "parcels");
+      const before = JSON.stringify(l.paint["fill-color"]);
+      const runtime = new ClassifyRuntime(map as never, [l], {}, (id) => data.get(id), changed, {
+        readsByView: (id) => id === "parcels",
+        onRefused,
+      });
+      runtime.dataLoaded("parcels");
+      runtime.dataLoaded("parcels"); // the next view's read
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+
+      expect(classifyRecordOf(l)!.breaks).toBeUndefined();
+      expect(map.setPaintProperty).not.toHaveBeenCalled();
+      expect(changed).not.toHaveBeenCalled();
+      // The no-data colour stays: exactly it, not a class colour.
+      expect(l.paint["fill-color"]).toEqual(["to-color", DEFAULT_NO_DATA_COLOR]);
+      expect(JSON.stringify(l.paint["fill-color"])).toBe(before);
+      expect(onRefused).toHaveBeenCalledTimes(1);
+      const [layerId, sourceId, error] = onRefused.mock.calls[0]!;
+      expect([layerId, sourceId]).toEqual(["income", "parcels"]);
+      expect((error as Error).message).toContain("breaks:");
+      expect((error as Error).message).toContain("whole file");
+    });
+
+    it("a FlatGeobuf that switches to by-view after its empty placeholder keeps the no-data colour (ml-aot.106)", async () => {
+      // The source's placeholder is there when the layers are ready, before
+      // the loader has opened the file and switched to reading by view.
+      const data = new Map<string, unknown>([["big", fc([])]]);
+      let byView = false;
+      const map = fakeMap(new Set(["m"]));
+      const l = layer("m", "big");
+      const runtime = new ClassifyRuntime(map as never, [l], {}, (id) => data.get(id), () => {}, {
+        readsByView: () => byView,
+        onRefused: vi.fn(),
+      });
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+      expect(classifyRecordOf(l)!.breaks).toBeUndefined();
+      byView = true;
+      data.set("big", fc([1, 2, 3, 40]));
+      runtime.dataLoaded("big");
+      expect(l.paint["fill-color"]).toEqual(["to-color", DEFAULT_NO_DATA_COLOR]);
+      expect(map.setPaintProperty).not.toHaveBeenCalled();
+    });
+
+    it("keeps explicit breaks, without edges taken from the part in view", () => {
+      const data = new Map<string, unknown>([["parcels", fc([3, 12, 40])]]);
+      const record = resolveClassify(
+        { field: "v", breaks: [10, 20], colors: ["#000000", "#777777", "#ffffff"] },
+        "fill"
+      );
+      const l = applyClassifyToSpec({ id: "e", type: "fill", source: "parcels" }, record) as never as {
+        paint: Record<string, unknown>;
+      };
+      const map = fakeMap(new Set(["e"]));
+      const onRefused = vi.fn();
+      const runtime = new ClassifyRuntime(map as never, [l as never], {}, (id) => data.get(id), () => {}, {
+        readsByView: () => true,
+        onRefused,
+      });
+      runtime.dataLoaded("parcels");
+      expect(onRefused).not.toHaveBeenCalled();
+      expect(JSON.stringify(l.paint["fill-color"])).toContain('"step"');
+      const current = classifyRecordOf(l)!;
+      expect(current.breaks).toEqual([10, 20]);
+      expect(current.stats).toBeUndefined();
+      expect(classifyLegendEntries(current).map((e) => e.label)).toEqual([
+        "v",
+        "< 10",
+        "10–20",
+        "≥ 20",
+        "No data",
+      ]);
+    });
+  });
+
+  describe("a field the loaded data has no value for (ml-aot.95)", () => {
+    const rows = (props: Array<Record<string, unknown>>) => ({
+      type: "FeatureCollection",
+      features: props.map((p) => ({ type: "Feature", properties: p, geometry: null })),
+    });
+    const TRACTS = rows([
+      { name: "a", median_income: 30000, population: 100, zone: "residential" },
+      { name: "b", median_income: 60000, population: 200, zone: "commercial" },
+    ]);
+
+    it("names a wrong-case or misspelt field, with a did-you-mean and the data's properties", () => {
+      const [p] = classifyFieldProblems(TRACTS, { field: "Median_Income", kind: "numeric" });
+      expect(p).toMatchObject({ key: "field", reason: "missing", suggestion: "median_income" });
+      const message = classifyFieldMessage("income", p!);
+      expect(message).toContain('classify field: "Median_Income" is not a property of any feature');
+      expect(message).toContain('Did you mean "median_income"?');
+      expect(message).toContain('"population"');
+    });
+
+    it("names a text field under numeric classes", () => {
+      const [p] = classifyFieldProblems(TRACTS, { field: "zone", kind: "numeric" });
+      expect(p).toMatchObject({ reason: "not-numeric", sample: "residential" });
+      expect(classifyFieldMessage("z", p!)).toContain("holds no numbers");
+      // The same field is fine for categories.
+      expect(classifyFieldProblems(TRACTS, { field: "zone", kind: "categorical" })).toEqual([]);
+    });
+
+    it("checks normalize: too, and says nothing when the fields have values", () => {
+      const [p] = classifyFieldProblems(TRACTS, { field: "median_income", kind: "numeric", normalize: "populaton" });
+      expect(p).toMatchObject({ key: "normalize", reason: "missing", suggestion: "population" });
+      expect(
+        classifyFieldProblems(TRACTS, { field: "median_income", kind: "numeric", normalize: "population" })
+      ).toEqual([]);
+      expect(classifyFieldProblems(rows([]), { field: "x", kind: "numeric" })).toEqual([]);
+    });
+
+    it("an empty placeholder before the fetch is not 'checked': the fetched data is (ml-aot.105)", async () => {
+      const data = new Map<string, unknown>([["tracts", rows([])]]); // the named source's placeholder
+      const onFieldProblem = vi.fn();
+      const record = resolveClassify({ field: "Median_Income", breaks: [50000], colors: ["#000000", "#ffffff"] }, "fill");
+      const l = applyClassifyToSpec({ id: "income", type: "fill", source: "tracts" }, record) as never;
+      const runtime = new ClassifyRuntime(fakeMap(new Set(["income"])) as never, [l], {}, (id) => data.get(id), () => {}, {
+        readsByView: () => false,
+        onRefused: vi.fn(),
+        onFieldProblem,
+      });
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+      expect(onFieldProblem).not.toHaveBeenCalled();
+      data.set("tracts", TRACTS);
+      runtime.dataLoaded("tracts");
+      expect(onFieldProblem).toHaveBeenCalledTimes(1);
+      expect(String(onFieldProblem.mock.calls[0]![1])).toContain('Did you mean "median_income"?');
+    });
+
+    it("inline data the pipeline never delivers is checked from the document (ml-aot.105)", async () => {
+      const onFieldProblem = vi.fn();
+      const record = resolveClassify({ field: "Value", breaks: [1], colors: ["#000000", "#ffffff"] }, "fill");
+      const own = applyClassifyToSpec(
+        { id: "own", type: "fill", source: { type: "geojson", data: rows([{ value: 1 }, { value: 2 }]) } },
+        record
+      ) as never;
+      const named = applyClassifyToSpec({ id: "named", type: "fill", source: "pts" }, record) as never;
+      const runtime = new ClassifyRuntime(
+        fakeMap(new Set(["own", "named"])) as never,
+        [own, named],
+        { pts: { type: "geojson", data: rows([{ value: 3 }]) } },
+        () => undefined,
+        () => {},
+        { readsByView: () => false, onRefused: vi.fn(), onFieldProblem }
+      );
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+      expect(onFieldProblem.mock.calls.map((c) => c[0]).sort()).toEqual(["named", "own"]);
+      expect(String(onFieldProblem.mock.calls[0]![1])).toContain('Did you mean "value"?');
+    });
+
+    it("the runtime reports it once per layer, for fetched and inline data", async () => {
+      const data = new Map<string, unknown>([["s", TRACTS]]);
+      const onFieldProblem = vi.fn();
+      const fetched = layer("f", "s"); // field "v": on no feature
+      const record = resolveClassify({ field: "Median_Income", breaks: [50000], colors: ["#000000", "#ffffff"] }, "fill");
+      const inline = applyClassifyToSpec({ id: "i", type: "fill", source: "s2" }, record) as never;
+      data.set("s2", TRACTS);
+      const runtime = new ClassifyRuntime(
+        fakeMap(new Set(["f", "i"])) as never,
+        [fetched, inline],
+        {},
+        (id) => data.get(id),
+        () => {},
+        { readsByView: () => false, onRefused: vi.fn(), onFieldProblem }
+      );
+      runtime.dataLoaded("s");
+      runtime.dataLoaded("s");
+      await runtime.layersReady({ fetch: vi.fn() } as never);
+      expect(onFieldProblem).toHaveBeenCalledTimes(2);
+      expect(onFieldProblem.mock.calls.map((c) => c[0]).sort()).toEqual(["f", "i"]);
+      expect(String(onFieldProblem.mock.calls.find((c) => c[0] === "i")![1])).toContain('"median_income"');
+    });
   });
 });

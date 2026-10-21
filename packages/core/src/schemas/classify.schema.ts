@@ -457,6 +457,24 @@ export const ClassifySchema: z.ZodType<ClassifyConfig> = z
           `size${config.radius.length === 1 ? "" : "s"}: give one radius per class.`
       );
     }
+    // Numeric classes coloured from the default palette: the largest one
+    // (viridis) has MAX_CLASS_COUNT colours, so more breaks would leave the
+    // top classes without a colour (an invalid step, ml-aot.78).
+    if (
+      !hasCategories &&
+      config.palette === undefined &&
+      config.colors === undefined &&
+      config.radius === undefined &&
+      count > MAX_CLASS_COUNT
+    ) {
+      issue(
+        [hasBreaks ? "breaks" : "classes"],
+        `This classify makes ${count} classes` +
+          (hasBreaks ? ` (${config.breaks!.length} breaks + 1)` : "") +
+          `, and the default palettes colour at most ${MAX_CLASS_COUNT}. Use fewer breaks, ` +
+          "or list colors: yourself (one per class)."
+      );
+    }
     // A categories list coloured from the default qualitative palette.
     if (
       Array.isArray(config.categories) &&

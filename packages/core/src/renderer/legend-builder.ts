@@ -25,7 +25,7 @@ import type { ClassifyConfig } from '../schemas/classify.schema';
 const LEGEND_BOX_STYLE =
   'display:block;background:rgba(255,255,255,0.95);border-radius:4px;' +
   'box-shadow:0 1px 4px rgba(0,0,0,0.3);padding:8px 12px;' +
-  'font:12px/1.5 system-ui,sans-serif;color:#333;min-width:140px;';
+  'font:12px/1.5 system-ui,sans-serif;color:#333;min-width:min(140px, 100%);box-sizing:border-box;';
 
 const SYMBOL_STYLE = {
   circle: 'display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;',
@@ -97,7 +97,7 @@ export class LegendBuilder {
     if (!el) return;
     this.locale ??= elementLanguage(el);
 
-    const items: LegendEntry[] = config?.items || this.extractItems(layers);
+    const items: LegendEntry[] = this.entries(layers, config);
 
     // Nothing to show → no box. An empty "Legend" panel reads as broken chrome;
     // say what's missing instead (entries come from layers' `legend:` fields
@@ -141,13 +141,20 @@ export class LegendBuilder {
   /**
    * The legend's entries: the block's own `items:`, else every layer's
    * `legend:` field. Empty when there is nothing to show.
+   *
+   * @remarks
+   * A classified layer's classes are shown either way (ml-aot.94): after the
+   * block's `items:` when it lists its own, since those were written by hand
+   * and cannot describe classes computed from the data. A layer opts out with
+   * `legend: false` (or replaces its classes with its own `legend:` entry).
    */
   entries(
     layers: Layer[],
     config?: Partial<LegendConfig>,
     overrides?: ClassifyOverrides
   ): LegendEntry[] {
-    return config?.items || this.extractItems(layers, overrides);
+    if (!config?.items) return this.extractItems(layers, overrides);
+    return [...config.items, ...this.extractItems(layers, overrides, { classifiedOnly: true })];
   }
 
   /**
@@ -211,11 +218,19 @@ export class LegendBuilder {
    * Extract legend items from layers: a layer's authored `legend:` item, or
    * — for a `classify:` layer without one — a heading and one line per class.
    */
-  private extractItems(layers: Layer[], overrides?: ClassifyOverrides): LegendEntry[] {
+  private extractItems(
+    layers: Layer[],
+    overrides?: ClassifyOverrides,
+    options: { classifiedOnly?: boolean } = {}
+  ): LegendEntry[] {
     const items: LegendEntry[] = [];
     for (const layer of layers) {
+      // `legend: false`: the layer (and its classify classes) stays out.
+      if ((layer as { legend?: unknown }).legend === false) continue;
       if (layer.legend && typeof layer.legend === 'object') {
-        items.push(layer.legend as LegendItem);
+        // Beside the block's own `items:`, a layer's hand-written entry is
+        // the author's to list there; only generated classes are added.
+        if (!options.classifiedOnly) items.push(layer.legend as LegendItem);
         continue;
       }
       const record = this.classifyRecord(layer, overrides);
@@ -260,6 +275,7 @@ export class LegendBuilder {
   /** Whether some classify layer is still waiting for its data. */
   private hasPendingClassify(layers: Layer[]): boolean {
     return layers.some((layer) => {
+      if ((layer as { legend?: unknown }).legend === false) return false;
       const record = this.classifyRecord(layer);
       return record !== undefined && isPending(record);
     });

@@ -151,8 +151,8 @@ test.describe("home: <Map config> and <Map src>", () => {
   });
 });
 
-test.describe("cloud-native data: PMTiles and FlatGeobuf from YAML (0.9, ml-cnv)", () => {
-  test("both formats render, framed on the data, with no page JavaScript @dev", async ({ page }) => {
+test.describe("cloud-native data: PMTiles, FlatGeobuf and GeoParquet from YAML (0.9, ml-cnv)", () => {
+  test("all three formats render, framed on the data, with no page JavaScript @dev", async ({ page }) => {
     const errors = await guard(page);
     const ranged: number[] = [];
     page.on("response", (r) => {
@@ -162,6 +162,7 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf from YAML (0.9, ml-cnv)
     const map = '[data-testid="cloud-native-map"] ml-map';
     await mapReady(page, map);
     await layerLoaded(page, map, "districts");
+    await layerLoaded(page, map, "population");
     await expect
       .poll(() =>
         page.evaluate(
@@ -173,9 +174,52 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf from YAML (0.9, ml-cnv)
         )
       )
       .toBeGreaterThan(0);
+    // The GeoParquet file's population classes were computed from its features.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (sel) =>
+            JSON.stringify(
+              (document.querySelector(sel) as any).getMap().getPaintProperty("population", "fill-color")
+            ),
+          map
+        )
+      )
+      .toContain('"step"');
     // fitTo framed the decoded FlatGeobuf data (the YAML says zoom 8).
     await expect.poll(async () => (await camera(page, map)).zoom).toBeGreaterThan(9);
     // The archive was read in parts (HTTP range requests), as on any static host.
+    expect(ranged.length).toBeGreaterThan(0);
+    expect(ranged.every((s) => s === 206)).toBe(true);
+    await expect(page.locator(`${map} .ml-map-notice`)).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe("Cloud Optimized GeoTIFF from YAML (0.9, ml-cnv.2)", () => {
+  test("imagery and elevation render, framed on the file, with no page JavaScript @dev", async ({ page }) => {
+    const errors = await guard(page);
+    const ranged: number[] = [];
+    page.on("response", (r) => {
+      if (/\.cog\.tif/.test(r.url())) ranged.push(r.status());
+    });
+    await page.goto("/cog/", { waitUntil: "domcontentloaded" });
+    const map = '[data-testid="cog-map"] ml-map';
+    await mapReady(page, map);
+    await page.waitForFunction(
+      (sel) => {
+        const m = (document.querySelector(sel) as any)?.getMap?.();
+        return Boolean(m && m.getSource("imagery") && m.isSourceLoaded("imagery") && m.isSourceLoaded("elevation"));
+      },
+      map,
+      { timeout: 45_000 }
+    );
+    const style = await page.evaluate((sel) => (document.querySelector(sel) as any).getMap().getStyle(), map);
+    expect(style.sources.imagery.url).toMatch(/^cog:\/\/.*\/data\/cloud-native\/imagery\.cog\.tif$/);
+    expect(style.sources.elevation.url).toMatch(/elevation\.cog\.tif#dem$/);
+    // fitTo framed the file's extent (the YAML says zoom 8).
+    await expect.poll(async () => (await camera(page, map)).zoom).toBeGreaterThan(8.5);
+    // Read in parts (HTTP range requests), as on any static host.
     expect(ranged.length).toBeGreaterThan(0);
     expect(ranged.every((s) => s === 206)).toBe(true);
     await expect(page.locator(`${map} .ml-map-notice`)).toHaveCount(0);
@@ -452,8 +496,16 @@ test.describe("story: the shared <ml-scrollytelling> engine (ml-aot.1)", () => {
     await mapReady(page, MAP);
     await goToChapter(page, "boundaries");
     await expectCameraNear(page, MAP, [-170, 15], 1.5);
-    // Settled on the chapter's own zoom before the wheel turns.
+    // Settled on the chapter's own zoom before the wheel turns: sample only
+    // once the camera has stopped (a rounded zoom can match mid-ease, and the
+    // ease finishing would then look like the wheel zooming — ml-aot.91).
+    await expect
+      .poll(() => page.evaluate((sel) => (document.querySelector(sel) as any).getMap().isMoving(), MAP))
+      .toBe(false);
     await expect.poll(async () => Math.round((await camera(page, MAP)).zoom * 1000) / 1000).toBe(1.5);
+    await expect
+      .poll(() => page.evaluate((sel) => (document.querySelector(sel) as any).getMap().isMoving(), MAP))
+      .toBe(false);
     const zoom = (await camera(page, MAP)).zoom;
     const before = await page.evaluate(() => scrollY);
     // Right-hand side of the map, clear of the left-aligned card.

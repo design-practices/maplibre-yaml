@@ -33,7 +33,8 @@ import type { ExportClassDefinition } from "../export";
 import { LAYER_RUNTIME_KEYS, SOURCE_RUNTIME_KEYS } from "../model/normalize";
 import { sanitizeSourcesAttribution } from "../utils/attribution";
 import { lowerEffectLayer } from "./lower-effects";
-import { lowerSourceFormat, type EmitDataRef } from "./lower-formats";
+import { lowerSourceFormat, PMTILES_ON_EMIT, type EmitDataRef } from "./lower-formats";
+import { isProtomapsBasemap } from "../schemas/basemap.schema";
 
 /**
  * Sanitize every `sources.*.attribution` in an emitted style, in place on the
@@ -120,7 +121,7 @@ export interface EmitResult {
    */
   images?: EmitImageRef[];
   /**
-   * FlatGeobuf sources to convert (ml-cnv.3). Core emits each as an empty
+   * FlatGeobuf / GeoParquet sources to convert (ml-cnv.3/.4). Core emits each as an empty
    * GeoJSON source and describes the file here; the CLI reads it and inlines
    * the features (`mlym emit`). A direct caller holds the same obligation.
    * Absent when the document has none.
@@ -467,9 +468,9 @@ function pushSourceRuntimeWarnings(
       continue;
     }
     const definition = requireExportClass(`source.${key}`);
-    // `format:`/`load:` (ml-cnv) say how the file is read, not what is live:
+    // `format:`/`load:`/`colorRamp:` (ml-cnv) say how the file is read, not what is live:
     // the format's own lowering reports what the emitted source carries.
-    if (key === "format" || key === "load") {
+    if (key === "format" || key === "load" || key === "colorRamp") {
       warnings.push({
         path: `${basePath}.${key}`,
         kind: "contract",
@@ -493,13 +494,18 @@ function pushSourceRuntimeWarnings(
   }
 }
 
+/** A GeoJSON source given by `url:` — emitted as `data: <url>`. */
+function hasGeoJSONUrl(spec: Record<string, unknown>): boolean {
+  return spec["type"] === "geojson" && typeof spec["url"] === "string";
+}
+
 export function projectStyle(
   model: MapModel,
   mode: EmitMode = "with-fallbacks"
 ): EmitResult {
   const warnings: EmitWarning[] = [];
   const sources: Record<string, unknown> = {};
-  // FlatGeobuf sources the caller reads and inlines (ml-cnv; core describes).
+  // FlatGeobuf / GeoParquet sources the caller reads and inlines (ml-cnv; core describes).
   const dataRefs: EmitDataRef[] = [];
 
   for (const [name, source] of Object.entries(model.style.sources)) {
@@ -512,7 +518,10 @@ export function projectStyle(
     }
     sources[name] = spec;
     if (Object.keys(source.runtime).length > 0) {
-      const hasData = isPlainObject(source.spec) && "data" in source.spec;
+      // A GeoJSON `url:` emits as `data: <url>` (lowerGeoJSONUrl): the style
+      // loads it, once.
+      const hasData =
+        isPlainObject(source.spec) && ("data" in source.spec || hasGeoJSONUrl(source.spec));
       pushSourceRuntimeWarnings(warnings, `sources.${name}`, source.runtime, hasData);
     }
   }
@@ -576,7 +585,8 @@ export function projectStyle(
 
     // Captured before the hoist below replaces the inline object with a
     // generated source name — the contract/lossy split needs it.
-    const inlineHasData = isPlainObject(spec["source"]) && "data" in spec["source"];
+    const inlineHasData =
+      isPlainObject(spec["source"]) && ("data" in spec["source"] || hasGeoJSONUrl(spec["source"]));
 
     // The style spec has no inline-source concept: `layer.source` must name an
     // entry in `sources:`. An inline source is hoisted into a generated one.
@@ -712,6 +722,28 @@ export function projectStyle(
   }
   if (imageRefs.length > 0) {
     style["sprite"] = declareDocumentSprite({})["sprite"];
+  }
+  // A Protomaps basemap (ml-cnv.7) is merged in as a full generated style
+  // (resolveBasemap): its file is read through `pmtiles://`, which the
+  // renderer of the emitted style must support, and a relative file path
+  // resolves against whichever page loads that style.
+  const basemap = model.style.basemap;
+  if (isProtomapsBasemap(basemap) && typeof basemap.pmtiles === "string") {
+    const file = basemap.pmtiles.replace(/^pmtiles:\/\//i, "");
+    const relative = !/^[a-z][a-z0-9+.-]*:/i.test(file) && !file.startsWith("//");
+    warnings.push({
+      path: "basemap.pmtiles",
+      kind: "contract",
+      construct: "format.pmtiles",
+      exportClass: "exports",
+      message:
+        `The Protomaps basemap exports as a full style reading \`pmtiles://${file}\` — ${PMTILES_ON_EMIT}` +
+        (relative
+          ? " The file path is relative, so it resolves against the page that loads the style; " +
+            "use an absolute URL for a style used anywhere else."
+          : "") +
+        " Labels and icons load from the style's glyphs and sprite URLs.",
+    });
   }
   // U15's 3D trio: style-spec root properties, compiled verbatim (class
   // `exports`). Terrain carries a cross-reference the spec validates — its

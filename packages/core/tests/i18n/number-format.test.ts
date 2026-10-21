@@ -63,9 +63,31 @@ describe("formatNumber", () => {
     expect(formatNumber(5, { currency: "NOTACURRENCY", locale: "en-US" }, "en-US")).toBe("5");
     expect(formatNumber(6, { currency: "NOTACURRENCY", locale: "en-US" }, "en-US")).toBe("6");
     expect(formatNumber(7, { unit: "furlongs-per-fortnight" }, "en-US")).toBe("7");
-    expect(formatNumber(1234, {}, "not a locale!!")).toBe("1234");
+    // A locale Intl rejects keeps the format, in the browser's language.
+    expect(formatNumber(1234, {}, "not a locale!!")).toBe(new Intl.NumberFormat().format(1234));
     expect(warn.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(warn.mock.calls.length).toBeLessThanOrEqual(3);
+    warn.mockRestore();
+  });
+
+  it("reads POSIX locale tags (en_US) as BCP 47 (en-US): the 0.8.1 output is kept", () => {
+    expect(formatNumber(8336816.62, ",.0f", "en_US")).toBe("8,336,817");
+    expect(formatNumber(1234.5, { locale: "de_DE" })).toBe("1.234,5");
+    expect(formatNumber(1234.5, { locale: " de_DE " }, "en-US")).toBe("1.234,5");
+  });
+
+  it("falls back in steps: default locale, browser locale with the options kept, String() last", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // A format locale Intl rejects: the default locale, options kept.
+    expect(formatNumber(8336816.62, { locale: "xx-!!", "max-fraction-digits": 0 }, "de-DE")).toBe("8.336.817");
+    // No usable locale at all: the browser's, options kept.
+    expect(formatNumber(8336816.62, ",.0f", "not a locale!!")).toBe(
+      new Intl.NumberFormat(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(8336816.62)
+    );
+    // An option Intl rejects (unknown currency): grouping and digits survive.
+    expect(
+      formatNumber(1234.567, { currency: "NOTACURRENCY", locale: "de-DE", "max-fraction-digits": 1 })
+    ).toBe("1.234,6");
     warn.mockRestore();
   });
 

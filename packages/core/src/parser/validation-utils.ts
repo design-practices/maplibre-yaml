@@ -53,8 +53,12 @@ export interface ValidationWarning {
    * a newly-deprecated field would hard-fail every existing user's build the
    * moment they upgrade. `--strict-deprecations` opts back in. Absent on
    * unknown-key and expression warnings, which promote as before.
+   *
+   * `note`: not a problem at all — how a valid value is read (a basemap
+   * string naming a `.pmtiles` file is the Protomaps shorthand). Never
+   * promoted.
    */
-  kind?: "deprecation" | "unimplemented";
+  kind?: "deprecation" | "unimplemented" | "note";
   /**
    * Also shown on the page, in the map's "part of this map didn't load"
    * notice, not only the console: the document is valid but part of it

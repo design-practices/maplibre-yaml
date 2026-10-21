@@ -60,7 +60,10 @@ jobs:
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
-          version: pnpm changeset version
+          # `changeset version`, then the CDN pins in docs/READMEs/examples
+          # move to the new minor (scripts/sync-cdn-pins.mjs, ml-aot.92), so
+          # the release PR never ships docs pointing at the previous line.
+          version: pnpm run version-packages
           # MUST be a single command, not a shell line. changesets/action
           # splits this input on whitespace and runs it through @actions/exec
           # with no shell, so an `&&` here is passed as a literal argument to

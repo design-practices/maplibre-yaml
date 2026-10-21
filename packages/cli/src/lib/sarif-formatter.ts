@@ -100,22 +100,23 @@ export function formatSARIF(results: ValidationResult[], version: string): strin
       });
     }
 
-    // Process warnings
+    // Process warnings (a note, which explains how a valid value is read, at level "note")
     for (const warning of result.warnings) {
       const ruleId = getRuleId(warning.path);
+      const level = warning.kind === 'note' ? 'note' : 'warning';
 
       if (!rulesMap.has(ruleId)) {
         rulesMap.set(ruleId, {
           id: ruleId,
           name: getRuleName(warning.path),
           shortDescription: { text: getShortDescription(warning.path) },
-          defaultConfiguration: { level: 'warning' },
+          defaultConfiguration: { level },
         });
       }
 
       sarifResults.push({
         ruleId,
-        level: 'warning',
+        level,
         message: { text: warning.message },
         locations: [
           {

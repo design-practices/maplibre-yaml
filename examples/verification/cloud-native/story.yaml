@@ -1,5 +1,6 @@
-# A story map over cloud-native data (0.9, ml-cnv): the same PMTiles and
-# FlatGeobuf sources an <ml-map> reads, in <ml-scrollytelling>, no page JS.
+# A story map over cloud-native data (0.9, ml-cnv): the same PMTiles,
+# FlatGeobuf and GeoParquet sources an <ml-map> reads, in
+# <ml-scrollytelling>, no page JS.
 type: scrollytelling
 id: cloud-native-story
 config:
@@ -19,6 +20,9 @@ sources:
   districts:
     type: geojson
     url: /gallery-assets/cloud-native/districts.fgb
+  wells:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
 layers:
   - id: imagery
     type: raster
@@ -35,14 +39,27 @@ layers:
     source: outlines
     source-layer: districts
     paint: { line-color: "#1d3557", line-width: 1.2 }
+  - id: wells
+    type: circle
+    source: wells
+    paint: { circle-radius: 3, circle-color: ["match", ["get", "kind"], "well", "#e63946", "#264653"] }
+    legend: { label: "Stations (GeoParquet)", color: "#264653", shape: circle }
 chapters:
   - id: overview
     title: The whole plan
-    description: "<p>Imagery and outlines come from PMTiles archives; the coloured districts are a FlatGeobuf file — all named in YAML.</p>"
+    description: "<p>Imagery and outlines come from PMTiles archives; the coloured districts are a FlatGeobuf file; the stations are a GeoParquet file — all named in YAML.</p>"
     center: [10.2, 42.15]
     zoom: 9.4
   - id: closer
     title: A closer look
-    description: "<p>Zoomed in: the archives serve only the tiles in view.</p>"
+    description: "<p>Zoomed in: the archives serve only the tiles in view. Only stations with a value of 50 or more show: the chapter filters on a GeoParquet column no layer uses, which is read all the same.</p>"
     center: [10.1, 42.08]
     zoom: 11
+    onChapterEnter:
+      - action: setFilter
+        layer: wells
+        filter: [">=", ["get", "value"], 50]
+    onChapterExit:
+      - action: setFilter
+        layer: wells
+        filter: null

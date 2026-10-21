@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cloud Optimized GeoTIFF, YAML only</title>
+  <!--
+    0.9 (ml-cnv.2): COG files with no page JavaScript — a .tif URL on a
+    raster or raster-dem source. Fixtures: scripts/fixtures/cog.py.
+      - v1 (top left): imagery.cog.tif (RGB) draped on 3D terrain from
+        elevation.cog.tif, which also drives a hillshade layer; fitTo frames
+        the imagery from the file's own extent.
+      - v2 (top right): ndvi.cog.tif, one band of values, coloured by a
+        colorRamp (red → blue); the sea has no values and stays clear.
+      - errors (bottom left): a COG in longitude/latitude (EPSG:4326), a
+        server without range requests, a host that doesn't allow this page
+        to read the file (CORS), a web page saved as .tif, a missing file —
+        each said in plain words in the map's notice.
+      - hint (bottom right): an ordinary GeoTIFF (in strips, no overviews)
+        still draws; the notice (shown while developing) says how to make it
+        a COG.
+    PASS = the island imagery in 3D with shading; the red/blue island; one
+    notice line per failure; the plain GeoTIFF drawn with a hint.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/cog.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 400px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = 3D shaded island imagery (v1), a red/blue island (v2), plain-words notices for each failure, the plain GeoTIFF drawn with a hint.</header>
+  <main>
+    <section>
+      <h2>v1: imagery on terrain, hillshade, fitTo</h2>
+      <ml-map id="v1">
+        <script type="text/yaml">
+type: map
+id: cog-v1
+config:
+  center: [0, 0]
+  zoom: 2
+  pitch: 45
+  mapStyle: "/examples/verification/configs/local-style.json"
+  fitTo: { source: imagery, padding: 10 }
+sources:
+  imagery:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery.cog.tif
+  elevation:
+    type: raster-dem
+    url: /gallery-assets/cloud-native/elevation.cog.tif
+terrain:
+  source: elevation
+  exaggeration: 1.5
+layers:
+  - { id: imagery, type: raster, source: imagery }
+  - id: hills
+    type: hillshade
+    source: elevation
+    paint: { hillshade-exaggeration: 0.6 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>v2: one band, coloured with colorRamp</h2>
+      <ml-map id="v2">
+        <script type="text/yaml">
+version: 2
+type: map
+id: cog-v2
+style:
+  basemap: "/examples/verification/configs/local-style.json"
+  center: [10.2, 42.15]
+  zoom: 9.6
+  sources:
+    ndvi:
+      type: raster
+      url: /gallery-assets/cloud-native/ndvi.cog.tif
+      runtime:
+        colorRamp: { colors: ["#ff0000", "#0000ff"], min: -0.1, max: 0.85 }
+  layers:
+    - { id: ndvi, type: raster, source: ndvi }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Failures, in plain words</h2>
+      <ml-map id="cog-errors">
+        <script type="text/yaml">
+type: map
+id: cog-errors
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  latlon:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery-4326.cog.tif
+  norange:
+    type: raster
+    url: /norange/gallery-assets/cloud-native/imagery.cog.tif
+  blocked:
+    type: raster
+    url: "{{OTHER_ORIGIN}}/nocors/gallery-assets/cloud-native/imagery.cog.tif"
+  webpage:
+    type: raster
+    url: /gallery-assets/cloud-native/not-really.tif
+  missing:
+    type: raster-dem
+    url: /gallery-assets/cloud-native/missing.tif
+layers:
+  - { id: latlon, type: raster, source: latlon }
+  - { id: norange, type: raster, source: norange }
+  - { id: blocked, type: raster, source: blocked }
+  - { id: webpage, type: raster, source: webpage }
+  - { id: missing, type: hillshade, source: missing }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Not cloud-optimized: drawn, with a hint</h2>
+      <ml-map id="cog-hint">
+        <script type="text/yaml">
+type: map
+id: cog-hint
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  plain:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery-plain.tif
+layers:
+  - { id: plain, type: raster, source: plain }
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script>
+    // The CORS case needs another origin: the same server, reached as
+    // 127.0.0.1 instead of localhost (see errors.html).
+    for (const s of document.querySelectorAll('script[type="text/yaml"]')) {
+      s.textContent = s.textContent.replaceAll("{{OTHER_ORIGIN}}", `http://127.0.0.1:${location.port}`);
+    }
+  </script>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Base path: a Protomaps basemap from a .pmtiles file</title>
+  <!--
+    ml-cnv.7 — mapStyle: { pmtiles: … } on a GitHub Pages project site
+    (/my-repo/), with no page JavaScript. The .pmtiles file is a small
+    Protomaps extract (DUMBO and Brooklyn Heights) served from the site's own
+    protomaps/ folder; `base` resolves it under /my-repo/.
+    PASS:
+      1 (top left)  light basemap with street and place labels, a red dot on
+                    top; fonts and sprite self-hosted (glyphs:/sprite:).
+      2 (top right) the same area in the dark flavor (format v2, basemap:),
+                    fonts and sprite from Protomaps' hosted assets.
+      3 (bottom left)  a file that isn't there: a notice naming it.
+      4 (bottom right) a PMTiles file that isn't a Protomaps basemap: a
+                       notice saying so.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/my-repo/blog/protomaps.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    ml-map { display: block; height: 380px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = light basemap with labels and a red dot; the dark flavor; a notice for a missing file; a notice for a file that isn't a basemap.</header>
+  <main>
+    <ml-map id="self-hosted" base="/my-repo/">
+      <script type="text/yaml">
+type: map
+id: protomaps-self-hosted
+config:
+  center: [-73.9935, 40.6985]
+  zoom: 14.6
+  mapStyle:
+    pmtiles: protomaps/brooklyn.pmtiles
+    glyphs: protomaps-assets/fonts/{fontstack}/{range}.pbf
+    sprite: protomaps-assets/sprites/v4/light
+layers:
+  - id: pier-dot
+    type: circle
+    source: { type: geojson, data: { type: Point, coordinates: [-73.9935, 40.6985] } }
+    paint: { circle-radius: 9, circle-color: "#e63946", circle-stroke-color: "#ffffff", circle-stroke-width: 2 }
+  - id: under-labels
+    type: circle
+    before: places_subplace
+    source: { type: geojson, data: { type: Point, coordinates: [-73.9905, 40.7005] } }
+    paint: { circle-radius: 6, circle-color: "#1d3557" }
+      </script>
+    </ml-map>
+    <ml-map id="dark" base="/my-repo/">
+      <script type="text/yaml">
+version: 2
+type: map
+id: protomaps-dark
+style:
+  basemap: { pmtiles: protomaps/brooklyn.pmtiles, flavor: dark }
+  center: [-73.9935, 40.6985]
+  zoom: 14.6
+  layers: []
+      </script>
+    </ml-map>
+    <ml-map id="missing" base="/my-repo/">
+      <script type="text/yaml">
+type: map
+id: protomaps-missing
+config:
+  center: [-73.9935, 40.6985]
+  zoom: 14.6
+  mapStyle:
+    pmtiles: protomaps/not-here.pmtiles
+    glyphs: protomaps-assets/fonts/{fontstack}/{range}.pbf
+    sprite: protomaps-assets/sprites/v4/light
+layers: []
+      </script>
+    </ml-map>
+    <ml-map id="not-basemap" base="/my-repo/">
+      <script type="text/yaml">
+type: map
+id: protomaps-not-a-basemap
+config:
+  center: [10.2, 42.15]
+  zoom: 9.6
+  mapStyle:
+    pmtiles: cloud-native/districts.pmtiles
+    glyphs: protomaps-assets/fonts/{fontstack}/{range}.pbf
+    sprite: protomaps-assets/sprites/v4/light
+layers: []
+      </script>
+    </ml-map>
+  </main>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>

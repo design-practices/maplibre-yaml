@@ -20,6 +20,8 @@
  * {@link numericValue}), so the breaks describe the features the map colours.
  */
 
+import { declaredPropertyNames } from "../data/property-names";
+
 /** The break-computation methods. */
 export const CLASSIFY_METHODS = ["quantile", "equal", "jenks"] as const;
 export type ClassifyMethod = (typeof CLASSIFY_METHODS)[number];
@@ -291,4 +293,122 @@ export function computeBreaks(
     case "jenks":
       return jenksBreaks(sorted, classes);
   }
+}
+
+/** What a dataset holds for one property: how many features have it, and how many as a number. */
+function presence(features: readonly unknown[], field: string): { present: number; numeric: number; sample?: unknown } {
+  let present = 0;
+  let numeric = 0;
+  let sample: unknown;
+  for (const feature of features) {
+    const raw = propertyOf(feature, field);
+    if (raw === undefined || raw === null || raw === "") continue;
+    present++;
+    if (numericValue(raw) !== undefined) numeric++;
+    else if (sample === undefined) sample = raw;
+  }
+  return { present, numeric, ...(sample !== undefined ? { sample } : {}) };
+}
+
+/** The property names the dataset's features carry (from the first features, in order). */
+function propertyNames(features: readonly unknown[], limit = 500): string[] {
+  const names = new Set<string>();
+  for (const feature of features.slice(0, limit)) {
+    if (!feature || typeof feature !== "object") continue;
+    const props = (feature as Record<string, unknown>)["properties"];
+    if (props && typeof props === "object") for (const key of Object.keys(props)) names.add(key);
+  }
+  return [...names];
+}
+
+/** The name an author probably meant: the same name in another case, else the nearest. */
+function nearestName(field: string, names: readonly string[]): string | undefined {
+  const lower = field.toLowerCase();
+  const sameCase = names.find((n) => n !== field && n.toLowerCase() === lower);
+  if (sameCase) return sameCase;
+  let best: string | undefined;
+  let bestDistance = Math.max(2, Math.floor(field.length / 3)) + 1;
+  for (const name of names) {
+    const d = editDistance(lower, name.toLowerCase());
+    if (d < bestDistance) {
+      bestDistance = d;
+      best = name;
+    }
+  }
+  return best;
+}
+
+function editDistance(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0]!;
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const up = prev[j]!;
+      prev[j] = Math.min(prev[j]! + 1, prev[j - 1]! + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = up;
+    }
+  }
+  return prev[b.length]!;
+}
+
+/** What is wrong with a classify field over a dataset (see {@link classifyFieldProblems}). */
+export interface ClassifyFieldProblem {
+  /** `field` or `normalize`. */
+  key: "field" | "normalize";
+  /** The property name as written. */
+  name: string;
+  /** No feature has it at all (a misspelt or wrong-case name), or it holds no numbers. */
+  reason: "missing" | "not-numeric";
+  /** The name the author probably meant, when the data has a close one. */
+  suggestion?: string;
+  /** A non-numeric value the property holds (for `not-numeric`). */
+  sample?: unknown;
+  /** The data's property names (the first dozen). */
+  available: string[];
+  /**
+   * The file has a column of that name, but it wasn't read (a GeoParquet
+   * `columns:` list that leaves it out).
+   */
+  unread?: boolean;
+}
+
+/**
+ * Why a classified layer would draw every feature as no data over `data`
+ * (ml-aot.95): its `field:` (or `normalize:` divisor) is on no feature — a
+ * misspelt or wrong-case name — or, for numeric classes, holds no number on
+ * any feature (a text field). Empty when the field has values, or when the
+ * dataset is empty (nothing to judge).
+ */
+export function classifyFieldProblems(
+  data: unknown,
+  record: { field: string; kind: "numeric" | "categorical"; normalize?: string }
+): ClassifyFieldProblem[] {
+  const features = featuresOf(data);
+  if (features.length === 0) return [];
+  // A file that declares its columns (GeoParquet, which reads only some of
+  // them) suggests from all of them, not just the ones read.
+  const declared = declaredPropertyNames(data);
+  const names = declared ? [...declared] : propertyNames(features);
+  const available = names.slice(0, 12);
+  const problems: ClassifyFieldProblem[] = [];
+  const check = (key: "field" | "normalize", name: string, numeric: boolean) => {
+    const p = presence(features, name);
+    if (p.present > 0 && (!numeric || p.numeric > 0)) return;
+    const reason = p.present === 0 ? "missing" : "not-numeric";
+    const unread = reason === "missing" && declared !== undefined && declared.includes(name);
+    const suggestion = reason === "missing" && !unread ? nearestName(name, names) : undefined;
+    problems.push({
+      key,
+      name,
+      reason,
+      ...(unread ? { unread } : {}),
+      ...(suggestion ? { suggestion } : {}),
+      ...(p.sample !== undefined ? { sample: p.sample } : {}),
+      available,
+    });
+  };
+  check("field", record.field, record.kind === "numeric");
+  if (record.kind === "numeric" && record.normalize !== undefined) check("normalize", record.normalize, true);
+  return problems;
 }

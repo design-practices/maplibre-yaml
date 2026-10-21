@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { decodeBytes, probe, openWhole, decodeStream } from "../../src/formats/flatgeobuf";
+import { decodeBytes, probe, openWhole, decodeStream, isLonLat } from "../../src/formats/flatgeobuf";
 import { isFormatError } from "../../src/formats/errors";
 import {
   FlatGeobufLoader,
@@ -91,6 +91,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const REPO_ROOT_FOR_ZSTD = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
+
 describe("decodeBytes", () => {
   it("decodes every feature with its properties", async () => {
     const fc = await decodeBytes(fixture("districts.fgb"), "districts.fgb");
@@ -104,9 +106,52 @@ describe("decodeBytes", () => {
     expect(isFormatError(error) && error.failure).toMatchObject({ code: "crs", crs: "EPSG:3857" });
   });
 
+  it("names a Zstandard-compressed file instead of 'not a FlatGeobuf file' (ml-aot.109)", async () => {
+    const zstd = new Uint8Array(readFileSync(join(REPO_ROOT_FOR_ZSTD, "examples/verification/data/districts-zstd.fgb")));
+    const error = await decodeBytes(zstd, "districts-zstd.fgb").catch((e) => e);
+    expect(isFormatError(error) && error.failure.code).toBe("compressed");
+    expect((error as Error).message).toContain("is compressed (Zstandard)");
+    expect((error as Error).message).toContain("zstd -d districts-zstd.fgb");
+  });
+
   it("calls a web page what it is", async () => {
     const error = await decodeBytes(fixture("not-really.fgb"), "not-really.fgb").catch((e) => e);
     expect(isFormatError(error) && error.failure.code).toBe("not-format");
+  });
+});
+
+describe("isLonLat: which CRS a header declares", () => {
+  const head = (code: number | undefined, envelope?: [number, number, number, number]) => ({
+    header: { featuresCount: 1, indexed: true, ...(envelope ? { envelope } : {}) },
+    raw: code !== undefined ? { crs: { org: "EPSG", code } } : {},
+  });
+  const LONLAT: [number, number, number, number] = [10, 42, 10.5, 42.3];
+  const METRES: [number, number, number, number] = [1113194, 5160979, 1168854, 5206000];
+
+  it("accepts known geographic codes outside the old hard-coded list", () => {
+    for (const code of [4167, 4490, 4612, 6668, 7844, 4979, 4937, 4230, 4277]) {
+      const { header, raw } = head(code, LONLAT);
+      expect(isLonLat(header, raw), `EPSG:${code}`).toBe(true);
+    }
+  });
+
+  it("decides an unknown code by the envelope", () => {
+    const inside = head(9999, LONLAT);
+    expect(isLonLat(inside.header, inside.raw)).toBe(true);
+    const outside = head(9999, METRES);
+    expect(isLonLat(outside.header, outside.raw)).toBe(false);
+  });
+
+  it("still refuses known projected codes, even with a small extent", () => {
+    for (const code of [3857, 900913, 32633, 25832]) {
+      const { header, raw } = head(code, [0.1, 0.1, 0.2, 0.2]);
+      expect(isLonLat(header, raw), `EPSG:${code}`).toBe(false);
+    }
+  });
+
+  it("a geographic code with a projected-looking extent is refused (mislabelled file)", () => {
+    const { header, raw } = head(4326, METRES);
+    expect(isLonLat(header, raw)).toBe(false);
   });
 });
 
@@ -152,11 +197,10 @@ describe("the fitTo prefetch seam (data/source-data, ml-aot.75)", () => {
     expect(fc.features).toHaveLength(48);
   });
 
-  it("a viewport source or a GeoParquet file is not loaded ahead", async () => {
+  it("a viewport source is not loaded ahead", async () => {
     await expect(cloudSourceDataLoader({ type: "geojson", url: "/p.fgb", load: "viewport" }, ctx)).rejects.toThrow(
       /not loaded ahead/
     );
-    await expect(cloudSourceDataLoader({ type: "geojson", url: "/w.parquet" }, ctx)).rejects.toThrow();
     expect(cloudSourceDataLoader({ type: "geojson", url: "/p.geojson" }, ctx)).toBeUndefined();
   });
 
@@ -165,6 +209,68 @@ describe("the fitTo prefetch seam (data/source-data, ml-aot.75)", () => {
     const error = await loadFlatGeobufWhole("/oversize/60/points.fgb").catch((e) => e);
     expect(error).toBeInstanceOf(WholeFileTooLarge);
     expect(error.size).toBe(60 * 1024 * 1024);
+  });
+});
+
+describe("a host that answers ranges from a compressed copy (ml-zm7)", () => {
+  it("probe: bytes that aren't the file, from a host that serves it compressed, are said for what they are", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_: string, init?: RequestInit) =>
+        init?.method === "HEAD"
+          ? new Response(null, { status: 200, headers: { "content-encoding": "br" } })
+          : new Response(new Uint8Array([27, 7, 234, 17, 213, 188, 30, 34]), {
+              status: 206,
+              headers: { "content-range": "bytes 0-7/13862" },
+            })
+      )
+    );
+    const error = await probe("https://cdn.example/points.fgb").catch((e) => e);
+    expect(isFormatError(error) && error.failure.code).toBe("encoded-range");
+    expect((error as Error).message).toContain("fastly.jsdelivr.net, not cdn.jsdelivr.net");
+  });
+
+  it("…while a web page under a .fgb name is still 'isn't a FlatGeobuf file'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_: string, init?: RequestInit) =>
+        init?.method === "HEAD"
+          ? new Response(null, { status: 200 })
+          : new Response(new TextEncoder().encode("<!doctype"), { status: 206 })
+      )
+    );
+    const error = await probe("https://h.example/x.fgb").catch((e) => e);
+    expect(isFormatError(error) && error.failure.code).toBe("not-format");
+  });
+});
+
+describe("the whole-file guard without Content-Length (ml-cnv.19)", () => {
+  /** points.fgb (60 KB) as a chunked response: 4 KB at a time, no Content-Length. */
+  const chunked = () =>
+    vi.fn(async () => {
+      const bytes = fixture("points.fgb");
+      let at = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (at >= bytes.length) return controller.close();
+          controller.enqueue(bytes.slice(at, (at += 4096)));
+        },
+      });
+      return new Response(body, { status: 200 });
+    });
+
+  it("stops once the bytes streamed pass the guard, so the reader can switch to the view", async () => {
+    vi.stubGlobal("fetch", chunked());
+    const error = await loadFlatGeobufWhole("/points.fgb", { limits: { warn: 10_000, max: 20_000 } }).catch((e) => e);
+    expect(error).toBeInstanceOf(WholeFileTooLarge);
+    expect(error.size).toBeGreaterThan(20_000);
+    expect(error.size).toBeLessThan(fixture("points.fgb").length);
+  });
+
+  it("a file under the guard still decodes", async () => {
+    vi.stubGlobal("fetch", chunked());
+    const fc = await loadFlatGeobufWhole("/points.fgb", { limits: { warn: 1e6, max: 2e6 } });
+    expect(fc!.features.length).toBeGreaterThan(100);
   });
 });
 
@@ -252,6 +358,8 @@ describe("FlatGeobufLoader", () => {
     const { onError } = await run("/oversize/60/points-noindex.fgb");
     const error = onError.mock.calls[0]![0];
     expect(isFormatError(error) && error.failure).toMatchObject({ code: "too-large", size: 60 * 1024 * 1024 });
+    // No console note promising a by-view read that is then refused (ml-aot.103).
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("reading only the part in view"));
   });
 
   it("load: viewport on a file without an index → says so", async () => {

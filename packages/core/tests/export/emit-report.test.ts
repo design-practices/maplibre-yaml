@@ -117,18 +117,51 @@ describe("no-export reporting", () => {
         {
           id: "quakes",
           type: "circle",
-          source: { type: "geojson", url: "/live.geojson", refresh: { refreshInterval: 5000 } },
+          source: { type: "geojson", stream: { type: "websocket", url: "wss://example.com/live" } },
         },
       ],
     } as unknown as V1MapInput;
 
     const { warnings } = projectStyle(normalizeMapBlock(doc));
-    const refreshWarning = warnings.find((w) => w.construct === "source.refresh");
-    expect(refreshWarning?.path).toBe("layers.quakes.source.refresh");
+    const refreshWarning = warnings.find((w) => w.construct === "source.stream");
+    expect(refreshWarning?.path).toBe("layers.quakes.source.stream");
     expect(refreshWarning?.kind).toBe("lossy");
     expect(refreshWarning?.message).toMatch(/renders it empty/);
     // And lossy means --strict refuses it, exactly as for a named source.
     expect(() => projectStyle(normalizeMapBlock(doc), "strict")).toThrow(/strict/);
+  });
+
+  it("a live url: source keeps its data in the emitted style (data: <url>), so it is contract, not lossy", () => {
+    for (const source of [
+      { type: "geojson", url: "/live.geojson", refresh: { refreshInterval: 5000 } },
+    ]) {
+      const named = projectStyle(
+        normalizeMapBlock({
+          id: "named-live",
+          config: { center: [0, 0], zoom: 1, mapStyle: "https://example.com/style.json" },
+          sources: { s: source },
+          layers: [{ id: "a", type: "circle", source: "s" }],
+        } as unknown as V1MapInput)
+      );
+      expect((named.style.sources as Record<string, unknown>)["s"]).toEqual({
+        type: "geojson",
+        data: "/live.geojson",
+      });
+      const refresh = named.warnings.find((w) => w.construct === "source.refresh");
+      expect(refresh?.kind).toBe("contract");
+      const inline = projectStyle(
+        normalizeMapBlock({
+          id: "inline-live",
+          config: { center: [0, 0], zoom: 1, mapStyle: "https://example.com/style.json" },
+          layers: [{ id: "a", type: "circle", source }],
+        } as unknown as V1MapInput)
+      );
+      expect((inline.style.sources as Record<string, unknown>)["a-source"]).toEqual({
+        type: "geojson",
+        data: "/live.geojson",
+      });
+      expect(inline.warnings.find((w) => w.construct === "source.refresh")?.kind).toBe("contract");
+    }
   });
 
   it("a schema-valid v2 document with an unknown runtime key WARNS, never throws (the ml-blj law)", () => {

@@ -78,9 +78,89 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "type": "string",
                       "format": "uri"
                     },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "pmtiles": {
+                          "type": "string",
+                          "description": "The .pmtiles file: a path (relative to the page), a URL, or pmtiles://…"
+                        },
+                        "flavor": {
+                          "type": "string",
+                          "enum": [
+                            "light",
+                            "dark",
+                            "white",
+                            "grayscale",
+                            "black"
+                          ],
+                          "description": "Color scheme (default light)"
+                        },
+                        "lang": {
+                          "type": "string",
+                          "enum": [
+                            "ar",
+                            "cs",
+                            "bg",
+                            "da",
+                            "de",
+                            "el",
+                            "en",
+                            "es",
+                            "et",
+                            "fa",
+                            "fi",
+                            "fr",
+                            "ga",
+                            "he",
+                            "hi",
+                            "hr",
+                            "hu",
+                            "id",
+                            "it",
+                            "ja",
+                            "ko",
+                            "lt",
+                            "lv",
+                            "ne",
+                            "nl",
+                            "no",
+                            "mr",
+                            "mt",
+                            "pl",
+                            "pt",
+                            "ro",
+                            "ru",
+                            "sk",
+                            "sl",
+                            "sv",
+                            "tr",
+                            "uk",
+                            "ur",
+                            "vi",
+                            "zh-Hans",
+                            "zh-Hant"
+                          ],
+                          "description": "Label language (default: the page's language when the basemap has it, else en)"
+                        },
+                        "glyphs": {
+                          "type": "string",
+                          "description": "Glyph URL template ({fontstack}/{range}.pbf). Default: Protomaps' hosted fonts"
+                        },
+                        "sprite": {
+                          "type": "string",
+                          "description": "Sprite URL. Default: Protomaps' hosted sprite for the flavor"
+                        }
+                      },
+                      "required": [
+                        "pmtiles"
+                      ],
+                      "additionalProperties": true,
+                      "description": "A Protomaps basemap built from a .pmtiles file (no API key)"
+                    },
                     {}
                   ],
-                  "description": "MapLibre style URL or style object. Optional when global config.defaultMapStyle is set."
+                  "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }, or the file's path alone for the defaults). Optional when global config.defaultMapStyle is set."
                 },
                 "pitch": {
                   "type": "number",
@@ -157,40 +237,50 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
                 },
                 "fitTo": {
-                  "type": "object",
-                  "properties": {
-                    "source": {
+                  "anyOf": [
+                    {
                       "type": "string",
                       "minLength": 1,
-                      "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                      "description": "Name of a GeoJSON entry in \`sources:\` (shorthand for { source: name })"
                     },
-                    "padding": {
-                      "type": "number",
-                      "minimum": 0,
-                      "description": "Padding in pixels around the fitted bounds"
-                    },
-                    "maxZoom": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 24,
-                      "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                    {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                        },
+                        "padding": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "Padding in pixels around the fitted bounds. Default: 8% of the map's shorter side (12-48 px), plus room for the attribution at the bottom"
+                        },
+                        "maxZoom": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 24,
+                          "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG)",
+                      "patternProperties": {
+                        "^x-": {}
+                      }
                     }
-                  },
-                  "required": [
-                    "source"
                   ],
-                  "additionalProperties": false,
-                  "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
-                  "patternProperties": {
-                    "^x-": {}
-                  }
+                  "description": "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (wins over \`bounds\`)"
                 },
                 "minZoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                   "description": "Minimum zoom level"
                 },
                 "maxZoom": {
-                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                   "description": "Maximum zoom level"
                 },
                 "minPitch": {
@@ -334,7 +424,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       "url": {
                         "type": "string",
                         "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                        "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                        "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) or GeoParquet (.parquet) file"
                       },
                       "format": {
                         "type": "string",
@@ -344,7 +434,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "geoparquet",
                           "cog"
                         ],
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                       },
                       "load": {
                         "anyOf": [
@@ -382,7 +472,23 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             }
                           }
                         ],
-                        "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
+                        "description": "FlatGeobuf/GeoParquet: read the whole file (all, default) or only the features in view (viewport)"
+                      },
+                      "columns": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "const": "all"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "minItems": 1
+                          }
+                        ],
+                        "description": "GeoParquet: the columns to read (default: the ones this document references), or all"
                       },
                       "data": {
                         "description": "Inline GeoJSON object"
@@ -656,7 +762,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "format": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                       },
                       "tiles": {
                         "type": "array",
@@ -744,11 +850,54 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
-                        "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                        "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or a COG (.tif or cog://)"
                       },
                       "format": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
+                      },
+                      "colorRamp": {
+                        "type": "object",
+                        "properties": {
+                          "palette": {
+                            "type": "string",
+                            "description": "Palette name, as in classify: (viridis, cividis, YlGn, RdBu …); default viridis"
+                          },
+                          "colors": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "minItems": 2,
+                            "description": "Your own colours, low to high (#rrggbb), instead of a palette"
+                          },
+                          "min": {
+                            "type": "number",
+                            "description": "The value drawn in the first colour"
+                          },
+                          "max": {
+                            "type": "number",
+                            "description": "The value drawn in the last colour"
+                          },
+                          "reverse": {
+                            "type": "boolean",
+                            "description": "Run the colours high to low"
+                          },
+                          "classes": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "description": "Draw this many flat classes instead of a smooth ramp (with colors:, spread along them)"
+                          }
+                        },
+                        "required": [
+                          "min",
+                          "max"
+                        ],
+                        "additionalProperties": false,
+                        "description": "COG: colours for a single band of values (palette or colors, min, max)",
+                        "patternProperties": {
+                          "^x-": {}
+                        }
                       },
                       "tiles": {
                         "type": "array",
@@ -827,11 +976,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                       },
                       "url": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/url",
-                        "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                        "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or an elevation COG (.tif or cog://)"
                       },
                       "format": {
                         "$ref": "#/$defs/any/oneOf/0/properties/sources/additionalProperties/anyOf/0/properties/format",
-                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                        "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                       },
                       "tiles": {
                         "type": "array",
@@ -1052,11 +1201,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "description": "Source layer name (for vector sources)"
                           },
                           "minzoom": {
-                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                             "description": "Minimum zoom level to show layer"
                           },
                           "maxzoom": {
-                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                            "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                             "description": "Maximum zoom level to show layer"
                           },
                           "filter": {
@@ -1295,7 +1444,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                         "description": "Target center [longitude, latitude]; defaults to the clicked point"
                                       },
                                       "zoom": {
-                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                         "description": "Target zoom level; MapLibre keeps the current zoom when unset"
                                       },
                                       "duration": {
@@ -1317,7 +1466,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                         "description": "Padding in pixels around the fitted bounds"
                                       },
                                       "maxZoom": {
-                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/properties/maxZoom",
+                                        "$ref": "#/$defs/any/oneOf/0/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                         "description": "Maximum zoom level when fitting the feature's bounds"
                                       },
                                       "duration": {
@@ -1380,41 +1529,50 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             }
                           },
                           "legend": {
-                            "type": "object",
-                            "properties": {
-                              "color": {
-                                "type": "string",
-                                "description": "CSS color value"
-                              },
-                              "label": {
-                                "type": "string",
-                                "description": "Legend label text"
-                              },
-                              "shape": {
-                                "type": "string",
-                                "enum": [
-                                  "circle",
-                                  "square",
-                                  "line",
-                                  "icon"
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "color": {
+                                    "type": "string",
+                                    "description": "CSS color value"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "description": "Legend label text"
+                                  },
+                                  "shape": {
+                                    "type": "string",
+                                    "enum": [
+                                      "circle",
+                                      "square",
+                                      "line",
+                                      "icon"
+                                    ],
+                                    "default": "square",
+                                    "description": "Symbol shape"
+                                  },
+                                  "icon": {
+                                    "type": "string",
+                                    "description": "Icon name or URL (for shape: icon)"
+                                  }
+                                },
+                                "required": [
+                                  "color",
+                                  "label"
                                 ],
-                                "default": "square",
-                                "description": "Symbol shape"
+                                "additionalProperties": false,
+                                "description": "Legend item configuration",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
                               },
-                              "icon": {
-                                "type": "string",
-                                "description": "Icon name or URL (for shape: icon)"
+                              {
+                                "type": "boolean",
+                                "const": false
                               }
-                            },
-                            "required": [
-                              "color",
-                              "label"
                             ],
-                            "additionalProperties": false,
-                            "description": "Legend configuration",
-                            "patternProperties": {
-                              "^x-": {}
-                            }
+                            "description": "This layer's legend entry, or false to leave it (and its classify classes) out of the legend"
                           },
                           "effect": {
                             "type": "object",
@@ -3981,9 +4139,8 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "description": "Application description"
                 },
                 "defaultMapStyle": {
-                  "type": "string",
-                  "format": "uri",
-                  "description": "Default map style URL"
+                  "$ref": "#/$defs/any/oneOf/0/properties/config/properties/mapStyle",
+                  "description": "Default map style: a style URL, a style object, or a Protomaps basemap ({ pmtiles, flavor, lang })"
                 },
                 "theme": {
                   "type": "string",
@@ -4491,9 +4648,89 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "type": "string",
                   "format": "uri"
                 },
+                {
+                  "type": "object",
+                  "properties": {
+                    "pmtiles": {
+                      "type": "string",
+                      "description": "The .pmtiles file: a path (relative to the page), a URL, or pmtiles://…"
+                    },
+                    "flavor": {
+                      "type": "string",
+                      "enum": [
+                        "light",
+                        "dark",
+                        "white",
+                        "grayscale",
+                        "black"
+                      ],
+                      "description": "Color scheme (default light)"
+                    },
+                    "lang": {
+                      "type": "string",
+                      "enum": [
+                        "ar",
+                        "cs",
+                        "bg",
+                        "da",
+                        "de",
+                        "el",
+                        "en",
+                        "es",
+                        "et",
+                        "fa",
+                        "fi",
+                        "fr",
+                        "ga",
+                        "he",
+                        "hi",
+                        "hr",
+                        "hu",
+                        "id",
+                        "it",
+                        "ja",
+                        "ko",
+                        "lt",
+                        "lv",
+                        "ne",
+                        "nl",
+                        "no",
+                        "mr",
+                        "mt",
+                        "pl",
+                        "pt",
+                        "ro",
+                        "ru",
+                        "sk",
+                        "sl",
+                        "sv",
+                        "tr",
+                        "uk",
+                        "ur",
+                        "vi",
+                        "zh-Hans",
+                        "zh-Hant"
+                      ],
+                      "description": "Label language (default: the page's language when the basemap has it, else en)"
+                    },
+                    "glyphs": {
+                      "type": "string",
+                      "description": "Glyph URL template ({fontstack}/{range}.pbf). Default: Protomaps' hosted fonts"
+                    },
+                    "sprite": {
+                      "type": "string",
+                      "description": "Sprite URL. Default: Protomaps' hosted sprite for the flavor"
+                    }
+                  },
+                  "required": [
+                    "pmtiles"
+                  ],
+                  "additionalProperties": true,
+                  "description": "A Protomaps basemap built from a .pmtiles file (no API key)"
+                },
                 {}
               ],
-              "description": "MapLibre style URL or style object. Optional when global config.defaultMapStyle is set."
+              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }, or the file's path alone for the defaults). Optional when global config.defaultMapStyle is set."
             },
             "pitch": {
               "type": "number",
@@ -4570,40 +4807,50 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
               "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
             },
             "fitTo": {
-              "type": "object",
-              "properties": {
-                "source": {
+              "anyOf": [
+                {
                   "type": "string",
                   "minLength": 1,
-                  "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                  "description": "Name of a GeoJSON entry in \`sources:\` (shorthand for { source: name })"
                 },
-                "padding": {
-                  "type": "number",
-                  "minimum": 0,
-                  "description": "Padding in pixels around the fitted bounds"
-                },
-                "maxZoom": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 24,
-                  "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                    },
+                    "padding": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Padding in pixels around the fitted bounds. Default: 8% of the map's shorter side (12-48 px), plus room for the attribution at the bottom"
+                    },
+                    "maxZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 24,
+                      "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG)",
+                  "patternProperties": {
+                    "^x-": {}
+                  }
                 }
-              },
-              "required": [
-                "source"
               ],
-              "additionalProperties": false,
-              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
-              "patternProperties": {
-                "^x-": {}
-              }
+              "description": "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (wins over \`bounds\`)"
             },
             "minZoom": {
-              "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+              "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
               "description": "Minimum zoom level"
             },
             "maxZoom": {
-              "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+              "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
               "description": "Maximum zoom level"
             },
             "minPitch": {
@@ -4747,7 +4994,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   "url": {
                     "type": "string",
                     "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                    "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                    "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) or GeoParquet (.parquet) file"
                   },
                   "format": {
                     "type": "string",
@@ -4757,7 +5004,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "geoparquet",
                       "cog"
                     ],
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                   },
                   "load": {
                     "anyOf": [
@@ -4795,7 +5042,23 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         }
                       }
                     ],
-                    "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
+                    "description": "FlatGeobuf/GeoParquet: read the whole file (all, default) or only the features in view (viewport)"
+                  },
+                  "columns": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "all"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 1
+                      }
+                    ],
+                    "description": "GeoParquet: the columns to read (default: the ones this document references), or all"
                   },
                   "data": {
                     "description": "Inline GeoJSON object"
@@ -5069,7 +5332,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "format": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                   },
                   "tiles": {
                     "type": "array",
@@ -5157,11 +5420,54 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
-                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                    "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or a COG (.tif or cog://)"
                   },
                   "format": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
+                  },
+                  "colorRamp": {
+                    "type": "object",
+                    "properties": {
+                      "palette": {
+                        "type": "string",
+                        "description": "Palette name, as in classify: (viridis, cividis, YlGn, RdBu …); default viridis"
+                      },
+                      "colors": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 2,
+                        "description": "Your own colours, low to high (#rrggbb), instead of a palette"
+                      },
+                      "min": {
+                        "type": "number",
+                        "description": "The value drawn in the first colour"
+                      },
+                      "max": {
+                        "type": "number",
+                        "description": "The value drawn in the last colour"
+                      },
+                      "reverse": {
+                        "type": "boolean",
+                        "description": "Run the colours high to low"
+                      },
+                      "classes": {
+                        "type": "integer",
+                        "minimum": 2,
+                        "description": "Draw this many flat classes instead of a smooth ramp (with colors:, spread along them)"
+                      }
+                    },
+                    "required": [
+                      "min",
+                      "max"
+                    ],
+                    "additionalProperties": false,
+                    "description": "COG: colours for a single band of values (palette or colors, min, max)",
+                    "patternProperties": {
+                      "^x-": {}
+                    }
                   },
                   "tiles": {
                     "type": "array",
@@ -5240,11 +5546,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                   },
                   "url": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/url",
-                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                    "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or an elevation COG (.tif or cog://)"
                   },
                   "format": {
                     "$ref": "#/$defs/map/properties/sources/additionalProperties/anyOf/0/properties/format",
-                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                   },
                   "tiles": {
                     "type": "array",
@@ -5465,11 +5771,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         "description": "Source layer name (for vector sources)"
                       },
                       "minzoom": {
-                        "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+                        "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                         "description": "Minimum zoom level to show layer"
                       },
                       "maxzoom": {
-                        "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+                        "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                         "description": "Maximum zoom level to show layer"
                       },
                       "filter": {
@@ -5708,7 +6014,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                     "description": "Target center [longitude, latitude]; defaults to the clicked point"
                                   },
                                   "zoom": {
-                                    "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+                                    "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                     "description": "Target zoom level; MapLibre keeps the current zoom when unset"
                                   },
                                   "duration": {
@@ -5730,7 +6036,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                                     "description": "Padding in pixels around the fitted bounds"
                                   },
                                   "maxZoom": {
-                                    "$ref": "#/$defs/map/properties/config/properties/fitTo/properties/maxZoom",
+                                    "$ref": "#/$defs/map/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                     "description": "Maximum zoom level when fitting the feature's bounds"
                                   },
                                   "duration": {
@@ -5793,41 +6099,50 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                         }
                       },
                       "legend": {
-                        "type": "object",
-                        "properties": {
-                          "color": {
-                            "type": "string",
-                            "description": "CSS color value"
-                          },
-                          "label": {
-                            "type": "string",
-                            "description": "Legend label text"
-                          },
-                          "shape": {
-                            "type": "string",
-                            "enum": [
-                              "circle",
-                              "square",
-                              "line",
-                              "icon"
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "color": {
+                                "type": "string",
+                                "description": "CSS color value"
+                              },
+                              "label": {
+                                "type": "string",
+                                "description": "Legend label text"
+                              },
+                              "shape": {
+                                "type": "string",
+                                "enum": [
+                                  "circle",
+                                  "square",
+                                  "line",
+                                  "icon"
+                                ],
+                                "default": "square",
+                                "description": "Symbol shape"
+                              },
+                              "icon": {
+                                "type": "string",
+                                "description": "Icon name or URL (for shape: icon)"
+                              }
+                            },
+                            "required": [
+                              "color",
+                              "label"
                             ],
-                            "default": "square",
-                            "description": "Symbol shape"
+                            "additionalProperties": false,
+                            "description": "Legend item configuration",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
                           },
-                          "icon": {
-                            "type": "string",
-                            "description": "Icon name or URL (for shape: icon)"
+                          {
+                            "type": "boolean",
+                            "const": false
                           }
-                        },
-                        "required": [
-                          "color",
-                          "label"
                         ],
-                        "additionalProperties": false,
-                        "description": "Legend configuration",
-                        "patternProperties": {
-                          "^x-": {}
-                        }
+                        "description": "This layer's legend entry, or false to leave it (and its classify classes) out of the legend"
                       },
                       "effect": {
                         "type": "object",
@@ -7980,9 +8295,94 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
               "description": "Application description"
             },
             "defaultMapStyle": {
-              "type": "string",
-              "format": "uri",
-              "description": "Default map style URL"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "pmtiles": {
+                      "type": "string",
+                      "description": "The .pmtiles file: a path (relative to the page), a URL, or pmtiles://…"
+                    },
+                    "flavor": {
+                      "type": "string",
+                      "enum": [
+                        "light",
+                        "dark",
+                        "white",
+                        "grayscale",
+                        "black"
+                      ],
+                      "description": "Color scheme (default light)"
+                    },
+                    "lang": {
+                      "type": "string",
+                      "enum": [
+                        "ar",
+                        "cs",
+                        "bg",
+                        "da",
+                        "de",
+                        "el",
+                        "en",
+                        "es",
+                        "et",
+                        "fa",
+                        "fi",
+                        "fr",
+                        "ga",
+                        "he",
+                        "hi",
+                        "hr",
+                        "hu",
+                        "id",
+                        "it",
+                        "ja",
+                        "ko",
+                        "lt",
+                        "lv",
+                        "ne",
+                        "nl",
+                        "no",
+                        "mr",
+                        "mt",
+                        "pl",
+                        "pt",
+                        "ro",
+                        "ru",
+                        "sk",
+                        "sl",
+                        "sv",
+                        "tr",
+                        "uk",
+                        "ur",
+                        "vi",
+                        "zh-Hans",
+                        "zh-Hant"
+                      ],
+                      "description": "Label language (default: the page's language when the basemap has it, else en)"
+                    },
+                    "glyphs": {
+                      "type": "string",
+                      "description": "Glyph URL template ({fontstack}/{range}.pbf). Default: Protomaps' hosted fonts"
+                    },
+                    "sprite": {
+                      "type": "string",
+                      "description": "Sprite URL. Default: Protomaps' hosted sprite for the flavor"
+                    }
+                  },
+                  "required": [
+                    "pmtiles"
+                  ],
+                  "additionalProperties": true,
+                  "description": "A Protomaps basemap built from a .pmtiles file (no API key)"
+                },
+                {}
+              ],
+              "description": "Default map style: a style URL, a style object, or a Protomaps basemap ({ pmtiles, flavor, lang })"
             },
             "theme": {
               "type": "string",
@@ -8088,7 +8488,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "url": {
                                 "type": "string",
                                 "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                                "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                                "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) or GeoParquet (.parquet) file"
                               },
                               "format": {
                                 "type": "string",
@@ -8098,7 +8498,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "geoparquet",
                                   "cog"
                                 ],
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                               },
                               "load": {
                                 "anyOf": [
@@ -8136,7 +8536,23 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                     }
                                   }
                                 ],
-                                "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
+                                "description": "FlatGeobuf/GeoParquet: read the whole file (all, default) or only the features in view (viewport)"
+                              },
+                              "columns": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "all"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "minItems": 1
+                                  }
+                                ],
+                                "description": "GeoParquet: the columns to read (default: the ones this document references), or all"
                               },
                               "data": {
                                 "description": "Inline GeoJSON object"
@@ -8410,7 +8826,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "format": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                               },
                               "tiles": {
                                 "type": "array",
@@ -8498,11 +8914,54 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or a COG (.tif or cog://)"
                               },
                               "format": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
+                              },
+                              "colorRamp": {
+                                "type": "object",
+                                "properties": {
+                                  "palette": {
+                                    "type": "string",
+                                    "description": "Palette name, as in classify: (viridis, cividis, YlGn, RdBu …); default viridis"
+                                  },
+                                  "colors": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "minItems": 2,
+                                    "description": "Your own colours, low to high (#rrggbb), instead of a palette"
+                                  },
+                                  "min": {
+                                    "type": "number",
+                                    "description": "The value drawn in the first colour"
+                                  },
+                                  "max": {
+                                    "type": "number",
+                                    "description": "The value drawn in the last colour"
+                                  },
+                                  "reverse": {
+                                    "type": "boolean",
+                                    "description": "Run the colours high to low"
+                                  },
+                                  "classes": {
+                                    "type": "integer",
+                                    "minimum": 2,
+                                    "description": "Draw this many flat classes instead of a smooth ramp (with colors:, spread along them)"
+                                  }
+                                },
+                                "required": [
+                                  "min",
+                                  "max"
+                                ],
+                                "additionalProperties": false,
+                                "description": "COG: colours for a single band of values (palette or colors, min, max)",
+                                "patternProperties": {
+                                  "^x-": {}
+                                }
                               },
                               "tiles": {
                                 "type": "array",
@@ -8581,11 +9040,11 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               },
                               "url": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or an elevation COG (.tif or cog://)"
                               },
                               "format": {
                                 "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                               },
                               "tiles": {
                                 "type": "array",
@@ -9101,41 +9560,50 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                     }
                   },
                   "legend": {
-                    "type": "object",
-                    "properties": {
-                      "color": {
-                        "type": "string",
-                        "description": "CSS color value"
-                      },
-                      "label": {
-                        "type": "string",
-                        "description": "Legend label text"
-                      },
-                      "shape": {
-                        "type": "string",
-                        "enum": [
-                          "circle",
-                          "square",
-                          "line",
-                          "icon"
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "color": {
+                            "type": "string",
+                            "description": "CSS color value"
+                          },
+                          "label": {
+                            "type": "string",
+                            "description": "Legend label text"
+                          },
+                          "shape": {
+                            "type": "string",
+                            "enum": [
+                              "circle",
+                              "square",
+                              "line",
+                              "icon"
+                            ],
+                            "default": "square",
+                            "description": "Symbol shape"
+                          },
+                          "icon": {
+                            "type": "string",
+                            "description": "Icon name or URL (for shape: icon)"
+                          }
+                        },
+                        "required": [
+                          "color",
+                          "label"
                         ],
-                        "default": "square",
-                        "description": "Symbol shape"
+                        "additionalProperties": false,
+                        "description": "Legend item configuration",
+                        "patternProperties": {
+                          "^x-": {}
+                        }
                       },
-                      "icon": {
-                        "type": "string",
-                        "description": "Icon name or URL (for shape: icon)"
+                      {
+                        "type": "boolean",
+                        "const": false
                       }
-                    },
-                    "required": [
-                      "color",
-                      "label"
                     ],
-                    "additionalProperties": false,
-                    "description": "Legend configuration",
-                    "patternProperties": {
-                      "^x-": {}
-                    }
+                    "description": "This layer's legend entry, or false to leave it (and its classify classes) out of the legend"
                   },
                   "effect": {
                     "type": "object",
@@ -10939,14 +11407,8 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "description": "Initial zoom level (0-24)"
                             },
                             "mapStyle": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "format": "uri"
-                                },
-                                {}
-                              ],
-                              "description": "MapLibre style URL or style object. Optional when global config.defaultMapStyle is set."
+                              "$ref": "#/$defs/root/properties/config/properties/defaultMapStyle",
+                              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }, or the file's path alone for the defaults). Optional when global config.defaultMapStyle is set."
                             },
                             "pitch": {
                               "type": "number",
@@ -11023,31 +11485,41 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                               "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
                             },
                             "fitTo": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
+                              "anyOf": [
+                                {
                                   "type": "string",
                                   "minLength": 1,
-                                  "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                                  "description": "Name of a GeoJSON entry in \`sources:\` (shorthand for { source: name })"
                                 },
-                                "padding": {
-                                  "type": "number",
-                                  "minimum": 0,
-                                  "description": "Padding in pixels around the fitted bounds"
-                                },
-                                "maxZoom": {
-                                  "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
-                                  "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                                    },
+                                    "padding": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "description": "Padding in pixels around the fitted bounds. Default: 8% of the map's shorter side (12-48 px), plus room for the attribution at the bottom"
+                                    },
+                                    "maxZoom": {
+                                      "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
+                                      "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                                    }
+                                  },
+                                  "required": [
+                                    "source"
+                                  ],
+                                  "additionalProperties": false,
+                                  "description": "Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG)",
+                                  "patternProperties": {
+                                    "^x-": {}
+                                  }
                                 }
-                              },
-                              "required": [
-                                "source"
                               ],
-                              "additionalProperties": false,
-                              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
-                              "patternProperties": {
-                                "^x-": {}
-                              }
+                              "description": "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (wins over \`bounds\`)"
                             },
                             "minZoom": {
                               "$ref": "#/$defs/root/properties/layers/additionalProperties/anyOf/0/properties/minzoom",
@@ -12424,9 +12896,89 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                   "type": "string",
                   "format": "uri"
                 },
+                {
+                  "type": "object",
+                  "properties": {
+                    "pmtiles": {
+                      "type": "string",
+                      "description": "The .pmtiles file: a path (relative to the page), a URL, or pmtiles://…"
+                    },
+                    "flavor": {
+                      "type": "string",
+                      "enum": [
+                        "light",
+                        "dark",
+                        "white",
+                        "grayscale",
+                        "black"
+                      ],
+                      "description": "Color scheme (default light)"
+                    },
+                    "lang": {
+                      "type": "string",
+                      "enum": [
+                        "ar",
+                        "cs",
+                        "bg",
+                        "da",
+                        "de",
+                        "el",
+                        "en",
+                        "es",
+                        "et",
+                        "fa",
+                        "fi",
+                        "fr",
+                        "ga",
+                        "he",
+                        "hi",
+                        "hr",
+                        "hu",
+                        "id",
+                        "it",
+                        "ja",
+                        "ko",
+                        "lt",
+                        "lv",
+                        "ne",
+                        "nl",
+                        "no",
+                        "mr",
+                        "mt",
+                        "pl",
+                        "pt",
+                        "ro",
+                        "ru",
+                        "sk",
+                        "sl",
+                        "sv",
+                        "tr",
+                        "uk",
+                        "ur",
+                        "vi",
+                        "zh-Hans",
+                        "zh-Hant"
+                      ],
+                      "description": "Label language (default: the page's language when the basemap has it, else en)"
+                    },
+                    "glyphs": {
+                      "type": "string",
+                      "description": "Glyph URL template ({fontstack}/{range}.pbf). Default: Protomaps' hosted fonts"
+                    },
+                    "sprite": {
+                      "type": "string",
+                      "description": "Sprite URL. Default: Protomaps' hosted sprite for the flavor"
+                    }
+                  },
+                  "required": [
+                    "pmtiles"
+                  ],
+                  "additionalProperties": true,
+                  "description": "A Protomaps basemap built from a .pmtiles file (no API key)"
+                },
                 {}
               ],
-              "description": "MapLibre style URL or style object. Optional when global config.defaultMapStyle is set."
+              "description": "MapLibre style URL, style object, or a Protomaps basemap from a .pmtiles file ({ pmtiles, flavor, lang }, or the file's path alone for the defaults). Optional when global config.defaultMapStyle is set."
             },
             "pitch": {
               "type": "number",
@@ -12503,40 +13055,50 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
               "description": "Fit the initial camera to these bounds: [west, south, east, north] or [[west, south], [east, north]] (longitude first)"
             },
             "fitTo": {
-              "type": "object",
-              "properties": {
-                "source": {
+              "anyOf": [
+                {
                   "type": "string",
                   "minLength": 1,
-                  "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                  "description": "Name of a GeoJSON entry in \`sources:\` (shorthand for { source: name })"
                 },
-                "padding": {
-                  "type": "number",
-                  "minimum": 0,
-                  "description": "Padding in pixels around the fitted bounds"
-                },
-                "maxZoom": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 24,
-                  "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of a GeoJSON entry in \`sources:\` whose data the camera frames"
+                    },
+                    "padding": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Padding in pixels around the fitted bounds. Default: 8% of the map's shorter side (12-48 px), plus room for the attribution at the bottom"
+                    },
+                    "maxZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 24,
+                      "description": "Upper zoom limit for the fit (a single point would otherwise zoom all the way in)"
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG)",
+                  "patternProperties": {
+                    "^x-": {}
+                  }
                 }
-              },
-              "required": [
-                "source"
               ],
-              "additionalProperties": false,
-              "description": "Fit the initial camera to a GeoJSON source's data (wins over \`bounds\`)",
-              "patternProperties": {
-                "^x-": {}
-              }
+              "description": "Fit the initial camera to a source's data: GeoJSON, FlatGeobuf, GeoParquet or COG (wins over \`bounds\`)"
             },
             "minZoom": {
-              "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+              "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
               "description": "Minimum zoom level"
             },
             "maxZoom": {
-              "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+              "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
               "description": "Maximum zoom level"
             },
             "minPitch": {
@@ -12720,7 +13282,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   "url": {
                                     "type": "string",
                                     "pattern": "^(?:[a-zA-Z][a-zA-Z\\\\d+\\\\-.]*:|\\\\/|\\\\.\\\\.?\\\\/|[^\\\\s:/?#][^:/?#]*(?:[/?#]|$))",
-                                    "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) file"
+                                    "description": "URL of a GeoJSON file, or of a FlatGeobuf (.fgb) or GeoParquet (.parquet) file"
                                   },
                                   "format": {
                                     "type": "string",
@@ -12730,7 +13292,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                       "geoparquet",
                                       "cog"
                                     ],
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                                   },
                                   "load": {
                                     "anyOf": [
@@ -12768,7 +13330,23 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                         }
                                       }
                                     ],
-                                    "description": "FlatGeobuf: read the whole file (all, default) or only the features in view (viewport)"
+                                    "description": "FlatGeobuf/GeoParquet: read the whole file (all, default) or only the features in view (viewport)"
+                                  },
+                                  "columns": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "const": "all"
+                                      },
+                                      {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        },
+                                        "minItems": 1
+                                      }
+                                    ],
+                                    "description": "GeoParquet: the columns to read (default: the ones this document references), or all"
                                   },
                                   "data": {
                                     "description": "Inline GeoJSON object"
@@ -13042,7 +13620,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "format": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                                   },
                                   "tiles": {
                                     "type": "array",
@@ -13130,11 +13708,54 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                    "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or a COG (.tif or cog://)"
                                   },
                                   "format": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
+                                  },
+                                  "colorRamp": {
+                                    "type": "object",
+                                    "properties": {
+                                      "palette": {
+                                        "type": "string",
+                                        "description": "Palette name, as in classify: (viridis, cividis, YlGn, RdBu …); default viridis"
+                                      },
+                                      "colors": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        },
+                                        "minItems": 2,
+                                        "description": "Your own colours, low to high (#rrggbb), instead of a palette"
+                                      },
+                                      "min": {
+                                        "type": "number",
+                                        "description": "The value drawn in the first colour"
+                                      },
+                                      "max": {
+                                        "type": "number",
+                                        "description": "The value drawn in the last colour"
+                                      },
+                                      "reverse": {
+                                        "type": "boolean",
+                                        "description": "Run the colours high to low"
+                                      },
+                                      "classes": {
+                                        "type": "integer",
+                                        "minimum": 2,
+                                        "description": "Draw this many flat classes instead of a smooth ramp (with colors:, spread along them)"
+                                      }
+                                    },
+                                    "required": [
+                                      "min",
+                                      "max"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "COG: colours for a single band of values (palette or colors, min, max)",
+                                    "patternProperties": {
+                                      "^x-": {}
+                                    }
                                   },
                                   "tiles": {
                                     "type": "array",
@@ -13213,11 +13834,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                   },
                                   "url": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/url",
-                                    "description": "TileJSON URL, or a PMTiles archive (.pmtiles or pmtiles://)"
+                                    "description": "TileJSON URL, a PMTiles archive (.pmtiles or pmtiles://), or an elevation COG (.tif or cog://)"
                                   },
                                   "format": {
                                     "$ref": "#/$defs/scrollytelling/properties/layers/items/anyOf/0/anyOf/0/properties/source/anyOf/0/anyOf/0/properties/format",
-                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf; geoparquet and cog are not read yet)"
+                                    "description": "File format, when the URL doesn't show it (pmtiles, flatgeobuf, geoparquet, cog)"
                                   },
                                   "tiles": {
                                     "type": "array",
@@ -13414,11 +14035,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                         "description": "Source layer name (for vector sources)"
                       },
                       "minzoom": {
-                        "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+                        "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                         "description": "Minimum zoom level to show layer"
                       },
                       "maxzoom": {
-                        "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+                        "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                         "description": "Maximum zoom level to show layer"
                       },
                       "filter": {
@@ -13657,7 +14278,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Target center [longitude, latitude]; defaults to the clicked point"
                                   },
                                   "zoom": {
-                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                     "description": "Target zoom level; MapLibre keeps the current zoom when unset"
                                   },
                                   "duration": {
@@ -13679,7 +14300,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                     "description": "Padding in pixels around the fitted bounds"
                                   },
                                   "maxZoom": {
-                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/properties/maxZoom",
+                                    "$ref": "#/$defs/scrollytelling/properties/config/properties/fitTo/anyOf/1/properties/maxZoom",
                                     "description": "Maximum zoom level when fitting the feature's bounds"
                                   },
                                   "duration": {
@@ -13742,41 +14363,50 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                         }
                       },
                       "legend": {
-                        "type": "object",
-                        "properties": {
-                          "color": {
-                            "type": "string",
-                            "description": "CSS color value"
-                          },
-                          "label": {
-                            "type": "string",
-                            "description": "Legend label text"
-                          },
-                          "shape": {
-                            "type": "string",
-                            "enum": [
-                              "circle",
-                              "square",
-                              "line",
-                              "icon"
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "color": {
+                                "type": "string",
+                                "description": "CSS color value"
+                              },
+                              "label": {
+                                "type": "string",
+                                "description": "Legend label text"
+                              },
+                              "shape": {
+                                "type": "string",
+                                "enum": [
+                                  "circle",
+                                  "square",
+                                  "line",
+                                  "icon"
+                                ],
+                                "default": "square",
+                                "description": "Symbol shape"
+                              },
+                              "icon": {
+                                "type": "string",
+                                "description": "Icon name or URL (for shape: icon)"
+                              }
+                            },
+                            "required": [
+                              "color",
+                              "label"
                             ],
-                            "default": "square",
-                            "description": "Symbol shape"
+                            "additionalProperties": false,
+                            "description": "Legend item configuration",
+                            "patternProperties": {
+                              "^x-": {}
+                            }
                           },
-                          "icon": {
-                            "type": "string",
-                            "description": "Icon name or URL (for shape: icon)"
+                          {
+                            "type": "boolean",
+                            "const": false
                           }
-                        },
-                        "required": [
-                          "color",
-                          "label"
                         ],
-                        "additionalProperties": false,
-                        "description": "Legend configuration",
-                        "patternProperties": {
-                          "^x-": {}
-                        }
+                        "description": "This layer's legend entry, or false to leave it (and its classify classes) out of the legend"
                       },
                       "effect": {
                         "type": "object",

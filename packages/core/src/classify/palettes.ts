@@ -38,7 +38,20 @@ export function findPalette(name: string): PaletteData | undefined {
 
 /** The canonical palette name nearest to a misspelt one, or `undefined`. */
 export function suggestPalette(name: string): string | undefined {
-  const hit = suggest(name.trim().toLowerCase(), BY_LOWER.keys(), 3);
+  const lower = name.trim().toLowerCase();
+  // A name cut short (`Blu`, `Purp`) means the palette it starts: prefer a
+  // prefix match to the nearest by edit distance (`Blu` is 2 edits from
+  // `BuPu` but the start of `Blues`). Several (`Gre`: Greens, Greys): the
+  // nearest of those.
+  if (lower.length >= 2) {
+    const prefixed = [...BY_LOWER.keys()].filter((key) => key.startsWith(lower) && key !== lower);
+    if (prefixed.length === 1) return BY_LOWER.get(prefixed[0]!)?.name;
+    if (prefixed.length > 1) {
+      const nearest = suggest(lower, prefixed, Infinity);
+      if (nearest) return BY_LOWER.get(nearest)?.name;
+    }
+  }
+  const hit = suggest(lower, BY_LOWER.keys(), 3);
   return hit ? BY_LOWER.get(hit)?.name : undefined;
 }
 

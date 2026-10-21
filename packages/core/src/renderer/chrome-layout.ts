@@ -111,6 +111,30 @@ export class ChromeLayout {
     el.style.minHeight = "0";
     el.style.overflowY = "auto";
     this.corner(corner).appendChild(el);
+    this.shareRows();
+  }
+
+  /**
+   * Two occupied corners on one edge (top-left and top-right, or the bottom
+   * pair) share that edge: each may take at most half the map's width, so
+   * on a narrow map — a phone — a legend and the layer panel sit side by
+   * side instead of overlapping (ml-aot.111). A corner alone keeps the full
+   * width. Pieces wrap their text within the limit.
+   */
+  private shareRows(): void {
+    for (const edge of ["top", "bottom"] as const) {
+      const left = this.corners.get(`${edge}-left`);
+      const right = this.corners.get(`${edge}-right`);
+      const shared = Boolean(left?.childElementCount && right?.childElementCount);
+      for (const el of [left, right]) {
+        if (!el) continue;
+        el.style.maxWidth = shared ? "calc(50% - 15px)" : "";
+        for (const child of Array.from(el.children) as HTMLElement[]) {
+          child.style.maxWidth = shared ? "100%" : "";
+          child.style.boxSizing = shared ? "border-box" : child.style.boxSizing;
+        }
+      }
+    }
   }
 
   /**

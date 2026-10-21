@@ -1,0 +1,36 @@
+# ml-cnv.7 — a story whose basemap is a Protomaps basemap built from a
+# .pmtiles file on the site itself; a chapter restyles a basemap layer by id.
+type: scrollytelling
+id: protomaps-story
+config:
+  center: [-73.9935, 40.6985]
+  zoom: 14.6
+  mapStyle:
+    pmtiles: protomaps/brooklyn.pmtiles
+    glyphs: protomaps-assets/fonts/{fontstack}/{range}.pbf
+    sprite: protomaps-assets/sprites/v4/light
+chapters:
+  - id: dumbo
+    title: DUMBO
+    description: "<p>A basemap from one .pmtiles file beside the page.</p>"
+    center: [-73.9895, 40.7025]
+    zoom: 14.6
+  - id: river
+    title: The river
+    description: "<p>The basemap's own water layer, recoloured by this chapter.</p>"
+    center: [-73.9965, 40.6995]
+    zoom: 14.8
+    onChapterEnter:
+      - action: setPaintProperty
+        layer: water
+        property: fill-color
+        value: "#d62828"
+    onChapterExit:
+      - action: setPaintProperty
+        layer: water
+        property: fill-color
+        value: "#80deea"
+  - id: heights
+    title: Brooklyn Heights
+    center: [-73.9955, 40.6965]
+    zoom: 14.6

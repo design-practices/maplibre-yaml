@@ -185,10 +185,11 @@ export const validateCommand = defineCommand({
         // would hard-fail every existing user of a newly-deprecated field on
         // the release that deprecates it, which defeats the warning window.
         // Unimplemented-field warnings are NEVER promoted: the document is
-        // not wrong, the engine is behind (ml-tfd.8).
+        // not wrong, the engine is behind (ml-tfd.8). Nor are notes, which
+        // only explain how a valid value is read.
         if (strictMode || strictDeprecations) {
           const shouldPromote = (w: { kind?: string }) =>
-            w.kind === 'unimplemented'
+            w.kind === 'unimplemented' || w.kind === 'note'
               ? false
               : w.kind === 'deprecation'
                 ? strictDeprecations

@@ -78,8 +78,10 @@ Get a map on your page in 4 steps.
 
 4. **View in browser**
 
-   Serve the folder with any web server (for example `npx serve .`) and open
-   the address it prints. Opening the HTML file directly does not work: a
+   Serve the folder with `npx serve .` and open the address it prints (another
+   static server works too, if it supports range requests — needed for
+   PMTiles, FlatGeobuf, GeoParquet and COG files; `python -m http.server`
+   doesn't). Opening the HTML file directly does not work: a
    `file://` page cannot fetch `map.yaml`.
 
 </Steps>
@@ -497,7 +499,7 @@ when any of these is true, and stay off the page otherwise:
 
 | Situation | Author hints |
 | --------- | ------------ |
-| The page is served from your computer: `localhost`, `127.0.0.1`, `[::1]`, or opened as a `file://` page | shown |
+| The page is served from your computer: `localhost`, `127.0.0.1`, `[::1]`, `0.0.0.0` or `[::]` (a dev server started with `--host`), or opened as a `file://` page | shown |
 | A bundler development build: `astro dev`, `vite` (their `import.meta.env.DEV`), on any address, a Codespaces URL included | shown |
 | The element has the `debug` attribute (or its `<ml-scrollytelling>` does) | shown, wherever the page is served |
 | A published site (GitHub Pages, Netlify, your own domain), including the plain CDN script, which can't know how it was built | hidden |

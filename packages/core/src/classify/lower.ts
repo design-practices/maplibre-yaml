@@ -28,6 +28,7 @@ import {
   type ClassifyRecord,
 } from "./compile";
 import { isFeatureData } from "./breaks";
+import { formatOfSource, type CloudFormat } from "../formats/detect";
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object" && !Array.isArray(v);
@@ -35,7 +36,13 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 /** Where a layer's GeoJSON data is, as far as the model knows. */
 export type LayerDataLocation =
   | { kind: "inline"; data: unknown }
-  | { kind: "url"; url: string; source: string }
+  | {
+      kind: "url";
+      url: string;
+      source: string;
+      /** The file format the source declares or its URL names (`format: flatgeobuf`). */
+      format?: CloudFormat;
+    }
   | { kind: "none" };
 
 /**
@@ -68,7 +75,11 @@ export function layerDataLocation(
   if (runtime && isFeatureData(runtime["prefetchedData"])) {
     return { kind: "inline", data: runtime["prefetchedData"] };
   }
-  if (typeof spec["url"] === "string") return { kind: "url", url: spec["url"], source: name };
+  if (typeof spec["url"] === "string") {
+    // `format:` wins over the URL (an extensionless API URL), as in the browser.
+    const format = formatOfSource({ ...spec, ...(runtime ?? {}) });
+    return { kind: "url", url: spec["url"], source: name, ...(format ? { format } : {}) };
+  }
   if (typeof spec["data"] === "string") return { kind: "url", url: spec["data"], source: name };
   return { kind: "none" };
 }
@@ -109,8 +120,15 @@ export function updateClassifySpec(
   };
 }
 
-/** Loads a GeoJSON URL for {@link bakeClassify}. Throws (or rejects) on failure. */
-export type ClassifyDataLoader = (url: string) => Promise<unknown>;
+/**
+ * Loads a source's data for {@link bakeClassify}: GeoJSON, or — when
+ * `options.format` says so (a source's `format:`, or its URL's extension) —
+ * a file to decode, such as FlatGeobuf. Throws (or rejects) on failure.
+ */
+export type ClassifyDataLoader = (
+  url: string,
+  options?: { format?: CloudFormat }
+) => Promise<unknown>;
 
 /** A layer whose breaks could not be computed at export. */
 export interface ClassifyBakeError {
@@ -151,10 +169,11 @@ export async function bakeClassify(
             "to compute them from at export. Write breaks: yourself."
         );
       }
-      let pending = cache.get(where.url);
+      const key = `${where.format ?? ""}\u0000${where.url}`;
+      let pending = cache.get(key);
       if (!pending) {
-        pending = load(where.url);
-        cache.set(where.url, pending);
+        pending = where.format ? load(where.url, { format: where.format }) : load(where.url);
+        cache.set(key, pending);
       }
       let data: unknown;
       try {

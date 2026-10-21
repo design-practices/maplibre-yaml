@@ -20,22 +20,42 @@ import type { CloudFormat } from "./detect";
 export type FormatFailureCode =
   /** The server ignored `Range:` and sent the whole file (python -m http.server). */
   | "no-range"
+  /**
+   * The server compresses the parts of a file it sends (a range response
+   * with `Content-Encoding`, as jsDelivr's Cloudflare leg does), so a part
+   * can't be decoded on its own.
+   */
+  | "encoded-range"
   /** The request never completed: CORS refusal or an unreachable host. */
   | "cors"
   /** The bytes aren't this format (a wrong path that returned a web page). */
   | "not-format"
+  /** A Zstandard-compressed file (a compressed FlatGeobuf), which this version doesn't read. */
+  | "compressed"
   /** An HTTP error status. */
   | "http"
   /** Too large to load whole (and no index to read part of it). */
   | "too-large"
   /** `load: viewport` (or an oversized file) needs a spatial index it lacks. */
   | "no-index"
-  /** Not longitude/latitude. */
+  /** Not longitude/latitude (FlatGeobuf), or not Web Mercator (COG). */
   | "crs"
-  /** A recognized format this version doesn't read yet (GeoParquet, COG). */
+  /** A Parquet file without GeoParquet metadata (no `geo` key). */
+  | "not-geoparquet"
+  /** GeoParquet geometry in an encoding this version doesn't decode (GeoArrow). */
+  | "encoding"
+  /** A GeoTIFF that draws but isn't cloud-optimized (an author hint, not a failure). */
+  | "not-cloud-optimized"
+  /** A recognized format this version doesn't read (none in 0.9; kept for the next one). */
   | "unsupported"
   /** The reader itself couldn't be set up (e.g. maplibre-gl too old). */
   | "decoder"
+  /**
+   * The reader's file (`dist/chunks/<name>.js`, loaded on demand) couldn't be
+   * downloaded: offline, a content blocker or CSP, or a self-hosted copy of
+   * maplibre-yaml without its `chunks/` folder. `url` is that file.
+   */
+  | "chunk"
   /** Anything else the reader reported while decoding. */
   | "read";
 
@@ -51,7 +71,9 @@ export interface FormatFailure {
   size?: number;
   /** The CRS the file declares (`crs`), e.g. "EPSG:3857". */
   crs?: string;
-  /** The underlying library message (`read`, `decoder`). */
+  /** The geometry encoding a GeoParquet file uses (`encoding`), e.g. "point". */
+  encoding?: string;
+  /** The underlying library message (`read`, `decoder`, `chunk`). */
   detail?: string;
 }
 
@@ -106,6 +128,19 @@ export function classifyPmtilesError(error: unknown, url: string): unknown {
   const base = { format: "pmtiles" as const, url };
   if (/content-length exceeding request|byte serving/i.test(message)) {
     return new FormatError({ ...base, code: "no-range" });
+  }
+  // A server that refused the first range (16 KB from the start) of an
+  // archive shorter than that, and hid its `Content-Range` from this page:
+  // the reader can't learn the size to ask again. Ranges work; the file is
+  // fine — the host's CORS headers are what is missing.
+  if (/missing content-length on 416/i.test(message)) {
+    return new FormatError({
+      ...base,
+      code: "read",
+      detail:
+        "the server refused the first range request and didn't let this page read the file size " +
+        "(it needs to send `Access-Control-Expose-Headers: Content-Range`)",
+    });
   }
   if (/wrong magic number/i.test(message) || /spec version/i.test(message)) {
     return new FormatError({ ...base, code: "not-format" });
