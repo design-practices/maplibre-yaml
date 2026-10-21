@@ -93,7 +93,15 @@ layers:
 Everything in `public/` is copied to the published site as it is, so this
 file is served at `/configs/map.yaml`. Keep your data files there too, for
 example `public/data/places.geojson`, loaded with
-`url: "/data/places.geojson"`.
+`url: "/data/places.geojson"`. Large files (PMTiles, FlatGeobuf, GeoParquet,
+COG) work from `public/` as well: `npm run dev`, `npm run preview` and GitHub
+Pages all serve the parts of a file the map asks for
+([Large data](/guides/cloud-native-data/)).
+
+`mapStyle` is the basemap. Any MapLibre style URL works, like the OpenFreeMap
+one above, or a Protomaps `.pmtiles` extract you keep in `public/`
+(`mapStyle: { pmtiles: data/city.pmtiles, flavor: dark }`), which needs no
+API key ([Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap)).
 
 ## 3. Put the map on a page
 
@@ -128,7 +136,10 @@ npm run dev
 
 Open the address it prints (usually `http://localhost:4321`). You should see
 a street map of New York with a blue dot. If the YAML has a mistake, the map
-shows a card naming the line and the field instead. Stop the server with
+shows a card naming the line and the field instead. Hints about things that
+work but look unintended (a "did you mean", coordinates that look written
+latitude-first) appear in a notice on the map while you develop; the
+published site doesn't show them. Stop the server with
 <kbd>Ctrl</kbd>+<kbd>C</kbd> when you're done.
 
 ## 5. Set `site` and `base`
@@ -271,6 +282,7 @@ From now on, every push to `main` publishes the site again.
 | The *deploy* job fails, saying GitHub Pages isn't enabled or answering 404 | Settings → Pages → Source is not yet **GitHub Actions** (step 8, item 3); change it and run the workflow again |
 | `npm install` or `npm run build` stops with an engine or Node.js version error | Astro 7 needs Node.js 22.22 or later |
 | An error card on the map | The card names the problem and the line; see [Troubleshooting](/troubleshooting/) |
+| Notes you saw on the map locally are gone on GitHub Pages | Expected: author hints show only while you develop. Add `debug` to `<Map>` to see them on the published page while you check it ([Map component API](/integrations/astro/#map-component-api)) |
 
 ## Next steps
 

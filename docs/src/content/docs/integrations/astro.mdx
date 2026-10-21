@@ -101,7 +101,10 @@ lockfiles).
    ```
 
    Files in `public/` are served from the site root, so this one is at
-   `/configs/hero-map.yaml`.
+   `/configs/hero-map.yaml`. `mapStyle` is the basemap: any MapLibre style
+   URL, or a Protomaps `.pmtiles` file you keep in `public/`
+   (`mapStyle: { pmtiles: data/city.pmtiles, flavor: light }`), which needs no
+   API key ([Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap)).
 
 4. **Put the map on a page**
 
@@ -132,8 +135,9 @@ lockfiles).
    ```
 
    Open the address it prints (usually `http://localhost:4321`). You should
-   see a street map of New York with a blue dot. If the YAML has a mistake,
-   the map shows an error card naming the field instead.
+   see a street map of New York with a blue dot (a map that takes more than
+   a second shows a small "Loading map…" until the basemap draws). If the
+   YAML has a mistake, the map shows an error card naming the field instead.
 
 </Steps>
 
@@ -240,7 +244,9 @@ yarn add @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6
 | **4** | Yes, tested in CI | Content-layer collections need three changes, listed below. |
 
 This needs `@maplibre-yaml/astro` 0.5 or later. Earlier versions declare
-`astro: ^4 || ^5`, so `npm install` refuses them on Astro 6 and 7. Every major
+`astro: ^4 || ^5`, so `npm install` refuses them on Astro 6 and 7.
+`@maplibre-yaml/astro` 0.7 needs `@maplibre-yaml/core` 0.9 or later (its peer
+range is `>=0.9.0`), so install and upgrade the two together. Every major
 is tested the same way. CI builds the [example site](#runnable-example) against
 the published tarballs with `astro check`, `astro build` and `astro preview`, then
 drives it in a browser. It also runs a smoke test under `astro dev`. The
@@ -268,12 +274,12 @@ changes:
 
 The example site does all three.
 
-<Aside type="caution" title="astro dev with @maplibre-yaml/core 0.6.0 or earlier">
-  With core 0.6.0 or earlier, every `@maplibre-yaml/astro` component fails under
-  `astro dev` with *Failed to create map: Map is not a constructor*, while
-  `astro build` works. Vite never pre-bundles maplibre-gl when only a
-  dependency's `.astro` file imports it. Later core versions handle this. On
-  0.6.0, tell Vite to pre-bundle it:
+<Aside type="caution" title="Older releases: astro dev with @maplibre-yaml/core 0.6.0 or earlier">
+  Current releases are not affected. With core 0.6.0 or earlier, every
+  `@maplibre-yaml/astro` component fails under `astro dev` with *Failed to
+  create map: Map is not a constructor*, while `astro build` works: Vite never
+  pre-bundles maplibre-gl when only a dependency's `.astro` file imports it.
+  If you are stuck on 0.6.0, tell Vite to pre-bundle it:
 
   ```js
   // astro.config.mjs
@@ -478,8 +484,11 @@ If you pass both, `config` wins and the component warns at build time.
 404'd, a layer that failed) and the zero-height hint, for a finished site
 whose visitors shouldn't see author-facing details. The problems are still
 logged to the browser console, and a fatal problem (a document that doesn't
-validate, a basemap that never loads) still shows its error card.
-`FullPageMap` and `Scrollytelling` take the same prop.
+validate, a basemap that never loads) still shows its error card. The small
+"Loading map…" shown while a slow map starts is not a notice, so `quiet`
+leaves it; hide it with `ml-map .ml-map-loading { display: none; }` if the
+page has its own loading indicator. `FullPageMap` and `Scrollytelling` take
+the same prop.
 
 The notice always lists **failures**. **Author hints** — a "did you mean", a
 key nested under `config:`, coordinates that look written [latitude,
@@ -693,7 +702,7 @@ an error card and dispatches `ml-map:error`:
 Error display includes:
 - **YAML Syntax Errors**: Shows parsing error with details
 - **Validation Errors**: Lists all validation failures with paths (for example `config.zoom: Expected number, got string`)
-- **Network Errors**: Shows fetch failure messages (for example `Failed to fetch /configs/missing.yaml: 404 Not Found`)
+- **Missing files**: a *Map file not found* card with the status and the address the browser asked for (for example `Couldn't load src="/configs/missing.yaml": 404 Not Found.`), and a hint when the site looks like it is served under a subpath
 
 With `config`, the same problems surface at build time instead, in the
 `astro dev` error overlay and the `astro build` output. The message names the
@@ -906,7 +915,7 @@ hand to `<Map>` is identical either way.
 
 - [Format v2](/guides/format-v2/) — the style/runtime split, key-by-key, with
   the v1 → v2 relocation table.
-- [Interactions & Export to style.json](/guides/interactions/) — declarative interactions, the
+- [Export to style.json](/guides/interactions/) — declarative interactions, the
   export guarantee, and how `attachInteractions` reattaches behavior (including
   the trust-gated `emit` interaction).
 
@@ -915,7 +924,13 @@ hand to `<Map>` is identical either way.
 `Map` and `FullPageMap` hand the whole document to `<ml-map>`, through the
 `config` attribute or the `src` URL. Map-level features therefore work with no
 Astro-specific setup: `markers:`, `images:`, `parameters:` (the params panel),
-`legend:`, and hover popups. A `Scrollytelling` story's map is an `<ml-map>`
+`legend:`, hover popups, and the 0.9 additions: a layer's
+[`classify:`](/guides/thematic-maps/) block with its automatic legend, the
+document's `title:` and `description:` for screen readers, and `locale:`
+translations ([Accessibility & languages](/guides/accessibility-languages/)).
+PMTiles, FlatGeobuf, GeoParquet and COG files in `public/` load as well:
+`astro dev`, `astro preview` and GitHub Pages all answer the HTTP range
+requests they need ([Large data](/guides/cloud-native-data/)). A `Scrollytelling` story's map is an `<ml-map>`
 too, and since `@maplibre-yaml/core` 0.8 a story takes the same map-level keys:
 `sources:`, `markers:`, `legend:`, `state:` and `parameters:`, `images:`,
 `controls:`, `terrain:`, `projection:` (on 0.7 and earlier a story's map was
@@ -981,7 +996,9 @@ needs no `base`.) Then, everything under `public/` is served under the base:
   they are. The components hand the site's base to `<ml-map>` (its
   [`base` attribute](/integrations/web-components/#sites-under-a-subpath-github-pages)),
   which puts every path to your own files under it: data `url:`s, `tiles:`,
-  `images:`, marker `icon:`s, a site-hosted `mapStyle`, and popup links.
+  `images:`, marker `icon:`s, a site-hosted `mapStyle`, popup links, and (from
+  core 0.9) the file inside a `pmtiles://` or `cog://` URL and a Protomaps
+  basemap's `pmtiles:`, `glyphs:` and `sprite:`.
 
   ```yaml no-validate
   sources:
@@ -1411,12 +1428,18 @@ and the classes of a [classified](/guides/thematic-maps/) layer (listed after
 or `classify:` doesn't appear, and when no layer has one, no legend box is shown (the component
 warns at build time, and `<ml-map>` warns in the console).
 
-```yaml
+```yaml no-validate
 layers:
   - id: parks
     type: fill
     legend: { label: Parks, color: "#2e7d32", shape: square }
 ```
+
+Since core 0.9, a layer's own `legend:` entry (or a `classify:` block) shows
+a legend even without a `legend:` block or `showLegend`, in the default place
+(top-left). `showLegend` moves that legend to `legendPosition`; a `legend:`
+block in the document places it instead, and `legend: false` at the top level
+turns it off.
 
 `showLegend` needs the document at build time, so it applies to `config`.
 With `src`, the document is fetched in the browser — declare `legend:` in the
@@ -1596,9 +1619,9 @@ itself. Either way one engine drives the camera, layers, actions and rail, so
 a story file behaves the same in an Astro site and in a plain page.
 
 <Aside type="note" title="Version pairing">
-  `@maplibre-yaml/astro` 0.6 and later need `@maplibre-yaml/core` 0.8 or later
-  (the release that added `<ml-scrollytelling>`). Upgrade both together:
-  `npm install @maplibre-yaml/astro@latest @maplibre-yaml/core@latest`.
+  `@maplibre-yaml/astro` 0.7 needs `@maplibre-yaml/core` 0.9 or later (0.6
+  needed core 0.8, the release that added `<ml-scrollytelling>`). Upgrade both
+  together: `npm install @maplibre-yaml/astro@latest @maplibre-yaml/core@latest`.
 </Aside>
 
 ### Features
@@ -1901,7 +1924,7 @@ chapters:
 | `setPaintProperty` | `layer`, `property`, `value` | Change a paint property |
 | `setLayoutProperty` | `layer`, `property`, `value` | Change a layout property |
 | `flyTo` / `easeTo` | `options` (`center`, `zoom`, `bearing`, `pitch`, `duration`, …) | Move the camera, overriding the chapter's own camera |
-| `fitBounds` | `bounds: [west, south, east, north]`, `options` (`padding`, `duration`, …) | Frame an area |
+| `fitBounds` | `bounds: [west, south, east, north]` or `[[west, south], [east, north]]`, `options` (`padding`, `duration`, …) | Frame an area |
 | `custom` | anything in `options` | Runs nothing itself. Dispatches `ml-scrollytelling:action` for your page |
 
 A layer action naming a layer the map does not have logs a warning and is
@@ -2117,7 +2140,7 @@ All map builders (`buildPointMapConfig`, `buildMultiPointMapConfig`, `buildPolyg
 
 ## Adding Geographic Data to Content Collections
 
-You can add map support to any existing Astro content collection by importing the geographic schemas. This works for points, polygons, and lines — all optional, so items without geographic data still work. For a blog-style walkthrough with ready-made `getCollectionItemWith*Schema` helpers, see the [Collection Integration guide](/guides/collections-integration/).
+You can add map support to any existing Astro content collection by importing the geographic schemas. This works for points, polygons, and lines — all optional, so items without geographic data still work. For a blog-style walkthrough with ready-made `getCollectionItemWith*Schema` helpers, see [Astro content collections](/guides/collections-integration/).
 
 ### Schema setup
 
@@ -2494,7 +2517,7 @@ try {
 
 ### Build-time only
 
-`buildFeatureMapConfig` reads from the local filesystem via `process.cwd()` (or the configured `projectRoot`). It is **build-time only** -- invoking it in a deployed SSR adapter context throws a `GeoJSONLoadError` whose ENOENT message includes deployment-context hints. With `output: 'server'`, prerender the pages that use it (see [Server output](#server-output-ssr)). Runtime resolution is planned for V2.
+`buildFeatureMapConfig` reads from the local filesystem via `process.cwd()` (or the configured `projectRoot`). It is **build-time only** -- invoking it in a deployed SSR adapter context throws a `GeoJSONLoadError` whose ENOENT message includes deployment-context hints. With `output: 'server'`, prerender the pages that use it (see [Server output](#server-output-ssr)).
 
 ### Performance
 
@@ -2504,6 +2527,10 @@ try {
 | 10-50MB | Supported; one-time parse cost |
 | 50-100MB | Build-time warning |
 | > 100MB | Hard error directing toward PMTiles or splitting |
+
+For data this large, load it in the browser instead of at build time: a
+PMTiles, FlatGeobuf or GeoParquet file in `public/` is read in parts as the
+map needs it ([Large data](/guides/cloud-native-data/)).
 
 Files referenced multiple times across collection items are parsed once via an mtime-aware cache. Editing the GeoJSON in `astro dev` invalidates the cache on next page render -- no server restart needed. For files with 200+ features, a per-property index is built lazily on the second access for that property.
 
@@ -2586,7 +2613,7 @@ interface Props {
 const { src, height = '400px' } = Astro.props;
 ---
 
-<ml-map src={src} style={`height: ${height}; display: block;`} />
+<ml-map src={src} base={import.meta.env.BASE_URL} style={`height: ${height}; display: block;`} />
 
 <script>
   import { setWorkerUrl } from 'maplibre-gl';
@@ -2869,6 +2896,7 @@ const mapId = `map-${Math.random().toString(36).slice(2, 9)}`;
 
   <ml-map
     src={src}
+    base={import.meta.env.BASE_URL}
     style={`height: ${height}; display: block;`}
     data-click-handler={onLayerClick}
   />
@@ -3199,7 +3227,8 @@ for example `"readFile" is not exported by "__vite-browser-external"` (from
 
 ### Incorrect `src` Path for Public Files
 
-**Symptoms:** 404 error or `Failed to fetch` in the console.
+**Symptoms:** The map shows a *Map file not found* card
+(`Couldn't load src="public/configs/map.yaml": 404 Not Found.`).
 
 **Cause:** Using a filesystem path instead of a URL path for the `src` prop.
 
@@ -3241,9 +3270,11 @@ Files in Astro's `/public` directory are served from the root URL, so `public/co
 
 ### Map Container Has Zero Height
 
-**Symptoms:** Nothing visible, or map is 0px tall.
+**Symptoms:** Nothing visible, or map is 0px tall. `<ml-map>` shows a short
+note asking for a height (unless it has `quiet`).
 
-**Cause:** CSS height not set properly.
+**Cause:** CSS height not set properly. (The `Map` component sets a height
+for you, 400px by default; this is for your own `<ml-map>` components.)
 
 **Solution:**
 
@@ -3255,7 +3286,9 @@ Both `height` and `display: block` are required.
 
 ### Map Not Loading from Public Directory
 
-**Symptoms:** The map shows *Failed to fetch /configs/map.yaml: 404 Not Found*, or a network 404 appears in the console
+**Symptoms:** The map shows a *Map file not found* card
+(`Couldn't load src="/configs/map.yaml": 404 Not Found.`, then the address
+the browser asked for), or a network 404 appears in the console
 
 **Cause:** Incorrect path or file not in public directory.
 
@@ -3281,16 +3314,19 @@ all of them reload by themselves.
 ### Maps Work Locally but 404 on GitHub Pages
 
 **Symptoms:** After deploying to `https://<user>.github.io/<repo>/`, a map
-shows *Failed to fetch /configs/map.yaml: 404*, or the basemap shows but your
-data layer is missing (a 404 for `/data/...` in the console).
+shows a *Map file not found* card for `/configs/map.yaml` (the card says when
+the page looks like it is under a subpath), or the basemap shows but your data
+layer is missing (a notice on the map, and a 404 for `/data/...` in the
+console).
 
 **Cause:** The site is served under a base path, and a URL without it points at
 the domain root.
 
 **Solution:** See [Deploying to GitHub Pages](#deploying-to-github-pages-or-any-subpath):
-set `base` in `astro.config.mjs` and update to `@maplibre-yaml/astro` 0.6 and
-`@maplibre-yaml/core` 0.8 or later. `Map` and `FullPageMap` then add the base to
-`src` and to every path inside your YAML. Your own `<ml-map>` components need
+set `base` in `astro.config.mjs` (with `@maplibre-yaml/astro` 0.6 and
+`@maplibre-yaml/core` 0.8 or later; current releases do this). `Map`,
+`FullPageMap` and `Scrollytelling` then add the base to `src` and to every
+path inside your YAML. Your own `<ml-map>` components need
 `base={import.meta.env.BASE_URL}`.
 
 ### TypeScript Errors with `import.meta.glob`
@@ -3370,8 +3406,8 @@ also check that the page has a `<head>` (see the Astro 4 caution under
 ## Next Steps
 
 - [Vanilla JavaScript Integration](/integrations/vanilla-js/) - For non-Astro projects
-- [Web Components Reference](/integrations/web-components/) - Deep dive into `<ml-map>`
-- [Collection Integration](/guides/collections-integration/) - Maps in content-collection posts
+- [HTML pages: the `<ml-map>` element](/integrations/web-components/) - Deep dive into `<ml-map>`
+- [Astro content collections](/guides/collections-integration/) - Maps in content-collection posts
 - [Live Data Guide](/guides/live-data/) - Polling and streaming
 - [TypeScript API Reference](/reference/api/) - Complete API documentation, generated from the source
 - [`@maplibre-yaml/astro` README](https://github.com/design-practices/maplibre-yaml/tree/main/packages/astro#readme) - Every export of the package and its `/utils` subpath

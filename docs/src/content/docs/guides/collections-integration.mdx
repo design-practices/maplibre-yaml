@@ -288,7 +288,6 @@ const config = buildMultiPointMapConfig({
     { coordinates: [-87.6298, 41.8781], name: "Chicago" },
   ],
   mapStyle: "https://tiles.openfreemap.org/styles/liberty",
-  padding: 50, // pixels of padding around bounds
 });
 ```
 
@@ -345,7 +344,7 @@ const config = buildRouteMapConfig({
 Instead of specifying `mapStyle` on every map, create a shared configuration.
 For a validated, YAML-backed version that every builder accepts as its
 second argument, see `loadGlobalMapConfig` in
-[Astro Integration → Global Configuration](/integrations/astro/#global-configuration).
+[Astro → Global Configuration](/integrations/astro/#global-configuration).
 A plain object works too:
 
 ```typescript
@@ -355,6 +354,11 @@ export const globalMapConfig = {
   // Add any other defaults you want to share
 };
 ```
+
+`mapStyle` takes a MapLibre style URL or, for a basemap you host yourself
+with no API key, a Protomaps `.pmtiles` file in `public/`:
+`{ pmtiles: "data/city.pmtiles", flavor: "light" }`
+([Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap)).
 
 Then use it in your pages:
 
@@ -529,6 +533,6 @@ const config = buildPointMapConfig({
 
 ## Next Steps
 
-- Learn about [layers](/guides/layers) for more complex visualizations
-- Explore [live data](/guides/live-data) for real-time updates
-- See [examples](/examples) for more patterns
+- Learn about [layers](/guides/layers/) for more complex visualizations
+- Explore [live data](/guides/live-data/) for real-time updates
+- See [examples](/examples/) for more patterns

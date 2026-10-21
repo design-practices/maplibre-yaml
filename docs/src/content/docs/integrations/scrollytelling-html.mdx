@@ -185,9 +185,14 @@ chapters:
   edge. Click a dot to jump to its chapter, or Tab to it and use the arrow keys,
   Home and End.
 - **The whole map document.** A story takes the same map-level keys a
-  `type: map` document does: `sources:`, `markers:`, `legend:`, `state:` and
-  `parameters:` (the params panel), `images:`, `controls:`, `terrain:`,
-  `projection:`. Corner slots work too (below).
+  `type: map` document does: `title:` and `description:` (the map's name and
+  description for screen readers), `sources:`, `markers:`, `legend:`,
+  `state:` and `parameters:` (the params panel), `images:`, `controls:`,
+  `terrain:`, `projection:`; and `config.locale` translates the story's own
+  text ([Accessibility & languages](/guides/accessibility-languages/)). A
+  [`classify:`](/guides/thematic-maps/) layer, or a layer with its own
+  `legend:` entry, pins a legend even without a `legend:` block. Corner slots
+  work too (below).
 - **Reading comes first.** The mouse wheel and touch scroll the story, not the
   map (the story map's own pan and zoom gestures are off; set `scrollZoom: true`
   or `dragPan: true` in `config:` to turn one back on). Links, images and video
@@ -195,7 +200,9 @@ chapters:
   move is instant and ambient rotation is off.
 - **One error card.** A story that fails to load or validate shows a single
   card listing each problem with its line number and any did-you-mean hint
-  (`centre` → `center`), instead of a map.
+  (`centre` → `center`), instead of a map. A story map that is slow to start
+  shows a small "Loading map…" until its basemap draws, as
+  [`<ml-map>` does](/integrations/web-components/#when-something-goes-wrong).
 
 ## In the middle of a page
 
@@ -295,9 +302,10 @@ The element dispatches bubbling events and carries the active chapter's id in
 | `base` attribute / property | Where the story's own paths start, for a site under a subpath ([above](#sites-under-a-subpath-github-pages)) |
 | `story` (alias `config`) property | Set the story as an object (or JSON string) instead |
 | `debug` attribute | Outline each chapter (green when active), and show the story's author hints (a chapter naming a layer that doesn't exist, a key under `config:` that belongs at the top level) on the map wherever the page is served. Without it, hints show only while you develop (`localhost`, a `file://` page, a bundler dev build); failures always show. Passed on to the story's map. |
-| `quiet` attribute | Hide the on-page notes for a finished site: the map's "Part of this map couldn't load" notice and a chapter's "image didn't load" note. Every message stays in the browser console; a story that can't load at all still shows its error card. Passed on to the story's map. |
+| `quiet` attribute | Hide the on-page notes for a finished site: the map's "Part of this map couldn't load" notice and a chapter's "image didn't load" note. Every message stays in the browser console; a story that can't load at all still shows its error card, and a slow map still shows "Loading map…". Passed on to the story's map. |
 | `story` getter | The validated story, or `null` |
 | `activeChapterId` | The active chapter's `id` |
+| `mapElement` | The story's own `<ml-map>`, once the story has rendered (its [methods and events](/integrations/web-components/#component-api-reference) work as on any `<ml-map>`) |
 | `mapReady()` | Promise of the MapLibre map once it has loaded |
 | `getMap()` | The MapLibre map, or `null` before it loads |
 | `goToChapter(id)` | Scroll to a chapter and make it active (what the rail does) |

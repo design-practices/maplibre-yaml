@@ -107,6 +107,12 @@ The import map is required: it tells the browser where to find `maplibre-gl`, wh
 ></script>
 ```
 
+Loading from unpkg or jsDelivr needs nothing else. If you host
+maplibre-yaml's files on your own site instead, copy the whole `dist/` folder,
+not only `register.js`: the readers for PMTiles, FlatGeobuf, GeoParquet and
+COG files load on demand from `dist/chunks/` next to it
+([Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself)).
+
 <Aside type="note" title="maplibre-gl version">
   maplibre-yaml works with maplibre-gl **v4, v5 and v6** (v6 recommended for
   new projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`. Pin
@@ -181,10 +187,10 @@ There are three ways to configure `<ml-map>`, each suited for different use case
   defaults to an untrusted capability policy and registers no host handlers, so
   every `emit` fails closed (a silent no-op), even in a document you authored
   yourself. This is intentional fail-closed behavior, not a bug: `emit` targets
-  the `attachInteractions` path, and wiring it into the renderer is tracked
-  follow-up work (bead `ml-1lz`). The map-acting interactions (`popup`,
+  the `attachInteractions` path, and wiring it into `<ml-map>` is planned but
+  not available yet. The map-acting interactions (`popup`,
   `flyTo`, `zoomToFeature`, `hover.highlight`) work under `<ml-map>` as usual.
-  See [Interactions & Export to style.json](/guides/interactions/) for the full `emit` story.
+  See [Export to style.json](/guides/interactions/) for the full `emit` story.
 </Aside>
 
 ### Method 1: External YAML File (Recommended)
@@ -359,9 +365,11 @@ It applies to the `src` attribute and to these fields of the document:
 `mapStyle` (v2: `style.basemap`) when it is a path, and the `sprite`, `glyphs`
 and source URLs of an inline style object; source `url`, `tiles` and video
 `urls`, a GeoJSON `data` written as a path, and `stream.url`, in `sources:`
-and in a layer's own `source:`; `images:`; marker `icon:`; and `href` links in
-popups (layer, marker and standalone `popups:`). URLs inside a style JSON or
-GeoJSON file you load are not rewritten.
+and in a layer's own `source:`; the file inside a `pmtiles://` or `cog://`
+URL; a [Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap)'s
+`pmtiles:`, `glyphs:` and `sprite:`; `images:`; marker `icon:`; and `href`
+links in popups (layer, marker and standalone `popups:`). URLs inside a style
+JSON or GeoJSON file you load are not rewritten.
 
 `base="/<repo>"` and `base="<repo>"` mean the same thing. Without `base`,
 nothing changes: relative paths resolve against the page and `/…` against the
@@ -493,6 +501,14 @@ Every event `<ml-map>` dispatches (all bubble; payload on `event.detail`):
   "Notes for this map's author".
 - **Height hint** — a map with no height is invisible, so the element shows a
   short note saying to give it one, and removes it once the map has a height.
+- **"Loading map…"** — not a problem report: while the map starts, the element
+  carries `aria-busy="true"`, and if it hasn't drawn after about a second a
+  small, muted "Loading map…" appears in its middle (`role="status"`). Both go
+  away when the basemap draws or an error card replaces the map, so a fast map
+  never shows it. `quiet` doesn't hide it; a page with its own loading
+  indicator hides it with `ml-map .ml-map-loading { display: none; }`. The
+  text is translatable as `maplibre-yaml.Loading` in `locale:`
+  ([Accessibility & languages](/guides/accessibility-languages/)).
 
 **When is it "while you develop"?** Failures always show. Author hints show
 when any of these is true, and stay off the page otherwise:
@@ -677,7 +693,7 @@ mapEl.addEventListener("ml-map:layer-data-loaded", (event) => {
   Earlier versions of this page showed `mapEl.pauseRefresh()`,
   `resumeRefresh()` and `refreshNow()`. Those methods are **not** exposed on
   `<ml-map>` (or `MapRenderer`) today — calling them throws. Exposing
-  pause/resume/refresh is tracked as bead `ml-few`.
+  pause/resume/refresh is planned.
 </Aside>
 
 ## Complete Example: Earthquake Monitor
@@ -1292,7 +1308,8 @@ mapEl.addEventListener("ml-map:error", (event) => {
 - Ensure `type: "map"` is present
 - Ensure `id` is a string
 - Ensure `config.center` is `[longitude, latitude]`
-- Ensure `config.mapStyle` is a valid URL
+- Ensure `config.mapStyle` is a style URL, a style object, or a Protomaps
+  `.pmtiles` file ([Map styles](/getting-started/first-map/#map-styles))
 
 ### Events Not Firing
 
@@ -1370,6 +1387,7 @@ file.
 | `quiet`  | boolean            | Reflects the `quiet` attribute     |
 | `debug`  | boolean            | Reflects the `debug` attribute     |
 | `base`   | string or `null`   | Reflects the `base` attribute; setting it re-renders the map |
+| `MLMap.fitToWaitMs` (static) | number | How long a map with `fitTo` on a `url:` source waits for the data before its first paint, so it opens already framed (default `1500` ms; `0` turns the wait off). Set it before maps render |
 
 ### Methods
 
@@ -1384,15 +1402,16 @@ file.
 | `removeLayer(layerId)`          | `void`                    | Remove a layer |
 | `setLayerVisibility(id, on)`    | `void`                    | Show or hide a layer |
 | `updateLayerData(id, geojson)`  | `void`                    | Replace a GeoJSON layer's data |
+| `uiString(key, params?)`        | `string`                  | The document's text for a UI string key (`maplibre-yaml.Legend.Title`, `NavigationControl.ZoomIn`, …): its `locale:` translation, or English. For chrome you draw next to the map |
 
 Refresh control (`pauseRefresh` / `resumeRefresh` / `refreshNow`) is not
-exposed yet — see bead `ml-few`.
+exposed yet.
 
 ### Events
 
 See the [event reference](#event-reference) above for the complete list —
-seventeen events covering lifecycle, layer data, interactions, markers,
-images, and the params panel.
+eighteen events covering lifecycle, layer data, interactions, markers,
+images, the params panel, `fitTo` framing and classified layers.
 
 ## Trust and attribution
 
@@ -1450,7 +1469,7 @@ Three behavior changes are worth knowing when you move to 0.6:
 ## Next Steps
 
 - [Format v2](/guides/format-v2/) - The `style:` / `runtime:` split (renders identically here)
-- [Interactions & Export to style.json](/guides/interactions/) - Declarative interactions and the `emit` gate
+- [Export to style.json](/guides/interactions/) - Declarative interactions and the `emit` gate
 - [Vanilla JavaScript Integration](/integrations/vanilla-js/) - More control with direct API usage
 - [Astro Integration](/integrations/astro/) - For Astro-based sites
 - [Live Data Guide](/guides/live-data/) - Polling and streaming configuration
