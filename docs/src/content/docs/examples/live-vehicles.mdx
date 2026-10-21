@@ -37,9 +37,6 @@ layers:
         updateKey: "vehicleId"       # Match by this property
       cache:
         enabled: false
-      loading:
-        enabled: true
-        message: "Loading vehicles..."
     paint:
       circle-radius: 12
       circle-color:
@@ -112,14 +109,11 @@ circle-color:
 
 ### Loading UI
 
-Show spinner during initial load:
-
-```yaml
-source:
-  loading:
-    enabled: true
-    message: "Loading vehicles..."
-```
+Nothing to configure: if the map hasn't drawn after about a second, it shows
+a small "Loading map…" in its middle until the basemap appears. To follow
+each poll from the page's JavaScript, listen for `ml-map:layer-data-loaded`
+and `ml-map:layer-data-error`
+([Reacting to updates](/guides/live-data/#reacting-to-updates)).
 
 ### Disable caching
 

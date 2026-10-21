@@ -38,7 +38,11 @@ looser, since some cross-field rules cannot be expressed in JSON Schema.
 ```json
 {
   "valid": true,
-  "files": [{ "file": "my-map.yaml", "valid": true, "errors": [], "warnings": [] }]
+  "files": [{ "file": "my-map.yaml", "valid": true, "errors": [], "warnings": [] }],
+  "summary": {
+    "total": 1, "valid": 1, "invalid": 0,
+    "errorCount": 0, "warningCount": 0, "noteCount": 0
+  }
 }
 ```
 
@@ -65,6 +69,12 @@ On failure, each error carries a `path`, a human-readable `message`, and
   ]
 }
 ```
+
+`warnings[]` entries have the same fields plus a `severity`: `"warning"`
+for something that probably isn't what the author meant (a `=`-prefixed style
+value, a map with no basemap), or `"note"` for information about how a valid
+value is read (a basemap written as just a `.pmtiles` file). Notes never make
+a file invalid and aren't counted in `warningCount`.
 
 Repair by walking each `errors[]` entry: `path` is a dotted pointer into the
 document (`config.center`, `layers.0.paint.circle-radius`), `message` describes

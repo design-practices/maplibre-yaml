@@ -3,8 +3,9 @@
 Declarative [MapLibre](https://maplibre.org/) web maps from YAML. Describe a
 map (basemap, data, layers, popups, legend) or a scroll-driven story map in a
 YAML file and put it on a page with one HTML element, from a CDN with no
-build step, or with Astro components. Made for students, content creators
-and developers who want a working map without writing map code.
+build step, or with Astro components. Made for anyone who wants a working
+map without writing map code: writers and journalists, researchers,
+developers prototyping a map, and people learning web mapping.
 
 [![npm](https://img.shields.io/npm/v/@maplibre-yaml/core.svg)](https://www.npmjs.com/package/@maplibre-yaml/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -95,11 +96,19 @@ import { Map } from '@maplibre-yaml/astro';
 - **Maps from YAML:** every MapLibre layer type, GeoJSON and tile sources,
   popups, hover, markers, legends, a parameters panel. Works with maplibre-gl
   4, 5 and 6.
+- **Thematic maps:** a layer's `classify:` block makes a choropleth,
+  graduated circles or a category map, with a legend generated for it.
+- **Large data, YAML only:** PMTiles, FlatGeobuf, GeoParquet and Cloud
+  Optimized GeoTIFF files read in parts from any static host, and a whole
+  Protomaps basemap from one `.pmtiles` file, with no API key.
+- **Accessible and translatable:** `title:`/`description:` for screen
+  readers, and `locale:` for every piece of text the library draws.
 - **Story maps:** `<ml-scrollytelling>` turns a `type: scrollytelling` YAML
   file into a scroll-driven story, in a plain HTML page or in Astro.
 - **Live data:** polling, Server-Sent Events and WebSocket updates.
 - **Mistakes explained on the page:** error cards with line numbers and
-  did-you-mean hints, and a notice for a layer or file that didn't load.
+  did-you-mean hints, a notice for a layer or file that didn't load, and
+  author hints while you develop (or anywhere with `debug`).
 - **Export:** `emit` writes a standalone MapLibre `style.json`
   ([export classes](https://docs.maplibre-yaml.org/guides/export-classes/)).
 - **Examples:** the [MapLibre example gallery](https://docs.maplibre-yaml.org/examples/gallery/)

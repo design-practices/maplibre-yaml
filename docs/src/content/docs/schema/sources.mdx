@@ -392,7 +392,8 @@ Real-time data via WebSocket or Server-Sent Events.
 A streamed source still needs somewhere to start: a `url:` to load first, or
 `data:` with an empty `FeatureCollection` to start blank (validation refuses a
 GeoJSON source with only `stream:`). Write a `refresh:` block next to
-`stream:`: its `updateStrategy` says how each message is applied.
+`stream:`: the stream connects only when one is there, and its
+`updateStrategy` says how each message is applied.
 
 ### WebSocket
 
@@ -904,11 +905,10 @@ One poll feeds both layers, and each still receives its own
 `ml-map:layer-data-loaded` event. Polling stops when the last layer referencing
 the source is removed.
 
-The layer-keyed control APIs resolve to the shared pipeline, so you address it
-through any referencing layer:
+The layer-keyed APIs resolve to the shared source, so you address it through
+any referencing layer:
 
 ```js
-renderer.pauseRefresh("vehicle-dots");   // pauses the shared poll
 renderer.updateLayerData("vehicle-dots", geojson);  // updates both layers
 ```
 

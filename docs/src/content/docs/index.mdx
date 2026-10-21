@@ -31,12 +31,14 @@ import LiveMap from "../../components/LiveMap.astro";
 
 <CardGrid stagger>
   <Card title="No JavaScript Required" icon="pencil">
-    Define your entire map in YAML. Perfect for students, content creators, and
-    developers who want rapid prototyping.
+    Define your entire map in YAML: layers, data, popups, legends and stories.
+    For anyone who wants a web map without writing the code for it, and for
+    developers who want to prototype quickly.
   </Card>
   <Card title="Runtime-First" icon="rocket">
-    Data is fetched when your map loads, keeping bundles tiny (~165KB) and
-    supporting real-time updates.
+    Data is fetched when your map loads, so it can update live. The script is
+    about 175 KB gzip (plus maplibre-gl), and readers for large-data formats
+    download only when a map uses them.
   </Card>
   <Card title="Full MapLibre Power" icon="setting">
     Access all MapLibre GL features: expressions, data-driven styling, 3D

@@ -137,7 +137,9 @@ maplibre-yaml works with maplibre-gl **v4, v5 and v6** (v6 recommended for new
 projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`. Every
 example on this page pins major 6 (`maplibre-gl@^6` for npm, `maplibre-gl@6` for the
 CSS and the import map). Pin whichever supported major your project uses, and
-keep the CSS on the same major as the JS.
+keep the CSS on the same major as the JS. Cloud Optimized GeoTIFF (COG)
+sources need maplibre-gl 4.5 or later
+([Large data](/guides/cloud-native-data/)).
 
 maplibre-gl v6 is ESM-only: the browser entry is `dist/maplibre-gl.mjs` (there
 is no `maplibre-gl.js` UMD file any more), so an import map points at that file

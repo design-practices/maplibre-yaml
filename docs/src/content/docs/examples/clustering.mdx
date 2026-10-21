@@ -24,36 +24,40 @@ Clustering groups nearby points together at lower zoom levels. Zoom in to see in
 
 ### Enable clustering
 
-Configure clustering on the GeoJSON source:
+Configure clustering on the GeoJSON source. Three layers draw from it, so
+declare it once under `sources:` and give it a name:
 
 ```yaml
-source:
-  id: quakes                # Named source for reuse
-  type: geojson
-  url: "..."
-  cluster: true             # Enable clustering
-  clusterRadius: 50         # Cluster radius in pixels
-  clusterMaxZoom: 14        # Don't cluster above zoom 14
+sources:
+  quakes:                   # the name layers refer to
+    type: geojson
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson"
+    cluster: true           # Enable clustering
+    clusterRadius: 50       # Cluster radius in pixels
+    clusterMaxZoom: 14      # Don't cluster above zoom 14
 ```
 
 ### Multiple layers from one source
 
-Three layers reference the same source:
+Three layers reference the same source by its name:
 
 ```yaml
 layers:
   # Layer 1: Cluster circles
   - id: clusters
+    type: circle
     source: quakes
     filter: ["has", "point_count"]    # Only clusters
 
   # Layer 2: Cluster counts
   - id: cluster-count
+    type: symbol
     source: quakes
     filter: ["has", "point_count"]    # Only clusters
 
   # Layer 3: Individual points
   - id: unclustered
+    type: circle
     source: quakes
     filter: ["!", ["has", "point_count"]]    # Only points
 ```

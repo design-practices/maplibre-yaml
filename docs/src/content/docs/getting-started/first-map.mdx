@@ -123,7 +123,8 @@ center: [40.7128, -74.006]
 
 <Aside type="tip">
   An easy way to remember: longitude comes first because it's the X axis
-  (horizontal), latitude is Y (vertical).
+  (horizontal), latitude is Y (vertical). While you develop, a `center` that
+  looks written latitude-first gets a "did you mean" note on the map.
 </Aside>
 
 ### Map styles
@@ -144,18 +145,30 @@ mapStyle: "https://your-server.com/styles/dark.json"
 mapStyle: "https://api.maptiler.com/maps/streets/style.json?key=YOUR_KEY"
 ```
 
-It can also be a basemap you host yourself: one `.pmtiles` file of
-OpenStreetMap data next to your page, with no API key and no tile server.
-Three lines of YAML draw it:
+It can also be a basemap you host yourself: one Protomaps `.pmtiles` file of
+OpenStreetMap data next to your page, with no API key and no tile server. The
+file name alone is enough, and draws the light basemap with labels in the
+page's language:
+
+```yaml
+mapStyle: data/brooklyn.pmtiles   # the file, next to your page (public/ in Astro)
+```
+
+To choose the look or the label language, write it out:
 
 ```yaml
 mapStyle:
-  pmtiles: data/brooklyn.pmtiles   # the file, next to your page (public/ in Astro)
-  flavor: light                    # or dark, white, grayscale, black
+  pmtiles: data/brooklyn.pmtiles
+  flavor: dark                     # light (default), dark, white, grayscale, black
+  lang: es                         # labels in Spanish; default: the page's language
 ```
 
-See [Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap)
+The server must support HTTP range requests (`npx serve`, GitHub Pages and
+Netlify do). See [Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap)
 for making the file.
+
+A map with no `mapStyle` at all doesn't draw: it shows an error card asking
+for one.
 
 ## Adding a simple layer
 
@@ -326,7 +339,7 @@ layers:
           - p:
               - str: "Population: "
               - property: population
-                format: ",.0f" # 8336817 → 8,336,817
+                format: ",.0f" # 8336817 → 8,336,817 on an English page
 
 controls:
   navigation: true

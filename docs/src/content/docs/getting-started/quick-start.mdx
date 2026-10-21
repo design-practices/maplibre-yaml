@@ -91,6 +91,12 @@ Open the address it prints (usually http://localhost:3000) in your browser.
 Double-clicking `index.html` instead does not work: a page opened from a
 `file://` address is not allowed to fetch `earthquake-map.yaml`.
 
+`npx serve` needs [Node.js](https://nodejs.org/). Another local server
+works for this map too, but later, for large-data files (PMTiles, FlatGeobuf,
+GeoParquet, COG), the server must support HTTP range requests: `npx serve`
+does, `python -m http.server` doesn't. If the map is slow to start, a small
+"Loading map…" shows in its middle until the basemap draws.
+
 ## Result
 
 Here's what you'll see:
@@ -113,6 +119,10 @@ config:
   zoom: 5                    # Initial zoom level
   mapStyle: "https://..."    # Basemap style URL`}
 </YAMLBlock>
+
+`mapStyle` is the basemap: a MapLibre style URL, as here, or a single
+Protomaps `.pmtiles` file you host yourself, with no API key
+([Map styles](/getting-started/first-map/#map-styles)).
 
 <YAMLBlock highlight={[1, 2, 3, 4, 5, 6]} caption="Layer configuration">
   {`layers:
@@ -172,7 +182,7 @@ layers:
 
 Make the map refresh automatically every 60 seconds:
 
-```yaml {6-9}
+```yaml {7-9}
 layers:
   - id: earthquakes
     type: circle
