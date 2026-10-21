@@ -306,7 +306,9 @@ export type FitToConfig = z.infer<typeof FitToSchema>;
  *   defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
  *
  * pages:
- *   - blocks:
+ *   - path: "/"
+ *     title: "Home"
+ *     blocks:
  *       - type: map
  *         id: simple-map
  *         config:

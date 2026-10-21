@@ -520,8 +520,10 @@ export class MLMap extends HTMLElement {
    * a layer MapLibre rejected). Author hints — did-you-mean suggestions, a
    * key nested under `config:`, a `fitTo` typo, coordinates that look
    * swapped, a string starting with the reserved `=` — show only while you
-   * develop: on a page served from this computer (`localhost`, `127.0.0.1`,
-   * `[::1]`, `file:`) and in a bundler dev build (`astro dev`, `vite`).
+   * develop: on a page served from this computer (`localhost` and
+   * `*.localhost`, `127.x`, `[::1]`, a dev server bound to every interface
+   * opened at `0.0.0.0` or `[::]`, `file:`) and in a bundler dev build
+   * (`astro dev`, `vite`).
    * `debug` shows them on a published site too, for checking a deploy.
    * `quiet` still wins: it hides the notice entirely. The console always
    * gets every hint either way.
