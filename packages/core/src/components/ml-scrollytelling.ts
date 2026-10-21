@@ -52,6 +52,7 @@
  * @fires ml-scrollytelling:error - The story could not be loaded or validated
  */
 
+import { BaseElement } from "./base-element.js";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
   YAMLParser,
@@ -146,7 +147,7 @@ interface Waiter {
  * @fires ml-scrollytelling:action - A `custom` chapter action ran
  * @fires ml-scrollytelling:error - The story could not be loaded or validated
  */
-export class MLScrollytelling extends HTMLElement {
+export class MLScrollytelling extends BaseElement {
   static get observedAttributes(): string[] {
     return ["src", "config", "base", "quiet", "debug"];
   }

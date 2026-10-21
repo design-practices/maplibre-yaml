@@ -300,11 +300,24 @@ typed as `MLMap` without a cast.
 
 ## Next.js
 
-Client components still render on the server (App Router included), and the
-element class extends `HTMLElement`, which does not exist there. A top-level
-`import "@maplibre-yaml/core/register"` in a `"use client"` file therefore
-fails the build with `ReferenceError: HTMLElement is not defined`. Register
-the element from an effect instead:
+Client components still render on the server (App Router included). From
+0.9.1, `@maplibre-yaml/core/register` is safe to import there: on the server it
+only loads, and it registers the element when the client bundle runs in the
+browser. A top-level import in a `"use client"` file works:
+
+```jsx
+"use client";
+import "@maplibre-yaml/core/register";
+
+export default function YamlMap({ src }) {
+  return <ml-map src={src} style={{ display: "block", height: "400px" }} />;
+}
+```
+
+Up to 0.9.0, that import failed the build with `ReferenceError: HTMLElement
+is not defined`, because the element class extends `HTMLElement`, which does
+not exist on the server. On those versions, register the element from an
+effect instead:
 
 ```jsx
 "use client";
@@ -319,10 +332,11 @@ export default function YamlMap({ src }) {
 }
 ```
 
-The server sends a plain `<ml-map>` tag, and it upgrades once the import
-resolves. Import the MapLibre CSS in `app/layout`. On maplibre-gl 6, call
-`setWorkerUrl()` with your bundler's URL for the worker before that import —
-see [Installation](/getting-started/installation/#supported-maplibre-gl-versions).
+Either way, the server sends a plain `<ml-map>` tag, and it upgrades once the
+register module runs in the browser. Import the MapLibre CSS in `app/layout`.
+On maplibre-gl 6, call `setWorkerUrl()` with your bundler's URL for the worker
+in the same file as the register import — see
+[Installation](/getting-started/installation/#supported-maplibre-gl-versions).
 
 ## Vue
 
