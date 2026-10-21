@@ -21,12 +21,10 @@ pages:
 
 ## Page Properties
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `path` | string | Yes | URL path (e.g., `"/"`, `"/map"`, `"/about"`) |
-| `title` | string | Yes | Page title for browser tab and SEO |
-| `description` | string | No | Meta description for SEO |
-| `blocks` | array | Yes | Array of content/map blocks |
+Each page needs a `path` (its URL path: `"/"`, `"/map"`, `"/about"`), a
+`title` (for the browser tab and search engines) and its `blocks`; a
+`description` becomes the page's meta description. See
+[`pages`](/reference/yaml/root/#pages) in the root document reference.
 
 ### Example
 
@@ -172,21 +170,14 @@ Layout container for combining multiple blocks with custom layouts.
 
 | Layout | Description | CSS Equivalent |
 |--------|-------------|----------------|
-| `row` | Horizontal layout | `display: flex; flex-direction: row` |
-| `column` | Vertical layout (default) | `display: flex; flex-direction: column` |
+| `row` | Horizontal layout (the default) | `display: flex; flex-direction: row` |
+| `column` | Vertical layout | `display: flex; flex-direction: column` |
 | `grid` | CSS Grid layout | `display: grid` |
 
-### Properties
-
-| Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `type` | `"mixed"` | Yes | - | Block type |
-| `id` | string | No | - | Unique identifier |
-| `className` | string | No | - | CSS class name |
-| `style` | string | No | - | Inline CSS styles |
-| `layout` | `"row"` \| `"column"` \| `"grid"` | No | `"row"` | Layout direction |
-| `gap` | string | No | - | Gap between blocks (CSS gap property) |
-| `blocks` | array | Yes | - | Child blocks |
+A mixed block takes `blocks` (its child blocks), `layout` (`row` by default),
+an optional `gap` (a CSS gap value such as `"1rem"`), and the `id`,
+`className` and `style` every block takes. See
+[`type: mixed`](/reference/yaml/root/#pages-blocks-mixed).
 
 ### Row Layout
 

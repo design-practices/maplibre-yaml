@@ -9,7 +9,9 @@ scroll-driven story maps, and exports the parser, schemas and renderer.
 [![npm version](https://img.shields.io/npm/v/@maplibre-yaml/core.svg)](https://www.npmjs.com/package/@maplibre-yaml/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-**Documentation: [docs.maplibre-yaml.org](https://docs.maplibre-yaml.org)**
+**Documentation: [docs.maplibre-yaml.org](https://docs.maplibre-yaml.org)** ·
+[Choose your path](https://docs.maplibre-yaml.org/getting-started/) (an HTML page, an Astro site,
+a story map, a thematic map, large data)
 
 ## Quick start: a plain HTML page, no install
 
@@ -20,12 +22,19 @@ scroll-driven story maps, and exports the parser, schemas and renderer.
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- Without this line, phones lay the page out at desktop width and the map looks tiny -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>My First Map</title>
+    <title>My map</title>
     <link
       href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
       rel="stylesheet"
     />
+    <style>
+      ml-map {
+        display: block;
+        height: 400px;
+      }
+    </style>
     <!-- Tell the browser where to find maplibre-gl -->
     <script type="importmap">
       { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
@@ -35,25 +44,14 @@ scroll-driven story maps, and exports the parser, schemas and renderer.
       type="module"
       src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
     ></script>
-    <style>
-      body {
-        margin: 0;
-      }
-      /* <ml-map> has no size of its own: without a height the map is invisible */
-      ml-map {
-        display: block;
-        width: 100%;
-        height: 100vh;
-      }
-    </style>
   </head>
   <body>
-    <ml-map src="./earthquake-map.yaml"></ml-map>
+    <ml-map src="./map.yaml"></ml-map>
   </body>
 </html>
 ```
 
-`earthquake-map.yaml`, in the same folder:
+`map.yaml`, in the same folder:
 
 ```yaml
 type: map
@@ -77,7 +75,8 @@ layers:
 
 Serve the folder (`npx serve .`) and open the address it prints. A page opened
 from disk (`file://`) cannot fetch the YAML. The number after `core@` names a
-release line: the address loads the newest release in that line. Walkthrough: [Quick Start](https://docs.maplibre-yaml.org/getting-started/quick-start/).
+release line: the address loads the newest release in that line. Walkthrough: [Quick start](https://docs.maplibre-yaml.org/getting-started/quick-start/).
+Publishing it on GitHub Pages: [Publishing & subpaths](https://docs.maplibre-yaml.org/guides/publishing/).
 
 ## With npm and a bundler
 
@@ -115,7 +114,7 @@ On the page above, from the CDN:
 <ml-scrollytelling src="story.yaml"></ml-scrollytelling>
 ```
 
-A complete page and story: [Scrollytelling in plain HTML](https://docs.maplibre-yaml.org/integrations/scrollytelling-html/).
+A complete page and story: [Story maps in plain HTML](https://docs.maplibre-yaml.org/integrations/scrollytelling-html/).
 
 ## JavaScript API
 
@@ -213,9 +212,12 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
 
 ## More
 
-- Docs: [Web Components (`<ml-map>`)](https://docs.maplibre-yaml.org/integrations/web-components/) ·
-  [YAML Schema](https://docs.maplibre-yaml.org/schema/overview/) ·
+- Docs: [HTML pages: the `<ml-map>` element](https://docs.maplibre-yaml.org/integrations/web-components/) ·
+  [`<ml-map>` reference](https://docs.maplibre-yaml.org/reference/elements/) ·
+  [YAML reference](https://docs.maplibre-yaml.org/reference/yaml/) ·
   [Examples gallery](https://docs.maplibre-yaml.org/examples/gallery/)
+- Something wrong? [Troubleshooting](https://docs.maplibre-yaml.org/troubleshooting/) ·
+  Coming from an older release? [Upgrading](https://docs.maplibre-yaml.org/getting-started/upgrading/)
 - [`@maplibre-yaml/astro`](https://www.npmjs.com/package/@maplibre-yaml/astro): Astro components ·
   [`@maplibre-yaml/cli`](https://www.npmjs.com/package/@maplibre-yaml/cli): scaffold, validate, preview, export ·
   [`@maplibre-yaml/effects`](https://www.npmjs.com/package/@maplibre-yaml/effects): shader effects (experimental)

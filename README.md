@@ -10,7 +10,8 @@ developers prototyping a map, and people learning web mapping.
 [![npm](https://img.shields.io/npm/v/@maplibre-yaml/core.svg)](https://www.npmjs.com/package/@maplibre-yaml/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-**Documentation: [docs.maplibre-yaml.org](https://docs.maplibre-yaml.org)**
+**Documentation: [docs.maplibre-yaml.org](https://docs.maplibre-yaml.org)** ·
+[Choose your path](https://docs.maplibre-yaml.org/getting-started/)
 
 ## Quick start
 
@@ -21,6 +22,7 @@ developers prototyping a map, and people learning web mapping.
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- Without this line, phones lay the page out at desktop width and the map looks tiny -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>My map</title>
     <link
@@ -71,8 +73,10 @@ layers:
 
 Serve the folder (`npx serve .`) and open the address it prints. Or let the
 CLI write both files: `npx maplibre-yaml init my-map`.
+[Quick start](https://docs.maplibre-yaml.org/getting-started/quick-start/) walks through it;
+[Publishing & subpaths](https://docs.maplibre-yaml.org/guides/publishing/) puts it on GitHub Pages.
 
-In Astro:
+In Astro ([Astro site on GitHub Pages](https://docs.maplibre-yaml.org/getting-started/astro/)):
 
 ```astro
 ---
@@ -113,6 +117,9 @@ import { Map } from '@maplibre-yaml/astro';
   ([export classes](https://docs.maplibre-yaml.org/guides/export-classes/)).
 - **Examples:** the [MapLibre example gallery](https://docs.maplibre-yaml.org/examples/gallery/)
   rebuilt in maplibre-yaml, each marked YAML, YAML + JavaScript or YAML + plugin.
+
+Something wrong? [Troubleshooting](https://docs.maplibre-yaml.org/troubleshooting/). Upgrading?
+[Upgrading to 0.9](https://docs.maplibre-yaml.org/getting-started/upgrading/).
 
 ## Development
 

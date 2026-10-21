@@ -1,6 +1,6 @@
 ---
 title: "Interactivity"
-description: "Reference for the interactive parts of a map document: map controls and their positions, legends, interaction settings (scroll zoom, rotation, keyboard, touch, URL hash), and a layer's interactive: block (hover, click, popups, flyTo, zoomToFeature, emit)."
+description: "Reference for a layer's interactive: block: hover (cursor, highlight, preview popups), click (popups, flyTo, zoomToFeature), emit, and custom highlight styling. Map controls, legends and interaction settings are on the Map configuration page."
 ---
 
 New to popups and hover? The how-to
@@ -11,186 +11,30 @@ page is the reference for the same keys.
 This guide explains the fields and shows them in use. For every key — type, default, allowed values, and description, generated from the schemas so it always matches the validator — see the generated [Layers reference](/reference/yaml/layers/#interactive).
 :::
 
-Interactivity in maplibre-yaml is primarily configured through:
-- **Map Controls** - Navigation, scale, geolocation, fullscreen
-- **Legends** - Interactive layer information
-- **Layer Interactions** - Click, hover, and pointer events (configured at layer level)
+This page covers a layer's `interactive:` block: what happens when the
+pointer moves over a feature or clicks it. The map-level parts of
+interactivity have one home, [Map configuration](/schema/map-config/):
 
-Most snippets on this page are fragments. One that starts with `config:`,
-`controls:`, `legend:`, `interactive:` or `- id:` shows a single part of a map
-document and goes inside a complete one. The documents under
-[Complete Examples](#complete-examples), and any snippet that starts with
-`type: map`, run as printed.
+## Map controls and legends
 
-## Map Controls
-
-Map controls provide standard UI elements for map interaction. See [Map Configuration](/schema/map-config/) for detailed control configuration.
-
-### Available Controls
-
-```yaml
-controls:
-  navigation: true      # Zoom and rotation controls
-  geolocate: true       # User geolocation button
-  scale: true           # Distance scale
-  fullscreen: true      # Fullscreen toggle
-  attribution: true     # Attribution text
-  globe: true           # Globe / Mercator toggle (maplibre-gl 5 or later)
-```
-
-A `terrain` control toggles the document's 3D `terrain:`; see
-[Map controls](/schema/map-config/#available-controls) for every control and
-its default position. The controls' button labels come from MapLibre's
-`locale:` keys (`NavigationControl.ZoomIn` …), so `config.locale` translates
-them ([Localization](/schema/map-config/#localization)).
-
-### Control Positioning
-
-Each control can be positioned independently:
-
-```yaml
-controls:
-  navigation:
-    enabled: true
-    position: top-left
-  scale:
-    enabled: true
-    position: bottom-right
-```
-
-**Available positions:**
-- `top-left`
-- `top-right`
-- `bottom-left`
-- `bottom-right`
-
-### Attribution
-
-`attribution` renders a real attribution control and additionally accepts
-MapLibre's own options:
-
-```yaml
-controls:
-  attribution:
-    position: bottom-right    # default
-    compact: true             # collapse behind an (i) button
-    customAttribution: "© Example Data"
-```
-
-Configuring it suppresses MapLibre's built-in attribution so only one control
-renders. Leave it unset and the built-in one still appears — attribution is a
-licensing obligation for most tile providers, so it is never removed silently.
-
-`customAttribution`, like every source `attribution`, is sanitized before
-MapLibre renders it: text and `http:`/`https:`/`mailto:` links survive, other
-markup shows as literal text. See
-[Trust and attribution](/integrations/web-components/#trust-and-attribution).
-
-## Interactive Legends
-
-Legends display layer information and can be positioned anywhere on the map.
-The panel's header always reads "Legend" (translatable as
-`maplibre-yaml.Legend.Title`); a `title:` becomes a heading inside the panel.
-A map with a [classified](/guides/thematic-maps/) layer, or with a layer that
-has its own `legend: { label, color }` entry, shows a legend even without a
-`legend:` block; `legend: false` turns it off. All the rules are in
-[Map configuration › Legend](/schema/map-config/#legend).
-
-### Basic Legend
-
-```yaml
-legend:
-  title: "Map Features"
-  position: top-right
-  collapsed: false
-```
-
-### Custom Legend Items
-
-```yaml
-legend:
-  title: "Data Categories"
-  position: top-left
-  items:
-    - color: "#e74c3c"
-      label: "High Priority"
-      shape: circle
-    - color: "#f39c12"
-      label: "Medium Priority"
-      shape: circle
-    - color: "#2ecc71"
-      label: "Low Priority"
-      shape: circle
-```
-
-### Legend Item Shapes
-
-- `circle` - Circular symbol
-- `square` - Square symbol
-- `line` - Line symbol
-- `icon` - Custom icon (requires `icon` property)
-
-```yaml
-legend:
-  title: "Transportation"
-  items:
-    - color: "#3b82f6"
-      label: "Highway"
-      shape: line
-    - color: "#10b981"
-      label: "Local Road"
-      shape: line
-    - color: "#000000"
-      label: "Restaurant"
-      shape: icon
-      icon: "restaurant"
-```
+Navigation, scale, geolocate, fullscreen, globe, terrain and attribution
+controls, their default positions and attribution options are in
+[Map controls](/schema/map-config/#map-controls). The legend (placement,
+title, your own items, the automatic legend and `legend: false`) is in
+[Legend](/schema/map-config/#legend).
 
 ## Map Interaction Settings
 
-Control which user interactions are enabled.
+Whether the reader can zoom, pan, rotate and tilt the map (`interactive`,
+`scrollZoom`, `dragPan`, `dragRotate`, `keyboard`, `touchPitch` …), the
+keyboard shortcuts, and URL hash syncing (`hash`) are `config:` keys:
+see [Interaction settings](/schema/map-config/#interaction-settings).
 
-### Disable All Interactions
-
-Create a static presentation map:
-
-```yaml
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  interactive: false
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-### Selective Interactions
-
-Enable specific interactions:
-
-```yaml
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  scrollZoom: true
-  dragPan: true
-  dragRotate: false      # Disable rotation
-  touchPitch: false      # Disable pitch on mobile
-  doubleClickZoom: false # Disable double-click zoom
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-### Interaction Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `interactive` | boolean | `true` | Enable all interactions |
-| `scrollZoom` | boolean | `true` | Scroll to zoom |
-| `boxZoom` | boolean | `true` | Shift+drag box zoom |
-| `dragRotate` | boolean | `true` | Right-drag to rotate |
-| `dragPan` | boolean | `true` | Drag to pan |
-| `keyboard` | boolean | `true` | Keyboard shortcuts |
-| `doubleClickZoom` | boolean | `true` | Double-click zoom |
-| `touchZoomRotate` | boolean | `true` | Touch zoom/rotate |
-| `touchPitch` | boolean | `true` | Two-finger pitch |
+Most snippets on this page are fragments. One that starts with
+`interactive:` or `- id:` shows a single part of a map document and goes
+inside a complete one. The document under
+[Complete Examples](#complete-examples), and any snippet that starts with
+`type: map`, run as printed.
 
 ## Layer Interactivity
 
@@ -412,73 +256,6 @@ and leave `highlight` off:
       cursor: pointer
 ```
 
-## Keyboard Shortcuts
-
-When keyboard interaction is enabled (`keyboard: true`), the following shortcuts are available:
-
-| Keys | Action |
-|------|--------|
-| `+` / `=` | Zoom in |
-| `-` | Zoom out |
-| Arrow keys | Pan map |
-| Shift + Arrow keys | Rotate map |
-| Shift + `+` / `-` | Increase/decrease pitch |
-
-### Disable Keyboard
-
-```yaml
-config:
-  center: [0, 0]
-  zoom: 2
-  keyboard: false
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-## Touch Interactions
-
-Control touch gestures on mobile devices.
-
-### Enable All Touch
-
-```yaml
-config:
-  center: [0, 0]
-  zoom: 2
-  touchZoomRotate: true
-  touchPitch: true
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-### Disable Pitch on Touch
-
-Prevent accidental camera tilt:
-
-```yaml
-config:
-  center: [0, 0]
-  zoom: 2
-  touchZoomRotate: true
-  touchPitch: false
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-## URL Hash Syncing
-
-Sync map state (center, zoom, bearing, pitch) with the URL hash for bookmarkable views.
-
-```yaml
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  hash: true  # Enable URL hash syncing
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-When enabled, the URL will update as users interact with the map:
-```
-https://example.com/map#12/40.7128/-74.006
-```
-
 ## Cursor Styling
 
 MapLibre shows its own cursors: the default arrow over the map and a grab
@@ -488,8 +265,9 @@ layer asks for one with `interactive.hover.cursor` (usually `pointer`); a
 
 ## Complete Examples
 
-Each example is a complete document: save it as a `.yaml` file and load it
-with `<ml-map src="…">`.
+A complete document: save it as a `.yaml` file and load it with
+`<ml-map src="…">`. Complete maps that limit or turn off interaction are
+under [Map configuration](/schema/map-config/#complete-examples).
 
 ### Fully Interactive Map
 
@@ -539,122 +317,6 @@ legend:
       shape: square
 ```
 
-### Limited Interaction Map
-
-```yaml
-type: map
-id: limited-map
-config:
-  center: [0, 20]
-  zoom: 2
-  scrollZoom: true
-  dragPan: true
-  dragRotate: false
-  touchPitch: false
-  doubleClickZoom: false
-  keyboard: false
-  minZoom: 1
-  maxZoom: 8
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: quakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    paint:
-      circle-radius: 6
-      circle-color: "#3b82f6"
-    legend:
-      color: "#3b82f6"
-      label: "Earthquake"
-      shape: circle
-controls:
-  navigation: true
-  scale: true
-legend:
-  title: "Earthquakes this week"
-  position: top-left
-```
-
-### Static Presentation Map
-
-```yaml
-type: map
-id: static-map
-config:
-  center: [-74.006, 40.7128]
-  zoom: 15
-  pitch: 45
-  bearing: -30
-  interactive: false
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-sources:
-  omt:
-    type: vector
-    url: "https://tiles.openfreemap.org/planet"
-layers:
-  - id: buildings
-    type: fill-extrusion
-    source: omt
-    source-layer: building
-    paint:
-      fill-extrusion-color: "#aaaaaa"
-      fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
-      fill-extrusion-opacity: 0.8
-legend:
-  title: "3D Buildings"
-  position: bottom-right
-  items:
-    - color: "#aaaaaa"
-      label: "Building"
-      shape: square
-```
-
-### Touch-Optimized Mobile Map
-
-```yaml
-type: map
-id: mobile-map
-config:
-  center: [-120, 37]
-  zoom: 4
-  touchZoomRotate: true
-  touchPitch: false        # Disable pitch to prevent accidental tilts
-  dragRotate: false        # Disable rotation
-  keyboard: false          # Not needed on mobile
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: quakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    paint:
-      circle-radius: 12     # Larger for touch targets
-      circle-color: "#3b82f6"
-      circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"
-    legend:
-      color: "#3b82f6"
-      label: "Earthquake"
-      shape: circle
-controls:
-  navigation:
-    enabled: true
-    position: top-right
-  geolocate:
-    enabled: true
-    position: top-right
-  scale:
-    enabled: true
-    position: bottom-left
-legend:
-  title: "Earthquakes"
-  position: top-left
-  collapsed: true          # Start collapsed on mobile
-```
-
 ## Best Practices
 
 ### Performance
@@ -670,47 +332,10 @@ legend:
 3. **Mobile-first**: Disable complex gestures like pitch on mobile
 4. **Accessibility**: Include keyboard navigation and clear visual indicators
 
-### Map Constraints
-
-1. **Set zoom limits**: Use `minZoom`/`maxZoom` to keep users in relevant area
-2. **Geographic bounds**: Use `maxBounds` to restrict panning
-3. **Disable unnecessary interactions**: Remove interactions that don't serve your use case
-
 ## TypeScript Types
 
-```typescript
-import {
-  type ControlsConfig,
-  type LegendConfig,
-  type MapConfig
-} from '@maplibre-yaml/core/schemas';
-
-const controls: ControlsConfig = {
-  navigation: {
-    enabled: true,
-    position: "top-right"
-  },
-  scale: true,
-  geolocate: true
-};
-
-const legend: LegendConfig = {
-  title: "Features",
-  position: "top-left",
-  collapsed: false,
-  items: [
-    { color: "#ff0000", label: "High", shape: "circle" },
-    { color: "#00ff00", label: "Low", shape: "circle" }
-  ]
-};
-
-const interactiveConfig: MapConfig = {
-  center: [-74.006, 40.7128],
-  zoom: 12,
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
-  interactive: true,
-  scrollZoom: true,
-  dragPan: true,
-  hash: true
-};
-```
+The types for controls, legends and `config:` (`ControlsConfig`,
+`LegendConfig`, `MapConfig`) are shown under
+[Map configuration](/schema/map-config/#typescript-types). The layer's
+`interactive:` block is validated by `InteractiveConfigSchema`, exported from
+`@maplibre-yaml/core/schemas` ([TypeScript API](/reference/api/maplibre-yaml/core/schemas/)).

@@ -323,41 +323,13 @@ layers:
 
 ## Real-Time Updates
 
-### Polling Updates
-
-Periodically refresh data from a URL.
-
-```yaml
-source:
-  type: geojson
-  url: "https://api.example.com/live-data"
-  refresh:
-    refreshInterval: 5000        # Fetch every 5 seconds
-    updateStrategy: replace      # Replace all data
-```
-
-### Update Strategies
-
-| Strategy | Description | Use Case |
-|----------|-------------|----------|
-| `replace` | Replace all data | Complete data refresh |
-| `merge` | Merge by unique key | Update/add features |
-| `append-window` | Append with size/time limits | Time-series data |
-
-#### Replace Strategy
-
-```yaml
-source:
-  type: geojson
-  url: "https://api.example.com/current-weather"
-  refresh:
-    refreshInterval: 300000  # 5 minutes
-    updateStrategy: replace
-```
-
-#### Merge Strategy
-
-Update existing features by unique key:
+A GeoJSON source given by `url:` can keep itself current: `refresh:` polls
+the URL every `refreshInterval` milliseconds, and `stream:` receives updates
+over a WebSocket or Server-Sent Events. `updateStrategy` says how new
+features combine with the ones on the map: `replace` (the default) swaps the
+whole dataset, `merge` updates features that share an `updateKey` and adds
+new ones, and `append-window` adds them while keeping at most `windowSize`
+features or `windowDuration` milliseconds of them.
 
 ```yaml
 source:
@@ -366,28 +338,8 @@ source:
   refresh:
     refreshInterval: 10000
     updateStrategy: merge
-    updateKey: "vehicleId"  # Required for merge
+    updateKey: "vehicleId"  # required for merge
 ```
-
-#### Append-Window Strategy
-
-Keep only recent data:
-
-```yaml
-source:
-  type: geojson
-  url: "https://api.example.com/events"
-  refresh:
-    refreshInterval: 15000
-    updateStrategy: append-window
-    windowSize: 100              # Max 100 features
-    windowDuration: 3600000      # Max 1 hour old
-    timestampField: "timestamp"  # Feature property with timestamp
-```
-
-## Streaming Data
-
-Real-time data via WebSocket or Server-Sent Events.
 
 A streamed source still needs somewhere to start: a `url:` to load first, or
 `data:` with an empty `FeatureCollection` to start blank (validation refuses a
@@ -395,53 +347,24 @@ GeoJSON source with only `stream:`). Write a `refresh:` block next to
 `stream:`: the stream connects only when one is there, and its
 `updateStrategy` says how each message is applied.
 
-### WebSocket
-
-```yaml
-source:
-  type: geojson
-  data: { type: FeatureCollection, features: [] }   # empty until messages arrive
-  stream:
-    type: websocket
-    url: "wss://api.example.com/stream"
-    reconnect: true
-    reconnectMaxAttempts: 10
-    reconnectDelay: 1000
-    reconnectMaxDelay: 30000
-    protocols: ["json", "v1"]
-  refresh:
-    updateStrategy: merge
-    updateKey: "id"
-```
-
-### Server-Sent Events (SSE)
-
 ```yaml
 source:
   type: geojson
   url: "https://api.example.com/features"   # the current state, loaded first
   stream:
-    type: sse
+    type: sse                               # or websocket, with a wss:// url
     url: "https://api.example.com/events"
-    eventTypes: ["update", "delete", "create"]
-    reconnect: true
   refresh:
     updateStrategy: merge
     updateKey: "id"
 ```
 
-### Streaming Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `type` | `"websocket"` \| `"sse"` | - | Connection type |
-| `url` | string | - | Endpoint URL |
-| `reconnect` | boolean | `true` | Auto-reconnect on disconnect |
-| `reconnectMaxAttempts` | number | `10` | Max reconnection attempts |
-| `reconnectDelay` | number | `1000` | Initial reconnect delay (ms) |
-| `reconnectMaxDelay` | number | `30000` | Max reconnect delay (ms) |
-| `eventTypes` | string[] | - | SSE event types to listen for |
-| `protocols` | string \| string[] | - | WebSocket sub-protocols |
+How each strategy behaves, reconnection, and reacting to updates from your
+page's JavaScript are in [Live data & streaming](/guides/live-data/). Every
+key with its type and default is in the sources reference:
+[`refresh:`](/reference/yaml/sources/#geojson-refresh) and [`stream:`](/reference/yaml/sources/#geojson-stream).
+Live updates work on GeoJSON sources only; a FlatGeobuf or GeoParquet file is
+read once.
 
 ## Point Clustering
 
@@ -457,15 +380,9 @@ source:
   clusterMinPoints: 2
 ```
 
-### Clustering Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `cluster` | boolean | `false` | Enable clustering |
-| `clusterRadius` | number | `50` | Cluster radius in pixels |
-| `clusterMaxZoom` | number | - | Max zoom to cluster |
-| `clusterMinPoints` | number | `2` | Min points to form cluster |
-| `clusterProperties` | object | - | Aggregate cluster properties |
+`clusterRadius` is in pixels (50 by default), and `clusterMaxZoom` is the last
+zoom level at which points are clustered; every clustering key is in the
+[sources reference](/reference/yaml/sources/#geojson-cluster).
 
 ### Cluster Properties Example
 
@@ -486,25 +403,13 @@ source:
 
 ## Loading UI
 
-Configure loading indicators while data is fetching.
-
-```yaml
-source:
-  type: geojson
-  url: "https://example.com/large-dataset.geojson"
-  loading:
-    enabled: true
-    message: "Loading earthquake data..."
-    showErrorOverlay: true
-```
-
-### Loading Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `enabled` | boolean | `false` | Show loading overlay |
-| `message` | string | - | Custom loading message |
-| `showErrorOverlay` | boolean | `true` | Show errors in overlay |
+Loading feedback needs no configuration: while a map starts, `<ml-map>`
+marks itself busy (`aria-busy="true"`) and shows a small "Loading map…" if it
+hasn't drawn after about a second, and a data file that fails to load is
+listed in a notice on the map
+([Troubleshooting](/troubleshooting/#reading-what-the-map-tells-you)). A
+source's `loading:` block (`enabled`, `message`, `showErrorOverlay`) still
+validates, but in this release it draws no overlay of its own.
 
 ## Caching
 
@@ -519,25 +424,17 @@ source:
     ttl: 300000  # 5 minutes
 ```
 
-### Cache Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable HTTP caching |
-| `ttl` | number | - | Cache TTL in milliseconds |
+Caching is on by default; `ttl` (milliseconds) overrides how long a
+response is reused. Turn it off for live data. See
+[`cache:`](/reference/yaml/sources/#geojson-cache).
 
 ## Additional GeoJSON Options
 
-MapLibre GL JS GeoJSON options are supported:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `tolerance` | number | Simplification tolerance |
-| `buffer` | number | Tile buffer size |
-| `lineMetrics` | boolean | Enable line distance metrics |
-| `generateId` | boolean | Auto-generate feature IDs |
-| `promoteId` | string \| object | Promote property to feature ID |
-| `attribution` | string | Attribution text ([sanitized](#attribution-is-sanitized)) |
+MapLibre's own GeoJSON source options pass through: `tolerance`, `buffer`,
+`lineMetrics`, `generateId`, `promoteId` (`generateId` or `promoteId` is
+needed for hover highlights) and `attribution`
+([sanitized](#attribution-is-sanitized)). Each is in the
+[sources reference](/reference/yaml/sources/#geojson-tolerance).
 
 ### Example
 
@@ -588,17 +485,10 @@ source:
   maxzoom: 14
 ```
 
-### Vector Properties
-
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `url` | string | One of url/tiles | TileJSON URL, or a PMTiles archive (`.pmtiles` / `pmtiles://`) |
-| `tiles` | string[] | One of url/tiles | Tile URL templates |
-| `minzoom` | number | No | Minimum zoom level |
-| `maxzoom` | number | No | Maximum zoom level |
-| `bounds` | number[] | No | Bounds [west, south, east, north] |
-| `scheme` | `"xyz"` \| `"tms"` | No | Tile coordinate scheme |
-| `attribution` | string | No | Attribution text ([sanitized](#attribution-is-sanitized)) |
+Give `url` (a TileJSON URL, or a PMTiles archive: `.pmtiles` or
+`pmtiles://`) or `tiles` (tile URL templates). `minzoom`, `maxzoom`,
+`bounds`, `scheme` and `attribution` ([sanitized](#attribution-is-sanitized))
+are MapLibre's; every key is in the [sources reference](/reference/yaml/sources/#vector).
 
 ### Example
 
@@ -629,18 +519,11 @@ source:
   attribution: "© OpenStreetMap contributors"
 ```
 
-### Raster Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `url` | string | - | TileJSON URL, a PMTiles archive (`.pmtiles` / `pmtiles://`), or a Cloud Optimized GeoTIFF (`.tif` / `.tiff` / `cog://`, [cloud-native](#cloud-native-files-pmtiles-flatgeobuf-geoparquet-cog)) |
-| `tiles` | string[] | - | Tile URL templates |
-| `tileSize` | number | `512` | Tile size in pixels |
-| `minzoom` | number | - | Minimum zoom level |
-| `maxzoom` | number | - | Maximum zoom level |
-| `bounds` | number[] | - | Bounds [west, south, east, north] |
-| `scheme` | `"xyz"` \| `"tms"` | - | Tile coordinate scheme |
-| `attribution` | string | - | Attribution text ([sanitized](#attribution-is-sanitized)) |
+Give `url` (a TileJSON URL, a PMTiles archive, or a Cloud Optimized GeoTIFF:
+`.tif` / `.tiff` / `cog://`, see [cloud-native](#cloud-native-files-pmtiles-flatgeobuf-geoparquet-cog))
+or `tiles`. `tileSize` defaults to 512, so set `256` for most raster tile
+servers. A COG with one band of values takes `colorRamp:`. Every key is in
+the [sources reference](/reference/yaml/sources/#raster).
 
 ### Example
 
@@ -670,21 +553,11 @@ source:
   tileSize: 256
 ```
 
-### Raster DEM Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `url` | string | - | TileJSON URL, a PMTiles archive (`.pmtiles` / `pmtiles://`), or a Cloud Optimized GeoTIFF (`.tif` / `.tiff` / `cog://`, [cloud-native](#cloud-native-files-pmtiles-flatgeobuf-geoparquet-cog)) |
-| `tiles` | string[] | - | Tile URL templates |
-| `tileSize` | number | `512` | Tile size in pixels |
-| `encoding` | `"terrarium"` \| `"mapbox"` \| `"custom"` | `"mapbox"` | Elevation encoding |
-| `minzoom` | number | - | Minimum zoom level |
-| `maxzoom` | number | - | Maximum zoom level |
-| `bounds` | number[] | - | Bounds [west, south, east, north] |
-| `attribution` | string | - | Attribution text ([sanitized](#attribution-is-sanitized)) |
-
-Either `url` or `tiles` is required. A `custom` encoding also accepts MapLibre's
-`redFactor`, `greenFactor`, `blueFactor`, and `baseShift`.
+Give `url` (a TileJSON URL, a PMTiles archive or a COG, as on a raster
+source) or `tiles`. `encoding` is `mapbox` (the default), `terrarium` or
+`custom`; a `custom` encoding also accepts MapLibre's `redFactor`,
+`greenFactor`, `blueFactor` and `baseShift`. Every key is in the
+[sources reference](/reference/yaml/sources/#raster-dem).
 
 ### Example
 
@@ -762,12 +635,8 @@ source:
     - [-80.425, 37.936]  # bottom-left
 ```
 
-### Image Properties
-
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `url` | string | Yes | Image URL |
-| `coordinates` | array | Yes | Four corner coordinates [topLeft, topRight, bottomRight, bottomLeft] |
+Both `url` and `coordinates` are required
+([image source reference](/reference/yaml/sources/#image)).
 
 ### Example
 
@@ -805,12 +674,8 @@ source:
     - [-122.51423120498657, 37.56161849366671]
 ```
 
-### Video Properties
-
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `urls` | string[] | Yes | Video URLs for browser compatibility |
-| `coordinates` | array | Yes | Four corner coordinates [topLeft, topRight, bottomRight, bottomLeft] |
+Both `urls` (several formats, for browser compatibility) and `coordinates`
+are required ([video source reference](/reference/yaml/sources/#video)).
 
 ### Example
 
@@ -1003,62 +868,8 @@ All three patterns (block-level named sources, shared named layers, inline sourc
 
 ## Complete Examples
 
-### Real-Time Vehicle Tracking
-
-```yaml
-- id: vehicles
-  type: circle
-  source:
-    type: geojson
-    data: { type: FeatureCollection, features: [] }
-    stream:
-      type: websocket
-      url: "wss://api.example.com/vehicles"
-      reconnect: true
-    refresh:
-      updateStrategy: merge
-      updateKey: "vehicleId"
-    loading:
-      enabled: true
-      message: "Connecting to vehicle stream..."
-  paint:
-    circle-radius: 8
-    circle-color:
-      - match
-      - ["get", "status"]
-      - "active"
-      - "#10b981"
-      - "idle"
-      - "#f59e0b"
-      - "#6b7280"
-```
-
-### Time-Series Event Data
-
-```yaml
-- id: events
-  type: circle
-  source:
-    type: geojson
-    url: "https://api.example.com/events"
-    refresh:
-      refreshInterval: 30000
-      updateStrategy: append-window
-      windowSize: 1000
-      windowDuration: 3600000
-      timestampField: "eventTime"
-  paint:
-    circle-radius: 6
-    circle-color: "#3b82f6"
-    circle-opacity:
-      - interpolate
-      - ["linear"]
-      - ["get", "age"]
-      - 0
-      - 1
-      - 3600000
-      - 0.2
-```
+Live examples (polling, streams, `append-window`) are in
+[Live data & streaming](/guides/live-data/#complete-example).
 
 ### Clustered Points with Custom Properties
 

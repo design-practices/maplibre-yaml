@@ -280,13 +280,20 @@ The lines read:
 - "Other" and "No data" only when they can occur (with GeoJSON data, only when
   some feature actually has no data).
 
-A map with a classified layer gets its legend **automatically** — even with
-no `legend:` block — in the default place (top-left, open, headed "Legend");
-a story pins one by its usual rules. Write a `legend:` block to place or title
-it, or `legend: false` at the top level to have none. To keep one classified
-layer out of the legend, write `legend: false` on that layer. Number
-formatting follows the reader's
-locale; set it with MapLibre's own `number-format` option names:
+A map with a classified layer gets its legend **automatically**, even with
+no `legend:` block, in the default place (top-left, open, headed "Legend");
+a story pins one by its usual rules, with the same classes (breaks computed
+after load included). `legend: false` at the top level means no legend, and
+`legend: false` on a classified layer leaves its classes out. A hand-written
+layer `legend:` entry wins over the generated lines, and a `legend:` block
+with its own `items:` lists them first and the generated classes after them
+(when those items describe the colours from before `classify:`, remove them;
+validation and the page's author notes point this out). Placement, title and
+the other legend rules are in
+[Map configuration › Legend](/schema/map-config/#legend).
+
+Number formatting follows the reader's locale; set it with MapLibre's own
+`number-format` option names:
 
 ```yaml
 classify:
@@ -300,13 +307,7 @@ classify:
 follow the page's language. The "No data" and "Other" lines are UI strings you
 can translate in `locale:` like the rest
 ([Accessibility & languages](/guides/accessibility-languages/)):
-`maplibre-yaml.Classify.NoData` and `maplibre-yaml.Classify.Other`. A hand-written layer
-`legend:` entry still wins over the generated lines. A legend block with its
-own `items:` shows those items first and the generated classes after them;
-when the items describe a layer's colours from before `classify:`, remove
-them (validation and the page's author notes point this out), or write
-`legend: false` on a layer to leave its classes out. In a story, the pinned legend shows the same
-classes (including breaks computed after load).
+`maplibre-yaml.Classify.NoData` and `maplibre-yaml.Classify.Other`.
 
 ## Which paint property
 

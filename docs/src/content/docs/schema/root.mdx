@@ -31,17 +31,12 @@ pages:            # Page definitions (required, min: 1)
 
 Optional top-level settings that apply across all pages.
 
-### Properties
-
-| Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `title` | string | No | - | Application title |
-| `description` | string | No | - | Application description |
-| `defaultMapStyle` | string \| object | No | - | Default basemap: a style URL, a style object, or a [Protomaps basemap](/schema/map-config/#mapstyle-forms) (`{ pmtiles, flavor, lang }`, or just the `.pmtiles` path) |
-| `defaultCenter` | `[lng, lat]` | No | - | Default center |
-| `defaultZoom` | number (0–24) | No | - | Default zoom |
-| `theme` | `"light"` \| `"dark"` | No | `"light"` | Default theme |
-| `dataFetching` | object | No | - | Data fetching configuration |
+`title` and `description` describe the whole document, `theme` (`light` or
+`dark`) sets the default look, and `defaultMapStyle`, `defaultCenter` and
+`defaultZoom` give maps a basemap and a starting view. `defaultMapStyle`
+takes the same forms as a map's `mapStyle`: a style URL, a style object, or a
+[Protomaps basemap](/schema/map-config/#mapstyle-forms). Every key, with its
+type and default, is in the [root document reference](/reference/yaml/root/#config).
 
 `defaultMapStyle`, `defaultCenter` and `defaultZoom` are filled in by the
 [Astro map builders](/integrations/astro/#global-configuration), which build a map block from a
@@ -51,13 +46,11 @@ needs its own `center` and `zoom`, and validation warns when it has no
 
 ### Data Fetching Configuration
 
-Configure how data is fetched across all maps:
-
-| Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `defaultStrategy` | `"runtime"` \| `"build"` \| `"hybrid"` | No | `"runtime"` | When to fetch data |
-| `timeout` | number | No | `30000` | Timeout in milliseconds (min: 1000) |
-| `retryAttempts` | number | No | `3` | Number of retry attempts (min: 0) |
+`dataFetching` sets how data is fetched across all maps: `defaultStrategy`
+(`runtime`, the default, `build` or `hybrid`; see
+[data loading strategies](/schema/sources/#data-loading-strategies)),
+`timeout` (milliseconds, at least 1000; 30000 by default) and `retryAttempts`
+(3 by default). See [`dataFetching`](/reference/yaml/root/#config-datafetching).
 
 ### Example
 
@@ -119,40 +112,11 @@ pages:
 
 ## Named Source Definitions
 
-You can define named sources in two places and reference them from layers.
-
-### Block-level sources (bare name)
-
-Define sources at the map block level and reference them by their bare name across multiple layers in that block.
-
-```yaml
-pages:
-  - path: "/"
-    title: "Home"
-    blocks:
-      - type: map
-        id: map1
-        config:
-          center: [-100, 40]
-          zoom: 3
-          mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-        sources:
-          earthquakeData:
-            type: geojson
-            url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-            refresh:
-              refreshInterval: 300000  # 5 minutes
-              updateStrategy: merge
-              updateKey: id
-        layers:
-          - id: quakes
-            type: circle
-            source: earthquakeData
-            paint:
-              circle-radius: 6
-```
-
-Layers reference a block-level named source with its bare name (`source: earthquakeData`).
+A map block under `pages:` takes its own `sources:` and its layers name them
+with a bare name (`source: earthquakeData`), exactly as in a single map
+document: see [Named source definitions](/schema/sources/#named-source-definitions).
+What a multi-page document adds is a root-level `sources:` map, shared by
+every page.
 
 ### Root-level sources (`$ref`)
 

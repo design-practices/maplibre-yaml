@@ -11,6 +11,9 @@ with schema helpers and map builders.
 
 **Documentation: [docs.maplibre-yaml.org/integrations/astro](https://docs.maplibre-yaml.org/integrations/astro/)**
 
+New project? [Quick start: Astro site on GitHub Pages](https://docs.maplibre-yaml.org/getting-started/astro/)
+goes from an empty folder to a published site.
+
 ## Install
 
 ```bash
@@ -145,15 +148,20 @@ needs a few content-layer settings: see
 
 ## Documentation
 
-- [Astro Integration](https://docs.maplibre-yaml.org/integrations/astro/):
+- [Quick start: Astro site on GitHub Pages](https://docs.maplibre-yaml.org/getting-started/astro/)
+- [Astro](https://docs.maplibre-yaml.org/integrations/astro/):
   [component APIs](https://docs.maplibre-yaml.org/integrations/astro/#map-component-api),
   [deploying to GitHub Pages](https://docs.maplibre-yaml.org/integrations/astro/#deploying-to-github-pages-or-any-subpath),
   [editing in astro dev](https://docs.maplibre-yaml.org/integrations/astro/#editing-in-astro-dev),
   [GeoJSON feature references](https://docs.maplibre-yaml.org/integrations/astro/#geojson-feature-references),
   [troubleshooting](https://docs.maplibre-yaml.org/integrations/astro/#troubleshooting)
-- [Astro Content Collections](https://docs.maplibre-yaml.org/guides/collections-integration/)
-- [YAML Schema](https://docs.maplibre-yaml.org/schema/overview/) ·
-  [Scrollytelling](https://docs.maplibre-yaml.org/schema/scrollytelling/)
+- [Story maps in Astro](https://docs.maplibre-yaml.org/integrations/astro-stories/) ·
+  [Astro content collections](https://docs.maplibre-yaml.org/integrations/astro-collections/)
+- [Publishing & subpaths](https://docs.maplibre-yaml.org/guides/publishing/) ·
+  [Troubleshooting](https://docs.maplibre-yaml.org/troubleshooting/) ·
+  [Upgrading](https://docs.maplibre-yaml.org/getting-started/upgrading/)
+- [YAML reference](https://docs.maplibre-yaml.org/reference/yaml/) ·
+  [Story file reference](https://docs.maplibre-yaml.org/schema/scrollytelling/)
 - Runnable example site: [`examples/astro/site`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/astro/site)
 
 ## Related packages
