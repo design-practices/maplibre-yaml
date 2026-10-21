@@ -408,8 +408,9 @@ marks itself busy (`aria-busy="true"`) and shows a small "Loading map…" if it
 hasn't drawn after about a second, and a data file that fails to load is
 listed in a notice on the map
 ([Troubleshooting](/troubleshooting/#reading-what-the-map-tells-you)). A
-source's `loading:` block (`enabled`, `message`, `showErrorOverlay`) still
-validates, but in this release it draws no overlay of its own.
+source's `loading:` block (`enabled`, `message`, `showErrorOverlay`) draws no
+overlay of its own: it still validates, with a warning that it has no effect
+(deprecated since core 0.9.1), so you can remove it.
 
 ## Caching
 

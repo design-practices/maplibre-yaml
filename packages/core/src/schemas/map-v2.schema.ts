@@ -133,9 +133,7 @@ export const SourceRuntimeSchema = z
       "WebSocket/SSE streaming configuration"
     ),
     cache: CacheConfigSchema.optional().describe("Cache configuration"),
-    loading: LoadingConfigSchema.optional().describe(
-      "Loading UI configuration"
-    ),
+    loading: LoadingConfigSchema.optional(),
     prefetchedData: z
       .any()
       .optional()

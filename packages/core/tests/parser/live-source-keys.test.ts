@@ -144,3 +144,68 @@ describe("stream: without refresh: (ml-aot.134)", () => {
     expect(warned(legacy.warnings, "sources.live.stream")).toBeUndefined();
   });
 });
+
+describe("loading: is deprecated: it has no effect (ml-aot.132)", () => {
+  const LOADING = `loading:\n  enabled: true\n  message: "Loading vehicles..."`;
+  const deprecation = (warnings: { path: string; message: string; kind?: string }[], path: string) =>
+    warnings.find((w) => w.path === path && w.message.includes('"loading:" has no effect'));
+
+  it("v1: still valid, with a deprecation warning at loading:", () => {
+    const result = v1(indent(`type: geojson\nurl: https://example.com/v.geojson\n${LOADING}`, 4));
+    expect(result.success).toBe(true);
+    const warning = deprecation(result.warnings, "sources.live.loading");
+    expect(warning).toBeDefined();
+    expect(warning!.kind).toBe("deprecation");
+    expect(warning!.line).toBe(11);
+    expect(warning!.message).toContain("Loading map…");
+  });
+
+  it("v1: on a layer's inline source too", () => {
+    const result = YAMLParser.safeParseMapBlock(`type: map
+id: m
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: https://example.com/style.json
+layers:
+  - id: dots
+    type: circle
+    source:
+      type: geojson
+      url: https://example.com/v.geojson
+      loading: { enabled: true }
+`);
+    expect(result.success).toBe(true);
+    expect(deprecation(result.warnings, "layers.0.source.loading")).toBeDefined();
+  });
+
+  it("v2: at runtime.loading", () => {
+    const result = v2(indent(`type: geojson\nurl: https://example.com/v.geojson\nruntime:\n${indent(LOADING, 2)}`, 6));
+    expect(result.success).toBe(true);
+    expect(deprecation(result.warnings, "style.sources.live.runtime.loading")).toBeDefined();
+  });
+
+  it("a story and a multi-page root document warn too", () => {
+    const s = story(indent(`type: geojson\nurl: https://example.com/v.geojson\n${LOADING}`, 4));
+    expect(s.success).toBe(true);
+    expect(deprecation(s.warnings, "sources.live.loading")).toBeDefined();
+
+    const root = YAMLParser.safeParse(`sources:
+  live:
+    type: geojson
+    url: https://example.com/v.geojson
+    loading: { enabled: true }
+pages:
+  - path: /
+    title: Home
+    blocks: []
+`);
+    expect(root.success).toBe(true);
+    expect(deprecation(root.warnings, "sources.live.loading")).toBeDefined();
+  });
+
+  it("a source without loading: gets no such warning", () => {
+    const result = v1(indent(`type: geojson\nurl: https://example.com/v.geojson`, 4));
+    expect(result.warnings.some((w) => w.message.includes('"loading:"'))).toBe(false);
+  });
+});

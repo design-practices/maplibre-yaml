@@ -623,6 +623,21 @@ const DEPRECATIONS: DeprecationRule[] = [
       `Move it into a "refresh:" block (refresh.${field}).`,
     suggestion: "refresh",
   })),
+  {
+    // A source's `loading:` block (ml-aot.132) was accepted from the start
+    // and never drawn: the overlay it configures was never wired up. 0.9's
+    // map-level "Loading map…" indicator and the on-map data notices cover
+    // what it promised, so it is deprecated rather than built. v1: on the
+    // GeoJSON source itself; v2: under the source's `runtime:` (one in a v2
+    // source body already warns that it belongs there).
+    field: "loading",
+    applies: (value: Record<string, unknown>, path: (string | number)[]) =>
+      (value.type === "geojson" && path[0] !== "style") || path[path.length - 1] === "runtime",
+    message:
+      '"loading:" has no effect: maplibre-yaml draws no loading overlay for a source. ' +
+      'The map already shows "Loading map…" while it starts, and a data file that fails ' +
+      "to load is reported on the map. Remove loading:.",
+  },
   ...DEPRECATED_ACTION_TRIGGERS.map((trigger) => ({
     field: "action",
     applies: (_value: Record<string, unknown>, path: (string | number)[]) =>
