@@ -326,7 +326,7 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     page,
     baseURL,
   }) => {
-    const html = fences("integrations/vanilla-js.mdx", "html")[1];
+    const html = fences("integrations/vanilla-js.mdx", "html").find((h) => h.includes('src="map.js"'))!;
     const [yaml] = fences("integrations/vanilla-js.mdx", "yaml");
     const js = fences("integrations/vanilla-js.mdx", "javascript")[0];
     expect(html).toContain('src="map.js"');

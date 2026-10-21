@@ -20,10 +20,8 @@ import { fileURLToPath } from "node:url";
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO = join(APP, "..", "..");
-const PAGES = [
-  "docs/src/content/docs/integrations/web-components.mdx",
-  "docs/src/content/docs/integrations/react.mdx",
-];
+// The React material lives on one page ("React & other frameworks").
+const PAGES = ["docs/src/content/docs/integrations/react.mdx"];
 
 /** [{ page, path, body }] for every snippet marker followed by a fence. */
 function markedSnippets() {
@@ -53,23 +51,16 @@ test("docs React snippets are files of this app, verbatim", { skip: !docsPresent
   }
 });
 
-test("every docs ```tsx block on the React parts of the pages is a checked snippet", { skip: !docsPresent }, () => {
+test("every docs ```tsx block on the React page is a checked snippet", { skip: !docsPresent }, () => {
   // An unmarked React fence would be unchecked prose code: the drift this
-  // guards against. web-components.mdx: the "### React" section up to
-  // "#### Next.js" (the Next.js snippet needs a server and is verified
-  // separately); react.mdx: the whole page.
-  const wc = readFileSync(join(REPO, PAGES[0]), "utf8");
-  const start = wc.indexOf("### React\n");
-  const end = wc.indexOf("#### Next.js");
-  assert.ok(start > 0 && end > start, "the React section moved; update this test with it");
-  for (const [page, text] of [
-    [PAGES[0], wc.slice(start, end)],
-    [PAGES[1], readFileSync(join(REPO, PAGES[1]), "utf8")],
-  ]) {
+  // guards against. The Next.js snippet is ```jsx (it needs a server and is
+  // verified separately), so it is not counted here.
+  for (const page of PAGES) {
+    const text = readFileSync(join(REPO, page), "utf8");
     const fences = [...text.matchAll(/(^.*\n)?```tsx\n/gm)];
     for (const f of fences) {
       const marked = /\{\/\* snippet: /.test(f[1] ?? "");
-      // The two-line entry-point imports on react.mdx are not a component.
+      // The entry-point imports (src/main.tsx) are not a component.
       const entryImports = text
         .slice(f.index + (f[1]?.length ?? 0))
         .startsWith("```tsx\n// src/main.tsx\n");

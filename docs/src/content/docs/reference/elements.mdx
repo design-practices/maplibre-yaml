@@ -1,0 +1,180 @@
+---
+title: "<ml-map> & <ml-scrollytelling> reference"
+description: Every attribute, property, method, event, slot and styling hook of the <ml-map> and <ml-scrollytelling> web components.
+---
+
+The two elements `@maplibre-yaml/core/register` defines (the CDN's
+`register.js` is the same module). For how to use them, see
+[HTML pages: the `<ml-map>` element](/integrations/web-components/) and
+[Story maps in plain HTML](/integrations/scrollytelling-html/). The generated
+[`MLMap` API reference](/reference/api/maplibre-yaml/core/components/classes/mlmap/)
+has the same members with their TypeScript types.
+
+## `<ml-map>`
+
+Draws one `type: map` document.
+
+### `<ml-map>` attributes
+
+| Attribute | Value | What it does |
+|-----------|-------|--------------|
+| `src` | URL | The YAML document to load. Changing it loads the new document |
+| `config` | JSON string | The document as JSON. Changing it re-renders the map |
+| `base` | path | Where the paths in `src` and in the document start, for a site under a subpath (`"/my-repo/"`). Full `https://` URLs are never changed ([Sites under a subpath](/guides/publishing/#html-pages-the-base-attribute)) |
+| `debug` | boolean | Show author hints on the page wherever it is served, not only while developing ([Reading what the map tells you](/troubleshooting/#reading-what-the-map-tells-you)) |
+| `quiet` | boolean | Keep the notice ("Part of this map couldn't load", author hints) and the zero-height hint off the page. The error card and "Loading map…" still show; the console keeps every message |
+
+The element reads its document from the first of these it finds: the
+`config` property, an inline `<script type="text/yaml">` child, the `src`
+attribute, the `config` attribute.
+
+### `<ml-map>` properties
+
+| Property | Type | What it does |
+|----------|------|--------------|
+| `config` | object or JSON string (set); object or `null` (get) | The document. Set before or after the element connects, it is validated like every other path; a value JSON-equal to the one shown is a no-op. Get returns the document being shown |
+| `base` | string or `null` | Reflects the `base` attribute; setting it re-renders the map |
+| `debug` | boolean | Reflects the `debug` attribute |
+| `quiet` | boolean | Reflects the `quiet` attribute |
+| `MLMap.fitToWaitMs` (static) | number | How long a map with `fitTo` on a `url:` source waits for the data before its first paint, so it opens already framed. Default `1500` (ms); `0` turns the wait off. Set it before maps render |
+
+### `<ml-map>` methods
+
+| Method | Returns | What it does |
+|--------|---------|--------------|
+| `mapReady()` | `Promise<maplibregl.Map>` | Resolves with the MapLibre map once the document has loaded (at once if it already has); rejects when the document fails (`ml-map:error`) |
+| `getMap()` | `maplibregl.Map \| null` | The MapLibre map, or `null` before a render. `reload()` and a new document make a new map, so read it when you need it |
+| `getRenderer()` | `MapRenderer \| null` | The renderer behind the element ([JavaScript API](/integrations/vanilla-js/)) |
+| `isLoaded()` | `boolean` | Whether the map has finished loading |
+| `reload()` | `Promise<void>` | Render again from `src` or the inline YAML; slot children are kept |
+| `addLayer(layer)` | `Promise<void>` | Add a layer (the same shape as a document layer) |
+| `removeLayer(layerId)` | `void` | Remove a layer |
+| `setLayerVisibility(layerId, visible)` | `void` | Show or hide a layer |
+| `updateLayerData(layerId, geojson)` | `void` | Replace a GeoJSON layer's data |
+| `uiString(key, params?)` | `string` | The document's text for a UI string key (`maplibre-yaml.Legend.Title`, `NavigationControl.ZoomIn`, …): its `locale:` translation, or English. For controls you draw next to the map ([Accessibility & languages](/guides/accessibility-languages/)) |
+
+Pausing, resuming and forcing a live-data refresh (`pauseRefresh()`,
+`resumeRefresh()`, `refreshNow()`) are not available on the element.
+
+### `<ml-map>` events
+
+Every event bubbles, and carries its payload on `event.detail`. In
+TypeScript, `MLMapEventMap` (from `@maplibre-yaml/core/register`) types each
+listener.
+
+| Event | Detail | Fires when |
+|-------|--------|------------|
+| `ml-map:loading` | `{ url }` | A `src` document fetch begins |
+| `ml-map:load` | `{}` | The document is fully loaded — basemap and every layer |
+| `ml-map:error` | `{ error, fatal }` or `{ errors }` | Initialization or runtime failure. `fatal: true` aborts the document (a basemap style that won't load, a worker that can't start); `fatal: false` is a problem the map survives (a rejected layer, a tile that 404'd). A document that can't be fetched, parsed or validated carries `errors` — the structured `{ path, message }[]` the error card shows — instead |
+| `ml-map:layer-added` | `{ layerId }` | A layer was added to the map |
+| `ml-map:layer-removed` | `{ layerId }` | A layer was removed |
+| `ml-map:layer-data-loading` | `{ layerId }` | A layer's data fetch begins |
+| `ml-map:layer-data-loaded` | `{ layerId, featureCount }` | A layer's data landed |
+| `ml-map:layer-data-error` | `{ layerId, error }` | A layer's data fetch failed |
+| `ml-map:layer-click` | `{ layerId, feature, lngLat }` | A feature on an interactive layer was clicked |
+| `ml-map:layer-hover` | `{ layerId, feature, lngLat }` | A feature on an interactive layer was hovered |
+| `ml-map:markers-added` | `{ count }` | The `markers:` pins were added |
+| `ml-map:marker-click` | `{ index, at }` | A standalone marker was clicked |
+| `ml-map:marker-icon-error` | `{ index, icon }` | A marker `icon:` failed (unsafe scheme or load error); the default pin was substituted |
+| `ml-map:image-error` | `{ name, url }` | An `images:` entry failed (unsafe scheme, CORS, load or register error) |
+| `ml-map:parameter-change` | `{ key, value }` | A params-panel control wrote a state key |
+| `ml-map:layer-visibility` | `{ layerId, visible }` | A params-panel checkbox toggled a layer |
+| `ml-map:camera-fit` | `{ source, bounds }` | The `fitTo` camera framed its source's data (once, on the first data load for fetched sources) |
+| `ml-map:layer-classified` | `{ layerId, classify }` | A `classify:` layer's classes as drawn — once when the layers settle, and again when fetched data computes or refreshes them. `classify` is the record the emitted style carries in `metadata["maplibre-yaml:classify"]` (breaks, colours, stats) |
+
+### `<ml-map>` slots
+
+Children with one of these `slot` values are placed over the map
+([Slots: your own chrome over the map](/integrations/web-components/#slots-your-own-chrome-over-the-map)):
+
+| Slot | Placement |
+|------|-----------|
+| `top-left`, `top-right`, `bottom-left`, `bottom-right` | In that corner, stacked after the built-in legend and the params panel |
+| `legend` | **Replaces** the built-in legend, at the document's `legend.position` (default `top-left`) |
+
+An inline `<script type="text/yaml">` child holds the document instead
+(above). Any other child is left where it is.
+
+### `<ml-map>` styling hooks
+
+| Hook | What it is |
+|------|------------|
+| `aria-busy="true"` | Set on the element while the map starts; removed when the basemap draws or an error card replaces the map |
+| `.ml-map-loading` | The "Loading map…" text, shown in the middle of the map if it hasn't drawn after about a second (`role="status"`). Hide it with `ml-map .ml-map-loading { display: none; }` when the page has its own loading indicator |
+| `.ml-map-error` | The error card that replaces a map that can't be drawn |
+| `.ml-map-notice` | The notice over the map ("Part of this map couldn't load", author hints) |
+| `--ml-map-notice-top`, `--ml-map-notice-left`, `--ml-map-notice-transform`, `--ml-map-notice-max-width` | Custom properties that place the notice (defaults `10px`, `50%`, `translateX(-50%)`, `min(480px, calc(100% - 20px))`). A story sets them to keep the notice clear of its pinned legend |
+| `.ml-map-height-hint` | The note shown while the element has no height |
+
+The element has no size of its own: give it `display: block` and a height.
+
+## `<ml-scrollytelling>`
+
+Shows one `type: scrollytelling` document as a story: a sticky map, drawn by
+an `<ml-map>` inside it, with the chapters scrolling past.
+
+### `<ml-scrollytelling>` attributes
+
+| Attribute | Value | What it does |
+|-----------|-------|--------------|
+| `src` | URL | The story's YAML |
+| `config` | JSON string | The story as JSON |
+| `base` | path | Where the story's own paths start, for a site under a subpath: `src`, every path in its map document and chapter `image` / `video` paths ([Sites under a subpath](/guides/publishing/#sites-under-a-subpath-github-pages)). Passed on to the story's map |
+| `debug` | boolean | Outline each chapter (green when active), and show the story's author hints (a chapter naming a layer that doesn't exist, a key under `config:` that belongs at the top level) wherever the page is served. Without it, hints show only while you develop (`localhost`, a `file://` page, a bundler dev build); failures always show. Passed on to the story's map |
+| `quiet` | boolean | Hide the on-page notes for a finished site: the map's "Part of this map couldn't load" notice and a chapter's "image didn't load" note. Every message stays in the browser console; a story that can't load at all still shows its error card, and a slow map still shows "Loading map…". Passed on to the story's map |
+
+The element reads its story from the first of these it finds: the `story` (or
+`config`) property, an inline `<script type="text/yaml">` child, the `src`
+attribute, the `config` attribute.
+
+### `<ml-scrollytelling>` properties and methods
+
+| Property / method | What it does |
+|-------------------|--------------|
+| `story` (alias `config`) | Set: the story as an object or JSON string, validated like every other path (a value JSON-equal to the one shown is a no-op). Get: the validated story, or `null` |
+| `base` | Reflects the `base` attribute |
+| `activeChapterId` | The active chapter's `id`, or `null` |
+| `mapElement` | The story's own [`<ml-map>`](#ml-map), once the story has rendered: its methods and events work as on any `<ml-map>` |
+| `mapReady()` | A promise of the MapLibre map once it has loaded; rejects if the story or its map fails |
+| `getMap()` | The MapLibre map, or `null` before it loads |
+| `goToChapter(id)` | Scroll to a chapter and make it active (what the chapter rail does) |
+
+### `<ml-scrollytelling>` events
+
+All bubble. In TypeScript, `MLScrollytellingEventMap` (from
+`@maplibre-yaml/core/register`) types each listener.
+
+| Event | Detail | Fires when |
+|-------|--------|------------|
+| `ml-scrollytelling:chapter` | `{ chapterId, previousChapterId, index, callback, map }` | A chapter became active. `callback` is the chapter's `callback:` value |
+| `ml-scrollytelling:action` | `{ action, chapterId, phase, map }` | A `custom` chapter action ran (`phase` is `"enter"` or `"exit"`) |
+| `ml-scrollytelling:error` | `{ errors, warnings, source }` | The story could not be loaded or validated. `source` is the `src` URL, when there is one |
+
+`map` is the story's MapLibre map (`null` when it failed to load). The events
+of the story's map itself (`ml-map:load`, `ml-map:layer-click`, …) bubble up
+through the story too.
+
+### `<ml-scrollytelling>` slots
+
+| Slot | Placement |
+|------|-----------|
+| `top-left`, `top-right`, `bottom-left`, `bottom-right` | Handed to the story's map, in that corner, under the chapter cards |
+| `legend` | Fills the story's pinned legend panel instead of the built-in entries |
+
+### `<ml-scrollytelling>` styling hooks
+
+| Hook | What it is |
+|------|------------|
+| `data-active-chapter` | Attribute on the element: the active chapter's `id` |
+| `--ml-scrolly-map-height` | Custom property: the sticky map's height (default `100vh`) |
+| `--ml-scrolly-map-top` | Custom property: where the map sticks, below a fixed header (default `0px`) |
+| `.scrolly-map-container` | The sticky map |
+| `.scrolly-chapters` | The chapter column |
+| `.scrolly-chapter` | One chapter; `.is-active` while active, and `.align-left`, `.align-right`, `.align-center` or `.align-full` |
+| `.chapter-content` | A chapter's card |
+| `.chapter-markers`, `.chapter-marker` | The chapter rail and its dots (`showMarkers: true`) |
+| `.scrolly-footer` | The story's footer |
+
+Examples of overriding them are in
+[Styling](/integrations/scrollytelling-html/#styling).

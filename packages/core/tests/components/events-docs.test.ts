@@ -2,7 +2,7 @@
  * @file The ml-map event reference cannot drift from the element (U9)
  *
  * @description
- * The web-components page's event table is hand-written prose; this test
+ * The element reference page's event table is hand-written prose; this test
  * makes it a contract, the same way the export-classes page is pinned to its
  * registry. Three sources must agree on the event NAMES — the `@fires`
  * JSDoc tags, the `new CustomEvent("ml-map:…")` calls actually dispatched,
@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SOURCE = readFileSync(join(HERE, "../../src/components/ml-map.ts"), "utf8");
 const DOCS_ROOT = join(HERE, "../../../../docs");
-const PAGE = join(DOCS_ROOT, "src/content/docs/integrations/web-components.mdx");
+const PAGE = join(DOCS_ROOT, "src/content/docs/reference/elements.mdx");
 
 /** Shorthand or `key:` detail keys inside one `detail: { ... }` literal. */
 function detailKeys(body: string): string[] {
@@ -50,8 +50,8 @@ function firesTags(): string[] {
 /** name → keys named in the Detail column (every `{ … }` group in the cell). */
 function documented(page: string): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();
-  const start = page.indexOf("### Event reference");
-  expect(start, "the Event reference section is gone from the page").toBeGreaterThan(-1);
+  const start = page.indexOf("### `<ml-map>` events");
+  expect(start, "the <ml-map> events section is gone from the page").toBeGreaterThan(-1);
   for (const line of page.slice(start).split("\n")) {
     const m = line.match(/^\|\s*`(ml-map:[a-z-]+)`\s*\|([^|]*)\|/);
     if (!m) continue;
@@ -81,7 +81,7 @@ describe("ml-map events: @fires, dispatch sites, and the docs table agree", () =
   });
 
   it.skipIf(!existsSync(DOCS_ROOT))(
-    "the web-components event table names every event with its detail keys",
+    "the element reference's event table names every event with its detail keys",
     () => {
       expect(
         existsSync(PAGE),

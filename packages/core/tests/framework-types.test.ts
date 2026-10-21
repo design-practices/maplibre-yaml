@@ -49,7 +49,7 @@ const DOC = join(
   "content",
   "docs",
   "integrations",
-  "web-components.mdx"
+  "react.mdx"
 );
 
 if (process.env.CI && !existsSync(DIST)) {
