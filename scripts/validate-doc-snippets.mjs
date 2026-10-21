@@ -3,10 +3,21 @@
  * validate-doc-snippets.mjs
  *
  * Extracts fenced ```yaml code blocks from documentation files and validates
- * any block that is a standalone map or scrollytelling document (i.e. has a
- * top-level `type: map` or `type: scrollytelling` key) against the real
- * @maplibre-yaml/core parser. YAML fragments without a top-level `type:` key
- * are skipped, as are fences tagged with `no-validate` in their info string.
+ * them against the real @maplibre-yaml/core parser:
+ *
+ *  - a standalone map or scrollytelling document (a top-level `type: map` or
+ *    `type: scrollytelling` key), as written;
+ *  - a multi-page root document (no `type:`, a top-level `pages:` key);
+ *  - a fragment readers paste into a map: a list of layers (every item has an
+ *    `id:` and a layer `type:`), or a mapping whose keys are all map-block
+ *    keys (`config:`, `layers:`, `sources:`, `controls:`, `legend:` …). The
+ *    fragment is wrapped in a minimal map (a placeholder center, zoom and
+ *    basemap fill in what it leaves out) and validated as part of it.
+ *
+ * Other YAML (a layer's `paint:` on its own, frontmatter, CI workflows) is
+ * skipped. A fence that is deliberately partial or wrong (an error example,
+ * a fragment naming a source defined elsewhere) opts out with `no-validate`
+ * in its info string: ```yaml no-validate
  *
  * Requires @maplibre-yaml/core to be built first:
  *   pnpm --filter @maplibre-yaml/core build
@@ -22,6 +33,7 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -35,6 +47,66 @@ if (!existsSync(coreDist)) {
 }
 
 const { YAMLParser } = await import(coreDist);
+// The YAML library core itself parses with, to inspect a fragment's shape.
+const YAML = createRequire(join(repoRoot, "packages/core/package.json"))("yaml");
+
+/** Keys a map block takes at its top level (fragments made only of these are wrapped). */
+const MAP_BLOCK_KEYS = new Set([
+  "config", "layers", "sources", "controls", "legend", "title", "description",
+  "markers", "images", "terrain", "sky", "light", "projection", "params",
+]);
+const LAYER_TYPES = new Set([
+  "circle", "line", "fill", "fill-extrusion", "symbol", "heatmap", "hillshade",
+  "raster", "background", "color-relief",
+]);
+const PLACEHOLDER_CONFIG = {
+  center: [0, 0],
+  zoom: 1,
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
+};
+
+/**
+ * A fragment of a map wrapped into a whole map block (YAML text), or null when
+ * the fence isn't one: a list of layers, or a mapping of map-block keys only.
+ */
+function wrapFragment(content) {
+  let value;
+  try {
+    value = YAML.parse(content);
+  } catch {
+    return null; // several documents (frontmatter), or deliberately broken YAML
+  }
+  let block;
+  if (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((l) => l && typeof l === "object" && "id" in l && LAYER_TYPES.has(l.type))
+  ) {
+    block = { layers: value };
+  } else if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).length > 0 &&
+    Object.keys(value).every((k) => MAP_BLOCK_KEYS.has(k))
+  ) {
+    block = { ...value };
+  } else {
+    return null;
+  }
+  return YAML.stringify({
+    type: "map",
+    id: "snippet",
+    ...block,
+    config: { ...PLACEHOLDER_CONFIG, ...(block.config ?? {}) },
+    layers: block.layers ?? [],
+  });
+}
+
+/** True for a root document: no top-level `type:`, a top-level `pages:` key. */
+function isRootDocument(content) {
+  return /^pages:/m.test(content);
+}
 
 /** Recursively collect files under `dir` matching one of `exts`. */
 function walk(dir, exts, out = []) {
@@ -56,6 +128,8 @@ function defaultFileSet() {
   if (existsSync(docsContent)) walk(docsContent, [".md", ".mdx"], files);
   const patterns = join(repoRoot, "docs/patterns");
   if (existsSync(patterns)) walk(patterns, [".md", ".mdx"], files);
+  // The repository README is the GitHub front page; its samples get copied too.
+  files.push(join(repoRoot, "README.md"));
   const packagesDir = join(repoRoot, "packages");
   if (existsSync(packagesDir)) {
     for (const pkg of readdirSync(packagesDir)) {
@@ -152,6 +226,9 @@ for (const file of files) {
     }
   }
 
+  // The generated reference (TypeDoc, YAML reference) is rebuilt from core's
+  // source; its fragments are fixed there, not here.
+  const generated = /docs\/src\/content\/docs\/reference\/(api|yaml)\//.test(rel);
   for (const fence of extractYamlFences(text)) {
     // demotiles has country polygons only: past zoom ~6 a map or story on it
     // is a flat green field with no coastline, roads or labels, which a
@@ -167,22 +244,39 @@ for (const file of files) {
       continue;
     }
     const type = topLevelType(fence.content);
-    if (type !== "map" && type !== "scrollytelling") {
+    let result;
+    let kind = "";
+    if (type === "map") {
+      result = YAMLParser.safeParseMapBlock(fence.content);
+    } else if (type === "scrollytelling") {
+      result = YAMLParser.safeParseScrollytellingBlock(fence.content);
+    } else if (type === null && generated) {
+      // Generated from core's JSDoc: only whole documents are checked there.
+      skipped++;
+      continue;
+    } else if (type === null && isRootDocument(fence.content)) {
+      result = YAMLParser.safeParse(fence.content);
+      kind = " (root document)";
+    } else if (type === null) {
+      const wrapped = wrapFragment(fence.content);
+      if (wrapped === null) {
+        skipped++;
+        continue;
+      }
+      result = YAMLParser.safeParseMapBlock(wrapped);
+      kind = " (fragment, wrapped in a map)";
+    } else {
       skipped++;
       continue;
     }
 
     checked++;
-    const result =
-      type === "map"
-        ? YAMLParser.safeParseMapBlock(fence.content)
-        : YAMLParser.safeParseScrollytellingBlock(fence.content);
-
     if (!result.success) {
       failures.push({
         file: rel,
         index: fence.index,
         line: fence.line,
+        kind,
         errors: result.errors.map((e) => (e.path ? `${e.path}: ${e.message}` : e.message)),
       });
     }
@@ -196,7 +290,7 @@ console.log(
 if (failures.length > 0) {
   console.error(`\n${failures.length} invalid snippet(s):\n`);
   for (const f of failures) {
-    console.error(`- ${f.file} (snippet #${f.index}, fence at line ${f.line})`);
+    console.error(`- ${f.file} (snippet #${f.index}, fence at line ${f.line})${f.kind ?? ""}`);
     for (const e of f.errors) {
       console.error(`    ${e}`);
     }
