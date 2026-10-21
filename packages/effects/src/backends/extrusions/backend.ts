@@ -15,7 +15,9 @@
  *   adapter), meshed in a worker pool with the static layer's own filter
  *   and height/base expressions; finished meshes upload under a per-frame
  *   budget, and a tile still building draws its nearest cached ancestor or
- *   children, so pans and zooms never show holes.
+ *   children, so pans and zooms never show holes. Each area draws from one
+ *   tile level only, even while MapLibre briefly holds a parent tile beside
+ *   its children (tile-select.ts).
  * - **Draw:** per tile, a float64-composed matrix (MapLibre's projection ×
  *   tile offset/scale × metres→mercator), back-face culling and an optional
  *   depth prepass, then the effect's fragment shader.
@@ -45,6 +47,7 @@ import { readCuts, type MeshData } from "./mesh-build";
 import { VERTEX_BYTES, VB } from "./vertex-format";
 import { zoomFactor } from "./interp";
 import { SeamRegistry } from "./seams";
+import { selectTiles } from "./tile-select";
 
 const EARTH_CIRCUMFERENCE = 40075016.68557849;
 
@@ -170,6 +173,8 @@ class ExtrusionEffect {
     seamWallsPatched: 0,
     maxFrameUploadMs: 0,
     placementOk: 0,
+    /** Tiles skipped this frame because another tile level drew their area. */
+    overlapSkipped: 0,
   };
 
   private readonly map: MapLibreMap;
@@ -208,6 +213,10 @@ class ExtrusionEffect {
   private readonly seams: SeamRegistry;
   /** Diagnostic: false disables the seam stitching (A/B in the browser suite). */
   private readonly stitch: boolean;
+  /** Diagnostic: false draws parent and child tiles together (the pre-fix overlap). */
+  private readonly dedupe: boolean;
+  /** The tiles drawn in the last frame (canonical z/x/y, wrap), for tests. */
+  private lastDrawn: ReadonlyArray<{ z: number; x: number; y: number; wrap: number; overscaledZ: number }> = [];
   private frame = 0;
   private pendingWork = 0;
   private noRawFrames = 0;
@@ -226,6 +235,7 @@ class ExtrusionEffect {
     this.budget = ctx.options.buildBudgetMs ?? 12;
     this.workerUrl = ctx.options.workerUrl;
     this.stitch = ctx.options.seams ?? true;
+    this.dedupe = ctx.options.dedupeTiles ?? true;
     this.customLayerId = `${ctx.layerId}::fx-${ctx.definition.type}`;
     this.seams = new SeamRegistry((meshKey, vi, verts) => {
       const list = this.patches.get(meshKey) ?? [];
@@ -552,6 +562,8 @@ class ExtrusionEffect {
   private render(gl: WebGL2RenderingContext, args: unknown): void {
     this.frame++;
     this.stats.tilesDrawn = 0;
+    this.stats.overlapSkipped = 0;
+    this.lastDrawn = [];
     if (this.status !== "active") return;
     const map = this.map;
     const main = probeMainMatrix(args);
@@ -626,33 +638,15 @@ class ExtrusionEffect {
     const lat = (map.getCenter().lat * Math.PI) / 180;
     const zMerc = 1 / (EARTH_CIRCUMFERENCE * Math.cos(lat));
     const zex = this.def.heightScale?.(zoom, this.params) ?? 1;
-    const draws: Array<{ mesh: GpuMesh; matrix: Float32Array; mpu: number; origin: [number, number] }> = [];
+    type Candidate = { mesh: GpuMesh; z: number; x: number; y: number; wrap: number; overscaledZ: number };
+    const candidates: Candidate[] = [];
     const drawn = new Set<string>();
-    const T = this.T, M = this.M;
     const pushDraw = (mesh: GpuMesh, z: number, x: number, y: number, wrap: number) => {
       const dk = `${mesh.key}@${wrap}`;
       if (drawn.has(dk)) return;
       drawn.add(dk);
       mesh.lastUsed = this.frame;
-      const n = 2 ** z;
-      const s = 1 / (n * mesh.extent);
-      T.fill(0);
-      T[0] = s;
-      T[5] = s;
-      T[10] = zMerc;
-      T[15] = 1;
-      T[12] = (x + wrap * n) / n;
-      T[13] = y / n;
-      mul(M, main, T);
-      draws.push({
-        mesh,
-        matrix: Float32Array.from(M),
-        mpu: this.anchorMetresPerMerc / (n * mesh.extent),
-        origin: [
-          ((x + wrap * n) / n - this.anchor[0]) * this.anchorMetresPerMerc,
-          -(y / n - this.anchor[1]) * this.anchorMetresPerMerc,
-        ],
-      });
+      candidates.push({ mesh, z, x, y, wrap, overscaledZ: mesh.zoom });
     };
     /**
      * While a tile builds, draw what MapLibre would: the same tile at
@@ -734,6 +728,34 @@ class ExtrusionEffect {
       }
     } else this.noRawFrames = 0;
     this.stats.maxFrameUploadMs = Math.max(this.stats.maxFrameUploadMs, performance.now() - t0);
+
+    // One tile level per area: no parent drawn over its own children.
+    const chosen = this.dedupe ? selectTiles(candidates) : candidates;
+    this.stats.overlapSkipped = candidates.length - chosen.length;
+    this.lastDrawn = chosen;
+    const draws: Array<{ mesh: GpuMesh; matrix: Float32Array; mpu: number; origin: [number, number] }> = [];
+    const T = this.T, M = this.M;
+    for (const { mesh, z, x, y, wrap } of chosen) {
+      const n = 2 ** z;
+      const s = 1 / (n * mesh.extent);
+      T.fill(0);
+      T[0] = s;
+      T[5] = s;
+      T[10] = zMerc;
+      T[15] = 1;
+      T[12] = (x + wrap * n) / n;
+      T[13] = y / n;
+      mul(M, main, T);
+      draws.push({
+        mesh,
+        matrix: Float32Array.from(M),
+        mpu: this.anchorMetresPerMerc / (n * mesh.extent),
+        origin: [
+          ((x + wrap * n) / n - this.anchor[0]) * this.anchorMetresPerMerc,
+          -(y / n - this.anchor[1]) * this.anchorMetresPerMerc,
+        ],
+      });
+    }
 
     if (this.cull) {
       gl.enable(gl.CULL_FACE);
@@ -821,6 +843,10 @@ class ExtrusionEffect {
     return this.seams.report();
   }
 
+  drawnTiles() {
+    return this.lastDrawn.map(({ z, x, y, wrap, overscaledZ }) => ({ z, x, y, wrap, overscaledZ }));
+  }
+
   readyPromise(): Promise<void> {
     return new Promise<void>((resolve) => {
       const poll = () => {
@@ -887,7 +913,7 @@ export const extrusions: Backend = {
       get beforeId() {
         return fx.beforeId;
       },
-      debug: { seams: () => fx.seamReport() },
+      debug: { seams: () => fx.seamReport(), drawnTiles: () => fx.drawnTiles() },
       ready: () => fx.readyPromise(),
       detach: () => fx.detach(),
     } as BackendHandle;

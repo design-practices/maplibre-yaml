@@ -103,6 +103,12 @@ export interface AttachOptions {
    * coordinates run over the whole wall (default true). Diagnostic switch.
    */
   seams?: boolean;
+  /**
+   * Draw each area from one tile level while MapLibre briefly shows a parent
+   * tile beside its children during a zoom (default true). `false` draws
+   * both, overlapping. Diagnostic switch.
+   */
+  dedupeTiles?: boolean;
 }
 
 /** What a backend needs to draw one effect on one layer. @experimental */
