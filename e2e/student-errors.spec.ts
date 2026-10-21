@@ -375,6 +375,8 @@ test.describe("validation messages name the fix (ml-okw)", () => {
     ["smart", "layers.0.paint.circle-color: Curly quotes (“ ”) are not YAML quotes"],
     ["swapped", "config.center.1: Value must be >= -90. Coordinates are [longitude, latitude] — longitude first. Did you mean [-98, 39]?"],
     ["units", 'layers.0.paint.circle-radius: Expected number or array, got string. Write a plain number, without quotes or units: 10'],
+    // ml-aot.133: a source that doesn't exist fails validation, at the source: line.
+    ["nosource", `layers.0.source: Layer "dots" uses source "citeis", which this document doesn't define. Did you mean "cities"?`],
   ];
   test("each mistake's card says what to write instead, with the line", async ({ page }) => {
     await guard(page);

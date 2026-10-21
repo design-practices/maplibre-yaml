@@ -272,6 +272,7 @@ import {
   type SugarRemap,
 } from "./expand-sugar";
 import { checkClassify, checkClassifiedLegendItems } from "../classify/checks";
+import { checkLayerSources } from "./source-refs";
 import { restoreCategoryOrder } from "../classify/category-order";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
@@ -279,7 +280,6 @@ import { MapBlockV2Schema, type MapBlockV2 } from "../schemas/map-v2.schema";
 import { ScrollytellingBlockSchema } from "../schemas/scrollytelling.schema";
 import type { z } from "zod";
 import {
-  checkSourceReferences,
   collectWarnings,
   findHashCommentValues,
   hashCommentMessage,
@@ -641,6 +641,12 @@ export class YAMLParser {
     // replaced by one that says what happened and shows the quoted fix.
     const hashValues = findHashCommentValues(doc, lineCounter);
 
+    // A layer `source:` naming no source (ml-aot.133): an error where the
+    // layer can't be drawing from a basemap source, else a near-miss
+    // warning. Run on failed documents too, like the classify checks.
+    const sourceRefs = checkLayerSources(value, { doc, lineCounter });
+    warnings.push(...sourceRefs.warnings);
+
     const result = schema.safeParse(value);
     if (!result.success) {
       const errors = this.formatZodErrors(result.error, {
@@ -663,7 +669,15 @@ export class YAMLParser {
             (e.path.startsWith(`${layer}.`) && !e.path.startsWith(`${layer}.classify`))
         );
       });
-      const finalErrors = replaceHashCommentErrors([...errors, ...classifyErrors], hashValues);
+      // Not for a layer whose source the schema already rejected.
+      const sourceRefErrors = sourceRefs.errors.filter((r) => {
+        const layer = r.path.replace(/\.source$/, "");
+        return !errors.some((e) => e.path === layer || e.path.startsWith(`${layer}.source`));
+      });
+      const finalErrors = replaceHashCommentErrors(
+        [...errors, ...classifyErrors, ...sourceRefErrors],
+        hashValues
+      );
       // A typo reported as THE error (`config.centre: Unknown key "centre" —
       // did you mean "center"?`) need not be repeated as a warning.
       // Nor an unknown key an error already names with its own wording
@@ -683,8 +697,8 @@ export class YAMLParser {
     // `classify:` checks that need the layer around the block (layer type,
     // the paint property it writes, the source kind for `method:`).
     const classifyErrors = checkClassify(value, { doc, lineCounter });
-    if (classifyErrors.length > 0) {
-      return { success: false, errors: classifyErrors, warnings };
+    if (classifyErrors.length > 0 || sourceRefs.errors.length > 0) {
+      return { success: false, errors: [...sourceRefs.errors, ...classifyErrors], warnings };
     }
 
     // A `categories:` map with numeric keys keeps the order it was written
@@ -987,10 +1001,9 @@ export class YAMLParser {
     }
     const remaps = expansion.remaps;
 
-    // A layer `source:` that almost names a declared source (`citeis` for
-    // `cities`) validates — the name could be a basemap source — but is
-    // almost certainly a typo; say so with a did-you-mean (ml-aot.15).
-    const sourceRefWarnings = checkSourceReferences(m.value, m.doc, m.lineCounter);
+    // (A layer `source:` naming no source is checked in validateAgainst,
+    // ml-aot.15 / ml-aot.133, for every block type.)
+    const sourceRefWarnings: ValidationWarning[] = [];
     // No basemap: valid under the Astro builders, refused by <ml-map>.
     const noBasemap = missingBasemapWarning(
       m.value,
@@ -2436,7 +2449,9 @@ function findMatchingSourceBranch(
 /**
 /** The throwing entry points' half of the `classify:` layer checks. */
 function throwOnClassifyErrors(value: unknown): void {
-  const errors = checkClassify(value);
+  // The document-level checks the throwing entry points share with
+  // validateAgainst: classify, and layer sources that name nothing (ml-aot.133).
+  const errors = [...checkLayerSources(value).errors, ...checkClassify(value)];
   if (errors.length > 0) {
     throw new Error(errors.map((e) => `${e.path}: ${e.message}`).join("\n"));
   }

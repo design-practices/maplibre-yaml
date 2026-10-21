@@ -11,10 +11,14 @@ sources:
     type: geojson
     url: "data/cities.geojson"
 layers:
-  # A source-name typo: `citeis` for `cities`.
+  # A source-name typo: `citeis` for `cities`. With `source-layer:` the name
+  # could be one of the basemap style's own vector sources, so validation
+  # only warns (ml-aot.133; without source-layer: it is a validation error)
+  # and the page's notice names the layer and the missing source.
   - id: typo-layer
     type: circle
     source: citeis
+    source-layer: places
     paint:
       circle-radius: 6
       circle-color: "#2563eb"

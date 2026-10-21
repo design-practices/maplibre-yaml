@@ -19,6 +19,8 @@ describe("the !html tag resolves to a structural marker", () => {
 type: map
 id: m
 config: { center: [0, 0], zoom: 5 }
+sources:
+  s: { type: geojson, data: { type: FeatureCollection, features: [] } }
 layers:
   - id: a
     type: circle
@@ -41,6 +43,8 @@ layers:
 type: map
 id: m
 config: { center: [0, 0], zoom: 5 }
+sources:
+  s: { type: geojson, data: { type: FeatureCollection, features: [] } }
 layers:
   - id: a
     type: circle

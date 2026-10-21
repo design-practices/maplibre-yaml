@@ -184,19 +184,42 @@ describe("other union failures report the inner field (ml-okw)", () => {
   });
 });
 
-describe("a layer source: that almost names a declared source (ml-aot.15)", () => {
-  const withSources = (ref: string) =>
+describe("a layer source: that names no source (ml-aot.15, ml-aot.133)", () => {
+  const withSources = (ref: string, layerExtra = "") =>
     doc({
       extra: "sources:\n  cities:\n    type: geojson\n    data: { type: FeatureCollection, features: [] }\n",
     }).replace(
       "    source:\n      type: geojson\n      data: { type: FeatureCollection, features: [] }",
-      `    source: ${ref}`
+      `    source: ${ref}${layerExtra}`
     );
 
-  it("warns with a did-you-mean (the document still validates: it might be a basemap source)", () => {
+  it("a typo is an error at the source: line, with a did-you-mean (ml-aot.133)", () => {
     const result = parse(withSources("citeis"));
-    expect(result.success).toBe(true);
-    expect(result.warnings).toContainEqual({
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual([
+      {
+        path: "layers.0.source",
+        message:
+          'Layer "cities" uses source "citeis", which this document doesn\'t define. Did you mean "cities"? ' +
+          'Sources defined here: "cities". (To draw from one of the basemap style\'s own sources, the ' +
+          "layer also needs source-layer:.)",
+        suggestion: "cities",
+        line: 14,
+        column: 13,
+      },
+    ]);
+  });
+
+  it("a circle layer can't draw from a basemap's vector source without source-layer: an error too", () => {
+    const result = parse(withSources("openmaptiles"));
+    expect(result.success).toBe(false);
+    expect(result.errors[0]?.path).toBe("layers.0.source");
+  });
+
+  it("with source-layer: the name may be a basemap source: a near miss warns, anything else is silent", () => {
+    const near = parse(withSources("citeis", "\n    source-layer: places"));
+    expect(near.success).toBe(true);
+    expect(near.warnings).toContainEqual({
       path: "layers.0.source",
       message:
         'Layer "cities" uses source "citeis", which is not declared under sources:. Did you mean "cities"?',
@@ -204,11 +227,10 @@ describe("a layer source: that almost names a declared source (ml-aot.15)", () =
       line: 14,
       column: 13,
     });
-  });
 
-  it("does not warn for a name unlike any declared source (a basemap source)", () => {
-    const result = parse(withSources("openmaptiles"));
-    expect(result.warnings).toEqual([]);
+    const basemap = parse(withSources("openmaptiles", "\n    source-layer: place"));
+    expect(basemap.success).toBe(true);
+    expect(basemap.warnings).toEqual([]);
   });
 });
 

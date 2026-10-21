@@ -203,6 +203,8 @@ layers:
 
 Define sources at the block level and reference them by name across multiple layers. This avoids duplicating source definitions and is the recommended approach when multiple layers share the same data.
 
+A layer whose `source:` names a source the document doesn't define fails validation at that line, with a "did you mean" (since core 0.9.1). A source written inline on a layer has no name to share, even with an `id:`. The one exception is a layer that could be drawing from the basemap style's own sources: one with `source-layer:`, or a raster layer.
+
 ```yaml
 type: map
 id: earthquake-map
