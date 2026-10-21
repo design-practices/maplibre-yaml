@@ -11,7 +11,7 @@ The root configuration is the top-level structure of your maplibre-yaml file. It
 
 ## Structure
 
-```yaml
+```yaml no-validate
 config:           # Global configuration (optional)
   title: ...
   defaultMapStyle: ...
@@ -37,9 +37,17 @@ Optional top-level settings that apply across all pages.
 |----------|------|----------|---------|-------------|
 | `title` | string | No | - | Application title |
 | `description` | string | No | - | Application description |
-| `defaultMapStyle` | string (URL) | No | - | Default map style for all maps |
+| `defaultMapStyle` | string \| object | No | - | Default basemap: a style URL, a style object, or a [Protomaps basemap](/schema/map-config/#mapstyle-forms) (`{ pmtiles, flavor, lang }`, or just the `.pmtiles` path) |
+| `defaultCenter` | `[lng, lat]` | No | - | Default center |
+| `defaultZoom` | number (0–24) | No | - | Default zoom |
 | `theme` | `"light"` \| `"dark"` | No | `"light"` | Default theme |
 | `dataFetching` | object | No | - | Data fetching configuration |
+
+`defaultMapStyle`, `defaultCenter` and `defaultZoom` are filled in by the
+[Astro map builders](/integrations/astro/#global-configuration), which build a map block from a
+location and this global config. A map block written out under `pages:` still
+needs its own `center` and `zoom`, and validation warns when it has no
+`mapStyle`: the standalone `<ml-map>` element refuses a map without a basemap.
 
 ### Data Fetching Configuration
 
@@ -96,10 +104,14 @@ layers:
 
 pages:
   - path: "/"
+    title: "Home"
     blocks:
       - type: map
         id: map1
-        config: {...}
+        config:
+          center: [-100, 40]
+          zoom: 3
+          mapStyle: "https://tiles.openfreemap.org/styles/liberty"
         layers:
           - $ref: "#/layers/earthquakes"
           - $ref: "#/layers/cities"
@@ -120,7 +132,10 @@ pages:
     blocks:
       - type: map
         id: map1
-        config: {...}
+        config:
+          center: [-100, 40]
+          zoom: 3
+          mapStyle: "https://tiles.openfreemap.org/styles/liberty"
         sources:
           earthquakeData:
             type: geojson
@@ -155,7 +170,10 @@ pages:
     blocks:
       - type: map
         id: map1
-        config: {...}
+        config:
+          center: [-100, 40]
+          zoom: 3
+          mapStyle: "https://tiles.openfreemap.org/styles/liberty"
         layers:
           - id: outline
             type: line
@@ -176,7 +194,7 @@ The bare-string path form `source: "#/sources/name"` is **not** resolved — it 
 
 Required array of page configurations. At least one page must be defined.
 
-```yaml
+```yaml no-validate
 pages:
   - path: "/"
     title: "Home"
@@ -312,7 +330,7 @@ References are resolved at parse time and replaced with the actual definition. N
 The root schema enforces:
 
 - **At least one page**: `pages` array must have minimum 1 item
-- **Valid URLs**: `defaultMapStyle` must be a valid URL if provided
+- **Valid basemaps**: `defaultMapStyle` is a style URL or path, a style object, or a Protomaps basemap (a misspelt `flavor:` or `lang:` gets a did-you-mean)
 - **Valid enums**: `theme`, `defaultStrategy` must be valid enum values
 - **Numeric constraints**: `timeout` ≥ 1000, `retryAttempts` ≥ 0
 
@@ -320,7 +338,6 @@ The root schema enforces:
 
 ```
 pages: Array must have at least 1 element(s)
-config.defaultMapStyle: Invalid URL format
 config.theme: "blue" is not one of light, dark.
 config.dataFetching.timeout: Value must be >= 1000
 ```

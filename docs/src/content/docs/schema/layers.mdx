@@ -54,6 +54,16 @@ All layers share these base properties:
       default: "24",
       description: "Maximum zoom level",
     },
+    {
+      name: "paint",
+      type: "object",
+      description: "MapLibre paint properties for the layer type, passed through as the style spec defines them",
+    },
+    {
+      name: "layout",
+      type: "object",
+      description: "MapLibre layout properties for the layer type, passed through as the style spec defines them",
+    },
     { name: "filter", type: "Expression", description: "Filter expression" },
     {
       name: "visible",
@@ -87,7 +97,7 @@ All layers share these base properties:
     {
       name: "legend",
       type: "object | false",
-      description: "Legend entry configuration; false leaves the layer (and its classify classes) out of the legend",
+      description: "The layer's legend entry ({ label, color, shape }); a layer with one makes the map show a legend even without a legend: block. false leaves the layer (and its classify classes) out of the legend",
     },
     {
       name: "classify",
@@ -104,6 +114,13 @@ All layers share these base properties:
   ]}
 />
 
+`paint:`, `layout:` and `filter:` take MapLibre's
+[style spec](https://maplibre.org/maplibre-style-spec/layers/) values and
+expressions unchanged. A string value that starts with `=` (such as
+`text-field: "=upper({name})"`) is reserved for a future shorthand and gets a
+validation warning; see
+[Strings starting with `=` are reserved](/guides/layers/#strings-starting-with--are-reserved).
+
 ### `classify:`
 
 Colours (and, on circle layers, sizes) features by class — a choropleth,
@@ -117,7 +134,7 @@ symbol layers. Full guide: [Thematic maps](/guides/thematic-maps/).
 | `normalize` | string | Divide `field` by this property and classify the **rate** (cases ÷ population). A missing, zero or non-numeric divisor is no data. Numeric classes only. |
 | `multiply` | number | Scale the rate: `100` for percent, `100000` for "per 100,000". Needs `normalize:`. |
 | `breaks` | number[] | Class thresholds, as MapLibre `step`: n breaks make n + 1 classes; a value equal to a break takes the class above it. Strictly ascending. |
-| `method` | `quantile` \| `equal` \| `jenks` | Compute the breaks from the data instead — **GeoJSON sources only** (a vector tile source never holds the whole dataset). |
+| `method` | `quantile` \| `equal` \| `jenks` | Compute the breaks from the data instead — **sources read whole only**: GeoJSON, and FlatGeobuf or GeoParquet files without `load: viewport`. A vector tile source (PMTiles included) never holds the whole dataset, so it takes `breaks:`. |
 | `classes` | integer 2–12 | How many classes `method:` computes. Default 5. |
 | `categories` | `{ value: colour }` \| list | Categorical classes (compiles to `match`): a map of value → colour, or a list of values coloured from `palette:`/`colors:`. |
 | `palette` | string | A palette name, case-insensitive: ColorBrewer (`Blues`, `YlGnBu`, `RdBu`, `Set2` …), `viridis`, `cividis`, `okabe-ito`. Default `YlGnBu` (numeric), `okabe-ito` (categories). |
@@ -164,8 +181,8 @@ layers:
 ### `effect:` (experimental)
 
 :::caution[Experimental]
-`effect:` and `@maplibre-yaml/effects` are experimental in 0.7: the key's
-params and the effects API may change in a minor release.
+`effect:` and `@maplibre-yaml/effects` are experimental: the key's params
+and the effects API may change in a minor release.
 :::
 
 An `effect:` block names a registered effect and carries its params flat
@@ -454,7 +471,9 @@ layers:
 Draws text labels and icons at points (or along lines). Text is drawn with
 the basemap style's fonts (its `glyphs`), so `text-font` must name a font
 that style has: the OpenFreeMap styles have `Noto Sans Regular`, `Noto Sans
-Bold` and `Noto Sans Italic`. A label layer without `text-font` borrows a
+Bold` and `Noto Sans Italic`, and the [Protomaps
+basemap](/schema/map-config/#mapstyle-forms) has `Noto Sans Regular`, `Noto
+Sans Medium` and `Noto Sans Italic`. A label layer without `text-font` borrows a
 font the basemap style's own labels use (from core 0.8.1): its "Regular"
 font if it has one (`Noto Sans Regular` on OpenFreeMap), otherwise the one
 its labels use most, so the text loads from the basemap's glyphs; if the basemap has no labels to borrow
@@ -801,7 +820,7 @@ A link item needs `href`. Its text is `str` or `text` (if both are given,
 ```yaml
 popup:
   - p:
-      - str: "Back to the class page"
+      - str: "Back to the home page"
         href: "/"
         target: _self
 ```

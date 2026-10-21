@@ -9,6 +9,21 @@ This guide explains the fields and shows them in use. For every key — type, de
 
 The maplibre-yaml schema is built on [Zod](https://zod.dev), providing type-safe configuration with automatic validation and TypeScript type inference.
 
+## Three kinds of document
+
+| Document | Starts with | Shown by |
+|---|---|---|
+| A map | `type: map` | `<ml-map src="…">`, the Astro `<Map>` and `<FullPageMap>` components |
+| A story | `type: scrollytelling` | `<ml-scrollytelling src="…">`, the Astro `<Scrollytelling>` component |
+| A multi-page document | `pages:` (no `type:`) | Your own site code, which renders each block (see [root](/schema/root/) and [pages & blocks](/schema/pages/)) |
+
+A map or story can also carry a `title:` and `description:`, which name and
+describe it for screen readers ([Accessibility & languages](/guides/accessibility-languages/)).
+Every page outside *Advanced* uses format v1, the default;
+[format v2](/guides/format-v2/) is an opt-in alternative layout of the same
+map. Check any of these files with `npx maplibre-yaml validate file.yaml`
+([The CLI](/cli/getting-started/)).
+
 ## Architecture
 
 The schema follows a hierarchical structure:
@@ -25,6 +40,7 @@ RootSchema
         └── blocks (array)
             ├── ContentBlock
             ├── MapBlock
+            ├── MapFullPageBlock
             ├── ScrollytellingBlock
             └── MixedBlock
 ```
@@ -53,9 +69,9 @@ if (result.success) {
 Schemas are composed from smaller, reusable schemas:
 
 - **Base schemas**: LngLat, ZoomLevel, Color, Expression
-- **Source schemas**: GeoJSON, Vector, Raster, Raster DEM, Image, Video
+- **Source schemas**: GeoJSON, Vector, Raster, Raster DEM, Image, Video (PMTiles, FlatGeobuf, GeoParquet and COG files use these types with a `url:` to the file; see [Sources](/schema/sources/#cloud-native-files))
 - **Layer schemas**: Circle, Line, Fill, Symbol, Heatmap, etc.
-- **Block schemas**: Content, Map, Scrollytelling, Mixed
+- **Block schemas**: Content, Map, Map (full page), Scrollytelling, Mixed
 - **Page schemas**: Page, Root, GlobalConfig
 
 ### Default Values
@@ -93,7 +109,7 @@ config:
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
-Note that `mapStyle` itself is optional in the schema: the Astro integration can inherit it from a global `defaultMapStyle`. Standalone `<ml-map>` usage still needs it at render time.
+`mapStyle` is not a required key in the schema, because the Astro map builders can fill it in from a global `defaultMapStyle`. A map without one gets a validation warning (in `mlym validate` too), and the standalone `<ml-map>` element shows an error card instead of the map.
 
 ## Validation
 
@@ -142,18 +158,29 @@ layers:
   myLayer:
     id: shared-layer
     type: circle
-    source: {...}
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
 
 # Reference multiple times
 pages:
   - path: "/"
+    title: "Home"
     blocks:
       - type: map
         id: map1
+        config:
+          center: [-100, 40]
+          zoom: 3
+          mapStyle: "https://tiles.openfreemap.org/styles/liberty"
         layers:
           - $ref: "#/layers/myLayer"
       - type: map
         id: map2
+        config:
+          center: [140, 36]
+          zoom: 4
+          mapStyle: "https://tiles.openfreemap.org/styles/liberty"
         layers:
           - $ref: "#/layers/myLayer"
 ```

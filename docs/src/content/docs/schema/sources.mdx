@@ -389,11 +389,17 @@ source:
 
 Real-time data via WebSocket or Server-Sent Events.
 
+A streamed source still needs somewhere to start: a `url:` to load first, or
+`data:` with an empty `FeatureCollection` to start blank (validation refuses a
+GeoJSON source with only `stream:`). Write a `refresh:` block next to
+`stream:`: its `updateStrategy` says how each message is applied.
+
 ### WebSocket
 
 ```yaml
 source:
   type: geojson
+  data: { type: FeatureCollection, features: [] }   # empty until messages arrive
   stream:
     type: websocket
     url: "wss://api.example.com/stream"
@@ -412,6 +418,7 @@ source:
 ```yaml
 source:
   type: geojson
+  url: "https://api.example.com/features"   # the current state, loaded first
   stream:
     type: sse
     url: "https://api.example.com/events"
@@ -625,7 +632,7 @@ source:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `url` | string | - | TileJSON URL, or a PMTiles archive (`.pmtiles` / `pmtiles://`) |
+| `url` | string | - | TileJSON URL, a PMTiles archive (`.pmtiles` / `pmtiles://`), or a Cloud Optimized GeoTIFF (`.tif` / `.tiff` / `cog://`, [cloud-native](#cloud-native-files-pmtiles-flatgeobuf-geoparquet-cog)) |
 | `tiles` | string[] | - | Tile URL templates |
 | `tileSize` | number | `512` | Tile size in pixels |
 | `minzoom` | number | - | Minimum zoom level |
@@ -666,7 +673,7 @@ source:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `url` | string | - | TileJSON URL, or a PMTiles archive (`.pmtiles` / `pmtiles://`) |
+| `url` | string | - | TileJSON URL, a PMTiles archive (`.pmtiles` / `pmtiles://`), or a Cloud Optimized GeoTIFF (`.tif` / `.tiff` / `cog://`, [cloud-native](#cloud-native-files-pmtiles-flatgeobuf-geoparquet-cog)) |
 | `tiles` | string[] | - | Tile URL templates |
 | `tileSize` | number | `512` | Tile size in pixels |
 | `encoding` | `"terrarium"` \| `"mapbox"` \| `"custom"` | `"mapbox"` | Elevation encoding |
@@ -910,19 +917,29 @@ reflects the change. That is intended: one source, one dataset.
 
 ### Referencing With `$ref`
 
-A layer can also point at a source with a JSON-pointer style reference, which
-resolves against the block's own `sources:`:
+A layer can also point at a source with a JSON-pointer style reference. In a
+map document it resolves against the document's own `sources:`; in a
+[multi-page document](/schema/root/#root-level-sources-ref) it resolves
+against the root `sources:`, next to `pages:`.
 
 ```yaml
+sources:
+  boundary:
+    type: geojson
+    url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
+
 layers:
   - id: boundary-fill
     type: fill
     source: { $ref: "#/sources/boundary" }
 ```
 
-This is equivalent to `source: boundary`. Prefer the bare name for readability;
-`$ref` exists for generated documents and tooling. Nested references — a `$ref`
-whose target itself contains a `$ref` — are not resolved.
+Unlike the bare name (`source: boundary`), which shares one source between
+the layers that name it, `$ref` copies the definition into the layer when the
+document is read, so each layer gets its own copy. Prefer the bare name;
+`$ref` exists for generated documents, tooling and multi-page documents.
+Nested references — a `$ref` whose target itself contains a `$ref` — are not
+resolved.
 
 Block-level sources are added to the map before layers are processed, so any layer in that block can reference them by name. This avoids duplicating source definitions when multiple layers use the same data.
 
@@ -959,7 +976,10 @@ pages:
           - $ref: "#/layers/quakes"
 ```
 
-Note that a layer's `source:` field cannot reference root-level definitions: the string form `source: "#/sources/name"` is never resolved, and bare names (`source: quakes`) only resolve against the map block's own `sources:` section.
+A layer can also reach a root-level source with the object form
+`source: { $ref: "#/sources/name" }` (see [Root-level sources](/schema/root/#root-level-sources-ref)).
+The string form `source: "#/sources/name"` is never resolved, and bare names
+(`source: quakes`) only resolve against the map block's own `sources:` section.
 
 ### Inline Sources
 
@@ -990,6 +1010,7 @@ All three patterns (block-level named sources, shared named layers, inline sourc
   type: circle
   source:
     type: geojson
+    data: { type: FeatureCollection, features: [] }
     stream:
       type: websocket
       url: "wss://api.example.com/vehicles"
