@@ -9,7 +9,9 @@
  *  - `schema/v<major.minor>/<block>.schema.json` — versioned copies
  *  - `_redirects`                          — older `schema/v<major.minor>/`
  *                                            URLs → the CDN copy of that
- *                                            release's schemas (Cloudflare Pages)
+ *                                            release's schemas, and moved docs
+ *                                            pages (docs/redirects.mjs) → their
+ *                                            new address (Cloudflare Pages)
  *  - `llms.txt`                            — agent index
  *  - `llms-full.txt`                       — self-contained agent reference
  *
@@ -28,6 +30,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cloudflarePageRedirectLines } from '../redirects.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DOCS_ROOT = join(__dirname, '..');
@@ -133,8 +136,13 @@ function writeSchemaRedirects(version) {
       `/schema/v${major}.${m}/* https://cdn.jsdelivr.net/npm/@maplibre-yaml/core@${major}.${m}/schemas/:splat 302`,
     );
   }
+  const schemaLines = lines.length - 2;
+  // Pages that moved (docs/redirects.mjs): HTTP 301s keep a link's #fragment,
+  // which the meta-refresh pages Astro writes for the same paths drop.
+  lines.push('# Docs pages that moved -> their new address (docs/redirects.mjs).');
+  lines.push(...cloudflarePageRedirectLines());
   writeFileSync(join(PUBLIC_DIR, '_redirects'), lines.join('\n') + '\n', 'utf-8');
-  return lines.length - 2;
+  return schemaLines;
 }
 
 function readConfig(name) {
