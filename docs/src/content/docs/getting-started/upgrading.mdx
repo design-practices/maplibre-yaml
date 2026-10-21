@@ -64,7 +64,8 @@ npm install @maplibre-yaml/core@latest
 </TabItem>
 <TabItem label="Astro">
 
-Upgrade core and the Astro package together:
+Upgrade core and the Astro package together (`@maplibre-yaml/astro` 0.7
+requires `@maplibre-yaml/core` 0.9 or later):
 
 ```bash
 npm install @maplibre-yaml/core@latest @maplibre-yaml/astro@latest
@@ -198,6 +199,10 @@ and what to do about each, if anything.
   - On a narrow map, a legend and a layer panel in two corners of the same
     edge no longer overlap, and a story's pinned legend no longer covers the
     map's notice.
+  - `mlym validate` prints *notes* (`ℹ note`) that explain how a valid value
+    is read, such as a basemap written as just a `.pmtiles` file. Notes are
+    not warnings: the file still reads `✓ valid`, and `--strict` never fails
+    on them.
   - `mlym init --template basic` and `--template story` load core at the
     release line the CLI was built with, so a new project gets the features
     these docs describe.

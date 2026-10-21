@@ -9,17 +9,23 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## Who Is This For?
 
-### 🎓 Students
+Anyone who wants an interactive web map without writing the JavaScript for
+it, for example:
 
-Learning web mapping but don't want to write JavaScript? maplibre-yaml lets you focus on cartography and data visualization without the programming overhead.
-
-### 🚀 Developers
-
-Need to prototype maps quickly? Define layers, styling, and interactivity in YAML and iterate faster than ever.
-
-### 📝 Content Creators
-
-Building story maps or data journalism pieces? Write the story (chapters, camera moves, layer changes) as a YAML file, then show it with a few lines of HTML: one `<ml-scrollytelling>` element in a plain page ([Story maps in plain HTML](/integrations/scrollytelling-html/)), or the `<Scrollytelling>` component in an Astro site ([Story maps in Astro](/integrations/astro/#scrollytelling-component)). No JavaScript to write.
+- **Developers**, who want to prototype a map quickly: layers, styling and
+  interactivity in one file that is fast to change.
+- **Writers, journalists and researchers**, who build story maps and data
+  pieces. Write the story (chapters, camera moves, layer changes) as a YAML
+  file, then show it with a few lines of HTML: one `<ml-scrollytelling>`
+  element in a plain page ([Story maps in plain HTML](/integrations/scrollytelling-html/)),
+  or the `<Scrollytelling>` component in an Astro site
+  ([Story maps in Astro](/integrations/astro/#scrollytelling-component)).
+  No JavaScript to write.
+- **People learning web mapping**, who want to focus on cartography and data
+  rather than on programming.
+- **People who already know MapLibre**, who want the style spec they know
+  (`paint:`, `layout:`, expressions) with data loading, popups and legends
+  added in the same file.
 
 ## How It Works
 
@@ -77,8 +83,11 @@ layers:
 | ---------------------- | ----------------------------------- |
 | **Declarative Config** | Define maps in YAML or JSON         |
 | **Runtime Data**       | Fetch GeoJSON when map loads        |
+| **Thematic maps**      | Choropleths and graduated symbols with `classify:`, legend included ([guide](/guides/thematic-maps/)) |
+| **Large data**         | PMTiles, FlatGeobuf, GeoParquet and COG files from a static host ([guide](/guides/cloud-native-data/)) |
 | **Live Updates**       | WebSocket, SSE, and polling support |
 | **Scrollytelling**     | Narrative story maps                |
+| **Accessible, translatable** | Map titles and descriptions for screen readers, translatable text ([guide](/guides/accessibility-languages/)) |
 | **Web Components**     | `<ml-map>` works anywhere           |
 | **Type Safety**        | Full TypeScript support             |
 

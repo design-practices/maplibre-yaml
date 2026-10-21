@@ -18,7 +18,10 @@ Layers are how you visualize data on your map. maplibre-yaml supports all MapLib
 | `fill`           | Areas, regions, polygons | Polygon      |
 | `fill-extrusion` | 3D buildings             | Polygon      |
 | `heatmap`        | Density visualization    | Point        |
-| `raster`         | Satellite imagery        | Raster tiles |
+| `raster`         | Satellite imagery, scanned maps, [COG](/guides/cloud-native-data/) files | Raster tiles |
+| `hillshade`      | Shaded relief            | Elevation (`raster-dem`) |
+| `color-relief`   | Elevation coloured by height (maplibre-gl 5.6 or later) | Elevation (`raster-dem`) |
+| `background`     | A colour or pattern under everything | None |
 
 <Aside type="note" title="Layer snippets">
   Each snippet on this page is one entry of a map document's `layers:` list,
@@ -208,7 +211,7 @@ MapLibre's own `==` operator (`["==", ["get", "kind"], "park"]`, or a legacy
 
 Layers are drawn in order. Later layers appear on top:
 
-```yaml
+```yaml no-validate
 layers:
   - id: background-fill      # Drawn first (bottom)
     type: fill
@@ -220,6 +223,12 @@ layers:
     type: symbol
     # source, layout, ...
 ```
+
+All of them draw above the basemap. To slide a layer under part of the
+basemap, such as its labels, name that basemap layer in `before:`
+(`before: place_label`): your layer is drawn just below it. If `before:` names
+a layer the map doesn't have, your layer is drawn on top instead and, while
+you develop, a note on the map suggests the closest layer id.
 
 ## Filtering layers
 
@@ -233,6 +242,30 @@ Show only features matching certain criteria:
   paint:
     circle-color: "#ef4444"
 ```
+
+## In the legend
+
+Give a layer a `legend:` entry and the map shows a legend listing it, top left
+and open, even without a `legend:` block of its own:
+
+```yaml
+- id: parks
+  type: fill
+  source:
+    type: geojson
+    url: "./data/parks.geojson"
+  paint:
+    fill-color: "#22c55e"
+  legend:
+    label: Parks
+    color: "#22c55e"
+    shape: square
+```
+
+A map-level `legend:` block places and titles it; `legend: false` on a layer
+leaves that layer out, and `legend: false` at the top level hides the legend.
+A [classified](/guides/thematic-maps/) layer lists its classes automatically.
+See [Legend](/schema/map-config/#legend).
 
 ## Next steps
 

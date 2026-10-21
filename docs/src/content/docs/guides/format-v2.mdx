@@ -112,13 +112,18 @@ Everything under `style:` contributes to the compiled MapLibre style, possibly
 by transformation. It carries:
 
 - **`basemap`** — the base style URL (or inline style object) that is merged in
-  at compile time. This is v2's name for v1's `mapStyle`.
+  at compile time. This is v2's name for v1's `mapStyle`, and it takes the same
+  forms, including a [Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap)
+  from one `.pmtiles` file (`basemap: data/nyc.pmtiles`, or
+  `basemap: { pmtiles: data/nyc.pmtiles, flavor: dark }`).
 - **the camera** — `center`, `zoom`, `pitch`, `bearing`, lifted to the `style:`
   root because they are style-spec root properties.
 - **`sources`** — your data sources, each keyed by name.
 - **`layers`** — your layer list, in draw order.
 - **`state`** — spec-native runtime-tunable values (read by the `global-state`
   expression), and optional `metadata`.
+- **`images`, `terrain`, `sky`, `light`, `projection`** — the style-spec root
+  properties, as in v1.
 
 ### `runtime:` — what degrades
 
@@ -127,7 +132,9 @@ compiled `style.json` — when you export to a plain style, it is stripped. It
 carries:
 
 - **`map`** — MapLibre `Map` constructor options (`minZoom`, `maxZoom`,
-  `scrollZoom`, `interactive`, `maxBounds`, and the rest).
+  `scrollZoom`, `interactive`, `bounds`, `maxBounds`, `locale`, and the rest).
+- **`fitTo`** — frame the map on a source's data when it loads.
+- **`markers`** and **`popups`** — map-level markers and popups.
 - **`controls`** — navigation, scale, geolocate, fullscreen, attribution.
 - **`legend`** — the map-level legend.
 - **`parameters`** — presentation metadata for your `state` keys (label, type,
@@ -165,7 +172,9 @@ no need to consult a table.
 ## Per-source runtime: live data stays beside its source
 
 A source's live-data configuration — polling `refresh`, `stream`, `cache`,
-`loading` — nests under that source's own `runtime:` key. It sits right beside
+`loading` — nests under that source's own `runtime:` key, as do the keys that
+say how a [large-data file](/guides/cloud-native-data/#format-v2) is read:
+`format`, `load`, `columns` and `colorRamp`. It sits right beside
 the spec fields it acts on, so a source is still one thing to edit.
 
 ```yaml
@@ -200,10 +209,13 @@ The spec half of the source (`type`, `url`, `data`, `cluster`, …) compiles int
 
 ## Per-layer runtime: interactions, legend, label, toggle
 
-A layer's experience keys — `interactive`, `legend`, `label`, `toggleable` —
-nest under the layer's own `runtime:`. The paint, layout, filter, type, and
-source stay exactly where they are in v1 (they are byte-identical to v1) and
-compile straight through.
+A layer's experience keys — `interactive`, `legend`, `label`, `toggleable`,
+and the experimental `effect` — nest under the layer's own `runtime:`
+(`legend: false` there keeps the layer out of the legend). The paint, layout,
+filter, type, source and `before` stay exactly where they are in v1 (they are
+byte-identical to v1), and so does a
+[`classify:`](/guides/thematic-maps/) block, which compiles to plain paint
+expressions.
 
 ```yaml
 version: 2
@@ -285,15 +297,22 @@ relocation, not a rewrite — every value keeps its meaning and its spelling
 
 | v1 location | v2 location |
 | --- | --- |
+| top-level `title` / `description` | unchanged: the document root |
 | `config.mapStyle` | `style.basemap` (renamed) |
 | `config.center` / `zoom` / `pitch` / `bearing` | `style.center` / `zoom` / `pitch` / `bearing` |
-| `config.minZoom` / `maxZoom` / `maxBounds` / `minPitch` / `maxPitch` | `runtime.map.*` |
+| `config.bounds` / `minZoom` / `maxZoom` / `maxBounds` / `minPitch` / `maxPitch` | `runtime.map.*` |
+| `config.locale` | `runtime.map.locale` |
+| `config.fitTo` | `runtime.fitTo` |
 | `config.interactive` / `scrollZoom` / `boxZoom` / `dragRotate` / `dragPan` / `keyboard` / … | `runtime.map.*` |
 | `config.hash` / `attributionControl` / `logoPosition` / `trackResize` | `runtime.map.*` |
 | top-level `sources` | `style.sources` |
 | source `refresh` / `stream` / `cache` / `loading` | source `runtime.*` |
+| source `format` / `load` / `columns` / `colorRamp` | source `runtime.*` |
 | top-level `layers` | `style.layers` |
-| layer `interactive` / `legend` / `label` / `toggleable` | layer `runtime.*` |
+| layer `classify` / `before` | unchanged: on the layer |
+| layer `interactive` / `legend` / `label` / `toggleable` / `effect` | layer `runtime.*` |
+| top-level `images` / `terrain` / `sky` / `light` / `projection` | `style.*` |
+| top-level `markers` / `popups` | `runtime.markers` / `runtime.popups` |
 | top-level `controls` | `runtime.controls` |
 | top-level `legend` | `runtime.legend` |
 | block `style:` / `className:` | `runtime.container.style` / `runtime.container.className` |
@@ -309,8 +328,9 @@ relocation, not a rewrite — every value keeps its meaning and its spelling
 
 ## Next steps
 
-- [Data Sources](/guides/data-sources/) — GeoJSON, URLs, and remote APIs
-- [Live Data & Streaming](/guides/live-data/) — the keys that nest under a
+- [Loading data](/guides/data-sources/) — GeoJSON, URLs, and remote APIs
+- [Live data & streaming](/guides/live-data/) — the keys that nest under a
   source's `runtime:`
-- [Working with Layers](/guides/layers/) — paint, layout, and filters, which are
+- [Layers & styling](/guides/layers/) — paint, layout, and filters, which are
   identical across v1 and v2
+- [Map block (v2, opt-in) reference](/reference/yaml/map-v2/) — every v2 key

@@ -86,7 +86,7 @@ footer: "..."        # Optional footer HTML
 | `cameraOffset` | boolean | No | `true` | Offset the camera so each chapter's `center` isn't under its card (beside a left/right card, above a centred one, above the card on a phone). `false` centres it in the whole map. A chapter's own `padding` always wins |
 | `layers` | array | No | `[]` | Persistent layers |
 | `footer` | string | No | - | Footer HTML content |
-| `legend` | object | No | - | The story's legend, pinned above the cards (see [The legend](#the-legend)): the map legend's `title` and `items`, an optional `position`, and `collapsed: auto` (default), `true` or `false` |
+| `legend` | object or `false` | No | - | The story's legend, pinned above the cards (see [The legend](#the-legend)): the map legend's `title` and `items`, an optional `position`, and `collapsed: auto` (default), `true` or `false`. A story with a `classify:` layer, or a layer with its own `legend:` entry, gets one without it; `false` turns it off |
 | `sources`, `markers`, `state`, `parameters`, `popups`, `images`, `controls`, `terrain`, `sky`, `projection`, `light` | - | No | - | The story's map takes every map-level key a [`type: map` document](/schema/map-config/) does, with the same schema (see [Map-level keys](#map-level-keys)) |
 
 ## Chapters
@@ -352,6 +352,8 @@ Execute actions when entering or exiting chapters.
 | `setFilter` | Update layer filter |
 | `setPaintProperty` | Update layer paint property |
 | `setLayoutProperty` | Update layer layout property |
+| `flyTo` | Fly the camera to the `options` given (`center`, `zoom`, …) |
+| `easeTo` | Ease the camera to the `options` given |
 | `fitBounds` | Fit map to bounds |
 | `custom` | Custom action (application-defined) |
 
@@ -424,6 +426,9 @@ Execute actions when entering or exiting chapters.
         padding: 50
         duration: 2000
 ```
+
+`bounds` takes either of MapLibre's forms: four numbers
+`[west, south, east, north]`, or two corners `[[west, south], [east, north]]`.
 
 ## Themes
 
@@ -607,7 +612,7 @@ and never moves while the story scrolls.
   focus back on the button, and on a phone a tap outside closes it. A long
   legend scrolls inside the panel.
 
-```yaml
+```yaml no-validate
 legend:
   title: Harbour tour
   collapsed: auto        # true | false | auto
@@ -619,10 +624,12 @@ legend:
 A `slot="legend"` child of the story fills the same panel with your own markup
 instead of the entries.
 
-A story with a [`classify:`](/guides/thematic-maps/) layer pins a legend even
-without a `legend:` block, by the same rules (a "Legend" button where cards
-pass its corner, open elsewhere), listing the layer's classes; `legend: false`
-turns it off. The story's map never draws a second legend under the cards.
+A story with a [`classify:`](/guides/thematic-maps/) layer, or a layer with its
+own `legend: { label, color }` entry, pins a legend even without a `legend:`
+block, by the same rules (a "Legend" button where cards pass its corner, open
+elsewhere), listing the layer's classes or entry; `legend: false` at the top
+level turns it off, and `legend: false` on a layer leaves that layer out. The
+story's map never draws a second legend under the cards.
 
 Everything else on the map stays put too. MapLibre's controls (scale bar,
 attribution, zoom buttons), corner slots, the params panel and the on-map

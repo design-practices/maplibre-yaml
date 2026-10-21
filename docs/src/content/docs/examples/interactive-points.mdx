@@ -83,13 +83,27 @@ Unicode characters work in popup text:
 
 ## Advanced: Hover effects
 
-You can also change styling on hover:
+To highlight the point under the pointer, add `highlight: true`: the layer's
+colour changes while the pointer is over a feature, with no paint to write.
 
 ```yaml
 interactive:
   hover:
     cursor: pointer
-    paint:
-      circle-radius: 18        # Grow on hover
-      circle-stroke-width: 4   # Thicker stroke
+    highlight: true
 ```
+
+To change something else on hover, such as the size, reference the hover
+state in the paint value yourself, a MapLibre `feature-state` expression:
+
+```yaml
+paint:
+  circle-radius:
+    - case
+    - ["boolean", ["feature-state", "hover"], false]
+    - 18                       # Grow on hover
+    - 12
+```
+
+Hover state needs feature ids: add `generateId: true` (or `promoteId`) to the
+source. See [Hover](/schema/interactivity/#hover) for the details.

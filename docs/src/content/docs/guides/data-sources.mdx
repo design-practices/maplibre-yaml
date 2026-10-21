@@ -99,42 +99,45 @@ source:
 | `enabled: false`        | Always fetch from network          |
 
 <Aside>
-  Caching is in-memory only and resets when the page reloads. For offline
-  support, see the future roadmap.
+  Caching is in memory only and resets when the page reloads.
 </Aside>
 
 ## Loading states
 
-Show feedback while data loads:
+You don't need to configure anything for loading feedback. While a map
+starts, `<ml-map>` marks itself busy for screen readers (`aria-busy="true"`),
+and if it hasn't drawn after about a second, a small "Loading map…" appears in
+its middle until the basemap draws. A data file that fails to load shows a
+notice on the map ("Part of this map couldn't load"), with the reason under
+"Details for the site's author"; the rest of the map still draws. See
+[Troubleshooting](/troubleshooting/#reading-what-the-map-tells-you).
 
-```yaml
-source:
-  type: geojson
-  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
-  loading:
-    enabled: true
-    message: "Loading earthquake data..."
-```
-
-When enabled, maplibre-yaml shows a spinner overlay while fetching data and an error message if the fetch fails.
+A source's `loading:` key (`enabled`, `message`) still validates, but in this
+release it draws no overlay of its own.
 
 ### Handling errors programmatically
 
-```javascript
-const renderer = new MapRenderer(container, config);
+With the [JavaScript API](/integrations/vanilla-js/), listen for each layer's
+data as it loads:
 
-renderer.on("layer:loading", ({ layerId }) => {
+```javascript
+const renderer = new MapRenderer(container, block.config, block.layers);
+
+renderer.on("layer:data-loading", ({ layerId }) => {
   console.log(`Loading ${layerId}...`);
 });
 
-renderer.on("layer:loaded", ({ layerId, featureCount, fromCache }) => {
-  console.log(`Loaded ${featureCount} features (cached: ${fromCache})`);
+renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
+  console.log(`Loaded ${featureCount} features into ${layerId}`);
 });
 
-renderer.on("layer:error", ({ layerId, error }) => {
+renderer.on("layer:data-error", ({ layerId, error }) => {
   console.error(`Failed to load ${layerId}:`, error.message);
 });
 ```
+
+`<ml-map>` fires the same moments as DOM events (`ml-map:layer-data-loaded`
+and so on): see [HTML pages: the `<ml-map>` element](/integrations/web-components/#event-reference).
 
 ## Clustering
 

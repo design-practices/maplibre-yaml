@@ -16,7 +16,7 @@
         "owner": "maplibre-yaml",
         "fileLocation": "absolute",
         "pattern": {
-          "regexp": "^(.+):(\\d+):(\\d+): (error|warning): (.*)$",
+          "regexp": "^(.+):(\\d+):(\\d+): (error|warning|info): (.*)$",
           "file": 1,
           "line": 2,
           "column": 3,
@@ -45,7 +45,7 @@
         "owner": "maplibre-yaml",
         "fileLocation": "absolute",
         "pattern": {
-          "regexp": "^(.+):(\\d+):(\\d+): (error|warning): (.*)$",
+          "regexp": "^(.+):(\\d+):(\\d+): (error|warning|info): (.*)$",
           "file": 1,
           "line": 2,
           "column": 3,
@@ -71,7 +71,7 @@
         "owner": "maplibre-yaml",
         "fileLocation": "absolute",
         "pattern": {
-          "regexp": "^(.+):(\\d+):(\\d+): (error|warning): (.*)$",
+          "regexp": "^(.+):(\\d+):(\\d+): (error|warning|info): (.*)$",
           "file": 1,
           "line": 2,
           "column": 3,

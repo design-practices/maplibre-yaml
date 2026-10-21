@@ -31,6 +31,10 @@ them) report problems on the page, not only in the browser console:
   site.
 - **Height hint.** A map with no height is invisible, so the element shows a
   note saying to give it one.
+- **"Loading map…"**, in the middle of the map. The map hasn't drawn yet
+  after about a second, usually because the basemap or a `fitTo` data file is
+  slow to arrive. It goes away when the basemap draws, or is replaced by the
+  error card. It isn't a problem report, so `quiet` doesn't hide it.
 
 Two attributes change what shows: **`debug`** shows the author hints on any
 site, which helps when checking a deployed page; **`quiet`** hides the notice

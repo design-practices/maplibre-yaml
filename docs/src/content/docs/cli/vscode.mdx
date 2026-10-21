@@ -3,11 +3,11 @@ title: VS Code tasks
 description: Use maplibre-yaml with Visual Studio Code
 ---
 
-Integrate maplibre-yaml validation into your VSCode workflow for real-time error detection and quick fixes.
+Run maplibre-yaml's validator from VS Code and see its errors, warnings and notes in the Problems panel, next to the lines they belong to.
 
 ## Quick Start (No Extension Required)
 
-You can use maplibre-yaml with VSCode immediately using the built-in **Tasks** feature:
+You can use maplibre-yaml with VS Code immediately using the built-in **Tasks** feature:
 
 ### Step 1: Add Task Configuration
 
@@ -32,7 +32,7 @@ Create or update `.vscode/tasks.json` in your project:
         "owner": "maplibre-yaml",
         "fileLocation": "absolute",
         "pattern": {
-          "regexp": "^(.+):(\\d+):(\\d+): (error|warning): (.*)$",
+          "regexp": "^(.+):(\\d+):(\\d+): (error|warning|info): (.*)$",
           "file": 1,
           "line": 2,
           "column": 3,
@@ -59,11 +59,11 @@ Create or update `.vscode/tasks.json` in your project:
 
 ### Step 3: View Errors
 
-Errors appear in the **Problems** panel (`Cmd+Shift+M` / `Ctrl+Shift+M`) with:
-- ✅ Clickable file paths
-- ✅ Line and column numbers
-- ✅ Error messages with context
-- ✅ Quick navigation to error locations
+Errors appear in the **Problems** panel (`Cmd+Shift+M` / `Ctrl+Shift+M`),
+each with its file, line and column: click one to jump to it. Warnings (for
+example a map with no basemap, or a style value starting with the reserved
+`=`) appear as warnings, and notes, which explain how a valid value is read
+(such as a basemap written as just a `.pmtiles` file), appear as information.
 
 ## Configuration Files
 
@@ -72,7 +72,9 @@ Errors appear in the **Problems** panel (`Cmd+Shift+M` / `Ctrl+Shift+M`) with:
 Download the complete configuration with all tasks:
 [tasks.json example](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/tasks.json)
 
-Includes:
+It includes three tasks, whose problem matchers pick up errors, warnings and
+notes (`info`):
+
 - **Validate Current File**: Validates the open file
 - **Validate All Configs**: Validates all YAML files
 - **Watch and Validate**: Continuous validation
@@ -136,11 +138,10 @@ Run **maplibre-yaml: Watch and Validate** for continuous validation:
 - Runs in background
 - Updates Problems panel on file save
 - Shows real-time errors
-- Perfect for development workflow
 
 ## Problem Matcher
 
-The VSCode Problem Matcher parses CLI output in the format:
+VS Code's problem matcher parses CLI output in the format:
 
 ```
 file:line:column: severity: [path] message
@@ -148,10 +149,10 @@ file:line:column: severity: [path] message
 
 Example:
 ```
-/Users/you/project/config.yaml:5:10: error: [config.center] Expected array, got string
+/Users/you/project/config.yaml:4:11: error: [config.center] center needs square brackets: center: [0, 0]
 ```
 
-This enables VSCode to:
+This enables VS Code to:
 - Parse error locations
 - Underline errors in the editor
 - Display in Problems panel
@@ -165,10 +166,12 @@ The `--format vscode` flag produces Problem Matcher-compatible output:
 npx maplibre-yaml validate config.yaml --format vscode
 ```
 
-Output:
+Output (one line per problem; `severity` is `error`, `warning`, or `info`
+for a note):
 ```
-/path/to/config.yaml:5:10: error: [config.center] Expected array
-/path/to/config.yaml:12:3: warning: [layers[0]] Deprecated property
+/path/to/config.yaml:4:11: error: [config.center] center needs square brackets: center: [0, 0]
+/path/to/config.yaml:3:1: warning: [config.mapStyle] No mapStyle: this map has no basemap. …
+/path/to/other.yaml:6:3: info: [config.mapStyle] mapStyle: "data/nyc.pmtiles" names a .pmtiles file, so it is read as a Protomaps basemap …
 ```
 
 ## Keyboard Shortcuts
@@ -182,23 +185,15 @@ Recommended shortcuts:
 | Next Error | `F8` | - |
 | Previous Error | `Shift+F8` | - |
 
-## Future: Native Extension
+## Checking as you type
 
-We're planning a native VSCode extension with:
-
-- ✅ Real-time validation as you type
-- ✅ Autocomplete for map properties
-- ✅ Hover documentation
-- ✅ Inline map preview
-- ✅ Go to definition for layer references
-- ✅ Rename refactoring
-
-**Roadmap**: [Extension Architecture](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/EXTENSION_ROADMAP.md)
-
-**Phase 1** (Available Now): CLI with Tasks
-**Phase 2** (Q1 2025): Extension MVP
-**Phase 3** (Q2 2025): Language Server
-**Phase 4** (Q3 2025): Preview Webview
+There is no maplibre-yaml extension for VS Code. As-you-type checking,
+autocomplete and hover documentation come from the Red Hat **YAML** extension
+reading maplibre-yaml's JSON Schema (see [YAML Schema Settings](#yaml-schema-settings)
+above and [Editor setup](/guides/editor-setup/)). The task on this page adds
+what the schema can't check: the validator's own rules, such as a layer
+naming a source the document doesn't declare (with a "did you mean"), a
+misspelt `fitTo` source, or a map with no basemap.
 
 ## Troubleshooting
 
@@ -206,8 +201,9 @@ We're planning a native VSCode extension with:
 
 1. Check that the task includes `problemMatcher`
 2. Verify `--format vscode` is in the args
-3. Ensure file paths are absolute
+3. Check that `fileLocation` is `"absolute"`: the CLI prints full paths
 4. Check Problems panel filter settings
+5. Notes missing? The `regexp` must match `info` as well as `error` and `warning`
 
 ### Task Not Found
 

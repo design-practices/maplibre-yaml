@@ -41,6 +41,10 @@ Map configuration defines the initial view, interaction settings, controls, and 
 | `zoom` | number | Initial zoom level (0-24) |
 | `mapStyle` | string \| object | A MapLibre style URL, a style object, or a Protomaps basemap from a `.pmtiles` file (below) |
 
+Without `mapStyle:`, validation (and `mlym validate`) warns and `<ml-map>`
+shows an error card instead of the map. Only the Astro map builders can fill
+it in, from a site-wide `defaultMapStyle`.
+
 ### Example
 
 ```yaml
@@ -199,7 +203,7 @@ key, a sibling of `config:`. Each entry:
 | `color` | color | Pin color (default pin only; ignored when `icon` is set) |
 | `size` | number | Scale multiplier over MapLibre's default pin (1 = default) |
 | `icon` | string | Image URL replacing the default pin |
-| `popup` | popup content | Popup opened by clicking the marker — same structured content as [layer popups](/schema/interactivity/) |
+| `popup` | popup content | Popup opened by clicking the marker — same structured content as [layer popups](/schema/layers/#popups) |
 
 ```yaml
 type: map
@@ -232,7 +236,7 @@ under it and no marker above it (MapLibre's `new Popup().setLngLat(...)
 | Property | Type | Description |
 |----------|------|-------------|
 | `at` | [number, number] | Popup anchor [longitude, latitude] (required) |
-| `content` | popup content | Same structured content as [layer popups](/schema/interactivity/) (required) |
+| `content` | popup content | Same structured content as [layer popups](/schema/layers/#popups) (required) |
 | `closeButton` | boolean | Show the close button (MapLibre default: `true`) |
 | `closeOnClick` | boolean | Close when the map is clicked (MapLibre default: `true`) |
 | `maxWidth` | string | CSS max-width, e.g. `"300px"` (MapLibre default: `240px`) |
@@ -864,7 +868,7 @@ legend:
 | `position` | string | `"top-left"` | Legend position |
 | `title` | string | - | A heading inside the legend panel (the toggle above it always reads "Legend") |
 | `collapsed` | boolean | `false` | Start collapsed |
-| `items` | array | - | Custom legend items |
+| `items` | array | - | Your own entries, listed instead of the layers' `legend:` entries (a [classified](/guides/thematic-maps/) layer's classes still follow them) |
 
 The legend is a collapsible panel whose header — the part you click to open
 or close it — always reads **Legend**, so a screen reader announces "Legend,
@@ -892,7 +896,9 @@ document needs no change: the title now appears as the panel's heading.
 
 #### Automatic Legend
 
-If `items` is not provided, legend items are extracted from layers with legend configuration:
+If `items` is not provided, the legend lists each layer that has its own
+`legend: { label, color }` entry, and the classes of each classified layer, in
+layer order. A layer with `legend: false` is left out.
 
 ```yaml
 legend:
@@ -1115,7 +1121,11 @@ leading `- ` and remove two spaces from the start of every line.
 
 ## Using Global Default Style
 
-Define a default map style once in global config:
+Define a default map style once in global config. It is the Astro map
+builders that fill it in (see
+[Global configuration](/integrations/astro/#global-configuration)); the
+standalone `<ml-map>` element reads only the block's own `mapStyle:`, and
+validation warns about each block below that it has none.
 
 ```yaml
 config:
@@ -1130,14 +1140,14 @@ pages:
         config:
           center: [-74, 40]
           zoom: 12
-          # mapStyle inherited from global config
+          # mapStyle filled in from defaultMapStyle by the Astro builders
 
       - type: map
         id: map2
         config:
           center: [139, 35]
           zoom: 12
-          # mapStyle inherited from global config
+          # mapStyle filled in from defaultMapStyle by the Astro builders
 ```
 
 ## TypeScript Types

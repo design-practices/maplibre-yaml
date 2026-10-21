@@ -16,7 +16,6 @@ No install needed:
 
 ```bash
 npx maplibre-yaml validate map.yaml
-npx maplibre-yaml validate map.yaml   # the same, shorter
 ```
 
 Installed, the CLI has two command names for the same program,
@@ -55,7 +54,8 @@ reload the page.
   `<ml-scrollytelling>`, no build step) or `astro` (an Astro site). `-t` picks
   the template, `--list` shows them, `-n` sets the project name.
 - **`validate <patterns...>`** checks files or globs against the schema, with
-  line numbers and did-you-mean hints. `-f` sets the output (`human`, `json`,
+  line numbers and did-you-mean hints, and notes (`ℹ note`) that explain how
+  a valid value is read without counting as warnings. `-f` sets the output (`human`, `json`,
   `sarif`, `vscode`), `--strict` fails on warnings (on by default in CI), `-w`
   watches. Exit code `0` valid, `1` errors, `2` no file matched.
 - **`preview <config>`** serves one `type: map` file with hot reload and an

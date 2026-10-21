@@ -76,8 +76,8 @@ layers:
 ```
 
 Serve the folder (`npx serve .`) and open the address it prints. A page opened
-from disk (`file://`) cannot fetch the YAML. `@0.8` means the newest 0.8.x
-release. Walkthrough: [Quick Start](https://docs.maplibre-yaml.org/getting-started/quick-start/).
+from disk (`file://`) cannot fetch the YAML. The number after `core@` names a
+release line: the address loads the newest release in that line. Walkthrough: [Quick Start](https://docs.maplibre-yaml.org/getting-started/quick-start/).
 
 ## With npm and a bundler
 
@@ -172,8 +172,17 @@ and the [TypeScript API reference](https://docs.maplibre-yaml.org/reference/api/
   JavaScript; a whole Protomaps basemap from one `.pmtiles` file
   (`mapStyle: { pmtiles: data/x.pmtiles }`)
   ([Cloud-native data](https://docs.maplibre-yaml.org/guides/cloud-native-data/)).
+- **Thematic maps:** a layer's `classify:` block makes a choropleth,
+  graduated circles or a category map from your data, with breaks computed
+  (quantile, equal interval, Jenks) or written, named colour palettes, and a
+  legend generated for it
+  ([Thematic maps](https://docs.maplibre-yaml.org/guides/thematic-maps/)).
 - **Interactivity:** popups, hover states, markers, legends, a parameters
   panel, and Format v2 declarative interactions.
+- **Accessible, translatable maps:** `title:` and `description:` name and
+  describe the map for screen readers, `locale:` translates every piece of
+  text the library draws, and popup numbers follow the page's language
+  ([Accessibility & languages](https://docs.maplibre-yaml.org/guides/accessibility-languages/)).
 - **Export:** `mlym emit` (from `@maplibre-yaml/cli`) turns a map document
   into a standalone MapLibre `style.json`; [export classes](https://docs.maplibre-yaml.org/guides/export-classes/)
   list what carries over.

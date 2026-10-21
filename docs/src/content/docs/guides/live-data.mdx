@@ -37,23 +37,19 @@ source:
 
 ### Controlling polling
 
-```javascript
-const renderer = new MapRenderer(container, config);
-
-// Pause updates (e.g., when tab is inactive)
-renderer.pauseRefresh("earthquakes");
-
-// Resume updates
-renderer.resumeRefresh("earthquakes");
-
-// Trigger immediate refresh
-await renderer.refreshNow("earthquakes");
-```
+Polling runs on the `refreshInterval` you write in the YAML. There is no
+method to pause, resume or force a refresh from JavaScript yet; to change the
+data yourself, call `updateLayerData(layerId, geojson)` on `<ml-map>` or a
+`MapRenderer`.
 
 <Aside>
   Polling is automatically paused when the browser tab is hidden and resumes
   when visible again.
 </Aside>
+
+Live updates work on GeoJSON sources given by `url:`. A FlatGeobuf or
+GeoParquet file ([Large data](/guides/cloud-native-data/)) is read once:
+`refresh:` or `stream:` on one is a validation error.
 
 ## Update strategies
 
@@ -103,6 +99,7 @@ Add new features while limiting total count or age:
 ```yaml
 source:
   type: geojson
+  data: { type: FeatureCollection, features: [] }   # empty until messages arrive
   stream:
     type: sse
     url: "https://stream.example.com/events"
@@ -117,11 +114,17 @@ source:
 
 ## Server-Sent Events (SSE)
 
-For real-time push updates, use SSE streaming:
+For real-time push updates, use SSE streaming. A streamed source still needs
+somewhere to start: a `url:` to load first, or `data:` with an empty
+`FeatureCollection` to start blank (validation refuses a GeoJSON source with
+only `stream:`). It also needs a `refresh:` block next to `stream:`: the
+stream connects only when one is there, and its `updateStrategy` says how
+each message is applied.
 
 ```yaml
 source:
   type: geojson
+  data: { type: FeatureCollection, features: [] }   # empty until messages arrive
   stream:
     type: sse
     url: "https://stream.example.com/events"
@@ -157,6 +160,7 @@ For bidirectional communication, use WebSocket:
 ```yaml
 source:
   type: geojson
+  data: { type: FeatureCollection, features: [] }   # empty until messages arrive
   stream:
     type: websocket
     url: "wss://stream.example.com/data"
@@ -168,38 +172,30 @@ source:
 
 WebSocket is useful when you need to send messages to the server (e.g., subscribing to specific data channels).
 
-## Handling connection states
+## Reacting to updates
 
-Monitor streaming connection status:
+Each poll or stream message that reaches the map fires the layer's data
+events, so a page can show when the data last changed or that a request
+failed:
 
 ```javascript
-const renderer = new MapRenderer(container, config);
+const mapEl = document.querySelector("ml-map");
 
-renderer.on("layer:stream-state", ({ layerId, state }) => {
-  // state: 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'failed'
-  console.log(`${layerId} stream: ${state}`);
-
-  if (state === "reconnecting") {
-    showNotification("Connection lost, reconnecting...");
-  } else if (state === "connected") {
-    hideNotification();
-  }
+mapEl.addEventListener("ml-map:layer-data-loaded", (event) => {
+  const { layerId, featureCount } = event.detail;
+  console.log(`${layerId}: ${featureCount} features`);
 });
-```
 
-## Error handling
-
-Handle fetch and stream errors:
-
-```javascript
-renderer.on("layer:error", ({ layerId, error }) => {
+mapEl.addEventListener("ml-map:layer-data-error", (event) => {
+  const { layerId, error } = event.detail;
   console.error(`${layerId} error:`, error.message);
 });
-
-renderer.on("layer:retry", ({ layerId, attempt, delay }) => {
-  console.log(`Retrying ${layerId} (attempt ${attempt}) in ${delay}ms`);
-});
 ```
+
+With the [JavaScript API](/integrations/vanilla-js/), the same events are
+`renderer.on("layer:data-loaded", …)` and `renderer.on("layer:data-error", …)`.
+A stream reconnects by itself, as set by its `reconnect*` options; the
+connection's own states (connecting, reconnecting) aren't reported as events.
 
 ## Complete example
 
@@ -229,9 +225,6 @@ layers:
         updateKey: "vehicleId" # Match by vehicle ID
       cache:
         enabled: false # Don't cache live data
-      loading:
-        enabled: true
-        message: "Loading vehicles..."
     paint:
       circle-radius: 10
       circle-color:
@@ -270,7 +263,7 @@ controls:
 2. **Use merge for entities** - When tracking things with IDs, use merge to avoid flicker
 3. **Set reasonable retry limits** - Don't retry forever if the server is down
 4. **Disable cache for live data** - Ensure you're always getting fresh data
-5. **Handle errors gracefully** - Show users when data isn't updating
+5. **Handle errors gracefully** - Show users when data isn't updating (listen for `ml-map:layer-data-error`)
 
 ## Next steps
 

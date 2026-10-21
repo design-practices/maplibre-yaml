@@ -242,8 +242,9 @@ smaller, cut a tighter `--bbox` around the area you show, or lower
 `--maxzoom` (12 still reads well for a whole city). For larger areas, use a
 host meant for big files, such as an object store.
 
-**Hosting.** The file is read with HTTP range requests, like any PMTiles file:
-GitHub Pages, Netlify, Cloudflare, S3 and R2 support them;
+**Hosting.** The file is read with HTTP range requests, like any PMTiles file.
+To preview locally, serve the folder with `npx serve` (or `astro dev`);
+published, GitHub Pages, Netlify, Cloudflare, S3 and R2 support them.
 `python -m http.server` does not (see
 [Hosting](#hosting-range-requests-and-cors)).
 
@@ -747,7 +748,10 @@ See [Export classes](/guides/export-classes/) for the full table.
 ## Format v2
 
 In a [format v2](/guides/format-v2/) document the URL stays in the source and
-`format:` / `load:` / `columns:` / `colorRamp:` move under the source's `runtime:`:
+`format:` / `load:` / `columns:` / `colorRamp:` move under the source's `runtime:`.
+A Protomaps basemap is written under `style:` as
+`basemap: data/nyc.pmtiles` or `basemap: { pmtiles: data/nyc.pmtiles, flavor: dark }`,
+the same forms as `mapStyle:`.
 
 ```yaml
 version: 2

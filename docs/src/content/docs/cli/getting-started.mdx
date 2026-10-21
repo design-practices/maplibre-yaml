@@ -74,13 +74,17 @@ npx serve .
 
 Open the address `serve` prints (usually http://localhost:3000). The `basic`
 template (the default) is a plain HTML page and a `map.yaml`, loaded from a
-CDN, so there is nothing to install or build. Edit `map.yaml` and reload the
-page. Opening `index.html` by double-clicking it does not work: browsers block
-a `file://` page from loading `map.yaml`.
+CDN at the release line this CLI was built with, so there is nothing to
+install or build. Edit `map.yaml` and reload the page. Opening `index.html` by
+double-clicking it does not work: browsers block a `file://` page from loading
+`map.yaml`. Another local server works too if it supports HTTP range
+requests, which PMTiles, FlatGeobuf, GeoParquet and COG files need;
+`python -m http.server` doesn't.
 
-Other templates: `--template astro` (an Astro site) and `--template story` (a
-scrollytelling document). Run `npx maplibre-yaml init --list` to see
-them, and see the [init reference](/cli/reference/#init) for details.
+Other templates: `--template astro` (an Astro site, ready for GitHub Pages)
+and `--template story` (a scrollytelling document). Run
+`npx maplibre-yaml init --list` to see them, and see the
+[init reference](/cli/reference/#init) for details.
 
 ## Validate Configuration
 
@@ -109,6 +113,19 @@ Output for invalid configuration:
   error config: The document is missing config: — add a config: block with center:, zoom: and mapStyle:.
 
 ✗ 1 file(s) with issues: 1 error(s)
+```
+
+Besides errors, `validate` prints **warnings** (`⚠`), for something that
+probably isn't what you meant, such as a layer naming an undeclared source
+or a map with no basemap, and **notes** (`ℹ note`), which explain how a valid
+value is read. A note never makes a file invalid:
+
+```
+✓ my-map.yaml
+  ℹ note config.mapStyle: mapStyle: "data/nyc.pmtiles" names a .pmtiles file, so it is read as a Protomaps basemap (the light flavor, labels in the page's language). To choose a flavor or a language, write it as mapStyle: { pmtiles: data/nyc.pmtiles, flavor: dark, lang: es }.
+    at line 6, column 3
+
+✓ 1 file(s) valid (1 note(s))
 ```
 
 ### Glob Patterns
@@ -161,7 +178,7 @@ Output:
   "valid": true,
   "files": [
     {
-      "file": "my-map.yaml",
+      "file": "/home/you/maps/my-map.yaml",
       "valid": true,
       "errors": [],
       "warnings": []
@@ -172,10 +189,14 @@ Output:
     "valid": 1,
     "invalid": 0,
     "errorCount": 0,
-    "warningCount": 0
+    "warningCount": 0,
+    "noteCount": 0
   }
 }
 ```
+
+Each file's `warnings` list also carries its notes, marked
+`"severity": "note"`; `noteCount` counts them apart from `warningCount`.
 
 #### SARIF for GitHub Code Scanning
 
@@ -187,20 +208,20 @@ npx maplibre-yaml validate my-map.yaml --format sarif
 
 #### VSCode Problem Matcher
 
-Output format compatible with VSCode's Problem Matcher:
+Output format compatible with VS Code's problem matchers:
 
 ```bash
 npx maplibre-yaml validate my-map.yaml --format vscode
 ```
 
-Output:
+Output (notes are printed with the severity `info`):
 
 ```
-/path/to/config.yaml:5:10: error: [config.center] Expected array, got string
-/path/to/config.yaml:12:3: warning: [layers[0]] Deprecated property
+/path/to/config.yaml:4:11: error: [config.center] center needs square brackets: center: [0, 0]
+/path/to/config.yaml:3:1: warning: [config.mapStyle] No mapStyle: this map has no basemap. …
 ```
 
-See [VSCode Integration](/cli/vscode) for setup instructions.
+See [VS Code tasks](/cli/vscode/) for setup instructions.
 
 ### Watch Mode
 
@@ -218,9 +239,9 @@ Features:
 
 ### Strict Mode
 
-Treat warnings as errors. Strict mode is on by default when the `CI`
-environment variable is set (CI services set it) and off on your own machine;
-`--strict` and `--no-strict` override that:
+Treat warnings as errors (notes stay notes). Strict mode is on by default
+when the `CI` environment variable is set (CI services set it) and off on your
+own machine; `--strict` and `--no-strict` override that:
 
 ```bash
 npx maplibre-yaml validate my-map.yaml --strict
@@ -244,7 +265,7 @@ The CLI is highly optimized for speed:
 - **100 files**: Validated in ~80ms
 - **Single file**: Validated in ~1ms
 - **Watch mode**: Cached validations in ~1ms
-- **Parallel processing**: Configurable concurrency (default: 10)
+- **Parallel processing**: up to 10 files at a time
 
 Example CI usage:
 
@@ -256,8 +277,10 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: npx maplibre-yaml validate "configs/**/*.yaml" --format json
 ```
 
@@ -273,10 +296,12 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: npx maplibre-yaml validate "**/*.yaml" --format sarif > results.sarif
-      - uses: github/codeql-action/upload-sarif@v2
+      - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
 ```
@@ -291,8 +316,10 @@ Start a local development server with hot reload to preview your map as you edit
 npx maplibre-yaml preview my-map.yaml
 ```
 
-This renders the YAML document on a page of its own (to see your own HTML page
-around the map, serve your folder with `npx serve .` instead). It will:
+This renders the YAML document, a map or a story (`type: scrollytelling`), on
+a page of its own (to see your own HTML page around the map, serve your
+folder with `npx serve .` instead). Data paths in the YAML resolve against the
+YAML file's folder, which the server serves. It will:
 
 - Start a Vite development server on port 3000
 - Open your browser automatically
@@ -382,6 +409,6 @@ npx maplibre-yaml --version
 
 ## Next Steps
 
-- [Command Reference](/cli/reference) - Detailed command documentation
-- [Examples](/examples) - Sample YAML configurations
+- [CLI commands](/cli/reference/) - Detailed command documentation, including `emit` (export to `style.json`)
+- [Examples](/examples/) - Sample YAML configurations
 - [YAML reference](/reference/yaml/) - Every key of the format

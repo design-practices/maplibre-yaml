@@ -11,7 +11,7 @@ Pages represent individual routes in your application. Each page contains an arr
 
 ## Page Structure
 
-```yaml
+```yaml no-validate
 pages:
   - path: "/"           # URL path (required)
     title: "Home"       # Page title (required)
@@ -81,8 +81,8 @@ Rich text content using a structured format.
     - h2: [{ str: "Subheading" }]
     - p: [{ str: "Paragraph text" }]
     - ul:
-        - [{ str: "List item 1" }]
-        - [{ str: "List item 2" }]
+        - li: [{ str: "List item 1" }]
+        - li: [{ str: "List item 2" }]
 ```
 
 See the [root document reference](/reference/yaml/root/) for every content block option.
@@ -435,9 +435,9 @@ pages:
           - h1: [{ str: "Welcome" }]
           - p: [{ str: "Explore our interactive maps" }]
           - ul:
-              - [{ str: "Real-time data visualization" }]
-              - [{ str: "Interactive stories" }]
-              - [{ str: "Custom map styles" }]
+              - li: [{ str: "Real-time data visualization" }]
+              - li: [{ str: "Interactive stories" }]
+              - li: [{ str: "Custom map styles" }]
 
   - path: "/map"
     title: "Map"

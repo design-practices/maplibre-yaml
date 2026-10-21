@@ -38,9 +38,9 @@ CDN. It exists for every release from 0.4 on and never moves:
 https://cdn.jsdelivr.net/npm/@maplibre-yaml/core@0.9/schemas/map.schema.json
 ```
 
-Change the version after `core@` to the one your project uses: a release line
-such as `@0.8` is the newest release in that line, and a full version such as
-`@0.8.1` is exactly that release. The docs site also serves the current
+Change the version after `core@` to the one your project uses: two numbers
+(`major.minor`, as above) name a release line and give the newest release in
+it, and three numbers (`major.minor.patch`) name exactly one release. The docs site also serves the current
 release under `https://docs.maplibre-yaml.org/schema/v0.9/<block>.schema.json`;
 addresses for older versions there redirect to the CDN copy.
 
@@ -76,7 +76,7 @@ Use the schema that matches the file's block type:
     ```
   </TabItem>
   <TabItem label="root (pages)">
-    ```yaml
+    ```yaml no-validate
     # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/root.schema.json
     pages:
       - path: "/"

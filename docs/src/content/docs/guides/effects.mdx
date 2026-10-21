@@ -128,9 +128,13 @@ From a CDN with an import map:
 </script>
 <script type="module">
   import "https://unpkg.com/@maplibre-yaml/core@0.9/register.js";
-  import "https://unpkg.com/@maplibre-yaml/effects/register.js";
+  import "https://unpkg.com/@maplibre-yaml/effects@0.1/register.js";
 </script>
 ```
+
+The `@0.1` pins the effects package's release line, as the caution at the
+top of this page advises: an experimental package may change in its next
+minor release.
 
 The backend builds tile meshes in a module worker,
 `extrusions-worker.js`, loaded from beside the effects bundle (bundlers that
@@ -169,9 +173,10 @@ Unknown params are errors (typo protection).
 ```bash
 mlym emit crosshatch.yaml --strict            # refuses: 1 lossy (layers.buildings.effect)
 mlym emit crosshatch.yaml --out dist/ --sprite-base https://example.com/dist
-# lossy layers.buildings.effect: effect "tonal-hatch" on `buildings` — Effects are
-#   runtime shaders with no style.json form; the emitted style carries the
-#   layer's own static style (its fallback) instead …
+#  WARN  layers.buildings.effect: effect "tonal-hatch" on buildings — Effects are
+#   runtime shaders with no style.json form, so the layer exports with a fallback:
+#   the emitted style carries its own static style instead — lossy, so --strict
+#   refuses it.
 ```
 
 The emitted style carries the static layer (here, its hatch pattern) and no
