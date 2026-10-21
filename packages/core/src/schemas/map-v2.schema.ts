@@ -70,6 +70,7 @@ import {
   SourceFormatSchema,
   ColorRampSchema,
   SourceLoadSchema,
+  STREAM_START_HINT,
 } from "./source.schema";
 import {
   CircleLayerSchema,
@@ -277,7 +278,8 @@ export const SourceV2Schema: z.ZodTypeAny = z.union([
         message:
           "GeoJSON source requires at least one of: url, data, or runtime.prefetchedData. " +
           'Use "url" to fetch from an endpoint, "data" for inline GeoJSON, ' +
-          'or "runtime.prefetchedData" for build-time fetched data.',
+          'or "runtime.prefetchedData" for build-time fetched data.' +
+          (runtime?.["stream"] ? STREAM_START_HINT : ""),
       });
     }
   }),

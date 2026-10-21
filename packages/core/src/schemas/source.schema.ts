@@ -265,6 +265,17 @@ export const StreamConfigSchema = z.object({
 export type StreamConfig = z.infer<typeof StreamConfigSchema>;
 
 /**
+ * Appended to the "needs url, data or prefetchedData" error when the source
+ * has a `stream:` (ml-aot.134): a stream adds to data the source already
+ * has, so a stream-only source is refused, and this says how to start empty.
+ *
+ * @internal
+ */
+export const STREAM_START_HINT =
+  " A stream: adds to the source's data, so it needs somewhere to start: to start empty " +
+  "until the first message arrives, add data: { type: FeatureCollection, features: [] }.";
+
+/**
  * Loading UI configuration for data fetching.
  *
  * @remarks
@@ -392,8 +403,11 @@ export type RefreshConfig = z.infer<typeof RefreshConfigSchema>;
  *
  * **Data Sources (one required):**
  * - `url` - Fetch GeoJSON from URL at runtime
- * - `data` - Inline GeoJSON object
- * - `stream` - Real-time WebSocket or SSE connection
+ * - `data` - Inline GeoJSON object (an empty FeatureCollection to start blank)
+ * - `prefetchedData` - Data fetched at build time
+ *
+ * A `stream` (WebSocket or SSE) adds to one of these; it is not a data source
+ * on its own, and it connects only beside a `refresh` block.
  *
  * **Fetch Strategy:**
  * - `runtime` (default) - Fetch when map loads, keeps bundle small
@@ -402,8 +416,8 @@ export type RefreshConfig = z.infer<typeof RefreshConfigSchema>;
  *
  * **Real-time Updates:**
  * - Use `refreshInterval` for polling (minimum 1000ms)
- * - Use `stream` for WebSocket/SSE
- * - Configure `updateStrategy` for merge vs replace
+ * - Use `stream` for WebSocket/SSE, with a `refresh` block beside it
+ * - Configure `refresh.updateStrategy` for merge vs replace
  *
  * @example Basic URL Source
  * ```yaml
@@ -441,11 +455,13 @@ export type RefreshConfig = z.infer<typeof RefreshConfigSchema>;
  * ```yaml
  * source:
  *   type: geojson
+ *   data: { type: FeatureCollection, features: [] }  # empty until messages arrive
  *   stream:
  *     type: websocket
  *     url: "wss://api.example.com/stream"
- *   updateStrategy: merge
- *   updateKey: "id"
+ *   refresh:
+ *     updateStrategy: merge
+ *     updateKey: "id"
  * ```
  *
  * @example Clustered Points
@@ -578,7 +594,8 @@ export const GeoJSONSourceSchema = z
         message:
           "GeoJSON source requires at least one of: url, data, or prefetchedData. " +
           'Use "url" to fetch from an endpoint, "data" for inline GeoJSON, ' +
-          'or "prefetchedData" for build-time fetched data.',
+          'or "prefetchedData" for build-time fetched data.' +
+          (d.stream ? STREAM_START_HINT : ""),
       });
       return;
     }
