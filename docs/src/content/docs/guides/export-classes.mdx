@@ -46,7 +46,7 @@ disagree.
 | `source.refresh` / `source.stream` / `source.cache` / `source.loading` / `source.prefetchedData` / `source.fetchStrategy` / `source.refreshInterval` / `source.updateStrategy` / `source.updateKey` | `no-export` | Live-data machinery; the emitted source carries the data present at compile time — inline `data`, or a GeoJSON `url:` written as the style spec's `data: <url>`, loaded once — and is lossy when there is none. |
 | `format.pmtiles` | `exports` | A [PMTiles](/guides/cloud-native-data/) source exports with its URL in the canonical `pmtiles://` form (a `.pmtiles` URL gains the scheme); `type` is untouched. Reported as a `contract` warning: the renderer must read `pmtiles://` (maplibre-gl JS: register the protocol). |
 | `format.flatgeobuf` | `exports-with-fallback` | A FlatGeobuf source is converted to GeoJSON: `mlym emit` reads the file and inlines its features as the source's `data` (a snapshot — viewport reading doesn't compile). Unreadable at emit time, the source is emitted empty and reported as lossy. |
-| `format.cog` | `exports` | A [COG](/guides/cloud-native-data/#cloud-optimized-geotiff-cog) source exports as the `cog://` URL the map uses: `#dem` on elevation, a `colorRamp:` as `#color:`, `tileSize: 256`. Reported as a `contract` warning: the renderer must register the COG protocol of `@geomatico/maplibre-cog-protocol`. |
+| `format.cog` | `exports` | A [COG](/guides/cog/) source exports as the `cog://` URL the map uses: `#dem` on elevation, a `colorRamp:` as `#color:`, `tileSize: 256`. Reported as a `contract` warning: the renderer must register the COG protocol of `@geomatico/maplibre-cog-protocol`. |
 | `format.geoparquet` | `exports-with-fallback` | A GeoParquet source is converted to GeoJSON the same way: `mlym emit` reads the file and inlines its features — every column, or the `columns:` listed — as the source's `data` (a snapshot — viewport reading doesn't compile). Unreadable at emit time, the source is emitted empty and reported as lossy. |
 | `source.format` | `exports` | The file format is carried by the emitted source itself (a `pmtiles://` or `cog://` URL, or GeoJSON converted from the file); the key never appears in `style.json`. |
 | `source.colorRamp` | `exports` | A COG's colour ramp is compiled into its `cog://` URL (the `#color:` fragment, with the palette written out as colours); the key never appears in `style.json`. |
@@ -62,7 +62,7 @@ disagree.
 
 The basemap is not a construct of its own: `mlym emit` merges it into the
 emitted style. A style URL is fetched and inlined, and a
-[Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap)
+[Protomaps basemap](/guides/host-your-own-basemap/)
 (`mapStyle: data/nyc.pmtiles` or `{ pmtiles: … }`) is written out as the full
 style it generates, its file as a `pmtiles://` URL that the page loading the
 style must register.

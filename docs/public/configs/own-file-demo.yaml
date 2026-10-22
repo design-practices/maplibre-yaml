@@ -1,0 +1,17 @@
+type: map
+id: cities
+config:
+  center: [-97, 38]
+  zoom: 2.4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: cities
+    type: circle
+    source:
+      type: geojson
+      url: "/data/cities.geojson"
+    paint:
+      circle-radius: 8
+      circle-color: "#e63946"
+      circle-stroke-width: 2
+      circle-stroke-color: "#ffffff"

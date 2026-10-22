@@ -1,6 +1,5 @@
-# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
 type: map
-id: cluster-demo
+id: clustered-earthquakes
 config:
   center: [-120, 37]
   zoom: 3
@@ -10,31 +9,23 @@ sources:
     type: geojson
     url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson"
     cluster: true
-    clusterRadius: 50
-    clusterMaxZoom: 14
+    clusterRadius: 50     # pixels: points this close are grouped
+    clusterMaxZoom: 14    # from zoom 15, every point is drawn alone
 layers:
   - id: clusters
     type: circle
     source: earthquakes
     filter: ["has", "point_count"]
     paint:
-      circle-radius:
-        - step
-        - ["get", "point_count"]
-        - 20
-        - 100
-        - 30
-        - 750
-        - 40
       circle-color: "#3b82f6"
       circle-opacity: 0.8
+      circle-radius: ["step", ["get", "point_count"], 20, 100, 30, 750, 40]
   - id: cluster-count
     type: symbol
     source: earthquakes
     filter: ["has", "point_count"]
     layout:
       text-field: "{point_count_abbreviated}"
-      text-font: ["Noto Sans Regular"] # a font the basemap's glyphs include
       text-size: 12
   - id: unclustered
     type: circle

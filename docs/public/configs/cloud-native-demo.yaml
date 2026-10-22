@@ -1,6 +1,6 @@
-# Cloud-native data (0.9): PMTiles + FlatGeobuf, YAML only.
-# Synthetic, public-domain data in a fictional sea area
-# (scripts/fixtures/cloud-native.py).
+# A PMTiles archive (imagery and district outlines) and a FlatGeobuf file
+# (the coloured districts), read with no page JavaScript. Synthetic,
+# public-domain data for a made-up coast.
 type: map
 id: cloud-native-demo
 config:

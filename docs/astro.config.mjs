@@ -181,9 +181,17 @@ export default defineConfig({
           items: [
             { label: "Loading data", link: "/guides/data-sources/" },
             {
-              label: "Large data: PMTiles, FlatGeobuf, GeoParquet & COG",
-              link: "/guides/cloud-native-data/",
+              label: "Large data",
+              collapsed: true,
+              items: [
+                { label: "Large data", link: "/guides/cloud-native-data/" },
+                { label: "PMTiles", link: "/guides/pmtiles/" },
+                { label: "FlatGeobuf", link: "/guides/flatgeobuf/" },
+                { label: "GeoParquet", link: "/guides/geoparquet/" },
+                { label: "Cloud Optimized GeoTIFF (COG)", link: "/guides/cog/" },
+              ],
             },
+            { label: "Host your own basemap", link: "/guides/host-your-own-basemap/" },
             { label: "Live data & streaming", link: "/guides/live-data/" },
             { label: "Layers & styling", link: "/guides/layers/" },
             { label: "Thematic maps & legends", link: "/guides/thematic-maps/" },

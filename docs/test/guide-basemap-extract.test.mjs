@@ -1,5 +1,5 @@
 /**
- * The cloud-native guide's "Host your own basemap" steps (ml-aot.116): the
+ * The "Host your own basemap" guide's steps (ml-aot.116): the
  * extract command a student copies must make a file GitHub accepts. Without
  * `--maxzoom` the New York example is about 95 MB, over GitHub's 25 MB web
  * upload and close to its 100 MB push limit.
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 const GUIDE = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
-  "src/content/docs/guides/cloud-native-data.mdx"
+  "src/content/docs/guides/host-your-own-basemap.mdx"
 );
 const text = readFileSync(GUIDE, "utf8");
 

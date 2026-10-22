@@ -1,16 +1,130 @@
 ---
 title: Loading data
-description: Loading GeoJSON from URLs, inline data, and remote APIs
+description: Put your own data on the map — a GeoJSON file on your site, a file on another site, a few points written in the YAML — and share one source between layers, cluster points, and load tiles.
 ---
 
 import LiveMap from "../../../components/LiveMap.astro";
-import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Code } from "@astrojs/starlight/components";
+import ownFile from "../../../../public/configs/own-file-demo.yaml?raw";
+import clustered from "../../../../public/configs/cluster-demo.yaml?raw";
 
-maplibre-yaml supports multiple ways to provide data to your layers: inline GeoJSON, remote URLs, and streaming connections.
+A layer draws whatever its source points at. Most maps load a GeoJSON file
+that sits on the same site as the page: one you drew on
+[geojson.io](https://geojson.io), exported from QGIS, or downloaded from an
+open-data portal. This guide starts there, then covers files on other sites,
+points written in the YAML, and sources shared between layers.
 
-## Inline data
+## Load a file from your site
 
-For small, static datasets, embed the GeoJSON directly:
+1. Put the GeoJSON file in your site: in a `data/` folder next to your HTML
+   page, or in `public/data/` in an Astro or Vite project. To follow along,
+   download [cities.geojson](https://docs.maplibre-yaml.org/data/cities.geojson)
+   (five US cities, each with a `name` and a `population`).
+2. Point a source's `url:` at it:
+
+   <Code code={ownFile} lang="yaml" title="map.yaml" />
+
+3. Open the page through a web server (`npx serve`, `astro dev`, or your
+   host). You should see five red dots across the United States:
+
+<LiveMap src="/configs/own-file-demo.yaml" height="320px" caption="Five cities loaded from /data/cities.geojson" />
+
+The file can hold a `FeatureCollection`, a single `Feature`, or a bare
+geometry (`{"type": "Polygon", …}`); a single feature or geometry is read as
+a one-feature collection.
+
+### How paths are read \{#relative-paths}
+
+- **`/data/cities.geojson`** starts at the site root. In Astro, `public/` is
+  the root, so `public/data/cities.geojson` is `/data/cities.geojson`.
+- **`data/cities.geojson`** (no leading slash) starts at the folder of the
+  **web page**, not of the YAML file. A map at `maps/city.yaml` shown on
+  `index.html` loads `data/cities.geojson` from beside `index.html`.
+- **On a site published under a subpath**, such as a GitHub Pages project
+  site at `https://<user>.github.io/<repo>/`, give `<ml-map>` a
+  `base="/<repo>/"` and keep the paths as they are. The Astro components set
+  it for you. See [Publishing & subpaths](/guides/publishing/#sites-under-a-subpath-github-pages).
+
+When a file doesn't load, the map still draws and a notice lists the problem,
+for example "Data file `/data/citys.geojson` didn't load (404 Not Found), so
+layer `cities` has no data", followed by the address the browser tried.
+
+## Load a file from another site \{#remote-url}
+
+A full URL works the same way. The USGS earthquake feeds are a good test,
+because their server allows other sites to read them:
+
+```yaml
+type: map
+id: earthquakes
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 5
+      circle-color: "#ef4444"
+      circle-opacity: 0.7
+```
+
+<LiveMap src="/configs/remote-demo.yaml" height="350px" caption="This week's earthquakes, from the USGS feed" />
+
+### When the other site blocks the request (CORS) \{#cors-considerations}
+
+A browser only reads a file from another site if that site allows it (CORS).
+When it doesn't, the console shows a CORS error and the layer stays empty.
+You can't fix that from your page. Download the file and serve it from your
+own site instead, or ask the data provider whether they offer a CORS-enabled
+address. For data that changes, a small proxy on your own server is the
+other option.
+
+## Write a few points in the YAML \{#inline-data}
+
+For a handful of places you type by hand, skip the file. `locations:` takes a
+list of points, each with `coordinates` (longitude first) and an optional
+`name` and `description`:
+
+```yaml
+type: map
+id: stops
+config:
+  center: [-73.98, 40.75]
+  zoom: 12
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: stops
+    type: circle
+    source:
+      type: geojson
+      locations:
+        - coordinates: [-74.00, 40.73]
+          name: "Stop A"
+        - coordinates: [-73.96, 40.77]
+          name: "Stop B"
+    paint:
+      circle-radius: 7
+      circle-color: "#2563eb"
+```
+
+The same shorthand exists for one point, one polygon and one line. Each takes
+the place of `url:` or `data:` on a `geojson` source, and its `name` and
+`description` become the feature's properties:
+
+| Key | Draws | `coordinates` |
+|---|---|---|
+| `location:` | one point | `[lon, lat]` |
+| `locations:` | many points | one `coordinates` per list item |
+| `region:` | a polygon | a list of rings: `[[[lon, lat], …]]`, first point repeated last |
+| `route:` | a line | a list of at least two points: `[[lon, lat], …]` |
+
+When the features need other properties (a population for a popup, a
+category to colour by), write the GeoJSON itself under `data:`:
 
 ```yaml
 source:
@@ -19,46 +133,14 @@ source:
     type: FeatureCollection
     features:
       - type: Feature
-        geometry:
-          type: Point
-          coordinates: [-74.006, 40.7128]
-        properties:
-          name: "New York"
+        geometry: { type: Point, coordinates: [-74.006, 40.7128] }
+        properties: { name: "New York", population: 8336817 }
 ```
 
-<Aside type="tip">
-  Inline data is great for prototyping and small datasets. For larger datasets
-  (100+ features), use a URL instead.
-</Aside>
+Past a few dozen features, a file is easier to edit and keeps the YAML
+readable.
 
-## Remote URL
-
-Load GeoJSON from any URL:
-
-```yaml
-source:
-  type: geojson
-  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-```
-
-<LiveMap
-  src="/configs/remote-demo.yaml"
-  height="350px"
-  caption="Live earthquake data from USGS"
-/>
-
-The file can hold a `FeatureCollection`, a single `Feature`, or a bare
-geometry (`{"type": "Polygon", …}`), as geojson.io or a copied feature gives
-you; a single feature or geometry is read as a one-feature collection.
-
-<Aside type="tip" title="Large files?">
-  A GeoJSON file of tens of megabytes is slow to download and draw. For
-  large datasets, imagery or elevation, use a file made to be read in parts:
-  PMTiles, FlatGeobuf, GeoParquet or a Cloud Optimized GeoTIFF. See
-  [Large data](/guides/cloud-native-data/).
-</Aside>
-
-### CSV and spreadsheets
+## CSV and spreadsheets
 
 CSV files (including a Google Sheet published as CSV) aren't supported: a
 layer whose `url` points at one shows "CSV files aren't supported" on the map.
@@ -66,202 +148,134 @@ Convert the table to GeoJSON first, for example by opening it in
 [geojson.io](https://geojson.io) or QGIS and saving it as GeoJSON, then point
 `url` at the `.geojson` file.
 
-### CORS considerations
+## Share one source between layers \{#named-sources}
 
-When loading from remote URLs, the server must allow cross-origin requests (CORS). If you see errors, the API may not support browser requests.
-
-**Solutions:**
-
-- Use APIs that support CORS (like USGS earthquake feed)
-- Set up a proxy server
-- Host the data yourself
-
-## Caching
-
-Control how fetched data is cached:
-
-```yaml
-source:
-  type: geojson
-  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
-  cache:
-    enabled: true # Enable caching (default)
-    ttl: 300000 # Cache for 5 minutes (milliseconds)
-```
-
-### Cache behavior
-
-| Scenario                | Behavior                           |
-| ----------------------- | ---------------------------------- |
-| First request           | Fetch from network, store in cache |
-| Subsequent (within TTL) | Return cached data immediately     |
-| After TTL expires       | Fetch fresh data, update cache     |
-| `enabled: false`        | Always fetch from network          |
-
-<Aside>
-  Caching is in memory only and resets when the page reloads.
-</Aside>
-
-## Loading states
-
-You don't need to configure anything for loading feedback. While a map
-starts, `<ml-map>` marks itself busy for screen readers (`aria-busy="true"`),
-and if it hasn't drawn after about a second, a small "Loading map…" appears in
-its middle until the basemap draws. A data file that fails to load shows a
-notice on the map ("Part of this map couldn't load"), with the reason under
-"Details for the site's author"; the rest of the map still draws. See
-[Troubleshooting](/troubleshooting/#reading-what-the-map-tells-you).
-
-A source's `loading:` key (`enabled`, `message`) draws no overlay of its own:
-it still validates, with a warning that it has no effect (deprecated since
-core 0.9.1), so you can remove it.
-
-### Handling errors programmatically
-
-With the [JavaScript API](/integrations/vanilla-js/), listen for each layer's
-data as it loads:
-
-```javascript
-const renderer = new MapRenderer(container, block.config, block.layers);
-
-renderer.on("layer:data-loading", ({ layerId }) => {
-  console.log(`Loading ${layerId}...`);
-});
-
-renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
-  console.log(`Loaded ${featureCount} features into ${layerId}`);
-});
-
-renderer.on("layer:data-error", ({ layerId, error }) => {
-  console.error(`Failed to load ${layerId}:`, error.message);
-});
-```
-
-`<ml-map>` fires the same moments as DOM events (`ml-map:layer-data-loaded`
-and so on): see [`<ml-map>` events](/reference/elements/#ml-map-events).
-
-## Clustering
-
-For point datasets with many features, enable clustering:
-
-```yaml
-source:
-  type: geojson
-  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson"
-  cluster: true
-  clusterRadius: 50 # Cluster points within 50px
-  clusterMaxZoom: 14 # Stop clustering at zoom 14
-```
-
-Then style clustered and unclustered points separately:
-
-```yaml
-layers:
-  # Clustered points
-  - id: clusters
-    type: circle
-    source: earthquakes
-    filter: ["has", "point_count"]
-    paint:
-      circle-radius:
-        - step
-        - ["get", "point_count"]
-        - 20 # Default size
-        - 100
-        - 30 # Larger for 100+ points
-        - 750
-        - 40 # Even larger for 750+
-      circle-color: "#3b82f6"
-
-  # Cluster count labels
-  - id: cluster-count
-    type: symbol
-    source: earthquakes
-    filter: ["has", "point_count"]
-    layout:
-      text-field: "{point_count_abbreviated}"
-      text-font: ["Noto Sans Regular"] # a font the basemap's glyphs include
-      text-size: 12
-
-  # Individual points
-  - id: unclustered
-    type: circle
-    source: earthquakes
-    filter: ["!", ["has", "point_count"]]
-    paint:
-      circle-radius: 6
-      circle-color: "#ef4444"
-```
-
-<LiveMap
-  src="/configs/cluster-demo.yaml"
-  height="400px"
-  caption="Clustered earthquake data - zoom in to see individual points"
-/>
-
-## Named Sources
-
-Define sources at the block level and reference them by name across multiple layers. This avoids duplicating source definitions and is the recommended approach when multiple layers share the same data.
-
-A layer whose `source:` names a source the document doesn't define fails validation at that line, with a "did you mean" (since core 0.9.1). A source written inline on a layer has no name to share, even with an `id:`. The one exception is a layer that could be drawing from the basemap style's own sources: one with `source-layer:`, or a raster layer.
+When several layers draw the same data (a fill and its outline, points and
+their labels), define the source once under `sources:` and name it from each
+layer:
 
 ```yaml
 type: map
-id: earthquake-map
+id: cities-labelled
 config:
-  center: [-120, 35]
-  zoom: 6
+  center: [-98.5, 39.8]
+  zoom: 3
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-
 sources:
-  quakes:
+  cities:
     type: geojson
-    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    cluster: true
-    clusterRadius: 50
-    clusterMaxZoom: 14
-
+    url: "/data/cities.geojson"
 layers:
-  - id: clusters
+  - id: city-dots
     type: circle
-    source: quakes
-    filter: ["has", "point_count"]
-    paint:
-      circle-radius:
-        - step
-        - ["get", "point_count"]
-        - 20
-        - 100
-        - 30
-      circle-color: "#3b82f6"
-
-  - id: cluster-count
-    type: symbol
-    source: quakes
-    filter: ["has", "point_count"]
-    layout:
-      text-field: "{point_count_abbreviated}"
-      text-font: ["Noto Sans Regular"] # a font the basemap's glyphs include
-      text-size: 12
-
-  - id: unclustered
-    type: circle
-    source: quakes
-    filter: ["!", ["has", "point_count"]]
+    source: cities
     paint:
       circle-radius: 6
-      circle-color: "#ef4444"
+      circle-color: "#e63946"
+  - id: city-names
+    type: symbol
+    source: cities
+    layout:
+      text-field: ["get", "name"]
+      text-offset: [0, 1.2]
 ```
 
-Use a named source when several layers draw the same data (a fill and its
-outline, clusters and their counts); a live named source is polled once for
-all of them. Inline sources on single layers still work, and the two mix
-freely. The rules (`$ref`, sharing data across the pages of a multi-page
-document) are in [Named source definitions](/schema/sources/#named-source-definitions).
+The file is downloaded once, and a [live](/guides/live-data/) named source is
+polled once for all the layers that use it. A source written on a layer
+(`source: { type: geojson, … }`) belongs to that layer alone; the two forms
+mix freely in one document. A layer whose `source:` names a source the
+document doesn't define fails validation at that line, with a "did you mean".
+
+## Cluster many points \{#clustering}
+
+Thousands of points in one place hide each other. With `cluster: true` the
+source groups nearby points into one feature per group, and splits them
+again as the reader zooms in. A named source lets three layers draw the
+groups, their counts and the single points:
+
+<Code code={clustered} lang="yaml" title="clusters.yaml" />
+
+<LiveMap src="/configs/cluster-demo.yaml" height="400px" caption="This month's earthquakes, clustered. Zoom in to see single points." />
+
+- A cluster is a feature with a `point_count` property (and
+  `point_count_abbreviated`, such as "1.2k"). `["has", "point_count"]` picks
+  out the clusters; `["!", ["has", "point_count"]]` the single points.
+- The label layer has no `text-font`, so it uses the basemap's font. If you
+  name a font, it must be one the basemap provides
+  ([Layers › Labels](/guides/layers/#labels)).
+- `clusterProperties` adds totals to each cluster, such as the largest
+  magnitude in it. Every clustering key is in the
+  [sources reference](/reference/yaml/sources/#geojson-cluster).
+
+To zoom into a cluster when it's clicked, see the gallery's
+[Create and style clusters](/examples/gallery/create-and-style-clusters/).
+
+## Other kinds of data
+
+- **Vector tiles**: `type: vector` with a TileJSON `url:` or a `tiles:`
+  template (`https://…/{z}/{x}/{y}.pbf`). Each layer then names the
+  `source-layer:` it draws. See
+  [Add a vector tile source](/examples/gallery/add-a-vector-tile-source/).
+- **Raster tiles and WMS**: `type: raster` with a `tiles:` template and
+  `tileSize: 256`. See
+  [Add a raster tile source](/examples/gallery/add-a-raster-tile-source/) and
+  [Add a WMS source](/examples/gallery/add-a-wms-source/).
+- **Large files** (tens of megabytes and up, imagery, elevation): PMTiles,
+  FlatGeobuf, GeoParquet and Cloud Optimized GeoTIFF read only the part in
+  view. See [Large data](/guides/cloud-native-data/).
+- **Data that changes**: see [Live data](/guides/live-data/).
+
+Every source type and key is in the [sources reference](/reference/yaml/sources/).
+
+## Caching
+
+Each map keeps a file it downloaded in memory for five minutes, so layers
+that load the same URL fetch it once. The memory is cleared when the page
+reloads. `cache: { ttl: 60000 }` on a source changes the time (in
+milliseconds), and `cache: { enabled: false }` turns it off.
+
+## Know when the data has loaded \{#handling-errors-programmatically}
+
+To do something when a layer's data arrives or fails (update a count,
+show a message), listen for `<ml-map>`'s `ml-map:layer-data-loaded` and
+`ml-map:layer-data-error` events; see
+[`<ml-map>` events](/reference/elements/#ml-map-events). With the
+[JavaScript API](/integrations/vanilla-js/), the same moments are
+`renderer.on("layer:data-loaded", …)` and `renderer.on("layer:data-error", …)`.
+
+## Troubleshooting
+
+[Troubleshooting](/troubleshooting/) covers maps that don't show at all.
+For a layer that stays empty, read the map's notice:
+
+- **"didn't load (404 Not Found)"**: the path is wrong for the page. Check the
+  address the notice says the browser tried, and the
+  [path rules](#relative-paths) above.
+- **"it isn't JSON — a wrong path often returns a web page instead"**: the
+  same problem on a host that answers a missing file with a page.
+- **"it is JSON but not GeoJSON"**: the file has no `"type":
+  "FeatureCollection"` (or `Feature`, or a geometry). An API response often
+  wraps the GeoJSON in another object; point `url:` at an address that
+  returns the GeoJSON itself.
+- **"pages opened from a file (file://) can't load data files"**: open the
+  page through a web server instead of double-clicking it.
+- **A CORS error in the console**: see [above](#cors-considerations).
+- **"CSV files aren't supported"**: see [CSV and spreadsheets](#csv-and-spreadsheets).
 
 ## Next steps
 
-- [Large data](/guides/cloud-native-data/) - PMTiles, FlatGeobuf, GeoParquet and COG files
-- [Live data & streaming](/guides/live-data/) - Auto-refresh and streaming
-- [Thematic maps & legends](/guides/thematic-maps/) - Colour features by a value, with a legend
-- [Examples](/examples/) - Complete working examples
+- [Layers & styling](/guides/layers/): draw the data as circles, lines,
+  fills and labels.
+- [Popups, hover & controls](/guides/popups/): show a feature's properties
+  when it's clicked.
+- [Large data](/guides/cloud-native-data/): files too big to download whole.
+- Gallery: [Draw GeoJSON points](/examples/gallery/draw-geojson-points/),
+  [Add a GeoJSON line](/examples/gallery/add-a-geojson-line/),
+  [Add a GeoJSON polygon](/examples/gallery/add-a-geojson-polygon/).
+
+## Moved
+
+### Loading states
+
+The "Loading map…" text and `aria-busy` need no setup; how to restyle or
+replace them is in [`<ml-map>` styling hooks](/reference/elements/#ml-map-styling-hooks).

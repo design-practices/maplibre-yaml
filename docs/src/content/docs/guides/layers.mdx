@@ -1,275 +1,295 @@
 ---
 title: "Layers & styling"
-description: Learn about layer types, paint properties, and data-driven styling
+description: Draw data as circles, lines, fills, labels, 3D extrusions and heatmaps; colour and size features by their properties; order, filter and show layers by zoom.
 ---
 
 import LiveMap from "../../../components/LiveMap.astro";
-import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
+import { Code } from "@astrojs/starlight/components";
+import states from "../../../../public/configs/layers-demo.yaml?raw";
+import byMagnitude from "../../../../public/configs/interpolate-demo.yaml?raw";
 
-Layers are how you visualize data on your map. maplibre-yaml supports all MapLibre layer types, each suited to different kinds of geographic data.
+A layer draws one source's data in one way: as circles, lines, filled areas,
+labels and so on. Each entry under `layers:` names its `type`, its `source`,
+and how it looks (`paint:` and `layout:`). Layers draw in order, the first at
+the bottom, all above the basemap.
+
+## Quick start
+
+Two layers can draw the same data. Here a `fill` shades each US state and a
+`line` outlines it, both from one source named under `sources:`:
+
+<Code code={states} lang="yaml" title="states.yaml" />
+
+<LiveMap src="/configs/layers-demo.yaml" height="320px" caption="One source, two layers: a fill and its outline" />
+
+The style keys (`fill-color`, `line-width` …) are MapLibre's, unchanged:
+every one is in the [MapLibre style spec](https://maplibre.org/maplibre-style-spec/layers/).
+`paint:` holds how a layer is coloured and sized; `layout:` holds what is
+drawn at all (label text, line caps, visibility).
 
 ## Layer types
 
-| Type             | Best for                 | Geometry     |
-| ---------------- | ------------------------ | ------------ |
-| `circle`         | Point markers, dots      | Point        |
-| `symbol`         | Icons and labels         | Point        |
-| `line`           | Roads, paths, routes     | LineString   |
-| `fill`           | Areas, regions, polygons | Polygon      |
-| `fill-extrusion` | 3D buildings             | Polygon      |
-| `heatmap`        | Density visualization    | Point        |
-| `raster`         | Satellite imagery, scanned maps, [COG](/guides/cloud-native-data/) files | Raster tiles |
-| `hillshade`      | Shaded relief            | Elevation (`raster-dem`) |
-| `color-relief`   | Elevation coloured by height (maplibre-gl 5.6 or later) | Elevation (`raster-dem`) |
-| `background`     | A colour or pattern under everything | None |
+| `type:` | Draws | Data |
+| --- | --- | --- |
+| `circle` | A dot per point | Points |
+| `symbol` | Labels and icons | Points, or along lines |
+| `line` | Lines and outlines | Lines, polygons |
+| `fill` | Filled areas | Polygons |
+| `fill-extrusion` | Areas raised in 3D, such as buildings | Polygons |
+| `heatmap` | Point density as a colour surface | Points |
+| `raster` | Imagery and scanned maps | Raster tiles, [COG](/guides/cog/) files |
+| `hillshade` | Shaded relief | Elevation (`raster-dem`) |
+| `color-relief` | Elevation coloured by height (maplibre-gl 5.6 or later) | Elevation (`raster-dem`) |
+| `background` | One colour or pattern over the whole map | None |
 
-<Aside type="note" title="Layer snippets">
-  Each snippet on this page is one entry of a map document's `layers:` list,
-  not a whole file. Paste it under `layers:` in a document that has `type`,
-  `id` and `config` (see [Your First Map](/getting-started/first-map/)).
-</Aside>
+A `background` layer covers the basemap, because your layers draw above it;
+use it on a map without a basemap, or slide it under the basemap's layers
+with [`before:`](#layer-order).
 
-## Circle layers
+## Points, lines and areas
 
-Circles are the simplest way to show point data:
+These snippets are entries for a document's `layers:` list. Each names a
+source (`earthquakes`, `routes`, `states`) that the document defines under
+`sources:` ([Loading data](/guides/data-sources/#named-sources)).
 
 ```yaml
-- id: points
+- id: earthquakes
   type: circle
-  source:
-    type: geojson
-    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+  source: earthquakes
   paint:
-    circle-radius: 8
-    circle-color: "#3b82f6"
-    circle-stroke-width: 2
+    circle-radius: 6
+    circle-color: "#ef4444"
+    circle-stroke-width: 1
     circle-stroke-color: "#ffffff"
-    circle-opacity: 0.8
 ```
 
-<LiveMap
-  src="/configs/circle-demo.yaml"
-  height="300px"
-/>
-
-## Line layers
-
-Use lines for paths, routes, and boundaries:
-
 ```yaml
-- id: rivers
+- id: routes
   type: line
-  source:
-    type: geojson
-    url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines.geojson"
+  source: routes
   paint:
-    line-color: "#ef4444"
+    line-color: "#2563eb"
     line-width: 4
-    line-opacity: 0.8
   layout:
     line-cap: round
     line-join: round
 ```
 
-<LiveMap
-  src="/configs/line-demo.yaml"
-  height="300px"
-/>
-
-## Fill layers
-
-Fill layers shade polygon areas:
-
 ```yaml
 - id: states
   type: fill
-  source:
-    type: geojson
-    url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
+  source: states
   paint:
     fill-color: "#22c55e"
     fill-opacity: 0.5
-    fill-outline-color: "#166534"
 ```
 
-<LiveMap
-  src="/configs/fill-demo.yaml"
-  height="300px"
-/>
+Write colours in quotes (`"#22c55e"`): in YAML an unquoted `#` starts a
+comment, so the colour would be lost.
+
+## Labels
+
+A `symbol` layer with `text-field` writes text at each feature:
+
+```yaml
+- id: city-names
+  type: symbol
+  source: cities
+  layout:
+    text-field: ["get", "name"]
+    text-size: 13
+    text-offset: [0, 1.2]     # below the point, in ems
+  paint:
+    text-color: "#1f2937"
+    text-halo-color: "#ffffff"
+    text-halo-width: 1.5
+```
+
+Without `text-font`, a label uses the basemap's regular font. A font has to
+come from the basemap's glyph server, so if you name one, name a font that
+server has: OpenFreeMap's styles serve `"Noto Sans Regular"`,
+`"Noto Sans Bold"` and `"Noto Sans Italic"`. A font the server lacks leaves
+the labels out and fills the console with failed downloads. The gallery has
+[Change the case of labels](/examples/gallery/change-the-case-of-labels/) and
+[Display and style rich text labels](/examples/gallery/display-and-style-rich-text-labels/).
+
+## 3D buildings and heatmaps
+
+`fill-extrusion` raises polygons by a height property. A layer can draw from
+the basemap's own sources by name: OpenFreeMap's styles call theirs
+`openmaptiles`, and its `building` layer has a height:
+
+```yaml
+- id: buildings-3d
+  type: fill-extrusion
+  source: openmaptiles
+  source-layer: building
+  minzoom: 15
+  paint:
+    fill-extrusion-color: "#aab4c3"
+    fill-extrusion-height: ["get", "render_height"]
+    fill-extrusion-opacity: 0.8
+```
+
+Tilt the map (`pitch: 50` in `config:`) to see the height. A `heatmap` turns
+many points into a density surface:
+
+```yaml
+- id: quake-density
+  type: heatmap
+  source: earthquakes
+  paint:
+    heatmap-weight: ["interpolate", ["linear"], ["get", "mag"], 0, 0, 6, 1]
+    heatmap-radius: 20
+```
+
+See [Display buildings in 3D](/examples/gallery/display-buildings-in-3d/)
+and [Create a heatmap layer](/examples/gallery/create-a-heatmap-layer/) for
+complete maps.
 
 ## Data-driven styling
 
-For a choropleth or another classed map, use `classify:`: it writes the
-expression and the legend for you. See
-[Thematic maps & legends](/guides/thematic-maps/).
+To colour or size each feature by one of its properties, write a MapLibre
+expression where a value would go. For classed maps (a choropleth, graduated
+circles, categories with a legend), `classify:` writes the expression and the
+legend for you: see [Thematic maps & legends](/guides/thematic-maps/).
 
-The real power of maplibre-yaml is data-driven styling. Style features based on their properties using expressions.
+The examples here use the USGS earthquake feed, whose features carry a
+magnitude (`mag`) and a `type`.
 
-### Categorical colors
+### A smooth ramp: `interpolate`
 
-Color features based on a category:
+<Code code={byMagnitude} lang="yaml" title="quakes-by-magnitude.yaml" />
+
+<LiveMap src="/configs/interpolate-demo.yaml" height="320px" caption="Radius and colour grow with magnitude" />
+
+`["get", "mag"]` reads the property; the pairs after it are input and output
+(magnitude 1 → radius 3, magnitude 6 → radius 20), with values in between
+blended.
+
+### Categories: `match`
 
 ```yaml
 paint:
   circle-color:
     - match
-    - ["get", "type"] # Get the "type" property
-    - "hospital"
-    - "#ef4444" # Red for hospitals
-    - "school"
-    - "#3b82f6" # Blue for schools
-    - "park"
-    - "#22c55e" # Green for parks
-    - "#6b7280" # Gray default
+    - ["get", "type"]
+    - "earthquake"
+    - "#ef4444"
+    - "quarry blast"
+    - "#3b82f6"
+    - "#6b7280"          # every other value
 ```
 
-<LiveMap
-  src="/configs/categorical-demo.yaml"
-  height="300px"
-  caption="Colors based on feature type"
-/>
-
-### Interpolated values
-
-Create smooth gradients based on numeric properties:
-
-```yaml
-paint:
-  circle-radius:
-    - interpolate
-    - ["linear"]
-    - ["get", "magnitude"]
-    - 1 # Input: magnitude 1
-    - 4 # Output: radius 4px
-    - 5 # Input: magnitude 5
-    - 20 # Output: radius 20px
-  circle-color:
-    - interpolate
-    - ["linear"]
-    - ["get", "magnitude"]
-    - 1
-    - "#fef08a" # Yellow for small
-    - 5
-    - "#dc2626" # Red for large
-```
-
-<LiveMap
-  src="/configs/interpolate-demo.yaml"
-  height="300px"
-  caption="Size and color based on magnitude"
-/>
-
-### Step functions
-
-Create discrete categories from continuous values:
+### Steps: `step`
 
 ```yaml
 paint:
   circle-color:
     - step
-    - ["get", "count"]
-    - "#22c55e" # Green: count < 10
-    - 10
-    - "#eab308" # Yellow: 10 <= count < 100
-    - 100
-    - "#ef4444" # Red: count >= 100
+    - ["get", "mag"]
+    - "#22c55e"          # below 2.5
+    - 2.5
+    - "#eab308"          # 2.5 up to 4.5
+    - 4.5
+    - "#ef4444"          # 4.5 and above
 ```
+
+Every expression is in the style spec's
+[expressions reference](https://maplibre.org/maplibre-style-spec/expressions/).
+The gallery's
+[Style lines with a data-driven property](/examples/gallery/style-lines-with-a-data-driven-property/)
+is a complete example.
+
+## Filter features
+
+`filter:` keeps only the features that match an expression:
+
+```yaml
+- id: large-earthquakes
+  type: circle
+  source: earthquakes
+  filter: [">=", ["get", "mag"], 4.5]
+  paint:
+    circle-color: "#ef4444"
+```
+
+## Show a layer only at some zooms
+
+`minzoom` and `maxzoom` limit the zoom levels a layer draws at (`minzoom: 12`
+hides it when zoomed out further). `visible: false` starts it hidden.
+
+To let readers turn a layer on and off, give it a `label:`. The map then
+shows a layer panel in the top-right corner with a checkbox for each labelled
+layer; `toggleable: false` keeps a layer's label without the checkbox.
+
+## Layer order
+
+Layers draw in the order you list them; later ones draw on top:
+
+```yaml no-validate
+layers:
+  - id: areas        # bottom
+    type: fill
+  - id: roads
+    type: line
+  - id: labels       # top
+    type: symbol
+```
+
+All of them draw above the basemap. To slide a layer under part of the
+basemap, such as its place names, name that basemap layer in `before:`
+(`before: place_label`): your layer is drawn just below it. See
+[Add a new layer below labels](/examples/gallery/add-a-new-layer-below-labels/).
+
+## In the legend
+
+A layer with a `legend: { label, color }` entry, or a `classify:` block, is
+listed in the map's legend. How the legend is built and placed is in
+[Thematic maps › The legend](/guides/thematic-maps/#the-legend).
+
+## Look it up
+
+- The [layer reference](/reference/yaml/layers/): every key maplibre-yaml
+  accepts on a layer, by type.
+- MapLibre's [layer properties](https://maplibre.org/maplibre-style-spec/layers/)
+  and [expressions](https://maplibre.org/maplibre-style-spec/expressions/):
+  every `paint` and `layout` key and what it takes.
+
+## Troubleshooting
+
+[Troubleshooting › The basemap draws but your layer doesn't](/troubleshooting/#the-basemap-draws-but-your-layer-doesnt)
+walks through an empty layer step by step. Problems specific to styling:
+
+- **A colour is ignored**: it is probably unquoted. Write `"#ef4444"`.
+- **Nothing draws at this zoom**: check `minzoom`, `maxzoom` and `filter:`.
+- **Labels don't appear**: the `text-font` you named isn't on the basemap's
+  glyph server. Remove `text-font`, or name a font it serves.
+- **A note about `before:`**: `before:` names a layer the map doesn't have. The
+  layer is drawn on top instead, and the note suggests the closest layer id.
 
 ### Strings starting with `=` are reserved
 
-A style value that starts with `=` — `text-field: "=upper({name})"` — is
-reserved for a future expression shorthand, a formula-style way to write
-the expressions above. It doesn't work yet: today MapLibre gets the text
-exactly as written. So that the shorthand can arrive later without changing
-what your map means, maplibre-yaml warns about such a string now, at its
-line, in `mlym validate`, in the browser console, and on the page while you
-develop (see [what the map tells you](/troubleshooting/#reading-what-the-map-tells-you)).
-The check covers values under a layer's `paint:` and `layout:`, its
-`filter:`, and a story chapter's `setPaintProperty`/`setLayoutProperty`
-`value`, in both format versions; titles, descriptions and popup text are
-never checked.
-
-Write a MapLibre expression instead:
+A style value that starts with `=`, such as `text-field: "=upper({name})"`,
+is reserved and gets a warning: in `mlym validate`, in the browser console,
+and on the page while you develop. MapLibre receives the text exactly as
+written. Write an expression instead:
 
 ```yaml
 layout:
   text-field: ["upcase", ["get", "name"]]   # not "=upper({name})"
 ```
 
-For text that really does start with `=`, wrap it in a `literal`
-expression, which never warns and draws the text as written:
-
-```yaml
-layout:
-  text-field: ["literal", "=5"]
-```
-
-MapLibre's own `==` operator (`["==", ["get", "kind"], "park"]`, or a legacy
-`["==", "kind", "park"]` filter) is not affected.
-
-## Layer ordering
-
-Layers are drawn in order. Later layers appear on top:
-
-```yaml no-validate
-layers:
-  - id: background-fill      # Drawn first (bottom)
-    type: fill
-    # source, paint, ...
-  - id: roads                # Drawn second
-    type: line
-    # source, paint, ...
-  - id: labels               # Drawn last (top)
-    type: symbol
-    # source, layout, ...
-```
-
-All of them draw above the basemap. To slide a layer under part of the
-basemap, such as its labels, name that basemap layer in `before:`
-(`before: place_label`): your layer is drawn just below it. If `before:` names
-a layer the map doesn't have, your layer is drawn on top instead and, while
-you develop, a note on the map suggests the closest layer id.
-
-## Filtering layers
-
-Show only features matching certain criteria:
-
-```yaml
-- id: large-earthquakes
-  type: circle
-  source: earthquakes
-  filter: [">=", ["get", "mag"], 4.5] # Only magnitude 4.5+
-  paint:
-    circle-color: "#ef4444"
-```
-
-## In the legend
-
-Give a layer a `legend:` entry and the map shows a legend listing it, top left
-and open, even without a `legend:` block of its own:
-
-```yaml
-- id: parks
-  type: fill
-  source:
-    type: geojson
-    url: "./data/parks.geojson"
-  paint:
-    fill-color: "#22c55e"
-  legend:
-    label: Parks
-    color: "#22c55e"
-    shape: square
-```
-
-A map-level `legend:` block places and titles it; `legend: false` on a layer
-leaves that layer out, and `legend: false` at the top level hides the legend.
-A [classified](/guides/thematic-maps/) layer lists its classes automatically.
-See [Legend](/schema/map-config/#legend).
+For text that really starts with `=`, wrap it in `literal`, which never
+warns: `text-field: ["literal", "=5"]`. MapLibre's own `==` operator
+(`["==", ["get", "kind"], "park"]`) is not affected. The check covers a
+layer's `paint:`, `layout:` and `filter:`, and a story chapter's
+`setPaintProperty` and `setLayoutProperty` values.
 
 ## Next steps
 
-- [Loading data](/guides/data-sources/) - Load data from URLs
-- [Thematic maps & legends](/guides/thematic-maps/) - Classed colours and sizes with `classify:`
-- [Live data & streaming](/guides/live-data/) - Auto-refresh and streaming
-- [Popups, hover & controls](/guides/popups/) - Popups and hover effects
+- [Thematic maps & legends](/guides/thematic-maps/): classed colours and
+  sizes with a legend.
+- [Popups, hover & controls](/guides/popups/): what happens when a feature is
+  clicked.
+- [Loading data](/guides/data-sources/): files, URLs and named sources.

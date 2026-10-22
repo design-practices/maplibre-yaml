@@ -1,7 +1,6 @@
 # One band of values from a Cloud Optimized GeoTIFF, coloured with
-# colorRamp (0.9). The file holds a vegetation index (about -0.1 to 0.85);
-# the sea has no values and stays clear. Synthetic, public-domain data
-# (scripts/fixtures/cog.py). Shown on /guides/cloud-native-data/.
+# colorRamp. The file holds a vegetation index (about -0.1 to 0.85); the
+# sea has no values and stays clear. Synthetic, public-domain data.
 type: map
 id: cog-vegetation-demo
 config:

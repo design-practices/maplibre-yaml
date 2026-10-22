@@ -1,7 +1,6 @@
-# A Protomaps basemap from one .pmtiles file (0.9): no API key, no tile
-# server, no page JavaScript. The file is a ~0.6 MB extract of DUMBO and
-# Brooklyn Heights from the Protomaps planet build
-# (scripts/fixtures/protomaps-basemap.sh); data © OpenStreetMap contributors.
+# A Protomaps basemap from one .pmtiles file: no API key, no tile server,
+# no page JavaScript. The file is a ~0.6 MB extract of DUMBO and Brooklyn
+# Heights from the Protomaps planet build; data © OpenStreetMap contributors.
 type: map
 id: protomaps-basemap-demo
 config:

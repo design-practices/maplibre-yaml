@@ -1,6 +1,6 @@
 ---
 title: "Thematic maps & legends"
-description: Choropleths, graduated symbols and category maps from a few lines of YAML — compiled to plain MapLibre step and match expressions, with a generated legend
+description: Choropleths, graduated symbols and category maps from a classify block — breaks, palettes, rates and no-data — and the legend every map can show.
 ---
 
 import LiveMap from "../../../components/LiveMap.astro";
@@ -9,18 +9,26 @@ import { Aside } from "@astrojs/starlight/components";
 A **thematic map** colours (or sizes) each feature by one of its values:
 income by tract, population by city, land use by parcel. In MapLibre you
 write that as a `step` or `match` expression, and then write the legend by
-hand to match it. A `classify:` block does both from one description of the
-classes:
+hand to match it. A `classify:` block on a layer does both from one
+description of the classes. This page is also where legends are explained,
+for classified layers and any other.
+
+## Quick start
+
+The examples use two sample files:
+[sample-tracts.geojson](https://docs.maplibre-yaml.org/data/classify/sample-tracts.geojson)
+(made-up census tracts in Philadelphia) and
+[world-cities.geojson](https://docs.maplibre-yaml.org/data/classify/world-cities.geojson).
+Download them into `data/classify/` in your site (`public/data/classify/` in
+Astro) so the `url:` paths below work. Then:
 
 ```yaml
 type: map
-id: income
+id: classify-choropleth
 config:
   center: [-75.19, 39.936]
   zoom: 12
   mapStyle: "https://tiles.openfreemap.org/styles/positron"
-legend:
-  position: bottom-left
 sources:
   tracts:
     type: geojson
@@ -35,24 +43,24 @@ layers:
       method: quantile          # breaks computed from the data
       classes: 5
       palette: Blues            # a ColorBrewer palette
+      format: { currency: USD, max-fraction-digits: 0 }
     paint:
       fill-opacity: 0.85
+      fill-outline-color: "#ffffff"
 ```
 
-<LiveMap src="/configs/classify/choropleth.yaml" height="440px" caption="Five quantile classes computed when the data loads; tracts without a value are light grey" />
+<LiveMap src="/configs/classify/choropleth.yaml" height="440px" caption="Five quantile classes computed when the data loads; tracts without a value are light grey. Click a tract for its value." />
 
-The examples on this page use two sample files:
-[sample-tracts.geojson](https://docs.maplibre-yaml.org/data/classify/sample-tracts.geojson)
-and [world-cities.geojson](https://docs.maplibre-yaml.org/data/classify/world-cities.geojson).
-Download them into a `data/classify/` folder of your site (for an Astro site,
-`public/data/classify/`) so the `url:` paths above work, or use the full
-addresses as the `url:`.
+The tracts are shaded in five blues, and a legend in the top-left corner
+lists each class with its dollar range. The basemap is OpenFreeMap's
+positron, a quiet grey one that keeps the classes readable.
 
-`classify:` sits on the layer beside `paint:`. It is **sugar over MapLibre,
-not a new language**: it compiles to the `step` (numeric classes) or `match`
-(categories) expression you would otherwise write, in `paint.fill-color` (or
-`circle-color`, `line-color`, …). What you learn here — thresholds, palettes,
-no-data — is what MapLibre, QGIS and d3 call the same things.
+`classify:` sits on the layer beside `paint:` and compiles to the `step`
+(numeric classes) or `match` (categories) expression you would otherwise
+write, in the layer's main colour (`fill-color`, `circle-color` …). The terms
+here (breaks, palettes, no data) mean what they mean in MapLibre, QGIS and
+d3. [Thematic maps](/examples/thematic-maps/) in the examples shows each map
+on this page with its complete document.
 
 ## Three ways to say what the classes are
 
@@ -72,14 +80,15 @@ last everything from the last break up.
 
 <Aside type="note" title="QGIS draws that edge the other way">
 QGIS's graduated renderer puts a value equal to a break in the *lower*
-class. maplibre-yaml follows MapLibre, which puts it in the upper one — so a
+class. maplibre-yaml follows MapLibre, which puts it in the upper one, so a
 tract at exactly 0.4 can change class between your QGIS project and your
 web map. Only values that sit exactly on a break are affected.
 </Aside>
 
-Explicit breaks work on **every** source — GeoJSON, vector tiles, PMTiles —
-because nothing has to be computed in the browser. Breaks you computed
-elsewhere (QGIS, a notebook, the census bureau's published ranges) go here.
+Explicit breaks work on every source, GeoJSON, vector tiles and PMTiles
+alike, because nothing has to be computed in the browser. Breaks you
+computed elsewhere (QGIS, a notebook, a statistics office's published
+ranges) go here.
 
 ### Breaks computed from the data
 
@@ -96,32 +105,22 @@ classify:
 | `equal` | the same width of value range in each class | evenly spread data; values with a natural unit |
 | `jenks` | natural breaks: groups that are as alike inside, and as different between, as possible (Fisher–Jenks, computed exactly) | data with clusters |
 
-The breaks are computed **when the data arrives** — at load for inline
-`data:`, when the fetch lands for a `url:` (or a FlatGeobuf file), and again on
-every refresh of live data — so the classes always describe the features on
-the map. When many values tie (40% of tracts at 0), a method can produce fewer
-classes than you asked for; the map and legend then show the classes that
+The breaks are computed **when the data arrives**: at load for inline
+`data:`, when the file loads for a `url:`, and again on every refresh of
+[live data](/guides/live-data/). The classes always describe the features on
+the map. When many values tie (40% of tracts at 0), a method can produce
+fewer classes than you asked for; the map and legend show the classes that
 exist.
 
-<Aside type="caution" title="Whole-file sources only">
-`method:` needs the whole dataset. A **vector tile** source (including
-PMTiles and a basemap's sources) only ever gives the browser the tiles in
-view, and so does a **FlatGeobuf or GeoParquet source read by view** — breaks
-computed there would describe part of the data and change as you pan. So:
-
-- Validation refuses `method:` on a tiled source, and on a FlatGeobuf or
-  GeoParquet source with `load: viewport` (in any form, including
-  `{ mode: viewport }` and a version 2 source's `runtime.load`).
-- A FlatGeobuf or GeoParquet file over 50 MB switches itself to reading by
-  view even with `load: all` (see [Cloud-native
-  data](/guides/cloud-native-data/#flatgeobuf)).
-  Validation can't know a file's size, so the map checks when it reads the
-  file: the layer stays in its no-data colour and a notice asks for
-  `breaks:`.
-
-Explicit `breaks:` work on all of these. Compute them where the full data
-lives (QGIS, the tile pipeline) and write them in.
-</Aside>
+`method:` needs the whole dataset in the browser. A vector tile source
+(including PMTiles and the basemap's sources) only ever holds the tiles in
+view, and so does a FlatGeobuf or GeoParquet file read with
+`load: viewport`; breaks computed there would change as you pan. Validation
+refuses `method:` on those sources. Use explicit `breaks:` instead, computed
+where the full data lives. A FlatGeobuf or GeoParquet file over 50 MB switches
+to reading by view by itself, so for one of those the map checks when it
+reads the file and asks for `breaks:` in its notice
+([FlatGeobuf](/guides/flatgeobuf/), [GeoParquet](/guides/geoparquet/)).
 
 ### Categories
 
@@ -135,19 +134,20 @@ classify:
   other: "#bbbbbb"     # values you did not list (default grey; or hide)
 ```
 
-Or list the values and let a palette colour them (in order):
+Or list the values and let a palette colour them, in order:
 
 ```yaml
 classify:
   field: CONTINENT
   categories: [Africa, Asia, Europe, North America, South America, Oceania]
   palette: okabe-ito
+  other: "#d9d9d9"
 ```
 
 Categories compile to a `match`. Numbers work too (`categories: [1, 2, 3]`
 matches a zoning code stored as `1` or `"1"`). The legend lists categories in
-the order you write them, numeric codes included. Categories need no data scan,
-so they work on vector tiles exactly as on GeoJSON:
+the order you write them. Categories need no data scan, so they work on
+vector tiles exactly as on GeoJSON:
 
 <LiveMap src="/configs/classify/categories.yaml" height="380px" caption="The demo tiles' countries by continent, with a colour-blind-safe palette" />
 
@@ -166,9 +166,8 @@ near miss gets a "did you mean".
 - **Colour-blind safety.** Every sequential palette, `viridis`, `cividis`,
   `okabe-ito`, and the diverging `BrBG` `PiYG` `PRGn` `PuOr` `RdBu` (and
   `RdYlBu` at small class counts) stay distinguishable for the common
-  colour-vision deficiencies.
-  `RdYlGn`, `Spectral` and the ColorBrewer qualitative sets do not; prefer
-  `okabe-ito` for categories.
+  colour-vision deficiencies. `RdYlGn`, `Spectral` and the ColorBrewer
+  qualitative sets do not; prefer `okabe-ito` for categories.
 - **Defaults.** Numeric classes use `YlGnBu` (`viridis` past 9 classes);
   categories use `okabe-ito`. Both are colour-blind safe.
 - **Class counts.** ColorBrewer palettes start at 3 classes and go up to 9
@@ -177,17 +176,12 @@ near miss gets a "did you mean".
   too few colours.
 - `reverse: true` flips a palette (dark → light).
 
-Palette names resolve to plain hex colours when the document is read: the
-compiled expression and an exported style carry literal colours, never a
-palette name.
-
 ## Graduated symbols
 
-On a circle layer, `radius:` sizes each class — the same breaks drive
+On a circle layer, `radius:` sizes each class; the same breaks drive
 `circle-color` and `circle-radius`:
 
-```yaml no-validate
-# `cities` is a GeoJSON source declared under the document's sources:
+```yaml
 - id: cities
   type: circle
   source: cities
@@ -208,8 +202,8 @@ own `circle-color` stays); features with no value are then hidden.
 ## Rates, not counts
 
 A map of raw counts mostly shows where people live: the biggest tracts have
-the most of everything. Map a **rate** instead — `normalize:` divides the field
-by another property, and `multiply:` scales the result:
+the most of everything. Map a **rate** instead. `normalize:` divides the
+field by another property, and `multiply:` scales the result:
 
 ```yaml
 classify:
@@ -217,28 +211,27 @@ classify:
   normalize: population   # ÷ the people it happened to
   multiply: 100000        # × 100,000 → cases per 100,000 residents
   method: jenks           # breaks are computed on the rate
+  classes: 5
   palette: OrRd
+  format: { max-fraction-digits: 0 }
 ```
 
 <LiveMap src="/configs/classify/rate.yaml" height="440px" caption="Cases per 100,000 residents: the legend's edges are rates" />
 
-- Breaks — your own `breaks:` or a computed `method:` — are in the units of
-  the rate, and the legend shows the rate. Without a `label:`, the legend
-  heading names it (`cases per 100,000 population`).
-- A tract whose population is missing, 0 or not a number is **no data**, as is
-  one whose count is missing: the compiled expression checks before it
-  divides, so no feature is ever coloured by Infinity or NaN.
+- Breaks, your own or computed, are in the units of the rate, and the legend
+  shows the rate. Without a `label:`, the legend heading names it
+  (`cases per 100,000 population`).
+- A tract whose population is missing, 0 or not a number is **no data**, as
+  is one whose count is missing. No feature is ever coloured by Infinity or
+  NaN.
 - `normalize:` works for colour and for `radius:`; it needs numeric classes
   (not `categories:`), and `multiply:` needs `normalize:`.
-
-The compiled input is `["/", ["to-number", value], ["to-number", divisor]]`
-(times `multiply`), inside the same `let`/`case` guard as below.
 
 ## No data
 
 A feature has **no data** when its value is null or missing, an empty string,
-or text that is not a number (`"n/a"`). Numeric strings — `"15"`, which
-CSV-derived GeoJSON is full of — are read as numbers.
+or text that is not a number (`"n/a"`). Numeric strings such as `"15"`, which
+CSV-derived GeoJSON is full of, are read as numbers.
 
 ```yaml
 classify:
@@ -247,67 +240,15 @@ classify:
   noData: "#eeeeee"   # a colour (default: light grey #cccccc), or hide
 ```
 
-`noData: hide` leaves those features off the map instead (it adds a condition
-to the layer's `filter:`).
-
-When **every** feature is no data, the field name is usually the problem:
-property names are case-sensitive (`Median_Income` is not `median_income`),
-and numeric classes need a numeric property. Once the data has loaded, the
-console (and, while you develop, a note on the map) names the field and the
-data's actual property names, with a did-you-mean. The same goes for
-`normalize:`. The legend then shows only the "No data" line.
+`noData: hide` leaves those features off the map instead.
 
 <Aside type="note" title="Why this matters">
-In plain MapLibre, a `step` whose input is null — or a string, even `"15"` —
+In plain MapLibre, a `step` whose input is null, or a string (even `"15"`),
 does not fall into the first class: the expression fails, MapLibre logs a
-warning, and the feature is painted **black** (the property's default).
-classify's compiled expression checks the value first, so a missing value
-reads as "no data", never as a dark class.
+warning, and the feature is painted **black**. The expression `classify:`
+writes checks the value first, so a missing value reads as "no data", never
+as a dark class.
 </Aside>
-
-## The legend
-
-A classified layer adds its classes to the map's legend: a heading (the
-layer's `label:`, else the field name), one line per class with its **real
-edges**, and a "No data" line. A `label:` also gives the layer a visibility
-checkbox in the map's layer panel (top-right, in maps and stories alike); add
-`toggleable: false` to the layer to keep the heading without the checkbox.
-The lines read:
-
-- `< 25,000`, `25,000–50,000`, `≥ 75,000` for explicit breaks;
-- `3–10` … `31–55`, using the data's lowest and highest value, when the data
-  is GeoJSON (so the edges are the dataset's own);
-- "Other" and "No data" only when they can occur (with GeoJSON data, only when
-  some feature actually has no data).
-
-A map with a classified layer gets its legend **automatically**, even with
-no `legend:` block, in the default place (top-left, open, headed "Legend");
-a story pins one by its usual rules, with the same classes (breaks computed
-after load included). `legend: false` at the top level means no legend, and
-`legend: false` on a classified layer leaves its classes out. A hand-written
-layer `legend:` entry wins over the generated lines, and a `legend:` block
-with its own `items:` lists them first and the generated classes after them
-(when those items describe the colours from before `classify:`, remove them;
-validation and the page's author notes point this out). Placement, title and
-the other legend rules are in
-[Map configuration › Legend](/schema/map-config/#legend).
-
-Number formatting follows the reader's locale; set it with MapLibre's own
-`number-format` option names:
-
-```yaml
-classify:
-  field: median_income
-  method: quantile
-  format: { currency: USD, max-fraction-digits: 0 }   # $25,000–$50,000
-```
-
-`format:` takes `locale`, `currency`, `unit` (e.g. `percent`, `kilometer`),
-`min-fraction-digits` and `max-fraction-digits`; without a `locale` the edges
-follow the page's language. The "No data" and "Other" lines are UI strings you
-can translate in `locale:` like the rest
-([Accessibility & languages](/guides/accessibility-languages/)):
-`maplibre-yaml.Classify.NoData` and `maplibre-yaml.Classify.Other`.
 
 ## Which paint property
 
@@ -332,14 +273,83 @@ classify:
 | symbol | `text-color`, `icon-color`, `text-halo-color`, `icon-halo-color` |
 
 One owner per property: writing both `classify:` and `paint.fill-color` on
-the same layer is an error (keep one). Other paint properties —
-`fill-opacity`, `circle-stroke-width` — sit beside classify as usual.
+the same layer is an error (keep one). Other paint properties, such as
+`fill-opacity` or `circle-stroke-width`, sit beside classify as usual. A
+hand-written `step`, `match` or `interpolate` in `paint:` keeps working on
+any layer, beside classified ones ([Layers & styling](/guides/layers/#data-driven-styling)).
+
+## The legend
+
+A map shows a legend by itself when a layer is classified or carries its own
+`legend:` entry. It sits top-left, open, under a "Legend" header the reader
+can click to fold it.
+
+**A classified layer** lists a heading (the layer's `label:`, else the field
+name), one line per class with its real edges, and a "No data" line:
+
+- `< 25,000`, `25,000–50,000`, `≥ 75,000` for explicit breaks;
+- `3–10` … `31–55`, using the data's lowest and highest value, when the data
+  is GeoJSON (so the edges are the dataset's own);
+- "Other" and "No data" only when they can occur (with GeoJSON data, only
+  when some feature actually has no data).
+
+Edges follow the reader's language. `format:` in the classify block takes
+the same number options as a popup
+([Format numbers](/guides/popups/#format-numbers)): `format: { currency: USD,
+max-fraction-digits: 0 }` gives `$25,000–$50,000`.
+
+**Any other layer** joins the legend with an entry of its own:
+
+```yaml
+- id: parks
+  type: fill
+  source: parks
+  paint:
+    fill-color: "#22c55e"
+  legend:
+    label: Parks
+    color: "#22c55e"
+    shape: square       # square (default), circle, line or icon
+```
+
+**A `legend:` block** at the top level of the document places and titles it:
+
+```yaml
+legend:
+  title: Land use        # a heading inside the panel
+  position: bottom-left  # top-left (default), top-right, bottom-left, bottom-right
+  collapsed: true        # start folded
+```
+
+- `legend: false` at the top level means no legend; `legend: false` on a layer
+  leaves that layer (and its classes) out.
+- `items:` in the block lists entries you write yourself (`color`, `label`,
+  `shape`), instead of the layers' own entries. A classified layer's classes
+  still follow them. When those items describe colours from before you added
+  `classify:`, remove them; validation points this out.
+- A `label:` also gives the layer a checkbox in the map's layer panel; add
+  `toggleable: false` to keep the heading without the checkbox.
+- The header reads "Legend" in every map, so a screen reader always
+  announces it the same way. Translate it, and the "No data" and "Other"
+  lines, with `maplibre-yaml.Legend.Title`, `maplibre-yaml.Classify.NoData`
+  and `maplibre-yaml.Classify.Other` in `config.locale`
+  ([Accessibility & languages](/guides/accessibility-languages/#show-the-map-in-another-language)).
+
+Every legend key is in the [map reference](/reference/yaml/map/#legend).
+A story map pins its legend by the same rules, with the same classes.
 
 ## What it compiles to
 
-classify is an `exports` construct: an exported style carries the compiled
-expression and nothing else is needed to draw it. The income layer above
-(with explicit breaks) becomes:
+An exported `style.json` (`mlym emit`) carries the compiled expression, so
+the map draws the same without maplibre-yaml. Computed breaks are worked
+out at export: an `https://` data URL is fetched, a path is read from disk
+(relative to the YAML file; a `/…` path from the nearest `public/` folder).
+If the data can't be loaded, the export fails and names the layer and the
+URL. Palette names are written out as colours, and the layer's `metadata`
+records the field, method, breaks and colours.
+
+<details>
+<summary>The expression for the income layer with breaks `[25000, 50000, 75000]`</summary>
 
 ```json
 "fill-color": [
@@ -355,29 +365,36 @@ expression and nothing else is needed to draw it. The income layer above
 ```
 
 The `case` is the no-data guard (a number that is not NaN, or a non-empty
-numeric string); inside it is the plain `step`. Categories compile to
-`["match", ["to-string", ["get", field]], …, other]` behind the same kind of
-guard.
+numeric string); inside it is the plain `step`. Categories compile to a
+`match` behind the same kind of guard, and a rate divides inside the guard.
 
-- **Provenance.** The layer's `metadata["maplibre-yaml:classify"]` records
-  what the expression means — field, method, the breaks actually drawn,
-  colours, palette, no-data treatment — so a third-party legend (or a future
-  importer) can read it.
-- **`mlym emit`** bakes computed breaks into the style. With a `url:` source
-  it loads the data at export: an `https://` URL is fetched, a path is read
-  from disk (relative to the YAML file; a `/…` path from the nearest
-  `public/` folder). If the data cannot be loaded, the export fails and names
-  the layer and the URL — a classed map whose classes are unknown has no
-  honest fallback.
-- **Raw MapLibre still works.** classify is one way to write the expression,
-  never the only one: a hand-written `step`, `match` or `interpolate` in
-  `paint:` keeps working on any layer, beside classified ones.
+</details>
 
-## Format v2 and stories
+## Troubleshooting
+
+Validation catches most slips at the line they happen on, with a "did you
+mean" where it can. The common ones:
+
+- **Every feature is "No data".** The field name is usually wrong: property
+  names are case-sensitive (`Median_Income` is not `median_income`), and
+  numeric classes need a numeric property. Once the data has loaded, the
+  console (and, while you develop, a note on the map) names the field and
+  the data's actual property names. The same goes for `normalize:`.
+- **"method: computes breaks from the whole dataset, and …"**: the source is
+  tiled or read by view. Write `breaks:` instead
+  ([above](#breaks-computed-from-the-data)).
+- **Breaks that don't go up**, or a `colors:` (or `radius:`) list whose length
+  doesn't match the classes: n breaks make n + 1 classes.
+- **Too few colours**: the palette doesn't go up to that many classes; lower
+  `classes:` or pick another palette.
+- **`classify:` and `paint.fill-color` both written**: keep one.
+- **`radius:` on a layer that isn't a circle layer**, `normalize:` with
+  `categories:`, or `multiply:` without `normalize:`.
+
+## Format v2 \{#format-v2-and-stories}
 
 In [format v2](/guides/format-v2/), `classify:` sits on the layer under
-`style.layers[]` (it is style, not runtime), with `label:` under the layer's
-`runtime:`:
+`style.layers[]` (it is style), with `label:` under the layer's `runtime:`:
 
 ```yaml
 version: 2
@@ -399,18 +416,8 @@ runtime:
   legend: { position: bottom-left }
 ```
 
-A scrollytelling story's `layers:` take `classify:` exactly as a map's do.
+## Moved
 
-## Checks
+### Checks
 
-Validation catches the common slips, at the line they happen on:
-
-- breaks that do not go up; a `colors:` list (or `radius:`) whose length
-  does not match the classes (n breaks → n + 1);
-- an unknown `method:` or `palette:` (with a "did you mean");
-- a palette with too few colours for the classes;
-- `method:` on a vector tile source;
-- `classify:` and the same paint property both written;
-- `radius:` on a layer that is not a circle layer;
-- `normalize:` on `categories:`, a field divided by itself, or `multiply:`
-  without `normalize:` (and `normalise:` gets a "did you mean").
+The list of validation checks is now under [Troubleshooting](#troubleshooting).

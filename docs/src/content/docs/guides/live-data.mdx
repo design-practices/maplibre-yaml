@@ -1,100 +1,111 @@
 ---
 title: "Live data & streaming"
-description: Polling, streaming, and real-time updates
+description: Keep a layer current — poll a GeoJSON URL on a timer, or receive updates over Server-Sent Events or a WebSocket — and choose whether updates replace, merge with or add to the data on the map.
 ---
 
 import LiveMap from "../../../components/LiveMap.astro";
-import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Code } from "@astrojs/starlight/components";
+import polling from "../../../../public/configs/polling-demo.yaml?raw";
+import merging from "../../../../public/configs/merge-demo.yaml?raw";
 
-maplibre-yaml makes it easy to keep your map data fresh with automatic polling, Server-Sent Events (SSE), and WebSocket streaming.
+A layer can keep its data current while the page is open: by fetching its
+GeoJSON URL again on a timer (polling), or by receiving updates the server
+pushes (a stream). Polling suits a feed that changes every minute or so;
+a stream suits positions that change every second.
 
-<Aside title="Placeholder endpoints">
-  Live feeds are specific to your data, so the endpoints on this page
-  (`api.example.com`, `stream.example.com`) are placeholders: swap in your
-  own polling URL, SSE stream or WebSocket. For a real feed to try polling
-  with, the USGS earthquake feeds
-  (`https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson`)
-  allow cross-origin requests.
-</Aside>
+## Quick start: poll a feed
 
-## Polling (auto-refresh)
+Add a `refresh:` block to the source, beside its `url:`. This map fetches the
+USGS feed of the last day's earthquakes every minute:
 
-The simplest way to keep data current is polling - fetching data at regular intervals:
+<Code code={polling} lang="yaml" title="live-earthquakes.yaml" />
 
-```yaml
-source:
-  type: geojson
-  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-  refresh:
-    refreshInterval: 60000 # Refresh every 60 seconds (milliseconds)
-```
+<LiveMap src="/configs/polling-demo.yaml" height="350px" caption="The last day's earthquakes, fetched again every minute" />
 
-<LiveMap
-  src="/configs/polling-demo.yaml"
-  height="350px"
-  caption="Refreshes every 60 seconds"
-/>
+Each poll downloads the URL again and redraws the layer with what it
+returns. Polling pauses while the browser tab is hidden and resumes when the
+reader comes back. `refreshInterval` is in milliseconds, at least 1000.
 
-### Controlling polling
+- The feed must allow other sites to read it (CORS), as the USGS feeds do
+  ([Loading data › CORS](/guides/data-sources/#cors-considerations)).
+- A named source under `sources:` is polled once, however many layers draw
+  it ([named sources](/guides/data-sources/#named-sources)).
+- Live updates work on GeoJSON sources. A FlatGeobuf or GeoParquet file is
+  read once, and `refresh:` or `stream:` on one is a validation error.
 
-Polling runs on the `refreshInterval` you write in the YAML. There is no
-method to pause, resume or force a refresh from JavaScript yet; to change the
-data yourself, call `updateLayerData(layerId, geojson)` on `<ml-map>` or a
-`MapRenderer`.
+The YAML sets the interval; there is no method to pause or force a poll from
+JavaScript. To replace the data yourself, call
+`updateLayerData(layerId, geojson)` on `<ml-map>`.
 
-<Aside>
-  Polling is automatically paused when the browser tab is hidden and resumes
-  when visible again.
-</Aside>
+## Choose how updates combine \{#update-strategies}
 
-Live updates work on GeoJSON sources given by `url:`. A FlatGeobuf or
-GeoParquet file ([Large data](/guides/cloud-native-data/)) is read once:
-`refresh:` or `stream:` on one is a validation error.
+`updateStrategy` in the `refresh:` block says what happens to the features
+already on the map when new ones arrive:
 
-## Update strategies
+| `updateStrategy:` | The map then shows | Use it for |
+| --- | --- | --- |
+| `replace` (default) | Only the new features | A feed that returns the whole dataset each time |
+| `merge` | The new features, plus every earlier one the update didn't mention | Things with an id that move or change: vehicles, sensors |
+| `append-window` | Earlier and new features together, trimmed by count or age | Event streams: the last 100 events, the last hour |
 
-When new data arrives, how should it combine with existing data?
+### Replace
 
-### Replace (default)
-
-New data completely replaces old data:
-
-```yaml
-source:
-  type: geojson
-  url: "https://..."
-  refresh:
-    refreshInterval: 30000
-    updateStrategy: replace # Default behavior
-```
-
-**Use for:** Complete datasets that are re-fetched in full each time.
+The default, used by the quick start: each response is the whole dataset.
 
 ### Merge
 
-Update existing features, add new ones, keep features not in the update:
+`merge` matches features by `updateKey`, a property whose value is different
+for every feature. A feature whose key is already on the map is replaced by
+its new version; a new key is added; features the update doesn't mention
+stay. Here the USGS hour feed keeps every earthquake seen since the page
+opened, even after it drops out of the feed's last hour:
+
+<Code code={merging} lang="yaml" title="earthquakes-this-session.yaml" />
+
+<LiveMap src="/configs/merge-demo.yaml" height="350px" caption="Earthquakes from the last hour, accumulating while the page is open" />
+
+`updateKey` names a **property** (inside `properties`), not the feature's
+top-level `id`. The USGS feeds keep their id at the top level, so this
+example matches on the event page's `url` property instead. A feature
+without the property is dropped. Validation refuses `merge` without
+`updateKey`.
+
+For your own feed, say a vehicle API, each response is a `FeatureCollection`
+of points whose properties include the key:
 
 ```yaml
 source:
   type: geojson
-  url: "https://api.example.com/vehicles"
+  url: "https://api.example.com/vehicles"   # your own endpoint
   refresh:
     refreshInterval: 5000
     updateStrategy: merge
-    updateKey: "vehicleId" # Match features by this property
+    updateKey: vehicleId
 ```
 
-**Use for:** Entity tracking where each feature has a unique ID.
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.41, 37.79] },
+      "properties": { "vehicleId": "bus-12", "status": "active" }
+    }
+  ]
+}
+```
 
-**Example scenario:**
+A vehicle that stops reporting keeps its last position on the map. To show
+that, have the feed send it with a status such as `offline` and colour by
+`status`, or use `replace` if the feed always lists every vehicle.
 
-- Initial data: Vehicles A, B, C
-- Update contains: A (new position), D (new vehicle)
-- Result: A (updated), B (unchanged), C (unchanged), D (added)
+### Append with a window
 
-### Append with window
-
-Add new features while limiting total count or age:
+`append-window` adds every update to what is there, then trims: `windowSize`
+keeps the newest N features, and `windowDuration` (milliseconds) drops
+features older than that, judged by the number in `timestampField`
+(milliseconds since 1970, as USGS's `time` is). It suits a stream:
 
 ```yaml
 source:
@@ -105,73 +116,50 @@ source:
     url: "https://stream.example.com/events"
   refresh:
     updateStrategy: append-window
-    windowSize: 100 # Keep latest 100 features
-    windowDuration: 3600000 # Or features from last hour
-    timestampField: "time" # Property containing timestamp
+    windowSize: 100           # keep the newest 100 features
+    windowDuration: 3600000   # and none older than an hour
+    timestampField: time
 ```
 
-**Use for:** Event streams, activity feeds, time-series data.
+## Receive updates from a stream
 
-## Server-Sent Events (SSE)
-
-For real-time push updates, use SSE streaming. A streamed source still needs
-somewhere to start: a `url:` to load first, or `data:` with an empty
-`FeatureCollection` to start blank (validation refuses a GeoJSON source with
-only `stream:`). It also needs a `refresh:` block next to `stream:`: the
-stream connects only when one is there, and its `updateStrategy` says how
-each message is applied.
+With a stream, the server sends updates as they happen instead of waiting to
+be asked. A `stream:` block opens a Server-Sent Events (`type: sse`) or
+WebSocket (`type: websocket`) connection:
 
 ```yaml
 source:
   type: geojson
-  data: { type: FeatureCollection, features: [] }   # empty until messages arrive
+  url: "https://api.example.com/vehicles"   # the current state, loaded first
   stream:
-    type: sse
-    url: "https://stream.example.com/events"
-    reconnect: true # Auto-reconnect on disconnect
-    reconnectMaxAttempts: 10 # Give up after 10 failures
-    reconnectDelay: 1000 # Initial delay (doubles each retry)
+    type: sse                               # or websocket, with a wss:// url
+    url: "https://api.example.com/vehicles/stream"
   refresh:
     updateStrategy: merge
-    updateKey: "id"
+    updateKey: vehicleId
 ```
 
-### How SSE works
+- **Each message is one GeoJSON `FeatureCollection`**, as JSON text: an SSE
+  event's `data:` or one WebSocket message. Send a single changed feature
+  inside a collection of one. Anything else (a bare `Feature`, text that
+  isn't JSON) is skipped and reported as a data error.
+- **The source needs a `refresh:` block beside `stream:`.** The stream
+  connects only when one is there, and its `updateStrategy` says how each
+  message is applied. Validation warns when it is missing.
+- **The source needs somewhere to start**: a `url:` with the current state,
+  or `data:` with an empty `FeatureCollection` to start blank.
+- **Reconnecting is automatic.** After a dropped connection the stream
+  retries up to `reconnectMaxAttempts` times (10), waiting `reconnectDelay`
+  (1 second) and doubling the wait each time up to `reconnectMaxDelay`
+  (30 seconds). `reconnect: false` turns it off.
+- An SSE stream listens for the `message` event unless `eventTypes` names
+  others. A WebSocket can ask for sub-`protocols`.
 
-1. Browser opens persistent HTTP connection
-2. Server sends data as events occur
-3. Browser automatically reconnects if connection drops
-4. Each message updates the map
-
-### Stream options
-
-`reconnect` is on by default: after a dropped connection the stream retries
-up to `reconnectMaxAttempts` times (10), waiting `reconnectDelay` (1 second)
-and doubling the wait each time up to `reconnectMaxDelay` (30 seconds). An
-SSE stream listens for the `message` event unless `eventTypes` names others;
-a WebSocket can ask for sub-`protocols`. Every `stream:` and `refresh:` key,
-with its type and default, is in the
-[sources reference](/reference/yaml/sources/#geojson-stream)
-([`refresh:` keys](/reference/yaml/sources/#geojson-refresh)).
-
-## WebSocket streaming
-
-For bidirectional communication, use WebSocket:
-
-```yaml
-source:
-  type: geojson
-  data: { type: FeatureCollection, features: [] }   # empty until messages arrive
-  stream:
-    type: websocket
-    url: "wss://stream.example.com/data"
-    reconnect: true
-  refresh:
-    updateStrategy: merge
-    updateKey: "id"
-```
-
-WebSocket is useful when you need to send messages to the server (e.g., subscribing to specific data channels).
+SSE is the simpler choice for updates that only flow from the server; use a
+WebSocket when your server already speaks it. Every `stream:` and `refresh:`
+key, with its default, is in the sources reference:
+[`stream:`](/reference/yaml/sources/#geojson-stream) and
+[`refresh:`](/reference/yaml/sources/#geojson-refresh).
 
 ## Reacting to updates
 
@@ -184,90 +172,55 @@ const mapEl = document.querySelector("ml-map");
 
 mapEl.addEventListener("ml-map:layer-data-loaded", (event) => {
   const { layerId, featureCount } = event.detail;
-  console.log(`${layerId}: ${featureCount} features`);
+  document.querySelector("#updated").textContent =
+    `${featureCount} features, updated ${new Date().toLocaleTimeString()}`;
 });
 
 mapEl.addEventListener("ml-map:layer-data-error", (event) => {
   const { layerId, error } = event.detail;
-  console.error(`${layerId} error:`, error.message);
+  console.error(`${layerId}:`, error.message);
 });
 ```
 
+A [classified](/guides/thematic-maps/) layer recomputes its classes after
+each update. Every event is in [`<ml-map>` events](/reference/elements/#ml-map-events).
 With the [JavaScript API](/integrations/vanilla-js/), the same events are
 `renderer.on("layer:data-loaded", …)` and `renderer.on("layer:data-error", …)`.
-A stream reconnects by itself, as set by its `reconnect*` options; the
-connection's own states (connecting, reconnecting) aren't reported as events.
 
-## Complete example
+## Troubleshooting
 
-Here's a complete live tracking example. `https://api.example.com/vehicles` is
-a **placeholder**: there is no public vehicle feed behind it, so as printed the
-map shows only the basemap. Point `url:` at your own endpoint that returns a
-GeoJSON `FeatureCollection` of points with `vehicleId`, `vehicleName`,
-`status` and `lastUpdate` properties (and allows cross-origin requests).
+- **The layer never updates.** Check the browser's network tab for a request
+  every interval. No request: `refresh:` is not inside the source (it sits
+  beside `url:`), or the tab was hidden. A request that fails: the feed
+  blocks other sites (CORS), or it is down; the map's notice and
+  `ml-map:layer-data-error` say which.
+- **The stream never connects.** The source has `stream:` but no `refresh:`;
+  validation warns "stream: connects only when the source also has a
+  refresh: block".
+- **With `merge`, the layer empties after the first update.** The features
+  don't have the `updateKey` property: check its spelling and that it is
+  inside `properties`, not the feature's top-level `id`.
+- **Stream messages are ignored.** Each message must be a whole
+  `FeatureCollection` (see above); the console shows "Received data is not a
+  valid GeoJSON FeatureCollection".
 
-```yaml
-type: map
-id: vehicle-tracker
-config:
-  center: [-122.4, 37.8]
-  zoom: 12
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-
-layers:
-  - id: vehicles
-    type: circle
-    source:
-      type: geojson
-      url: "https://api.example.com/vehicles"
-      refresh:
-        refreshInterval: 5000 # Poll every 5 seconds
-        updateStrategy: merge # Update existing, add new
-        updateKey: "vehicleId" # Match by vehicle ID
-      cache:
-        enabled: false # Don't cache live data
-    paint:
-      circle-radius: 10
-      circle-color:
-        - match
-        - ["get", "status"]
-        - "active"
-        - "#22c55e"
-        - "idle"
-        - "#eab308"
-        - "offline"
-        - "#6b7280"
-        - "#6b7280"
-      circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"
-    interactive:
-      hover:
-        cursor: pointer
-      click:
-        popup:
-          - h3:
-              - property: vehicleName
-          - p:
-              - str: "Status: "
-              - property: status
-          - p:
-              - str: "Last update: "
-              - property: lastUpdate
-
-controls:
-  navigation: true
-```
-
-## Best practices
-
-1. **Choose appropriate intervals** - Don't poll more frequently than data changes
-2. **Use merge for entities** - When tracking things with IDs, use merge to avoid flicker
-3. **Set reasonable retry limits** - Don't retry forever if the server is down
-4. **Disable cache for live data** - Ensure you're always getting fresh data
-5. **Handle errors gracefully** - Show users when data isn't updating (listen for `ml-map:layer-data-error`)
+More: [Troubleshooting](/troubleshooting/).
 
 ## Next steps
 
-- [Popups, hover & controls](/guides/popups/) - Add popups and hover effects
-- [Named sources](/schema/sources/#named-source-definitions) - One live source feeding several layers, polled once
-- [Examples](/examples/) - See complete working examples
+- [Earthquake tracker](/examples/earthquake-tracker/): a complete polling map.
+- Gallery: [Add live realtime data](/examples/gallery/add-live-realtime-data/).
+- [Popups, hover & controls](/guides/popups/): what a reader sees when they
+  click a feature.
+
+## Moved
+
+### Complete example
+
+The vehicle-tracking walkthrough is now [Merge](#merge), with a feed that
+works as printed.
+
+### Best practices
+
+Folded into the sections above: [Choose how updates combine](#update-strategies)
+and [Troubleshooting](#troubleshooting).

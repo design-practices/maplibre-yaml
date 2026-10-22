@@ -1,45 +1,16 @@
-# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
 type: map
-id: interpolate-demo
+id: quakes-by-magnitude
 config:
   center: [-120, 37]
-  zoom: 5
+  zoom: 4
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
-  - id: quakes
+  - id: earthquakes
     type: circle
     source:
       type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry: { type: Point, coordinates: [-121, 36] }
-            properties: { magnitude: 1.5 }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-119, 37.5] }
-            properties: { magnitude: 2.8 }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-120.5, 38] }
-            properties: { magnitude: 4.2 }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-118, 36.5] }
-            properties: { magnitude: 5.1 }
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     paint:
-      circle-radius:
-        - interpolate
-        - ["linear"]
-        - ["get", "magnitude"]
-        - 1
-        - 6
-        - 5
-        - 24
-      circle-color:
-        - interpolate
-        - ["linear"]
-        - ["get", "magnitude"]
-        - 1
-        - "#fef08a"
-        - 5
-        - "#dc2626"
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 3, 6, 20]
+      circle-color: ["interpolate", ["linear"], ["get", "mag"], 1, "#fef08a", 6, "#dc2626"]
       circle-opacity: 0.8
