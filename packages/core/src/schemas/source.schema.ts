@@ -511,16 +511,16 @@ export const GeoJSONSourceSchema = z
       .min(1000)
       .optional()
       .describe(
-        "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+        "Deprecated: use refresh.refreshInterval. Polling interval in milliseconds"
       ),
     updateStrategy: z
       .enum(["replace", "merge", "append-window"])
       .optional()
-      .describe("Update strategy (legacy, use refresh.updateStrategy)"),
+      .describe("Deprecated: use refresh.updateStrategy"),
     updateKey: z
       .string()
       .optional()
-      .describe("Update key (legacy, use refresh.updateKey)"),
+      .describe("Deprecated: use refresh.updateKey"),
     loading: LoadingConfigSchema.optional(),
     cache: CacheConfigSchema.optional().describe("Cache configuration"),
     // MapLibre clustering options
