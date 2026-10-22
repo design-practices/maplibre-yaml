@@ -356,26 +356,26 @@ test.describe("docs: getting-started snippets render verbatim", () => {
       "map.js": js,
     });
     const loaded = page.waitForEvent("console", {
-      predicate: (m) => m.text() === "Map loaded successfully!",
+      predicate: (m) => m.text() === "map loaded",
       timeout: 60_000,
     });
     await page.goto(`/__docs/vanilla-api/`, { waitUntil: "domcontentloaded" });
     await orReport(loaded, errors);
 
     // The renderer drew the document into #map: the view from the YAML, and the
-    // `points` layer hit-testable at the centre.
+    // `quakes` layer drawing the (stubbed) feed.
     await expect(page.locator("#map canvas.maplibregl-canvas")).toBeVisible();
     await page.waitForFunction(
       () => {
         const map = (globalThis as any).__docMaps?.[0];
-        if (!map || !map.loaded() || !map.getLayer("points")) return false;
-        return map.queryRenderedFeatures({ layers: ["points"] }).length > 0;
+        if (!map || !map.loaded() || !map.getLayer("quakes")) return false;
+        return map.queryRenderedFeatures({ layers: ["quakes"] }).length > 0;
       },
       undefined,
       { timeout: 60_000 }
     );
     const zoom = await page.evaluate(() => (globalThis as any).__docMaps[0].getZoom());
-    expect(zoom).toBeCloseTo(12, 3);
+    expect(zoom).toBeCloseTo(4, 3);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
@@ -477,23 +477,22 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     await context.close();
   });
 
-  test("web components: the Quick Start steps assemble into a working page", async ({
+  test("web components: the Quick Start page and map.yaml render the earthquake layer", async ({
     page,
     baseURL,
   }) => {
-    const html = fences("integrations/web-components.mdx", "html");
-    const [head, element] = html;
-    expect(head).toContain("<head>");
-    expect(element).toContain("<ml-map");
+    const [html] = fences("integrations/web-components.mdx", "html");
+    expect(html).toContain('<ml-map src="map.yaml"');
+    expect(html).toContain('name="viewport"');
     const [yaml] = fences("integrations/web-components.mdx", "yaml");
-    expectKnownUrls(baseURL!, head, element, yaml);
+    expectKnownUrls(baseURL!, html, yaml);
 
     const errors = await serveSnippet(page, baseURL!, "wc-quick", {
-      "index.html": `<!DOCTYPE html>\n<html lang="en">\n${head}<body>\n${element}</body>\n</html>\n`,
+      "index.html": html,
       "map.yaml": yaml,
     });
     await page.goto(`/__docs/wc-quick/`, { waitUntil: "domcontentloaded" });
-    await orReport(waitForRenderedLayer(page, "marker"), errors);
+    await orReport(waitForRenderedLayer(page, "quakes"), errors);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
@@ -502,23 +501,26 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     baseURL,
   }) => {
     const html = fences("integrations/web-components.mdx", "html");
-    const [head] = html;
+    const [pageHtml] = html;
     const slots = html.find((h) => h.includes('slot="top-right"'))!;
     const [yaml] = fences("integrations/web-components.mdx", "yaml");
-    expectKnownUrls(baseURL!, head, slots, yaml);
+    expectKnownUrls(baseURL!, pageHtml, slots, yaml);
+    // The quick-start page, with the Slots example in place of its <ml-map>.
+    const element = pageHtml.match(/^\s*<ml-map[^\n]*<\/ml-map>\n/m)![0];
+    const withSlots = pageHtml.replace(element, slots);
+    expect(withSlots).toContain('slot="top-right"');
 
     const errors = await serveSnippet(page, baseURL!, "wc-slots", {
-      "index.html": `<!DOCTYPE html>\n<html lang="en">\n${head}<body>\n${slots}</body>\n</html>\n`,
+      "index.html": withSlots,
       "map.yaml": yaml,
     });
     await page.goto(`/__docs/wc-slots/`, { waitUntil: "domcontentloaded" });
-    await orReport(waitForRenderedLayer(page, "marker"), errors);
+    await orReport(waitForRenderedLayer(page, "quakes"), errors);
 
-    // As printed before this fix the element had no height: blank page.
     const box = await page.locator("ml-map").boundingBox();
     expect(box!.height).toBe(400);
     await expect(page.locator(".my-controls")).toBeVisible();
-    await expect(page.getByText("Data: city open data portal")).toBeVisible();
+    await expect(page.getByText("Data: USGS")).toBeVisible();
     expect(errors, errors.join("\n")).toEqual([]);
   });
 

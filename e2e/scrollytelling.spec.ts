@@ -1242,6 +1242,7 @@ function cdn(baseURL: string): Record<string, string | { js: string }> {
     "https://unpkg.com/@maplibre-yaml/core@0.9/register.js": `${baseURL}/packages/core/register.js`,
     "https://unpkg.com/@maplibre-yaml/core@0.9/dist/register.browser.js": `${baseURL}/packages/core/dist/register.browser.js`,
     "https://demotiles.maplibre.org/style.json": `${baseURL}${LOCAL_STYLE}`,
+    "https://tiles.openfreemap.org/styles/liberty": `${baseURL}${LOCAL_STYLE}`,
   };
 }
 
@@ -1394,7 +1395,8 @@ test.describe("docs: Scrollytelling in plain HTML, run verbatim", () => {
   });
 
   test("the quick start (index.html + story.yaml) is a working story", async ({ page, baseURL }) => {
-    const [html, inlineHtml] = fences(PAGE, "html");
+    const [html] = fences(PAGE, "html");
+    const inlineHtml = fences(PAGE, "html").find((h) => h.includes('<script type="text/yaml">'))!;
     const [yaml] = fences(PAGE, "yaml");
     expect(html).toContain('<ml-scrollytelling src="story.yaml">');
     for (const url of html.match(/https?:\/\/[^\s"'`<>)]+/g) ?? []) {
