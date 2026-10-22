@@ -1,6 +1,6 @@
 {
   "name": "@maplibre-yaml/cli",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Command line for maplibre-yaml: scaffold a project, validate and preview YAML maps, export them to MapLibre style.json",
   "type": "module",
   "bin": {

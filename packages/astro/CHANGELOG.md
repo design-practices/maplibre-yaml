@@ -1,5 +1,13 @@
 # @maplibre-yaml/astro
 
+## 0.7.1
+
+### Patch Changes
+
+- 35e5480: `buildMultiPointMapConfig` and `buildRouteMapConfig` now apply their `padding` option. It was accepted and documented (default 50 pixels) but never reached the map, so the points or route were fitted edge to edge. The built config now carries `fitBoundsOptions: { padding }` next to `bounds`, so the map leaves that many pixels between your data and the map edge.
+- 0013b82: The `astro` project template from `mlym init -t astro` now asks for Node.js 22.23.4 or later in its `package.json` `engines`, which is what Astro 7.4.2 requires. Before, it asked for 22.22, so a new project could install on a Node version that Astro then refuses to run on. The `@maplibre-yaml/astro` README now gives the same minimum for Astro 7.
+- cbf0ec0: Content-collection entries validated with `getMapSchema()` or `getScrollytellingSchema()` now accept the GeoJSON shorthand (`location:`, `locations:`, `region:`, `route:` on a `type: geojson` source), just as `<Map src>` and `loadMapConfig` do. Before, the same YAML that worked as a map file failed as a collection entry with "GeoJSON source requires at least one of: url, data, or prefetchedData". The entry's data now has the shorthand expanded into `data:`, and a malformed shorthand is reported at its own path. `extendSchema()` keeps this behavior. Both helpers are now always a validating wrapper, never core's zod object itself; on Astro 6 and 7 they already were.
+
 ## 0.7.0
 
 ### Minor Changes
