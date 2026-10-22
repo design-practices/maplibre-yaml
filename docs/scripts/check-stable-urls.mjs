@@ -10,6 +10,8 @@
  *  - NEVER_MOVE: addresses pinned outside this repo's control — core's
  *    shipped error text, editor modelines in users' files, published npm
  *    READMEs. They must answer directly, with no redirect.
+ *  - REDIRECTED_ANCHORS: linked sections of pages that moved; each must land
+ *    on an element with that id once the redirect is followed.
  *  - PAGE_REDIRECTS (docs/redirects.mjs): each old path must redirect to its
  *    new one, and public/_redirects must carry a 301 for it (Cloudflare Pages
  *    serves those; a meta-refresh page drops the #fragment, a 301 keeps it).
@@ -142,6 +144,37 @@ export const STUB_ANCHORS = [
   "/troubleshooting/#blank-map-and-worker-failed-to-load",
   "/troubleshooting/#an-error-card-instead-of-the-map",
   "/troubleshooting/#the-basemap-draws-but-your-layer-doesnt",
+  // Reference topic pages (docs batch 6): anchors kept on the hubs, and the
+  // linked sections of the pages that now redirect, which must still land.
+  "/schema/overview/#three-kinds-of-document",
+  "/schema/map-config/#complete-examples",
+  "/schema/map-config/#what-goes-inside-config",
+  "/schema/map-config/#mapstyle-forms",
+  "/schema/map-config/#fit-to-bounds",
+  "/schema/map-config/#fit-to-a-sources-data",
+  "/schema/map-config/#interaction-settings",
+  "/schema/map-config/#terrain-sky--projection",
+  "/schema/map-config/#light",
+  "/schema/map-config/#popups",
+  "/schema/map-config/#legend",
+  "/schema/map-config/#map-controls",
+  "/schema/map-config/#typescript-types",
+];
+
+/**
+ * Sections of pages that moved (PAGE_REDIRECTS) that other pages still link
+ * to. The redirect keeps the #fragment (a Cloudflare 301 does), so the page
+ * it lands on must carry the id.
+ */
+export const REDIRECTED_ANCHORS = [
+  "/schema/sources/#geojson-sugar",
+  "/schema/sources/#files-on-your-own-site-relative-paths",
+  "/schema/sources/#named-source-definitions",
+  "/schema/layers/#popups",
+  "/schema/layers/#classify",
+  "/schema/layers/#number-formats",
+  "/schema/interactivity/#emit",
+  "/schema/interactivity/#custom-highlight-styling",
 ];
 
 function parseArgs(argv) {
@@ -244,6 +277,9 @@ async function main() {
 
   section("Anchors kept by same-text stubs");
   for (const a of STUB_ANCHORS) results.push(await check(opts.base, a, { direct: true }));
+
+  section("Sections of moved pages (land after the redirect)");
+  for (const a of REDIRECTED_ANCHORS) results.push(await check(opts.base, a, { direct: false }));
 
   section("Moved pages (Astro redirect page + Cloudflare 301)");
   const cf = builtRedirects();

@@ -77,7 +77,7 @@ const PAGES: PageDef[] = [
     intro:
       "A `type: map` block — the unit `<ml-map src>` and `mlym validate` consume. " +
       "This is the default format (`version: 1`, or no `version:` key). " +
-      "For narrative and examples see [Map configuration](/schema/map-config/).",
+      "For narrative and examples see [Map documents](/schema/map-config/).",
   },
   {
     slug: "sources",
@@ -90,7 +90,8 @@ const PAGES: PageDef[] = [
     intro:
       "A data source, declared under a block's `sources:` map (then referenced from a " +
       "layer by bare name) or inline as a layer's `source:`. The `type` key selects " +
-      "the variant. For narrative and examples see [Sources](/schema/sources/).",
+      "the variant. For narrative and examples see [Loading data](/guides/data-sources/) " +
+      "and [Sources & layers](/schema/sources-and-layers/).",
   },
   {
     slug: "layers",
@@ -103,8 +104,9 @@ const PAGES: PageDef[] = [
     intro:
       "An entry of a block's `layers:` list: either a full layer (the `type` key " +
       "selects the variant) or a `$ref` to a named layer in a root document. " +
-      "For narrative and examples see [Layers & popups](/schema/layers/) and " +
-      "[Popups, hover & controls](/schema/interactivity/).",
+      "For narrative and examples see [Layers & styling](/guides/layers/), " +
+      "[Popups, hover & controls](/guides/popups/) and " +
+      "[Sources & layers](/schema/sources-and-layers/).",
   },
   {
     slug: "map-v2",
@@ -142,8 +144,8 @@ const PAGES: PageDef[] = [
     intro:
       "A root document: global `config`, shared named `layers` and `sources`, and a " +
       "`pages:` list whose blocks are content, map, scrollytelling, or mixed blocks. " +
-      "Framework integrations render it; it is never the `src` of `<ml-map>`. For " +
-      "narrative see [Multi-page documents: root](/schema/root/) and [Multi-page documents: pages & blocks](/schema/pages/).",
+      "No maplibre-yaml package renders it, and it is never the `src` of `<ml-map>`: " +
+      "write [map documents](/schema/map-config/) and [story maps](/schema/scrollytelling/) instead.",
   },
 ];
 

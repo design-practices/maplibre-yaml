@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+type: map
+id: earthquakes-week
+title: "Earthquakes this week"            # the map's name, for screen readers
+description: "Every earthquake the USGS recorded in the past seven days, sized by magnitude."
+config:                                   # camera, basemap, MapLibre map options
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+sources:                                  # beside config:, not inside it
+  quakes:
+    type: geojson
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+layers:
+  - id: quakes
+    type: circle
+    source: quakes
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 3, 6, 18]
+      circle-color: "#ef4444"
+      circle-opacity: 0.7
+    legend: { label: "Earthquake", color: "#ef4444", shape: circle }
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3: [{ property: place }]
+          - p:
+              - str: "Magnitude "
+              - property: mag
+markers:
+  - at: [-122.2585, 37.8719]
+    color: "#2563eb"
+    popup:
+      - p: [{ str: "Seismology lab, UC Berkeley" }]
+controls:
+  navigation: true
+  scale: true

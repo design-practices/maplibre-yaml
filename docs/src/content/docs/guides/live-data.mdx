@@ -64,10 +64,12 @@ opened, even after it drops out of the feed's last hour:
 
 <LiveMap src="/configs/merge-demo.yaml" height="350px" caption="Earthquakes from the last hour, accumulating while the page is open" />
 
-`updateKey` names a **property** (inside `properties`), not the feature's
-top-level `id`. The USGS feeds keep their id at the top level, so this
-example matches on the event page's `url` property instead. A feature
-without the property is dropped. Validation refuses `merge` without
+`updateKey` names a **property** (inside `properties`). A feature without
+that property is matched by its top-level GeoJSON `id` instead, and one with
+neither is kept but not matched: each update's unmatched features replace the
+previous update's, and the console says so once. (Core 0.9.0 matched only the
+property and dropped other features; this example matches on the USGS `url`
+property, which works on every version.) Validation refuses `merge` without
 `updateKey`.
 
 For your own feed, say a vehicle API, each response is a `FeatureCollection`
@@ -197,9 +199,10 @@ With the [JavaScript API](/integrations/vanilla-js/), the same events are
 - **The stream never connects.** The source has `stream:` but no `refresh:`;
   validation warns "stream: connects only when the source also has a
   refresh: block".
-- **With `merge`, the layer empties after the first update.** The features
-  don't have the `updateKey` property: check its spelling and that it is
-  inside `properties`, not the feature's top-level `id`.
+- **With `merge`, a note says features "have no `updateKey` property and no
+  top-level `id`, so `updateStrategy: merge` can't match them".** Check the
+  key's spelling; the note lists property names the features do have. (On
+  core 0.9.0 the layer empties instead.)
 - **Stream messages are ignored.** Each message must be a whole
   `FeatureCollection` (see above); the console shows "Received data is not a
   valid GeoJSON FeatureCollection".

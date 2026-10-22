@@ -66,7 +66,10 @@ popup:
   skipped with a console warning. Elements don't nest: a `ul:` can't contain
   `li:` entries. Put links and images inside `p:` or `div:`.
 - **Text is always text.** Property values and `str` are shown as text, never
-  as markup, so data can't inject HTML into your page.
+  as markup, so data can't inject HTML into your page. A `str` tagged `!html`
+  (`str: !html "<em>new</em>"`) is markup only on a page that trusts the
+  document; `<ml-map>` doesn't, so it shows the tags as text and logs a
+  warning.
 - **Links** take an absolute URL (`https://`, `mailto:`, `tel:`) or a path on
   your site (`/about`, `notes.html`, `#top`); any other scheme, such as
   `javascript:`, is shown as plain text. A link opens in a new tab unless you
@@ -138,18 +141,43 @@ The `hover:` part of `interactive:` takes three things, alone or together:
 
 `highlight` needs an id on each feature. `promoteId` names a property that is
 different for every feature (`STATE_ID` here), which keeps the same id when
-the data refreshes. `generateId: true` numbers the features instead. On a
-layer whose data is written in the YAML, leaving both out generates ids with
-a console warning; a file loaded from `url:` has no ids unless the file has
-them, and the console says "needs feature ids".
+the data refreshes. `generateId: true` numbers the features instead. Leave
+both out and maplibre-yaml turns on `generateId` for you, whether the data is
+written in the YAML or loaded from `url:` (core 0.9.1 or later). Write
+`generateId: false` to keep the ids your data has.
 
 `highlight` changes the layer's main colour (`fill-color` here), and works on
 [classified](/guides/thematic-maps/) layers too. If that colour is already an
 expression of your own, `highlight` leaves it alone and warns; to choose the
-highlight colour yourself, use `["feature-state", "hover"]` in the paint, as
-in [Custom highlight styling](/schema/interactivity/#custom-highlight-styling).
-Gallery: [Create a hover effect](/examples/gallery/create-a-hover-effect/),
+highlight colour yourself, use `["feature-state", "hover"]` in the paint
+([below](#custom-highlight-styling)). Hover state belongs to the source, so
+layers that [share a source](/guides/data-sources/#named-sources) share it
+too. Gallery: [Create a hover effect](/examples/gallery/create-a-hover-effect/),
 [Display a popup on hover](/examples/gallery/display-a-popup-on-hover/).
+
+### Choose the highlight colour yourself \{#custom-highlight-styling}
+
+Leave `highlight` off and write the colour as a `case` on the feature's
+`hover` state. `cursor: pointer` alone keeps the hover tracking on:
+
+```yaml
+- id: states
+  type: fill
+  source: states
+  paint:
+    fill-color:
+      - case
+      - ["boolean", ["feature-state", "hover"], false]
+      - "#2563eb"      # under the pointer
+      - "#cbd5e1"      # everywhere else
+    fill-opacity: 0.7
+  interactive:
+    hover:
+      cursor: pointer
+```
+
+Without `highlight`, ids aren't generated for you: give the source
+`promoteId` or `generateId: true`.
 
 ## Move the camera to a feature
 
@@ -170,6 +198,7 @@ interactive:
     zoomToFeature:
       padding: 40      # pixels around the feature (optional)
       maxZoom: 12      # don't zoom closer than this (optional)
+      duration: 600    # optional, milliseconds
 ```
 
 `flyTo` centres on the clicked point (or a `center:` you give) at a zoom you
@@ -217,7 +246,7 @@ so a `config.locale` table translates them along with everything else the
 library draws ([Show the map in another language](/guides/accessibility-languages/#show-the-map-in-another-language)).
 
 To turn off ways of moving the map instead (scroll zoom, rotation, a fully
-static map), see [Interaction settings](/schema/map-config/#interaction-settings).
+static map), see [Map documents › How readers can move the map](/schema/map-config/#interaction-settings).
 
 ## Legends
 
@@ -232,11 +261,15 @@ A legend explains colours; how a map gets one is in
 - **The popup shows a label but no value.** The property name doesn't match
   the data: names are case-sensitive (`Name` is not `name`). Add
   `else: "…"` to see when a value is missing.
-- **Nothing highlights, and the console says "needs feature ids".** Add
-  `promoteId` or `generateId: true` to the source ([above](#respond-to-hover)).
-- **Highlight warns that the colour is already an expression.** Use
-  [custom highlight styling](/schema/interactivity/#custom-highlight-styling)
-  instead.
+- **Nothing highlights, and the console says "needs feature ids".** The
+  features have no ids: add `promoteId` or `generateId: true` to the source
+  ([above](#respond-to-hover)). Core 0.9.1 and later add them for a
+  `highlight` layer by themselves.
+- **Highlight warns that the colour is already an expression.** Choose the
+  [highlight colour yourself](#custom-highlight-styling) instead.
+- **A warning says `action` is deprecated.** `click.action` and the
+  `mouseenter`/`mouseleave` actions were never carried out. Remove them, and
+  listen for the element's events instead ([below](#reacting-from-your-own-javascript)).
 
 More: [Troubleshooting](/troubleshooting/).
 
@@ -256,9 +289,32 @@ map.addEventListener("ml-map:layer-click", (event) => {
 ```
 
 `ml-map:layer-hover` carries the same details for hover. Every event is in
-[`<ml-map>` events](/reference/elements/#ml-map-events). For a named event
-with a payload you choose, see `click.emit` (host event) in
-[Interactivity](/schema/interactivity/#emit).
+[`<ml-map>` events](/reference/elements/#ml-map-events).
+
+### Host events: `click.emit` \{#emit}
+
+`click.emit` sends a named event, with a payload built from the clicked
+feature, to code on the page. It does nothing under `<ml-map>`, which accepts
+no page handlers; there, use `ml-map:layer-click` above. It is for a map you
+build yourself and connect with `attachInteractions`, under a policy that
+trusts the document and with a handler registered for the event's name
+([Export to style.json](/guides/export/)).
+
+```yaml
+interactive:
+  click:
+    emit:
+      event: select
+      payload:
+        id: { property: code }
+        label: { property: place, else: "Untitled" }
+        kind: { str: earthquake }
+```
+
+Each payload key is a `str` (fixed text) or a `property` of the feature,
+with an optional `else`. A missing property gives its `else`, or `null`, so
+every payload has the same keys. A payload holds data only: no formats, no
+markup.
 
 <Aside type="note" title="Popups and hover stay on the page">
   Popups, hover and click actions are page behaviour, not part of a MapLibre
@@ -273,8 +329,8 @@ with a payload you choose, see `click.emit` (host event) in
   `interactive:` key.
 - The [map reference](/reference/yaml/map/#controls): every control and its
   options.
-- [Map configuration › Popups](/schema/map-config/#popups): popups that open
-  at fixed coordinates, with no feature under them.
+- [Map documents › Popups at fixed places](/schema/map-config/#popups):
+  popups that open at fixed coordinates, with no feature under them.
 - Examples: [Basic map](/examples/basic-map/) and
   [Interactive points](/examples/interactive-points/).
 - Gallery: [Display a popup on click](/examples/gallery/display-a-popup-on-click/),
