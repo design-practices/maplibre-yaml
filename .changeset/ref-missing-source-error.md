@@ -1,5 +1,0 @@
----
-"@maplibre-yaml/core": patch
----
-
-A `$ref` that points at a source or layer that doesn't exist now fails validation at the `$ref` line, with a "did you mean" over the defined names. Before, `source: { $ref: "#/sources/quake" }` in a story passed `mlym validate` and the story's map then showed a "Source reference not found" error card. In a map or multi-page document it failed with no line number, and only after every other error was fixed. The message is the same text the map shows, so `mlym validate` and `<ml-map>` now agree. The check covers v1 maps, stories, and multi-page root documents, where a `$ref` looks only at the root `sources:` (a `$ref` to a block's own source now says to write `source: name` instead). A `$ref` of the wrong kind is also an error at its line: a layer's source pointing at `#/layers/…`, or a `layers:` entry `$ref` in a map or story, which has no root `layers:` record to point into. A reference written as a plain string, `source: "#/sources/quakes"`, is never resolved, and it is now an error on every layer type, including raster layers.

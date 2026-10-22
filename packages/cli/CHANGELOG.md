@@ -1,5 +1,29 @@
 # @maplibre-yaml/cli
 
+## 0.6.1
+
+### Patch Changes
+
+- 0013b82: The `astro` project template from `mlym init -t astro` now asks for Node.js 22.23.4 or later in its `package.json` `engines`, which is what Astro 7.4.2 requires. Before, it asked for 22.22, so a new project could install on a Node version that Astro then refuses to run on. The `@maplibre-yaml/astro` README now gives the same minimum for Astro 7.
+- 2b0e0f2: `mlym bake crosshatch` now writes hatch textures pre-filtered for MapLibre, so they no longer shimmer when the map draws them at an angle. MapLibre samples pattern images without mipmaps, so on a pitched map the far ground showed the hatch strokes breaking up and crawling as the map moved. The earth and landuse hatches are now baked at twice Tangram's period, with softened strokes at 85 % contrast, as 512 px, 32-tone palette PNGs (declare them at `pixelRatio: 2`). The preset no longer writes `building-fallback.png`, because the crosshatch style now draws plain lit walls: a pattern on a wall is drawn edge-on and shimmers most. If you want hatched walls in a static style, the new `mlym bake crosshatch-walls` writes `building-hatch.png`, a wall hatch pre-filtered along the stroke.
+- 7068c89: `preview.port`, `preview.open` and `preview.debug` in `maplibre-yaml.config.*` now take effect. Before, the built-in defaults (port 3000, open the browser, no debug panel) always won over the settings file, so `mlym preview` ignored those settings. The order is now: a flag you type (`--port 4000`, `--no-open`) wins, then the settings file, then the default. `mlym validate` follows the same order for its settings.
+- 50c9ced: When `mlym emit --strict` refuses a document because a construct such as `markers` or `fitTo` needs a fallback, the message now says to export without `--strict`, which applies the fallback and prints a warning. Before, it said to re-run with `--with-fallbacks`, which is already the default and is an error next to `--strict`. The message comes from core's `projectStyle`: in its default `with-fallbacks` mode, called without the fallback step, it now names the step to run first (`lowerMarkers`, `lowerFitTo`).
+- e96c3ab: `mlym emit --trust` is deprecated, because it never changed the exported file. Trust decides whether raw `!html` in popups renders and whether `click.emit` host events fire, and both are map behavior that a `style.json` cannot hold, so a trusted and an untrusted export were byte-for-byte the same. The flag is no longer listed in `mlym emit --help`. Passing it still works and exports the same style as before, and it prints a note on stderr saying it has no effect, so your scripts keep running while you remove it. A value other than `trusted` or `untrusted` no longer fails the export. A later release will remove the flag.
+- b610f89: The `index.html` that `mlym init` writes for the `basic` and `story` templates no longer says `"@0.8" means the newest 0.8.x release` above a script tag that loads 0.9. The comment now names the same release line as the script URL, and both come from the `@maplibre-yaml/core` version the CLI was built with, so they stay in step with every future release.
+- Updated dependencies [586f1de]
+- Updated dependencies [dced079]
+- Updated dependencies [50c9ced]
+- Updated dependencies [82640da]
+- Updated dependencies [5ae85d3]
+- Updated dependencies [8b89359]
+- Updated dependencies [e7e1756]
+- Updated dependencies [61aed35]
+- Updated dependencies [3a9b718]
+- Updated dependencies [8536da4]
+- Updated dependencies [7993849]
+- Updated dependencies [417ce32]
+  - @maplibre-yaml/core@0.9.1
+
 ## 0.6.0
 
 ### Minor Changes

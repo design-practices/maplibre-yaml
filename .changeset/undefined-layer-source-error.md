@@ -1,5 +1,0 @@
----
-"@maplibre-yaml/core": patch
----
-
-A layer whose `source:` names a source that doesn't exist now fails validation. Before, a mistyped name passed both `mlym validate` and `<ml-map>`, and the layer then failed on the page. The error is reported at the layer's `source:` line with a "did you mean" over the defined source names. When the cause is an inline source's `id:` (which names nothing) or a layer id used as a source name, the error says how to share the source instead. The check covers v1 `sources:`, v2 `style.sources:`, story layers, and multi-page root documents. In a root document, a block's layers can use the root's `sources:`, and the root `layers:` entries can use a source any block defines. Names that could be one of the basemap style's own sources still validate: those on a layer with `source-layer:`, on a raster layer, or in an inline style object or Protomaps basemap. For those, a near miss warns as before, and a missing one is still reported in the notice on the map, naming the layer and the source.
