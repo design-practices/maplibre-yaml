@@ -13,6 +13,7 @@
       fx    = 1 (default) | 0          0 = no effects package: the static fallback
       tiles = fixture (default) | live  live = OpenFreeMap vector tiles + glyphs
       z, b, p, lng, lat                 camera overrides
+      seams=0, overlap=0                diagnostic A/Bs (see below)
   -->
   <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
   <style>
@@ -88,12 +89,17 @@
     document.body.appendChild(el);
     const map = await el.mapReady();
 
-    // Diagnostic A/B for the tile-seam fix: seams=0 re-attaches the effects
-    // without stitching generator-cut walls (the U12 spike's behaviour).
-    if (fx && q.get("seams") === "0") {
+    // Diagnostic A/Bs, re-attaching the effects with one fix switched off:
+    //   seams=0    walls cut at tile edges are not stitched (the U12 spike)
+    //   overlap=0  a retained parent tile draws over its loaded children
+    //              during a zoom (the pre-fix behaviour of ml-aot.139)
+    const diag = {};
+    if (q.get("seams") === "0") diag.seams = false;
+    if (q.get("overlap") === "0") diag.dedupeTiles = false;
+    if (fx && Object.keys(diag).length) {
       const refs = fx.getAttachedEffects(map).map((e) => ({ layerId: e.layerId, effect: doc.layers.find((l) => l.id === e.layerId).effect }));
       for (const e of fx.getAttachedEffects(map)) e.detach();
-      fx.attachEffects(map, refs, { seams: false });
+      fx.attachEffects(map, refs, diag);
     }
 
     // --- counters: KTD7's static clause (no repaint, no rAF while idle) ----

@@ -4,10 +4,15 @@
 #
 # The static tier: every layer is plain style spec, so this document is its
 # own export — `mlym emit --strict` compiles it with nothing lost. Ground,
-# landuse and water reproduce Tangram exactly (Tangram draws them unlit:
-# tile-repeated hatch textures and a pre-lit crumpled-paper water, baked by
-# `mlym bake crosshatch`). Buildings are the one lit layer: here every face
-# gets the same light pen hatch, shaded by `light:`. Tangram's tonal
+# landuse and water are Tangram's (Tangram draws them unlit: tile-repeated
+# hatch textures and a pre-lit crumpled-paper water), baked by
+# `mlym bake crosshatch`. MapLibre samples patterns without mipmaps, so the
+# hatches are pre-filtered: twice Tangram's period, soft strokes, steady on
+# the far ground of a pitched map instead of shimmering.
+#
+# Buildings are the one lit layer, and they carry no pattern: plain walls
+# shaded by `light:` and the vertical gradient. A pattern on a wall is drawn
+# edge-on, where an un-mipmapped texture shimmers worst, and Tangram's tonal
 # hatching — stroke density following light per face — is the runtime
 # effect's job, not this document's.
 #
@@ -36,11 +41,11 @@ light:
   anchor: map
   position: [1.15, 239, 30]
   intensity: 0.5
+# The ground hatches are 512 px at pixelRatio 2: a 256 CSS px tile.
 images:
   earth: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/earth.png", pixelRatio: 2 }
   landuse: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/landuse.png", pixelRatio: 2 }
   water: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/water.png", pixelRatio: 1 }
-  building-hatch: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/building-fallback.png", pixelRatio: 4 }
 sources:
   omt:
     type: vector
@@ -99,7 +104,10 @@ layers:
     source-layer: building
     minzoom: 13
     paint:
-      fill-extrusion-pattern: building-hatch
+      # Plain walls: paper-toned, shaded by `light:` and darkened toward the
+      # ground by the vertical gradient. No fill-extrusion-pattern — a wall
+      # pattern is sampled edge-on and shimmers without mipmaps.
+      fill-extrusion-color: "#ece6d4"
       # Tangram exaggerates height by max(1, 0.5 + (1 - zoom/20) * 5) — linear
       # in zoom (2.25x at z13 → 1x at z18), so one interpolate reproduces it.
       fill-extrusion-height:

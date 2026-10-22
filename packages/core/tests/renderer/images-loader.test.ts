@@ -134,3 +134,54 @@ describe("loadDocumentImages", () => {
     warn.mockRestore();
   });
 });
+
+describe("density matching (ml-aot.139): no image denser than the screen", () => {
+  it("area-averages pixels, in premultiplied alpha", async () => {
+    const { downsampleRGBA } = await import("../../src/renderer/images-loader");
+    // 4x2 → 2x1: each output pixel averages a 2x2 block
+    const src = new Uint8Array([
+      0, 0, 0, 255, 255, 255, 255, 255, 10, 20, 30, 255, 10, 20, 30, 255,
+      0, 0, 0, 255, 255, 255, 255, 255, 10, 20, 30, 255, 10, 20, 30, 255,
+    ]);
+    expect([...downsampleRGBA(src, 4, 2, 2, 1)]).toEqual([128, 128, 128, 255, 10, 20, 30, 255]);
+    // a transparent texel does not darken its opaque neighbour's colour
+    const edge = new Uint8Array([200, 100, 50, 255, 0, 0, 0, 0]);
+    expect([...downsampleRGBA(edge, 2, 1, 1, 1)]).toEqual([200, 100, 50, 128]);
+    // non-integer ratio (3 → 2) keeps total weight
+    const ramp = new Uint8Array([0, 0, 0, 255, 90, 90, 90, 255, 180, 180, 180, 255]);
+    expect([...downsampleRGBA(ramp, 3, 1, 2, 1)]).toEqual([30, 30, 30, 255, 150, 150, 150, 255]);
+  });
+
+  it("registers a pixelRatio-4 image at the screen's ratio, keeping its logical size", async () => {
+    const dpr = vi.spyOn(window, "devicePixelRatio", "get").mockReturnValue(2);
+    const pixels = new Uint8ClampedArray(8 * 8 * 4).fill(255);
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue({ drawImage: () => {}, getImageData: () => ({ data: pixels }) } as never);
+    const map = mapMock();
+    const create = vi.spyOn(document, "createElement");
+    const done = loadDocumentImages(map, {
+      dense: { url: "https://x.example/hatch.png", pixelRatio: 4 },
+      matched: { url: "https://x.example/ok.png", pixelRatio: 2 },
+      sdf: { url: "https://x.example/sdf.png", pixelRatio: 4, sdf: true },
+    });
+    for (const img of createdImages(create).filter((e) => e.tagName === "IMG")) {
+      Object.defineProperty(img, "naturalWidth", { value: 8 });
+      Object.defineProperty(img, "naturalHeight", { value: 8 });
+      img.dispatchEvent(new Event("load"));
+    }
+    await done;
+    const dense = map.added.get("dense");
+    expect(dense.options).toEqual({ pixelRatio: 2 });
+    expect(dense.img).toMatchObject({ width: 4, height: 4 });
+    expect(dense.img.data).toHaveLength(4 * 4 * 4);
+    // already at the screen's ratio, or SDF: handed over as declared
+    expect(map.added.get("matched").options).toEqual({ pixelRatio: 2 });
+    expect(map.added.get("matched").img).toBeInstanceOf(HTMLImageElement);
+    expect(map.added.get("sdf").options).toEqual({ sdf: true, pixelRatio: 4 });
+    expect(map.added.get("sdf").img).toBeInstanceOf(HTMLImageElement);
+    create.mockRestore();
+    getContext.mockRestore();
+    dpr.mockRestore();
+  });
+});

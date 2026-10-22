@@ -11,10 +11,17 @@ preset's ink-on-paper textures from these:
 
 | Output | From |
 |---|---|
-| `earth.png` | `hatch_0.png`, ink-on-paper |
-| `landuse.png` | `hatch_2.png`, ink-on-paper |
+| `earth.png` | `hatch_0.png`, ink-on-paper, pre-filtered (2x period, soft strokes, 85 % contrast, 32 tones) |
+| `landuse.png` | `hatch_2.png`, the same |
 | `water.png` | `normal-0031.jpg`, lit on #343434 under Tangram's fixed lights |
-| `building-fallback.png` | `hatch_0.png`, ink-on-paper (declared at pixelRatio 4) |
+
+`mlym bake crosshatch-walls` adds `building-hatch.png` (`hatch_0.png`,
+pre-filtered and smoothed along the stroke) for a document that wants a
+hatched wall pattern; the crosshatch preset itself draws plain lit walls.
+
+MapLibre samples patterns without mipmaps (Tangram mipmapped them), so the
+images are pre-filtered at bake time: none carries detail finer than the
+minification a pitched map draws it at.
 
 Tangram's crosshatch style itself is tangram-sandbox `styles/crosshatch.yaml`.
 The tonal-hatch atlas (tangrams/blocks `filter/imgs/hatch.png`) belongs to the

@@ -7,7 +7,8 @@
  * rasterize), exactly as `mlym emit --out --sprite-base` would. The CLI does
  * not load @maplibre-yaml/effects, which is the point: the effect must export
  * to its static layer with one `lossy` warning (so `--strict` refuses), and
- * the emitted style must render the hatched buildings in plain maplibre-gl.
+ * the emitted style must render that layer — plain lit buildings, no wall
+ * pattern — in plain maplibre-gl.
  *
  *   node --import tsx scripts/generate-effects-export-fixture.ts <outDir> <origin>
  */
@@ -76,7 +77,11 @@ const result = {
   effectStripped: !styleText.includes('"effect"'),
   buildings: (finalized["layers"] as Array<{ id: string; type: string; paint?: Record<string, unknown> }>)
     .filter((l) => l.id === "buildings")
-    .map((l) => ({ type: l.type, pattern: l.paint?.["fill-extrusion-pattern"] })),
+    .map((l) => ({
+      type: l.type,
+      pattern: l.paint?.["fill-extrusion-pattern"] ?? null,
+      color: l.paint?.["fill-extrusion-color"] ?? null,
+    })),
 };
 writeFileSync(join(outDir, "result.json"), JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));

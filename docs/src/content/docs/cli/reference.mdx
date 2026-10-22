@@ -458,7 +458,8 @@ npx maplibre-yaml bake [preset] --out <dir>
 
 | Preset | Writes | From |
 | ------ | ------ | ---- |
-| `crosshatch` | `earth.png`, `landuse.png`, `water.png`, `building-fallback.png` | Tangram's MIT-licensed crosshatch textures, vendored unmodified in the CLI package (`assets/tangram/`, with provenance) |
+| `crosshatch` | `earth.png`, `landuse.png`, `water.png` | Tangram's MIT-licensed crosshatch textures, vendored unmodified in the CLI package (`assets/tangram/`, with provenance). The hatches are pre-filtered for MapLibre, which samples patterns without mipmaps: twice the period, softened strokes, 32 tones |
+| `crosshatch-walls` | `building-hatch.png` | Tangram's light pen hatch for a `fill-extrusion-pattern`, smoothed along the stroke so walls seen edge-on stay steady. The crosshatch document itself draws plain walls |
 | `blueprint` | `grid.png` | A generated drafting grid |
 
 With no preset, `bake` lists them. The docs gallery's committed images are

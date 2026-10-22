@@ -4,14 +4,24 @@ description: "Classic-style example — a drafting-sheet city as a pure style-sp
 ---
 
 import LiveMap from '../../../../components/LiveMap.astro';
-import { Code } from '@astrojs/starlight/components';
+import { Aside, Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/blueprint.yaml?raw';
 
-A **classic-style example**: lower Manhattan as a drafting sheet, made in
-the Mapzen spirit. It is not a port of a Tangram original. The ground is a
+A **classic-style example**: lower Manhattan as a drafting sheet, after the
+[blueprint style](https://github.com/tangrams/tangram-sandbox/blob/gh-pages/styles/blueprint.yaml)
+Patricio Gonzalez Vivo wrote for Tangram in 2015. It is a reinterpretation,
+not a port. Tangram drew white lines on every wall edge and building
+outlines raised to roof height. The style spec can draw neither, so here the
+buildings are flat-shaded blue extrusions with no edges. The ground is a
 drafting grid. Water is dark with a pale shoreline, streets are thin and
-pale, park outlines are dashed, and the buildings are flat-shaded blue
-extrusions.
+pale, and park outlines are dashed.
+
+<Aside title="Static version, no shader effect">
+This map is plain style spec, exactly what `mlym emit` exports, so its
+buildings have no edges. The live version, with the `blueprint` effect's
+grid and glowing wall edges, is on
+[Mapzen classics](/examples/classics/#blueprint).
+</Aside>
 
 <LiveMap src="/configs/gallery/blueprint.yaml" height="520px" />
 

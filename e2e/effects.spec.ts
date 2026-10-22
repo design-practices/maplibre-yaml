@@ -197,7 +197,8 @@ test.describe("effects (maplibre-gl 5+)", () => {
     expect(result.strictLossy).toEqual(["layers.buildings.effect"]);
     expect(result.lossy).toEqual(["layers.buildings.effect"]);
     expect(result.effectStripped).toBe(true);
-    expect(result.buildings).toEqual([{ type: "fill-extrusion", pattern: "mlym:building-hatch" }]);
+    // The static layer as authored: plain lit walls, no wall pattern.
+    expect(result.buildings).toEqual([{ type: "fill-extrusion", pattern: null, color: "#ece6d4" }]);
 
     await page.goto("/e2e/generated/effects-export/index.html");
     await page.waitForFunction(() => (window as any).__export?.map?.loaded(), undefined, { timeout: 60_000 });

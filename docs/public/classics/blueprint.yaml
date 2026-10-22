@@ -1,7 +1,9 @@
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
 # Classic-style example: blueprint — the launch-page document (docs
-# /classics/). A drafting sheet in the Mapzen spirit, not a port of a
-# Tangram original.
+# /classics/). A drafting sheet after Tangram's blueprint style
+# (tangrams/tangram-sandbox styles/blueprint.yaml, @patriciogv 2015, MIT),
+# reinterpreted rather than ported: the effect draws glowing wall edges where
+# Tangram drew white ones, and no outline at roof height.
 #
 # This is the gallery's static preset (configs/gallery/blueprint.yaml) plus
 # one statement of intent: `effect: blueprint` on the buildings. Everything

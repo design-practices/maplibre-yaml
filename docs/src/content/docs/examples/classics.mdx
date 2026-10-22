@@ -32,17 +32,21 @@ Lower Manhattan as a pen drawing, after the
 [crosshatch style](https://github.com/tangrams/tangram-sandbox/blob/gh-pages/styles/crosshatch.yaml)
 Patricio Gonzalez Vivo wrote for Tangram in 2015. Live, the `tonal-hatch`
 effect makes the stroke **density** follow the light on each face: lit
-walls go to paper, shaded walls to dense ink. Exported, every face gets the
-same light pen hatch, shaded by the document's `light:`.
+walls go to paper, shaded walls to dense ink. Exported, the walls are plain,
+shaded only by the document's `light:`, on the same hatched ground.
 
 <ClassicViewer name="crosshatch" effect="tonal-hatch" />
 
 ## Blueprint
 
-A drafting sheet in the Mapzen spirit. Live, the `blueprint` effect lays a
-grid on every roof and wall, with lines a fixed **4 metres** apart that
-never stretch, and edges that glow. Exported, the buildings are flat-shaded
-blue blocks on the same drafting-grid ground.
+A drafting sheet after the
+[blueprint style](https://github.com/tangrams/tangram-sandbox/blob/gh-pages/styles/blueprint.yaml)
+Patricio Gonzalez Vivo wrote for Tangram in 2015, reinterpreted rather than
+ported. Live, the `blueprint` effect lays a grid on every roof and wall, with
+lines a fixed **4 metres** apart that never stretch, and draws glowing wall
+edges, where Tangram drew white ones. It draws no separate outline at roof
+height. Exported, the buildings are flat-shaded blue blocks with no edges,
+on the same drafting-grid ground.
 
 <ClassicViewer name="blueprint" effect="blueprint" />
 

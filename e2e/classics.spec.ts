@@ -252,6 +252,7 @@ test.describe("Mapzen classics launch page (U11)", () => {
         // The live pane's effect attached and is drawing (not declared absent).
         await expect(status).toHaveAttribute("data-state", "on", { timeout: 60_000 });
         await expect(status).toContainText(effect);
+        await expect(page.locator(`section.classic[data-classic="${name}"] [data-fx-notice]`)).toBeHidden();
         const attached = await fx();
         expect(attached).toEqual([{ layerId: "buildings", type: effect, active: true, tiles: expect.any(Number) }]);
         expect(attached[0]!.tiles).toBeGreaterThan(0);
@@ -260,6 +261,11 @@ test.describe("Mapzen classics launch page (U11)", () => {
         // the page says so; the document's static buildings still draw.
         await expect(status).toHaveAttribute("data-state", "static", { timeout: 60_000 });
         await expect(status).toContainText("static fallback");
+        // ... and says so where a reader looks: a visible notice with the reason
+        const notice = page.locator(`section.classic[data-classic="${name}"] [data-fx-notice]`);
+        await expect(notice).toBeVisible();
+        await expect(notice).toContainText(`The ${effect} effect is not running in this browser`);
+        await expect(notice).toContainText("maplibre-gl 5");
         expect(await fx()).toEqual([{ layerId: "buildings", type: effect, active: false, tiles: 0 }]);
         expect(
           await page.evaluate(
