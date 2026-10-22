@@ -1,25 +1,28 @@
 ---
 title: "Installation & versions"
-description: How to install maplibre-yaml in your project
+description: Every way to load maplibre-yaml — from a CDN in a plain HTML page, with the Astro package, or from npm with Vite or another bundler — which maplibre-gl versions it supports, and how to host its files yourself.
 ---
 
-import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-There are two ways to load maplibre-yaml:
+How you load maplibre-yaml depends on what you are building:
 
-- **From a CDN, in a plain HTML page.** No install and no build step: you
-  write an HTML file and a YAML file and serve the folder. Start here if you
-  are new. See [Browser usage (CDN)](#browser-usage-cdn).
-- **From npm, with a bundler** such as Vite. See
-  [Using a bundler (Vite)](#using-a-bundler-vite).
+| You're making | Load it | Start with |
+| --- | --- | --- |
+| A plain HTML page, on any static host | From a CDN: nothing to install | [Browser usage (CDN)](#browser-usage-cdn) |
+| An Astro site | `@maplibre-yaml/astro` from npm | [Quick start: Astro site on GitHub Pages](/getting-started/astro/) |
+| A Vite project, or a React, Vue or Svelte app | `@maplibre-yaml/core` from npm | [Using a bundler (Vite)](#using-a-bundler-vite) |
+
+New to all of this? Use the CDN: the
+[quick start](/getting-started/quick-start/) walks through it.
 
 ## Browser usage (CDN)
 
-For prototypes, small sites and simple pages, you can use
-maplibre-yaml directly from a CDN: no install, no build tools. An
-[import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap)
-tells the browser where to find `maplibre-gl`, which the register bundle keeps
-external (not bundled). Leave it out and the page stays blank, with
+A plain HTML page needs three things in its `<head>`: MapLibre's stylesheet,
+an [import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap)
+that tells the browser where `maplibre-gl` is, and the script that defines
+`<ml-map>`. maplibre-yaml uses the page's copy of MapLibre rather than
+bundling its own, so without the import map the page stays blank with
 *Failed to resolve module specifier "maplibre-gl"* in the console.
 
 ```html
@@ -35,6 +38,7 @@ external (not bundled). Leave it out and the page stays blank, with
       rel="stylesheet"
     />
     <style>
+      /* <ml-map> has no size of its own: without a height the map is invisible */
       ml-map {
         display: block;
         height: 400px;
@@ -44,7 +48,7 @@ external (not bundled). Leave it out and the page stays blank, with
     <script type="importmap">
       { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
     </script>
-    <!-- Register the <ml-map> web component -->
+    <!-- Register the <ml-map> element -->
     <script
       type="module"
       src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
@@ -56,170 +60,70 @@ external (not bundled). Leave it out and the page stays blank, with
 </html>
 ```
 
-Save this next to it as `map.yaml` (the file `src="./map.yaml"` loads):
+Save this next to it as `map.yaml`, the file `src="./map.yaml"` loads:
 
 ```yaml title="map.yaml"
 type: map
-id: my-map
+id: earthquake-map
 config:
-  center: [-74.006, 40.7128]
-  zoom: 11
+  center: [-120, 37]
+  zoom: 4
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
-  - id: marker
+  - id: earthquakes
     type: circle
     source:
       type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
-            properties: { name: "New York" }
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     paint:
-      circle-radius: 10
-      circle-color: "#e63946"
+      circle-radius: 6
+      circle-color: "#e74c3c"
 ```
 
-Serve the folder with `npx serve .` and open the address it prints. (Another
-static server works too if it supports range requests, which PMTiles,
-FlatGeobuf, GeoParquet and COG files need; `python -m http.server` doesn't.) Opening the HTML file directly (a `file://`
-address) does not work: the browser blocks the page from fetching `map.yaml`.
+Serve the folder with `npx serve .` and open the address it prints. Opening
+the HTML file directly (a `file://` address) doesn't work: the browser blocks
+the page from fetching `map.yaml`. Another static server works too, but large
+data files (PMTiles, FlatGeobuf, GeoParquet, COG) need one that answers range
+requests, which `npx serve` does and `python -m http.server` doesn't.
 
 ### Versions in CDN URLs
 
-The version in `@maplibre-yaml/core@0.9` names a release line: the URL loads
-the newest release in that line, so bug fixes arrive automatically, and the
-next line, which may change behaviour, never arrives by surprise. Change the
-number on purpose when you upgrade; these docs always show the current line.
-`maplibre-gl@6` works the same way for MapLibre.
+The version in `@maplibre-yaml/core@0.9` names a release line: the address
+loads the newest release in that line, so bug fixes arrive by themselves,
+while the next line, which may change behaviour, never arrives by surprise.
+Change the number on purpose when you upgrade
+([Upgrading](/getting-started/upgrading/)); these docs always show the
+current line. `maplibre-gl@6` works the same way for MapLibre.
 
-### Hosting the files yourself
+## Using a bundler (Vite)
 
-To serve maplibre-yaml from your own site instead of a CDN, copy the
-package's **whole `dist/` folder** (from `node_modules/@maplibre-yaml/core/`,
-or the package on unpkg) and load `dist/register.browser.js` from it:
+With npm and a bundler, install the package and maplibre-gl, then make your
+entry file do three things: point maplibre-gl 6 at its worker, register
+`<ml-map>`, and load MapLibre's stylesheet. Starting from a new Vite project:
 
-```html
-<script type="module" src="/js/maplibre-yaml/dist/register.browser.js"></script>
-```
-
-Some parts of maplibre-yaml load on demand, only for maps that use them, and
-the browser fetches them from `dist/chunks/` next to the script: the readers
-for [PMTiles, FlatGeobuf, GeoParquet and COG files](/guides/cloud-native-data/)
-(`pmtiles.js`, `flatgeobuf.js`, `geoparquet.js` and `geoparquet-brotli.js`,
-`cog.js` with its image codecs `cog-deflate.js`, `cog-jpeg.js`, `cog-lerc.js`
-and `cog-zstd.js`) and the [Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap)
-style generator (`protomaps-basemap.js`). A copy of only `register.browser.js` works for every
-other map; a map that needs a missing reader shows a notice naming the file.
-
-### JavaScript API from a CDN
-
-To use the JavaScript API (`YAMLParser`, `MapRenderer`) from a CDN instead of the web component, import the package from esm.sh, which resolves `yaml` and `zod` for you. Keep the same import map and add `?external=maplibre-gl` so the library uses the maplibre-gl you pinned, not a second copy chosen by esm.sh:
-
-```html
-<script type="importmap">
-  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-</script>
-<script type="module">
-  import {
-    YAMLParser,
-    MapRenderer,
-  } from "https://esm.sh/@maplibre-yaml/core@0.9?external=maplibre-gl";
-
-  // Your map code here
-</script>
-```
-
-## Supported maplibre-gl versions
-
-maplibre-yaml works with maplibre-gl **v4, v5 and v6** (v6 recommended for new
-projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`. Every
-example on this page pins major 6 (`maplibre-gl@^6` for npm, `maplibre-gl@6` for the
-CSS and the import map). Pin whichever supported major your project uses, and
-keep the CSS on the same major as the JS. Cloud Optimized GeoTIFF (COG)
-sources need maplibre-gl 4.5 or later
-([Large data](/guides/cloud-native-data/)).
-
-maplibre-gl v6 is ESM-only: the browser entry is `dist/maplibre-gl.mjs` (there
-is no `maplibre-gl.js` UMD file any more), so an import map points at that file
-directly. It loads its worker (`maplibre-gl-worker.mjs`) from next to its own
-module, which works as-is from a CDN or any static server.
-
-**Bundlers (Vite, webpack, …) on v6:** inside a bundle MapLibre cannot find its
-worker, and every map fails with *"Worker failed to load"* (maplibre-yaml's
-`ml-map:error` then spells out this fix). Tell MapLibre where the worker is
-in the same entry file that imports maplibre-yaml. With Vite:
-
-```ts
-import { setWorkerUrl } from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-
-setWorkerUrl(workerUrl);
-```
-
-The full setup is under [Using a bundler (Vite)](#using-a-bundler-vite). The
-`@maplibre-yaml/astro` components do this for you. v4 and v5 need nothing.
-
-## Package installation
-
-<Tabs>
+<Tabs syncKey="pkg">
   <TabItem label="npm">
     ```bash
+    npm create vite@latest my-map -- --template vanilla
+    cd my-map
     npm install @maplibre-yaml/core maplibre-gl@^6
     ```
   </TabItem>
   <TabItem label="pnpm">
     ```bash
+    pnpm create vite my-map --template vanilla
+    cd my-map
     pnpm add @maplibre-yaml/core maplibre-gl@^6
     ```
   </TabItem>
   <TabItem label="yarn">
     ```bash
+    yarn create vite my-map --template vanilla
+    cd my-map
     yarn add @maplibre-yaml/core maplibre-gl@^6
     ```
   </TabItem>
 </Tabs>
-
-**Upgrading an existing project.** Before 1.0, a range such as `^0.8.1` in
-`package.json` stays within 0.8.x, so a newer minor release never installs on
-its own. Run `npm install @maplibre-yaml/core@latest` (add
-`@maplibre-yaml/astro@latest` in an Astro project, see
-[Astro](/integrations/astro/#upgrading-an-existing-project)) to move to the
-current release. [Upgrading to 0.9](/getting-started/upgrading/) lists what
-changes, for npm and CDN pages alike.
-
-## Required CSS
-
-MapLibre GL JS requires its CSS for proper rendering. Add it to your HTML or import it in your JavaScript:
-
-<Tabs>
-  <TabItem label="HTML">
-    ```html
-    <link
-      href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
-      rel="stylesheet"
-    />
-    ```
-  </TabItem>
-  <TabItem label="JavaScript">
-    ```javascript
-    import 'maplibre-gl/dist/maplibre-gl.css';
-    ```
-  </TabItem>
-</Tabs>
-
-## Using a bundler (Vite)
-
-With npm and a bundler, your entry file does three things: point maplibre-gl 6
-at its worker, register `<ml-map>`, and load MapLibre's CSS. Starting from a
-new Vite project:
-
-```bash
-npm create vite@latest my-map -- --template vanilla
-cd my-map
-npm install @maplibre-yaml/core maplibre-gl@^6
-```
 
 Replace the contents of `src/main.js` with:
 
@@ -235,6 +139,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 setWorkerUrl(workerUrl);
 ```
 
+Without the worker lines, every map on maplibre-gl 6 fails with
+*Worker failed to load*. On maplibre-gl 4 or 5, leave them out: there is no
+worker file to import, and the build fails if you keep them.
+
 Replace the `<body>` of `index.html` with:
 
 ```html
@@ -244,91 +152,98 @@ Replace the `<body>` of `index.html` with:
 </body>
 ```
 
-Put `map.yaml` in the **`public/`** folder (`public/map.yaml`), together with
-any data files it loads. Vite serves `public/` at the site root during
-`npm run dev` and copies it into `dist/` on `npm run build`.
+Put `map.yaml` in the **`public/`** folder (`public/map.yaml`), with any data
+files it loads. Vite serves `public/` at the site root during `npm run dev`
+and copies it into `dist/` on `npm run build`. A `map.yaml` next to
+`index.html` works in `npm run dev` but isn't copied by `npm run build`, and
+the built site then shows *YAML syntax error … `<!doctype html>`*: the server
+answered with the page instead of the file.
 
-<Aside type="caution" title="YAML next to index.html works in dev, then breaks">
-A `map.yaml` next to `index.html` loads in `npm run dev`, but `npm run build`
-does not copy it: Vite only bundles files your code imports. The built site
-then answers the request with `index.html`, and the map shows
-*YAML syntax error … `<!doctype html>`*. Keep every file that `src=` or a
-`url:` in your YAML points at in `public/`.
-</Aside>
+`npm run dev` shows the map; `npm run build` and then `npm run preview` serve
+the production build.
 
-`npm run dev` shows the map; `npm run build` then `npm run preview` serves
-the production build. On maplibre-gl 4 or 5, delete the two worker lines and
-the `setWorkerUrl` call (there is no worker file to import, and the build
-fails if you keep them).
+The same entry file works with other bundlers and in React, Vue or Svelte
+apps: see [React & other frameworks](/integrations/react/). The
+`@maplibre-yaml/astro` components do all of this for you.
 
-The same entry-file setup applies to other bundlers and frameworks: see
-[Framework Compatibility](/integrations/react/).
+## Supported maplibre-gl versions
 
-## Web component registration
+maplibre-yaml is tested with maplibre-gl **4, 5 and 6**; use 6 for a new
+project. (The package's peer range, `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`,
+also accepts 3, which isn't tested.) `@maplibre-yaml/astro` needs 4 or later,
+and Cloud Optimized GeoTIFF (COG) sources need 4.5 or later. Keep MapLibre's
+stylesheet on the same major version as its script.
 
-To use the `<ml-map>` web component, import the registration module:
+maplibre-gl 6 is published only as an ES module: the browser file is
+`dist/maplibre-gl.mjs`, which is what the import map points at. It loads its
+worker from next to itself, which works from a CDN or any static server; only
+a bundle needs the worker step in [Using a bundler](#using-a-bundler-vite).
 
-```javascript
-import "@maplibre-yaml/core/register";
-```
+## Hosting the files yourself
 
-Then use it in your HTML:
+To serve maplibre-yaml from your own site instead of a CDN, copy the
+package's **whole `dist/` folder** (from `node_modules/@maplibre-yaml/core/`,
+or the package on unpkg) and load `dist/register.browser.js` from it:
 
 ```html
-<ml-map
-  style="display: block; width: 100%; height: 400px;"
-  config='{"type":"map","id":"my-map","config":{"center":[-74,40.7],"zoom":10,"mapStyle":"https://tiles.openfreemap.org/styles/liberty"},"layers":[]}'
->
-</ml-map>
+<script type="module" src="/js/maplibre-yaml/dist/register.browser.js"></script>
 ```
 
-## TypeScript
+`register.browser.js` is the script the CDN examples load: `register.js` at
+the package root is a one-line file that loads it, so that the short CDN
+address works.
 
-maplibre-yaml is written in TypeScript and includes type definitions. No additional `@types` packages are needed.
+Keep the folder whole. The readers for
+[large data formats](/guides/cloud-native-data/) (PMTiles, FlatGeobuf,
+GeoParquet, COG) and the
+[Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap) are
+separate files in `dist/chunks/`, which the browser fetches from next to the
+script only for a map that uses them. A copy of `register.browser.js` alone
+works for every other map; a map that needs a missing reader shows a notice
+naming the file.
 
-```typescript
-import { YAMLParser, MapRenderer } from "@maplibre-yaml/core";
-import type { MapBlock } from "@maplibre-yaml/core";
+## Upgrading
 
-// For a single `type: map` document:
-const mapBlock: MapBlock = YAMLParser.parseMapBlock(yamlString);
+A project keeps the version it was set up with. To move to a newer release,
+see [Upgrading to 0.9](/getting-started/upgrading/#how-to-upgrade).
+
+## Alternatives
+
+### The JavaScript API from a CDN
+
+To use the JavaScript API (`YAMLParser`, `MapRenderer`) on a plain page
+instead of the `<ml-map>` element, import the package from esm.sh. Keep the
+same import map, and add `?external=maplibre-gl` so the library uses the
+maplibre-gl you pinned, not a second copy chosen by esm.sh:
+
+```html
+<script type="importmap">
+  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
+</script>
+<script type="module">
+  import {
+    YAMLParser,
+    MapRenderer,
+  } from "https://esm.sh/@maplibre-yaml/core@0.9?external=maplibre-gl";
+
+  // Your map code here
+</script>
 ```
 
-## Verify installation
+The [JavaScript API](/integrations/vanilla-js/) page continues from here. The
+package ships its own TypeScript types, so there is no `@types` package to
+install; they are listed in the [TypeScript API](/reference/api/).
 
-Check that the parser loads and validates a document (this checks parsing
-only; a map still needs a page to render in):
+### A map document without a file
 
-```javascript
-import { YAMLParser } from "@maplibre-yaml/core";
-
-const yaml = `
-type: map
-id: test
-config:
-  center: [0, 0]
-  zoom: 2
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers: []
-`;
-
-const result = YAMLParser.safeParseMapBlock(yaml);
-
-if (result.success) {
-  console.log("✓ maplibre-yaml parsed the document");
-  console.log("  Map ID:", result.data.id);
-} else {
-  for (const error of result.errors) {
-    console.error(`✗ ${error.path}: ${error.message}`);
-  }
-}
-```
+`<ml-map>` can also take the document as JSON in its `config` attribute or
+property, or as YAML in a `<script type="text/yaml">` child, for a page that
+builds the map in code. See
+[HTML pages: the `<ml-map>` element](/integrations/web-components/).
 
 ## Next steps
 
-Now that you have maplibre-yaml installed, follow the
-[Quick start](/getting-started/quick-start/) to build your first map (or the
-[Astro quick start](/getting-started/astro/) for an Astro site), then
-read [Your first map, explained](/getting-started/first-map/) for what each
-part of the YAML does. Something not working? See
-[Troubleshooting](/troubleshooting/).
+Follow the [quick start](/getting-started/quick-start/) to build your first
+map (or the [Astro quick start](/getting-started/astro/) for an Astro site),
+then read [Your first map, explained](/getting-started/first-map/).
+Something not working? See [Troubleshooting](/troubleshooting/).

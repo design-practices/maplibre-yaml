@@ -1,16 +1,19 @@
 ---
 title: "Quick start: a map in an HTML page"
-description: Create your first map in 5 minutes
+description: Make a web page with a live map of the week's earthquakes from two files, an HTML page and a YAML map document, loaded from a CDN with nothing to install.
 ---
 
+import { Aside } from "@astrojs/starlight/components";
 import LiveMap from "../../../components/LiveMap.astro";
-import YAMLBlock from "../../../components/YAMLBlock.astro";
 
-Let's create a map showing earthquake data in under 5 minutes using the `<ml-map>` web component.
+In this tutorial you make a web page with a map of the past week's
+earthquakes, from two files: an HTML page and a YAML file that describes the
+map. Nothing is installed: the page loads maplibre-yaml from a CDN. You need a
+text editor and [Node.js](https://nodejs.org/), for a local web server.
 
 ## 1. Create an HTML file
 
-Create a new file called `index.html`:
+Make a new folder for the map. In it, create a file called `index.html`:
 
 ```html
 <!DOCTYPE html>
@@ -19,7 +22,7 @@ Create a new file called `index.html`:
     <meta charset="utf-8" />
     <!-- Without this line, phones lay the page out at desktop width and the map looks tiny -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>My First Map</title>
+    <title>My first map</title>
     <link
       href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
       rel="stylesheet"
@@ -28,7 +31,7 @@ Create a new file called `index.html`:
     <script type="importmap">
       { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
     </script>
-    <!-- Register the <ml-map> web component -->
+    <!-- Register the <ml-map> element -->
     <script
       type="module"
       src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
@@ -46,38 +49,43 @@ Create a new file called `index.html`:
     </style>
   </head>
   <body>
-    <ml-map src="./earthquake-map.yaml"></ml-map>
+    <ml-map src="./map.yaml"></ml-map>
   </body>
 </html>
 ```
 
-## 2. Create your YAML configuration
+The page loads MapLibre's stylesheet, tells the browser where MapLibre is,
+loads the script that defines the `<ml-map>` element, and gives the map the
+whole window. `<ml-map src="./map.yaml">` is the map.
 
-Create a file called `earthquake-map.yaml` in the same folder:
+## 2. Describe the map in YAML
+
+In the same folder, create a file called `map.yaml`. This file is the *map
+document*:
 
 ```yaml
-type: map
-id: earthquake-map
-config:
-  center: [-120, 37]
-  zoom: 5
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
+type: map              # this file describes one map
+id: earthquake-map     # a short name for it, in your own words
+config:                # the view the map opens on
+  center: [-120, 37]   # [longitude, latitude]: California
+  zoom: 4              # 0 is the whole world; higher numbers zoom in
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"  # the basemap
+layers:                # your data, drawn on top of the basemap
   - id: earthquakes
-    type: circle
-    source:
+    type: circle       # draw each point as a circle
+    source:            # where the points come from
       type: geojson
       url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    paint:
+    paint:             # how the circles look
       circle-radius: 6
       circle-color: "#e74c3c"
       circle-stroke-width: 1
       circle-stroke-color: "#ffffff"
 ```
 
-Two YAML rules that trip up almost everyone the first time: indent with
-spaces (never tabs), and put colours in quotes. `circle-color: #e74c3c`
-without quotes is a comment, because `#` starts a comment in YAML.
+Two YAML rules trip up almost everyone the first time: indent with spaces,
+never tabs, and put colours in quotes. `circle-color: #e74c3c` without
+quotes is empty, because `#` starts a comment in YAML.
 
 ## 3. Run a local server
 
@@ -88,69 +96,44 @@ npx serve .
 ```
 
 Open the address it prints (usually http://localhost:3000) in your browser.
-Double-clicking `index.html` instead does not work: a page opened from a
-`file://` address is not allowed to fetch `earthquake-map.yaml`.
-
-`npx serve` needs [Node.js](https://nodejs.org/). Another local server
-works for this map too, but later, for large-data files (PMTiles, FlatGeobuf,
-GeoParquet, COG), the server must support HTTP range requests: `npx serve`
-does, `python -m http.server` doesn't. If the map is slow to start, a small
-"Loading map…" shows in its middle until the basemap draws.
+Double-clicking `index.html` instead doesn't work: a page opened from a
+`file://` address isn't allowed to fetch `map.yaml`.
 
 ## Result
 
-Here's what you'll see:
+You see this map, with every earthquake of the past seven days as a red dot.
+Drag to pan; scroll or pinch to zoom.
 
 <LiveMap
   src="/configs/quickstart-demo.yaml"
   height="400px"
-  caption="Live earthquake data from USGS"
+  caption="Earthquakes of the past seven days, from the USGS live feed"
 />
 
-## Understanding the configuration
+<Aside type="caution" title="Nothing showing?">
+- **A blank page, no error:** open the browser console (<kbd>F12</kbd>). *Failed
+  to resolve module specifier "maplibre-gl"* means the import map is missing
+  or comes after the `register.js` script.
+- **A card instead of the map:** it names the line in `map.yaml` and what to
+  fix. A card that says the page was opened from a file means you skipped
+  step 3.
+- **The basemap draws but no dots:** check the `url:` line, character for
+  character.
 
-Let's break down the YAML:
+More in [Troubleshooting](/troubleshooting/).
+</Aside>
 
-<YAMLBlock highlight={[1, 2, 3, 4, 5, 6, 7]} caption="Map configuration">
-  {`type: map                    # Block type (required)
-id: earthquake-map           # Unique identifier
-config:
-  center: [-120, 37]         # [longitude, latitude]
-  zoom: 5                    # Initial zoom level
-  mapStyle: "https://..."    # Basemap style URL`}
-</YAMLBlock>
+## 4. Add a popup
 
-`mapStyle` is the basemap: a MapLibre style URL, as here, or a single
-Protomaps `.pmtiles` file you host yourself, with no API key
-([Map styles](/getting-started/first-map/#map-styles)).
-
-<YAMLBlock highlight={[1, 2, 3, 4, 5, 6]} caption="Layer configuration">
-  {`layers:
-  - id: earthquakes          # Layer identifier
-    type: circle             # Render as circles
-    source:                  # Data source
-      type: geojson
-      url: "https://..."     # GeoJSON URL`}
-</YAMLBlock>
-
-<YAMLBlock highlight={[1, 2, 3, 4, 5]} caption="Styling with paint properties">
-  {`    paint:
-      circle-radius: 6       # Circle size in pixels
-      circle-color: "#e74c3c"
-      circle-stroke-width: 1
-      circle-stroke-color: "#ffffff"`}
-</YAMLBlock>
-
-## Add interactivity
-
-Let's make the earthquakes clickable. Update your YAML:
+Make each earthquake clickable: add the `interactive:` block (the highlighted
+lines) to the layer in `map.yaml`, save, and reload the page.
 
 ```yaml {18-24}
 type: map
 id: earthquake-map
 config:
   center: [-120, 37]
-  zoom: 5
+  zoom: 4
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
@@ -172,42 +155,24 @@ layers:
               - property: title
 ```
 
+`hover:` turns the pointer into a hand over a dot. `click:` opens a popup
+whose heading (`h3`) is the earthquake's `title` property from the data,
+such as *M 2.1 - 10 km NE of Aguanga, CA*. The
+[popups guide](/guides/popups/) shows what else a popup can hold.
+
 <LiveMap
   src="/configs/quickstart-interactive.yaml"
   height="400px"
-  caption="Click on any earthquake to see details"
+  caption="Click an earthquake to see its title"
 />
-
-## Add live updates
-
-Make the map refresh automatically every 60 seconds:
-
-```yaml {7-9}
-layers:
-  - id: earthquakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-      refresh:
-        refreshInterval: 60000
-        updateStrategy: replace
-    paint:
-      circle-radius: 6
-      circle-color: "#e74c3c"
-```
 
 ## Next steps
 
-You've created your first interactive, live-updating map! Continue learning:
-
-- [Your first map, explained](/getting-started/first-map/) - What each part of the YAML does
-- [Layers & styling](/guides/layers/) - Learn about different layer types and styling
-- [Loading data](/guides/data-sources/) - Load data from various sources
-- [Live data & streaming](/guides/live-data/) - Polling, streaming, and merge strategies
-- [Thematic maps & legends](/guides/thematic-maps/) - Colour features by a value, with a legend
-- [Large data](/guides/cloud-native-data/) - PMTiles, FlatGeobuf, GeoParquet and COG files
-- [Story maps](/integrations/scrollytelling-html/) - A map that moves as the reader scrolls
-- [Accessibility & languages](/guides/accessibility-languages/) - Map titles, descriptions and translations
-- [Examples](/examples/) - See complete real-world examples
-- [Troubleshooting](/troubleshooting/) - When the map doesn't show what you expect
+- [Your first map, explained](/getting-started/first-map/): what each part of
+  `map.yaml` does, sizing each earthquake by its magnitude, and loading a file
+  of your own.
+- [Live data & streaming](/guides/live-data/): refresh the earthquakes while
+  the page stays open.
+- [Publishing & subpaths](/guides/publishing/): put the folder on GitHub Pages
+  or another static host.
+- [Examples](/examples/): complete maps to copy.

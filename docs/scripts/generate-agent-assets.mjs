@@ -44,7 +44,7 @@ const BLOCKS = ['map', 'scrollytelling', 'root', 'any'];
 
 /** The five most instructive complete configs, in teaching order. */
 const CURATED_CONFIGS = [
-  'complete-example.yaml',
+  'earthquakes.yaml',
   'interactive-points.yaml',
   'clustering.yaml',
   'earthquake-tracker.yaml',

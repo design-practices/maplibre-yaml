@@ -86,6 +86,31 @@ Slots"). Use one term per concept:
   verbatim; the Astro docs tests check it.
 - Run new commands and code before publishing them, against the published
   packages.
+- A live map shown next to a YAML sample draws that sample, character for
+  character: its file in `docs/public/configs/` is the fence plus the schema
+  modeline. Give the reader the fence and the demo the file; don't trim one
+  of them.
+
+## Running example
+
+Use the same data across pages, so a reader meets one map that grows rather
+than a new one on every page.
+
+- **Points: the USGS earthquake feed**,
+  `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson`.
+  It is open to any site (CORS), and each feature has `mag`, `place`,
+  `title` and `time`. Always write `mag`, never `magnitude`. The quick start,
+  *Your first map, explained* and the landing page use it.
+- **Inline data: the US cities** (New York 8,336,817, Chicago, Los Angeles),
+  where a page teaches `data:` written in the document.
+- **Polygons and thematic maps: the sample tracts**,
+  `/data/classify/sample-tracts.geojson`, written as a full
+  `https://docs.maplibre-yaml.org/…` URL in a sample readers copy.
+- **Basemap:** OpenFreeMap liberty. Use positron only where a choropleth
+  needs a quiet base, and say why once.
+- **File names:** `index.html` and `map.yaml` side by side (what
+  `mlym init` writes), `story.yaml` for a story, data under `data/`. Write
+  `<repo>` for a GitHub Pages subpath.
 
 ## Anchors and URLs
 

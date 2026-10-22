@@ -1,20 +1,18 @@
 ---
 title: Choose your path
-description: Where to start with maplibre-yaml — a map in an HTML page, an Astro site on GitHub Pages, a story map, a thematic map, large data, or coming from MapLibre — and where to go when something breaks.
+description: Where to start with maplibre-yaml — a map in an HTML page, an Astro site on GitHub Pages, a site or app with a bundler, a story map, a thematic map, large data, or coming from MapLibre — and where to look things up or get help.
 ---
 
 maplibre-yaml draws a web map from a YAML file: you describe the map, its
-data and its styling, and a small script on the page does the rest. Pick the
-row that matches what you want to make. Each one says where to **start**,
-what to read **next**, and where to **look things up**.
-
-Not sure what maplibre-yaml is? Read [What is maplibre-yaml?](/getting-started/introduction/)
-first. Every page outside *Advanced* uses the default format (format v1).
+data and its styling, and a script on the page does the rest. Pick the row
+that matches what you want to make. Each one says where to **start**, what to
+read **next**, and where to **look things up**. New to the library? Read
+[What is maplibre-yaml?](/getting-started/introduction/) first.
 
 ## A map in an HTML page
 
 One HTML file and one YAML file, loaded from a CDN. Nothing to install and no
-build step; any static host (GitHub Pages included) can publish it.
+build step; any static host, GitHub Pages included, can publish it.
 
 - **Start:** [Quick start: a map in an HTML page](/getting-started/quick-start/)
 - **Then:** [Your first map, explained](/getting-started/first-map/) ·
@@ -30,10 +28,20 @@ push.
 
 - **Start:** [Quick start: Astro site on GitHub Pages](/getting-started/astro/)
 - **Then:** [Your first map, explained](/getting-started/first-map/) ·
-  [Astro](/integrations/astro/) (build-time loading, `<FullPageMap>`) ·
-  [Astro content collections](/integrations/astro-collections/)
+  [Astro](/integrations/astro/) · [Astro content collections](/integrations/astro-collections/)
 - **Look up:** [Astro components](/integrations/astro/#map-component-api) ·
   [YAML reference](/reference/yaml/)
+
+## A site or app with a bundler
+
+A Vite project, or a React, Vue or Svelte app, that installs packages from
+npm and builds the page.
+
+- **Start:** [Using a bundler (Vite)](/getting-started/installation/#using-a-bundler-vite)
+- **Then:** [React & other frameworks](/integrations/react/) ·
+  [Your first map, explained](/getting-started/first-map/)
+- **Look up:** [`<ml-map>` attributes and events](/reference/elements/) ·
+  [JavaScript API](/integrations/vanilla-js/)
 
 ## A story map
 
@@ -44,7 +52,7 @@ A map that moves as the reader scrolls through chapters of text and images
   or [Story maps in Astro](/integrations/astro-stories/)
 - **Then:** [Story file reference](/schema/scrollytelling/) (chapters, camera
   moves and actions)
-- **Look up:** [Scrollytelling block reference](/reference/yaml/scrollytelling/)
+- **Look up:** [Story map fields](/reference/yaml/scrollytelling/)
 
 ## A thematic map
 
@@ -71,20 +79,28 @@ files, read in parts straight from a static host.
 
 ## Already know MapLibre?
 
-A maplibre-yaml document *is* a MapLibre style with the page behaviour added:
-`paint:`, `layout:`, `filter:` and expressions are the
-[style spec](https://maplibre.org/maplibre-style-spec/), passed through
-unchanged. What maplibre-yaml adds is data loading, popups, legends, controls
-and stories, written in the same file.
+A map document's layers are MapLibre style layers: `paint:`, `layout:`,
+`filter:` and expressions follow the
+[style spec](https://maplibre.org/maplibre-style-spec/) unchanged. What
+maplibre-yaml adds is data loading, popups, legends, controls and stories,
+written in the same file.
 
-- **Start:** [JavaScript next to the YAML](/getting-started/introduction/#how-it-works),
-  then the [MapLibre examples in YAML](/examples/gallery/): every official
-  MapLibre example, with which ones the format expresses on its own
-- **Then:** [Export to style.json](/guides/export/): `mlym emit` turns a
+- **Start:** [How it works](/getting-started/introduction/#how-it-works), then
+  the [MapLibre examples in YAML](/examples/gallery/): every official MapLibre
+  example, and which ones the format expresses on its own
+- **Then:** [Export to style.json](/guides/export/): `mlym emit` turns a map
   document into a plain `style.json`, and
-  [Export classes](/guides/export-classes/) lists what each construct becomes
+  [Export classes](/guides/export-classes/) lists what each part becomes
 - **Look up:** [JavaScript API](/integrations/vanilla-js/) ·
   [TypeScript API](/reference/api/)
+
+## Looking something up
+
+Every key a map document or story file takes, with its type and default, is
+in the [YAML reference](/reference/yaml/). The `<ml-map>` and
+`<ml-scrollytelling>` attributes, events and styling hooks are in
+[Elements](/reference/elements/), and the command-line tool's commands are in
+the [CLI reference](/cli/reference/).
 
 ## Something's broken
 

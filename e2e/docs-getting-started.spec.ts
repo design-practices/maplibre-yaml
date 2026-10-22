@@ -12,8 +12,10 @@
  *  - quick-start.mdx step 1 HTML + step 2 YAML (`<ml-map src>` via the CDN
  *    import-map pattern), and the "Add interactivity" YAML (click → popup),
  *    also on a phone-sized viewport (the viewport meta tag);
- *  - first-map.mdx "Putting it together" YAML (formatted popup), on the
- *    canonical CDN page from installation.mdx, which first-map links;
+ *  - installation.mdx's CDN page and the map.yaml next to it;
+ *  - first-map.mdx "Putting it together" YAML (formatted popup) and its
+ *    "Using your own data file" change, on the quick start's page, which
+ *    first-map continues;
  *  - vanilla-js.mdx "JavaScript API" quick start (esm.sh `?external=maplibre-gl`
  *    + `MapRenderer.fromModel(toModel(...))`);
  *  - web-components.mdx Quick Start steps and the Slots example;
@@ -70,17 +72,19 @@ function fencesIn(path: string, lang: string): string[] {
   return out;
 }
 
-/** A stand-in for the USGS feed: three California quakes with `title`s. */
+/** A stand-in for the USGS feed: three California quakes, with the feed's `title`, `place` and `mag`. */
 const QUAKES = {
   type: "FeatureCollection",
-  features: [
-    [-120, 37, "M 3.1 - Central California"],
-    [-118.4, 34.1, "M 2.4 - Los Angeles"],
-    [-121.9, 37.4, "M 1.8 - San Jose"],
-  ].map(([lng, lat, title]) => ({
+  features: (
+    [
+      [-120, 37, 3.1, "Central California"],
+      [-118.4, 34.1, 2.4, "Los Angeles"],
+      [-121.9, 37.4, 1.8, "San Jose"],
+    ] as const
+  ).map(([lng, lat, mag, place]) => ({
     type: "Feature",
     geometry: { type: "Point", coordinates: [lng, lat] },
-    properties: { title, mag: 2 },
+    properties: { title: `M ${mag} - ${place}`, place, mag },
   })),
 };
 
@@ -206,6 +210,15 @@ function expectKnownUrls(baseURL: string, ...snippets: string[]) {
   }
 }
 
+/** first-map.mdx "Putting it together": the whole map document. */
+function firstMapWhole(): string {
+  const yaml = fences("getting-started/first-map.mdx", "yaml").find(
+    (y) => /^type: map$/m.test(y) && y.includes("interpolate") && y.includes("controls:")
+  );
+  expect(yaml, "first-map.mdx 'Putting it together' document").toBeDefined();
+  return yaml!;
+}
+
 /** Run `wait`; on failure, report the page's errors rather than a bare timeout. */
 async function orReport<T>(wait: Promise<T>, errors: string[]): Promise<T> {
   try {
@@ -229,7 +242,7 @@ function waitForRenderedLayer(page: Page, layerId: string) {
 }
 
 test.describe("docs: getting-started snippets render verbatim", () => {
-  test("quick start: index.html + earthquake-map.yaml render the earthquake layer", async ({
+  test("quick start: index.html + map.yaml render the earthquake layer", async ({
     page,
     baseURL,
   }) => {
@@ -239,7 +252,7 @@ test.describe("docs: getting-started snippets render verbatim", () => {
 
     const errors = await serveSnippet(page, baseURL!, "quick-start", {
       "index.html": html,
-      "earthquake-map.yaml": yaml,
+      "map.yaml": yaml,
     });
     await page.goto(`/__docs/quick-start/`, { waitUntil: "domcontentloaded" });
     await orReport(waitForRenderedLayer(page, "earthquakes"), errors);
@@ -250,7 +263,7 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     });
     expect(view.center[0]).toBeCloseTo(-120, 3);
     expect(view.center[1]).toBeCloseTo(37, 3);
-    expect(view.zoom).toBeCloseTo(5, 3);
+    expect(view.zoom).toBeCloseTo(4, 3);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
@@ -265,35 +278,37 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     expectKnownUrls(baseURL!, html, yaml!);
     const errors = await serveSnippet(page, baseURL!, "install-cdn", { "index.html": html, "map.yaml": yaml! });
     await page.goto(`/__docs/install-cdn/`, { waitUntil: "domcontentloaded" });
-    await orReport(waitForRenderedLayer(page, "marker"), errors);
+    await orReport(waitForRenderedLayer(page, "earthquakes"), errors);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("first map: 'Using your own data file' ships the places.geojson it loads (ml-aot.49)", async ({
+  test("first map: 'Using your own data file' loads the saved copy of the feed", async ({
     page,
     baseURL,
   }) => {
-    // First map uses the canonical CDN page from Installation (it links it).
-    const html = fences("getting-started/installation.mdx", "html").find((h) => h.includes('src="./map.yaml"'))!;
-    const [structure] = fences("getting-started/first-map.mdx", "yaml");
-    const fragment = fences("getting-started/first-map.mdx", "yaml").find((y) => y.includes("./data/places.geojson"))!;
-    const [geojson] = fences("getting-started/first-map.mdx", "json");
-    expect(geojson, "first-map.mdx shows no data/places.geojson").toBeDefined();
-    // The page's own recipe: the layer snippet replaces `layers: []`.
-    const yaml = structure.replace(/^layers: \[\].*$/m, fragment.trimEnd());
-    expect(yaml).toContain("id: my-places");
+    // First map continues the quick start's folder: its index.html, unchanged.
+    const [html] = fences("getting-started/quick-start.mdx", "html");
+    const whole = firstMapWhole();
+    const fragment = fences("getting-started/first-map.mdx", "yaml").find((y) =>
+      y.includes('url: "data/earthquakes.geojson"')
+    )!;
+    expect(fragment, "first-map.mdx shows the source pointing at data/earthquakes.geojson").toBeDefined();
+    // The page's own recipe: the source's url: line becomes the local file.
+    const localUrl = fragment.match(/^\s*url: .*$/m)![0].trim();
+    const yaml = whole.replace(/^(\s*)url: "https:\/\/earthquake\.usgs\.gov[^"]*"$/m, `$1${localUrl}`);
+    expect(yaml).toContain('url: "data/earthquakes.geojson"');
     const errors = await serveSnippet(page, baseURL!, "first-map-data", {
       "index.html": html,
       "map.yaml": yaml,
-      "data/places.geojson": geojson,
+      "data/earthquakes.geojson": JSON.stringify(QUAKES),
     });
     await page.goto(`/__docs/first-map-data/`, { waitUntil: "domcontentloaded" });
-    await orReport(waitForRenderedLayer(page, "my-places"), errors);
+    await orReport(waitForRenderedLayer(page, "earthquakes"), errors);
     expect(await page.locator(".ml-map-notice").count()).toBe(0);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("quick start: 'Add interactivity' YAML opens a popup with the feature title", async ({
+  test("quick start: 'Add a popup' YAML opens a popup with the feature title", async ({
     page,
     baseURL,
   }) => {
@@ -306,7 +321,7 @@ test.describe("docs: getting-started snippets render verbatim", () => {
 
     const errors = await serveSnippet(page, baseURL!, "quick-start-interactive", {
       "index.html": html,
-      "earthquake-map.yaml": yaml,
+      "map.yaml": yaml,
     });
     await page.goto(`/__docs/quick-start-interactive/`, { waitUntil: "domcontentloaded" });
     await orReport(waitForRenderedLayer(page, "earthquakes"), errors);
@@ -380,7 +395,7 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     const [yaml] = fences("getting-started/quick-start.mdx", "yaml");
     const errors = await serveSnippet(page, baseURL!, "quick-start-mobile", {
       "index.html": html,
-      "earthquake-map.yaml": yaml,
+      "map.yaml": yaml,
     });
     await page.goto(`/__docs/quick-start-mobile/`, { waitUntil: "domcontentloaded" });
     await orReport(waitForRenderedLayer(page, "earthquakes"), errors);
@@ -396,15 +411,13 @@ test.describe("docs: getting-started snippets render verbatim", () => {
     await context.close();
   });
 
-  test("first map: host page + 'Putting it together' YAML render, popup formats the population", async ({
+  test("first map: host page + 'Putting it together' YAML render, popup formats the magnitude", async ({
     page,
     baseURL,
   }) => {
-    // First map uses the canonical CDN page from Installation (it links it).
-    const html = fences("getting-started/installation.mdx", "html").find((h) => h.includes('src="./map.yaml"'))!;
-    const yaml = fences("getting-started/first-map.mdx", "yaml").find((y) =>
-      y.includes("id: complete-example")
-    )!;
+    // First map continues the quick start's folder: its index.html, unchanged.
+    const [html] = fences("getting-started/quick-start.mdx", "html");
+    const yaml = firstMapWhole();
     expect(html).toContain('src="./map.yaml"');
     expectKnownUrls(baseURL!, html, yaml);
 
@@ -413,20 +426,28 @@ test.describe("docs: getting-started snippets render verbatim", () => {
       "map.yaml": yaml,
     });
     await page.goto(`/__docs/first-map/`, { waitUntil: "domcontentloaded" });
-    await orReport(waitForRenderedLayer(page, "cities"), errors);
+    await orReport(waitForRenderedLayer(page, "earthquakes"), errors);
 
     await page.evaluate(() => {
       const map = (document.querySelector("ml-map") as any).getMap();
-      const at = { lng: -74.006, lat: 40.7128 };
+      const at = { lng: -120, lat: 37 };
       map.fire("click", { lngLat: at, point: map.project(at) });
     });
     const popup = page.locator(".maplibregl-popup-content");
-    await expect(popup.locator("h3")).toHaveText("New York");
-    await expect(popup.locator("p")).toHaveText("Population: 8,336,817");
+    await expect(popup.locator("h3")).toHaveText("Central California");
+    await expect(popup.locator("p")).toHaveText("Magnitude 3.1");
+    // The radius comes from `mag`: the 3.1 quake is drawn bigger than the 1.8 one.
+    const radii = await page.evaluate(() => {
+      const map = (document.querySelector("ml-map") as any).getMap();
+      const r = (lng: number, lat: number) =>
+        map.queryRenderedFeatures(map.project({ lng, lat }), { layers: ["earthquakes"] })[0]?.layer.paint["circle-radius"];
+      return { big: r(-120, 37), small: r(-121.9, 37.4) };
+    });
+    expect(radii.big).toBeGreaterThan(radii.small);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("first map 'Putting it together' on a phone shows all three cities (ml-aot.42)", async ({
+  test("first map 'Putting it together' on a phone shows every quake", async ({
     browser,
     baseURL,
   }) => {
@@ -438,24 +459,19 @@ test.describe("docs: getting-started snippets render verbatim", () => {
       hasTouch: true,
     });
     const page = await context.newPage();
-    // First map uses the canonical CDN page from Installation (it links it).
-    const html = fences("getting-started/installation.mdx", "html").find((h) => h.includes('src="./map.yaml"'))!;
-    const yaml = fences("getting-started/first-map.mdx", "yaml").find((y) =>
-      y.includes("id: complete-example")
-    )!;
+    const [html] = fences("getting-started/quick-start.mdx", "html");
+    const yaml = firstMapWhole();
     const errors = await serveSnippet(page, baseURL!, "first-map-mobile", {
       "index.html": html,
       "map.yaml": yaml,
     });
     await page.goto(`/__docs/first-map-mobile/`, { waitUntil: "domcontentloaded" });
-    await orReport(waitForRenderedLayer(page, "cities"), errors);
-    // At center [-98, 39] zoom 4 a 390px-wide map spans ~34° of longitude:
-    // New York and Los Angeles were off-screen, so a phone showed one dot.
-    const names = await page.evaluate(() => {
+    await orReport(waitForRenderedLayer(page, "earthquakes"), errors);
+    const places = await page.evaluate(() => {
       const map = (document.querySelector("ml-map") as any).getMap();
-      return [...new Set(map.queryRenderedFeatures({ layers: ["cities"] }).map((f: any) => f.properties.name))].sort();
+      return [...new Set(map.queryRenderedFeatures({ layers: ["earthquakes"] }).map((f: any) => f.properties.place))].sort();
     });
-    expect(names).toEqual(["Chicago", "Los Angeles", "New York"]);
+    expect(places).toEqual(["Central California", "Los Angeles", "San Jose"]);
     await page.screenshot({ path: "e2e/results/first-map-mobile.png" });
     expect(errors, errors.join("\n")).toEqual([]);
     await context.close();

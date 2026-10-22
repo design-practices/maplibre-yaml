@@ -3,7 +3,7 @@ title: maplibre-yaml
 description: Declarative web maps with YAML configuration
 template: splash
 hero:
-  tagline: Create interactive maps with simple YAML — no JavaScript required
+  tagline: Describe a web map in a YAML file and put it on any page, with no JavaScript to write.
   image:
     file: ../../assets/yaml-file-icon.webp
   actions:
@@ -19,58 +19,79 @@ hero:
 import { Card, CardGrid } from "@astrojs/starlight/components";
 import LiveMap from "../../components/LiveMap.astro";
 
-## See It in Action
+## One file, one map
+
+This map of the past week's earthquakes, sized by magnitude, is the YAML
+below it. Click a circle to see where it happened.
 
 <LiveMap
-  src="/configs/hero-map.yaml"
+  src="/configs/earthquakes.yaml"
   height="400px"
-  caption="A simple map created with just YAML"
+  caption="Earthquakes of the past seven days, from the USGS live feed"
 />
 
-## Why maplibre-yaml?
-
-<CardGrid stagger>
-  <Card title="No JavaScript Required" icon="pencil">
-    Define your entire map in YAML: layers, data, popups, legends and stories.
-    For anyone who wants a web map without writing the code for it, and for
-    developers who want to prototype quickly.
-  </Card>
-  <Card title="Runtime-First" icon="rocket">
-    Data is fetched when your map loads, so it can update live. The script is
-    about 175 KB gzip (plus maplibre-gl), and readers for large-data formats
-    download only when a map uses them.
-  </Card>
-  <Card title="Full MapLibre Power" icon="setting">
-    Access all MapLibre GL features: expressions, data-driven styling, 3D
-    terrain, and more.
-  </Card>
-  <Card title="Framework Agnostic" icon="puzzle">
-    Use with vanilla JavaScript, Astro, or any framework via web components.
-  </Card>
-</CardGrid>
-
-## Quick Example
-
-```yaml
+```yaml title="map.yaml"
 type: map
-id: my-first-map
+id: earthquake-map
 config:
-  center: [-90, 38]
-  zoom: 3.5
+  center: [-160, 20]
+  zoom: 1
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
-  - id: rivers
-    type: line
+  - id: earthquakes
+    type: circle
     source:
       type: geojson
-      url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines.geojson"
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     paint:
-      line-color: "#2563eb"
-      line-width: 2
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 2, 7, 20]
+      circle-color: "#e74c3c"
+      circle-opacity: 0.7
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: place
+          - p:
+              - str: "Magnitude "
+              - property: mag
+                format: { max-fraction-digits: 1 }
 controls:
   navigation: true
   scale: true
 ```
+
+Save it as `map.yaml`, put `<ml-map src="map.yaml"></ml-map>` on a web
+page, and the page shows this map. The
+[quick start](/getting-started/quick-start/) builds it with you in a few
+minutes.
+
+## Why maplibre-yaml?
+
+<CardGrid stagger>
+  <Card title="No JavaScript to write" icon="pencil">
+    The basemap, your data, its styling, popups, legends and story chapters
+    all go in one YAML file, which checks itself and tells you which line is
+    wrong.
+  </Card>
+  <Card title="Live data" icon="rocket">
+    Data loads when the page opens, so the map shows today's version of a
+    feed, and it can refresh itself while the page stays open.
+  </Card>
+  <Card title="All of MapLibre" icon="setting">
+    Layers use the MapLibre style spec as it is: expressions, data-driven
+    styling, 3D terrain and globe. You can export a map to a plain
+    `style.json`.
+  </Card>
+  <Card title="Works in any page" icon="puzzle">
+    A plain HTML page from a CDN, an Astro site, or a React, Vue or Svelte
+    app: the `<ml-map>` element is the same in each.
+  </Card>
+</CardGrid>
 
 ## Choose your path
 
@@ -93,5 +114,6 @@ controls:
   </Card>
 </CardGrid>
 
-Something else, or not sure? See [all the paths](/getting-started/), including
-thematic maps, large data and coming from MapLibre.
+Something else, or not sure? [Choose your path](/getting-started/) lists
+every route, including an app with a bundler, thematic maps, large data and
+coming from MapLibre.
