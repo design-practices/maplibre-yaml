@@ -56,6 +56,7 @@ import type {
   Chapter,
 } from "@maplibre-yaml/core/schemas";
 import { bridgeSchema, HOST_ZOD_IS_V4, type CoreSchemaLike } from "./zod-bridge";
+import { withEntrySugar } from "./collection-sugar";
 
 /**
  * Core schema behind each bridged schema, so {@link extendSchema} can extend
@@ -81,6 +82,10 @@ function bridged<T>(core: CoreSchemaLike<T>): z.ZodType<T> {
  * - Layers and sources
  * - Controls and legend
  * - Interactive features
+ *
+ * GeoJSON shorthand on a `type: geojson` source (`location:`, `locations:`,
+ * `region:`, `route:`) is expanded into `data:` first, as `<Map src>` and
+ * `loadMapConfig` do, so an entry accepts the same YAML a map file does.
  *
  * Use this schema when defining a content collection for map configurations.
  *
@@ -127,7 +132,9 @@ function bridged<T>(core: CoreSchemaLike<T>): z.ZodType<T> {
  * ```
  */
 export function getMapSchema(): z.ZodType<MapBlock> {
-  return bridged<MapBlock>(MapBlockSchema as CoreSchemaLike<MapBlock>);
+  // GeoJSON shorthand (location:, route:, …) expands first, as it does for
+  // <Map src> and loadMapConfig (ml-svf).
+  return bridged<MapBlock>(withEntrySugar(MapBlockSchema as CoreSchemaLike<MapBlock>));
 }
 
 /**
@@ -143,6 +150,9 @@ export function getMapSchema(): z.ZodType<MapBlock> {
  * - Chapter actions (onChapterEnter, onChapterExit)
  * - Persistent layers
  * - Theme and markers
+ *
+ * GeoJSON shorthand (`location:`, `route:`, …) on a source is expanded first,
+ * as {@link getMapSchema} does.
  *
  * Use this schema when defining a content collection for scrollytelling stories.
  *
@@ -193,7 +203,7 @@ export function getMapSchema(): z.ZodType<MapBlock> {
  */
 export function getScrollytellingSchema(): z.ZodType<ScrollytellingBlock> {
   return bridged<ScrollytellingBlock>(
-    ScrollytellingBlockSchema as CoreSchemaLike<ScrollytellingBlock>
+    withEntrySugar(ScrollytellingBlockSchema as CoreSchemaLike<ScrollytellingBlock>)
   );
 }
 
@@ -404,10 +414,15 @@ export function extendSchema<T extends z.ZodTypeAny, E extends z.ZodRawShape>(
 function extendSchemaImpl(baseSchema: z.ZodTypeAny, extensions: z.ZodRawShape): z.ZodTypeAny {
   const core = CORE_OF.get(baseSchema as object);
 
-  // zod-4 host (Astro 6+) with a bridged core schema: the core half cannot
-  // be `.extend()`ed by host zod, so validate both halves and merge. Both
-  // strip unknown keys, so each sees only its own fields in the output.
-  if (HOST_ZOD_IS_V4 && core) {
+  // A bridged core schema that is not a host-zod object -- any core schema on
+  // a zod-4 host (Astro 6+), and the map and story schemas (which read the
+  // GeoJSON shorthand first) on any host: it cannot be `.extend()`ed, so
+  // validate both halves and merge. Both strip unknown keys, so each sees
+  // only its own fields in the output.
+  const extendable =
+    typeof (baseSchema as { extend?: unknown }).extend === "function" &&
+    typeof (baseSchema as { shape?: unknown }).shape === "object";
+  if (core && (HOST_ZOD_IS_V4 || !extendable)) {
     const extra = z.object(extensions);
     return z.unknown().transform((value, ctx) => {
       const base = core.safeParse(value);

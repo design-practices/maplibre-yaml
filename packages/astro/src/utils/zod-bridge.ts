@@ -33,14 +33,18 @@ export interface CoreSchemaLike<T> {
  * Hand a core (zod 3) schema to the host's zod.
  *
  * @remarks
- * On a zod-3 host the schema is returned as-is (zod-3 copies interoperate).
+ * On a zod-3 host a zod-3 schema is returned as-is (zod-3 copies
+ * interoperate); a plain {@link CoreSchemaLike} is wrapped as below.
  * On a zod-4 host it is wrapped in a host-zod `unknown().transform()` that
  * delegates validation to the core schema and re-raises each core issue at
  * its original path, so content-collection errors still point at the field.
  * Output (defaults applied, unknown keys stripped) is the core schema's.
  */
 export function bridgeSchema<T>(core: CoreSchemaLike<T>): z.ZodType<T> {
-  if (!HOST_ZOD_IS_V4) return core as unknown as z.ZodType<T>;
+  // A real zod-3 schema on a zod-3 host is the host's kind already. Anything
+  // else (a zod-3 schema on a zod-4 host, or a plain safeParse wrapper such as
+  // the GeoJSON-shorthand reader) goes through a host-zod transform.
+  if (!HOST_ZOD_IS_V4 && "_def" in (core as object)) return core as unknown as z.ZodType<T>;
   return z.unknown().transform((value, ctx) => {
     const result = core.safeParse(value);
     if (result.success) return result.data;
