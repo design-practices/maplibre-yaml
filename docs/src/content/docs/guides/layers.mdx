@@ -148,6 +148,70 @@ See [Display buildings in 3D](/examples/gallery/display-buildings-in-3d/)
 and [Create a heatmap layer](/examples/gallery/create-a-heatmap-layer/) for
 complete maps.
 
+## Imagery and elevation
+
+A `raster` layer shows image tiles, such as satellite imagery. `hillshade`
+and `color-relief` draw elevation data, from a `raster-dem` source: shading
+that shows the shape of the land, and colours by height. These go in a
+document beside its `config:`:
+
+```yaml
+sources:
+  imagery:
+    type: raster
+    tiles:
+      - "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"
+    tileSize: 256
+    attribution: "Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2020)"
+  elevation:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+layers:
+  - id: imagery
+    type: raster
+    source: imagery
+    paint:
+      raster-opacity: 0.85
+  - id: relief
+    type: color-relief
+    source: elevation
+    paint:
+      color-relief-opacity: 0.5
+      color-relief-color:
+        - interpolate
+        - ["linear"]
+        - ["elevation"]
+        - 0
+        - "#2b83ba"
+        - 1500
+        - "#abdda4"
+        - 3000
+        - "#fdae61"
+        - 4500
+        - "#d7191c"
+  - id: hills
+    type: hillshade
+    source: elevation
+    paint:
+      hillshade-exaggeration: 0.6
+```
+
+- **Set `tileSize: 256`** for most raster tile servers. The default is 512,
+  which stretches 256-pixel tiles and blurs them.
+- **Set `encoding`** on a `raster-dem` source. It defaults to `mapbox`, so
+  terrarium tiles, such as Mapterhorn's, need `encoding: terrarium` or the
+  heights come out wrong.
+- **`color-relief` needs maplibre-gl 5.6 or later.** On an older version,
+  the map skips the layer with one console warning and draws the rest.
+  `color-relief-color` ramps over `["elevation"]`, in metres.
+
+The same `raster-dem` source can also raise the map in 3D:
+[Map documents › Terrain, sky & projection](/schema/map-config/#terrain-sky--projection). Gallery:
+[Display a satellite map](/examples/gallery/display-a-satellite-map/),
+[Add a hillshade layer](/examples/gallery/add-a-hillshade-layer/),
+[Add a color relief layer](/examples/gallery/add-a-color-relief-layer/).
+
 ## Data-driven styling
 
 To colour or size each feature by one of its properties, write a MapLibre
@@ -257,6 +321,8 @@ listed in the map's legend. How the legend is built and placed is in
 - MapLibre's [layer properties](https://maplibre.org/maplibre-style-spec/layers/)
   and [expressions](https://maplibre.org/maplibre-style-spec/expressions/):
   every `paint` and `layout` key and what it takes.
+- [Sources & layers](/schema/sources-and-layers/): how a layer finds its
+  source, and every key maplibre-yaml adds to a layer.
 
 ## Troubleshooting
 

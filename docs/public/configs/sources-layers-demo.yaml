@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+type: map
+id: quakes-two-ways
+config:
+  center: [-120, 37]
+  zoom: 4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+sources:
+  quakes:                       # defined once, downloaded once
+    type: geojson
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+layers:
+  - id: quake-density           # drawn first, so it sits underneath
+    type: heatmap
+    source: quakes
+    maxzoom: 7
+    paint:
+      heatmap-weight: ["interpolate", ["linear"], ["get", "mag"], 0, 0, 6, 1]
+      heatmap-radius: 20
+  - id: quake-points            # drawn on top, from zoom 5 in
+    type: circle
+    source: quakes
+    minzoom: 5
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 3, 6, 18]
+      circle-color: "#ef4444"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"

@@ -27,6 +27,13 @@ export const PAGE_REDIRECTS = {
   "/guides/collections-integration/": "/integrations/astro-collections/",
   "/guides/interactions/": "/guides/export/",
   "/cli/vscode/": "/guides/editor-setup/#validate-on-save-vs-code-task",
+  // Docs phase 3: the hand-written reference topic pages collapsed into three
+  // hubs (overview, map documents, sources & layers) and the guides.
+  "/schema/sources/": "/schema/sources-and-layers/",
+  "/schema/layers/": "/schema/sources-and-layers/",
+  "/schema/interactivity/": "/guides/popups/",
+  "/schema/root/": "/schema/overview/",
+  "/schema/pages/": "/schema/overview/",
 };
 
 /**

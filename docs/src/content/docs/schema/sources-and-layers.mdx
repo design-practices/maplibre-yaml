@@ -1,0 +1,143 @@
+---
+title: Sources & layers
+description: How a map document's sources and layers fit together — which source type to use, named sources and $ref, the keys maplibre-yaml adds to a MapLibre layer, and the order layers draw in.
+---
+
+import LiveMap from "../../../components/LiveMap.astro";
+import { Code } from "@astrojs/starlight/components";
+import twoWays from "../../../../public/configs/sources-layers-demo.yaml?raw";
+
+A map document draws data in two steps. A **source** says where the data
+comes from: a GeoJSON file, a tile server, an image. A **layer** says how to
+draw one source: as circles, lines, fills or labels. This page explains how
+the two connect and which page covers each part. For every key with its type
+and default, see the [sources reference](/reference/yaml/sources/) and the
+[layers reference](/reference/yaml/layers/).
+
+## How a layer finds its source \{#named-source-definitions}
+
+Define a source once under `sources:`, then name it from each layer that
+draws it. Here one week of earthquakes feeds a heatmap when zoomed out and
+circles when zoomed in:
+
+<Code code={twoWays} lang="yaml" title="quakes.yaml" />
+
+<LiveMap src="/configs/sources-layers-demo.yaml" height="340px" caption="One source, two layers: a heatmap zoomed out, circles from zoom 5" />
+
+A layer's `source:` takes one of three forms:
+
+- **A name** (`source: quakes`) points at an entry under `sources:`. Every
+  layer that names it shares that one source: the file is downloaded once,
+  and a [live](/guides/live-data/) source is polled once for all of them.
+  This is the form to use whenever two layers draw the same data. A name the
+  document doesn't define fails validation at that line, and the message
+  lists the sources the document does define.
+- **A source written on the layer** (`source: { type: geojson, url: … }`)
+  belongs to that layer alone. It is the shortest form for a map with one
+  layer per dataset.
+- **A reference** (`source: { $ref: "#/sources/quakes" }`) copies the named
+  definition into the layer when the document is read, so each layer gets
+  its own copy rather than sharing one. It is meant for documents that other
+  tools generate. A `$ref` inside the definition it points at is not
+  followed.
+
+The forms mix freely in one document. [Loading data](/guides/data-sources/)
+covers named sources step by step.
+
+## Which source type
+
+`type:` is the kind of data MapLibre draws, not the file format. A
+FlatGeobuf file is still `type: geojson`, and a PMTiles archive of vector
+tiles is still `type: vector`; the `url:` tells maplibre-yaml how to read the
+file ([Large data](/guides/cloud-native-data/)).
+
+| Your data | `type:` | Explained in |
+|---|---|---|
+| A GeoJSON file or URL, or points written in the YAML | `geojson` | [Loading data](/guides/data-sources/) |
+| A large file of features: FlatGeobuf, GeoParquet | `geojson` | [FlatGeobuf](/guides/flatgeobuf/), [GeoParquet](/guides/geoparquet/) |
+| Vector tiles, from a tile server or a PMTiles archive | `vector` | [Loading data › Other kinds of data](/guides/data-sources/#other-kinds-of-data), [PMTiles](/guides/pmtiles/) |
+| Imagery: raster tiles, WMS, a Cloud Optimized GeoTIFF | `raster` | [Loading data › Other kinds of data](/guides/data-sources/#other-kinds-of-data), [COG](/guides/cog/) |
+| Elevation, for hillshading and 3D terrain | `raster-dem` | [Layers › Imagery and elevation](/guides/layers/#imagery-and-elevation), [Map documents › Terrain, sky & projection](/schema/map-config/#terrain-sky--projection) |
+| One picture or video pinned to four corners | `image`, `video` | [Animate a series of images](/examples/gallery/animate-a-series-of-images/), [Add a video](/examples/gallery/add-a-video/) |
+| Data that changes while the page is open | `geojson` with `refresh:` or `stream:` | [Live data](/guides/live-data/) |
+
+### Paths to your own files \{#files-on-your-own-site-relative-paths}
+
+A path without a scheme (`data/cities.geojson`, `/data/cities.geojson`)
+is read relative to the **web page**, not to the YAML file. The rule covers
+every address in a document: a source's `url:` and `tiles:`, `images:`,
+marker icons, `mapStyle`, and a story chapter's pictures and video. On a
+site served from a subfolder, give the element a `base`. Details and the
+notice a wrong path shows: [Loading data › How paths are
+read](/guides/data-sources/#relative-paths).
+
+### Points, lines and polygons written in the YAML \{#geojson-sugar}
+
+A `geojson` source can take `location:`, `locations:`, `region:` or
+`route:` in place of `url:` or `data:`, for a few hand-placed features. They
+are read as ordinary GeoJSON before the document is checked. See [Loading
+data › Write a few points in the YAML](/guides/data-sources/#inline-data).
+
+## What a layer is made of
+
+A layer's `type`, `source`, `source-layer`, `paint`, `layout`, `filter`,
+`minzoom` and `maxzoom` are MapLibre's, unchanged: the
+[MapLibre style spec](https://maplibre.org/maplibre-style-spec/layers/)
+documents every `paint` and `layout` property, and
+[Layers & styling](/guides/layers/) shows each layer type. maplibre-yaml adds
+these keys:
+
+| Key | What it adds | Explained in |
+|---|---|---|
+| `interactive:` | Popups, hover highlights and tooltips, camera moves on click | [Popups, hover & controls](/guides/popups/) |
+| `classify:` | Colours or sizes by class, with a legend, without writing the expression | [Thematic maps & legends](/guides/thematic-maps/) |
+| `legend:` | The layer's own legend entry, or `false` to leave it out | [Thematic maps › The legend](/guides/thematic-maps/#the-legend) |
+| `label:`, `toggleable:` | A checkbox in the map's layer panel | [Layers › Show a layer only at some zooms](/guides/layers/#show-a-layer-only-at-some-zooms) |
+| `visible:` | Start the layer hidden | [Layers › Show a layer only at some zooms](/guides/layers/#show-a-layer-only-at-some-zooms) |
+| `before:` | Draw the layer under one of the basemap's layers | [Layers › Layer order](/guides/layers/#layer-order) |
+| `effect:` | An experimental shader effect drawn over the layer | [Effects](/guides/effects/) |
+
+### Popups \{#popups}
+
+A popup is a layer's `interactive.click.popup`: a list of HTML elements
+filled with the clicked feature's properties. How to write one, and every
+kind of item it can hold, is in [Popups, hover & controls › Choose what the
+popup shows](/guides/popups/#choose-what-the-popup-shows). A popup that opens
+at a fixed place, with no feature under it, is a document's
+[`popups:`](/schema/map-config/#popups).
+
+### Number formats
+
+A popup item with `format:` shows a number in the reader's language, such as
+8,336,817 or 8.336.817. See [Popups › Format
+numbers](/guides/popups/#format-numbers).
+
+### `classify:` \{#classify}
+
+`classify:` turns a property into classes (your own breaks, breaks computed
+from the data, or categories), writes the colour expression, and adds the
+classes to the legend. See [Thematic maps & legends](/guides/thematic-maps/).
+
+## The order layers draw in
+
+Layers draw in the order the document lists them, the first at the bottom,
+and all of them above the basemap. A `background` layer is no exception: it
+covers the basemap unless it is translucent or slid under it with `before:`.
+To draw a layer under part of the basemap, such as its place names, give
+`before:` the id of that basemap layer ([Layers › Layer
+order](/guides/layers/#layer-order)).
+
+## Troubleshooting
+
+- **A layer whose `source:` names a source the document doesn't define**
+  fails validation at that line. Check the spelling against `sources:`; names
+  are case-sensitive.
+- **"Source reference not found: #/sources/quake"**: the `$ref` names a
+  source missing from the document's top-level `sources:` (a block's own
+  `sources:` aren't searched). `mlym validate` and the map report it at the
+  `$ref` line, with the closest name as a suggestion.
+- **`source: "#/sources/quakes"` fails validation**: a reference needs the
+  object form, `source: { $ref: "#/sources/quakes" }`, or the bare name.
+
+The layer-by-layer checks for a map that draws nothing are in
+[Troubleshooting](/troubleshooting/).

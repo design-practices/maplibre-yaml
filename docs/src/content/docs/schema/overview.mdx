@@ -1,214 +1,113 @@
 ---
 title: Format overview
-description: Understanding the maplibre-yaml configuration schema
+description: The two kinds of maplibre-yaml document, how one is laid out, how it is checked, and where each key is explained and listed.
 ---
 
-:::tip[Complete field reference]
-This guide explains the fields and shows them in use. For every key — type, default, allowed values, and description, generated from the schemas so it always matches the validator — see the generated [YAML reference](/reference/yaml/).
-:::
+maplibre-yaml draws a MapLibre map from a YAML document. This page shows the
+shape every document shares, how a document is checked, and which page
+explains each part. To look up one key, its type and its default, use the
+generated [YAML reference](/reference/yaml/): it is built from the same
+schemas the validator uses, so it always matches.
 
-The maplibre-yaml schema is built on [Zod](https://zod.dev), providing type-safe configuration with automatic validation and TypeScript type inference.
-
-## Three kinds of document
+## Two kinds of document \{#three-kinds-of-document}
 
 | Document | Starts with | Shown by |
 |---|---|---|
-| A map | `type: map` | `<ml-map src="…">`, the Astro `<Map>` and `<FullPageMap>` components |
-| A story | `type: scrollytelling` | `<ml-scrollytelling src="…">`, the Astro `<Scrollytelling>` component |
-| A multi-page document | `pages:` (no `type:`) | Your own site code, which renders each block (see [root](/schema/root/) and [pages & blocks](/schema/pages/)) |
+| A map document | `type: map` | The `<ml-map src="…">` element; the Astro `<Map>` and `<FullPageMap>` components |
+| A story map | `type: scrollytelling` | The `<ml-scrollytelling src="…">` element; the Astro `<Scrollytelling>` component |
 
-A map or story can also carry a `title:` and `description:`, which name and
-describe it for screen readers ([Accessibility & languages](/guides/accessibility-languages/)).
-Every page outside *Advanced* uses format v1, the default;
-[format v2](/guides/format-v2/) is an opt-in alternative layout of the same
-map. Check any of these files with `npx maplibre-yaml validate file.yaml`
-([The CLI](/cli/getting-started/)).
+A story map is a map plus chapters that move it as the reader scrolls; it is
+explained in [Writing a story file](/schema/scrollytelling/). Every page
+outside *Advanced* uses format v1, the default. [Format v2](/guides/format-v2/)
+is an opt-in layout of the same map, split into what exports to a MapLibre
+style and what only runs on the page.
 
-## Architecture
-
-The schema follows a hierarchical structure:
-
-```
-RootSchema
-├── GlobalConfig (optional)
-├── Layers (optional, named definitions)
-├── Sources (optional, named definitions)
-└── Pages (array, required)
-    └── PageSchema
-        ├── path
-        ├── title
-        └── blocks (array)
-            ├── ContentBlock
-            ├── MapBlock
-            ├── MapFullPageBlock
-            ├── ScrollytellingBlock
-            └── MixedBlock
-```
-
-## Core Concepts
-
-### Type Safety
-
-All configuration is validated at parse time:
-
-```typescript
-import { YAMLParser } from '@maplibre-yaml/core';
-
-const result = YAMLParser.safeParse(yaml);
-if (result.success) {
-  // result.data is fully typed
-  console.log(result.data.pages[0].title);
-} else {
-  // result.errors contains detailed validation errors
-  console.error(result.errors);
-}
-```
-
-### Schema Composition
-
-Schemas are composed from smaller, reusable schemas:
-
-- **Base schemas**: LngLat, ZoomLevel, Color, Expression
-- **Source schemas**: GeoJSON, Vector, Raster, Raster DEM, Image, Video (PMTiles, FlatGeobuf, GeoParquet and COG files use these types with a `url:` to the file; see [Sources](/schema/sources/#cloud-native-files-pmtiles-flatgeobuf-geoparquet-cog))
-- **Layer schemas**: Circle, Line, Fill, Symbol, Heatmap, etc.
-- **Block schemas**: Content, Map, Map (full page), Scrollytelling, Mixed
-- **Page schemas**: Page, Root, GlobalConfig
-
-### Default Values
-
-Many properties have sensible defaults:
+## How a map document is laid out
 
 ```yaml
-config:
-  center: [0, 0]
-  zoom: 2
-  # pitch defaults to 0
-  # bearing defaults to 0
-  # interactive defaults to true
-```
-
-### Optional vs Required
-
-Required properties will cause validation errors if missing:
-
-```yaml
-# ✅ Valid - all required fields present
-type: map
-id: my-map
-config:
-  center: [0, 0]
-  zoom: 2
+type: map                     # which kind of document
+id: earthquakes               # a short name, unique on the page
+title: "Earthquakes this week"
+config:                       # the camera and the basemap
+  center: [-120, 37]          # longitude, latitude
+  zoom: 4
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-```yaml no-validate
-# ❌ Invalid - missing required 'center' and 'zoom'
-type: map
-id: my-map
-config:
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-`mapStyle` is not a required key in the schema, because the Astro map builders can fill it in from a global `defaultMapStyle`. A map without one gets a validation warning (in `mlym validate` too), and the standalone `<ml-map>` element shows an error card instead of the map.
-
-## Validation
-
-### Error Messages
-
-The schema provides detailed, human-readable error messages:
-
-```typescript
-const result = YAMLParser.safeParse(invalidYaml);
-if (!result.success) {
-  result.errors.forEach(err => {
-    console.log(`${err.path}: ${err.message}`);
-  });
-}
-```
-
-Example errors:
-
-```
-pages.0.blocks.0.config.zoom: Expected number, got string
-pages.0.blocks.1: Unknown layer type "invalid". Valid types: circle, line, fill, symbol, raster, fill-extrusion, heatmap, hillshade, color-relief, background.
-```
-
-### Custom Validation
-
-Some schemas include custom validation rules:
-
-```typescript
-// Zoom level must be 0-24
-zoom: z.number().min(0).max(24)
-
-// LngLat must be [lon, lat] where lon is -180 to 180, lat is -90 to 90
-center: z.tuple([
-  z.number().min(-180).max(180),
-  z.number().min(-90).max(90)
-])
-```
-
-## Reference Resolution
-
-The schema supports `$ref` pointers to reuse layers and sources:
-
-```yaml
-# Define once
-layers:
-  myLayer:
-    id: shared-layer
+sources:                      # where the data comes from
+  quakes:
+    type: geojson
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+layers:                       # how it is drawn, bottom first
+  - id: quakes
     type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-
-# Reference multiple times
-pages:
-  - path: "/"
-    title: "Home"
-    blocks:
-      - type: map
-        id: map1
-        config:
-          center: [-100, 40]
-          zoom: 3
-          mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-        layers:
-          - $ref: "#/layers/myLayer"
-      - type: map
-        id: map2
-        config:
-          center: [140, 36]
-          zoom: 4
-          mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-        layers:
-          - $ref: "#/layers/myLayer"
+    source: quakes
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 3, 6, 18]
+      circle-color: "#ef4444"
+controls:                     # buttons around the map
+  navigation: true
 ```
 
-The rules (named layers, root-level sources, and the object form `$ref`
-must take) are in [Reference resolution](/schema/root/#reference-resolution);
-within one map, prefer [named sources](/schema/sources/#named-source-definitions).
+`config:` holds the camera, the basemap and MapLibre's map options. Every
+other key sits beside it, at the top level: putting one inside `config:` is
+the most common mistake, and validation warns about it
+([Map documents › `config:` and the keys beside it](/schema/map-config/#what-goes-inside-config)).
+`paint:` and `layout:` are MapLibre's style properties, unchanged, so the
+[MapLibre style spec](https://maplibre.org/maplibre-style-spec/) is their
+reference.
 
-## Type Inference
+## How a document is checked
 
-Use Zod's type inference for TypeScript projects:
+One validator checks a document everywhere:
 
-```typescript
-import { RootSchema, type z } from '@maplibre-yaml/core/schemas';
+- **`npx maplibre-yaml validate map.yaml`** (or `mlym validate`) checks files
+  from the command line or in CI ([The CLI](/cli/getting-started/)).
+- **Your editor** checks as you type, with the JSON Schema at
+  `https://docs.maplibre-yaml.org/schema/latest/map.schema.json`
+  ([Editor setup](/guides/editor-setup/)).
+- **`<ml-map>`** checks a document when it loads it.
 
-type RootConfig = z.infer<typeof RootSchema>;
-type PageConfig = RootConfig['pages'][number];
-type MapBlock = Extract<PageConfig['blocks'][number], { type: 'map' }>;
+It reports two kinds of problem. An **error**, such as a missing `center:`,
+stops the map: `<ml-map>` shows an error card naming the line. A **warning**,
+such as a key in the wrong place or a map with no `mapStyle`, leaves the map
+drawing; the CLI prints it, and `<ml-map>` shows it as an author hint while
+you develop. Each message names the line and, where it can, the fix:
+
+```text
+error config.zoom: config is missing zoom: — add zoom: 12 (a number from 0 to 24).
+  at line 4, column 3
 ```
 
-## Next Steps
+To check documents from your own code, with the same messages, see
+[Parsing & validating in your own code](/guides/parsing-and-validating/).
 
-Explore specific schema sections:
+## Where each part is explained
 
-- [Root Configuration](/schema/root/) - Top-level configuration
-- [Pages & Blocks](/schema/pages/) - Page and block structure
-- [Map Configuration](/schema/map-config/) - Map settings and properties
-- [Data Sources](/schema/sources/) - GeoJSON, Vector, Raster sources
-- [Layer Types](/schema/layers/) - All layer types and styling
-- [Interactivity](/schema/interactivity/) - Events, popups, and controls
-- [Scrollytelling](/schema/scrollytelling/) - Narrative maps with chapters
+| Part | Explained in | Every key in |
+|---|---|---|
+| Camera, basemap, 3D, markers, images, state | [Map documents](/schema/map-config/) | [Map reference](/reference/yaml/map/) |
+| Sources and how layers use them | [Sources & layers](/schema/sources-and-layers/), [Loading data](/guides/data-sources/) | [Sources reference](/reference/yaml/sources/) |
+| Layer types and styling | [Layers & styling](/guides/layers/) | [Layers reference](/reference/yaml/layers/) |
+| Popups, hover, click actions | [Popups, hover & controls](/guides/popups/) | [`interactive`](/reference/yaml/layers/#interactive) |
+| Controls | [Popups › Add map controls](/guides/popups/#add-map-controls) | [`controls`](/reference/yaml/map/#controls) |
+| Classes and legends | [Thematic maps & legends](/guides/thematic-maps/) | [`classify`](/reference/yaml/layers/#classify), [`legend`](/reference/yaml/map/#legend) |
+| Story maps | [Writing a story file](/schema/scrollytelling/) | [Scrollytelling reference](/reference/yaml/scrollytelling/) |
+| Format v2 | [Format v2](/guides/format-v2/) | [Map reference (v2)](/reference/yaml/map-v2/) |
+| The elements' attributes, events and slots | [HTML pages: the `<ml-map>` element](/integrations/web-components/) | [`<ml-map>` & `<ml-scrollytelling>` reference](/reference/elements/) |
+
+## TypeScript types
+
+`@maplibre-yaml/core/schemas` exports the schemas the validator uses and a
+type for each document (`MapBlock`, `ScrollytellingBlock`) and for the
+`config:`, `controls:` and `legend:` blocks (`MapConfig`, `ControlsConfig`,
+`LegendConfig`). They describe a document after it is parsed, with defaults
+filled in. Every export is listed in the
+[TypeScript API](/reference/api/maplibre-yaml/core/schemas/); to parse and
+validate a document in your own code, see
+[Parsing & validating in your own code](/guides/parsing-and-validating/).
+
+## Moved
+
+### Reference resolution
+
+How a layer can point at a source by name, or copy it with `$ref`, is in
+[Sources & layers › How a layer finds its source](/schema/sources-and-layers/#named-source-definitions).

@@ -1,138 +1,424 @@
 ---
-title: Map configuration
-description: Map settings, view options, controls, and legends
+title: Map documents
+description: How a type map document is put together — config and the keys beside it, the basemap, the camera and fitting to data, 3D terrain, sky and light, markers, fixed popups, images, and values readers can change.
 ---
 
-:::tip[Complete field reference]
-This guide explains the fields and shows them in use. For every key — type, default, allowed values, and description, generated from the schemas so it always matches the validator — see the generated [Map block reference](/reference/yaml/map/) (and [format v2](/reference/yaml/map-v2/)).
-:::
+import LiveMap from "../../../components/LiveMap.astro";
+import { Code } from "@astrojs/starlight/components";
+import mapDocument from "../../../../public/configs/map-document-demo.yaml?raw";
 
-Map configuration defines the initial view, interaction settings, controls, and legends for map blocks. All configuration follows the [MapLibre GL JS API](https://maplibre.org/maplibre-gl-js/docs/API/).
+A map document is one YAML file that starts with `type: map`. `<ml-map>`
+and the Astro `<Map>` component draw it. This page explains the parts that
+aren't data and layers: the camera, the basemap, 3D, the extras placed on the
+map, and values readers can change. Sources and layers have their own page,
+[Sources & layers](/schema/sources-and-layers/). For every key with its type
+and default, see the [map reference](/reference/yaml/map/).
 
-## Map Config Structure
+## A complete map document \{#complete-examples}
 
-```yaml
-- type: map
-  id: my-map
-  title: "..."         # The map's name for screen readers (optional)
-  description: "..."   # What it shows, in a sentence or two (optional)
-  config:              # Map configuration
-    center: [lng, lat]
-    zoom: 12
-    mapStyle: "..."
-    pitch: 0
-    bearing: 0
-    # ... additional options
-  state: {...}         # Runtime-tunable values (optional)
-  parameters: {...}    # Control metadata for state keys → params panel (optional)
-  markers: [...]       # Standalone DOM pins (optional)
-  images: {...}        # Named images for icons and patterns (optional)
-  light: {...}         # Style-spec light for fill-extrusion shading (optional)
-  layers: [...]        # Map layers
-  controls: {...}      # Map controls (optional)
-  legend: {...}        # Legend (optional)
+<Code code={mapDocument} lang="yaml" title="earthquakes.yaml" />
+
+<LiveMap src="/configs/map-document-demo.yaml" height="380px" caption="A week of earthquakes, a marker, two controls and a legend" />
+
+Only `type`, `id`, `config.center` and `config.zoom` are required. Leaving
+out `mapStyle` is allowed, but it gets a warning and `<ml-map>` shows an
+error card instead of the map, so treat it as required too
+([below](#mapstyle-forms)).
+
+## `config:` and the keys beside it \{#what-goes-inside-config}
+
+`config:` holds the camera, the basemap, and any other
+[MapLibre map option](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/)
+(`cooperativeGestures`, `hash`, `maxZoom` …), which go to MapLibre as written.
+Everything else sits beside `config:`, at the top level of the document:
+`title`, `description`, `sources`, `layers`, `markers`, `popups`, `images`,
+`terrain`, `sky`, `projection`, `light`, `state`, `parameters`, `controls`
+and `legend`.
+
+This is the most common mistake in a map document. A top-level key nested
+inside `config:` does nothing, and validation warns:
+
+```text
+"markers" belongs at the top level, next to config:, not inside it.
 ```
 
-## Required Properties
+A key under `config:` that is neither a MapLibre option nor one of these warns
+as `Unknown key "fooBar" in config`.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `center` | [number, number] | Initial map center [longitude, latitude] |
-| `zoom` | number | Initial zoom level (0-24) |
-| `mapStyle` | string \| object | A MapLibre style URL, a style object, or a Protomaps basemap from a `.pmtiles` file (below) |
+## The basemap: `mapStyle` \{#mapstyle-forms}
 
-Without `mapStyle:`, validation (and `mlym validate`) warns and `<ml-map>`
-shows an error card instead of the map. Only the Astro map builders can fill
-it in, from a site-wide `defaultMapStyle`.
+The basemap is the map under your layers: streets, terrain, labels. Set it
+with `config.mapStyle`, in one of four forms:
 
-### Example
+| Form | Example | Use it for |
+|---|---|---|
+| A style URL | `mapStyle: "https://tiles.openfreemap.org/styles/liberty"` | A hosted basemap (OpenFreeMap, MapTiler, Stadia …) or a `style.json` on your site |
+| A style object | `mapStyle: { version: 8, sources: {…}, layers: […] }` | A small style written in the document |
+| A Protomaps basemap | `mapStyle: { pmtiles: data/nyc.pmtiles, flavor: dark }` | A full basemap from one `.pmtiles` file, with no API key or tile server |
+| A `.pmtiles` path | `mapStyle: data/nyc.pmtiles` | The same, with the default light flavor |
+
+An object with `version`, `sources` or `layers` is a style object; any other
+object is the Protomaps form. Making and hosting the `.pmtiles` file, and the
+flavors and label languages, are in
+[Host your own basemap](/guides/host-your-own-basemap/).
+
+Without `mapStyle`, `mlym validate` warns "No mapStyle: this map has no
+basemap", and `<ml-map>` shows an error card in place of the map. The Astro
+map builders are the exception: they can fill it in from a site-wide
+`defaultMapStyle` ([Global configuration](/integrations/astro/#global-configuration)).
+
+## The camera
+
+`center` (`[longitude, latitude]`) and `zoom` place the camera when the map
+opens. `pitch` tilts it, in degrees from straight down, and `bearing` turns
+it, in degrees clockwise from north.
+
+Coordinates are always **longitude first**, though many map sites show
+latitude first. When a `center:` only makes sense the other way round (it
+would land among the document's own data or markers), validation and the map
+both say so:
+
+```text
+center is [40.75, -73.98] — coordinates are [longitude, latitude]; did you mean [-73.98, 40.75]?
+```
+
+### Fit to bounds
+
+`bounds` frames an area instead of a point. It takes either of MapLibre's
+forms, longitude first:
+
+```yaml
+config:
+  center: [-74.006, 40.7128]            # used if the bounds can't apply
+  zoom: 12
+  bounds: [-74.3, 40.5, -73.7, 40.9]   # west, south, east, north
+  # or: bounds: [[-74.3, 40.5], [-73.7, 40.9]]
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+```
+
+A value with latitude and longitude swapped gets an error or a warning with
+the corrected value to copy. Longitudes past ±180 are allowed, so a box can
+cross the antimeridian (`[100, -50, 290, 62]` frames the Pacific).
+`maxBounds` and a story chapter's `fitBounds` take the same forms.
+
+### Fit to a source's data
+
+`fitTo` frames whatever a source holds, so the camera follows the data
+rather than coordinates you typed. Name a GeoJSON, FlatGeobuf, GeoParquet or
+COG source:
+
+```yaml
+type: map
+id: alpine-countries
+config:
+  center: [0, 20]       # before the data arrives, and if it never does
+  zoom: 2
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  fitTo:
+    source: countries
+    maxZoom: 9
+sources:
+  countries:
+    type: geojson
+    url: "https://docs.maplibre-yaml.org/gallery-assets/alpine-countries.geojson"
+layers:
+  - id: borders
+    type: line
+    source: countries
+    paint:
+      line-color: "#e63946"
+      line-width: 1.5
+```
+
+- **The map opens already framed**, with no jump. `<ml-map>` starts loading
+  the file as soon as it reads the document and builds the map on the data's
+  extent. The file is downloaded once; the source uses the same copy.
+- **A slow file doesn't hold up the map.** After 1.5 seconds the map opens at
+  `center` and `zoom`, then frames the data when it arrives. The element's
+  `fitToWaitMs` property changes the wait. `ml-map:camera-fit` fires when the
+  fit applies.
+- **Padding.** By default the data keeps a margin so features at the edge
+  are drawn whole, plus room for the controls along the bottom.
+  `padding: 40` sets it in pixels; `padding: 0` frames the exact extent.
+- **`maxZoom`** keeps a single point, or a small area, from zooming all the
+  way in.
+- **Tiled sources** (vector tiles, PMTiles, raster tiles) have no extent the
+  browser can read. `fitTo` on one warns once and keeps `center` and `zoom`.
+- `fitTo: countries` is short for `fitTo: { source: countries }`. When both
+  `fitTo` and `bounds` are set, `fitTo` wins. A refresh of the data doesn't
+  re-fit: after the map opens, the reader owns the camera.
+
+### Limit where readers can go \{#constraints}
+
+`minZoom`, `maxZoom`, `minPitch`, `maxPitch` and `maxBounds` keep readers
+near the data. They help most on a small map in a page, where a stray scroll
+can lose the data:
 
 ```yaml
 config:
   center: [-74.006, 40.7128]
   zoom: 12
+  minZoom: 9
+  maxBounds: [-74.3, 40.5, -73.7, 40.9]
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
-### `mapStyle` forms
+### How readers can move the map \{#interaction-settings}
 
-| Form | Example | Use it for |
-|---|---|---|
-| A style URL | `mapStyle: "https://tiles.openfreemap.org/styles/liberty"` | A hosted basemap (OpenFreeMap, MapTiler, Stadia, …) or a `style.json` on your site |
-| A style object | `mapStyle: { version: 8, sources: {...}, layers: [...] }` | A small style written in the document |
-| A Protomaps basemap | `mapStyle: { pmtiles: data/nyc.pmtiles, flavor: light }` | A full basemap from one `.pmtiles` file, with no API key and no tile server |
-| A `.pmtiles` file | `mapStyle: data/nyc.pmtiles` | The same Protomaps basemap with its defaults (light, labels in the page's language) |
-
-The Protomaps form takes these keys:
-
-| Key | Default | Meaning |
-|---|---|---|
-| `pmtiles` | (required) | The `.pmtiles` file: a path (relative to the page, with `base` applied), a URL, or `pmtiles://…` |
-| `flavor` | `light` | `light`, `dark`, `white`, `grayscale` or `black` |
-| `lang` | the page's language, else `en` | Label language, such as `en`, `es`, `fr`, `de`, `ja` or `zh-Hans` |
-| `glyphs` | Protomaps' hosted fonts | A glyph URL template (`…/{fontstack}/{range}.pbf`), to host the fonts yourself |
-| `sprite` | Protomaps' hosted sprite for the flavor | A sprite URL, to host the icons yourself |
+Each way of moving the map is a MapLibre option in `config:`, on by default.
+`interactive: false` makes a still map, for an illustration. To turn off
+single gestures:
 
 ```yaml
 config:
-  center: [-73.99, 40.70]
-  zoom: 14
-  mapStyle:
-    pmtiles: data/brooklyn.pmtiles
-    flavor: dark
+  center: [-74.006, 40.7128]
+  zoom: 12
+  scrollZoom: false     # the page scrolls past the map
+  dragRotate: false     # north stays up
+  touchPitch: false     # two fingers don't tilt it on a phone
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
-An object with `version`, `sources` or `layers` is a style object; any other
-object is the Protomaps form, so the two can't be confused. The file has to be
-a Protomaps basemap (one cut from the Protomaps planet build, say); the map
-shows a notice for any other kind of PMTiles. See
-[Host your own basemap](/guides/host-your-own-basemap/) for
-making the file and hosting it. In format v2 the same value goes under
-`style.basemap`.
+`hash: true` keeps the view in the page's address (`#12/40.7128/-74.006`),
+so a reader can bookmark or share it. The full list of options is under
+[`config` in the map reference](/reference/yaml/map/#config-interactive).
+Gallery: [Disable scroll zoom](/examples/gallery/disable-scroll-zoom/),
+[Display a non-interactive map](/examples/gallery/display-a-non-interactive-map/).
 
-### What goes inside `config:`
+## Terrain, sky & projection
 
-`config:` holds the camera and map options on this page and any other
-[MapLibre map option](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/)
-(`cooperativeGestures`, `zoomSnap`, …), which are passed to MapLibre as they
-are. Everything else is a document-root key, a sibling of `config:`:
-`layers`, `sources`, `markers`, `legend`, `controls`, `state`, `popups`,
-`images`, `terrain`, and (in a story) `theme` and `chapters`. Validation warns
-when one of those is nested inside `config:`, where it does nothing
-(`"markers" belongs at the top level, next to config:, not inside it`), and
-when `config:` has a key that is neither (`Unknown key "fooBar" in config`).
+`terrain:`, `sky:` and `projection:` sit beside `config:` and take MapLibre's
+own shapes, so what you write is what an exported `style.json` carries.
+Terrain needs elevation data: a `raster-dem` source, declared under
+`sources:` and named in `terrain.source`:
 
-Coordinates are always `[longitude, latitude]`, longitude first (map sites
-often show latitude first). When a `center:` (or a story chapter's `center:`)
-looks swapped -- written the other way round, it would land among the
-document's own data, markers or other centers -- validation and the map's
-notice say so: `center is [40.75, -73.98] — coordinates are [longitude,
-latitude]; did you mean [-73.98, 40.75]?`. A latitude beyond about ±85, which
-a web map can't show, warns too.
+```yaml
+type: map
+id: alps
+config:
+  center: [11.39, 47.27]
+  zoom: 12
+  pitch: 70
+  maxPitch: 85
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+sources:
+  elevation:
+    type: raster-dem
+    url: "https://tiles.mapterhorn.com/tilejson.json"
+    encoding: terrarium
+terrain:
+  source: elevation
+  exaggeration: 1.5
+sky:
+  sky-color: "#199EF3"
+  horizon-color: "#ffffff"
+  fog-color: "#ffffff"
+  fog-ground-blend: 0.1
+projection:
+  type: globe
+controls:
+  navigation: true
+  terrain: true         # a 3D on/off button
+```
 
-## Runtime state and parameters
+- **Set `encoding`.** It defaults to `mapbox`, even when the elevation
+  source's TileJSON says otherwise. Mapterhorn's tiles are `terrarium`.
+- **Give a hillshade layer its own `raster-dem` source.** One source serving
+  both terrain and a `hillshade` layer draws the shading at lower quality.
+- **The sky shows only when the camera can see the horizon**: tilt it with
+  `pitch`. Fog only affects 3D terrain. `sky: {}` turns on MapLibre's
+  default sky.
+- **`projection: { type: globe }`** draws the world as a globe when zoomed
+  out; `mercator` is the default.
+- A `terrain.source` that names no `raster-dem` source warns once, and the
+  map stays flat.
 
-`state:` declares runtime-tunable values a map can change after it loads, read
-from expressions via `global-state`. It is a document-root key — a sibling of
-`config:`, not nested inside it — and it uses the MapLibre style spec's own
-shape, `{ key: { default: value } }`:
+Gallery: [3D terrain](/examples/gallery/3d-terrain/),
+[Sky, fog, terrain](/examples/gallery/sky-fog-terrain/),
+[Display a globe with an atmosphere](/examples/gallery/display-a-globe-with-an-atmosphere/).
+
+### Runtime requirements
+
+Each of these needs a minimum maplibre-gl. On an older one, the map logs one
+console warning naming the version and draws without that part:
+
+| Key | Needs maplibre-gl | On an older runtime |
+|-----|-------------------|---------------------|
+| `terrain:` | 2.2 | Every supported version has it |
+| `sky:` | 4.5 | No sky or fog |
+| `sky.atmosphere-blend` | 5.0 (globe only) | No atmosphere |
+| `projection: globe` | 5.0 | A flat (mercator) map |
+| `controls.globe` | 5.0 | No globe button |
+
+### Light
+
+`light:` sets the one light that shades `fill-extrusion` faces, such as 3D
+buildings. It takes the style spec's
+[light](https://maplibre.org/maplibre-style-spec/light/) properties:
+`anchor` (`map` keeps the shading fixed as the map turns), `position`,
+`color` and `intensity`.
+
+```yaml
+type: map
+id: lit
+config:
+  center: [-74.0118, 40.7075]
+  zoom: 15.9
+  pitch: 60
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+light:
+  anchor: map
+  position: [1.15, 239, 30]   # distance, direction from north, angle from overhead
+  intensity: 0.5
+sources:
+  omt:
+    type: vector
+    url: "https://tiles.openfreemap.org/planet"
+layers:
+  - id: buildings
+    type: fill-extrusion
+    source: omt
+    source-layer: building
+    paint:
+      fill-extrusion-color: "#e5e7eb"
+      fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
+```
+
+A key the light doesn't have is a validation error. The
+[crosshatch classic](/examples/gallery/crosshatch/) uses `light:` to shade
+its buildings.
+
+### On export
+
+Terrain, sky, projection and light all export to `style.json` as written,
+replacing any the basemap had. Export notes a version difference when you
+target an older maplibre-gl ([Export classes](/guides/export-classes/)).
+
+## Markers, fixed popups and images
+
+### Markers
+
+`markers:` places pins on the map, each with an optional popup that opens
+when the pin is clicked:
+
+```yaml
+markers:
+  - at: [-73.985, 40.748]
+    color: "#e63946"
+    popup:
+      - h3: [{ str: "Empire State Building" }]
+```
+
+`at` is `[longitude, latitude]`. `icon:` replaces the pin with an image, and
+`size:` scales it. A marker is a page element, not a map layer: for many
+points, use a `circle` or `symbol` layer, which also gets popups and hover.
+`mlym emit --with-fallbacks` exports markers as a symbol layer with generated
+pins, without their popups ([Export classes](/guides/export-classes/)).
+
+### Popups at fixed places \{#popups}
+
+`popups:` opens a popup at a coordinate when the map loads, with no feature
+or marker under it: a caption, a welcome note, a label for an area.
+
+```yaml
+popups:
+  - at: [-96, 37.8]
+    closeOnClick: false      # stays open when the map is clicked
+    content:
+      - h3: [{ str: "Hello from the middle of the US" }]
+```
+
+`content` is written like any popup ([Popups › Choose what the popup
+shows](/guides/popups/#choose-what-the-popup-shows)), but there is no
+feature, so `property:` items show nothing. Popups that open when a feature
+is clicked belong on the layer:
+[Popups, hover & controls](/guides/popups/). Fixed popups are left out of an
+exported `style.json`.
+
+### Images
+
+`images:` names pictures for symbol layers (`icon-image`) and patterns
+(`fill-pattern`, `line-pattern`). Each is a URL, or an object with
+`sdf: true` for a one-colour icon you can tint with `icon-color`:
+
+```yaml
+type: map
+id: icons
+config:
+  center: [-73.98, 40.75]
+  zoom: 12
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+images:
+  logo: "https://maplibre.org/maplibre-gl-js/docs/assets/osgeo-logo.png"
+  pin:
+    url: "https://maplibre.org/maplibre-gl-js/docs/assets/custom_marker.png"
+    sdf: true
+sources:
+  places:
+    type: geojson
+    data:
+      type: FeatureCollection
+      features:
+        - type: Feature
+          geometry: { type: Point, coordinates: [-74.0, 40.76] }
+          properties: { kind: logo }
+        - type: Feature
+          geometry: { type: Point, coordinates: [-73.96, 40.74] }
+          properties: { kind: pin }
+layers:
+  - id: logos
+    type: symbol
+    source: places
+    filter: ["==", ["get", "kind"], "logo"]
+    layout:
+      icon-image: logo
+      icon-allow-overlap: true
+  - id: pins
+    type: symbol
+    source: places
+    filter: ["==", ["get", "kind"], "pin"]
+    layout:
+      icon-image: pin
+      icon-allow-overlap: true
+    paint:
+      icon-color: "#e63946"   # sdf: true makes the pin tintable
+```
+
+- **Images load before the layers**, so the first frame already has them.
+- **Keep `sdf` images and ordinary ones in separate layers**, as here:
+  MapLibre can't draw both kinds in one symbol layer.
+- **The image's server must allow cross-origin requests (CORS)**, including
+  on any redirect. A map draws an image as a texture, which the browser only
+  allows from a server that permits it, so an image that shows fine in an
+  `<img>` can still fail here. A failed image warns once and the rest of the
+  map draws.
+- **On export**, `mlym emit` downloads each image into the exported sprite.
+  It can't download a relative path, and it can't rewrite an `icon-image`
+  computed from a property; it reports both. Export only documents whose
+  image URLs you trust: the files are copied into what you publish.
+
+## Values readers can change: state and parameters \{#runtime-state-and-parameters}
+
+`state:` declares values the map can change after it loads. Layers read them
+with MapLibre's `global-state` expression. `parameters:` describes a control
+for each value, and declaring it shows a panel of those controls on the map:
 
 ```yaml
 type: map
 id: massing
+config:
+  center: [-73.985, 40.748]
+  zoom: 15.5
+  pitch: 55
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 state:
   scenario:
     default: built
 parameters:
   scenario:
     label: Massing scenario
-    type: enum
+    type: select
     values: [built, flat]
-config:
-  center: [-73.985, 40.748]
-  zoom: 15.5
-  pitch: 55
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 sources:
   omt:
     type: vector
@@ -151,1028 +437,76 @@ layers:
         - 3
 ```
 
-`parameters:` carries the presentation metadata a control UI needs to render a
-picker for a state key — the library owns the parameter's shape, the host owns
-how it looks. It holds no `default`; the value lives in `state:`.
-
-```yaml
-parameters:
-  scenario:
-    label: Massing scenario
-    type: enum
-    values: [built, flat]
-```
-
-Declaring `parameters:` renders the built-in **params panel** (top-right, in
-the same corner system as the legend): each entry becomes a control writing
-its state key via `setGlobalStateProperty`, seeded from the key's `state:`
-default. Each entry:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `label` | string | Control caption (defaults to the state key) |
-| `type` | string | `range`, `select` (alias `enum`), or `toggle`; unrecognized types render a labeled read-only row. Omitted: inferred — `values` present → select, boolean default → toggle |
-| `values` | array | The options, for `select` — authored value types survive (a numeric enum writes numbers) |
-| `min` / `max` | number | Bounds, for `range` (both required — a range without them renders read-only) |
-| `step` | number | Increment, for `range` |
-
-The panel also lists a **visibility checkbox for every layer with an
-authored `label:`** (set `toggleable: false` to opt a labeled layer out).
-The label is the opt-in on purpose: `toggleable` defaults to `true` on
-every layer, so it cannot signal intent by itself. Layer toggles write
-plain layout visibility and work on every supported runtime; parameter
-controls need maplibre-gl ≥ 5.6 and degrade to one notice below it. Panel
-writes are observable as `ml-map:parameter-change` and
-`ml-map:layer-visibility` events.
-
-:::note
-`state` and `global-state` require **maplibre-gl 5.6.0 or later**, and are
-supported on maplibre-gl JS only. When a document is compiled with `mlym emit`
-for an older runtime — or for cross-renderer portability — the emitter inlines
-each state key's default and drops the `state` block.
-:::
-
-## Markers
-
-`markers:` places standalone DOM pins (`maplibregl.Marker`) — a document-root
-key, a sibling of `config:`. Each entry:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `at` | [number, number] | Marker position [longitude, latitude] (required) |
-| `color` | color | Pin color (default pin only; ignored when `icon` is set) |
-| `size` | number | Scale multiplier over MapLibre's default pin (1 = default) |
-| `icon` | string | Image URL replacing the default pin |
-| `popup` | popup content | Popup opened by clicking the marker — same structured content as [layer popups](/schema/layers/#popups) |
-
-```yaml
-type: map
-id: pins
-config:
-  center: [-73.98, 40.75]
-  zoom: 12
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-markers:
-  - at: [-73.985, 40.748]
-    color: "#e63946"
-    popup:
-      - h3:
-          - str: Empire State Building
-```
-
-Markers **export with a fallback** (class `exports-with-fallback`): `mlym emit
---with-fallbacks` lowers them to a symbol layer with generated pin sprites
-(the pins render; dragging and popup content do not compile), and `--strict`
-refuses marker documents. `icon:` URLs are fetched into the document sprite
-at compile time, so exported icon markers keep their images. See the [export
-classes reference](/guides/export-classes/).
-
-## Popups
-
-`popups:` opens standalone popups at coordinates: a popup with no layer
-under it and no marker above it (MapLibre's `new Popup().setLngLat(...)
-.addTo(map)`). It is a document-root key, a sibling of `config:`. (For a
-popup when a feature is clicked, see
-[Popups, hover & controls](/guides/popups/).) Each entry:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `at` | [number, number] | Popup anchor [longitude, latitude] (required) |
-| `content` | popup content | Same structured content as [layer popups](/schema/layers/#popups) (required) |
-| `closeButton` | boolean | Show the close button (MapLibre default: `true`) |
-| `closeOnClick` | boolean | Close when the map is clicked (MapLibre default: `true`) |
-| `maxWidth` | string | CSS max-width, e.g. `"300px"` (MapLibre default: `240px`) |
-
-```yaml
-type: map
-id: hello
-config:
-  center: [-96, 37.8]
-  zoom: 3
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-popups:
-  - at: [-96, 37.8]
-    closeOnClick: false
-    content:
-      - h1:
-          - str: Hello World!
-```
-
-Popups are open from load. Content runs through the same trust gate as every
-other popup: tags are allowlisted, `str:` values are escaped, and there is no
-feature, so `property:` lookups resolve empty. A marker with its pin hidden
-can't stand in for this. A marker's popup opens on a click on the pin, so a
-pinless marker's popup could never open.
-
-Popups don't export (class `no-export`). `mlym emit` reports them as a
-contract warning, and the emitted style has no popups.
-
-## Images
-
-`images:` declares named images for symbol layers and patterns — a
-document-root key, a sibling of `config:`. Each entry is a URL string or an
-options object:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `url` | string | Image URL (required; a bare string is shorthand for `{ url }`) |
-| `sdf` | boolean | Treat as a signed-distance-field icon (tintable via `icon-color`) |
-| `pixelRatio` | number | Source density — `2` means the file is @2x its CSS size |
-
-```yaml
-type: map
-id: iconic
-config:
-  center: [-73.98, 40.75]
-  zoom: 12
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-images:
-  logo: "https://maplibre.org/maplibre-gl-js/docs/assets/osgeo-logo.png"
-  pin:
-    url: "https://maplibre.org/maplibre-gl-js/docs/assets/custom_marker.png"
-    sdf: true
-sources:
-  pts:
-    type: geojson
-    data:
-      type: FeatureCollection
-      features:
-        - type: Feature
-          geometry: { type: Point, coordinates: [-74.0, 40.76] }
-          properties: { kind: logo }
-        - type: Feature
-          geometry: { type: Point, coordinates: [-73.96, 40.74] }
-          properties: { kind: pin }
-layers:
-  - id: logos
-    type: symbol
-    source: pts
-    filter: ["==", ["get", "kind"], "logo"]
-    layout:
-      icon-image: logo
-      icon-size: 1.5
-      icon-allow-overlap: true
-  - id: pins
-    type: symbol
-    source: pts
-    filter: ["==", ["get", "kind"], "pin"]
-    layout:
-      icon-image: pin
-      icon-allow-overlap: true
-    paint:
-      icon-color: "#e63946"   # sdf: true makes the image tintable
-```
-
-Live, every image loads **before** layers are added, so references resolve
-on first render. Images load with `crossOrigin="anonymous"` (a WebGL
-texture must be untainted), so the host **must allow cross-origin access**
-on every response in the chain, redirects included — a host that serves
-plain `<img>` tags fine can still fail here. A failed image warns once and
-the document keeps rendering. On export the construct fully compiles (class `exports`):
-`mlym emit` fetches each URL into the document sprite and rewrites literal
-references (`icon-image`, `fill-pattern`, `line-pattern`,
-`background-pattern`, `fill-extrusion-pattern`) to `mlym:<name>` —
-`--strict` accepts image documents. Dynamic references
-(`["image", ["get", "icon"]]`) resolve live but cannot be rewritten at
-compile time; emit reports them, and runtime values naming declared images
-must spell `mlym:<name>` themselves. A `*-pattern` (or `icon-image`) may be
-an expression that *selects* among declared names —
-`fill-pattern: [match, [get, class], sand, earth, landuse]` — and every
-literal output is rewritten, with no warning. Relative URLs render live but cannot
-be fetched at compile time — emit reports them as lossy, so `--strict`
-refuses them.
-
-:::caution
-`mlym emit` performs a network request for **every** `images:` entry and
-marker `icon:` URL in the document (bounded: 30s timeout, 20MB and
-1024px-per-image ceilings). Only emit documents whose URLs you trust — the
-fetched bytes are embedded verbatim into the sprite files you publish.
-:::
-
-## Terrain, sky & projection
-
-Three document-root keys, siblings of `config:`, author the map-level 3D
-scene. Each one is the style spec's own root property, in the spec's own
-shape, so what you write is exactly what an exported `style.json` carries. In
-a format-v2 document they live under `style:` instead
-(`style.terrain`, `style.sky`, `style.projection`).
-
-```yaml
-type: map
-id: alps
-config:
-  center: [11.39, 47.27]
-  zoom: 12
-  pitch: 70
-  maxPitch: 85
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-sources:
-  terrainSource:
-    type: raster-dem
-    url: "https://tiles.mapterhorn.com/tilejson.json"
-    encoding: terrarium
-terrain:
-  source: terrainSource
-  exaggeration: 1.5
-sky:
-  sky-color: "#199EF3"
-  horizon-color: "#ffffff"
-  fog-color: "#ffffff"
-  fog-ground-blend: 0.1
-  atmosphere-blend: ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0]
-projection:
-  type: globe
-controls:
-  navigation: true
-  globe: true
-  terrain: true
-```
-
-### `terrain:`
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `source` | string | Name of a `raster-dem` source: one in `sources:`, or one the basemap supplies (required) |
-| `exaggeration` | number ≥ 0 | Vertical exaggeration (spec default `1`) |
-
-Declare the DEM as a **named** source. Give a `hillshade` layer its own DEM
-source rather than sharing the terrain's; one source serving both renders at
-reduced quality. A `source` that names nothing, or a non-DEM source, warns
-once and the map renders flat.
-
-### `sky:`
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `sky-color` | color or expression | The sky above the horizon |
-| `horizon-color` | color or expression | The band where sky meets fog |
-| `fog-color` | color or expression | Fog over distant 3D terrain |
-| `sky-horizon-blend` | 0–1 or expression | How far the horizon color blends up into the sky |
-| `horizon-fog-blend` | 0–1 or expression | How far the horizon color blends down into the fog |
-| `fog-ground-blend` | 0–1 or expression | Where fog starts: `0` at the camera, `1` at the horizon |
-| `atmosphere-blend` | 0–1 or expression | Globe atmosphere opacity; draws under globe projection only |
-
-`sky: {}` turns on MapLibre's default sky. The sky is only visible when a
-pitched camera can see the horizon, and fog only affects 3D terrain.
-
-### `projection:`
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `type` | `mercator` \| `globe` | `mercator` is the default |
-
-### Runtime requirements
-
-The live map applies each key with its MapLibre setter. Each setter is
-feature-detected: on a runtime that lacks one, the document logs one console
-warning naming the minimum version and keeps rendering without that effect.
-It never throws.
-
-| Key | Needs maplibre-gl | On an older runtime |
-|-----|-------------------|---------------------|
-| `terrain:` | 2.2.0 (`setTerrain`) | Every supported peer version has it |
-| `sky:` | 4.5.0 (`setSky`) | Renders without sky or fog |
-| `sky.atmosphere-blend` | 5.0.0 (draws under globe only) | No atmosphere (there is no globe) |
-| `projection: globe` | 5.0.0 (`setProjection`) | Renders in mercator |
-| `controls.globe` | 5.0.0 (`GlobeControl`) | The control is omitted |
-
-The minimums come from the maplibre-gl changelog: 3D terrain arrived in
-2.2.0, the spec `sky` in 4.5.0, and globe projection with its atmosphere in
-5.0.0.
-
-### On export
-
-All three keys are class `exports`. `mlym emit` copies them verbatim to the
-style.json root. When the basemap also defines one, the document's value
-replaces the basemap's wholesale, as it does live, and emit notes the
-override. A `terrain.source` that resolves to no `raster-dem` source, after
-the basemap merge, is dropped with a lossy warning rather than shipped as a
-style MapLibre would reject. With `--target` below a key's floor, emit keeps
-the key (it still validates on 4.x) and reports the visual difference as
-lossy, so `--strict --target 4.7.1` refuses a globe document. See the
-[export classes reference](/guides/export-classes/).
-## Light
-
-`light:` is the style-spec root [light](https://maplibre.org/maplibre-style-spec/light/)
-— the single light that shades `fill-extrusion` faces. A document-root key,
-a sibling of `config:` (in format v2 it lives in the `style:` half). Every
-property is optional and accepts a zoom expression:
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `anchor` | `map` \| `viewport` | `viewport` | `map` fixes the light to the map, so shading stays put as the map turns; `viewport` fixes it to the screen |
-| `position` | `[radial, azimuthal°, polar°]` | `[1.15, 210, 30]` | Distance from the base of an object, direction clockwise from north (at `anchor: map`), and angle from overhead |
-| `color` | color | `white` | Light color |
-| `intensity` | number 0–1 | `0.5` | Higher is more extreme contrast between faces |
-
-```yaml
-type: map
-id: lit
-config:
-  center: [-74.0118, 40.7075]
-  zoom: 15.9
-  pitch: 60
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-light:
-  anchor: map
-  position: [1.15, 239, 30]
-  intensity: 0.5
-sources:
-  omt:
-    type: vector
-    url: "https://tiles.openfreemap.org/planet"
-layers:
-  - id: buildings
-    type: fill-extrusion
-    source: omt
-    source-layer: building
-    paint:
-      fill-extrusion-color: "#e5e7eb"
-      fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
-```
-
-The object is closed: an unknown key is a validation error, not a silently
-ignored setting. Live, the renderer applies it with `map.setLight` once the
-style loads. On export it compiles through verbatim to the style's `light`
-(class `exports`), replacing any light the basemap carried. The
-[crosshatch classic](/examples/gallery/crosshatch/) uses it to shade its
-hatched buildings.
-
-## View Options
-
-Control the camera position and orientation.
-
-| Property | Type | Default | Range | Description |
-|----------|------|---------|-------|-------------|
-| `pitch` | number | `0` | 0-85 | Camera tilt angle in degrees |
-| `bearing` | number | `0` | -180 to 180 | Camera rotation in degrees |
-| `bounds` | array | - | - | Fit map to geographic bounds: `[west, south, east, north]` or `[[west, south], [east, north]]` |
-| `fitTo` | object \| string | - | - | Fit the initial camera to a source's data — GeoJSON, FlatGeobuf, GeoParquet or a COG (see below); a source name is shorthand for `{ source: name }` |
-
-### Examples
-
-#### 3D Perspective View
-
-```yaml
-config:
-  center: [-122.4194, 37.7749]
-  zoom: 15
-  pitch: 60
-  bearing: 30
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-#### Fit to Bounds
-
-```yaml
-config:
-  center: [-74.006, 40.7128]  # Fallback center
-  zoom: 12                     # Fallback zoom
-  bounds: [-74.3, 40.5, -73.7, 40.9]  # [west, south, east, north]
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-`bounds` takes either of MapLibre's two forms, so a value copied from
-MapLibre's docs works as written:
-
-```yaml
-bounds: [-74.3, 40.5, -73.7, 40.9]        # four numbers: west, south, east, north
-bounds: [[-74.3, 40.5], [-73.7, 40.9]]    # two corners: [west, south], [east, north]
-```
-
-Both are **longitude first**, like `center`. A value in neither form gets an
-error that spells out the order. When the numbers only make sense with
-latitude and longitude swapped (the order many map sites show), the message
-gives the swapped value to copy: `bounds [34, -118.5, 34.1, -118.2] has a
-latitude outside -90 to 90 … Did you mean [-118.5, 34, -118.2, 34.1]?`. A
-swap that is still in range (`[40.6, -74.0, 40.8, -73.9]` for New York) is
-caught by comparing the box with the map's own places (`center`, inline
-data, markers) and shown as a warning with the same did-you-mean.
-Longitudes past ±180 are allowed, for bounds that cross the antimeridian
-(`[100, -50, 290, 62]` frames the Pacific). `maxBounds`, format v2's
-`runtime.map.bounds` / `runtime.map.maxBounds`, and a story chapter's
-`fitBounds` action take both forms too.
-
-#### Fit to a Source's Data
-
-`fitTo` is the data-driven sibling of `bounds`. Instead of literal
-coordinates it names an entry in `sources:` — GeoJSON, FlatGeobuf, GeoParquet,
-or a Cloud Optimized GeoTIFF (COG) — and the camera frames whatever that
-source holds.
-
-It takes `source` (required), `padding` and `maxZoom`
-([`fitTo` in the reference](/reference/yaml/map/#config-fitto)); padding is
-explained below. Without `maxZoom`, a single point zooms all the way in.
-
-```yaml
-type: map
-id: alpine-countries
-config:
-  center: [0, 20]   # Before the data arrives, and the fallback
-  zoom: 2
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-  fitTo:
-    source: countries
-    padding: 20
-sources:
-  countries:
-    type: geojson
-    url: "https://docs.maplibre-yaml.org/gallery-assets/alpine-countries.geojson"
-layers:
-  - id: borders
-    type: line
-    source: countries
-    paint:
-      line-color: "#e63946"
-      line-width: 1.5
-```
-
-- **Inline `data:`**: the map is constructed already framed, with no camera jump.
-- **`url:`**: also framed from the first frame, with no jump. `<ml-map>`
-  starts fetching the file as soon as it reads the document, while the rest
-  of the page starts up, and builds the map with the data's bounds. The file
-  is requested once: the map's source uses the same download (and the
-  source's `cache:` settings). If the file takes longer than 1.5 seconds,
-  the map is built at `center`/`zoom` anyway and frames the data when it
-  lands, so a slow file never holds up the basemap for long
-  (`MLMap.fitToWaitMs` changes the wait; `0` turns it off). Story maps and
-  the Astro components (`src` or `config`) get the same, and `base` applies
-  to the URL as everywhere else. Refreshes don't re-fit, because the user
-  owns the camera after load. An `ml-map:camera-fit` event fires when the
-  fit applies.
-- **A COG** (`raster` / `raster-dem`): framed from the first frame too.
-  `<ml-map>` reads the file's header (its first 64 KB, which the COG reader
-  then reuses) within the same wait, and builds the map on the image's
-  extent.
-- **Other vector / raster / raster-dem sources** (tiles, PMTiles): not
-  supported. Tiled sources have no client-side extent. The renderer warns
-  once and keeps `center`/`zoom`.
-- **Padding.** Without `padding:`, the data keeps a margin so the features at
-  its edges are drawn whole: 8% of the map's shorter side, between 12 and
-  48 pixels (48 on a desktop window, about 30 on a phone), and at the bottom
-  the room MapLibre's controls take there (the attribution, a scale bar),
-  measured with the attribution expanded, so tapping its (i) button never
-  covers the data. `padding:` (pixels, every side)
-  replaces it; `padding: 0` frames the exact extent, as 0.8 did by default.
-- `fitTo: countries` (just the source name) is shorthand for
-  `fitTo: { source: countries }`, with the default padding.
-- `fitTo` wins over `bounds` when both are set. In format v2 it lives at
-  `runtime.fitTo`.
-
-On export `fitTo` **exports with a fallback** (class `exports-with-fallback`). `mlym emit --with-fallbacks`
-computes the fitted `center`/`zoom` from an inline source for a 1024×768
-reference viewport. That's lossy, because a live map fits its own container.
-For a fetched source the authored camera stands in, also reported as lossy.
-`--strict` refuses `fitTo` documents.
-
-## Constraints
-
-Limit user interaction to specific zoom levels, pitch angles, or geographic areas.
-
-- `minZoom` / `maxZoom`: the zoom range the reader can reach (0–24).
-- `minPitch` / `maxPitch`: the tilt range, in degrees (0–85).
-- `maxBounds`: the area the reader can pan to, in either
-  [`bounds` form](#fit-to-bounds).
-
-Keeping readers near the data with zoom limits and `maxBounds` helps most on
-a small map embedded in a page, where a stray scroll can lose the data.
-
-### Example
-
-```yaml
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  minZoom: 8
-  maxZoom: 18
-  maxBounds: [-74.3, 40.5, -73.7, 40.9]
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-## Interaction Settings
-
-Which ways the reader can move the map. Each is a MapLibre map option, with
-MapLibre's default ([`config` in the reference](/reference/yaml/map/#config-interactive)
-lists them all).
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `interactive` | boolean | `true` | Enable all map interactions |
-| `scrollZoom` | boolean | `true` | Enable scroll to zoom |
-| `boxZoom` | boolean | `true` | Enable shift+drag box zoom |
-| `dragRotate` | boolean | `true` | Enable right-drag to rotate |
-| `dragPan` | boolean | `true` | Enable drag to pan |
-| `keyboard` | boolean | `true` | Enable keyboard shortcuts |
-| `doubleClickZoom` | boolean | `true` | Enable double-click zoom |
-| `touchZoomRotate` | boolean | `true` | Enable touch zoom/rotate |
-| `touchPitch` | boolean | `true` | Enable two-finger touch pitch |
-
-### Non-Interactive Map
-
-Create a static map for presentation:
-
-```yaml
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  interactive: false
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-### Custom Interaction
-
-Disable specific interactions. On phones, `touchPitch: false` stops a
-two-finger drag from tilting the map by accident, and `dragRotate: false`
-keeps north up:
-
-```yaml
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  dragRotate: false      # Disable rotation
-  touchPitch: false      # Disable pitch on touch screens
-  doubleClickZoom: false # Disable double-click zoom
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-### Keyboard shortcuts
-
-With `keyboard: true` (the default), a focused map answers these keys;
-`keyboard: false` turns them off.
-
-| Keys | Action |
-|------|--------|
-| `+` / `=` | Zoom in |
-| `-` | Zoom out |
-| Arrow keys | Pan map |
-| Shift + Arrow keys | Rotate map |
-| Shift + `+` / `-` | Increase/decrease pitch |
-
-## Display Options
-
-Control map display and behavior.
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `hash` | boolean | `false` | Sync map state with URL hash |
-| `attributionControl` | boolean | `true` | Show attribution control |
-| `logoPosition` | string | `"bottom-left"` | MapLibre logo position |
-| `fadeDuration` | number | `300` | Fade duration in milliseconds |
-| `crossSourceCollisions` | boolean | `true` | Check for cross-source symbol collisions |
-
-### Example
-
-```yaml
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  hash: true                      # Enable URL hash syncing
-  attributionControl: false       # Hide attribution
-  logoPosition: bottom-right      # Move logo
-  fadeDuration: 500               # Slower fade
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-With `hash: true` the page's address follows the view as the reader moves the
-map (`https://example.com/map#12/40.7128/-74.006`: zoom, latitude,
-longitude, then bearing and pitch when set), so a view can be bookmarked or
-shared.
-
-## Rendering Options
-
-Advanced MapLibre options, passed through as they are, with MapLibre's
-defaults: `antialias` (smoother 3D edges, off by default),
-`preserveDrawingBuffer` (needed to save the canvas as an image),
-`renderWorldCopies`, `refreshExpiredTiles`, `maxTileCacheSize` and
-`failIfMajorPerformanceCaveat`. Each is listed under
-[`config` in the reference](/reference/yaml/map/#config-antialias).
-
-### Example
-
-```yaml
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  antialias: true                 # Smoother rendering
-  preserveDrawingBuffer: true     # Enable map.getCanvas().toDataURL()
-  maxTileCacheSize: 100           # Cache more tiles
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-## Localization
-
-Customize UI text for different languages. One `locale:` table covers
-MapLibre's own controls (keys like `NavigationControl.ZoomIn`) and the text
-maplibre-yaml adds (keys starting `maplibre-yaml.`, like the legend's
-header). Keys you leave out stay in English.
-
-```yaml
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  locale:
-    "FullscreenControl.Enter": "Pantalla completa"
-    "GeolocateControl.FindMyLocation": "Buscar mi ubicación"
-    "NavigationControl.ResetBearing": "Restablecer orientación"
-    "NavigationControl.ZoomIn": "Acercar"
-    "NavigationControl.ZoomOut": "Alejar"
-    "maplibre-yaml.Legend.Title": "Leyenda"
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-[Accessibility & languages](/guides/accessibility-languages/) lists every
-key, and shows how to give the map a name and description for screen
-readers (`title:` and `description:`).
-
-## Map Controls
-
-Configure which controls are displayed and where. The how-to
-[Popups, hover & controls](/guides/popups/#add-map-controls) shows them in a
-complete map.
-
-Each control is `true` (on, in its default corner) or
-`{ enabled: true, position: … }`, where `position` is `top-left`,
-`top-right`, `bottom-left` or `bottom-right`
-([`controls` in the reference](/reference/yaml/map/#controls)).
-
-```yaml
-controls:
-  navigation: true           # default corner: top-right
-  scale:
-    enabled: true
-    position: bottom-right
-  fullscreen: true
-```
-
-### Available Controls
-
-| Control | Default Position | Description |
-|---------|------------------|-------------|
-| `navigation` | `top-right` | Zoom and rotation controls |
-| `geolocate` | `top-right` | User geolocation button |
-| `scale` | `bottom-left` | Distance scale indicator |
-| `fullscreen` | `top-right` | Fullscreen toggle |
-| `attribution` | `bottom-right` | Attribution text |
-| `globe` | `top-right` | Globe/mercator projection toggle (maplibre-gl ≥ 5.0.0; older runtimes warn and omit it) |
-| `terrain` | `top-right` | 3D terrain on/off toggle for the document's [`terrain:`](#terrain-sky--projection) (warns and is omitted when the document declares none) |
-
-Each control's button labels come from MapLibre's `locale:` keys
-(`NavigationControl.ZoomIn` …), so `config.locale` translates them
-([Localization](#localization)).
-
-### Attribution
-
-`attribution` renders a real attribution control and additionally accepts
-MapLibre's own options:
-
-```yaml
-controls:
-  attribution:
-    position: bottom-right    # default
-    compact: true             # collapse behind an (i) button
-    customAttribution: "© Example Data"
-```
-
-Configuring it suppresses MapLibre's built-in attribution so only one control
-renders. Leave it unset and the built-in one still appears: attribution is a
-licensing obligation for most tile providers, so it is never removed silently.
-
-`customAttribution`, like every source `attribution`, is sanitized before
-MapLibre renders it: text and `http:`/`https:`/`mailto:` links survive, other
-markup shows as literal text. See
-[Trust and attribution](/integrations/web-components/#trust-and-attribution).
-
-## Legend
-
-Display a map legend showing layer information.
-
-A map with a [`classify:`](/guides/thematic-maps/) layer, or with a layer
-that writes its own entry (`legend: { label, color }`), gets a legend even
-without a `legend:` block — the default one below (top-left, open, headed
-"Legend"), listing those layers. Write `legend: false` to turn it off, or a
-`legend:` block to place and title it yourself.
-
-### Legend Structure
-
-```yaml
-legend:
-  title: "Map Legend"
-  position: top-left
-  collapsed: false
-  items:
-    - color: "#ff0000"
-      label: "Category 1"
-      shape: circle
-    - color: "#00ff00"
-      label: "Category 2"
-      shape: square
-```
-
-### Legend Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `position` | string | `"top-left"` | Legend position |
-| `title` | string | - | A heading inside the legend panel (the toggle above it always reads "Legend") |
-| `collapsed` | boolean | `false` | Start collapsed |
-| `items` | array | - | Your own entries, listed instead of the layers' `legend:` entries (a [classified](/guides/thematic-maps/) layer's classes still follow them) |
-
-The legend is a collapsible panel whose header — the part you click to open
-or close it — always reads **Legend**, so a screen reader announces "Legend,
-expanded" on every map. Your `title:` is a heading inside the panel, above
-the entries; a `title` of "Legend" (or none) adds no heading, so the word is
-never shown twice. Story legends work the same way. To show the header in
-another language, set `maplibre-yaml.Legend.Title` in `config.locale` (see
-[Accessibility & languages](/guides/accessibility-languages/)).
-
-:::note[Changed in 0.9]
-Before 0.9 a plain map's `title:` replaced "Legend" in the header. Your
-document needs no change: the title now appears as the panel's heading.
-:::
-
-### Legend Item Properties
-
-Each item needs a `color` (any CSS colour) and a `label`. `shape` is
-`square` (the default), `circle`, `line` or `icon`; an `icon` item names its
-image in `icon` ([`legend.items` in the reference](/reference/yaml/map/#legend-items)).
-
-### Examples
-
-#### Automatic Legend
-
-If `items` is not provided, the legend lists each layer that has its own
-`legend: { label, color }` entry, and the classes of each classified layer, in
-layer order. A layer with `legend: false` is left out.
-
-```yaml
-legend:
-  title: "Earthquake Magnitude"
-  position: top-left
-```
-
-#### Custom Legend Items
-
-```yaml
-legend:
-  title: "Features"
-  position: top-right
-  collapsed: false
-  items:
-    - color: "#e74c3c"
-      label: "High Priority"
-      shape: circle
-    - color: "#f39c12"
-      label: "Medium Priority"
-      shape: circle
-    - color: "#2ecc71"
-      label: "Low Priority"
-      shape: circle
-```
-
-#### Line and Icon Entries
-
-```yaml
-legend:
-  title: "Transportation"
-  position: bottom-left
-  items:
-    - color: "#3b82f6"
-      label: "Highway"
-      shape: line
-    - color: "#10b981"
-      label: "Local Road"
-      shape: line
-    - color: "#000000"
-      label: "Restaurant"
-      shape: icon
-      icon: "restaurant"
-```
-
-## Complete Examples
-
-These examples are written as entries in a [pages](/schema/pages/)
-document's `blocks:` list, so each starts with `- type: map` and is indented
-one level. To use one as a standalone file for `<ml-map src="…">`, delete the
-leading `- ` and remove two spaces from the start of every line.
-
-### Basic Interactive Map
-
-```yaml
-- type: map
-  id: basic-map
-  config:
-    center: [-120, 37]
-    zoom: 5
-    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-  layers:
-    - id: points
-      type: circle
-      source:
-        type: geojson
-        url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-      paint:
-        circle-radius: 8
-        circle-color: "#3b82f6"
-  controls:
-    navigation: true
-    scale: true
-```
-
-### 3D Map with Custom Controls
-
-```yaml
-- type: map
-  id: 3d-map
-  config:
-    center: [-122.4194, 37.7749]
-    zoom: 15
-    pitch: 60
-    bearing: -45
-    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-  layers:
-    - id: buildings
-      type: fill-extrusion
-      source:
-        type: vector
-        url: "https://tiles.openfreemap.org/planet"
-      source-layer: building
-      paint:
-        fill-extrusion-color: "#aaa"
-        fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
-        fill-extrusion-opacity: 0.8
-  controls:
-    navigation:
-      enabled: true
-      position: top-left
-    fullscreen:
-      enabled: true
-      position: top-right
-```
-
-### Constrained Map with Legend
-
-```yaml
-- type: map
-  id: constrained-map
-  config:
-    center: [-74.5, 41.5]
-    zoom: 6
-    minZoom: 5
-    maxZoom: 12
-    maxBounds: [-82, 37, -67, 46]
-    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-  layers:
-    - id: states
-      type: fill
-      source:
-        type: geojson
-        url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
-      paint:
-        fill-color:
-          - match
-          - ["get", "STATE_NAME"]
-          - "New York"
-          - "#fde68a"
-          - "New Jersey"
-          - "#93c5fd"
-          - "Pennsylvania"
-          - "#d8b4fe"
-          - "#e5e7eb"
-        fill-opacity: 0.6
-  controls:
-    navigation: true
-    scale: true
-  legend:
-    title: "States"
-    position: top-right
-    items:
-      - color: "#fde68a"
-        label: "New York"
-        shape: square
-      - color: "#93c5fd"
-        label: "New Jersey"
-        shape: square
-      - color: "#d8b4fe"
-        label: "Pennsylvania"
-        shape: square
-```
-
-### Non-Interactive Presentation Map
-
-```yaml
-- type: map
-  id: static-map
-  style: "height: 400px; width: 600px;"
-  config:
-    center: [0, 20]
-    zoom: 2
-    interactive: false
-    attributionControl: false
-    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-  layers:
-    - id: earthquakes
-      type: circle
-      source:
-        type: geojson
-        url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-      paint:
-        circle-radius: 6
-        circle-color: "#e74c3c"
-        circle-opacity: 0.8
-```
-
-### Full-Page Immersive Map
-
-```yaml
-- type: map-fullpage
-  id: immersive-map
-  config:
-    center: [-122.4194, 37.7749]
-    zoom: 13
-    pitch: 45
-    bearing: 0
-    hash: true
-    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-  layers:
-    - id: buildings
-      type: fill-extrusion
-      source:
-        type: vector
-        url: "https://tiles.openfreemap.org/planet"
-      source-layer: building
-      paint:
-        fill-extrusion-color: "#aaa"
-        fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
-  controls:
-    navigation: true
-    geolocate: true
-    fullscreen: true
-    scale: true
-```
-
-## Using Global Default Style
-
-Define a default map style once in global config. It is the Astro map
-builders that fill it in (see
-[Global configuration](/integrations/astro/#global-configuration)); the
-standalone `<ml-map>` element reads only the block's own `mapStyle:`, and
-validation warns about each block below that it has none.
-
-```yaml
-config:
-  defaultMapStyle: "https://tiles.openfreemap.org/styles/liberty"
-
-pages:
-  - path: "/"
-    title: "Home"
-    blocks:
-      - type: map
-        id: map1
-        config:
-          center: [-74, 40]
-          zoom: 12
-          # mapStyle filled in from defaultMapStyle by the Astro builders
-
-      - type: map
-        id: map2
-        config:
-          center: [139, 35]
-          zoom: 12
-          # mapStyle filled in from defaultMapStyle by the Astro builders
-```
-
-## TypeScript Types
-
-```typescript
-import {
-  type MapConfig,
-  type ControlsConfig,
-  type LegendConfig,
-  type MapBlock
-} from '@maplibre-yaml/core/schemas';
-
-const mapConfig: MapConfig = {
-  center: [-74.006, 40.7128],
-  zoom: 12,
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
-  pitch: 45,
-  bearing: 0
-};
-
-const controls: ControlsConfig = {
-  navigation: true,
-  scale: {
-    enabled: true,
-    position: "bottom-right"
-  }
-};
-
-const legend: LegendConfig = {
-  title: "Map Legend",
-  position: "top-left",
-  collapsed: false,
-  items: [
-    { color: "#ff0000", label: "High", shape: "circle" }
-  ]
-};
-```
+Choosing "flat" in the panel lowers every building to 3 metres.
+
+- **The value lives in `state:`**, with its `default`. `parameters:` holds
+  only how the control looks: a `label`, and a `type` of `select` (with
+  `values`), `range` (with `min`, `max` and an optional `step`) or `toggle`.
+  Without `type`, a parameter with `values` is a select and a `true`/`false`
+  default is a toggle. A parameter the panel can't draw as a control, such as
+  a `range` without `min` and `max`, shows as a read-only row.
+- **Layers with a `label:` get a checkbox** in the same panel, to show and
+  hide them; `toggleable: false` leaves one out.
+- **It needs maplibre-gl 5.6 or later.** On an older version the controls
+  are replaced by one notice, while the layer checkboxes still work.
+- The panel's changes fire `ml-map:parameter-change` and
+  `ml-map:layer-visibility` ([`<ml-map>` events](/reference/elements/#ml-map-events)).
+- An export for a maplibre-gl older than 5.6 replaces each value with its
+  default ([Export classes](/guides/export-classes/)).
+
+## Controls, legend and language
+
+### Map controls
+
+`controls:` adds MapLibre's buttons: navigation, scale, fullscreen,
+geolocate, globe, terrain and attribution, each in its usual corner unless
+you give a `position`. Which controls there are, and where each goes, is in
+[Popups, hover & controls › Add map controls](/guides/popups/#add-map-controls).
+Every option is in the [map reference](/reference/yaml/map/#controls).
+
+### Legend
+
+A map with a classified layer, or a layer with its own `legend:` entry, gets
+a legend without asking. A top-level `legend:` block places and titles it,
+and `legend: false` turns it off. How legends are built is in
+[Thematic maps › The legend](/guides/thematic-maps/#the-legend).
+
+### Localization
+
+`config.locale` translates the text the map draws: MapLibre's control labels
+and maplibre-yaml's own, such as the legend's header.
+[Accessibility & languages](/guides/accessibility-languages/#show-the-map-in-another-language)
+lists the keys, and how to name the map for screen readers with `title:` and
+`description:`.
+
+## Troubleshooting
+
+- **An error card says "mapStyle is required for standalone maps"**: add a
+  `mapStyle:` under `config:` ([The basemap](#mapstyle-forms)).
+- **A warning says a key "belongs at the top level"**: move it out of
+  `config:`, to the same indent as `config:`.
+- **The map opens in the wrong place, or in the ocean**: the coordinates are
+  probably latitude first. Validation suggests the swapped value.
+- **An image or icon doesn't show, and the console has a CORS error**: the
+  image's server doesn't allow cross-origin use. Host the image on your own
+  site.
+- **No sky, globe or terrain**: check the console for the maplibre-gl version
+  it needs ([Runtime requirements](#runtime-requirements)), and tilt the
+  camera to see the sky.
+- **`fitTo` doesn't frame anything**: it works on GeoJSON, FlatGeobuf,
+  GeoParquet and COG sources only, not on tiles.
+
+More: [Troubleshooting](/troubleshooting/).
+
+## Moved
+
+### Using global default style
+
+`defaultMapStyle` is an option of the Astro map builders:
+[Astro › Global configuration](/integrations/astro/#global-configuration).
+
+### TypeScript types
+
+The TypeScript types for a map document are in the
+[TypeScript API](/reference/api/maplibre-yaml/core/schemas/); see
+[Format overview › TypeScript types](/schema/overview/#typescript-types).

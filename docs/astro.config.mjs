@@ -111,6 +111,11 @@ export default defineConfig({
           // Pages tell readers to open http://localhost:… after starting a
           // local server; those are instructions, not links into this site.
           errorOnLocalLinks: false,
+          // A link to a page that moved still works: redirects.mjs sends it
+          // on, and check-stable-urls.mjs checks that its #anchor lands.
+          // The validator can't follow a redirect, so it skips these links.
+          exclude: ({ link }) =>
+            Object.hasOwn(PAGE_REDIRECTS, link.split("#")[0].split("?")[0]),
         }),
         /**
          * TypeScript API reference, generated from the core package's public
@@ -265,22 +270,10 @@ export default defineConfig({
               collapsed: false,
               autogenerate: { directory: "reference/yaml" },
             },
-            {
-              label: "Format by topic",
-              collapsed: true,
-              items: [
-                { label: "Overview", link: "/schema/overview/" },
-                { label: "Map configuration", link: "/schema/map-config/" },
-                { label: "Sources", link: "/schema/sources/" },
-                { label: "Layers & popups", link: "/schema/layers/" },
-                { label: "Interactivity", link: "/schema/interactivity/" },
-                { label: "Multi-page documents: root", link: "/schema/root/" },
-                {
-                  label: "Multi-page documents: pages & blocks",
-                  link: "/schema/pages/",
-                },
-              ],
-            },
+            // The hand-written hubs: how the parts fit, linking the guides.
+            { label: "Format overview", link: "/schema/overview/" },
+            { label: "Map documents", link: "/schema/map-config/" },
+            { label: "Sources & layers", link: "/schema/sources-and-layers/" },
             {
               label: "<ml-map> & <ml-scrollytelling> reference",
               link: "/reference/elements/",
