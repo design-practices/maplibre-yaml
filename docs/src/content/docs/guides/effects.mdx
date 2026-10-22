@@ -39,6 +39,57 @@ any third-party one:
 
 <small>Map data © OpenStreetMap contributors (ODbL), © OpenMapTiles, via OpenFreeMap. The crosshatch look follows Tangram's crosshatch style (tangrams/tangram-sandbox, @patriciogv, MIT).</small>
 
+## Install and load \{#loading-the-package}
+
+An effect runs only on a page that loads the effects package next to core.
+With a bundler, install it:
+
+```bash
+npm install @maplibre-yaml/effects
+```
+
+and import its `register` entry in your entry file (Vite shown):
+
+```js
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import "@maplibre-yaml/core/register";
+import "@maplibre-yaml/effects/register"; // built-ins + the <ml-map> hook
+import "maplibre-gl/dist/maplibre-gl.css";
+
+setWorkerUrl(workerUrl);
+```
+
+The `setWorkerUrl` lines are the usual maplibre-gl 6 bundler setup
+([Installation](/getting-started/installation/#using-a-bundler-vite)):
+without them the map fails with *Worker failed to load*. On maplibre-gl 5,
+leave them out.
+
+On a page without a build step, import both packages from a CDN, with the
+import map the `<ml-map>` element already needs:
+
+```html
+<script type="importmap">
+  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
+</script>
+<script type="module">
+  import "https://unpkg.com/@maplibre-yaml/core@0.9/register.js";
+  import "https://unpkg.com/@maplibre-yaml/effects@0.1/register.js";
+</script>
+```
+
+`@0.1` pins the effects package's release line, as the caution above
+advises.
+
+That is all: every `<ml-map>` whose document has `effect:` layers checks
+their params (a bad param is an error with its line, like the rest of the
+format) and attaches the effects once the map loads, detaching them on
+reload and removal. The order of the imports doesn't matter, and a document
+without effects never loads the package. The effects run their mesh building
+in a worker, `extrusions-worker.js`, loaded from beside the effects bundle;
+the CDN serves it, and bundlers that understand
+`new Worker(new URL(…, import.meta.url))` (Vite, webpack 5) emit it for you.
+
 ## Authoring `effect:` in YAML
 
 Put `effect:` on a `fill-extrusion` layer: `type` names the effect, every
@@ -78,6 +129,10 @@ layers:
       gain: 0.72
 ```
 
+`hatch-atlas` is the 3×3 tonal atlas `tonal-hatch` draws with: Tangram's
+`hatch.png` (tangrams/blocks, MIT). The URL above serves it from this site;
+to host it yourself, download that file and point `images:` at your copy.
+
 In [format v2](/guides/format-v2/) the block lives in the layer's
 `runtime:` — an effect never compiles to `style.json`:
 
@@ -96,51 +151,6 @@ the static layer's own `filter`, `fill-extrusion-height` and
 schema works, zoom ramps included (evaluated exactly as MapLibre does, at
 the tile's zoom and the next, blended per frame). Effect and fallback always
 stand at the same height.
-
-### Loading the package
-
-In your entry file (Vite shown):
-
-```js
-import { setWorkerUrl } from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import "@maplibre-yaml/core/register";
-import "@maplibre-yaml/effects/register"; // built-ins + the <ml-map> hook
-import "maplibre-gl/dist/maplibre-gl.css";
-
-setWorkerUrl(workerUrl);
-```
-
-The `setWorkerUrl` lines are the usual maplibre-gl 6 bundler setup
-([Installation](/getting-started/installation/#supported-maplibre-gl-versions)):
-without them the map fails with *Worker failed to load*. On maplibre-gl 5,
-leave them out. That is all: every `<ml-map>` whose document has `effect:` layers
-validates their params (bad params are positioned parse errors, like the
-rest of the format) and attaches the effects once the map loads, detaching
-them on reload and removal. Order does not matter — an `<ml-map>` that
-loaded first attaches as soon as the package registers. A document without
-effects costs nothing: core never imports the effects package.
-
-From a CDN with an import map:
-
-```html
-<script type="importmap">
-  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-</script>
-<script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core@0.9/register.js";
-  import "https://unpkg.com/@maplibre-yaml/effects@0.1/register.js";
-</script>
-```
-
-The `@0.1` pins the effects package's release line, as the caution at the
-top of this page advises: an experimental package may change in its next
-minor release.
-
-The backend builds tile meshes in a module worker,
-`extrusions-worker.js`, loaded from beside the effects bundle (bundlers that
-understand `new Worker(new URL(…, import.meta.url))` — Vite, webpack 5 —
-emit it for you).
 
 ### Built-in params
 
@@ -172,8 +182,8 @@ Unknown params are errors (typo protection).
 [export-class registry](/guides/export-classes/)):
 
 ```bash
-mlym emit crosshatch.yaml --strict            # refuses: 1 lossy (layers.buildings.effect)
-mlym emit crosshatch.yaml --out dist/ --sprite-base https://example.com/dist
+npx maplibre-yaml emit crosshatch.yaml --strict   # refuses: 1 lossy (layers.buildings.effect)
+npx maplibre-yaml emit crosshatch.yaml --out dist/ --sprite-base https://example.com/dist
 #  WARN  layers.buildings.effect: effect "tonal-hatch" on buildings — Effects are
 #   runtime shaders with no style.json form, so the layer exports with a fallback:
 #   the emitted style carries its own static style instead — lossy, so --strict
@@ -311,25 +321,22 @@ divides 1 km stays put.
   selection — through two MapLibre internals (`style.tileManagers`,
   `tile.latestRawTileData`), isolated in one adapter and feature-checked: if
   a MapLibre release removes them, effects declare absence rather than
-  break. A request for a public hook is drafted for maplibre-gl-js.
+  break.
 - The layer's paint/filter are read once at attach; re-attach after
   changing them.
-- **Performance:** the budget is a ratio to the same map's static layer,
-  judged on real GPUs. On an integrated laptop GPU (Intel UHD 630,
-  lower Manhattan, rotating camera) `tonal-hatch` holds about 0.8× of the
-  static preset's frame rate (≈170 vs 205 fps at 1200×800) and `blueprint`
-  about 0.65× of its much cheaper flat-colour fallback (≈205 vs 320 fps).
-  Meshes are built in a worker and uploaded under a frame budget, so pans
-  and zooms don't stutter, and an idle map schedules nothing. CI runs a
-  software-GL regression tripwire against a recorded ratio.
 
 ## Try it
 
-The demo page in the repository renders both classics live, with an
-effect on/off switch and a tour:
+[Mapzen classics](/examples/classics/) shows both built-in effects live,
+next to the static fallback that an export carries. The documents are on the
+[Crosshatch](/examples/gallery/crosshatch/) and
+[Blueprint](/examples/gallery/blueprint/) gallery pages.
 
-```bash
-pnpm --filter @maplibre-yaml/core build && pnpm --filter @maplibre-yaml/effects build
-pnpm verify:serve
-# open http://localhost:4174/examples/verification/effects/index.html
-```
+## Performance
+
+An effect is measured against the same map's static layer. On an integrated laptop GPU (Intel UHD 630,
+lower Manhattan, rotating camera) `tonal-hatch` holds about 0.8× of the
+static preset's frame rate (≈170 vs 205 fps at 1200×800) and `blueprint`
+about 0.65× of its much cheaper flat-colour fallback (≈205 vs 320 fps).
+Meshes are built in a worker and uploaded under a frame budget, so pans
+and zooms don't stutter, and an idle map schedules nothing.

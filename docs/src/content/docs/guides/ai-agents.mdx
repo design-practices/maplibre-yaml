@@ -1,123 +1,153 @@
 ---
 title: Using AI agents
-description: The generate → validate → repair loop, the structured JSON error contract, and the machine-readable resources agents need
+description: How an LLM agent writes a working map document — the generate, validate, repair loop, the CLI's JSON output, the resources to load, and the mistakes agents make most.
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
-Because a maplibre-yaml config _is_ the product, an LLM agent can author a
-complete, working map with nothing but the schema and a validation loop. This
-page is the whole agent story: a stable contract to read, and a structured
-error format to repair against.
+A map document is plain YAML checked against a published schema, so an LLM
+agent can write one reliably: generate a document, run the validator, and
+repair what it reports until the file is valid. This page gives the agent
+(or the developer wiring one up) the loop, the validator's JSON output, and
+the resources to load.
 
 ## The loop
 
-```
-generate  →  mlym validate -f json  →  repair  →  repeat until valid
+```text
+generate  →  validate -f json  →  repair  →  repeat until valid
 ```
 
-1. **Generate** a YAML config from the schema and examples below.
-2. **Validate** it with the CLI in JSON mode.
-3. **Repair** using the structured `{ path, message, line, column }` errors.
-4. **Repeat** until `valid: true`.
+1. **Generate** a map document in [format v1](/guides/format-v2/), the
+   default: the schemas, the examples and every guide use it.
+2. **Validate** it with the CLI's JSON output:
 
-```bash
-npx maplibre-yaml validate my-map.yaml -f json
-```
+   ```bash
+   npx maplibre-yaml validate map.yaml -f json
+   ```
+
+3. **Repair** each entry in `errors`, using its `path`, `message`, `line`
+   and `column`.
+4. **Repeat** until the command exits with `0` and prints `"valid": true`.
+
+The exit code tells the loop where it stands:
+
+| Code | Meaning |
+| ---- | ------- |
+| `0` | Every file is valid |
+| `1` | At least one file has errors, or warnings in strict mode |
+| `2` | The file wasn't found or the pattern matched nothing: check the path, not the YAML |
+
+Strict mode is on when the `CI` environment variable is set, so an agent
+running in CI must fix warnings as well as errors. `--no-strict` turns it
+off; `--strict` turns it on anywhere.
 
 <Aside type="note">
-`mlym validate` runs the Zod schemas — the source of truth. The JSON Schema
-(for [editor integration](/guides/editor-setup/)) is advisory and intentionally
-looser, since some cross-field rules cannot be expressed in JSON Schema.
+The [JSON Schema](/guides/editor-setup/) is looser than the validator: it
+checks the shape of a document, while `validate` also checks rules across
+fields (a layer naming a source that isn't declared, a map with no basemap).
+Always finish with `validate`.
 </Aside>
 
-## The machine error contract
+## The JSON output \{#the-machine-error-contract}
 
-`-f json` prints a stable, machine-readable object. On success:
+On success:
 
 ```json
 {
   "valid": true,
-  "files": [{ "file": "my-map.yaml", "valid": true, "errors": [], "warnings": [] }],
+  "files": [
+    {
+      "file": "/home/you/maps/map.yaml",
+      "valid": true,
+      "errors": [],
+      "warnings": []
+    }
+  ],
   "summary": {
-    "total": 1, "valid": 1, "invalid": 0,
-    "errorCount": 0, "warningCount": 0, "noteCount": 0
+    "total": 1,
+    "valid": 1,
+    "invalid": 0,
+    "errorCount": 0,
+    "warningCount": 0,
+    "noteCount": 0
   }
 }
 ```
 
-On failure, each error carries a `path`, a human-readable `message`, and
-(where the YAML source allows) `line` and `column`:
+On failure, here for `center: -74.006, 40.7128` written without brackets:
 
 ```json
 {
   "valid": false,
   "files": [
     {
-      "file": "my-map.yaml",
+      "file": "/home/you/maps/map.yaml",
       "valid": false,
       "errors": [
         {
           "path": "config.center",
-          "message": "Expected array, got string",
-          "line": 5,
-          "column": 11
+          "message": "center needs square brackets: center: [-74.006, 40.7128]",
+          "line": 4,
+          "column": 11,
+          "severity": "error"
         }
       ],
       "warnings": []
     }
-  ]
+  ],
+  "summary": {
+    "total": 1,
+    "valid": 0,
+    "invalid": 1,
+    "errorCount": 1,
+    "warningCount": 0,
+    "noteCount": 0
+  }
 }
 ```
 
-`warnings[]` entries have the same fields plus a `severity`: `"warning"`
-for something that probably isn't what the author meant (a `=`-prefixed style
-value, a map with no basemap), or `"note"` for information about how a valid
-value is read (a basemap written as just a `.pmtiles` file). Notes never make
-a file invalid and aren't counted in `warningCount`.
+- `file` is an absolute path.
+- `path` points into the document with dots: `config.center`,
+  `layers.0.paint.circle-radius`. `line` and `column` locate it in the source
+  where the YAML allows.
+- `message` says what is wrong and usually how to write it instead.
+- `warnings` entries have the same fields. Their `severity` is `"warning"`
+  for something valid that probably isn't what the author meant (a layer
+  naming an undeclared source, a map with no basemap), or `"note"` for how a
+  valid value is read. Notes never make a file invalid and aren't counted in
+  `warningCount`.
 
-Repair by walking each `errors[]` entry: `path` is a dotted pointer into the
-document (`config.center`, `layers.0.paint.circle-radius`), `message` describes
-the violation, and `line`/`column` locate it in the source. Re-run after each
-edit; exit code `0` means all files are valid, `1` means at least one failed.
+Other formats for the same findings (`sarif`, `vscode`) are in
+[CLI commands › Output formats](/cli/reference/#output-formats).
 
-<Aside type="tip">
-`-f sarif` emits the same findings as SARIF 2.1.0 for CI annotations;
-`-f vscode` emits editor-parseable `file:line:col: severity: message` lines.
-</Aside>
-
-## Resources an agent should load
+## Resources to load \{#resources-an-agent-should-load}
 
 | Resource | URL |
 | --- | --- |
 | Agent index (`llms.txt`) | `https://docs.maplibre-yaml.org/llms.txt` |
 | Full reference (`llms-full.txt`) | `https://docs.maplibre-yaml.org/llms-full.txt` |
-| `map` JSON Schema | `https://docs.maplibre-yaml.org/schema/latest/map.schema.json` |
-| `scrollytelling` JSON Schema | `https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json` |
-| `root` (pages) JSON Schema | `https://docs.maplibre-yaml.org/schema/latest/root.schema.json` |
-| `any` (dispatch) JSON Schema | `https://docs.maplibre-yaml.org/schema/latest/any.schema.json` |
+| JSON Schema for a map document | `https://docs.maplibre-yaml.org/schema/latest/map.schema.json` |
 
-`llms.txt` is a short index; `llms-full.txt` inlines the complete JSON Schemas
-and canonical example configs in one self-contained document. Both are
-generated from the same sources as these docs, so they never drift.
+`llms.txt` is a short index. `llms-full.txt` holds the complete JSON Schemas
+and example documents in one file. Both are built from the same sources as
+these docs. The schema for story files, and how to pin a version, are in
+[Editor setup › Schema URLs](/guides/editor-setup/#stable-schema-urls).
 
-Prefer the schema for the version you target. `mlym schema <block>` prints the
-schema bundled with the installed core package:
+To use exactly the schema of the core version a project has installed, print
+it with the CLI:
 
 ```bash
-npx maplibre-yaml schema map            # print to stdout
-npx maplibre-yaml schema any --out any.schema.json
+npx maplibre-yaml schema map
 ```
 
 ## Three things agents get wrong
 
-These are the most common failure modes. Get them right up front.
+### 1. A map document is `type: map` with a `config:` block \{#1-ml-map-src-wants-a-type-map-block-not-a-pages-document}
 
-### 1. `<ml-map src>` wants a `type: map` block, not a `pages:` document
-
-A single map file starts with `type: map`. Reserve the top-level `pages:` array
-for multi-page apps rendered by a framework integration — never as the `src` of
-`<ml-map>`.
+The file `<ml-map src>` loads starts with `type: map`. The camera and the
+basemap go under `config:`, not at the top level, and `center` is
+`[longitude, latitude]`. Don't mix in format v2's `style:` and `runtime:`
+sections.
 
 ```yaml
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
@@ -129,30 +159,29 @@ config:
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 ```
 
-### 2. Popups use the tag-array DSL
+### 2. Popups are a list of elements \{#2-popups-use-the-tag-array-dsl}
 
-`popup` is an **array of single-key `{ tag: [items] }` objects** — not an HTML
-string and not a `{ title, description }` object. Each item is `{ str }` (a
-literal) or `{ property }` (a feature field), optionally with `else` (fallback)
-and `format` (number format).
+`popup:` is a **list of single-key `{ tag: [items] }` objects**, not an HTML
+string and not a `{ title, description }` object. Each item is `str:` (fixed
+text) or `property:` (a feature's value), optionally with `else:` (a
+fallback) and `format:` (a [number format](/guides/popups/#format-numbers)).
 
 ```yaml
 interactive:
   click:
     popup:
       - h3:
-          - property: name
+          - property: title
       - p:
-          - str: "Rating: "
-          - property: rating
-            format: ".1f"
-          - str: " / 5"
+          - str: "Magnitude "
+          - property: mag
+            format: { max-fraction-digits: 1 }
 ```
 
-### 3. Named sources are referenced by bare name
+### 3. A named source is referenced by its name \{#3-named-sources-are-referenced-by-bare-name}
 
-Define sources once under a block-level `sources:` map, then set a layer's
-`source:` to the source's name as a plain string.
+Declare a source once under `sources:`, then set each layer's `source:` to
+that name as a plain string.
 
 ```yaml
 type: map
@@ -164,11 +193,11 @@ config:
 sources:
   quakes:
     type: geojson
-    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
+    url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
 layers:
   - id: quake-points
     type: circle
-    source: quakes # bare name, not an inline object
+    source: quakes # the name, not an inline object
     paint:
       circle-radius: 6
       circle-color: "#e55e5e"
@@ -176,9 +205,6 @@ layers:
 
 ## In CI
 
-The same JSON/SARIF output doubles as CI documentation — fail the build on
-invalid configs and surface findings as annotations:
-
-```bash
-npx maplibre-yaml validate "configs/**/*.yaml" -f sarif > results.sarif
-```
+The same command fails a CI job on an invalid document, and its SARIF output
+shows findings as annotations on a pull request:
+[CLI commands › Integration examples](/cli/reference/#integration-examples).

@@ -1,17 +1,24 @@
 ---
 title: "Parsing & validating in your own code"
-description: How a consumer that parses map documents itself keeps parse and validation behaviour identical to the library
+description: How code that reads map documents itself, such as a custom loader or an editor, parses and validates them exactly as the library does.
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
-Most integrations never parse YAML themselves — the `<ml-map>` component, the CLI, and the Astro integration all go through the library's own parser. But if you *do* parse a map document yourself — a custom loader, a GUI that reads and writes the file — parse it the way the library does, or your interpretation drifts from what the renderer and validator see.
+Most projects never parse the YAML themselves: `<ml-map>`, the CLI and the
+Astro components all use the library's parser. If your code reads a map
+document itself, for example a custom loader or an editor that reads and
+writes the file, parse it the way the library does. Otherwise your code and
+the map can read the same file differently.
 
-There are exactly two touchpoints.
+There are two things to use.
 
 ## Parse with the library's options
 
-The library parses map documents with two non-default options: YAML merge keys (`<<: *base`) and the `!html` scalar tag. Both change what a document *means* — a document that uses either resolves differently under the plain `yaml` API. Import the canonical options rather than re-declaring them:
+The library parses map documents with two options the plain `yaml` package
+doesn't turn on: YAML merge keys (`<<: *base`) and the `!html` tag. Both
+change what a document means. Import the options rather than writing your
+own copy:
 
 ```ts
 import { parse } from "yaml";
@@ -20,22 +27,62 @@ import { YAML_PARSE_OPTIONS } from "@maplibre-yaml/core";
 const value = parse(source, YAML_PARSE_OPTIONS);
 ```
 
-`YAML_PARSE_OPTIONS` (and the `htmlTag` it contains) is the single source of truth. Re-declaring it is how a copy silently drops `!html` to a bare string or mishandles a merge key — importing it makes that impossible.
+A hand-written copy is how `!html` silently turns into a plain string, or a
+merge key stops merging.
 
 ## Validate through the parser
 
-Validation is already public. `YAMLParser` runs the map schema through the same alias-expansion guard the read path uses, and returns a structured result:
+`YAMLParser` parses and validates in one step, and returns the same errors
+and warnings the CLI and `<ml-map>` report:
 
 ```ts
 import { YAMLParser } from "@maplibre-yaml/core";
 
 const result = YAMLParser.safeParseMapBlock(source);
 if (!result.success) {
-  // result.errors — the same errors the CLI and renderer would report
+  for (const error of result.errors) {
+    console.error(`${error.path}: ${error.message} (line ${error.line})`);
+  }
 }
 ```
 
-Use `safeParseMapBlock` for a single map block or `safeParseAny` when the document type is unknown. A value you already hold can be validated with `safeParseMapBlockValue`.
+- `result.errors` and `result.warnings` are lists of
+  `{ path, message, line, column }`, with an optional `suggestion` (the key
+  you probably meant). `path` points into the document with dots
+  (`config.center`); `line` and `column` are there when the source was YAML
+  text. These are the fields of the CLI's JSON output
+  ([Using AI agents](/guides/ai-agents/#the-machine-error-contract)).
+- `result.data` is the validated document when `result.success` is `true`.
+  It keeps the format it was written in, [v1 or v2](/guides/format-v2/);
+  `normalizeMapBlock(result.data)` turns either into the one model the
+  renderer and the exporter read.
+
+| Method | Validates |
+| --- | --- |
+| `safeParseMapBlock(yaml)` | A map document |
+| `safeParseScrollytellingBlock(yaml)` | A story file |
+| `safeParseAny(yaml)` | Either; `blockType` says which it was |
+| `safeParseMapBlockValue(value)` | A map document you already hold as an object |
+
+Every method and type is in the
+[TypeScript API reference](/reference/api/maplibre-yaml/core/classes/yamlparser/),
+and rendering the result with `MapRenderer` is on the
+[JavaScript API](/integrations/vanilla-js/#yamlparser) page.
+
+## Documents from people you don't control
+
+YAML aliases can be nested so that a small document expands into an enormous
+one (the "billion laughs" attack). The library keeps the `yaml` package's
+alias-expansion limit on, so such a document is rejected with a parse error
+instead of being expanded:
+
+```text
+YAML could not be expanded: Excessive alias count indicates a resource exhaustion attack
+```
+
+It is an ordinary validation error, not a crash, so a collaborative editor or
+a validation endpoint can report it like any other malformed input. Parse
+through `YAMLParser` (above) to get the same guard.
 
 ## Documents from people you don't control
 
@@ -53,5 +100,8 @@ a validation endpoint can report it like any other malformed input. Parse
 through `YAMLParser` (above) to get the same guard.
 
 <Aside type="note" title="What this is not">
-The library does not provide a mutation or write handle, and it does not preserve comments or formatting through a programmatic edit. If you edit a document, you own the mutation and serialization; these two touchpoints only keep your *parsing* and *validation* identical to the library's.
+The library doesn't provide a way to edit a document, and it doesn't keep
+comments or formatting through a programmatic edit. If your code changes a
+document, it owns the change and the writing back; these two tools only keep
+your *parsing* and *validation* the same as the library's.
 </Aside>
