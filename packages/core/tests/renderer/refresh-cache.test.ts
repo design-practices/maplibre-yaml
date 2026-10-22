@@ -44,7 +44,7 @@ function guideLayer(url: string, refreshInterval?: number) {
   let yaml = readFileSync(
     resolve(__dirname, "../../../../docs/public/configs/polling-demo.yaml"),
     "utf8"
-  ).replace(/url: ".*all_hour\.geojson"/, `url: "${url}"`);
+  ).replace(/url: "https:\/\/earthquake\.usgs\.gov\/[^"]*"/, `url: "${url}"`); // any USGS feed the demo uses
   if (refreshInterval) yaml = yaml.replace("refreshInterval: 60000", `refreshInterval: ${refreshInterval}`);
   const parsed = YAMLParser.safeParseMapBlock(yaml);
   expect(parsed.success).toBe(true);
