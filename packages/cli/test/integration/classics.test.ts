@@ -179,7 +179,7 @@ describe('mlym bake reproduces the committed classic images', () => {
       // Decoded RGBA, not PNG bytes: encoders differ across libvips builds.
       expect(Buffer.compare(a.data, b.data), `${preset}/${file.filename} drifted`).toBe(0);
     }
-  });
+  }, 30_000);
 
   it('every committed crosshatch image is a baked output (nothing stale left behind)', async () => {
     const { readdirSync } = await import('node:fs');
@@ -206,7 +206,8 @@ describe('mlym bake reproduces the committed classic images', () => {
         expect(tones.size, `${preset}/${file.filename}`).toBeLessThanOrEqual(32);
       }
     }
-  });
+    // Four full bakes (a JS Gaussian over 1536 px tiles): ~2 s locally, slower on CI.
+  }, 60_000);
 
   it('the CLI lists the presets and refuses an unknown one', async () => {
     const { stdout, stderr } = await execAsync(`node "${CLI}" bake`);
