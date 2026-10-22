@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { lowerMarkers, MARKERS_LAYER_ID, MARKERS_SOURCE_ID } from "../../src/emitter/lower-markers";
-import { projectStyle } from "../../src/emitter/project";
+import { projectStyle, EmitError } from "../../src/emitter/project";
 import { attachSpriteAssets, DOCUMENT_SPRITE_ID } from "../../src/emitter/assets";
 import { normalizeMapBlock } from "../../src/model/normalize";
 import { exportClasses } from "../../src/export/registrations";
@@ -132,10 +132,26 @@ describe("the fallback contract (R5)", () => {
     expect(hook.assets).toEqual(assets);
   });
 
-  it("the un-lowered strict message points authors at --with-fallbacks", () => {
+  it("the strict refusal tells authors to export without --strict (ml-aot.146)", () => {
+    // --with-fallbacks is already the default and cannot be combined with
+    // --strict, so "re-run with --with-fallbacks" was no advice at all.
+    let thrown: unknown;
+    try {
+      projectStyle(doc(MARKERS), "strict");
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(EmitError);
+    const warning = (thrown as EmitError).warnings.find((w) => w.construct === "markers");
+    expect(warning?.message).toContain("export without --strict");
+    expect(warning?.message).not.toContain("re-run with --with-fallbacks");
+  });
+
+  it("an un-lowered with-fallbacks projection names the lowering it skipped", () => {
     const { warnings } = projectStyle(doc(MARKERS));
     const warning = warnings.find((w) => w.construct === "markers");
-    expect(warning?.message).toContain("--with-fallbacks");
+    expect(warning?.message).toContain("lowerMarkers");
+    expect(warning?.message).not.toContain("re-run with --with-fallbacks");
   });
 
   it("an UN-lowered markers document is lossy in projectStyle — --strict refuses it", () => {

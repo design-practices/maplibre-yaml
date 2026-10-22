@@ -40,3 +40,23 @@ export function minorPin(version: string): string {
   const [major = '0', minor = '0'] = version.split('-')[0]!.split('.');
   return `${major}.${minor}`;
 }
+
+/**
+ * The template variables that carry a maplibre-yaml version, as `init`
+ * passes them to every template. Template text names a version only through
+ * these (`{{coreMinor}}`, `{{coreRange}}`, `{{astroRange}}`), never as a
+ * literal, so it cannot fall behind the release it ships with (ml-aot.145);
+ * test/unit/template-version-text.test.ts guards that.
+ */
+export function versionVariables(): {
+  coreRange: string;
+  astroRange: string;
+  coreMinor: string;
+} {
+  return {
+    coreRange: caretRange(CORE_VERSION),
+    astroRange: caretRange(ASTRO_VERSION),
+    // The plain-HTML templates' CDN pin (`@maplibre-yaml/core@0.9`).
+    coreMinor: minorPin(CORE_VERSION),
+  };
+}

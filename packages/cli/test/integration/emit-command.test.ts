@@ -308,6 +308,79 @@ layers:
     expect(failure.stderr).toContain('breaks:');
   });
 
+  // ml-aot.144: trust gates `!html` popups and `click.emit` host events, and
+  // neither is part of a style.json, so --trust never changed the export. It
+  // is deprecated: accepted, out of --help, and it says so on stderr.
+  it('accepts --trust as a deprecated no-op: same style, a note on stderr, not in --help', async () => {
+    const dir = await mkdir();
+    const doc = join(dir, 'map.yaml');
+    await writeFile(
+      doc,
+      `type: map
+id: gated
+config:
+  center: [-73.98, 40.75]
+  zoom: 12
+layers:
+  - id: pts
+    type: circle
+    source:
+      type: geojson
+      data: { type: FeatureCollection, features: [] }
+    paint: { circle-color: "#8899aa" }
+    interactive:
+      click:
+        popup:
+          - p: [{ str: !html "<b>hi</b>" }]
+        emit: { event: select-feature }
+`,
+    );
+
+    const plain = await execAsync(`node "${CLI}" emit "${doc}"`);
+    expect(plain.stderr).not.toContain('--trust');
+    for (const flag of ['--trust trusted', '--trust untrusted', '--trust=trusted']) {
+      const run = await execAsync(`node "${CLI}" emit "${doc}" ${flag}`);
+      expect(run.stdout).toBe(plain.stdout);
+      expect(run.stderr).toContain('--trust is deprecated and has no effect');
+    }
+
+    // citty prints help through consola, which goes silent when it detects a
+    // test runner: run the CLI as a user would (as preview-server.test.ts does).
+    const env = { ...process.env };
+    for (const key of ['VITEST', 'VITEST_POOL_ID', 'VITEST_WORKER_ID', 'TEST', 'NODE_ENV']) delete env[key];
+    const help = await execAsync(`node "${CLI}" emit --help`, { env });
+    expect(help.stdout).toContain('--target');
+    expect(help.stdout).not.toContain('--trust');
+  });
+
+  // ml-aot.146: the refusal said "re-run with --with-fallbacks", which is
+  // already the default and an error next to --strict.
+  it('a --strict refusal for markers says to export without --strict', async () => {
+    const dir = await mkdir();
+    const doc = join(dir, 'map.yaml');
+    await writeFile(
+      doc,
+      `type: map
+id: pins
+config:
+  center: [0, 0]
+  zoom: 2
+markers:
+  - at: [0, 0]
+layers:
+  - id: bg
+    type: background
+    paint: { background-color: "#eee" }
+`,
+    );
+
+    const failure = await execAsync(`node "${CLI}" emit "${doc}" --strict`).catch((e) => e);
+    expect(failure.code).toBe(1);
+    expect(failure.stderr).toContain('markers');
+    expect(failure.stderr).toContain('export without --strict');
+    expect(failure.stderr).not.toContain('re-run with --with-fallbacks');
+  });
+
   it('rejects a scrollytelling document — only map compiles', async () => {
     const dir = await mkdir();
     const doc = join(dir, 'story.yaml');

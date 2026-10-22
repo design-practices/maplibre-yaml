@@ -232,6 +232,30 @@ export function resolveOutPath(out: string): string {
   return namesFolder ? join(path, 'style.json') : path;
 }
 
+/**
+ * The deprecation note for `--trust`, or null when it was not given.
+ *
+ * @remarks
+ * `--trust trusted|untrusted` set the capability policy's trust. That policy
+ * gates raw `!html` in popups and `click.emit` host events, and both belong to
+ * the runtime half that export drops, so no step of `emit` reads it: trusted
+ * and untrusted exports were byte-identical (ml-aot.144). The flag is still
+ * accepted, so scripts that pass it keep working, but it is out of `--help`
+ * and prints this note on stderr. Parsing stops at `--`, as citty's does.
+ */
+export function trustFlagNote(rawArgs: readonly string[]): string | null {
+  const end = rawArgs.indexOf('--');
+  const given = (end === -1 ? rawArgs : rawArgs.slice(0, end)).some(
+    (arg) => arg === '--trust' || arg.startsWith('--trust='),
+  );
+  if (!given) return null;
+  return (
+    '--trust is deprecated and has no effect: it gates raw !html in popups and ' +
+    'click.emit host events, and neither is part of a style.json. Remove it; ' +
+    'a later release will remove it.'
+  );
+}
+
 export const emitCommand = defineCommand({
   meta: {
     name: 'emit',
@@ -259,10 +283,8 @@ export const emitCommand = defineCommand({
       description:
         'Target maplibre-gl version, e.g. 5.6.0. Gates state: support',
     },
-    trust: {
-      type: 'string',
-      description: 'Authoring trust context: trusted | untrusted (default)',
-    },
+    // No `trust` option: `--trust` is deprecated and has no effect, so it is
+    // not listed in --help. It is still accepted; see trustFlagNote.
     out: {
       type: 'string',
       alias: 'o',
@@ -276,8 +298,11 @@ export const emitCommand = defineCommand({
         'sprite URLs, so the emitted style must carry the deployed location)',
     },
   },
-  async run({ args }) {
+  async run({ args, rawArgs }) {
     const filePath = resolve(args.file as string);
+
+    const trustNote = trustFlagNote(rawArgs);
+    if (trustNote) consola.warn(trustNote);
 
     let contents: string;
     try {
@@ -306,13 +331,10 @@ export const emitCommand = defineCommand({
     }
     const mode: EmitMode = args.strict ? 'strict' : 'with-fallbacks';
 
-    const trust = (args.trust as string | undefined) ?? 'untrusted';
-    if (trust !== 'trusted' && trust !== 'untrusted') {
-      logger.error(`--trust must be "trusted" or "untrusted", got "${trust}".`);
-      process.exit(EXIT_CODES.VALIDATION_ERROR);
-    }
+    // Trust gates `!html` popups and `emit` host events, which are runtime
+    // behavior and never part of a style.json, so nothing here reads it.
     const policy: CapabilityPolicy = {
-      trust: trust as TrustContext,
+      trust: 'untrusted',
       ...(args.target ? { target: args.target as string } : {}),
     };
 

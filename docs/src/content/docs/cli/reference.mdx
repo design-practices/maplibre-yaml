@@ -336,7 +336,7 @@ npx maplibre-yaml emit <file> [options]
 | `--with-fallbacks` | | boolean | on | Export what has a style.json fallback (markers become a symbol layer with pin sprites, `fitTo` on inline data becomes a fixed camera, framed with the same default margin as the live map; on a `url:` source the authored `center`/`zoom` is kept, with a warning) and print a warning for each loss |
 | `--strict` | | boolean | off | Refuse the export (exit `1`) if anything would change what the map shows. Cannot be combined with `--with-fallbacks` |
 | `--target` | | string | | The maplibre-gl version the style is for, e.g. `5.6.0`. Features that version lacks (such as `state:` below its minimum, or `color-relief` below 5.6) are reported |
-| `--trust` | | string | `untrusted` | `trusted` or `untrusted`: how far the document's author is trusted. `trusted` lets capability-gated content (raw `!html`, `emit` interactions) through; see [Interactions](/guides/export/) |
+| `--trust` | | string | | Deprecated, and has no effect: it is no longer listed in `--help`, and passing it prints a note. Trust gates raw `!html` in popups and `click.emit` host events, and neither is part of a `style.json`, so it never changed the exported file. A later release will remove it |
 | `--sprite-base` | | string | | Absolute URL where the folder holding the style will be served. Required, with `--out`, when the document generates sprite images (markers, `images:`), because MapLibre rejects relative sprite URLs |
 
 Warnings go to stderr, so `npx maplibre-yaml emit map.yaml > style.json`
