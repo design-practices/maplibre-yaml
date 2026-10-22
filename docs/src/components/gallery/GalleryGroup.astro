@@ -1,0 +1,86 @@
+---
+/**
+ * One group of the gallery index: a table of the pages this site has, then
+ * (folded) the MapLibre examples in the group that have no page here, each
+ * with what an author would write instead. Data: src/data/gallery.mjs. The
+ * index's `## <group title>` heading sits above it in the MDX, so the anchor
+ * and the table of contents come from the page itself.
+ */
+import { Badge } from '@astrojs/starlight/components';
+import { GROUPS, KINDS, upstreamUrl } from '../../data/gallery.mjs';
+import { inline } from './inline.mjs';
+
+interface Props {
+  id: string;
+}
+
+const group = GROUPS.find((g) => g.id === Astro.props.id);
+if (!group) throw new Error(`GalleryGroup: no group "${Astro.props.id}" in src/data/gallery.mjs`);
+
+const withPage = group.entries.filter((e) => e.slug);
+const withoutPage = group.entries.filter((e) => !e.slug);
+const search = (e) => `${e.title} ${e.note ?? ''} ${KINDS[e.kind].label}`.toLowerCase();
+---
+
+<div class="gallery-group" data-gallery-group={group.id}>
+  <table>
+    <thead>
+      <tr><th scope="col">Example</th><th scope="col">You write</th></tr>
+    </thead>
+    <tbody>
+      {withPage.map((e) => (
+        <tr data-gallery-row data-kind={e.kind} data-search={search(e)}>
+          <td>
+            <a href={`/examples/gallery/${e.slug}/`}>{e.title}</a>
+            {e.note && <span class="gallery-note" set:html={` · ${inline(e.note)}`} />}
+          </td>
+          <td><Badge text={KINDS[e.kind].label} variant={KINDS[e.kind].variant} /></td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+  {withoutPage.length > 0 && (
+    <details class="gallery-without-page">
+      <summary>MapLibre examples in this group without a page here ({withoutPage.length})</summary>
+      <table>
+        <thead>
+          <tr><th scope="col">MapLibre example</th><th scope="col">You write</th></tr>
+        </thead>
+        <tbody>
+          {withoutPage.map((e) => (
+            <tr data-gallery-row data-kind={e.kind} data-search={search({ ...e, group })}>
+              <td>
+                <a href={upstreamUrl({ ...e, group })}>{e.title}</a>
+                {e.note && <span class="gallery-note" set:html={` · ${inline(e.note)}`} />}
+              </td>
+              <td><Badge text={KINDS[e.kind].label} variant={KINDS[e.kind].variant} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  )}
+  <p class="gallery-empty" hidden>No examples in this group match.</p>
+</div>
+
+<style>
+  .gallery-group table {
+    width: 100%;
+    display: table;
+  }
+  .gallery-group td:last-child,
+  .gallery-group th:last-child {
+    white-space: nowrap;
+    width: 1%;
+  }
+  .gallery-note {
+    color: var(--sl-color-gray-3);
+  }
+  .gallery-without-page {
+    margin-top: 0.75rem;
+  }
+  .gallery-without-page summary {
+    cursor: pointer;
+    color: var(--sl-color-gray-2);
+  }
+</style>

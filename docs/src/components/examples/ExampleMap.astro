@@ -1,0 +1,24 @@
+---
+/**
+ * An example's live map and, under it, the complete document it loads, both
+ * from one file in public/configs/. Naming the file once means the YAML on
+ * the page can't drift from the map.
+ */
+import { Code } from '@astrojs/starlight/components';
+import LiveMap from '../LiveMap.astro';
+import { configText } from './configs.mjs';
+
+interface Props {
+  /** Path under public/configs/, e.g. "basic-map.yaml". */
+  config: string;
+  height?: string;
+  caption?: string;
+}
+
+const { config, height, caption } = Astro.props;
+const text = configText(config);
+const title = config.split('/').pop();
+---
+
+<LiveMap src={`/configs/${config}`} height={height} caption={caption} />
+<Code code={text} lang="yaml" title={title} />

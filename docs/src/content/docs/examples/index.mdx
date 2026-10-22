@@ -1,58 +1,77 @@
 ---
 title: Examples
-description: Complete working examples of maplibre-yaml configurations
+description: Working maps with the YAML that draws them, from a first map with your own data to live feeds, plus a gallery of the MapLibre examples in YAML.
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-Explore complete, working examples that demonstrate maplibre-yaml capabilities.
+Every example here is a live map with the complete YAML document that draws
+it, ready to copy. Start with the first four, in order; each adds one idea
+to the one before. Then use the gallery to look up a specific technique.
+
+## Learn by example
+
+<CardGrid>
+  <LinkCard
+    title="Basic map"
+    href="/examples/basic-map/"
+    description="Five cities written into the document, drawn as circles sized by population, with a popup."
+  />
+  <LinkCard
+    title="Interactive points"
+    href="/examples/interactive-points/"
+    description="Points colored by category, with a generated legend, a hover highlight and a richer popup."
+  />
+  <LinkCard
+    title="Thematic maps"
+    href="/examples/thematic-maps/"
+    description="Four maps from one classify: block each: a choropleth, a rate map, graduated symbols and categories."
+  />
+  <LinkCard
+    title="Earthquake tracker"
+    href="/examples/earthquake-tracker/"
+    description="The USGS earthquake feed, fetched again every minute and redrawn."
+  />
+</CardGrid>
+
+## Find a specific technique
 
 <CardGrid>
   <Card title="MapLibre examples in YAML" icon="list-format">
-    Every official MapLibre GL JS example, with the ones the format expresses
-    rebuilt in YAML: a capability matrix you can copy from.
-    [Open the gallery →](/examples/gallery/)
+    The MapLibre GL JS examples rebuilt as YAML documents, grouped by what
+    they show, with a search. [Open the gallery](/examples/gallery/)
   </Card>
-
-  <Card title="Large data" icon="seti:db">
-    PMTiles, FlatGeobuf, GeoParquet and Cloud Optimized GeoTIFF files read
-    straight from a static host.
-    [Cloud-native examples →](/examples/gallery/#cloud-native-data)
+  <Card title="Clustered points" icon="seti:folder">
+    Thousands of points grouped into counted clusters that zoom in on click.
+    [Create and style clusters](/examples/gallery/create-and-style-clusters/)
   </Card>
-
-  <Card title="Mapzen classics" icon="star">
-    Crosshatch and Blueprint, Tangram-era looks rebuilt as plain MapLibre
-    style, side by side with their exported `style.json`.
-    [View the classics →](/examples/classics/)
+  <Card title="Live updates by id" icon="rocket">
+    Vehicles or sensors that move: each poll updates the features it
+    matches and keeps the rest. [Live data: merge](/guides/live-data/#merge)
   </Card>
-
-  <Card title="Basic map" icon="map">
-    A simple map with markers showing major cities.
-    [View example →](/examples/basic-map/)
-  </Card>
-
-  <Card title="Thematic maps" icon="pencil">
-    A choropleth, graduated symbols and a category map with `classify:`.
-    [View example →](/examples/thematic-maps/)
-  </Card>
-
-  <Card title="Earthquake tracker" icon="warning">
-    Live earthquake data from USGS with auto-refresh.
-    [View example →](/examples/earthquake-tracker/)
-  </Card>
-
-  <Card title="Clustered data" icon="seti:folder">
-    Efficiently display thousands of points with clustering.
-    [View example →](/examples/clustering/)
-  </Card>
-
-  <Card title="Interactive points" icon="puzzle">
-    Clickable markers with popups and hover effects.
-    [View example →](/examples/interactive-points/)
-  </Card>
-
-  <Card title="Live vehicle tracking" icon="rocket">
-    Real-time vehicle positions with polling updates.
-    [View example →](/examples/live-vehicles/)
+  <Card title="Large data files" icon="seti:db">
+    Files read in parts from a static host, with no tile server:
+    [PMTiles](/examples/gallery/pmtiles-source-and-protocol/),
+    [FlatGeobuf](/examples/gallery/flatgeobuf-source/),
+    [GeoParquet](/examples/gallery/geoparquet-source/) and
+    [Cloud Optimized GeoTIFF](/examples/gallery/add-a-cog-raster-source/).
   </Card>
 </CardGrid>
+
+## Showcase
+
+<CardGrid>
+  <Card title="Mapzen classics" icon="star">
+    Crosshatch and Blueprint, two Tangram-era looks rebuilt in YAML and run
+    with experimental effects, next to their exported `style.json`.
+    [View the classics](/examples/classics/)
+  </Card>
+</CardGrid>
+
+## Use an example on your page
+
+Save the document as a `.yaml` file in your site and load it with
+`<ml-map src="map.yaml">` on an [HTML page](/integrations/web-components/),
+or with the `<Map>` component in [Astro](/integrations/astro/). A document
+that reads a file by a path starting with `/`, such as
+`/data/classify/sample-tracts.geojson`, needs that file in your site too.

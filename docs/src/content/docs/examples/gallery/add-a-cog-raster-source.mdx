@@ -7,11 +7,11 @@ import LiveMap from '../../../../components/LiveMap.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/add-a-cog-raster-source.yaml?raw';
 
-A [Cloud Optimized GeoTIFF](https://cogeo.org/) (COG) is one image file laid out so the browser can read just the tiles it draws. Since 0.9 a `.tif` URL on a `raster` source is all it takes: maplibre-yaml reads the file with the COG protocol, so there is no tile server and no page JavaScript. Here one COG is the imagery, and a second holds elevation, which shades the hills and lifts the map into 3D.
+A [Cloud Optimized GeoTIFF](https://cogeo.org/) (COG) is one image file laid out so the browser can read just the tiles it draws. A `.tif` URL on a `raster` source is all it takes: maplibre-yaml reads the file with the COG protocol, so there is no tile server and no page JavaScript. Here one COG is the imagery, and a second holds elevation, which shades the hills and lifts the map into 3D.
 
 <LiveMap src="/configs/gallery/add-a-cog-raster-source.yaml" height="460px" />
 
-## The YAML
+## The complete document \{#the-yaml}
 
 <Code code={config} lang="yaml" title="add-a-cog-raster-source.yaml" />
 

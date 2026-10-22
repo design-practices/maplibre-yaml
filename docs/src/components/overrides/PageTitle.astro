@@ -1,0 +1,36 @@
+---
+/**
+ * Starlight's page title, plus a breadcrumb back to the gallery index on
+ * gallery pages (they aren't in the sidebar, so this is their way back).
+ */
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+import { galleryEntry } from './galleryRoute.mjs';
+
+const entry = galleryEntry(Astro.locals.starlightRoute);
+---
+
+{entry && (
+  <nav class="gallery-crumb" aria-label="Breadcrumb">
+    <a href="/examples/gallery/">MapLibre examples in YAML</a>
+    <span aria-hidden="true">›</span>
+    <a href={`/examples/gallery/#${entry.group.id}`}>{entry.group.title}</a>
+  </nav>
+)}
+<Default />
+
+<style>
+  .gallery-crumb {
+    margin-top: 1rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .gallery-crumb a {
+    color: var(--sl-color-text-accent);
+  }
+  .gallery-crumb + :global(h1) {
+    margin-top: 0.25rem;
+  }
+</style>

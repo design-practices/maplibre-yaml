@@ -1,0 +1,16 @@
+---
+/**
+ * Starlight's page content, plus the shared "Use this map" footer on gallery
+ * pages (see src/components/gallery/GalleryFooter.astro).
+ */
+import Default from '@astrojs/starlight/components/MarkdownContent.astro';
+import GalleryFooter from '../gallery/GalleryFooter.astro';
+import { galleryEntry } from './galleryRoute.mjs';
+
+const entry = galleryEntry(Astro.locals.starlightRoute);
+---
+
+<Default>
+  <slot />
+  {entry && <GalleryFooter entry={entry} />}
+</Default>

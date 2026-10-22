@@ -1,0 +1,127 @@
+---
+/**
+ * The gallery index's filter: a search box and a "you write" choice that
+ * hide non-matching rows (and groups left empty). Hidden until its script
+ * runs, so without JavaScript the index is simply the full list.
+ */
+import { KINDS } from '../../data/gallery.mjs';
+---
+
+<form class="gallery-filter not-content" data-gallery-filter hidden role="search" onsubmit="return false">
+  <label class="gallery-filter-search">
+    <span>Find an example</span>
+    <input type="search" name="q" placeholder="popup, terrain, cluster…" autocomplete="off" />
+  </label>
+  <fieldset>
+    <legend>You write</legend>
+    <label><input type="radio" name="kind" value="" checked /> Anything</label>
+    {Object.entries(KINDS).filter(([k]) => k !== 'js').map(([k, v]) => (
+      <label><input type="radio" name="kind" value={k} /> {v.label}</label>
+    ))}
+  </fieldset>
+  <p class="gallery-filter-count" aria-live="polite"></p>
+</form>
+
+<script>
+  function setup() {
+    const form = document.querySelector<HTMLFormElement>('[data-gallery-filter]');
+    if (!form) return;
+    form.hidden = false;
+    const count = form.querySelector('.gallery-filter-count')!;
+    const groups = [...document.querySelectorAll<HTMLElement>('[data-gallery-group]')];
+
+    // The group's heading lives in the MDX above the table; Starlight may
+    // wrap it, so hide the wrapper when there is one.
+    const headingOf = (group: HTMLElement) => {
+      const h = document.getElementById(group.dataset.galleryGroup!);
+      return (h?.closest('.sl-heading-wrapper') as HTMLElement | null) ?? h;
+    };
+
+    function apply() {
+      const q = (form!.elements.namedItem('q') as HTMLInputElement).value.trim().toLowerCase();
+      const kind = (form!.querySelector('input[name="kind"]:checked') as HTMLInputElement).value;
+      const filtering = q !== '' || kind !== '';
+      let shown = 0;
+      for (const group of groups) {
+        let groupShown = 0;
+        for (const row of group.querySelectorAll<HTMLElement>('[data-gallery-row]')) {
+          const match = (!q || row.dataset.search!.includes(q)) && (!kind || row.dataset.kind === kind);
+          row.hidden = !match;
+          if (match) groupShown++;
+        }
+        for (const table of group.querySelectorAll('table')) {
+          (table as HTMLElement).hidden = !table.querySelector('[data-gallery-row]:not([hidden])');
+        }
+        const details = group.querySelector('details');
+        if (details) {
+          const any = details.querySelector('[data-gallery-row]:not([hidden])');
+          details.hidden = !any;
+          if (filtering && any) details.open = true;
+        }
+        group.hidden = filtering && groupShown === 0;
+        const heading = headingOf(group);
+        if (heading) heading.hidden = group.hidden;
+        shown += groupShown;
+      }
+      count.textContent = filtering ? `${shown} matching example${shown === 1 ? '' : 's'}` : '';
+    }
+
+    form.addEventListener('input', apply);
+  }
+  setup();
+</script>
+
+<style>
+  .gallery-filter {
+    display: grid;
+    gap: 0.75rem;
+    margin: 1.5rem 0;
+    padding: 1rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+  }
+  .gallery-filter[hidden] {
+    display: none;
+  }
+  .gallery-filter .gallery-filter-search {
+    display: grid;
+    gap: 0.25rem;
+    font-weight: 600;
+  }
+  .gallery-filter input[type='search'] {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    font: inherit;
+    font-weight: 400;
+    border: 1px solid var(--sl-color-gray-4);
+    border-radius: 0.25rem;
+    background: var(--sl-color-black);
+    color: var(--sl-color-white);
+  }
+  .gallery-filter fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+  }
+  .gallery-filter legend {
+    font-weight: 600;
+    padding: 0;
+    margin-bottom: 0.25rem;
+    width: 100%;
+  }
+  .gallery-filter label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .gallery-filter-count {
+    margin: 0;
+    color: var(--sl-color-gray-3);
+  }
+  .gallery-filter-count:empty {
+    display: none;
+  }
+</style>

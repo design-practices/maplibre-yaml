@@ -1,0 +1,14 @@
+---
+/** The gallery index's counts, computed from src/data/gallery.mjs at build time. */
+import { census } from '../../data/gallery.mjs';
+
+const c = census();
+---
+
+<p>
+  MapLibre's gallery has {c.upstreamTotal} examples, and {c.upstreamWithPages} of them have a page
+  here: {c.upstreamPagesYaml} in YAML alone and {c.upstreamPagesYamlJs} with some page JavaScript.
+  The rest are listed, folded, under each group, with what you would write instead. The gallery
+  also has {c.ownPages} pages of its own: files read straight from a web server, and two Mapzen
+  classics.
+</p>

@@ -1,65 +1,65 @@
 ---
 title: Thematic maps
-description: A choropleth, graduated symbols and a category map, each one classify block
+description: A choropleth, a rate map, graduated symbols and a category map, each one classify block on an ordinary layer, with its complete document.
 ---
 
-import LiveMap from '../../../components/LiveMap.astro';
-import { Code } from '@astrojs/starlight/components';
-import choropleth from '../../../../public/configs/classify/choropleth.yaml?raw';
-import graduated from '../../../../public/configs/classify/graduated.yaml?raw';
-import categories from '../../../../public/configs/classify/categories.yaml?raw';
-import rate from '../../../../public/configs/classify/rate.yaml?raw';
+import ExampleMap from '../../../components/examples/ExampleMap.astro';
 
-Three thematic maps, each written as one `classify:` block on an ordinary
+Four thematic maps, each written as one `classify:` block on an ordinary
 layer. Every one compiles to a plain MapLibre expression and generates its
-legend. How it works, and every option: [Thematic maps](/guides/thematic-maps/).
+own legend. This page gives the complete document for each map; how
+`classify:` works, and every option, is in
+[Thematic maps & legends](/guides/thematic-maps/).
 
 ## Choropleth — quantile classes from the data
 
 Median household income by tract, in five quantile classes (the same number
-of tracts in each). The breaks are computed when the GeoJSON loads; the
-legend — automatic, since the document declares none — shows their real
-edges, formatted as currency. Tracts with no value
-— null, missing, `""`, `"n/a"` in this sample — are light grey, and the
-numeric strings a CSV export leaves behind (`"48200"`) count as numbers.
+of tracts in each). The breaks are computed when the GeoJSON loads. The
+document declares no legend, so one is generated, showing the real class
+edges formatted as currency. Tracts with no value are light grey: in this
+sample that is `null`, a missing property, `""` and `"n/a"`. Numeric
+strings, such as the `"48200"` a CSV export leaves behind, count as numbers.
 
-<LiveMap src="/configs/classify/choropleth.yaml" height="460px" caption="Synthetic sample tracts. Click a tract for its value" />
-
-<Code code={choropleth} lang="yaml" title="choropleth.yaml" />
+<ExampleMap config="classify/choropleth.yaml" height="460px" caption="Synthetic sample tracts. Click a tract for its value" />
 
 ## A rate — cases per 100,000 residents
 
 `normalize: population` and `multiply: 100000` turn a count into a rate, and
 the natural breaks are computed on the rate. The tract with no residents is
-no data (grey), not an Infinity class.
+no data (grey), not an infinitely high class.
 
-<LiveMap src="/configs/classify/rate.yaml" height="460px" caption="Synthetic sample tracts" />
+<ExampleMap config="classify/rate.yaml" height="460px" caption="Synthetic sample tracts" />
 
-<Code code={rate} lang="yaml" title="rate.yaml" />
-
-## Graduated symbols — natural breaks, colour and size
+## Graduated symbols — natural breaks, color and size
 
 World cities by population in five natural-breaks (jenks) classes. One block
 drives both `circle-color` and `circle-radius` from the same breaks.
 
-<LiveMap src="/configs/classify/graduated.yaml" height="420px" caption="Natural Earth populated places (public domain)" />
-
-<Code code={graduated} lang="yaml" title="graduated.yaml" />
+<ExampleMap config="classify/graduated.yaml" height="420px" caption="Natural Earth populated places (public domain)" />
 
 ## Categories over vector tiles
 
-The demo tiles' countries coloured by continent with `okabe-ito`, a
-colour-blind-safe palette. Categories compile to a `match` and need no data
-scan, so they work on a basemap's vector tiles; values not listed
-(Antarctica) take the `other:` colour.
+The demo tiles' countries colored by continent with `okabe-ito`, a
+palette that stays distinct for readers with color blindness. Categories
+compile to a `match` and need no data scan, so they work on a basemap's
+vector tiles; values not listed (Antarctica) take the `other:` color.
 
-<LiveMap src="/configs/classify/categories.yaml" height="400px" />
-
-<Code code={categories} lang="yaml" title="categories.yaml" />
+<ExampleMap config="classify/categories.yaml" height="400px" />
 
 ## Export
 
 `mlym emit choropleth.yaml` writes a style.json whose `fill-color` is the
-compiled `step` (with the breaks computed from the data at export) and whose
-layer `metadata["maplibre-yaml:classify"]` records the classes. It opens in
-Maputnik and renders in any MapLibre map — no maplibre-yaml required.
+compiled `step` expression, with the breaks computed from the data at export,
+and whose layer `metadata["maplibre-yaml:classify"]` records the classes. It
+opens in Maputnik and renders in any MapLibre map, with no maplibre-yaml
+needed. More in [Export to style.json](/guides/export/).
+
+## Data and reference
+
+- The tract maps read [sample-tracts.geojson](https://docs.maplibre-yaml.org/data/classify/sample-tracts.geojson),
+  synthetic tracts made for these examples; the graduated map reads
+  [world-cities.geojson](https://docs.maplibre-yaml.org/data/classify/world-cities.geojson).
+  The documents read them from `/data/classify/` on this site: to run a
+  document on yours, download the file into the same folder, or replace
+  its `url:` with the full address.
+- Every `classify:` key: [the layers reference](/reference/yaml/layers/#classify).

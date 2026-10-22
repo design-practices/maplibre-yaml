@@ -46,7 +46,7 @@ const BLOCKS = ['map', 'scrollytelling', 'root', 'any'];
 const CURATED_CONFIGS = [
   'earthquakes.yaml',
   'interactive-points.yaml',
-  'clustering.yaml',
+  'gallery/create-and-style-clusters.yaml',
   'earthquake-tracker.yaml',
   'quickstart-interactive.yaml',
 ];

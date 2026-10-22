@@ -7,11 +7,11 @@ import LiveMap from '../../../../components/LiveMap.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/flatgeobuf-source.yaml?raw';
 
-[FlatGeobuf](https://flatgeobuf.org/) is a compact binary file of features with an optional spatial index. Since 0.9 a `.fgb` URL on a `geojson` source is all it takes: maplibre-yaml reads the file into the source, so layers, popups, the legend and `fitTo` behave exactly as for a `.geojson` file. Click a district; zoom in past 11 to see the stations, which are read **by view**.
+[FlatGeobuf](https://flatgeobuf.org/) is a compact binary file of features with an optional spatial index. A `.fgb` URL on a `geojson` source is all it takes: maplibre-yaml reads the file into the source, so layers, popups, the legend and `fitTo` behave exactly as for a `.geojson` file. Click a district; zoom in past 11 to see the stations, which are read **by view**.
 
 <LiveMap src="/configs/gallery/flatgeobuf-source.yaml" height="460px" />
 
-## The YAML
+## The complete document \{#the-yaml}
 
 <Code code={config} lang="yaml" title="flatgeobuf-source.yaml" />
 

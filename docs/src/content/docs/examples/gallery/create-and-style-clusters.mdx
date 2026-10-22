@@ -7,7 +7,7 @@ import LiveMap from '../../../../components/LiveMap.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/create-and-style-clusters.yaml?raw';
 
-Replicates the MapLibre example [Create and style clusters](https://maplibre.org/maplibre-gl-js/docs/examples/create-and-style-clusters/) — the same USGS earthquake feed and the same three-layer treatment. The upstream version also registers a click handler that calls `getClusterExpansionZoom`; here `zoomToFeature` covers the click-to-zoom gesture declaratively.
+Replicates the MapLibre example [Create and style clusters](https://maplibre.org/maplibre-gl-js/docs/examples/create-and-style-clusters/) — the same USGS earthquake feed and the same three-layer treatment. Upstream also adds a click handler that zooms into a cluster; here `zoomToFeature` does it in YAML.
 
 <LiveMap src="/configs/gallery/create-and-style-clusters.yaml" height="500px" caption="Click a cluster to zoom in; click a point for its magnitude" />
 
@@ -17,6 +17,8 @@ Replicates the MapLibre example [Create and style clusters](https://maplibre.org
 
 ## What to notice
 
-- Clustering is entirely source configuration (`cluster`, `clusterMaxZoom`, `clusterRadius`) — the block-level `sources:` record lets three layers share one fetch.
-- The `step` expressions on color and radius are the style-spec arrays verbatim.
-- `filter: ["has", "point_count"]` vs `["!", ["has", "point_count"]]` splits clusters from single points, exactly as upstream.
+- Clustering is source configuration: `cluster: true` groups points closer than `clusterRadius` pixels, up to zoom `clusterMaxZoom`. The source sits under `sources:` with a name, so three layers share one fetch.
+- MapLibre gives each cluster two properties: `point_count` (how many points it holds) and `point_count_abbreviated` (the same, shortened to `1.2k`). The `step` expressions read `point_count` for size and color; the label shows the abbreviated one.
+- `filter: ["has", "point_count"]` draws clusters only; `["!", ["has", "point_count"]]` draws the single points.
+- `text-font` must name a font the basemap's glyphs include, or the counts don't draw. `Noto Sans Regular` is in the demo tiles and OpenFreeMap styles.
+- `click.zoomToFeature` zooms in on a clicked cluster, here to zoom 12 (`maxZoom`). Upstream instead asks MapLibre for the zoom at which that cluster splits (`getClusterExpansionZoom`), which needs page JavaScript.

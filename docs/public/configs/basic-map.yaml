@@ -4,6 +4,7 @@ id: basic-cities
 config:
   center: [-98.5, 39.8]
   zoom: 4
+  bounds: [-125, 24, -70, 50]   # west, south, east, north
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: cities
@@ -53,11 +54,11 @@ layers:
         - interpolate
         - ["linear"]
         - ["get", "population"]
-        - 500000
+        - 500000     # 500,000 people: 8 px
         - 8
-        - 5000000
+        - 5000000    # 5 million: 20 px
         - 20
-        - 10000000
+        - 10000000   # 10 million: 30 px
         - 30
       circle-color: "#3b82f6"
       circle-stroke-width: 2
@@ -72,6 +73,7 @@ layers:
           - p:
               - str: "Population: "
               - property: population
+                format: { max-fraction-digits: 0 }   # 8,336,817
 controls:
   navigation: true
   scale: true

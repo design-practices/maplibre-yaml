@@ -1,109 +1,50 @@
 ---
 title: Interactive points
-description: Rich popups and hover effects
+description: Points colored by category with a generated legend, a highlight under the pointer, and a popup with several lines.
 ---
 
-import LiveMap from '../../../components/LiveMap.astro';
+import ExampleMap from '../../../components/examples/ExampleMap.astro';
+import YamlExcerpt from '../../../components/examples/YamlExcerpt.astro';
 
-Demonstrates interactive features with detailed popups.
+Three San Francisco places, colored by what kind of place each is, with a
+legend, a highlight while the pointer is over one, and a popup with its
+address and rating. Use this pattern for any points that fall into a few
+categories: shops by type, stations by line, sites by status.
 
-## Live Demo
+<ExampleMap config="interactive-points.yaml" height="460px" caption="Point at a place to highlight it; click it for details" />
 
-<LiveMap
-  src="/configs/interactive-points.yaml"
-  height="500px"
-  caption="Click locations for details"
-/>
+## How it works
 
-## Key Concepts
+**`classify:` colors the categories.** It lists each value of `category`
+with its color, and `other:` colors any value not listed. It also makes the
+legend: the map has no `legend:` block, so one is generated from the
+classes, titled with the layer's `label:`.
 
-### Categorical colors with match expression
+<YamlExcerpt config="interactive-points.yaml" at={["classify:"]} />
 
-Different colors for each category:
+`classify:` compiles to the MapLibre `match` expression you could write in
+`circle-color` yourself. Write the `match` by hand only when you need
+something `classify:` doesn't do; you then lose the generated legend and the
+highlight below. [Thematic maps & legends](/guides/thematic-maps/) covers
+categories, palettes and numeric classes.
 
-```yaml
-circle-color:
-  - match
-  - ["get", "category"]
-  - "government"
-  - "#6366f1"        # Indigo for government
-  - "landmark"
-  - "#f59e0b"        # Amber for landmarks
-  - "sports"
-  - "#22c55e"        # Green for sports
-  - "#6b7280"        # Gray fallback
-```
+**The hover highlight.** `highlight: true` recolors the point under the
+pointer. It needs feature ids, which `generateId: true` on the source
+provides. (Without it, maplibre-yaml turns `generateId` on itself and says
+so in the browser console.)
 
-### Rich multi-line popups
+<YamlExcerpt config="interactive-points.yaml" at={["hover:"]} />
 
-Popups can contain multiple elements with mixed content:
+**A popup with several lines.** Each entry under `popup:` is one HTML
+element, and its list mixes fixed text (`str:`) with the clicked feature's
+values (`property:`):
 
-```yaml
-interactive:
-  click:
-    popup:
-      - h3:
-          - property: name
-      - p:
-          - str: "📍 "
-          - property: address
-      - p:
-          - str: "⭐ "
-          - property: rating
-          - str: " / 5"
-```
+<YamlExcerpt config="interactive-points.yaml" at={["click:"]} />
 
-### Hover cursor
+## Next
 
-Change cursor on hover to indicate interactivity:
-
-```yaml
-interactive:
-  hover:
-    cursor: pointer    # Shows pointer cursor on hover
-```
-
-### Popup structure
-
-Each popup item is an object with:
-- **Tag**: HTML element (`h3`, `p`, `div`, etc.)
-- **Content**: Array of content items that can be:
-  - `{ str: "text" }` - Static text
-  - `{ property: "name" }` - Feature property value
-
-### Emoji in content
-
-Unicode characters work in popup text:
-
-```yaml
-- p:
-    - str: "📍 "
-    - property: address
-```
-
-## Advanced: Hover effects
-
-To highlight the point under the pointer, add `highlight: true`: the layer's
-colour changes while the pointer is over a feature, with no paint to write.
-
-```yaml
-interactive:
-  hover:
-    cursor: pointer
-    highlight: true
-```
-
-To change something else on hover, such as the size, reference the hover
-state in the paint value yourself, a MapLibre `feature-state` expression:
-
-```yaml
-paint:
-  circle-radius:
-    - case
-    - ["boolean", ["feature-state", "hover"], false]
-    - 18                       # Grow on hover
-    - 12
-```
-
-Hover state needs feature ids: add `generateId: true` (or `promoteId`) to the
-source. See [Hover](/schema/interactivity/#hover) for the details.
+- [Popups, hover & controls](/guides/popups/): links, images, number
+  formats, hover tooltips and moving the camera on click.
+- [Thematic maps](/examples/thematic-maps/): classes computed from numbers.
+- Reference: [`classify:`](/reference/yaml/layers/#classify) and
+  [`interactive:`](/reference/yaml/layers/#interactive).

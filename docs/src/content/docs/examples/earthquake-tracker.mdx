@@ -1,82 +1,44 @@
 ---
 title: Earthquake tracker
-description: Live earthquake data with automatic refresh
+description: A map that polls the USGS earthquake feed every minute and redraws it, with color and size by magnitude.
 ---
 
-import LiveMap from '../../../components/LiveMap.astro';
-import { Aside } from '@astrojs/starlight/components';
+import ExampleMap from '../../../components/examples/ExampleMap.astro';
+import YamlExcerpt from '../../../components/examples/YamlExcerpt.astro';
 
-Real-time earthquake visualization using USGS data.
+A map that keeps itself current: it reads the past week of earthquakes from
+the [USGS feed](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php),
+fetches the feed again every minute, and redraws. Use this pattern for any
+feed that returns its whole current state each time you ask.
 
-<Aside>
-Data refreshes every 60 seconds from the USGS Earthquake Hazards Program.
-</Aside>
+<ExampleMap config="earthquake-tracker.yaml" height="460px" caption="USGS earthquakes of the past week, fetched again every minute" />
 
-## Live Demo
+## How it works
 
-<LiveMap
-  src="/configs/earthquake-tracker.yaml"
-  height="500px"
-  caption="Live USGS earthquake data - refreshes every 60 seconds"
-/>
+**`refresh:` polls the feed.** `refreshInterval` is in milliseconds.
+`updateStrategy: replace` swaps the whole layer for each response, which
+fits a feed that always returns the full list. The data cache is off, so
+each poll fetches the feed rather than reusing the last answer.
 
-## Key Concepts
+<YamlExcerpt config="earthquake-tracker.yaml" at={["source:"]} />
 
-### Remote data with auto-refresh
+Polling pauses while the browser tab is hidden. The USGS feed allows
+cross-origin requests, which a feed on another site must do for the browser
+to read it ([Loading data](/guides/data-sources/) explains CORS).
 
-Data is fetched from a URL and automatically refreshes:
+**Color and size by magnitude.** Two `interpolate` expressions read `mag`:
+the color runs from green at 0 to red at 6 and above, and the radius from
+3 px to 24 px.
 
-```yaml
-source:
-  type: geojson
-  url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-  refresh:
-    refreshInterval: 60000     # Refresh every 60 seconds
-    updateStrategy: replace    # Replace all data on each refresh
-  cache:
-    enabled: false          # Don't cache live data
-```
+<YamlExcerpt config="earthquake-tracker.yaml" at={["circle-color:"]} />
 
-### Color gradient by magnitude
+**The popup** shows the feed's `title` and the magnitude, written with one
+decimal place by `format:`.
 
-Earthquakes are colored on a green-to-red scale:
+## Next
 
-```yaml
-circle-color:
-  - interpolate
-  - ["linear"]
-  - ["get", "mag"]
-  - 0
-  - "#22c55e"    # Green for magnitude 0
-  - 2
-  - "#eab308"    # Yellow for magnitude 2
-  - 4
-  - "#f97316"    # Orange for magnitude 4
-  - 6
-  - "#dc2626"    # Red for magnitude 6+
-```
-
-### Size scaling by magnitude
-
-Larger circles for stronger earthquakes:
-
-```yaml
-circle-radius:
-  - interpolate
-  - ["linear"]
-  - ["get", "mag"]
-  - 0
-  - 3     # 3px radius for magnitude 0
-  - 2
-  - 6     # 6px radius for magnitude 2
-  - 4
-  - 12    # 12px radius for magnitude 4
-  - 6
-  - 24    # 24px radius for magnitude 6+
-```
-
-## Update strategies
-
-- **replace**: Completely replaces all data (used here for earthquake feed)
-- **merge**: Updates existing features by ID (useful for vehicle tracking)
-- **append-window**: Adds new data while maintaining size/time limits (useful for event streams)
+- [Live data & streaming](/guides/live-data/): the other update strategies
+  (`merge` for things with an id that move, such as vehicles), push streams
+  (SSE and WebSocket), and events for each update.
+- Reference: [`refresh:`](/reference/yaml/sources/#geojson-refresh) and
+  [`cache:`](/reference/yaml/sources/#geojson-cache).

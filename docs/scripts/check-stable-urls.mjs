@@ -255,6 +255,16 @@ export const REDIRECTED_ANCHORS = [
   "/getting-started/installation/#hosting-the-files-yourself",
   "/reference/elements/#ml-map-events",
   "/reference/elements/#trust-and-attribution",
+  // Renamed gallery headings keep their old anchors; the gallery index keeps
+  // its group anchors (the examples index and gallery pages link them).
+  "/examples/gallery/pmtiles-source-and-protocol/#the-yaml",
+  "/examples/gallery/pmtiles-source-and-protocol/#registering-the-protocol-yourself-still-supported",
+  "/examples/gallery/flatgeobuf-source/#the-yaml",
+  "/examples/gallery/geoparquet-source/#the-yaml",
+  "/examples/gallery/add-a-cog-raster-source/#the-yaml",
+  "/examples/gallery/#cloud-native-data",
+  "/examples/gallery/#map-basics",
+  "/examples/gallery/#mapzen-classics",
 ];
 
 function parseArgs(argv) {

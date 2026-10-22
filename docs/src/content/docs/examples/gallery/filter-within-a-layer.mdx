@@ -9,7 +9,7 @@ import config from '../../../../../public/configs/gallery/filter-within-a-layer.
 import hatchJs from '../../../../../public/gallery-js/filter-within-a-layer.js?raw';
 import chrome from '../../../../../public/gallery-js/filter-within-a-layer.html?raw';
 
-Replicates the MapLibre example [Filter within a layer](https://maplibre.org/maplibre-gl-js/docs/examples/filter-within-a-layer/). The layer and its *initial* filter are YAML; the slider re-filters at runtime through `getMap().setFilter`.
+Replicates the MapLibre example [Filter within a layer](https://maplibre.org/maplibre-gl-js/docs/examples/filter-within-a-layer/). The layer and its *initial* filter are YAML; the slider re-filters at runtime through `setFilter` on the map that `mapReady()` returns.
 
 <LiveMap src="/configs/gallery/filter-within-a-layer.yaml" height="440px" chrome={chrome} caption="Drag the slider — smaller quakes drop out" />
 

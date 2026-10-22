@@ -1,0 +1,15 @@
+---
+/** The gallery index's "start here" cards, from START_HERE in src/data/gallery.mjs. */
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { START_HERE, entryForSlug } from '../../data/gallery.mjs';
+
+const cards = START_HERE.map(({ slug, why }) => {
+  const entry = entryForSlug(slug);
+  if (!entry) throw new Error(`GalleryStartHere: no gallery page "${slug}"`);
+  return { title: entry.title, href: `/examples/gallery/${slug}/`, why };
+});
+---
+
+<CardGrid>
+  {cards.map((c) => <LinkCard title={c.title} href={c.href} description={c.why} />)}
+</CardGrid>

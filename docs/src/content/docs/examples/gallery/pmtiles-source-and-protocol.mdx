@@ -1,17 +1,17 @@
 ---
 title: PMTiles source and protocol
-description: "The MapLibre pmtiles example — YAML only since 0.9: a .pmtiles or pmtiles:// URL is all it takes"
+description: "The MapLibre pmtiles example in YAML only: a .pmtiles or pmtiles:// URL is all it takes"
 ---
 
 import LiveMap from '../../../../components/LiveMap.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/pmtiles-source-and-protocol.yaml?raw';
 
-Replicates the MapLibre example [PMTiles source and protocol](https://maplibre.org/maplibre-gl-js/docs/examples/pmtiles-source-and-protocol/). Since 0.9 it is **YAML only**: maplibre-yaml sees the `pmtiles://` URL (or a `.pmtiles` file name), registers the PMTiles protocol itself — once, on the maplibre-gl module the map renders with — and reads the archive with HTTP range requests.
+Replicates the MapLibre example [PMTiles source and protocol](https://maplibre.org/maplibre-gl-js/docs/examples/pmtiles-source-and-protocol/). It is **YAML only**: maplibre-yaml sees the `pmtiles://` URL (or a `.pmtiles` file name), registers the PMTiles protocol itself — once, on the maplibre-gl module the map renders with — and reads the archive with HTTP range requests.
 
 <LiveMap src="/configs/gallery/pmtiles-source-and-protocol.yaml" height="440px" />
 
-## The YAML
+## The complete document \{#the-yaml}
 
 <Code code={config} lang="yaml" title="pmtiles-source-and-protocol.yaml" />
 
@@ -22,9 +22,9 @@ Replicates the MapLibre example [PMTiles source and protocol](https://maplibre.o
 - The archive is read in parts (range requests), so the host must support them — GitHub Pages, Netlify, S3 and R2 do; `python -m http.server` doesn't. See [Cloud-native data](/guides/cloud-native-data/#hosting-range-requests-and-cors).
 - Data: [Protomaps](https://protomaps.com/) Florence sample extract (ODbL).
 
-## Registering the protocol yourself (still supported)
+## Register the protocol yourself \{#registering-the-protocol-yourself-still-supported}
 
-Before 0.9 this page needed page JavaScript; that route still works, and a page that registers `pmtiles` itself keeps its registration (useful for custom headers or a custom `Source`). Register through `@maplibre-yaml/core/maplibre`, so the protocol lands on the same maplibre-gl module `<ml-map>` renders with:
+Register the protocol in page JavaScript when you need custom headers or a custom `Source`; a page that registers `pmtiles` itself keeps its registration. Register through `@maplibre-yaml/core/maplibre`, so the protocol lands on the same maplibre-gl module `<ml-map>` renders with:
 
 ```js
 import { addProtocol } from "@maplibre-yaml/core/maplibre";
