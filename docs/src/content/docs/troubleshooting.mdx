@@ -94,7 +94,7 @@ is not a problem report; to hide it or style it, see the
 [`<ml-map>` styling hooks](/reference/elements/#ml-map-styling-hooks).
 
 To catch mistakes before you load the page, run
-`npx maplibre-yaml validate map.yaml` ([The CLI](/cli/getting-started/)), or
+`npx maplibre-yaml@latest validate map.yaml` ([The CLI](/cli/getting-started/)), or
 set up [your editor](/guides/editor-setup/) to check the YAML as you type.
 Page scripts can listen for the same problems as events
 ([`ml-map:error` and the others](/reference/elements/)).
@@ -296,7 +296,7 @@ notice says why. The common messages, with the fix for each, are in
 
 | Symptom | Where to look |
 |---|---|
-| `mlym: command not found`, or `npx mlym` fails with a 404 | Use `npx maplibre-yaml`, or install the CLI: [Short alias](/cli/getting-started/#short-alias), [Command not found](/cli/reference/#command-not-found) |
+| `mlym: command not found`, or `npx mlym` fails with a 404 | Use `npx maplibre-yaml@latest`, or install the CLI: [Short alias](/cli/getting-started/#short-alias), [Command not found](/cli/reference/#command-not-found) |
 | No autocomplete or checking in your editor | [Editor setup](/guides/editor-setup/) |
 | `mlym validate` errors don't show in VS Code's Problems panel | [Validate on save (VS Code task)](/guides/editor-setup/#errors-dont-appear-in-problems-panel) |
 

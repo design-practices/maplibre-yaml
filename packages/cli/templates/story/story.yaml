@@ -8,7 +8,7 @@
 # - Paths to your own files (an image, a data file) are relative to
 #   index.html (images/photo.jpg), or start at the site root with "/"
 #   (/images/photo.jpg). On GitHub Pages, see the base note in index.html.
-# - Check this file for mistakes: npx maplibre-yaml validate story.yaml
+# - Check this file for mistakes: npx maplibre-yaml@latest validate story.yaml
 type: scrollytelling
 id: {{projectName}}
 # Card colours: "light" or "dark". A story-level setting, next to config:.

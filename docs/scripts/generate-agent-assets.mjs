@@ -272,7 +272,7 @@ enforces cross-field rules the JSON Schema cannot express.
 
 Generate a config, then repair it against structured validator output:
 
-    npx @maplibre-yaml/cli validate my-map.yaml -f json
+    npx maplibre-yaml@latest validate my-map.yaml -f json
 
 \`-f json\` emits \`{ valid, files: [{ file, errors: [{ path, message, line,
 column }] }] }\`. Fix each \`path\`/\`message\`, re-run until \`valid: true\`.

@@ -10,14 +10,15 @@ and in CI; a map on a web page doesn't need it.
 
 You need [Node.js](https://nodejs.org/) 20.9 or later (check with
 `node --version`). Every command on this page runs through
-`npx maplibre-yaml`, which downloads the CLI the first time you use it, so
-there is nothing to install. Once installed, the same program is also called
-`mlym` ([below](#short-alias)).
+`npx maplibre-yaml@latest`, which downloads the CLI, so there is nothing to
+install. The `@latest` makes npx fetch the newest release instead of reusing
+an older copy it downloaded before. Once installed, the same program is also
+called `mlym` ([below](#short-alias)).
 
 ## 1. Create a project \{#start-a-project}
 
 ```bash
-npx maplibre-yaml init my-map
+npx maplibre-yaml@latest init my-map
 cd my-map
 npx serve .
 ```
@@ -40,7 +41,7 @@ Break `map.yaml` on purpose: change `center: [-74.006, 40.7128]` to
 `center: -74.006, 40.7128`, then run:
 
 ```bash
-npx maplibre-yaml validate map.yaml
+npx maplibre-yaml@latest validate map.yaml
 ```
 
 ```text
@@ -60,7 +61,7 @@ file invalid, except in CI, where warnings count as errors too.
 ## 3. Preview while you edit \{#preview-your-map}
 
 ```bash
-npx maplibre-yaml preview map.yaml
+npx maplibre-yaml@latest preview map.yaml
 ```
 
 This opens a browser tab at http://localhost:3000 with the map alone on the
@@ -74,7 +75,7 @@ your own page, serve the folder as in step 1.
 ## 4. Export it to style.json
 
 ```bash
-npx maplibre-yaml emit map.yaml --out dist/
+npx maplibre-yaml@latest emit map.yaml --out dist/
 ```
 
 ```text
@@ -93,7 +94,7 @@ here the popup and the zoom buttons.
 
 ## Install the CLI instead \{#installation}
 
-`npx maplibre-yaml` works everywhere. To pin the CLI's version in a project,
+`npx maplibre-yaml@latest` works everywhere. To pin the CLI's version in a project,
 or to use the shorter name, install it:
 
 ```bash
@@ -109,14 +110,14 @@ npm install -g @maplibre-yaml/cli
 `mlym` and `maplibre-yaml` are two names for the same installed program.
 `mlym` exists only after an install: `npx mlym` on its own fails with a 404,
 because no npm package has that name. (`maplibre-yaml` is a small package
-that runs `@maplibre-yaml/cli`, which is why `npx maplibre-yaml` works without
+that runs `@maplibre-yaml/cli`, which is why `npx maplibre-yaml@latest` works without
 an install.)
 
 ## If something goes wrong
 
 - **"maplibre-yaml needs Node.js 20.9 or newer"**: update Node.js; the
   current LTS release works.
-- **`npx mlym` fails with a 404**: use `npx maplibre-yaml`, or install the
+- **`npx mlym` fails with a 404**: use `npx maplibre-yaml@latest`, or install the
   CLI first ([above](#short-alias)).
 - **A glob matches nothing**: quote it, `"maps/**/*.yaml"`, so the CLI sees
   the pattern rather than your shell's expansion of it.

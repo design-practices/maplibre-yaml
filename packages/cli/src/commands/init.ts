@@ -89,14 +89,15 @@ export function initArgsError(rawArgs: readonly string[]): string | null {
  * @remarks
  * Written for someone who ran the CLI through `npx`: a bare `maplibre-yaml` or
  * `mlym` only exists after an install, so every CLI command is spelled
- * `npx maplibre-yaml …` (the alias package; works with or without an
- * install), the spelling the starters and docs use (ml-aot.54).
+ * `npx maplibre-yaml@latest …` (the alias package; works with or without an
+ * install), the spelling the starters and docs use (ml-aot.54). The `@latest`
+ * stops npx from reusing an older CLI it cached on an earlier run.
  *
  * @param template - the template that was scaffolded
  * @param cdPath - the folder to `cd` into, or null when it is the current one
  */
 export function nextSteps(template: string, cdPath: string | null): string[] {
-  const cli = 'npx maplibre-yaml';
+  const cli = 'npx maplibre-yaml@latest';
   const lines: string[] = [];
   if (cdPath) lines.push(`  ${pc.cyan('cd')} ${cdPath}`);
 
@@ -159,8 +160,8 @@ export const initCommand = defineCommand({
       const argsError = initArgsError(rawArgs);
       if (argsError) {
         logger.error(argsError);
-        console.log(`\nUsage: ${pc.cyan('npx maplibre-yaml init [folder] --template <template>')}`);
-        console.log(`Run ${pc.cyan('npx maplibre-yaml init --help')} for all options.\n`);
+        console.log(`\nUsage: ${pc.cyan('npx maplibre-yaml@latest init [folder] --template <template>')}`);
+        console.log(`Run ${pc.cyan('npx maplibre-yaml@latest init --help')} for all options.\n`);
         process.exit(EXIT_CODES.VALIDATION_ERROR);
       }
 
@@ -171,7 +172,7 @@ export const initCommand = defineCommand({
         for (const t of templates) {
           console.log(`  ${pc.cyan(t.name.padEnd(10))} ${t.description}`);
         }
-        console.log(`\nUsage: ${pc.cyan('npx maplibre-yaml init [folder] --template <template>')}\n`);
+        console.log(`\nUsage: ${pc.cyan('npx maplibre-yaml@latest init [folder] --template <template>')}\n`);
         return;
       }
 

@@ -5,8 +5,8 @@ the maplibre-yaml command line, under a short name, so one-off commands need
 no install:
 
 ```bash
-npx maplibre-yaml init my-map
-npx maplibre-yaml validate my-map/map.yaml
+npx maplibre-yaml@latest init my-map
+npx maplibre-yaml@latest validate my-map/map.yaml
 ```
 
 Needs Node.js 20.9 or later (22 or 24 LTS recommended).

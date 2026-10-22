@@ -182,8 +182,8 @@ Unknown params are errors (typo protection).
 [export-class registry](/guides/export-classes/)):
 
 ```bash
-npx maplibre-yaml emit crosshatch.yaml --strict   # refuses: 1 lossy (layers.buildings.effect)
-npx maplibre-yaml emit crosshatch.yaml --out dist/ --sprite-base https://example.com/dist
+npx maplibre-yaml@latest emit crosshatch.yaml --strict   # refuses: 1 lossy (layers.buildings.effect)
+npx maplibre-yaml@latest emit crosshatch.yaml --out dist/ --sprite-base https://example.com/dist
 #  WARN  layers.buildings.effect: effect "tonal-hatch" on buildings — Effects are
 #   runtime shaders with no style.json form, so the layer exports with a fallback:
 #   the emitted style carries its own static style instead — lossy, so --strict

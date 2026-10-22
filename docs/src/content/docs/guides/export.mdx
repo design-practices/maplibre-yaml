@@ -22,7 +22,7 @@ interaction that sends a click to your page's code; see
 1. In the folder with your `map.yaml`, export it:
 
    ```bash
-   npx maplibre-yaml emit map.yaml --out dist/
+   npx maplibre-yaml@latest emit map.yaml --out dist/
    ```
 
    This writes `dist/style.json`. A warning on the terminal names each part
@@ -254,7 +254,7 @@ URL for their sprite files. Pass the address the style's folder will be
 served from:
 
 ```bash
-npx maplibre-yaml emit map.yaml --out dist/ --sprite-base https://maps.example.org/dist/
+npx maplibre-yaml@latest emit map.yaml --out dist/ --sprite-base https://maps.example.org/dist/
 ```
 
 ### A PMTiles or COG layer is blank

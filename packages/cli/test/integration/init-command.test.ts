@@ -81,7 +81,7 @@ describe('init command (integration)', () => {
       const { stdout } = await run('init my-map --template basic', dir);
       expect(stdout).toContain('cd my-map');
       expect(stdout).toContain('npx serve .');
-      expect(stdout).toContain('npx maplibre-yaml validate map.yaml');
+      expect(stdout).toContain('npx maplibre-yaml@latest validate map.yaml');
       // Any other server must support range requests (cloud-native files): not "any static server".
       expect(stdout).not.toContain('Any static web server works');
       expect(stdout).toContain('range requests');
@@ -162,7 +162,7 @@ describe('init command (integration)', () => {
       // The "element is not in core 0.7 yet" note is gone; serve-and-open steps instead.
       expect(result.stdout).not.toMatch(/not part of|0\.7 yet/);
       expect(result.stdout).toContain('npx serve .');
-      expect(result.stdout).toContain('npx maplibre-yaml validate story.yaml');
+      expect(result.stdout).toContain('npx maplibre-yaml@latest validate story.yaml');
 
       const validate = await run(`validate "${join(dir, 'my-story', 'story.yaml')}"`, dir);
       expect(validate.code).toBe(0);

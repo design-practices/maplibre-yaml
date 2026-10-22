@@ -16,18 +16,18 @@ It is one program with several names:
 
 | You type | Works |
 | -------- | ----- |
-| `npx maplibre-yaml …` | Anywhere, with no install. npx downloads `maplibre-yaml`, a small package that runs `@maplibre-yaml/cli` |
-| `npx @maplibre-yaml/cli …` | Anywhere, with no install: the full name |
+| `npx maplibre-yaml@latest …` | Anywhere, with no install. npx downloads `maplibre-yaml`, a small package that runs `@maplibre-yaml/cli` |
+| `npx @maplibre-yaml/cli@latest …` | Anywhere, with no install: the full name |
 | `npx mlym …` | After `npm install --save-dev @maplibre-yaml/cli` in the project. Without the install it fails with a 404, because no npm package is called `mlym` |
 | `mlym …` or `maplibre-yaml …` | After `npm install -g @maplibre-yaml/cli`, in any folder; or in `package.json` scripts of a project that installed it |
 
-The examples on this page use `npx maplibre-yaml`.
+The examples on this page use `npx maplibre-yaml@latest`.
 
 ## Global options
 
 | Option      | Alias | Description           |
 | ----------- | ----- | --------------------- |
-| `--help`    | `-h`  | Show help for a command (`npx maplibre-yaml init --help`) |
+| `--help`    | `-h`  | Show help for a command (`npx maplibre-yaml@latest init --help`) |
 | `--version` |       | Show the CLI version  |
 
 ## Commands
@@ -37,7 +37,7 @@ The examples on this page use `npx maplibre-yaml`.
 Create a new project from a template.
 
 ```bash
-npx maplibre-yaml init [folder] [options]
+npx maplibre-yaml@latest init [folder] [options]
 ```
 
 | Argument | Required | Default | Description |
@@ -67,9 +67,9 @@ complete and check it as you type. `init` prints the next steps for the
 template it used.
 
 ```bash
-npx maplibre-yaml init my-map                    # ./my-map from the basic template
-npx maplibre-yaml init my-site --template astro  # an Astro site
-npx maplibre-yaml init --list                    # list the templates
+npx maplibre-yaml@latest init my-map                    # ./my-map from the basic template
+npx maplibre-yaml@latest init my-site --template astro  # an Astro site
+npx maplibre-yaml@latest init --list                    # list the templates
 ```
 
 ---
@@ -81,7 +81,7 @@ problems with their path in the document, a message, and the line and
 column.
 
 ```bash
-npx maplibre-yaml validate <patterns> [options]
+npx maplibre-yaml@latest validate <patterns> [options]
 ```
 
 | Argument   | Required | Description                                 |
@@ -121,9 +121,9 @@ directly.
   `.pmtiles` file. A note never makes a file invalid, even in strict mode.
 
 ```bash
-npx maplibre-yaml validate map.yaml
-npx maplibre-yaml validate "maps/**/*.yaml" --watch
-npx maplibre-yaml validate "**/*.yaml" --format sarif > results.sarif
+npx maplibre-yaml@latest validate map.yaml
+npx maplibre-yaml@latest validate "maps/**/*.yaml" --watch
+npx maplibre-yaml@latest validate "**/*.yaml" --format sarif > results.sarif
 ```
 
 #### Output formats
@@ -166,7 +166,7 @@ Start a local server that shows one YAML document, a map or a story map, on
 a page of its own, and reloads it when you save the file.
 
 ```bash
-npx maplibre-yaml preview <file> [options]
+npx maplibre-yaml@latest preview <file> [options]
 ```
 
 | Argument | Required | Description                     |
@@ -188,8 +188,8 @@ the YAML file's folder, which the server serves.
 To see your own page, serve the folder instead (for example `npx serve .`).
 
 ```bash
-npx maplibre-yaml preview map.yaml
-npx maplibre-yaml preview map.yaml --port 8080 --no-open
+npx maplibre-yaml@latest preview map.yaml
+npx maplibre-yaml@latest preview map.yaml --port 8080 --no-open
 ```
 
 ---
@@ -205,7 +205,7 @@ opens in [Maputnik](https://maplibre.org/maputnik/) and renders in a plain
 document.
 
 ```bash
-npx maplibre-yaml emit <file> [options]
+npx maplibre-yaml@latest emit <file> [options]
 ```
 
 | Argument | Required | Description |
@@ -221,7 +221,7 @@ npx maplibre-yaml emit <file> [options]
 | `--trust` | | string | | Deprecated, and has no effect: it is no longer listed in `--help`, and passing it prints a note. Trust gates raw `!html` in popups and `click.emit` host events, and neither is part of a `style.json`, so it never changed the exported file. A later release will remove it |
 | `--sprite-base` | | string | | Absolute URL where the folder holding the style will be served. Required, with `--out`, when the document generates sprite images (markers, `images:`), because MapLibre rejects relative sprite URLs |
 
-Warnings go to stderr, so `npx maplibre-yaml emit map.yaml > style.json`
+Warnings go to stderr, so `npx maplibre-yaml@latest emit map.yaml > style.json`
 keeps the JSON clean. A part of the document with no style.json form prints
 a `contract` warning, and a part whose look changes prints a `lossy` warning,
 which `--strict` refuses ([Reading the report](/guides/export-classes/#reading-the-emit-report)).
@@ -243,10 +243,10 @@ resolves against the YAML file's folder, then the current folder and its
   [Large-data files in an exported style](/guides/export/#large-data-files-in-an-exported-style).
 
 ```bash
-npx maplibre-yaml emit map.yaml                       # print the style
-npx maplibre-yaml emit map.yaml --out dist/           # write dist/style.json
-npx maplibre-yaml emit map.yaml --strict --out dist/  # fail on any loss (CI)
-npx maplibre-yaml emit map.yaml --out dist/ --sprite-base https://maps.example.org/dist/
+npx maplibre-yaml@latest emit map.yaml                       # print the style
+npx maplibre-yaml@latest emit map.yaml --out dist/           # write dist/style.json
+npx maplibre-yaml@latest emit map.yaml --strict --out dist/  # fail on any loss (CI)
+npx maplibre-yaml@latest emit map.yaml --out dist/ --sprite-base https://maps.example.org/dist/
 ```
 
 The last line exports a document with markers: it writes `style.json` and
@@ -263,7 +263,7 @@ against. The schemas describe [format v1](/guides/format-v2/); there is no
 JSON Schema for format v2.
 
 ```bash
-npx maplibre-yaml schema [block] [options]
+npx maplibre-yaml@latest schema [block] [options]
 ```
 
 | Argument | Required | Default | Description                                          |
@@ -275,8 +275,8 @@ npx maplibre-yaml schema [block] [options]
 | `--out` | `-o`  | string | Write the schema to a file instead of stdout    |
 
 ```bash
-npx maplibre-yaml schema map                         # print the map schema
-npx maplibre-yaml schema any --out any.schema.json   # write a file for offline use
+npx maplibre-yaml@latest schema map                         # print the map schema
+npx maplibre-yaml@latest schema any --out any.schema.json   # write a file for offline use
 ```
 
 A modeline then points at the written file:
@@ -298,7 +298,7 @@ rides on `*-pattern` images; `bake` derives them reproducibly instead of
 leaving them as unexplained binaries.
 
 ```bash
-npx maplibre-yaml bake [preset] --out <dir>
+npx maplibre-yaml@latest bake [preset] --out <dir>
 ```
 
 | Preset | Writes | From |
@@ -311,8 +311,8 @@ With no preset, `bake` lists them. The docs gallery's committed images are
 exactly this output — a test pins them pixel for pixel:
 
 ```bash
-npx maplibre-yaml bake crosshatch --out docs/public/classics/crosshatch
-npx maplibre-yaml bake blueprint --out docs/public/classics/blueprint
+npx maplibre-yaml@latest bake crosshatch --out docs/public/classics/crosshatch
+npx maplibre-yaml@latest bake blueprint --out docs/public/classics/blueprint
 ```
 
 ---
@@ -377,7 +377,7 @@ Set it to any value to print debug messages and the stack trace of an
 unexpected error, for a bug report:
 
 ```bash
-DEBUG=1 npx maplibre-yaml validate "**/*.yaml"
+DEBUG=1 npx maplibre-yaml@latest validate "**/*.yaml"
 ```
 
 ### NO_COLOR
@@ -385,7 +385,7 @@ DEBUG=1 npx maplibre-yaml validate "**/*.yaml"
 Disable colored output:
 
 ```bash
-NO_COLOR=1 npx maplibre-yaml validate map.yaml
+NO_COLOR=1 npx maplibre-yaml@latest validate map.yaml
 ```
 
 ---
@@ -423,7 +423,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npx maplibre-yaml validate "**/*.yaml"
+      - run: npx maplibre-yaml@latest validate "**/*.yaml"
 ```
 
 ### GitHub code scanning
@@ -443,7 +443,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npx maplibre-yaml validate "**/*.yaml" --format sarif > results.sarif
+      - run: npx maplibre-yaml@latest validate "**/*.yaml" --format sarif > results.sarif
       - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
@@ -457,7 +457,7 @@ for a commit (it does nothing when there are none):
 ```bash
 #!/bin/sh
 git diff --cached --name-only --diff-filter=ACM -- '*.yaml' '*.yml' \
-  | xargs -r npx maplibre-yaml validate
+  | xargs -r npx maplibre-yaml@latest validate
 ```
 
 ---
@@ -467,7 +467,7 @@ git diff --cached --name-only --diff-filter=ACM -- '*.yaml' '*.yml' \
 ### Command not found
 
 `mlym` and `maplibre-yaml` exist only after an install, and `npx mlym` fails
-with a 404 without one. Use `npx maplibre-yaml`, or install the CLI (see
+with a 404 without one. Use `npx maplibre-yaml@latest`, or install the CLI (see
 [Running the CLI](#running-the-cli)). After a global install, check that
 your `PATH` includes npm's global bin folder (`npm prefix -g`).
 

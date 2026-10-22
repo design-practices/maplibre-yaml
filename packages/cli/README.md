@@ -15,7 +15,7 @@ standalone MapLibre `style.json`.
 No install needed:
 
 ```bash
-npx maplibre-yaml validate map.yaml
+npx maplibre-yaml@latest validate map.yaml
 ```
 
 Installed, the CLI has two command names for the same program,
@@ -32,13 +32,13 @@ npx mlym validate map.yaml
 ```
 
 `mlym` exists only once `@maplibre-yaml/cli` is installed. There is no `mlym`
-package, so `npx mlym` without an install fails; use `npx maplibre-yaml` for
+package, so `npx mlym` without an install fails; use `npx maplibre-yaml@latest` for
 one-off runs.
 
 ## Quick start
 
 ```bash
-npx maplibre-yaml init my-map
+npx maplibre-yaml@latest init my-map
 cd my-map
 npx serve .
 ```
@@ -74,13 +74,13 @@ reload the page.
 
 What `emit` keeps, replaces with a fallback, or drops is listed in
 [Export classes](https://docs.maplibre-yaml.org/guides/export-classes/).
-Warnings go to stderr, so `npx maplibre-yaml emit map.yaml > style.json`
+Warnings go to stderr, so `npx maplibre-yaml@latest emit map.yaml > style.json`
 keeps the JSON clean.
 
 ## In CI
 
 ```yaml
-- run: npx maplibre-yaml validate "**/*.yaml" --format json --strict
+- run: npx maplibre-yaml@latest validate "**/*.yaml" --format json --strict
 ```
 
 `--format sarif` feeds GitHub code scanning; see
@@ -105,7 +105,7 @@ the same version accepts.
 
 ## Related packages
 
-- [`maplibre-yaml`](https://www.npmjs.com/package/maplibre-yaml): runs this CLI, for `npx maplibre-yaml …`
+- [`maplibre-yaml`](https://www.npmjs.com/package/maplibre-yaml): runs this CLI, for `npx maplibre-yaml@latest …`
 - [`@maplibre-yaml/core`](https://www.npmjs.com/package/@maplibre-yaml/core): the library and the `<ml-map>` web component
 - [`@maplibre-yaml/astro`](https://www.npmjs.com/package/@maplibre-yaml/astro): Astro components
 

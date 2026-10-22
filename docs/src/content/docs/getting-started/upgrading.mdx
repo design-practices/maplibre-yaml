@@ -76,9 +76,9 @@ afterwards.
 </TabItem>
 <TabItem label="CLI">
 
-With `npx maplibre-yaml …` there is nothing installed to upgrade; write
-`npx maplibre-yaml@latest …` once so npx doesn't reuse an older copy it
-downloaded before. A CLI installed in a project or globally moves with:
+With `npx maplibre-yaml@latest …` there is nothing installed to upgrade:
+the `@latest` makes npx fetch the newest CLI instead of reusing an older
+copy it downloaded before. A CLI installed in a project or globally moves with:
 
 ```bash
 npm install --save-dev @maplibre-yaml/cli@latest   # in a project: ^0.6.0
@@ -86,7 +86,7 @@ npm install -g @maplibre-yaml/cli@latest           # installed globally
 ```
 
 An installed CLI also answers to its short name, `mlym`, which the notes
-below use: `mlym validate` is `npx maplibre-yaml validate`.
+below use: `mlym validate` is `npx maplibre-yaml@latest validate`.
 
 </TabItem>
 </Tabs>

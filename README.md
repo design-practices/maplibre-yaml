@@ -72,7 +72,7 @@ layers:
 ```
 
 Serve the folder (`npx serve .`) and open the address it prints. Or let the
-CLI write both files: `npx maplibre-yaml init my-map`.
+CLI write both files: `npx maplibre-yaml@latest init my-map`.
 [Quick start](https://docs.maplibre-yaml.org/getting-started/quick-start/) walks through it;
 [Publishing & subpaths](https://docs.maplibre-yaml.org/guides/publishing/) puts it on GitHub Pages.
 
@@ -92,7 +92,7 @@ import { Map } from '@maplibre-yaml/astro';
 | [`@maplibre-yaml/core`](https://www.npmjs.com/package/@maplibre-yaml/core) | The engine: `<ml-map>` and `<ml-scrollytelling>` web components, YAML parser, schemas, renderer |
 | [`@maplibre-yaml/astro`](https://www.npmjs.com/package/@maplibre-yaml/astro) | Astro components (`Map`, `FullPageMap`, `Scrollytelling`), loaders, content-collection helpers |
 | [`@maplibre-yaml/cli`](https://www.npmjs.com/package/@maplibre-yaml/cli) | `init`, `validate`, `preview`, `emit` (export to `style.json`), `schema` |
-| [`maplibre-yaml`](https://www.npmjs.com/package/maplibre-yaml) | Runs the CLI as `npx maplibre-yaml …` |
+| [`maplibre-yaml`](https://www.npmjs.com/package/maplibre-yaml) | Runs the CLI as `npx maplibre-yaml@latest …` |
 | [`@maplibre-yaml/effects`](https://www.npmjs.com/package/@maplibre-yaml/effects) | Shader effects on 3D buildings (experimental) |
 
 ## Features
