@@ -293,6 +293,8 @@ interface WalkContext {
   doc: Document;
   lineCounter: LineCounter;
   warnings: ValidationWarning[];
+  /** The whole document being walked, for rules that depend on its kind. */
+  root: unknown;
 }
 
 /**
@@ -383,7 +385,7 @@ export function collectWarnings(
   doc: Document,
   lineCounter: LineCounter
 ): ValidationWarning[] {
-  const ctx: WalkContext = { doc, lineCounter, warnings: [] };
+  const ctx: WalkContext = { doc, lineCounter, warnings: [], root: value };
   walk(value, schema, [], ctx);
   return ctx.warnings;
 }
@@ -595,10 +597,15 @@ export const DEPRECATED_ACTION_TRIGGERS = [
 interface DeprecationRule {
   /** The deprecated key on the matched object. */
   field: string;
-  /** Whether this rule applies to the object currently being walked. */
+  /**
+   * Whether this rule applies to the object currently being walked. `root`
+   * is the whole document, for a rule that only holds in one kind of
+   * document (a root document's `config:` is not a map block's).
+   */
   applies: (
     value: Record<string, unknown>,
-    path: (string | number)[]
+    path: (string | number)[],
+    root: unknown
   ) => boolean;
   /** Static text, or computed from the matched object. */
   message: string | ((value: Record<string, unknown>) => string);
@@ -638,6 +645,40 @@ const DEPRECATIONS: DeprecationRule[] = [
       'The map already shows "Loading map…" while it starts, and a data file that fails ' +
       "to load is reported on the map. Remove loading:.",
   },
+  // Accepted but inert (ml-1q8, ml-j2p): deprecated with a warning in 0.9.1
+  // so existing documents keep validating; 0.10 implements or removes them.
+  ...(["build", "hybrid"] as const).map((strategy) => ({
+    // Nothing fetches at build time: every source is fetched in the browser.
+    field: "fetchStrategy",
+    applies: (value: Record<string, unknown>, path: (string | number)[]) =>
+      value.fetchStrategy === strategy &&
+      ((value.type === "geojson" && path[0] !== "style") || path[path.length - 1] === "runtime"),
+    message:
+      `"fetchStrategy: ${strategy}" has no effect: maplibre-yaml fetches a source's data ` +
+      "in the browser when the map loads, whatever fetchStrategy says. Remove fetchStrategy:.",
+  })),
+  ...(["dataFetching", "theme"] as const).map((field) => ({
+    // A root document's `config:` (GlobalConfigSchema): nothing reads either.
+    field,
+    applies: (_value: Record<string, unknown>, path: (string | number)[], root: unknown) =>
+      path.length === 1 && path[0] === "config" && isRootDocument(root),
+    message:
+      `"config.${field}" has no effect: nothing in maplibre-yaml reads it` +
+      (field === "theme" ? " (a story's own theme: is read; this one is not)" : "") +
+      `. Remove ${field}:.`,
+  })),
+  {
+    // Multi-page documents (pages:, and the content / mixed / map-fullpage
+    // blocks that only occur inside them): one warning per document.
+    field: "pages",
+    applies: (_value: Record<string, unknown>, path: (string | number)[], root: unknown) =>
+      path.length === 0 && isRootDocument(root),
+    message:
+      "Multi-page documents (pages:, and content, mixed and map-fullpage blocks) aren't " +
+      "rendered by any maplibre-yaml package yet: this document validates, but nothing " +
+      "displays it. To show a map or a story, use a document with type: map or " +
+      "type: scrollytelling.",
+  },
   ...DEPRECATED_ACTION_TRIGGERS.map((trigger) => ({
     field: "action",
     applies: (_value: Record<string, unknown>, path: (string | number)[]) =>
@@ -651,6 +692,11 @@ const DEPRECATIONS: DeprecationRule[] = [
   })),
 ];
 
+/** A multi-page root document: no `type:`, a `pages:` key. */
+function isRootDocument(root: unknown): boolean {
+  return isPlainObject(root) && root["type"] === undefined && root["pages"] !== undefined;
+}
+
 /**
  * Record a deprecation warning for every rule matching the walked object.
  */
@@ -661,7 +707,7 @@ function checkDeprecations(
 ): void {
   for (const rule of DEPRECATIONS) {
     if (value[rule.field] === undefined) continue;
-    if (!rule.applies(value, path)) continue;
+    if (!rule.applies(value, path, ctx.root)) continue;
 
     const pos = positionForKey(ctx.doc, ctx.lineCounter, path, rule.field);
     ctx.warnings.push({
@@ -721,7 +767,7 @@ function checkUnimplemented(
 ): void {
   for (const rule of UNIMPLEMENTED) {
     if (value[rule.field] === undefined) continue;
-    if (!rule.applies(value, path)) continue;
+    if (!rule.applies(value, path, ctx.root)) continue;
 
     const pos = positionForKey(ctx.doc, ctx.lineCounter, path, rule.field);
     ctx.warnings.push({

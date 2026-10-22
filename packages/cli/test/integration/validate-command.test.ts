@@ -50,12 +50,13 @@ describe('validate command (integration)', () => {
     expect(stdout).toContain('valid-scrollytelling.yaml');
   });
 
-  it('exits with 0 for root pages document', async () => {
+  it('exits with 0 for root pages document, warning that nothing renders it', async () => {
+    // A deprecation warning (ml-j2p.4): exit 0 even under --strict.
     const { stdout } = await execAsync(
-      `node "${CLI}" validate "test/fixtures/valid-root.yaml"`
+      `node "${CLI}" validate --strict "test/fixtures/valid-root.yaml"`
     );
-    expect(stdout).toContain('✓');
     expect(stdout).toContain('valid-root.yaml');
+    expect(stdout).toContain("aren't rendered by any maplibre-yaml package yet");
   });
 
   it('exits with 1 and lists valid types for unknown block type', async () => {

@@ -60,20 +60,72 @@ export async function loadProjectConfig(cwd = process.cwd()): Promise<ProjectCon
   return null;
 }
 
+/** A command's option definitions, as far as {@link explicitFlags} needs them. */
+export type FlagDefinitions = Record<string, { alias?: string | string[]; [key: string]: unknown }>;
+
 /**
- * Merge CLI args with project config (CLI takes precedence)
+ * The option names given explicitly on the command line: `--port 4000`,
+ * `--port=4000`, `--open`, `--no-open`, and an alias such as `-f json` (with
+ * `definitions`, an alias is reported under its option's name).
+ *
+ * @remarks
+ * citty fills in an option's declared default, so the parsed args cannot say
+ * whether `open: true` was typed or defaulted. The raw arguments can. Parsing
+ * stops at `--`, as citty's does. Short flags may be grouped (`-wf`), as
+ * citty allows.
+ */
+export function explicitFlags(
+  rawArgs: readonly string[],
+  definitions: FlagDefinitions = {}
+): Set<string> {
+  const aliases = new Map<string, string>();
+  for (const [name, def] of Object.entries(definitions)) {
+    const list = def.alias === undefined ? [] : Array.isArray(def.alias) ? def.alias : [def.alias];
+    for (const alias of list) aliases.set(alias, name);
+  }
+  const canonical = (flag: string) => aliases.get(flag) ?? flag;
+
+  const names = new Set<string>();
+  for (const arg of rawArgs) {
+    if (arg === '--') break;
+    const long = /^--(?:no-)?([^=]+)/.exec(arg);
+    if (long) {
+      names.add(canonical(long[1]!));
+      continue;
+    }
+    const short = /^-([^-=][^=]*)/.exec(arg);
+    if (short) for (const flag of short[1]!) names.add(canonical(flag));
+  }
+  return names;
+}
+
+/**
+ * Merge CLI args with project config: a flag given on the command line wins,
+ * then the project config file, then the option's built-in default.
+ *
+ * @param cli - The raw command-line arguments and the command's option
+ *   definitions. With them, a project value replaces any CLI value that was
+ *   not given explicitly, including one citty filled in from the option's
+ *   default (ml-dpe). Without them, a project value only fills a CLI value
+ *   that is `undefined` or `null`.
  */
 export function mergeConfig<T extends Record<string, any>>(
   cliArgs: T,
-  projectConfig: Partial<T> | undefined
+  projectConfig: Partial<T> | undefined,
+  cli?: { rawArgs: readonly string[]; definitions?: FlagDefinitions }
 ): T {
   if (!projectConfig) return cliArgs;
 
   const merged = { ...cliArgs };
+  const explicit = cli ? explicitFlags(cli.rawArgs, cli.definitions) : undefined;
 
   for (const [key, value] of Object.entries(projectConfig)) {
-    // Only use project config value if CLI didn't set it (undefined or default)
-    if (merged[key] === undefined || merged[key] === null) {
+    if (value === undefined || value === null) continue;
+    const cliValue = merged[key];
+    const cliSetIt = explicit
+      ? explicit.has(key)
+      : cliValue !== undefined && cliValue !== null;
+    if (!cliSetIt) {
       (merged as any)[key] = value;
     }
   }

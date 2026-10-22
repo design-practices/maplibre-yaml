@@ -141,7 +141,9 @@ export const SourceRuntimeSchema = z
     fetchStrategy: z
       .enum(["runtime", "build", "hybrid"])
       .optional()
-      .describe("When to fetch data: runtime (default), build, or hybrid"),
+      .describe(
+        "No effect (deprecated): data is always fetched in the browser when the map loads. build and hybrid warn and do nothing"
+      ),
     // Cloud-native formats (0.9, ml-cnv): how the file is read.
     format: SourceFormatSchema.optional(),
     load: SourceLoadSchema.optional(),

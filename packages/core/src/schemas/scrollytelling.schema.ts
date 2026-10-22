@@ -536,7 +536,9 @@ export const ScrollytellingBlockSchema: z.ZodObject<any> = z
     showMarkers: z
       .boolean()
       .default(false)
-      .describe("Show chapter markers on map"),
+      .describe(
+        "Show the chapter rail: a column of dots beside the story, one per chapter, that jump to it (not markers on the map)"
+      ),
     markerColor: z
       .string()
       .optional()

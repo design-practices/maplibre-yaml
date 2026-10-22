@@ -101,7 +101,9 @@ export const MixedBlockSchema: z.ZodType<any> = z.lazy(() =>
         .describe("Gap between blocks (CSS gap property)"),
       blocks: z.array(BlockSchema).describe("Child blocks"),
     })
-    .describe("Mixed block for combining multiple block types")
+    .describe(
+      "Mixed block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet"
+    )
 );
 
 /** Inferred type for mixed block. */
@@ -210,7 +212,9 @@ export const PageSchema = z
     description: z.string().optional().describe("Page description for SEO"),
     blocks: z.array(BlockSchema).describe("Page content blocks"),
   })
-  .describe("Page configuration");
+  .describe(
+    "A page of a multi-page document. No effect (deprecated): no maplibre-yaml package renders it yet"
+  );
 
 /** Inferred type for page. */
 export type Page = z.infer<typeof PageSchema>;
@@ -259,7 +263,10 @@ export const GlobalConfigSchema = z
     defaultMapStyle: MapStyleSchema.optional().describe(
       "Default map style: a style URL, a style object, or a Protomaps basemap ({ pmtiles, flavor, lang })",
     ),
-    theme: z.enum(["light", "dark"]).default("light").describe("Default theme"),
+    theme: z
+      .enum(["light", "dark"])
+      .default("light")
+      .describe("No effect (deprecated): nothing reads it. A story's own theme: is read"),
     defaultZoom: z
       .number()
       .min(0)
@@ -274,21 +281,21 @@ export const GlobalConfigSchema = z
         defaultStrategy: z
           .enum(["runtime", "build", "hybrid"])
           .default("runtime")
-          .describe("Default fetch strategy"),
+          .describe("No effect (deprecated)"),
         timeout: z
           .number()
           .min(1000)
           .default(30000)
-          .describe("Default timeout in milliseconds"),
+          .describe("No effect (deprecated)"),
         retryAttempts: z
           .number()
           .int()
           .min(0)
           .default(3)
-          .describe("Default retry attempts"),
+          .describe("No effect (deprecated)"),
       })
       .optional()
-      .describe("Data fetching configuration"),
+      .describe("No effect (deprecated): nothing reads it"),
   })
   .describe("Global configuration");
 
@@ -465,9 +472,13 @@ export const RootSchema: z.ZodType<any> = z
     pages: z
       .array(PageSchema)
       .min(1, "At least one page is required")
-      .describe("Page definitions"),
+      .describe(
+        "No effect (deprecated): multi-page documents validate, but no maplibre-yaml package renders them yet"
+      ),
   })
-  .describe("Root configuration schema");
+  .describe(
+    "Multi-page root document. No effect (deprecated): it validates, but no maplibre-yaml package renders it yet"
+  );
 
 /** Inferred type for root configuration. */
 export type RootConfig = z.infer<typeof RootSchema>;

@@ -231,7 +231,9 @@ const FitToObjectSchema = z
     source: z
       .string()
       .min(1)
-      .describe("Name of a GeoJSON entry in `sources:` whose data the camera frames"),
+      .describe(
+        "Name of a source in `sources:` (GeoJSON, FlatGeobuf, GeoParquet or COG) whose data the camera frames"
+      ),
     padding: z
       .number()
       .min(0)
@@ -255,7 +257,9 @@ export const FitToSchema = z
       .string()
       .min(1)
       .transform((source): z.output<typeof FitToObjectSchema> => ({ source }))
-      .describe("Name of a GeoJSON entry in `sources:` (shorthand for { source: name })"),
+      .describe(
+        "Name of a source in `sources:` (GeoJSON, FlatGeobuf, GeoParquet or COG); shorthand for { source: name }"
+      ),
     FitToObjectSchema,
   ])
   .describe("Fit the initial camera to a source's data (GeoJSON, FlatGeobuf, GeoParquet or COG): { source, padding, maxZoom }, or a source name");
@@ -819,7 +823,7 @@ export const ParametersSchema = z
             "Params-panel control kind: `enum`/`select` (dropdown over `values`), " +
               "`range` (slider over `min`/`max`/`step`), or `toggle` (checkbox). " +
               "When omitted it is inferred: `values` gives a dropdown, a boolean " +
-              "default gives a toggle; other values render no control"
+              "default gives a toggle. Any other value shows a read-only row with the parameter's current value"
           ),
         values: z.array(z.any()).optional().describe("Allowed values, for enum parameters"),
         min: z.number().optional().describe("Lower bound, for range parameters"),
@@ -1058,7 +1062,9 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
       "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on export"
     ),
   })
-  .describe("Full-page map block");
+  .describe(
+    "Full-page map block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet"
+  );
 
 /** Inferred type for full-page map block. */
 export type MapFullPageBlock = z.infer<typeof MapFullPageBlockSchema>;

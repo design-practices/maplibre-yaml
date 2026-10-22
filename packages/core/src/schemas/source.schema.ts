@@ -498,7 +498,9 @@ export const GeoJSONSourceSchema = z
     fetchStrategy: z
       .enum(["runtime", "build", "hybrid"])
       .default("runtime")
-      .describe("When to fetch data: runtime (default), build, or hybrid"),
+      .describe(
+        "No effect (deprecated): data is always fetched in the browser when the map loads. build and hybrid warn and do nothing"
+      ),
     stream: StreamConfigSchema.optional().describe(
       "WebSocket/SSE streaming configuration"
     ),
@@ -511,16 +513,16 @@ export const GeoJSONSourceSchema = z
       .min(1000)
       .optional()
       .describe(
-        "Polling interval in milliseconds (legacy, use refresh.refreshInterval)"
+        "Deprecated: use refresh.refreshInterval. Polling interval in milliseconds"
       ),
     updateStrategy: z
       .enum(["replace", "merge", "append-window"])
       .optional()
-      .describe("Update strategy (legacy, use refresh.updateStrategy)"),
+      .describe("Deprecated: use refresh.updateStrategy"),
     updateKey: z
       .string()
       .optional()
-      .describe("Update key (legacy, use refresh.updateKey)"),
+      .describe("Deprecated: use refresh.updateKey"),
     loading: LoadingConfigSchema.optional(),
     cache: CacheConfigSchema.optional().describe("Cache configuration"),
     // MapLibre clustering options

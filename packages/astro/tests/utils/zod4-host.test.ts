@@ -73,6 +73,24 @@ describe("zod-4 host (Astro 6+)", () => {
     expect(JSON.stringify(both.error?.issues)).toMatch(/Cannot use 'feature_ref'/);
   });
 
+  it("map entries accept GeoJSON shorthand on the zod-4 host too (ml-svf)", async () => {
+    const withShorthand = {
+      ...MAP,
+      layers: [
+        {
+          id: "office",
+          type: "circle",
+          source: { type: "geojson", location: { coordinates: [1, 2], name: "Office" } },
+        },
+      ],
+    };
+    const ok = await getMapSchema().safeParseAsync(withShorthand);
+    expect(ok.success).toBe(true);
+    expect((ok.data as any).layers[0].source.data.geometry.coordinates).toEqual([1, 2]);
+    const nested = z.object({ map: getMapSchema() }).safeParse({ map: withShorthand });
+    expect(nested.success).toBe(true);
+  });
+
   it("bridged core schemas validate, apply defaults, and keep issue paths", async () => {
     const ok = await getMapSchema().safeParseAsync(MAP);
     expect(ok.success).toBe(true);
