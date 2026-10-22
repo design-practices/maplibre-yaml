@@ -133,7 +133,7 @@ flowchart TB
 
 ### Sources / Research
 
-- plans/feat-maplibre-examples-gallery.md — the 139-example census verdicts and the Wave 3 friction log (F1/F2 foundations blockers; hatch ergonomics findings).
+- docs/plans/feat-maplibre-examples-gallery.md — the 139-example census verdicts and the Wave 3 friction log (F1/F2 foundations blockers; hatch ergonomics findings).
 - docs/brainstorms/2026-07-15-tangram-style-replication.md — ADR: erasability test, package split, Tangram options considered and rejected.
 - docs/brainstorms/2026-07-14-proposal-interactions.md — effects + deck + interactions proposal; §5 deck backend, §9 risks.
 - docs/brainstorms/effects/ — the unrun effect implementations (types contract, flow-lines, hatch-fill, tron-buildings) with fallback() shapes.

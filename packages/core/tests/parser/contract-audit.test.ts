@@ -4,7 +4,7 @@
  *
  * - `$ref` handling was AUDITED AS ALREADY CLOSED and is pinned here: a v1
  *   standalone block resolves `$ref` against its own `sources:` record and
- *   hard-errors when the target is missing (todos/039 is stale); v2
+ *   hard-errors when the target is missing (docs/archive/todos/039 is stale); v2
  *   hard-errors on the shape itself ($ref is a v1 affordance).
  * - Scrollytelling fields that once warned `kind: "unimplemented"`
  *   (spinGlobe, rotateAnimation, callback, and the fitBounds/custom/flyTo/

@@ -85,6 +85,19 @@ import { Map } from '@maplibre-yaml/astro';
 <Map src="/configs/hero-map.yaml" height="500px" />
 ```
 
+## Install
+
+No install is needed for a plain HTML page: the quick start above loads
+everything from a CDN. With a bundler or in Astro:
+
+```bash
+npm install @maplibre-yaml/core maplibre-gl@^6                         # web components
+npm install @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6    # Astro
+```
+
+[Installation & versions](https://docs.maplibre-yaml.org/getting-started/installation/)
+covers each setup.
+
 ## Packages
 
 | Package | What it is |
@@ -118,10 +131,14 @@ import { Map } from '@maplibre-yaml/astro';
 - **Examples:** the [MapLibre example gallery](https://docs.maplibre-yaml.org/examples/gallery/)
   rebuilt in maplibre-yaml, each marked YAML, YAML + JavaScript or YAML + plugin.
 
-Something wrong? [Troubleshooting](https://docs.maplibre-yaml.org/troubleshooting/). Upgrading?
-[Upgrading to 0.9](https://docs.maplibre-yaml.org/getting-started/upgrading/).
+Something wrong? [Troubleshooting](https://docs.maplibre-yaml.org/troubleshooting/).
+Upgrading? [Upgrading](https://docs.maplibre-yaml.org/getting-started/upgrading/)
+covers moving to a newer release.
 
-## Development
+## Contributing
+
+This is a pnpm monorepo: `packages/` holds the published packages, `docs/`
+the documentation site, `examples/` runnable examples.
 
 ```bash
 pnpm install
@@ -130,9 +147,10 @@ pnpm test
 pnpm presubmit   # build, typecheck, lint, test, docs snippet check
 ```
 
-See [CONTRIBUTING.md](https://github.com/design-practices/maplibre-yaml/blob/main/CONTRIBUTING.md).
-Releases go through [changesets](https://github.com/changesets/changesets).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Releases go through
+[changesets](https://github.com/changesets/changesets). Bugs and ideas:
+[GitHub Issues](https://github.com/design-practices/maplibre-yaml/issues).
 
 ## License
 
-MIT
+[MIT](LICENSE.md)

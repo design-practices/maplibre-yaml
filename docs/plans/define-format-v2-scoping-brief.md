@@ -2,7 +2,7 @@
 
 **Status:** Prepared for the define-v2 session (bead `ml-lc5.1`, epic `ml-16x`)
 **Date:** 2026-08-07
-**Source of authority:** [`docs/brainstorms/2026-07-24-library-direction-requirements.md`](../docs/brainstorms/2026-07-24-library-direction-requirements.md) (R8)
+**Source of authority:** [`docs/brainstorms/2026-07-24-library-direction-requirements.md`](../brainstorms/2026-07-24-library-direction-requirements.md) (R8)
 **Supersedes:** the Phase-5 D6 scoping questions in [`feat-geojson-schema-alignment.md`](./feat-geojson-schema-alignment.md), which grow into this session
 
 ---

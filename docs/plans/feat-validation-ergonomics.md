@@ -56,7 +56,7 @@ Two detections for the classic silent-blank-map failures, shown as console warni
 
 ### 7. Root-level sources become reachable (todo 035)
 
-Per the recorded decision below: accept `{$ref: "#/sources/<name>"}` in a layer's `source:` field (schema change: add the `$ref` object shape to the `source` union), and run reference resolution so it resolves against root-level `sources:` before layer rendering. Today the `$ref` object fails validation because validation runs before `resolveReferences` (the source union has no `$ref` shape), making root-level `sources:` dead weight. Includes: schema shape, parser ordering fix, error message for a dangling `$ref` (unknown source name, with did-you-mean), docs update in `schema/root.mdx`, and closing `todos/035`.
+Per the recorded decision below: accept `{$ref: "#/sources/<name>"}` in a layer's `source:` field (schema change: add the `$ref` object shape to the `source` union), and run reference resolution so it resolves against root-level `sources:` before layer rendering. Today the `$ref` object fails validation because validation runs before `resolveReferences` (the source union has no `$ref` shape), making root-level `sources:` dead weight. Includes: schema shape, parser ordering fix, error message for a dangling `$ref` (unknown source name, with did-you-mean), docs update in `schema/root.mdx`, and closing `docs/archive/todos/035`.
 
 ## Testing strategy
 
