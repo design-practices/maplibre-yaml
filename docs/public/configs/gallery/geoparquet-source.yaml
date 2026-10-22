@@ -1,9 +1,7 @@
-# GeoParquet files as GeoJSON sources — YAML only (0.9). The .parquet file
+# GeoParquet files as GeoJSON sources — YAML only. The .parquet file
 # name is the only hint; layers, popups, classify, the legend and fitTo work
 # as for a .geojson file, and only the columns this document uses are read.
-# Synthetic, public-domain data (a fictional sea area,
-# scripts/fixtures/cloud-native.py). Hermetic test: e2e/gallery.spec.ts
-# (twin) and e2e/cloud-native-geoparquet.spec.ts.
+# Synthetic, public-domain data (a fictional sea area).
 type: map
 id: geoparquet-source
 config:

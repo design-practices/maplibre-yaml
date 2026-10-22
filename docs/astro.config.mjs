@@ -111,11 +111,9 @@ export default defineConfig({
           // Pages tell readers to open http://localhost:… after starting a
           // local server; those are instructions, not links into this site.
           errorOnLocalLinks: false,
-          // A link to a page that moved still works: redirects.mjs sends it
-          // on, and check-stable-urls.mjs checks that its #anchor lands.
-          // The validator can't follow a redirect, so it skips these links.
-          exclude: ({ link }) =>
-            Object.hasOwn(PAGE_REDIRECTS, link.split("#")[0].split("?")[0]),
+          // No exclusions: a link to a page in redirects.mjs fails the build
+          // too. The redirects are for addresses outside this site (published
+          // READMEs, bookmarks); pages here link the new address directly.
         }),
         /**
          * TypeScript API reference, generated from the core package's public

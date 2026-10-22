@@ -399,11 +399,13 @@ if (!headquarters) throw new Error('maps/headquarters.yaml not found');
 <Map config={headquarters.data} height="500px" />
 ```
 
-In a collection entry, write GeoJSON in full (`data:` or `url:`). The
-[GeoJSON shorthands](/schema/sources/#geojson-sugar) (`location:`, `route:`, …
-on a source) are expanded by `loadMapConfig` and `<Map src>`, but not by
-`getMapSchema()`, which reports *GeoJSON source requires at least one of:
-url, data, or prefetchedData*.
+A collection entry can use the
+[GeoJSON shorthands](/guides/data-sources/#inline-data) (`location:`,
+`locations:`, `region:` and `route:` on a source), as a map file can:
+`getMapSchema()` expands them into `data:`, so the entry's data holds full
+GeoJSON. This needs `@maplibre-yaml/astro` 0.7.1 or later; on 0.7.0 the
+entry fails with *GeoJSON source requires at least one of: url, data, or
+prefetchedData*, and you write the GeoJSON in full (`data:` or `url:`).
 
 <Aside type="caution" title="Don't hand-write the map schema">
   `z.object({ type, id, config: z.object({ center, zoom, mapStyle }), layers })`

@@ -1,9 +1,8 @@
-# Cloud Optimized GeoTIFFs — YAML only (0.9). A .tif file name is the only
+# Cloud Optimized GeoTIFFs — YAML only. A .tif file name is the only
 # hint: imagery on a raster source, elevation on a raster-dem source (it
 # drives the hillshade layer and the 3D terrain). fitTo frames the imagery
 # file's own extent.
-# Synthetic, public-domain data (a fictional island, scripts/fixtures/cog.py).
-# Hermetic test: e2e/gallery.spec.ts (twin) and e2e/cloud-native-cog.spec.ts.
+# Synthetic, public-domain data (a fictional island).
 type: map
 id: add-a-cog-raster-source
 config:

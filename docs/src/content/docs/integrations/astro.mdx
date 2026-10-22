@@ -131,7 +131,7 @@ How it fits together:
   `parameters:` (the params panel), `legend:`, popups,
   [`classify:`](/guides/thematic-maps/), `title:`/`description:` and `locale:`
   ([Accessibility & languages](/guides/accessibility-languages/)), the
-  [GeoJSON shorthands](/schema/sources/#geojson-sugar) (`location:`,
+  [GeoJSON shorthands](/guides/data-sources/#inline-data) (`location:`,
   `route:`, …) and [format v2](/guides/format-v2/) documents. The component
   hands the whole document to the `<ml-map>` element, so there is no
   Astro-specific setup.
@@ -251,7 +251,7 @@ layers:
 
 Legend entries come only from the layers' `legend:` fields, the legend
 block's `items:` and classified layers, never from paint colours. When no
-layer has one, no legend is shown. The [layers reference](/schema/layers/)
+layer has one, no legend is shown. The [layer reference](/reference/yaml/layers/#legend)
 lists the entry's fields.
 
 ## Story maps and content collections
@@ -467,7 +467,7 @@ layers:
 ```
 
 Named and inline sources can be mixed in one document. Every source type and
-its options are in the [sources reference](/schema/sources/).
+its options are in the [sources reference](/reference/yaml/sources/).
 
 ### Effects \{#effects-in-astro}
 
@@ -611,7 +611,6 @@ editing `maps.yaml`, or add the [integration](#editing-in-astro-dev).
 | `defaultCenter` | `[lng, lat]` | The center when a map has no geometry |
 | `defaultZoom` | number (0–24) | The zoom when the builder isn't given one |
 | `title`, `description` | string | Your site's title and description, for your own use |
-| `theme` | `"light"` or `"dark"` | Default `"light"` |
 
 ### Maps in MDX pages
 

@@ -19,7 +19,7 @@ Replicates the MapLibre example [PMTiles source and protocol](https://maplibre.o
 
 - `type: vector` stays the MapLibre source type; the URL says the file is a PMTiles archive. `url: https://…/firenze.pmtiles` (no scheme) works the same — and so does a file on your own site, `url: data/firenze.pmtiles`.
 - No page JavaScript, no import-map entry: the PMTiles reader is part of `@maplibre-yaml/core` (CDN build and npm package alike).
-- The archive is read in parts (range requests), so the host must support them — GitHub Pages, Netlify, S3 and R2 do; `python -m http.server` doesn't. See [Cloud-native data](/guides/cloud-native-data/#hosting-range-requests-and-cors).
+- The archive is read in parts (range requests), so the host must support them — GitHub Pages, Netlify, S3 and R2 do; `python -m http.server` doesn't. See [Publishing › Large files](/guides/publishing/#large-files-range-requests-and-cors).
 - Data: [Protomaps](https://protomaps.com/) Florence sample extract (ODbL).
 
 ## Register the protocol yourself \{#registering-the-protocol-yourself-still-supported}

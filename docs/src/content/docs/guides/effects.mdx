@@ -190,7 +190,7 @@ npx maplibre-yaml emit crosshatch.yaml --out dist/ --sprite-base https://example
 #   refuses it.
 ```
 
-The emitted style carries the static layer (here, its hatch pattern) and no
+The emitted style carries the static layer (here, plain lit walls) and no
 `effect` key. An effect may refine its export through `fallback()` — adjust
 the layer, or return `null` to drop it — when emitting programmatically
 with the package loaded; `mlym emit` does not load the package and always

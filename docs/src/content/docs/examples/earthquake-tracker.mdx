@@ -17,8 +17,8 @@ feed that returns its whole current state each time you ask.
 
 **`refresh:` polls the feed.** `refreshInterval` is in milliseconds.
 `updateStrategy: replace` swaps the whole layer for each response, which
-fits a feed that always returns the full list. The data cache is off, so
-each poll fetches the feed rather than reusing the last answer.
+fits a feed that always returns the full list. Each poll asks the server
+again, never the data cache, so the map shows the feed's latest answer.
 
 <YamlExcerpt config="earthquake-tracker.yaml" at={["source:"]} />
 

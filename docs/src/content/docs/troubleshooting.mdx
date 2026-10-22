@@ -279,7 +279,7 @@ notice says why. The common messages, with the fix for each, are in
 | A file on another site is blocked (CORS) | The other server doesn't allow your site, or the `Range` header | [CORS rule](/guides/publishing/#large-files-range-requests-and-cors) |
 | "is in EPSG:…" | The file is in another projection | FlatGeobuf needs longitude/latitude (EPSG:4326), a COG Web Mercator (EPSG:3857); the notice gives the command that converts it ([details](/guides/cloud-native-data/#when-something-goes-wrong)) |
 | "The … reader (`…/chunks/….js`) couldn't be downloaded", on a site hosting maplibre-yaml's files itself | Only the script was copied, not the whole `dist/` folder | [Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself) |
-| A Protomaps basemap draws without labels or icons, or the notice names the fonts or icons | Labels come from Protomaps' font host unless you copy them | [Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap) |
+| A Protomaps basemap draws without labels or icons, or the notice names the fonts or icons | Labels come from Protomaps' font host unless you copy them | [Host your own basemap](/guides/host-your-own-basemap/) |
 | "too large to load whole in a browser" | The source reads the whole file, and this one is too big for that | Add `load: viewport` or convert the file: [When something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong) |
 
 ## Astro
