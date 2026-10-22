@@ -83,8 +83,7 @@ feature-state works:
 
 - **Features need ids.** Set `generateId: true` on the source, or `promoteId` to
   use a property as the id. If neither is set, `highlight` enables `generateId`
-  and warns — but generated ids are not stable across data refreshes, so
-  `promoteId` is the durable choice.
+  on a GeoJSON source for you, whether its data is inline or loaded from `url:`.
 - **A [classified](/guides/thematic-maps/) layer** highlights like any other:
   the colour `classify:` generates is wrapped the same way (also after
   computed breaks land), as long as `classify:` drives that primary colour.

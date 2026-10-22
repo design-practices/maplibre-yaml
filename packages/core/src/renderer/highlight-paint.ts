@@ -82,3 +82,21 @@ export function classifiedHighlightProperty(layer: unknown): string | undefined 
   const record = classifyRecordOf(layer);
   return property && record?.property === property ? property : undefined;
 }
+
+/**
+ * The named sources (`sources:` ids) that a highlighted layer draws from —
+ * the ones that need feature ids for feature-state (ml-aot.142).
+ *
+ * @remarks
+ * Named sources are added before any layer, so the renderer works this out
+ * from the whole document up front. A layer's inline source is decided when
+ * that layer is added (see `LayerManager`).
+ */
+export function namedSourcesNeedingIds(layers: readonly unknown[]): Set<string> {
+  const ids = new Set<string>();
+  for (const layer of layers) {
+    const source = (layer as { source?: unknown } | null)?.source;
+    if (typeof source === "string" && isHighlightEnabled(layer)) ids.add(source);
+  }
+  return ids;
+}

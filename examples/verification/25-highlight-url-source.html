@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>hover.highlight on url: data without ids</title>
+  <!--
+    ml-aot.142. Both maps load a GeoJSON file by `url:` whose features have
+    no ids, and highlight on hover: the left through the layer's own
+    source, the right through a named `sources:` entry.
+    PASS = hovering the red circle in the middle of either map turns it
+    gold. FAIL = it stays red, and the console says "needs feature ids".
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/25-highlight-url-source.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    .maps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    ml-map { display: block; height: 420px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = hovering the middle red circle of either map turns it gold. FAIL = it stays red.</header>
+  <div class="maps">
+    <ml-map id="layer-source" src="./configs/highlight-url-layer.yaml"></ml-map>
+    <ml-map id="named-source" src="./configs/highlight-url-named.yaml"></ml-map>
+  </div>
+  <script type="module" src="../../packages/core/register.js"></script>
+</body>
+</html>

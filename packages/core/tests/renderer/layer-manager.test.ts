@@ -192,7 +192,7 @@ describe("LayerManager", () => {
       expect(spec.paint["circle-color"]).toBe("#ff0000");
     });
 
-    it("enables generateId with a warning when the source has no id strategy", async () => {
+    it("enables generateId, quietly, when the source has no id strategy", async () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       const layer = {
         id: "pts",
@@ -212,7 +212,8 @@ describe("LayerManager", () => {
         "pts-source",
         expect.objectContaining({ generateId: true })
       );
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("generateId"));
+      // Ids are the library's job here, not the author's: nothing to warn.
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("generateId"));
       warn.mockRestore();
     });
 
@@ -959,6 +960,106 @@ describe("LayerManager", () => {
         { strategy: "merge", updateKey: "id" }
       );
       expect(onSourceHint).not.toHaveBeenCalled();
+    });
+  });
+  // ml-aot.142: feature ids for hover.highlight came only to inline data. A
+  // file loaded by `url:` — the usual way a student's data arrives — got a
+  // console warning and no highlight.
+  describe("feature ids for hover.highlight on every GeoJSON source path", () => {
+    const fc = { type: "FeatureCollection" as const, features: [] as any[] };
+    const okResponse = () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: { get: () => null },
+      json: async () => fc,
+    });
+    const highlighted = (source: unknown, extra: Record<string, unknown> = {}) => ({
+      id: "pts",
+      type: "circle" as const,
+      visible: true,
+      toggleable: false,
+      source,
+      interactive: { hover: { highlight: true } },
+      ...extra,
+    });
+    const specFor = (id: string) =>
+      mockMap.addSource.mock.calls.find((c: any[]) => c[0] === id)?.[1];
+
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn(async () => okResponse()));
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("an inline layer source loaded from url:", async () => {
+      await manager.addLayer(
+        highlighted({ type: "geojson", url: "https://example.com/pts.geojson" }) as any
+      );
+      expect(specFor("pts-source")).toMatchObject({ generateId: true });
+    });
+
+    it("a named source loaded from url:, when a highlighted layer draws from it", () => {
+      manager = new LayerManager(mockMap, callbacks, {
+        namedSourcesNeedingIds: new Set(["quakes"]),
+      });
+      manager.registerSources({
+        quakes: { type: "geojson", url: "https://example.com/quakes.geojson" },
+        plain: { type: "geojson", url: "https://example.com/plain.geojson" },
+      });
+      expect(specFor("quakes")).toMatchObject({ generateId: true });
+      // Only where a layer needs feature-state: other sources keep their ids.
+      expect(specFor("plain").generateId).toBeUndefined();
+    });
+
+    it("a named source with inline data", () => {
+      manager = new LayerManager(mockMap, callbacks, {
+        namedSourcesNeedingIds: new Set(["inline"]),
+      });
+      manager.registerSources({ inline: { type: "geojson", data: fc } });
+      expect(specFor("inline")).toMatchObject({ generateId: true });
+    });
+
+    it("a FlatGeobuf url: decoded into a GeoJSON source", async () => {
+      // The source is added (with its ids) before the reader starts; the
+      // reader itself needs a real map, so its failure here is irrelevant.
+      await manager
+        .addLayer(highlighted({ type: "geojson", url: "https://example.com/pts.fgb" }) as any)
+        .catch(() => {});
+      expect(specFor("pts-source")).toMatchObject({ generateId: true });
+    });
+
+    it("the author's generateId or promoteId wins, generateId: false included", async () => {
+      manager = new LayerManager(mockMap, callbacks, {
+        namedSourcesNeedingIds: new Set(["off", "promoted"]),
+      });
+      manager.registerSources({
+        off: { type: "geojson", url: "https://example.com/a.geojson", generateId: false },
+        promoted: { type: "geojson", url: "https://example.com/b.geojson", promoteId: "code" },
+      });
+      await manager.addLayer(
+        highlighted({ type: "geojson", data: fc, generateId: false }) as any
+      );
+      expect(specFor("off").generateId).toBe(false);
+      expect(specFor("promoted")).toMatchObject({ promoteId: "code" });
+      expect(specFor("promoted").generateId).toBeUndefined();
+      expect(specFor("pts-source").generateId).toBe(false);
+    });
+
+    it("a url: source with a merge refresh still gets generated ids", async () => {
+      // Merge keeps keyed features in place, so index ids stay stable; and
+      // promoteId on the key would miss features keyed by a top-level id.
+      await manager.addLayer(
+        highlighted({
+          type: "geojson",
+          url: "https://example.com/pts.geojson",
+          refresh: { refreshInterval: 60_000, updateStrategy: "merge", updateKey: "id" },
+        }) as any
+      );
+      expect(specFor("pts-source")).toMatchObject({ generateId: true });
+      expect(specFor("pts-source").promoteId).toBeUndefined();
+      manager.destroy();
     });
   });
 });

@@ -80,6 +80,7 @@ import {
 } from '../formats/protomaps-style';
 import { elementLanguage } from '../i18n/strings';
 import { geoParquetColumns } from '../formats/columns';
+import { namedSourcesNeedingIds } from './highlight-paint';
 
 /** The document's source ids (named, and `<layer>-source` for inline ones) that read `format`. */
 function sourceIdsReading(
@@ -868,6 +869,9 @@ export class MapRenderer {
       ...options.sourceData,
       isProtocolRegistered,
       columnsFor: (sourceId) => parquetColumns.get(sourceId),
+      // Named sources are added before any layer: say up front which ones a
+      // highlighted layer draws from, so they get feature ids (ml-aot.142).
+      namedSourcesNeedingIds: namedSourcesNeedingIds(layers),
     });
     const classifyRuntime = new ClassifyRuntime(
       this.map,

@@ -1,0 +1,24 @@
+# Assertion (ml-aot.142): hover.highlight works on a GeoJSON file loaded by
+# `url:` whose features have no ids — the usual student setup (a file in
+# public/). The library sets `generateId: true` on the source for the
+# highlight; before the fix only inline `data:` got it, and this layer
+# logged "needs feature ids" and never lit.
+type: map
+id: highlight-url-layer
+config:
+  center: [-118.25, 34.05]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: quakes
+    type: circle
+    source:
+      type: geojson
+      url: "/examples/verification/data/quakes-sample.geojson"
+    paint:
+      circle-radius: 30
+      circle-color: "#e63946"
+    interactive:
+      hover:
+        highlight: true
+        cursor: pointer
