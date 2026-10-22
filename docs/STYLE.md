@@ -73,6 +73,30 @@ Slots"). Use one term per concept:
   `style.json`.
 - **Base / subpath**: the folder a site is served from, such as `/<repo>/`
   on a GitHub Pages project site.
+- **`mlym emit`**: the CLI command that exports. Write "export with
+  `mlym emit`"; in a command readers copy, `npx maplibre-yaml emit`.
+- **`click.emit` (host event)**: an interaction that calls a function the
+  page registered when a feature is clicked. Always write it as
+  `click.emit` or "host event", never a bare "emit", and say it is not the
+  export command wherever both appear.
+- **Export class**: what an export does with one part of a document:
+  `exports`, `exports-with-fallback` or `no-export`. Don't use "compile",
+  "lower", "degrade" or "strip" for these.
+- **`contract` / `lossy` warning**: the two kinds of export warning. A
+  `contract` warning is an expected drop or requirement that leaves the map
+  looking the same; a `lossy` one means the map looks different, and
+  `--strict` refuses it.
+- **Project settings file**: `maplibre-yaml.config.json` (or `.yaml`,
+  `.js`), the CLI's defaults. Not "config", which is the map document's
+  `config:` key.
+- **Modeline**: the `# yaml-language-server: $schema=…` first line that
+  gives an editor the schema.
+- **Strict mode**: `mlym validate` treating warnings as errors; on by
+  default when the `CI` environment variable is set.
+- **`mlym` / `maplibre-yaml` / `@maplibre-yaml/cli`**: one program.
+  `@maplibre-yaml/cli` is the package; `mlym` and `maplibre-yaml` are its
+  command names once installed; `npx maplibre-yaml` runs it with no
+  install.
 
 ## Code samples
 

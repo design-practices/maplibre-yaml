@@ -1,170 +1,154 @@
 ---
 title: Editor setup
-description: Autocomplete, hover docs and checking as you type for maplibre-yaml files (yaml-language-server and JSON Schema), and a VS Code task that runs the full validator on save and lists its findings in the Problems panel.
+description: Autocomplete, hover docs and checks as you type for maplibre-yaml files, from one modeline and the YAML language server, plus a VS Code task that runs the full validator and lists its findings in the Problems panel.
 ---
 
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
-maplibre-yaml publishes its contract as **JSON Schema**, so any editor backed by
-the [YAML Language Server](https://github.com/redhat-developer/yaml-language-server)
-(the engine behind the Red Hat **YAML** extension for VS Code, and available in
-Neovim, JetBrains IDEs, and others) gives you autocomplete, hover documentation,
-and inline validation — with **zero project install**.
+maplibre-yaml publishes the format as **JSON Schema**. Any editor that runs
+the [YAML language server](https://github.com/redhat-developer/yaml-language-server)
+reads it and gives you autocomplete, hover documentation and checks as you
+type, with nothing installed in your project. That covers VS Code (through
+the Red Hat **YAML** extension), Neovim, JetBrains IDEs and others.
 
-<Aside type="note">
-The JSON Schema is authoring assistance. `mlym validate` (Zod) remains the
-source of truth: it enforces cross-field rules the JSON Schema cannot express.
-See [Using maplibre-yaml with an AI agent](/guides/ai-agents/).
-</Aside>
+## Quick start \{#option-1-the-modeline-recommended}
 
-## Stable schema URLs
+1. **Install the YAML extension.** In VS Code, install
+   [YAML by Red Hat](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml)
+   from the Extensions view. In another editor, set up the
+   `yaml-language-server` its documentation describes.
+2. **Make this the first line of your map document.** It is a comment, a
+   *modeline*, naming the schema the file follows:
 
-Each block type has a stable, versioned schema URL:
+   ```yaml
+   # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+   type: map
+   id: my-map
+   config:
+     center: [-74.006, 40.7128]
+     zoom: 12
+     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+   ```
 
-| Block            | Schema URL                                                        |
-| ---------------- | ----------------------------------------------------------------- |
-| `map`            | `https://docs.maplibre-yaml.org/schema/latest/map.schema.json`             |
-| `scrollytelling` | `https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json`  |
-| `root` (pages)   | `https://docs.maplibre-yaml.org/schema/latest/root.schema.json`            |
-| any of the above | `https://docs.maplibre-yaml.org/schema/latest/any.schema.json`             |
+Now press <kbd>Ctrl</kbd>+<kbd>Space</kbd> on an empty line for the keys
+that can go there, and hover a key for its description. Misspell a
+top-level key (`layer:` for `layers:`) and it is underlined. Files that
+`mlym init` creates already start with this line.
 
-`latest/` always tracks the newest release, and is what the files `mlym init`
-creates use.
-
-To pin a version, use the copy that ships inside the npm package, served by a
-CDN. It exists for every release from 0.4 on and never moves:
-
-```text
-https://cdn.jsdelivr.net/npm/@maplibre-yaml/core@0.9/schemas/map.schema.json
-```
-
-Change the version after `core@` to the one your project uses: two numbers
-(`major.minor`, as above) name a release line and give the newest release in
-it, and three numbers (`major.minor.patch`) name exactly one release. The docs site also serves the current
-release under `https://docs.maplibre-yaml.org/schema/v0.9/<block>.schema.json`;
-addresses for older versions there redirect to the CDN copy.
-
-## Option 1: The modeline (recommended)
-
-Add a `yaml-language-server` **modeline** as the first line of your file. It
-travels with the file, so anyone who opens it gets validation — no shared
-settings required. This is the first line of every config the CLI scaffolds:
-
-```yaml
-# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
-type: map
-id: my-map
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-```
-
-Use the schema that matches the file's block type:
+The modeline travels with the file, so anyone who opens it gets the same
+help, with no shared editor settings. A story file uses its own schema:
 
 <Tabs>
-  <TabItem label="map">
+  <TabItem label="Map document">
     ```yaml no-validate
     # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
     type: map
     ```
   </TabItem>
-  <TabItem label="scrollytelling">
+  <TabItem label="Story file">
     ```yaml no-validate
     # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json
     type: scrollytelling
     ```
   </TabItem>
-  <TabItem label="root (pages)">
-    ```yaml no-validate
-    # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/root.schema.json
-    pages:
-      - path: "/"
-    ```
-  </TabItem>
 </Tabs>
 
-## Option 2: VS Code `yaml.schemas` settings
+<Aside type="caution" title="Format v1 only">
+The schemas describe [format v1](/guides/format-v2/), the default. A
+`version: 2` document under this modeline is underlined where nothing is
+wrong.
+Leave the modeline out of a format v2 file and check it with
+`mlym validate`.
+</Aside>
 
-If you would rather not put a modeline in every file, map globs to schemas in
-your project's `.vscode/settings.json` (requires the Red Hat **YAML**
-extension). This is the no-modeline alternative:
+## What you get
+
+- **Autocomplete** for every key, layer type, control and source type.
+- **Hover documentation**, the same descriptions the
+  [YAML reference](/reference/yaml/) shows.
+- **Checks as you type** for structure, allowed values and types. Unknown
+  keys are flagged; `x-*` keys are always allowed, for extensions. MapLibre
+  options inside `config:` and extra source options are allowed, as they are
+  when the map renders.
+
+The schema checks the shape of the file. The validator,
+[`mlym validate`](/cli/reference/#validate), checks more: a layer naming a
+source the document doesn't declare (with a "did you mean"), a misspelt
+`fitTo` source, or a map with no basemap. To see its findings in the editor
+too, add the [VS Code task](#validate-on-save-vs-code-task) below.
+
+## Schema URLs and versions \{#stable-schema-urls}
+
+| File | Schema URL |
+| ---- | ---------- |
+| Map document (`type: map`) | `https://docs.maplibre-yaml.org/schema/latest/map.schema.json` |
+| Story file (`type: scrollytelling`) | `https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json` |
+| Any of the above | `https://docs.maplibre-yaml.org/schema/latest/any.schema.json` |
+
+`latest/` follows the newest release. To pin a version, use the copy inside
+the npm package, served by a CDN. It exists for every release from 0.4 on
+and never changes:
+
+```text
+https://cdn.jsdelivr.net/npm/@maplibre-yaml/core@0.9/schemas/map.schema.json
+```
+
+Change the version after `core@` to the one your project uses. Two numbers
+(`0.9`) name a release line and give its newest release; three (`0.9.0`)
+name exactly one release. The docs site also serves the current release line
+at `https://docs.maplibre-yaml.org/schema/v0.9/<block>.schema.json`; older
+lines there redirect to the CDN copy.
+
+## Without a modeline: VS Code settings \{#option-2-vs-code-yamlschemas-settings}
+
+To give whole folders a schema without a line in every file, map globs to
+schemas in your project's `.vscode/settings.json`:
 
 ```json
 {
   "yaml.schemas": {
     "https://docs.maplibre-yaml.org/schema/latest/map.schema.json": [
       "**/*.map.yaml",
-      "configs/**/*.yaml"
+      "maps/**/*.yaml"
     ],
     "https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json": [
       "**/*.story.yaml"
     ]
-  },
-  "files.associations": {
-    "*.map.yaml": "yaml",
-    "**/configs/**/*.yaml": "yaml"
   }
 }
 ```
 
-A complete example is in the repository:
-[settings.json](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/settings.json).
-
-<Aside type="tip">
-Modelines win over `yaml.schemas` when both are present, so you can set a broad
-glob default and override per-file with a modeline.
-</Aside>
+A modeline wins over `yaml.schemas` when a file has both, so you can set a
+default for a folder and override it per file. The repository has a
+[complete settings.json](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/settings.json).
 
 ## Offline / air-gapped
 
-The same schemas ship inside the `@maplibre-yaml/core` npm package, as
-`node_modules/@maplibre-yaml/core/schemas/<block>.schema.json` once core is
-installed. A modeline can point straight at that file, relative to the YAML
-file:
+The schemas ship inside the `@maplibre-yaml/core` npm package. With core
+installed, point the modeline at the file, relative to the YAML file:
 
 ```yaml no-validate
 # yaml-language-server: $schema=./node_modules/@maplibre-yaml/core/schemas/map.schema.json
 type: map
 ```
 
-(`@maplibre-yaml/core/schemas/json/<block>.schema.json` is the same file as a
-package export, for tools that resolve imports, not for a modeline.) Or write
-a copy next to your files with the CLI:
+Or write a copy next to your files with the CLI, which reads it from the
+installed core package, so it matches what `mlym validate` checks:
 
 ```bash
 npx maplibre-yaml schema map --out map.schema.json
 ```
-
-Then reference the local file:
 
 ```yaml no-validate
 # yaml-language-server: $schema=./map.schema.json
 type: map
 ```
 
-`mlym schema` reads the schema from the installed core package, so it always
-matches the version `mlym validate` enforces.
-
-## What you get
-
-- **Autocomplete** for every field, layer type, control, and source type.
-- **Hover documentation** sourced from the same `.describe()` annotations that
-  drive the docs.
-- **Inline validation** for structure, enums, and types as you type.
-
-Unknown top-level keys are flagged; `x-*` keys are always allowed, for
-extensions. Arbitrary MapLibre GL options inside `config:` and
-extra source options stay permissive, matching the runtime.
-
 ## Validate on save (VS Code task)
 
-The schema checks structure as you type, but not the validator's own rules:
-a layer naming a source the document doesn't declare (with a "did you mean"),
-a misspelt `fitTo` source, or a map with no basemap. There is no
-maplibre-yaml extension for VS Code; a **task** runs `mlym validate` instead,
-and VS Code lists its errors, warnings and notes in the **Problems** panel,
-next to the lines they belong to.
+The schema can't run the validator's own rules. A VS Code **task** runs
+`mlym validate` on the open file and lists its errors, warnings and notes in
+the **Problems** panel, next to the lines they belong to.
 
 ### Step 1: Add the task
 
@@ -202,77 +186,84 @@ Create or update `.vscode/tasks.json` in your project:
 ```
 
 With the CLI installed in the project (`npm install --save-dev @maplibre-yaml/cli`),
-`npx` uses that copy; otherwise it downloads it on first run.
+`npx` uses that copy; otherwise it downloads the CLI on the first run.
 
 ### Step 2: Run the task
 
 1. Open a `.yaml` file.
 2. Press <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (Mac) or
-   <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (Windows/Linux).
-3. Type "Run Task" and choose **maplibre-yaml: Validate Current File**.
+   <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (Windows and Linux).
+3. Type "Run Task" and choose **maplibre-yaml: Validate Current File**. The
+   first time, VS Code may ask whether to allow the task: choose **Allow**.
 
-To run it from a shortcut instead, open **Keyboard Shortcuts**
-(<kbd>Cmd</kbd>+<kbd>K</kbd> <kbd>Cmd</kbd>+<kbd>S</kbd>, or
-<kbd>Ctrl</kbd>+<kbd>K</kbd> <kbd>Ctrl</kbd>+<kbd>S</kbd>), search for
-"Run Task", and bind a key such as <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>
-to it.
+To run it from a key, open **Keyboard Shortcuts**, search for "Run Task" and
+bind a key to it.
 
 ### Step 3: Read the Problems panel
 
 Findings appear in the **Problems** panel
 (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> /
-<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>), each with its file, line and
-column: click one to jump to it, and <kbd>F8</kbd> / <kbd>Shift</kbd>+<kbd>F8</kbd>
-move to the next and previous one. Errors appear as errors; warnings (for
-example a map with no basemap, or a style value starting with the reserved
-`=`) as warnings; and notes, which explain how a valid value is read (such as
-a basemap written as just a `.pmtiles` file), as information.
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>) with their file, line and
+column: click one to jump to it. Errors show as errors and warnings as
+warnings. Notes, which explain how a valid value is read, show as
+information.
 
 ### Output format
 
-`--format vscode` prints one line per finding, in the shape the problem
-matcher reads, `file:line:column: severity: [path] message`, where severity is
-`error`, `warning`, or `info` for a note:
-
-```bash
-npx maplibre-yaml validate config.yaml --format vscode
-```
+`--format vscode` prints one line per finding,
+`file:line:column: severity: [path] message`, which the problem matcher
+reads. The severity is `error`, `warning`, or `info` for a note, and the path
+is absolute, which is why the task sets `"fileLocation": "absolute"`:
 
 ```text
-/path/to/config.yaml:4:11: error: [config.center] center needs square brackets: center: [0, 0]
-/path/to/config.yaml:3:1: warning: [config.mapStyle] No mapStyle: this map has no basemap. …
-/path/to/other.yaml:6:3: info: [config.mapStyle] mapStyle: "data/nyc.pmtiles" names a .pmtiles file, so it is read as a Protomaps basemap …
+/home/you/maps/map.yaml:15:11: error: [config.center] center needs square brackets: center: [-74.006, 40.7128]
+/home/you/maps/quakes.yaml:13:13: warning: [layers.0.source] Layer "quakes" uses source "quake", which is not declared under sources:. Did you mean "quakes"?
+/home/you/maps/nyc.yaml:6:3: info: [config.mapStyle] mapStyle: "data/nyc.pmtiles" names a .pmtiles file, so it is read as a Protomaps basemap …
 ```
-
-The paths are absolute, which is why the task sets `"fileLocation": "absolute"`.
 
 ### Complete tasks.json
 
 The repository has a [complete tasks.json](https://github.com/design-practices/maplibre-yaml/blob/main/docs/examples/vscode/tasks.json)
-with three tasks, whose problem matchers pick up errors, warnings and notes:
+with three tasks:
 
-- **Validate Current File**: validates the open file.
-- **Validate All Configs**: validates every YAML file under `configs/`, with
-  the findings grouped by file in the Problems panel.
+- **Validate Current File**: the open file.
+- **Validate All Configs**: every YAML file under `configs/`, grouped by
+  file in the Problems panel. Change the pattern to your own folder.
 - **Watch and Validate**: runs in the background with `--watch` and updates
   the Problems panel each time you save.
 
-### Errors Don't Appear in Problems Panel
+## Troubleshooting
 
-1. Check that the task includes `problemMatcher`.
-2. Check that `--format vscode` is in the args.
+### No autocomplete or hover
+
+- Check that the YAML extension is installed and enabled.
+- The modeline must be the file's **first** line, spelt exactly as above.
+- A format v2 file gets no help from these schemas
+  ([above](#option-1-the-modeline-recommended)).
+
+### `!html` is flagged as an unresolved tag
+
+The YAML extension doesn't know the `!html` tag. Tell it in
+`.vscode/settings.json`:
+
+```json
+{ "yaml.customTags": ["!html scalar"] }
+```
+
+### Errors don't appear in the Problems panel \{#errors-dont-appear-in-problems-panel}
+
+1. Check that the task has a `problemMatcher`.
+2. Check that `--format vscode` is in its `args`.
 3. Check that `fileLocation` is `"absolute"`: the CLI prints full paths.
-4. Check the Problems panel's filter settings.
+4. Check the Problems panel's filter.
 5. Notes missing? The `regexp` must match `info` as well as `error` and
    `warning`.
 
-### Task Not Found
+### Task not found
 
 1. Check that `.vscode/tasks.json` is in the folder you opened in VS Code.
-2. Reload the VS Code window.
-3. Check that the JSON is valid.
+2. Check that the JSON is valid, then reload the window.
 
-On the first run, VS Code may ask whether to allow the task to run: choose
-**Allow**. See VS Code's [Tasks documentation](https://code.visualstudio.com/docs/editor/tasks)
+See VS Code's [Tasks documentation](https://code.visualstudio.com/docs/editor/tasks)
 and [problem matchers](https://code.visualstudio.com/docs/editor/tasks#_defining-a-problem-matcher)
 for more.

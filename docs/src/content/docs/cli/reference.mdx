@@ -1,43 +1,29 @@
 ---
 title: CLI commands
-description: Complete command reference for maplibre-yaml CLI
+description: Every maplibre-yaml CLI command and option, the output formats, exit codes, project settings file, environment variables and CI recipes.
 ---
 
-Complete reference for all maplibre-yaml CLI commands, options, and arguments.
+Every command and option of the maplibre-yaml CLI (`@maplibre-yaml/cli`
+0.6). For a walkthrough of `init`, `validate`, `preview` and `emit`, see
+[The CLI (mlym)](/cli/getting-started/).
 
 ## Running the CLI
 
-The CLI needs [Node.js](https://nodejs.org/) 20.9 or later (22 or 24 LTS
-recommended); on an older Node it stops with a message saying so. Every
-example on this page uses `npx maplibre-yaml`, which works with no
-install: npx downloads the CLI on first use. (`maplibre-yaml` is a small
-package that runs `@maplibre-yaml/cli`; `npx @maplibre-yaml/cli` is the same
-program under its full name.)
+The CLI needs [Node.js](https://nodejs.org/) 20.9 or later. On an older Node
+it stops with "maplibre-yaml needs Node.js 20.9 or newer".
 
-```bash
-npx maplibre-yaml validate map.yaml
-```
+It is one program with several names:
 
-Installing the CLI gives you two shorter command names, `mlym` and
-`maplibre-yaml`, for the same program:
+| You type | Works |
+| -------- | ----- |
+| `npx maplibre-yaml …` | Anywhere, with no install. npx downloads `maplibre-yaml`, a small package that runs `@maplibre-yaml/cli` |
+| `npx @maplibre-yaml/cli …` | Anywhere, with no install: the full name |
+| `npx mlym …` | After `npm install --save-dev @maplibre-yaml/cli` in the project. Without the install it fails with a 404, because no npm package is called `mlym` |
+| `mlym …` or `maplibre-yaml …` | After `npm install -g @maplibre-yaml/cli`, in any folder; or in `package.json` scripts of a project that installed it |
 
-```bash
-# in a project: then run it as `npx mlym …` or from package.json scripts
-npm install --save-dev @maplibre-yaml/cli
-npx mlym validate map.yaml
+The examples on this page use `npx maplibre-yaml`.
 
-# or globally: then `mlym …` works in any folder
-npm install -g @maplibre-yaml/cli
-mlym validate map.yaml
-```
-
-Without an install, `npx mlym` does not work: `mlym` exists only once
-`@maplibre-yaml/cli` is installed. `npx maplibre-yaml …` does work without an
-install (it is a small package that runs the CLI). Wherever this page says
-`npx maplibre-yaml`, `npx @maplibre-yaml/cli` or an installed `mlym` does the
-same.
-
-## Global Options
+## Global options
 
 | Option      | Alias | Description           |
 | ----------- | ----- | --------------------- |
@@ -45,207 +31,6 @@ same.
 | `--version` |       | Show the CLI version  |
 
 ## Commands
-
-### validate
-
-Validate YAML configuration files against the maplibre-yaml schema.
-
-```bash
-npx maplibre-yaml validate <patterns> [options]
-```
-
-#### Arguments
-
-| Argument   | Required | Description                                 |
-| ---------- | -------- | ------------------------------------------- |
-| `patterns` | Yes      | File path(s) or glob pattern(s) to validate |
-
-Patterns can be:
-
-- Single file: `map.yaml`
-- Folder: `maps/` (every `.yaml` and `.yml` file under it)
-- Glob pattern: `configs/**/*.yaml` (quote it, so the CLI sees the pattern;
-  a quoted pattern with a space in a folder name, `"My Maps/*.yaml"`, works)
-- Several of these: `src/**/*.map.yaml configs/*.yaml`
-
-Every argument is checked and reported. A file name that doesn't exist prints
-`File not found: …`, and a pattern that matches nothing prints `No files match
-"…"`. Both make the command exit with code 2 unless a file also has errors
-(code 1). Files excluded by `validate.ignorePatterns` in your
-[project config](#configuration-file) are skipped, even when named directly.
-
-#### Options
-
-| Option     | Alias | Type    | Default | Description                                       |
-| ---------- | ----- | ------- | ------- | ------------------------------------------------- |
-| `--format` | `-f`  | string  | `human` | Output format: `human`, `json`, `sarif`, `vscode` |
-| `--strict` / `--no-strict` | | boolean | on in CI, off otherwise | Treat warnings as errors. Without either flag, strict mode is on when the `CI` environment variable is set (as CI services do) and off on your machine |
-| `--strict-deprecations` | | boolean | `false` | Also treat deprecation warnings as errors (`--strict` leaves them as warnings) |
-| `--watch`  | `-w`  | boolean | `false` | Watch for changes and re-validate                 |
-
-#### Output Formats
-
-Besides errors, `validate` reports **warnings** (something that probably
-isn't what you meant, such as a layer naming an undeclared source, or a map
-with no basemap) and **notes** (how a valid value is read, such as a basemap
-written as just a `.pmtiles` file). Notes never make a file invalid, and
-`--strict` never turns them into errors.
-
-**human** (default)
-
-- Human-readable colored output
-- Shows file paths with checkmarks/X marks
-- Displays errors (`error`), warnings (`warning`) and notes (`ℹ note`) with
-  their path, message, line and column
-- Includes summary with counts
-
-**json**
-
-- Structured JSON output
-- Machine-parseable
-- Ideal for CI/CD pipelines
-- Includes detailed error information with line/column numbers
-- Notes are listed with the warnings, marked `"severity": "note"`, and
-  counted in `summary.noteCount` (not in `warningCount`)
-
-**sarif**
-
-- [SARIF v2.1.0](https://sarifweb.azurewebsites.net/) format
-- Compatible with GitHub Code Scanning
-- Integrates with GitHub Advanced Security
-- Provides rich error context; notes have the SARIF level `note`
-
-**vscode**
-
-- VS Code problem matcher compatible format
-- Format: `file:line:column: severity: [path] message`, where `severity` is
-  `error`, `warning`, or `info` for a note
-- Use with VS Code tasks for IDE integration
-- See [VS Code tasks](/guides/editor-setup/#validate-on-save-vs-code-task)
-
-#### Exit Codes
-
-| Code | Meaning                 |
-| ---- | ----------------------- |
-| `0`  | All files valid         |
-| `1`  | Errors found, including YAML syntax errors (reported with line and column) |
-| `2`  | No file matched the pattern(s) |
-| `4`  | Unexpected internal error |
-
-#### Examples
-
-Validate a single file:
-
-```bash
-npx maplibre-yaml validate map.yaml
-```
-
-Validate with glob pattern:
-
-```bash
-npx maplibre-yaml validate "configs/**/*.yaml"
-```
-
-Validate multiple patterns:
-
-```bash
-npx maplibre-yaml validate "src/**/*.map.yaml" "configs/*.yaml"
-```
-
-JSON output for CI/CD:
-
-```bash
-npx maplibre-yaml validate "**/*.yaml" --format json
-```
-
-SARIF for GitHub Code Scanning:
-
-```bash
-npx maplibre-yaml validate "**/*.yaml" --format sarif > results.sarif
-```
-
-Strict mode (warnings as errors):
-
-```bash
-npx maplibre-yaml validate map.yaml --strict
-```
-
-Watch mode for development:
-
-```bash
-npx maplibre-yaml validate "configs/**/*.yaml" --watch
-```
-
-VS Code problem matcher format:
-
-```bash
-npx maplibre-yaml validate config.yaml --format vscode
-```
-
----
-
-### preview
-
-Start a local development server to preview your map with hot reload.
-`preview` renders the YAML document — a map (`type: map`) or a story
-(`type: scrollytelling`, from CLI 0.5.0) — on a page of its own; to see the
-HTML page you wrote around it, serve your folder instead (for example
-`npx serve .`). `--debug` applies to maps only.
-
-```bash
-npx maplibre-yaml preview <config> [options]
-```
-
-#### Arguments
-
-| Argument | Required | Description                     |
-| -------- | -------- | ------------------------------- |
-| `config` | Yes      | Path to YAML configuration file |
-
-#### Options
-
-| Option      | Type    | Default | Description                              |
-| ----------- | ------- | ------- | ---------------------------------------- |
-| `--port`    | number  | `3000`  | Port for development server              |
-| `--open`    | boolean | `true`  | Open browser automatically               |
-| `--no-open` | boolean |         | Don't open browser (keep server running) |
-| `--debug`   | boolean | `false` | Show debug panel with config JSON        |
-
-#### Features
-
-- **Hot Reload**: Automatically updates map when YAML file changes
-- **Error Overlay**: Shows validation errors (field path and message)
-- **Status Bar**: Displays connection state and the file (relative to the folder you ran the command in; the full path on hover)
-- **Live Validation**: Validates configuration on every change
-- **Debug Panel**: Optional JSON view of parsed configuration
-
-#### Examples
-
-Basic preview:
-
-```bash
-npx maplibre-yaml preview map.yaml
-```
-
-Custom port:
-
-```bash
-npx maplibre-yaml preview map.yaml --port 8080
-```
-
-Don't open browser:
-
-```bash
-npx maplibre-yaml preview map.yaml --no-open
-```
-
-Debug mode:
-
-```bash
-npx maplibre-yaml preview map.yaml --debug
-```
-
----
 
 ### init
 
@@ -255,13 +40,9 @@ Create a new project from a template.
 npx maplibre-yaml init [folder] [options]
 ```
 
-#### Arguments
-
 | Argument | Required | Default | Description |
 | -------- | -------- | ------- | ----------- |
 | `folder` | No | `./<name>` (`./my-map` for `basic`) | Folder to create. It must not exist yet, or be empty |
-
-#### Options
 
 | Option | Alias | Type | Default | Description |
 | ------ | ----- | ---- | ------- | ----------- |
@@ -277,34 +58,138 @@ have) prints an error and exits with code `1`, and nothing is created.
 | Template | Creates | Run it with |
 | -------- | ------- | ----------- |
 | `basic` | `index.html` (CDN import map, `<ml-map>` with a height, viewport meta tag; core loads from the CDN at the release line this CLI was built with) and `map.yaml` (a street basemap and one clickable point) | `npx serve .` in the folder, then open the address it prints. Needs no install or build. Another local server works if it supports range requests (which PMTiles, FlatGeobuf, GeoParquet and COG files need); `python -m http.server` doesn't |
-| `story` | `index.html` and a scrollytelling `story.yaml` | A story map with no build step: the page loads `<ml-scrollytelling>` from the CDN, at the release line this CLI was built with. Serve the folder (`npx serve .`) and scroll; see [Story maps in plain HTML](/integrations/scrollytelling-html/) |
-| `astro` | An Astro 7 site: a layout (with the viewport meta tag) and a page rendering `public/configs/map.yaml` with `@maplibre-yaml/astro`'s `<Map>`, the [optional integration](/integrations/astro/#editing-in-astro-dev) in `astro.config.mjs` with commented-out `site`/`base` lines for GitHub Pages, and a `.github/workflows/deploy.yml` that publishes it with `withastro/action`. Its `@maplibre-yaml/core` and `@maplibre-yaml/astro` ranges are the versions this CLI release was built with (`^0.9.0` and `^0.7.0` for CLI 0.6), and its `package.json` asks for Node.js 22.23.4 or later (Astro 7.4.2's own requirement) | `npm install`, then `npm run dev`. For GitHub Pages, set `site` and `base` in `astro.config.mjs` and push (see [Publishing & subpaths](/guides/publishing/#astro-sites)) |
+| `story` | `index.html` and a story file, `story.yaml` | A story map with no build step: the page loads `<ml-scrollytelling>` from the CDN, at the release line this CLI was built with. Serve the folder (`npx serve .`) and scroll; see [Story maps in plain HTML](/integrations/scrollytelling-html/) |
+| `astro` | An Astro 7 site: a layout (with the viewport meta tag) and a page rendering `public/configs/map.yaml` with `@maplibre-yaml/astro`'s `<Map>`, the [optional integration](/integrations/astro/#editing-in-astro-dev) in `astro.config.mjs` with commented-out `site`/`base` lines for GitHub Pages, and a `.github/workflows/deploy.yml` that publishes it with `withastro/action`. Its `@maplibre-yaml/core` and `@maplibre-yaml/astro` ranges are the versions this CLI release was built with, and its `package.json` asks for Node.js 22.23.4 or later (Astro 7.4.2's own requirement) | `npm install`, then `npm run dev`. For GitHub Pages, set `site` and `base` in `astro.config.mjs` and push (see [Publishing & subpaths](/guides/publishing/#astro-sites)) |
 
 Every YAML file the templates write starts with the
 [schema modeline](/guides/editor-setup/), so editors with the YAML extension
 complete and check it as you type. `init` prints the next steps for the
 template it used.
 
-#### Examples
-
-Create `./my-map` from the basic template, then serve it:
-
 ```bash
-npx maplibre-yaml init my-map
-cd my-map
-npx serve .
+npx maplibre-yaml init my-map                    # ./my-map from the basic template
+npx maplibre-yaml init my-site --template astro  # an Astro site
+npx maplibre-yaml init --list                    # list the templates
 ```
 
-An Astro project:
+---
+
+### validate
+
+Check map documents and story files against the format. It reports
+problems with their path in the document, a message, and the line and
+column.
 
 ```bash
-npx maplibre-yaml init my-site --template astro
+npx maplibre-yaml validate <patterns> [options]
 ```
 
-List the templates:
+| Argument   | Required | Description                                 |
+| ---------- | -------- | ------------------------------------------- |
+| `patterns` | Yes      | One or more file paths, folders or glob patterns. All of them are validated |
+
+A pattern can be:
+
+- a file: `map.yaml`;
+- a folder: `maps/` (every `.yaml` and `.yml` file under it);
+- a glob: `"maps/**/*.yaml"`. Quote it, so the CLI sees the pattern rather
+  than your shell's expansion of it. A quoted pattern with a space in a folder
+  name, `"My Maps/*.yaml"`, works;
+- several of these: `"src/**/*.map.yaml" "maps/*.yaml"`.
+
+Every argument is checked and reported. A file name that doesn't exist
+prints `File not found: …`, and a pattern that matches nothing prints
+`No files match "…"`. Both make the command exit with code `2` unless a file
+also has errors (code `1`). Files excluded by `validate.ignorePatterns` in the
+[project settings file](#configuration-file) are skipped, even when named
+directly.
+
+| Option     | Alias | Type    | Default | Description                                       |
+| ---------- | ----- | ------- | ------- | ------------------------------------------------- |
+| `--format` | `-f`  | string  | `human` | Output format: `human`, `json`, `sarif`, `vscode` ([below](#output-formats)) |
+| `--strict` / `--no-strict` | | boolean | on in CI, off otherwise | Treat warnings as errors. Without either flag, strict mode is on when the `CI` environment variable is set (as CI services do) and off on your machine |
+| `--strict-deprecations` | | boolean | `false` | Also treat deprecation warnings as errors (`--strict` leaves them as warnings) |
+| `--watch`  | `-w`  | boolean | `false` | Keep running and re-validate each file when it changes. Only changed files are checked again |
+
+`validate` reports three kinds of finding:
+
+- **errors**: the document is invalid; the map won't render as written.
+- **warnings**: valid, but probably not what you meant, such as a layer
+  naming a source that isn't declared, or a map with no basemap. In strict
+  mode they count as errors.
+- **notes**: how a valid value is read, such as a basemap written as just a
+  `.pmtiles` file. A note never makes a file invalid, even in strict mode.
 
 ```bash
-npx maplibre-yaml init --list
+npx maplibre-yaml validate map.yaml
+npx maplibre-yaml validate "maps/**/*.yaml" --watch
+npx maplibre-yaml validate "**/*.yaml" --format sarif > results.sarif
+```
+
+#### Output formats
+
+**`human`** (the default) prints each file with a mark, then its findings
+and a summary:
+
+```text
+⚠ map.yaml
+  warning layers.0.source: Layer "quakes" uses source "quake", which is not declared under sources:. Did you mean "quakes"?
+    at line 13, column 13
+
+⚠ 1 file(s) with warnings: 1 warning(s)
+```
+
+A note prints as `ℹ note`, and a file with only notes is `✓` valid. With
+more than 10 files, the human and `vscode` formats show a progress bar.
+
+**`json`** prints one object: `valid`, a `files` array (each with its
+absolute `file` path, `valid`, `errors` and `warnings`), and a `summary` of
+counts. Each finding has `path`, `message`, `line`, `column` and `severity`;
+notes are in `warnings` with `"severity": "note"` and are counted in
+`summary.noteCount`, not `warningCount`. The full shape is in
+[Using AI agents › The JSON output](/guides/ai-agents/#the-machine-error-contract).
+
+**`sarif`** prints [SARIF 2.1.0](https://sarifweb.azurewebsites.net/), which
+GitHub code scanning reads ([recipe below](#github-code-scanning)). Notes
+have the SARIF level `note`.
+
+**`vscode`** prints one line per finding,
+`file:line:column: severity: [path] message`, where `severity` is `error`,
+`warning`, or `info` for a note. VS Code's problem matcher reads it:
+see [Validate on save](/guides/editor-setup/#validate-on-save-vs-code-task).
+
+---
+
+### preview
+
+Start a local server that shows one YAML document, a map or a story map, on
+a page of its own, and reloads it when you save the file.
+
+```bash
+npx maplibre-yaml preview <file> [options]
+```
+
+| Argument | Required | Description                     |
+| -------- | -------- | ------------------------------- |
+| `file` | Yes      | The map document or story file to show |
+
+| Option      | Type    | Default | Description                              |
+| ----------- | ------- | ------- | ---------------------------------------- |
+| `--port`    | number  | `3000`  | Port for the server                      |
+| `--no-open` | boolean |         | Don't open a browser tab (by default `preview` opens one) |
+| `--debug`   | boolean | `false` | Show a panel with the parsed document as JSON. Maps only |
+
+A mistake in the file shows as an overlay with the field path and message,
+in place of the map. A status bar at the bottom shows whether the server is
+connected and which file it shows. Data paths in the YAML resolve against
+the YAML file's folder, which the server serves.
+
+`preview` shows the document alone, not the HTML page you wrote around it.
+To see your own page, serve the folder instead (for example `npx serve .`).
+
+```bash
+npx maplibre-yaml preview map.yaml
+npx maplibre-yaml preview map.yaml --port 8080 --no-open
 ```
 
 ---
@@ -314,134 +199,94 @@ npx maplibre-yaml init --list
 Export a map document to a standalone MapLibre `style.json`: a file that
 opens in [Maputnik](https://maplibre.org/maputnik/) and renders in a plain
 `new maplibregl.Map({ style })`, with no maplibre-yaml on the page. Only
-`type: map` documents export. What happens to each construct (layers,
-markers, popups, live data, …) is listed in
-[Export classes](/guides/export-classes/).
+`type: map` documents export, in [format v1 or v2](/guides/format-v2/).
+[Export to style.json](/guides/export/) explains how to use the result, and
+[Export classes](/guides/export-classes/) what happens to each part of the
+document.
 
 ```bash
 npx maplibre-yaml emit <file> [options]
 ```
 
-#### Arguments
-
 | Argument | Required | Description |
 | -------- | -------- | ----------- |
 | `file` | Yes | Path to a `type: map` YAML document |
 
-#### Options
-
 | Option | Alias | Type | Default | Description |
 | ------ | ----- | ---- | ------- | ----------- |
 | `--out` | `-o` | string | stdout | Write the style to this file. A folder (one that exists, or a path ending in `/`, like `dist/`) gets `style.json` inside it |
-| `--with-fallbacks` | | boolean | on | Export what has a style.json fallback (markers become a symbol layer with pin sprites, `fitTo` on inline data becomes a fixed camera, framed with the same default margin as the live map; on a `url:` source the authored `center`/`zoom` is kept, with a warning) and print a warning for each loss |
+| `--with-fallbacks` | | boolean | on | Export what has a style.json fallback (markers become a symbol layer with pin images; `fitTo` becomes a fixed camera) and print a warning for each loss |
 | `--strict` | | boolean | off | Refuse the export (exit `1`) if anything would change what the map shows. Cannot be combined with `--with-fallbacks` |
 | `--target` | | string | | The maplibre-gl version the style is for, e.g. `5.6.0`. Features that version lacks (such as `state:` below its minimum, or `color-relief` below 5.6) are reported |
 | `--trust` | | string | | Deprecated, and has no effect: it is no longer listed in `--help`, and passing it prints a note. Trust gates raw `!html` in popups and `click.emit` host events, and neither is part of a `style.json`, so it never changed the exported file. A later release will remove it |
 | `--sprite-base` | | string | | Absolute URL where the folder holding the style will be served. Required, with `--out`, when the document generates sprite images (markers, `images:`), because MapLibre rejects relative sprite URLs |
 
 Warnings go to stderr, so `npx maplibre-yaml emit map.yaml > style.json`
-keeps the JSON clean.
+keeps the JSON clean. A part of the document with no style.json form prints
+a `contract` warning, and a part whose look changes prints a `lossy` warning,
+which `--strict` refuses ([Reading the report](/guides/export-classes/#reading-the-emit-report)).
 
-Some documents need their data or files at export time. `emit` reads them
-the way the published site would serve them: an `https://` URL is fetched,
-and a local path resolves against the YAML file's folder, then the site
-root and its `public/` folder.
+Some documents need their data at export time. `emit` reads it the way the
+published site would serve it: an `https://` URL is fetched, and a local path
+resolves against the YAML file's folder, then the current folder and its
+`public/` folder.
 
 - A [`classify:`](/guides/thematic-maps/) layer with computed breaks
   (`method:`) has its source's data loaded, and the breaks are written into
   the style. If the data can't be loaded, the export fails and says why.
 - A GeoJSON `url:` source is written as `data: <url>`, as the style spec
   expects, so the exported style loads it.
-- [FlatGeobuf and GeoParquet](/guides/cloud-native-data/) files are converted
-  to inline GeoJSON (a file that can't be read leaves the source empty, with
-  a warning that `--strict` refuses).
-- PMTiles sources are written as `pmtiles://` URLs, COG sources as `cog://`
-  URLs, and a Protomaps basemap shorthand as the full style it builds. The
-  page showing the exported style must register those protocols itself; see
+- [Large-data](/guides/cloud-native-data/) files: FlatGeobuf and GeoParquet
+  are converted to inline GeoJSON; PMTiles and COG sources, and a Protomaps
+  basemap, become `pmtiles://` and `cog://` URLs that the page showing the
+  style must register. See
   [Large-data files in an exported style](/guides/export/#large-data-files-in-an-exported-style).
 
-#### Exit codes
-
-| Code | Meaning |
-| ---- | ------- |
-| `0` | Style written (warnings, if any, on stderr) |
-| `1` | Not a valid map document, a `--strict` refusal, or bad arguments |
-| `2` | Input file not found |
-| `4` | Unexpected error (for example, the basemap or an image could not be fetched) |
-
-#### Examples
-
-Print the style:
-
 ```bash
-npx maplibre-yaml emit map.yaml
+npx maplibre-yaml emit map.yaml                       # print the style
+npx maplibre-yaml emit map.yaml --out dist/           # write dist/style.json
+npx maplibre-yaml emit map.yaml --strict --out dist/  # fail on any loss (CI)
+npx maplibre-yaml emit map.yaml --out dist/ --sprite-base https://maps.example.org/dist/
 ```
 
-Write `dist/style.json`:
-
-```bash
-npx maplibre-yaml emit map.yaml --out dist/
-```
-
-Fail instead of exporting with losses (for CI):
-
-```bash
-npx maplibre-yaml emit map.yaml --strict --out dist/style.json
-```
-
-A document with markers, exported with its generated pin sprites:
-
-```bash
-npx maplibre-yaml emit map.yaml --out dist/style.json --sprite-base https://maps.example.org/dist
-```
+The last line exports a document with markers: it writes `style.json` and
+the sprite files (`mlym.json`, `mlym.png` and their `@2x` versions) into
+`dist/`, and the style points at them under `https://maps.example.org/dist/`.
 
 ---
 
 ### schema
 
-Print the JSON Schema for a block, resolved from the installed
-`@maplibre-yaml/core` package — so it always matches the version `validate`
-enforces. Useful for offline editor integration and AI agents.
+Print the JSON Schema for a block, read from the installed
+`@maplibre-yaml/core` package, so it matches the version `validate` checks
+against. The schemas describe [format v1](/guides/format-v2/); there is no
+JSON Schema for format v2.
 
 ```bash
 npx maplibre-yaml schema [block] [options]
 ```
 
-#### Arguments
-
 | Argument | Required | Default | Description                                          |
 | -------- | -------- | ------- | ---------------------------------------------------- |
 | `block`  | No       | `map`   | One of `map`, `scrollytelling`, `root`, `any`        |
-
-#### Options
 
 | Option  | Alias | Type   | Description                                     |
 | ------- | ----- | ------ | ----------------------------------------------- |
 | `--out` | `-o`  | string | Write the schema to a file instead of stdout    |
 
-#### Examples
-
-Print the map schema to stdout:
-
 ```bash
-npx maplibre-yaml schema map
+npx maplibre-yaml schema map                         # print the map schema
+npx maplibre-yaml schema any --out any.schema.json   # write a file for offline use
 ```
 
-Write the combined (`any`) schema to a file for offline use:
+A modeline then points at the written file:
 
-```bash
-npx maplibre-yaml schema any --out any.schema.json
-```
-
-Reference the written file from a config with a modeline:
-
-```yaml
+```yaml no-validate
 # yaml-language-server: $schema=./any.schema.json
 ```
 
-See [Editor Setup](/guides/editor-setup/) and
-[Using AI Agents](/guides/ai-agents/) for how these schemas power in-editor
-validation and agent workflows.
+See [Editor setup](/guides/editor-setup/) and
+[Using AI agents](/guides/ai-agents/) for what the schemas are used for.
 
 ---
 
@@ -472,10 +317,11 @@ npx maplibre-yaml bake blueprint --out docs/public/classics/blueprint
 
 ---
 
-## Configuration File
+## Project settings file \{#configuration-file}
 
-Create `maplibre-yaml.config.json` in your project root to set default options
-(`.yaml`, `.yml`, `.js` and `.mjs` versions of the same name work too):
+A `maplibre-yaml.config.json` file in the folder you run the CLI from sets
+default options for `validate` and `preview`. A `.yaml`, `.yml`, `.js` or
+`.mjs` file of the same name works too.
 
 ```json
 {
@@ -485,100 +331,49 @@ Create `maplibre-yaml.config.json` in your project root to set default options
     "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/*.backup.yaml"]
   },
   "preview": {
-    "port": 3000,
-    "open": true
+    "port": 4000,
+    "open": false
   }
 }
 ```
 
-### Configuration Options
+An option you type on the command line wins, then the settings file, then
+the built-in default. With the file above, `preview map.yaml` serves on port
+4000 without opening a browser, and `preview map.yaml --port 5000` serves on
+5000. The `preview` settings need CLI 0.6.1 or later; 0.6.0 ignores them.
 
-#### validate
-
-| Option           | Type     | Default | Description              |
-| ---------------- | -------- | ------- | ------------------------ |
-| `format`         | string   | `human` | Default output format    |
-| `strict`         | boolean  | on in CI | Treat warnings as errors |
-| `ignorePatterns` | string[] | `["**/node_modules/**", "**/dist/**"]` | Glob patterns to ignore. Setting it replaces the default, so list those two again if you still want them skipped |
-
-#### preview
-
-| Option | Type    | Default | Description             |
-| ------ | ------- | ------- | ----------------------- |
-| `port` | number  | `3000`  | Default server port     |
-| `open` | boolean | `true`  | Open browser by default |
-
-CLI arguments always take precedence over config file settings.
+| Setting | Type | Default | Description |
+| ------- | ---- | ------- | ----------- |
+| `validate.format` | string | `human` | Output format |
+| `validate.strict` | boolean | on in CI | Treat warnings as errors |
+| `validate.ignorePatterns` | string[] | `["**/node_modules/**", "**/dist/**"]` | Glob patterns to skip. Setting it replaces the default, so list those two again if you still want them skipped |
+| `preview.port` | number | `3000` | Server port |
+| `preview.open` | boolean | `true` | Open a browser tab |
+| `preview.debug` | boolean | `false` | Show the debug panel |
 
 ---
 
-## Aliases
-
-`mlym` and `maplibre-yaml` are the two command names an installed
-`@maplibre-yaml/cli` provides; they are the same program. See
-[Running the CLI](#running-the-cli) for when each form works.
-
----
-
-## Performance
-
-The CLI is optimized for speed:
-
-| Operation              | Performance   |
-| ---------------------- | ------------- |
-| Single file validation | ~1ms          |
-| 10 files validation    | ~3ms          |
-| 100 files validation   | ~80ms         |
-| Watch mode (cached)    | ~1ms per file |
-| CLI startup (`--help`) | ~350ms        |
-
-### Parallel Processing
-
-The validate command checks up to 10 files at a time. For more than 10 files
-(with `human` or `vscode` output), it checks them one after another and shows
-a progress bar.
-
-### Watch Mode Caching
-
-Watch mode uses mtime-based caching to avoid re-validating unchanged files. Only modified files are re-validated, making watch mode extremely fast for development workflows.
-
----
-
-## Exit Codes
-
-All commands use consistent exit codes:
+## Exit codes
 
 | Code | Meaning             | Commands          |
 | ---- | ------------------- | ----------------- |
-| `0`  | Success             | All               |
-| `1`  | Invalid input: validation or YAML syntax errors, an unknown template or option, a non-empty `init` folder, a `--strict` emit refusal | validate, emit, init, schema, bake |
-| `2`  | File not found      | validate, preview, emit |
-| `4`  | Unexpected error    | All               |
-
-Use exit codes in scripts and CI/CD pipelines to detect failures:
-
-```bash
-if npx maplibre-yaml validate "**/*.yaml"; then
-  echo "All configurations valid"
-else
-  echo "Validation failed with exit code $?"
-  exit 1
-fi
-```
+| `0`  | Success. For `emit`, the style was written; warnings, if any, are on stderr | All |
+| `1`  | Invalid input: validation or YAML syntax errors, warnings in strict mode, an unknown template or option, a non-empty `init` folder, an `emit --strict` refusal | validate, emit, init, schema, bake |
+| `2`  | File not found, or no file matched a pattern | validate, preview, emit |
+| `4`  | Unexpected error (for `emit`, for example, a basemap or image that could not be fetched) | All |
 
 ---
 
-## Environment Variables
+## Environment variables
 
 ### CI
 
 When `CI` is set (GitHub Actions and other CI services set it), `validate`
-runs in strict mode unless you pass `--no-strict`. See
-[Options](#options).
+runs in strict mode unless you pass `--no-strict`.
 
 ### DEBUG
 
-Set to any value to print debug messages and the stack trace of an
+Set it to any value to print debug messages and the stack trace of an
 unexpected error, for a bug report:
 
 ```bash
@@ -595,28 +390,30 @@ NO_COLOR=1 npx maplibre-yaml validate map.yaml
 
 ---
 
-## Integration Examples
+## Integration examples
 
-### npm Scripts
+### npm scripts
 
 With the CLI installed in the project (`npm install --save-dev
-@maplibre-yaml/cli`), scripts can use the short name. Add to `package.json`:
+@maplibre-yaml/cli`), scripts can use the short name:
 
 ```json
 {
   "scripts": {
-    "validate": "mlym validate 'configs/**/*.yaml'",
-    "validate:watch": "mlym validate 'configs/**/*.yaml' --watch",
+    "validate": "mlym validate 'maps/**/*.yaml'",
+    "validate:watch": "mlym validate 'maps/**/*.yaml' --watch",
     "preview": "mlym preview map.yaml",
-    "validate:ci": "mlym validate '**/*.yaml' --format json --strict"
+    "export": "mlym emit map.yaml --strict --out dist/"
   }
 }
 ```
 
 ### GitHub Actions
 
+`validate` is strict in CI, so warnings fail the job too:
+
 ```yaml
-name: Validate Maps
+name: Validate maps
 on: [push, pull_request]
 jobs:
   validate:
@@ -626,13 +423,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npx maplibre-yaml validate "**/*.yaml" --format json --strict
+      - run: npx maplibre-yaml validate "**/*.yaml"
 ```
 
-### GitHub Code Scanning
+### GitHub code scanning
+
+SARIF output shows each finding as an annotation on the pull request:
 
 ```yaml
-name: Code Scanning
+name: Code scanning
 on: [push, pull_request]
 jobs:
   analyze:
@@ -650,13 +449,13 @@ jobs:
           sarif_file: results.sarif
 ```
 
-### Pre-commit Hook
+### Pre-commit hook
 
-Using [husky](https://typicode.github.io/husky/):
+With [husky](https://typicode.github.io/husky/), check the YAML files staged
+for a commit (it does nothing when there are none):
 
 ```bash
 #!/bin/sh
-# Validate the YAML files staged for this commit (does nothing when there are none)
 git diff --cached --name-only --diff-filter=ACM -- '*.yaml' '*.yml' \
   | xargs -r npx maplibre-yaml validate
 ```
@@ -667,35 +466,44 @@ git diff --cached --name-only --diff-filter=ACM -- '*.yaml' '*.yml' \
 
 ### Command not found
 
-`mlym` and `maplibre-yaml` exist only after an install. Either:
-
-1. Run it through npx with the package name: `npx maplibre-yaml <command>`
-2. Install it in the project (`npm install --save-dev @maplibre-yaml/cli`) and run `npx mlym <command>`
-3. Install it globally (`npm install -g @maplibre-yaml/cli`) and check that your PATH includes npm's global bin folder
+`mlym` and `maplibre-yaml` exist only after an install, and `npx mlym` fails
+with a 404 without one. Use `npx maplibre-yaml`, or install the CLI (see
+[Running the CLI](#running-the-cli)). After a global install, check that
+your `PATH` includes npm's global bin folder (`npm prefix -g`).
 
 ### Glob patterns not matching files
 
-- Quote patterns to prevent shell expansion: `"configs/**/*.yaml"`
-- Use absolute paths or run from project root
-- Check ignore patterns in config file
+- Quote the pattern, `"maps/**/*.yaml"`, so your shell doesn't expand it.
+- Patterns are relative to the folder you run the command in.
+- Check `validate.ignorePatterns` in the project settings file: `validate`
+  prints `Skipped …: excluded by validate.ignorePatterns` for a file it
+  skipped.
 
 ### Watch mode not detecting changes
 
-- Ensure file is within watched pattern
-- Check file system limits (increase with `ulimit -n 4096`)
-- Verify file permissions
+- Check that the file matches the pattern you are watching.
+- On Linux, a large tree can exceed the file-watcher limit; raise it
+  (`fs.inotify.max_user_watches`) or watch a smaller pattern.
 
-### Permission errors
+### Settings file ignored
 
-- Ensure read access to all matched files
-- Check directory permissions
-- Run with appropriate user permissions
+The CLI reads `maplibre-yaml.config.*` from the folder you run it in, not
+from the YAML file's folder. An option typed on the command line overrides
+it.
 
 ---
 
-## See Also
+## See also
 
-- [The CLI (mlym)](/cli/getting-started/) - Installation and basic usage
-- [VS Code tasks](/guides/editor-setup/#validate-on-save-vs-code-task) - Set up IDE integration
-- [YAML reference](/reference/yaml/) - Every key of the format
-- [Examples](/examples/) - Sample configurations
+- [The CLI (mlym)](/cli/getting-started/): a walkthrough of the four main
+  commands.
+- [Editor setup](/guides/editor-setup/): checks as you type, and validation
+  on save in VS Code.
+- [Export to style.json](/guides/export/): using what `emit` writes.
+- [YAML reference](/reference/yaml/): every key of the format.
+
+## Moved sections
+
+### Aliases
+
+The command names are listed under [Running the CLI](#running-the-cli).

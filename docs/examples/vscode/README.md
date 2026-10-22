@@ -1,6 +1,6 @@
 # VSCode Integration Guide
 
-This directory contains examples and documentation for integrating maplibre-yaml with Visual Studio Code.
+This directory contains the example files for the docs page [Editor setup](https://docs.maplibre-yaml.org/guides/editor-setup/), which explains them.
 
 ## Quick Start (No Extension Required)
 
@@ -46,12 +46,12 @@ This will continuously monitor your YAML files and show errors in real-time.
 The tasks use a custom Problem Matcher that parses validation output in the format:
 
 ```
-file:line:column: severity: message
+file:line:column: severity: [path] message
 ```
 
 Example:
 ```
-/path/to/config.yaml:5:10: error: [config.center] Expected array, got string
+/path/to/map.yaml:4:11: error: [config.center] center needs square brackets: center: [-74.006, 40.7128]
 ```
 
 This format allows VSCode to:
@@ -59,12 +59,8 @@ This format allows VSCode to:
 - Underline errors in the editor
 - Provide quick navigation to error locations
 
-## Future: VSCode Extension
-
-See [`EXTENSION_ROADMAP.md`](./EXTENSION_ROADMAP.md) for the planned VSCode extension architecture.
-
 ## Requirements
 
-- `@maplibre-yaml/cli` installed in your project or globally
+- Node.js 20.9 or later. The tasks run `npx maplibre-yaml`, which uses `@maplibre-yaml/cli` from your project when it is installed and downloads it otherwise
 - VSCode 1.60+ (for Problem Matcher support)
 - Recommended: [YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml) for schema validation

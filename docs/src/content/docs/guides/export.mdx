@@ -1,98 +1,286 @@
 ---
 title: Export to style.json
-description: Declarative interactions, the export guarantee, and reattaching behavior with attachInteractions
+description: Export a map document to a standalone MapLibre style.json with mlym emit, show it with plain maplibre-gl, and put its popups and hover back with attachInteractions.
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
-A maplibre-yaml document carries two kinds of thing: the parts that become a
-MapLibre `style.json`, and the parts that only exist while the map is running.
-Interactions — popups, camera moves, hover highlighting, host events — are the
-second kind. They are declared in your YAML but they are **behavior**, and no
-MapLibre style can hold behavior.
+An export turns a map document into a standalone MapLibre `style.json`: the
+basemap, your sources and your layers in one file. The file renders with
+plain maplibre-gl, opens in [Maputnik](https://maplibre.org/maputnik/), and
+works in any app that reads MapLibre styles, with no maplibre-yaml on the
+page. The CLI command that exports is `mlym emit`.
 
-This guide is about what that means in practice: how the declarative
-interactions are authored (a recap), why a compiled style is inert on its own
-(the **export guarantee**), and how `attachInteractions` wires the behavior back
-onto any map so your interactions survive export.
+<Aside type="note" title="Two things called emit">
+`mlym emit` is the export command. It is unrelated to `click.emit`, an
+interaction that sends a click to your page's code; see
+[Host events](#emit-a-host-event-and-what-it-truthfully-requires) below.
+</Aside>
 
-## Declarative interactions, in one recap
+## Quick start
 
-Every interaction lives under a layer's `interactive:` block, split into a
-`hover:` trigger and a `click:` trigger. The named interactions core ships are:
+1. In the folder with your `map.yaml`, export it:
 
-- **`click.popup`** — open a popup built from the clicked feature.
-- **`click.flyTo`** — animate the camera to author-fixed coordinates (defaults
-  to the clicked point).
-- **`click.zoomToFeature`** — fit the camera to the clicked feature's own bounds.
-- **`hover.highlight`** — recolour the hovered feature via `feature-state`.
+   ```bash
+   npx maplibre-yaml emit map.yaml --out dist/
+   ```
 
-```yaml
-version: 1
-type: map
-id: cities-map
-config:
-  center: [10, 30]
-  zoom: 1.5
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: cities
-    type: circle
-    source:
-      type: geojson
-      url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_populated_places_simple.geojson"
-      generateId: true
-    paint:
-      circle-radius: 6
-      circle-color: "#3b82f6"
-    interactive:
-      hover:
-        cursor: pointer
-        highlight: true
-      click:
-        popup:
-          - h3: [{ property: name }]
-          - p: [{ property: adm0name }]
-        zoomToFeature:
-          padding: 40
-          maxZoom: 9
-          duration: 300
+   This writes `dist/style.json`. A warning on the terminal names each part
+   of the document that a style can't hold, such as popups or controls.
+
+2. Next to `map.yaml`, create `plain.html`, a page with maplibre-gl and
+   nothing else:
+
+   ```html
+   <!doctype html>
+   <html lang="en">
+   <head>
+     <meta charset="utf-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1">
+     <title>Exported map</title>
+     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css">
+     <style>
+       body { margin: 0; }
+       #map { height: 100vh; }
+     </style>
+   </head>
+   <body>
+     <div id="map"></div>
+     <script type="module">
+       import * as maplibregl from "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs";
+
+       new maplibregl.Map({ container: "map", style: "dist/style.json" });
+     </script>
+   </body>
+   </html>
+   ```
+
+3. Serve the folder with `npx serve .` and open `/plain` at the address it
+   prints.
+
+You see your map: the basemap and your layers, drawn by maplibre-gl alone.
+Clicking a feature does nothing, because a style can't hold behaviour. To
+get popups and hover back, see
+[Keep the interactions](#reattachment-attachinteractions).
+
+## What goes into the export \{#the-export-guarantee}
+
+A MapLibre style holds sources, layers, the camera and the basemap. It has
+no way to say "open a popup on click" or "show a legend", so those parts of
+a document are left out, each with a `contract` warning. `mlym emit` also
+does the work a plain style can't do at run time:
+
+- it merges the basemap into the style;
+- it writes the breaks a [`classify:`](/guides/thematic-maps/) layer
+  computes from its data;
+- it turns markers into a symbol layer with pin images, and `fitTo` into a
+  fixed camera, each with a `lossy` warning;
+- it converts or rewrites [large-data files](#large-data-files-in-an-exported-style).
+
+[Export classes](/guides/export-classes/) lists what happens to every part
+of a document. `--strict` refuses an export with any `lossy` warning, for
+CI, and [`emit`](/cli/reference/#emit) lists every option.
+
+## Keep the interactions: `attachInteractions` \{#reattachment-attachinteractions}
+
+`attachInteractions` puts a document's popups, hover, camera moves and
+highlight back onto any maplibre-gl map, including one showing an exported
+style. It reads them from the same YAML document. This version of
+`plain.html` loads the exported style, then attaches the interactions from
+`map.yaml`:
+
+```html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Exported map with interactions</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css">
+  <style>
+    body { margin: 0; }
+    #map { height: 100vh; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
+  </script>
+</head>
+<body>
+  <div id="map"></div>
+  <script type="module">
+    import * as maplibregl from "maplibre-gl";
+    import {
+      YAMLParser,
+      normalizeMapBlock,
+      projectInteractions,
+      attachInteractions,
+    } from "https://esm.sh/@maplibre-yaml/core@0.9?external=maplibre-gl";
+
+    const map = new maplibregl.Map({ container: "map", style: "dist/style.json" });
+
+    // The interactions come from the document the style was exported from.
+    const source = await (await fetch("map.yaml")).text();
+    const parsed = YAMLParser.safeParseMapBlock(source);
+    if (!parsed.success) throw new Error(parsed.errors[0].message);
+    const projection = projectInteractions(normalizeMapBlock(parsed.data));
+
+    attachInteractions(map, projection);
+  </script>
+</body>
+</html>
 ```
 
-When a layer configures both a popup and a camera move, the popup opens first
-and then travels with the camera. `highlight` needs feature ids — set
-`generateId: true` on the source, or `promoteId` to use a property.
+Now a click on a feature opens its popup. The import map makes the library
+use the same maplibre-gl as the page; the [JavaScript API](/integrations/vanilla-js/)
+page explains that setup.
 
-This is only a recap. Every field, its defaults, and the `emit` interaction are
-documented in full in the [Interactivity schema
-reference](/schema/interactivity/).
+- `projectInteractions(model)` reads the interactions out of a document as
+  plain data.
+- `attachInteractions(map, projection, options?)` binds them to the map's
+  layers by layer id, and returns a handle:
+  `resetFeatureState(layerId)` clears hover state after you replace a
+  layer's data, `detach(layerId)` removes one layer's listeners, and
+  `destroy()` removes all of them and any open popup.
+- `hover.highlight` needs feature ids, as it does under `<ml-map>`: set
+  `promoteId` (or `generateId: true`) on the source.
 
-## The export guarantee
+The map can also be one your own code built, with its own sources and
+layers: the interactions bind to whichever layers have the ids the document
+names. A runnable version is
+[`examples/vanilla/export-and-attach.html`](https://github.com/design-practices/maplibre-yaml/blob/main/examples/vanilla/export-and-attach.html)
+in the repository.
 
-`projectStyle(model)` compiles your document into a self-contained, spec-valid
-`style.json`. That artifact renders anywhere MapLibre runs — vanilla
-maplibre-gl, maplibre-native, a third-party tool that eats style JSON — with
-nothing from this library present at runtime. That is the export guarantee: your
-map is not locked to `<ml-map>`.
+## Host events (`click.emit`) \{#emit-a-host-event-and-what-it-truthfully-requires}
 
-The quickest way to get that file is the CLI:
-`npx maplibre-yaml emit map.yaml --out dist/` writes `dist/style.json`, with
-the basemap merged in, computed [`classify:`](/guides/thematic-maps/) breaks
-baked in, FlatGeobuf and GeoParquet files converted to GeoJSON, markers
-lowered to a symbol layer, and `fitTo` on inline data lowered to a fixed
-camera. Every loss is
-printed as a warning; see [`emit`](/cli/reference/#emit) and
-[Export classes](/guides/export-classes/). The rest of this section does the
-core step by hand, in JavaScript.
+`click.emit` is an interaction, not the export command. On a click it calls
+a function your page registered, with a payload read from the clicked
+feature:
 
-The other half of the guarantee is the honest half: **the compiled style is
-inert.** Nothing in the MapLibre style specification can express "open a popup
-on click" or "fly the camera to this feature." Those verbs do not exist in the
-spec. So the compiled style is a *picture* of your map, not its *behavior* — it
-draws the layers, and clicking a feature does nothing.
+```yaml no-validate
+interactive:
+  click:
+    emit:
+      event: select-quake
+      payload:
+        id: { property: code }
+        place: { property: place }
+```
+
+It fires only through `attachInteractions`, and only when the page trusts
+the document and has a handler for the event. Both calls take the trusted
+policy:
 
 ```js
-import * as maplibregl from "maplibre-gl";
+const projection = projectInteractions(model, { trust: "trusted" });
+
+attachInteractions(map, projection, {
+  policy: { trust: "trusted" },
+  hostHandlers: {
+    "select-quake": (payload) => console.log(payload.id, payload.place),
+  },
+});
+```
+
+Without the trusted policy, or without a handler of that name, nothing
+happens. Under `<ml-map>` a `click.emit` never fires: listen for the
+element's `ml-map:layer-click` event instead. The payload rules (`str`,
+`property`, `else`) are in the
+[Interactivity reference](/schema/interactivity/#emit).
+
+## Large-data files in an exported style
+
+A `style.json` can carry a URL but not a file reader, so the
+[large-data formats](/guides/cloud-native-data/) export like this:
+
+- **PMTiles** sources export as `pmtiles://` URLs (a `.pmtiles` URL gains the
+  scheme). The style then needs a renderer that reads `pmtiles://`, such as
+  maplibre-gl JS with the protocol registered. With a bundler, after
+  `npm install pmtiles`:
+
+  ```js
+  import maplibregl from "maplibre-gl";
+  import { Protocol } from "pmtiles";
+  maplibregl.addProtocol("pmtiles", new Protocol().tile);
+  ```
+
+  In a plain HTML page, import `addProtocol` from the `maplibre-gl` your import
+  map names and `Protocol` from `https://esm.sh/pmtiles@4` (esm.sh resolves
+  its dependencies; unpkg does not), before the map is created.
+- **A Protomaps basemap** (`mapStyle: { pmtiles: … }`) exports as the full
+  style it generates: every layer, the file as `pmtiles://…`, and the glyph
+  and sprite URLs. It needs the same `pmtiles` registration. A relative file
+  path is written as it is, so it resolves against whichever page loads the
+  style; give a full URL for a style used anywhere else. Labels are in `lang:`
+  (English when unset: an exported style has no page language to follow).
+- **FlatGeobuf** and **GeoParquet** sources are converted: `mlym emit` reads
+  the file (next to the YAML, in the current folder or its `public/`, or over
+  http(s)) and writes its features into the style as GeoJSON; for
+  GeoParquet, every column, or the `columns:` you listed. If it can't read
+  the file, the source is exported empty and reported, and `--strict`
+  refuses.
+- **COG** sources export as `cog://` URLs, in the form the map itself uses:
+  `#dem` on an elevation source, a `colorRamp:` written out as the COG
+  protocol's `#color:` fragment, and `tileSize: 256`. The style then needs the
+  protocol from
+  [`@geomatico/maplibre-cog-protocol`](https://github.com/geomatico/maplibre-cog-protocol).
+  With a bundler, after `npm install @geomatico/maplibre-cog-protocol`:
+
+  ```js
+  import maplibregl from "maplibre-gl";
+  import { cogProtocol } from "@geomatico/maplibre-cog-protocol";
+  maplibregl.addProtocol("cog", cogProtocol);
+  ```
+
+  In a plain HTML page, load the plugin's browser build
+  (`<script src="https://unpkg.com/@geomatico/maplibre-cog-protocol@0.10/dist/index.js"></script>`,
+  which defines `MaplibreCOGProtocol`) and call
+  `addProtocol("cog", MaplibreCOGProtocol.cogProtocol)` on the `maplibre-gl`
+  your import map names, before the map is created.
+
+[Export classes](/guides/export-classes/) lists how every construct exports.
+
+
+## Troubleshooting
+
+### The exported map has no popups or hover
+
+A style can't hold them. Attach them from the document with
+[`attachInteractions`](#reattachment-attachinteractions).
+
+### The export stops with "Sprite assets need an absolute URL"
+
+The document has markers or `images:`, and the exported style needs a full
+URL for their sprite files. Pass the address the style's folder will be
+served from:
+
+```bash
+npx maplibre-yaml emit map.yaml --out dist/ --sprite-base https://maps.example.org/dist/
+```
+
+### A PMTiles or COG layer is blank
+
+The exported style uses `pmtiles://` or `cog://` URLs. Register the protocol
+on the page before the map is created
+([Large-data files](#large-data-files-in-an-exported-style)).
+
+### `--strict` refuses the export
+
+Something in the document changes what the map shows when exported: the
+refusal names each part. Export without `--strict` to accept the fallbacks,
+or change the document; [Reading the report](/guides/export-classes/#reading-the-emit-report)
+explains the warnings.
+
+## Alternatives
+
+### Export from JavaScript
+
+`projectStyle` does the core step of an export in your own code, in Node or
+in a browser. It is narrower than `mlym emit`: it doesn't load data at
+export (so no computed `classify:` breaks or converted files), and it
+doesn't write sprite files for markers. In a Node script:
+
+```js
+import { readFileSync } from "node:fs";
 import {
   YAMLParser,
   normalizeMapBlock,
@@ -101,152 +289,24 @@ import {
   mergeBasemap,
 } from "@maplibre-yaml/core";
 
-const parsed = YAMLParser.safeParseMapBlock(doc);
+const parsed = YAMLParser.safeParseMapBlock(readFileSync("map.yaml", "utf8"));
+if (!parsed.success) throw new Error(parsed.errors[0].message);
 const model = normalizeMapBlock(parsed.data);
 
-// Compile the style half. The interactive half is NOT in here.
+// The style half of the document; projected.warnings names each part left out.
 const projected = projectStyle(model, "with-fallbacks");
-// The basemap is a URL (fetched), an inline style, or a Protomaps shorthand
-// (generated): resolveBasemap turns any of them into a style object to merge.
-const base = model.style.basemap;
-const { style } = base
-  ? mergeBasemap(await resolveBasemap(base), projected)
+
+// Merge the basemap: a style URL (fetched), an inline style, or a Protomaps
+// file (generated).
+const basemap = model.style.basemap;
+const { style } = basemap
+  ? mergeBasemap(await resolveBasemap(basemap), projected)
   : projected;
-
-// A plain MapLibre map over the compiled style. Nothing from this library
-// participates in rendering — and nothing makes the layers interactive.
-new maplibregl.Map({ container: "map", style });
 ```
 
-<Aside type="tip">
-  This is not a claim — it is a tested proof. The fixture
-  `examples/verification/emitter/export.html` hands a compiled style to a plain
-  `new maplibregl.Map({ style })` and asserts it renders with no
-  `runtime`/`interactive` keys left behind. It is driven end-to-end by
-  `e2e/v050-emitter.spec.ts`.
-</Aside>
-
-## Reattachment: `attachInteractions`
-
-If the compiled style is inert, how do interactions survive export? You wire them
-back on. `attachInteractions(map, projection, options)` takes the declarative
-projection your document produced and binds the built-in handlers onto **any**
-`maplibregl.Map` — a map rendering a compiled/exported style, *or* a map a host
-built entirely itself with its own sources and layers. No `<ml-map>` is
-involved.
-
-The behavior travels as data, separate from the style. `projectInteractions`
-extracts it; `attachInteractions` binds it:
-
-```js
-import {
-  projectInteractions,
-  attachInteractions,
-  createInteractionRegistry,
-} from "@maplibre-yaml/core";
-
-// The declarative interactions projection — pure data, no behavior yet.
-const projection = projectInteractions(model, { trust: "trusted" });
-
-// Wire it onto ANY maplibregl.Map: a compiled-style map, or the host's own.
-const handle = attachInteractions(map, projection, {
-  registry: createInteractionRegistry(),
-  policy: { trust: "trusted" },
-  hostHandlers: {
-    "select-feature": (payload) => {
-      /* host code runs here */
-    },
-  },
-});
-
-// The returned InteractionsHandle drives the lifecycle:
-handle.resetFeatureState("cities");   // drop hover state after a data refresh
-handle.detach("cities");              // release one layer's listeners
-handle.destroy();                     // release everything, remove any popup
-```
-
-The public API surface from `packages/core/src/interactions/index.ts` is small:
-
-- **`attachInteractions(map, projection, options)`** — bind the projection onto
-  a map; returns an `InteractionsHandle`.
-- **`projectInteractions(model, policy?)`** — extract the declarative projection
-  from a model.
-- **`createInteractionRegistry()`** — a fresh registry resolving interaction
-  names to built-ins (each attach gets its own).
-- **`InteractionsHandle`** — the returned lifecycle handle:
-  `{ resetFeatureState, detach, destroy }`.
-
-<Aside type="tip">
-  Also tested, not asserted. `examples/verification/interactions/compiled-interactions.html`
-  wires one authored document onto four maps — a compiled style, a
-  host-constructed map, an untrusted map, and a tampered projection — and
-  `e2e/interactions.spec.ts` drives it. The host-constructed leg is the
-  bring-your-own-map integration: the page owns the map, adds its own data, and
-  calls the same `attachInteractions`.
-</Aside>
-
-## `emit`: a host event, and what it truthfully requires
-
-`click.emit` is the interaction that hands data to code the host wrote. Unlike
-`popup`, `flyTo`, and `zoomToFeature` — which act on the map itself —
-`emit` dispatches a named event to a host-supplied handler. Because it hands
-control to host code, it is gated, and the gate is the point.
-
-```yaml
-version: 1
-type: map
-id: states-map
-config:
-  center: [-96, 38]
-  zoom: 3
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: states
-    type: fill
-    source:
-      type: geojson
-      url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
-      generateId: true
-    paint:
-      fill-color: "#2563eb"
-      fill-opacity: 0.6
-    interactive:
-      click:
-        emit:
-          event: select-feature
-          payload:
-            id: { property: STATE_ID }
-            kind: { str: state }
-```
-
-`emit` fires only through `attachInteractions`, and only when **both** of these
-hold at once:
-
-- **A trusted policy.** `options.policy` must declare `trust: "trusted"`. The
-  host hook is default-deny; an untrusted — or absent — policy shuts the gate
-  and the interaction does nothing. There is no per-policy override for this: a
-  host hook runs host code, and the only situation where that is safe is one
-  where the document author *is* the host.
-- **A matching handler.** `options.hostHandlers` must carry an entry whose key
-  equals the event name. Resolution is closed-world — an unregistered name (or a
-  prototype method like `toString`) is denied, never dispatched.
-
-Both are required. A trusted policy with no registered handler does nothing; a
-registered handler under an untrusted policy does nothing. It **needs BOTH.**
-
-<Aside type="caution">
-  **`emit` is inert under `<ml-map>` today.** The web component defaults to an
-  untrusted policy and registers no host handlers, so every `emit` fails closed
-  — a silent no-op — even in a document you authored yourself. This is
-  intentional fail-closed behavior, not a bug: `emit` targets the
-  `attachInteractions` path, and wiring it into the renderer is planned
-  follow-up work. Do not reach for `emit` expecting it to fire
-  from a plain `<ml-map>` mount.
-</Aside>
-
-The payload projection — `str`, `property`, `else`, and the defined-absent
-rule — is specified in the [`emit` section of the Interactivity
-reference](/schema/interactivity/#emit).
+`style` is the style object; pass it to `new maplibregl.Map({ style })` or
+write it to a file. `normalizeMapBlock` reads format v1 and v2 documents
+alike.
 
 ## Large-data files in an exported style
 
@@ -302,11 +362,16 @@ A `style.json` can carry a URL but not a file reader, so the
 
 ## Next steps
 
-- [Interactivity reference](/schema/interactivity/) — every interaction field,
-  the full `emit` payload vocabulary, and the deprecated `action` key
-- [Format v2](/guides/format-v2/) — the style/runtime split that makes the export
-  boundary legible
-- [Layers & styling](/guides/layers/) — the paint, layout, and filter that
-  compile straight through to `style.json`
-- [`mlym emit`](/cli/reference/#emit) — export a document to `style.json` from
-  the command line
+- [Export classes](/guides/export-classes/): what happens to each part of a
+  document, and how to read the warnings.
+- [`emit`](/cli/reference/#emit): every option of the command.
+- [Format v2](/guides/format-v2/): a layout that keeps what exports under
+  `style:`.
+
+## Moved sections
+
+### Declarative interactions, in one recap
+
+How to write popups, hover and camera moves is in
+[Popups, hover & controls](/guides/popups/); every interaction field is in the
+[Interactivity reference](/schema/interactivity/).

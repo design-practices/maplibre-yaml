@@ -1,27 +1,33 @@
 ---
 title: Format v2 (opt-in)
-description: The style/runtime split — additive, opt-in, and deep-equal to your v1 documents
+description: The opt-in version 2 layout of a map document, which splits it into style (what exports to style.json) and runtime (behaviour), and how each format v1 key maps to it.
 ---
 
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
-Format v1 is the default, and every page outside *Advanced* uses it; you can
-skip this page unless you want the split it describes.
+Format v1 is the default, and every other page of these docs uses it. Format
+v2 is an opt-in layout of the same map document: it splits the document into
+`style:`, the parts that become a MapLibre `style.json`, and `runtime:`, the
+behaviour that only exists while the map runs. Choose it when you export
+maps and want that line visible in the file, or when you generate or
+transform documents in code and want the style half to be the style spec's
+shape. Both formats draw the same map, so you can change one file at a time.
 
-Format v2 gives a maplibre-yaml document one new idea: a visible line between
-the parts of your map that become a MapLibre `style.json` and the parts that
-only exist while the map is running. You author that line yourself, at the top
-level, with two sections — `style:` and `runtime:`.
+<Aside type="tip" title="Use v2 when / stay on v1 when">
+**Use format v2** when you [export to style.json](/guides/export/) and want
+to see in the file what goes into the style, or when a program reads or
+writes your documents.
 
-## The headline: same map, two ways
+**Stay on format v1** for story maps (`type: scrollytelling` is v1 only),
+for help in your editor (the [JSON Schemas](/guides/editor-setup/) describe
+v1), and when you copy from the guides and examples, which are all v1.
+</Aside>
 
-**v2 is additive and opt-in.** A v2 document and its v1 twin parse to the
-**deep-equal internal model** and render and emit **identically**, so adopting
-v2 requires no migration, and nothing you have already written in v1 breaks. You move to v2 when the split earns its keep — not because
-a version bump forced your hand.
+## Same map, two ways \{#the-headline-same-map-two-ways}
 
-Here is one map, authored both ways. They produce the same model, so `<ml-map>`
-renders them indistinguishably.
+Here is one map written both ways. A v2 document and its v1 twin parse to the
+same model, so `<ml-map>` renders them the same and `mlym emit` exports the
+same `style.json`.
 
 <Tabs>
   <TabItem label="v2">
@@ -37,7 +43,7 @@ style:
   sources:
     quakes:
       type: geojson
-      url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson
+      url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson
       runtime:
         refresh:
           refreshInterval: 30000
@@ -69,7 +75,7 @@ config:
 sources:
   quakes:
     type: geojson
-    url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson
+    url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson
     refresh:
       refreshInterval: 30000
 layers:
@@ -88,58 +94,89 @@ controls:
   </TabItem>
 </Tabs>
 
-The only thing that differs is where the keys sit. In v1 the live-data keys are
-inline on the source and the experience keys are inline on the layer; in v2 they
-are grouped under a nested `runtime:`. The map is the same map. This equivalence
-is not a claim — it is checked by an end-to-end test that renders a full v2
-document through `<ml-map>`, renders its v1 twin beside it, and asserts the two
-models are deep-equal (`examples/verification/v2/v2-document.html`, driven by
-`e2e/v2-parser.spec.ts`).
+Only where the keys sit differs. In v1 the live-data keys sit on the source
+and the layer-panel keys on the layer; in v2 each group is under a nested
+`runtime:`. Every value keeps its meaning and its spelling, except one
+rename: v1's `mapStyle` is v2's `basemap`.
 
-<Aside type="tip">
-  Because the two forms collapse to one model, you can adopt v2 file by file.
-  There is no flag day and no bulk migration.
-</Aside>
+`mlym validate` and `mlym emit` read both formats, and so do `<ml-map>`, the
+Astro components and the JavaScript API. A v2 document starts with
+`version: 2` and `type: map`.
+
+## Where did my key go?
+
+If you know a v1 document, this table is the whole migration.
+
+| v1 location | v2 location |
+| --- | --- |
+| top-level `title` / `description` | unchanged: the document root |
+| `config.mapStyle` | `style.basemap` (renamed) |
+| `config.center` / `zoom` / `pitch` / `bearing` | `style.center` / `zoom` / `pitch` / `bearing` |
+| `config.bounds` / `minZoom` / `maxZoom` / `maxBounds` / `minPitch` / `maxPitch` | `runtime.map.*` |
+| `config.locale` | `runtime.map.locale` |
+| `config.fitTo` | `runtime.fitTo` |
+| `config.interactive` / `scrollZoom` / `boxZoom` / `dragRotate` / `dragPan` / `keyboard` / … | `runtime.map.*` |
+| `config.hash` / `attributionControl` / `logoPosition` / `trackResize` | `runtime.map.*` |
+| top-level `sources` | `style.sources` |
+| source `refresh` / `stream` / `cache` / `loading` | source `runtime.*` |
+| source `format` / `load` / `columns` / `colorRamp` | source `runtime.*` |
+| top-level `layers` | `style.layers` |
+| layer `classify` / `before` | unchanged: on the layer |
+| layer `interactive` / `legend` / `label` / `toggleable` / `effect` | layer `runtime.*` |
+| top-level `images` / `terrain` / `sky` / `light` / `projection` | `style.*` |
+| top-level `markers` / `popups` | `runtime.markers` / `runtime.popups` |
+| top-level `controls` | `runtime.controls` |
+| top-level `legend` | `runtime.legend` |
+| block `style:` / `className:` | `runtime.container.style` / `runtime.container.className` |
+| top-level `state` | `style.state` (or document root) |
+| top-level `parameters` | `runtime.parameters` (or document root) |
+
+Every v2 key is in the [map document (format v2) reference](/reference/yaml/map-v2/).
 
 ## The two halves
 
-Every v2 document states `version: 2` and `type: map` at its root, then splits
-into two sections.
+<span id="style--what-compiles-to-stylejson"></span>
 
-### `style:` — what compiles to `style.json`
+### The `style:` half: what goes into style.json
 
-Everything under `style:` contributes to the compiled MapLibre style, possibly
-by transformation. It carries:
+Everything under `style:` ends up in the exported `style.json`, sometimes
+transformed on the way. It holds:
 
-- **`basemap`** — the base style URL (or inline style object) that is merged in
-  at compile time. This is v2's name for v1's `mapStyle`, and it takes the same
-  forms, including a [Protomaps basemap](/guides/host-your-own-basemap/)
-  from one `.pmtiles` file (`basemap: data/nyc.pmtiles`, or
+- **`basemap`**: the basemap, merged in on export. This is v2's name for
+  v1's `mapStyle`, and it takes the same forms, including a
+  [Protomaps basemap](/guides/host-your-own-basemap/) from one `.pmtiles`
+  file (`basemap: data/nyc.pmtiles`, or
   `basemap: { pmtiles: data/nyc.pmtiles, flavor: dark }`).
-- **the camera** — `center`, `zoom`, `pitch`, `bearing`, lifted to the `style:`
-  root because they are style-spec root properties.
-- **`sources`** — your data sources, each keyed by name.
-- **`layers`** — your layer list, in draw order.
-- **`state`** — spec-native runtime-tunable values (read by the `global-state`
-  expression), and optional `metadata`.
-- **`images`, `terrain`, `sky`, `light`, `projection`** — the style-spec root
+- **the camera**: `center`, `zoom`, `pitch`, `bearing`, at the `style:`
+  root because they are root properties of a style.
+- **`sources`**: your data sources, each under its name.
+- **`layers`**: your layers, in drawing order.
+- **`state`**: values that expressions read with `global-state`, and
+  optional `metadata`.
+- **`images`, `terrain`, `sky`, `light`, `projection`**: the style's root
   properties, as in v1.
 
-### `runtime:` — what degrades
+<span id="runtime--what-degrades"></span>
 
-Everything under `runtime:` is the behavior layer. None of it reaches the
-compiled `style.json` — when you export to a plain style, it is stripped. It
-carries:
+### The `runtime:` half: behaviour
 
-- **`map`** — MapLibre `Map` constructor options (`minZoom`, `maxZoom`,
-  `scrollZoom`, `interactive`, `bounds`, `maxBounds`, `locale`, and the rest).
-- **`fitTo`** — frame the map on a source's data when it loads.
-- **`markers`** and **`popups`** — map-level markers and popups.
-- **`controls`** — navigation, scale, geolocate, fullscreen, attribution.
-- **`legend`** — the map-level legend.
-- **`parameters`** — presentation metadata for your `state` keys (label, type,
-  range) that a control UI needs but the style spec has nowhere to put.
-- **`container`** — the map element's own `style` and `className`.
+Everything under `runtime:` is behaviour and page furniture: what the map
+does while it runs. Most of it has no style.json form and is left out of an
+export, with a warning naming each key. Three keys export with a fallback
+instead: `markers` become a symbol layer with pin images, `fitTo` becomes a
+fixed camera, and a layer's `effect` exports as the layer's own static style.
+[Export classes](/guides/export-classes/) lists what happens to each key.
+`runtime:` holds:
+
+- **`map`**: MapLibre `Map` options (`minZoom`, `maxZoom`, `scrollZoom`,
+  `interactive`, `bounds`, `maxBounds`, `locale`, and the rest).
+- **`fitTo`**: frame the map on a source's data when it loads.
+- **`markers`** and **`popups`**: map-level markers and popups.
+- **`controls`**: navigation, scale, geolocate, fullscreen, attribution.
+- **`legend`**: the map's legend.
+- **`parameters`**: labels and ranges for your `state` keys, which a control
+  needs but a style has nowhere to put.
+- **`container`**: the map element's own `style` and `className`.
 
 ```yaml
 version: 2
@@ -165,17 +202,13 @@ runtime:
     className: "map-embed"
 ```
 
-The split is what makes the export guarantee legible: you can tell what will
-survive a compile to `style.json` by looking at which half a key lives in, with
-no need to consult a table.
+## A source's runtime: live data stays beside its source \{#per-source-runtime-live-data-stays-beside-its-source}
 
-## Per-source runtime: live data stays beside its source
-
-A source's live-data configuration — polling `refresh`, `stream`, `cache`,
-`loading` — nests under that source's own `runtime:` key, as do the keys that
-say how a [large-data file](/guides/cloud-native-data/#format-v2) is read:
-`format`, `load`, `columns` and `colorRamp`. It sits right beside
-the spec fields it acts on, so a source is still one thing to edit.
+A source's live-data settings (`refresh`, `stream`, `cache`, `loading`) go
+under that source's own `runtime:`, as do the keys that say how a
+[large-data file](/guides/cloud-native-data/#format-v2) is read: `format`,
+`load`, `columns` and `colorRamp`. They sit beside the fields they act on,
+so a source is still one thing to edit.
 
 ```yaml
 version: 2
@@ -204,18 +237,18 @@ style:
         circle-color: "#ef4444"
 ```
 
-The spec half of the source (`type`, `url`, `data`, `cluster`, …) compiles into
-`style.json`; the nested `runtime:` block degrades away on export.
+On export, the source's style fields (`type`, `url`, `data`, `cluster`, …)
+go into `style.json`, and its `runtime:` block is left out: the exported
+style loads the data once, with no polling.
 
-## Per-layer runtime: interactions, legend, label, toggle
+## A layer's runtime: interactions, legend, label, toggle \{#per-layer-runtime-interactions-legend-label-toggle}
 
-A layer's experience keys — `interactive`, `legend`, `label`, `toggleable`,
-and the experimental `effect` — nest under the layer's own `runtime:`
-(`legend: false` there keeps the layer out of the legend). The paint, layout,
-filter, type, source and `before` stay exactly where they are in v1 (they are
-byte-identical to v1), and so does a
-[`classify:`](/guides/thematic-maps/) block, which compiles to plain paint
-expressions.
+A layer's interaction and presentation keys (`interactive`, `legend`,
+`label`, `toggleable`, and the experimental `effect`) go under the layer's
+own `runtime:` (`legend: false` there keeps the layer out of the legend).
+`paint`, `layout`, `filter`, `type`, `source` and `before` stay where they
+are in v1, and so does a [`classify:`](/guides/thematic-maps/) block, which
+becomes plain paint expressions.
 
 ```yaml
 version: 2
@@ -228,7 +261,7 @@ style:
   sources:
     quakes:
       type: geojson
-      url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson
+      url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson
   layers:
     - id: quakes
       type: circle
@@ -241,7 +274,7 @@ style:
         toggleable: true
         legend:
           color: "#dc2626"
-          label: "Earthquake (past day)"
+          label: "Earthquake (past week)"
           shape: circle
         interactive:
           click:
@@ -250,17 +283,11 @@ style:
                   - property: title
 ```
 
-<Aside>
-  A layer's `runtime:` also reserves an `extends:` key for future layer
-  inheritance. The name is claimed but the value is currently unread — you can
-  ignore it until it is defined.
-</Aside>
-
 ## `state:` and `parameters:`
 
-`state:` is spec-native and compiles through, so it belongs under `style:`.
-Its presentation metadata does not compile through, so it lives under
-`runtime.parameters:`, keyed by the same state name.
+`state:` goes into the style, so it belongs under `style:`. The labels and
+ranges a control shows for it don't, so they go under `runtime.parameters:`,
+keyed by the same name.
 
 ```yaml
 version: 2
@@ -282,55 +309,31 @@ runtime:
       values: [baseline, buildout]
 ```
 
-<Aside>
-  For compatibility with v1 (which reads `state:` and `parameters:` at the
-  block root), v2 also accepts both keys at the document root. The nested
-  positions shown above are canonical; when a key appears in both places, the
-  nested one wins.
-</Aside>
+v2 also accepts `state:` and `parameters:` at the document root, where v1
+has them. When a key is in both places, the nested one wins.
 
-## Where did my key go?
+## Troubleshooting
 
-If you know a v1 document, this table is the whole migration. It is a
-relocation, not a rewrite — every value keeps its meaning and its spelling
-(except the one rename, `mapStyle` → `basemap`).
+### A v1 key in a v2 document gets a warning
 
-| v1 location | v2 location |
-| --- | --- |
-| top-level `title` / `description` | unchanged: the document root |
-| `config.mapStyle` | `style.basemap` (renamed) |
-| `config.center` / `zoom` / `pitch` / `bearing` | `style.center` / `zoom` / `pitch` / `bearing` |
-| `config.bounds` / `minZoom` / `maxZoom` / `maxBounds` / `minPitch` / `maxPitch` | `runtime.map.*` |
-| `config.locale` | `runtime.map.locale` |
-| `config.fitTo` | `runtime.fitTo` |
-| `config.interactive` / `scrollZoom` / `boxZoom` / `dragRotate` / `dragPan` / `keyboard` / … | `runtime.map.*` |
-| `config.hash` / `attributionControl` / `logoPosition` / `trackResize` | `runtime.map.*` |
-| top-level `sources` | `style.sources` |
-| source `refresh` / `stream` / `cache` / `loading` | source `runtime.*` |
-| source `format` / `load` / `columns` / `colorRamp` | source `runtime.*` |
-| top-level `layers` | `style.layers` |
-| layer `classify` / `before` | unchanged: on the layer |
-| layer `interactive` / `legend` / `label` / `toggleable` / `effect` | layer `runtime.*` |
-| top-level `images` / `terrain` / `sky` / `light` / `projection` | `style.*` |
-| top-level `markers` / `popups` | `runtime.markers` / `runtime.popups` |
-| top-level `controls` | `runtime.controls` |
-| top-level `legend` | `runtime.legend` |
-| block `style:` / `className:` | `runtime.container.style` / `runtime.container.className` |
-| top-level `state` | `style.state` (or document root) |
-| top-level `parameters` | `runtime.parameters` (or document root) |
+The document still parses, but `mlym validate` warns about a key left where
+v1 puts it: `Unknown key "mapStyle"` for a `mapStyle` at the `style:` root,
+or, for a `refresh:` directly on a source, that it goes under the source's
+`runtime:` block. Look the key up in
+[Where did my key go?](#where-did-my-key-go)
 
-<Aside type="caution">
-  v2 objects are strict about the v1 spelling: a `mapStyle` at the `style:`
-  root, or a bare `refresh:` inline on a source, parses but surfaces an
-  unknown-key **warning** — the reminder that the key moved. It does not break
-  the document; it points you at the new home.
-</Aside>
+### My editor underlines a v2 document
+
+The published JSON Schemas describe format v1. Leave the schema modeline
+out of a v2 file and check it with `mlym validate`
+([Editor setup](/guides/editor-setup/)).
 
 ## Next steps
 
-- [Loading data](/guides/data-sources/) — GeoJSON, URLs, and remote APIs
-- [Live data & streaming](/guides/live-data/) — the keys that nest under a
-  source's `runtime:`
-- [Layers & styling](/guides/layers/) — paint, layout, and filters, which are
-  identical across v1 and v2
-- [Map block (v2, opt-in) reference](/reference/yaml/map-v2/) — every v2 key
+- [Export to style.json](/guides/export/): what you do with the style half.
+- [Live data](/guides/live-data/): the keys that go under a source's
+  `runtime:`.
+- [Layers & styling](/guides/layers/): paint, layout and filters, the same
+  in v1 and v2.
+- [Map document (format v2) reference](/reference/yaml/map-v2/): every v2
+  key.

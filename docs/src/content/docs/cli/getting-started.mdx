@@ -1,70 +1,20 @@
 ---
 title: The CLI (mlym)
-description: Install and use the maplibre-yaml CLI
+description: Create a map project, check it for mistakes, preview it as you edit, and export it to style.json with the maplibre-yaml command line.
 ---
 
-The maplibre-yaml CLI provides command-line tools for starting a project,
-validating and previewing your YAML map configurations, and exporting them to
-`style.json`. It helps catch errors early and enables rapid development with
-hot reload.
+The maplibre-yaml CLI is a command-line tool for map documents. It creates a
+project, checks your YAML for mistakes, previews a map while you edit it, and
+exports a map to a plain MapLibre `style.json`. You use it on your computer
+and in CI; a map on a web page doesn't need it.
 
-The commands on this page use `npx maplibre-yaml`, which works without
-installing anything (you need [Node.js](https://nodejs.org/) 20.9 or later;
-the current LTS, 22 or 24, is recommended). On an older Node the CLI stops
-with "maplibre-yaml needs Node.js 20.9 or newer". Only the command line
-needs Node: maps and stories in a web page don't.
-`maplibre-yaml` is a small package that runs `@maplibre-yaml/cli`;
-`npx @maplibre-yaml/cli` is the same program under its full name.
-If you install the CLI, the shorter `mlym` does the same; see
-[Short Alias](#short-alias).
+You need [Node.js](https://nodejs.org/) 20.9 or later (check with
+`node --version`). Every command on this page runs through
+`npx maplibre-yaml`, which downloads the CLI the first time you use it, so
+there is nothing to install. Once installed, the same program is also called
+`mlym` ([below](#short-alias)).
 
-## Installation
-
-### Global Installation
-
-Install the CLI globally to use it anywhere:
-
-```bash
-npm install -g @maplibre-yaml/cli
-```
-
-Or with pnpm:
-
-```bash
-pnpm add -g @maplibre-yaml/cli
-```
-
-### Using npx
-
-You can use the CLI without installing it:
-
-```bash
-npx maplibre-yaml <command>
-```
-
-### Short Alias
-
-Once the CLI is installed, it also answers to the shorter `mlym`:
-
-```bash
-mlym validate config.yaml
-```
-
-`mlym` is a command name inside `@maplibre-yaml/cli`, not a package of its
-own, so `npx mlym` without an install fails with a 404. For a one-off run
-without installing, use `npx maplibre-yaml validate config.yaml` (a small
-package that runs the CLI) or the full name, `npx @maplibre-yaml/cli validate
-config.yaml`. Or install the CLI into your project first and then use the
-short name through npx:
-
-```bash
-npm install --save-dev @maplibre-yaml/cli
-npx mlym validate config.yaml
-```
-
-## Start a Project
-
-`init` creates a folder with a working map in it:
+## 1. Create a project \{#start-a-project}
 
 ```bash
 npx maplibre-yaml init my-map
@@ -72,343 +22,130 @@ cd my-map
 npx serve .
 ```
 
-Open the address `serve` prints (usually http://localhost:3000). The `basic`
-template (the default) is a plain HTML page and a `map.yaml`, loaded from a
-CDN at the release line this CLI was built with, so there is nothing to
-install or build. Edit `map.yaml` and reload the page. Opening `index.html` by
-double-clicking it does not work: browsers block a `file://` page from loading
-`map.yaml`. Another local server works too if it supports HTTP range
-requests, which PMTiles, FlatGeobuf, GeoParquet and COG files need;
-`python -m http.server` doesn't.
+`init` writes two files into `my-map/`: `index.html`, a page that loads
+maplibre-yaml from a CDN, and `map.yaml`, a street basemap with one point on
+New York. `npx serve .` serves the folder (npx asks once to download
+`serve`). Open the address it prints, usually http://localhost:3000, and
+click the blue point to open its popup.
 
-Other templates: `--template astro` (an Astro site, ready for GitHub Pages)
-and `--template story` (a scrollytelling document). Run
-`npx maplibre-yaml init --list` to see them, and see the
-[init reference](/cli/reference/#init) for details.
+Opening `index.html` by double-clicking it doesn't work: the browser blocks a
+`file://` page from loading `map.yaml`.
 
-## Validate Configuration
+`--template story` creates a story map instead, and `--template astro` an
+Astro site ready for GitHub Pages; see [`init`](/cli/reference/#init).
 
-Validate your YAML configuration files to catch errors before runtime.
+## 2. Check it for mistakes \{#validate-configuration}
 
-### Basic Validation
-
-Validate a single file:
+Break `map.yaml` on purpose: change `center: [-74.006, 40.7128]` to
+`center: -74.006, 40.7128`, then run:
 
 ```bash
-npx maplibre-yaml validate my-map.yaml
+npx maplibre-yaml validate map.yaml
 ```
 
-Output for valid configuration:
-
-```
-✓ my-map.yaml
-
-✓ 1 file(s) valid
-```
-
-Output for invalid configuration:
-
-```
-✗ my-map.yaml
-  error config: The document is missing config: — add a config: block with center:, zoom: and mapStyle:.
+```text
+✗ map.yaml
+  error config.center: center needs square brackets: center: [-74.006, 40.7128]
+    at line 15, column 11
 
 ✗ 1 file(s) with issues: 1 error(s)
 ```
 
-Besides errors, `validate` prints **warnings** (`⚠`), for something that
-probably isn't what you meant, such as a layer naming an undeclared source
-or a map with no basemap, and **notes** (`ℹ note`), which explain how a valid
-value is read. A note never makes a file invalid:
+Put the brackets back and run it again: it prints `✓ map.yaml`. Besides
+errors, `validate` reports **warnings**, for something that is valid but
+probably not what you meant (a layer naming a source that isn't declared),
+and **notes**, which explain how a valid value is read. Only errors make a
+file invalid, except in CI, where warnings count as errors too.
 
-```
-✓ my-map.yaml
-  ℹ note config.mapStyle: mapStyle: "data/nyc.pmtiles" names a .pmtiles file, so it is read as a Protomaps basemap (the light flavor, labels in the page's language). To choose a flavor or a language, write it as mapStyle: { pmtiles: data/nyc.pmtiles, flavor: dark, lang: es }.
-    at line 6, column 3
-
-✓ 1 file(s) valid (1 note(s))
-```
-
-### Glob Patterns
-
-Validate multiple files using glob patterns:
+## 3. Preview while you edit \{#preview-your-map}
 
 ```bash
-# Validate all YAML files in a directory
-npx maplibre-yaml validate "configs/**/*.yaml"
-
-# Validate specific patterns
-npx maplibre-yaml validate "maps/*.yaml"
-
-# Multiple patterns
-npx maplibre-yaml validate "src/**/*.map.yaml" "configs/*.yaml"
+npx maplibre-yaml preview map.yaml
 ```
 
-Output with progress indicator (for >10 files):
+This opens a browser tab at http://localhost:3000 with the map alone on the
+page. Each time you save `map.yaml` the map reloads, and a mistake shows as
+an overlay with the field and the message. Stop the server with
+<kbd>Ctrl</kbd>+<kbd>C</kbd>.
 
-```
-Validating [████████████████████] 100% (25/25)
-✓ Validated 25 files
+`preview` shows the YAML document, not your `index.html`. To see the map in
+your own page, serve the folder as in step 1.
 
-✓ 23 file(s) valid
-✗ 2 file(s) with issues: 3 error(s)
-```
-
-### Output Formats
-
-Choose from multiple output formats:
-
-#### Human-Readable (default)
+## 4. Export it to style.json
 
 ```bash
-npx maplibre-yaml validate my-map.yaml
+npx maplibre-yaml emit map.yaml --out dist/
 ```
 
-#### JSON for CI/CD
+```text
+ WARN  layers.marker.interactive: interactive — Interactions (popups, hover, highlight) are runtime behavior with no style.json form; the emitted style renders the layer without them. attachInteractions() restores them over an exported style.
 
-Get structured JSON output:
+ WARN  controls: controls — Controls are DOM chrome; the emitted style renders the map with MapLibre's default control set only.
+
+✔ Wrote style to …/my-map/dist/style.json
+```
+
+`dist/style.json` is a standard MapLibre style: the basemap and your point
+in one file, which renders with plain maplibre-gl and no maplibre-yaml on the
+page. Each warning names a part of the document that a style can't hold,
+here the popup and the zoom buttons.
+[Export to style.json](/guides/export/) shows what to do with the file.
+
+## Install the CLI instead \{#installation}
+
+`npx maplibre-yaml` works everywhere. To pin the CLI's version in a project,
+or to use the shorter name, install it:
 
 ```bash
-npx maplibre-yaml validate my-map.yaml --format json
+# In a project: run it as `npx mlym …` or as `mlym …` in package.json scripts
+npm install --save-dev @maplibre-yaml/cli
+
+# Globally: `mlym …` works in any folder
+npm install -g @maplibre-yaml/cli
 ```
 
-Output:
+### The short name, `mlym` \{#short-alias}
 
-```json
-{
-  "valid": true,
-  "files": [
-    {
-      "file": "/home/you/maps/my-map.yaml",
-      "valid": true,
-      "errors": [],
-      "warnings": []
-    }
-  ],
-  "summary": {
-    "total": 1,
-    "valid": 1,
-    "invalid": 0,
-    "errorCount": 0,
-    "warningCount": 0,
-    "noteCount": 0
-  }
-}
-```
+`mlym` and `maplibre-yaml` are two names for the same installed program.
+`mlym` exists only after an install: `npx mlym` on its own fails with a 404,
+because no npm package has that name. (`maplibre-yaml` is a small package
+that runs `@maplibre-yaml/cli`, which is why `npx maplibre-yaml` works without
+an install.)
 
-Each file's `warnings` list also carries its notes, marked
-`"severity": "note"`; `noteCount` counts them apart from `warningCount`.
+## If something goes wrong
 
-#### SARIF for GitHub Code Scanning
+- **"maplibre-yaml needs Node.js 20.9 or newer"**: update Node.js; the
+  current LTS release works.
+- **`npx mlym` fails with a 404**: use `npx maplibre-yaml`, or install the
+  CLI first ([above](#short-alias)).
+- **A glob matches nothing**: quote it, `"maps/**/*.yaml"`, so the CLI sees
+  the pattern rather than your shell's expansion of it.
 
-Generate SARIF format for GitHub Advanced Security:
+More in [CLI commands › Troubleshooting](/cli/reference/#troubleshooting).
 
-```bash
-npx maplibre-yaml validate my-map.yaml --format sarif
-```
+## Next steps
 
-#### VSCode Problem Matcher
+- [CLI commands](/cli/reference/): every option, the output formats, exit
+  codes, the project settings file, and CI.
+- [Editor setup](/guides/editor-setup/): checks as you type, and
+  `validate` on save in VS Code.
+- [Your first map, explained](/getting-started/first-map/): what each part
+  of `map.yaml` does.
 
-Output format compatible with VS Code's problem matchers:
+## Moved sections
 
-```bash
-npx maplibre-yaml validate my-map.yaml --format vscode
-```
+### Output formats
 
-Output (notes are printed with the severity `info`):
+JSON, SARIF and VS Code output: [CLI commands › Output formats](/cli/reference/#output-formats).
 
-```
-/path/to/config.yaml:4:11: error: [config.center] center needs square brackets: center: [0, 0]
-/path/to/config.yaml:3:1: warning: [config.mapStyle] No mapStyle: this map has no basemap. …
-```
+### Strict mode
 
-See [VS Code tasks](/guides/editor-setup/#validate-on-save-vs-code-task) for setup instructions.
+[CLI commands › validate](/cli/reference/#validate).
 
-### Watch Mode
+### Exit codes
 
-Continuously validate files as they change:
+[CLI commands › Exit codes](/cli/reference/#exit-codes).
 
-```bash
-npx maplibre-yaml validate "configs/**/*.yaml" --watch
-```
+### Watch mode
 
-Features:
-
-- **Intelligent Caching**: Only re-validates changed files
-- **Fast**: Cached validations complete in less than 1ms
-- **Real-time Feedback**: Shows errors immediately on save
-
-### Strict Mode
-
-Treat warnings as errors (notes stay notes). Strict mode is on by default
-when the `CI` environment variable is set (CI services set it) and off on your
-own machine; `--strict` and `--no-strict` override that:
-
-```bash
-npx maplibre-yaml validate my-map.yaml --strict
-```
-
-### Exit Codes
-
-The validate command uses specific exit codes for automation:
-
-| Code | Meaning             |
-| ---- | ------------------- |
-| 0    | Valid configuration |
-| 1    | Errors found, including YAML syntax errors |
-| 2    | No file matched the pattern |
-| 4    | Unexpected internal error |
-
-### Performance
-
-The CLI is highly optimized for speed:
-
-- **100 files**: Validated in ~80ms
-- **Single file**: Validated in ~1ms
-- **Watch mode**: Cached validations in ~1ms
-- **Parallel processing**: up to 10 files at a time
-
-Example CI usage:
-
-```yaml
-# .github/workflows/validate.yml
-name: Validate Maps
-on: [push, pull_request]
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npx maplibre-yaml validate "configs/**/*.yaml" --format json
-```
-
-GitHub Code Scanning with SARIF:
-
-```yaml
-# .github/workflows/code-scanning.yml
-name: Code Scanning
-on: [push, pull_request]
-jobs:
-  analyze:
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npx maplibre-yaml validate "**/*.yaml" --format sarif > results.sarif
-      - uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
-```
-
-## Preview Your Map
-
-Start a local development server with hot reload to preview your map as you edit.
-
-### Basic Preview
-
-```bash
-npx maplibre-yaml preview my-map.yaml
-```
-
-This renders the YAML document, a map or a story (`type: scrollytelling`), on
-a page of its own (to see your own HTML page around the map, serve your
-folder with `npx serve .` instead). Data paths in the YAML resolve against the
-YAML file's folder, which the server serves. It will:
-
-- Start a Vite development server on port 3000
-- Open your browser automatically
-- Watch the YAML file for changes
-- Reload the map when you save edits
-
-### Custom Port
-
-Use a different port:
-
-```bash
-npx maplibre-yaml preview my-map.yaml --port 8080
-```
-
-### Don't Open Browser
-
-Start the server without opening the browser:
-
-```bash
-npx maplibre-yaml preview my-map.yaml --no-open
-```
-
-### Preview Features
-
-The preview server includes:
-
-- **Hot Reload**: Automatically refreshes when you edit the YAML file
-- **Error Overlay**: Shows configuration errors with helpful messages
-- **Status Bar**: Displays connection state and the file (relative to the folder you ran the command in; the full path on hover)
-- **Live Validation**: Validates configuration on every change
-- **MapLibre Integration**: Full support for all MapLibre features
-
-### Error Handling
-
-If your configuration has errors, the preview will show:
-
-- A dark overlay with the error message
-- Red status indicator
-- Specific error details (the field path and message)
-- No map render (prevents confusion)
-
-Example error display:
-
-```
-Configuration Error
-━━━━━━━━━━━━━━━━━
-config: The document is missing config: — add a config: block with center:, zoom: and mapStyle:.
-```
-
-### Development Workflow
-
-1. Start the preview server:
-
-   ```bash
-   npx maplibre-yaml preview my-map.yaml
-   ```
-
-2. Edit your YAML file in your editor
-
-3. Save the file
-
-4. Preview automatically reloads with changes
-
-5. Fix any errors shown in the overlay
-
-6. Repeat!
-
-## Getting Help
-
-### Command Help
-
-Get help for any command:
-
-```bash
-npx maplibre-yaml --help
-npx maplibre-yaml validate --help
-npx maplibre-yaml preview --help
-```
-
-### Version
-
-Check the installed version:
-
-```bash
-npx maplibre-yaml --version
-```
-
-## Next Steps
-
-- [CLI commands](/cli/reference/) - Detailed command documentation, including `emit` (export to `style.json`)
-- [Examples](/examples/) - Sample YAML configurations
-- [YAML reference](/reference/yaml/) - Every key of the format
+[CLI commands › validate](/cli/reference/#validate).
