@@ -141,10 +141,10 @@ The `hover:` part of `interactive:` takes three things, alone or together:
 
 `highlight` needs an id on each feature. `promoteId` names a property that is
 different for every feature (`STATE_ID` here), which keeps the same id when
-the data refreshes. `generateId: true` numbers the features instead. On a
-layer whose data is written in the YAML, leaving both out generates ids with
-a console warning; a file loaded from `url:` has no ids unless the file has
-them, and the console says "needs feature ids".
+the data refreshes. `generateId: true` numbers the features instead. Leave
+both out and maplibre-yaml turns on `generateId` for you, whether the data is
+written in the YAML or loaded from `url:` (core 0.9.1 or later). Write
+`generateId: false` to keep the ids your data has.
 
 `highlight` changes the layer's main colour (`fill-color` here), and works on
 [classified](/guides/thematic-maps/) layers too. If that colour is already an
@@ -176,7 +176,8 @@ Leave `highlight` off and write the colour as a `case` on the feature's
       cursor: pointer
 ```
 
-The source still needs feature ids (`promoteId` or `generateId: true`).
+Without `highlight`, ids aren't generated for you: give the source
+`promoteId` or `generateId: true`.
 
 ## Move the camera to a feature
 
@@ -260,8 +261,10 @@ A legend explains colours; how a map gets one is in
 - **The popup shows a label but no value.** The property name doesn't match
   the data: names are case-sensitive (`Name` is not `name`). Add
   `else: "…"` to see when a value is missing.
-- **Nothing highlights, and the console says "needs feature ids".** Add
-  `promoteId` or `generateId: true` to the source ([above](#respond-to-hover)).
+- **Nothing highlights, and the console says "needs feature ids".** The
+  features have no ids: add `promoteId` or `generateId: true` to the source
+  ([above](#respond-to-hover)). Core 0.9.1 and later add them for a
+  `highlight` layer by themselves.
 - **Highlight warns that the colour is already an expression.** Choose the
   [highlight colour yourself](#custom-highlight-styling) instead.
 - **A warning says `action` is deprecated.** `click.action` and the
