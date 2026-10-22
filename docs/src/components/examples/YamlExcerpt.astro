@@ -1,0 +1,20 @@
+---
+/**
+ * A few lines cut from an example's document (see `excerpt` in
+ * configs.mjs). The build fails if the lines are gone from the file.
+ */
+import { Code } from '@astrojs/starlight/components';
+import { configText, excerpt } from './configs.mjs';
+
+interface Props {
+  /** Path under public/configs/, e.g. "basic-map.yaml". */
+  config: string;
+  /** Line starts leading to the block, e.g. ["- id: cities", "circle-radius:"]. */
+  at: string[];
+}
+
+const { config, at } = Astro.props;
+const code = excerpt(configText(config), at);
+---
+
+<Code code={code} lang="yaml" />

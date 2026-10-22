@@ -1,0 +1,100 @@
+---
+/**
+ * The end of every gallery page: how to use the map on your own page, the
+ * guide and reference for its group, the MapLibre original, and the way
+ * back to the index. Added by the MarkdownContent override, so the ~100
+ * hand-written gallery pages share it without importing anything.
+ */
+import { linksFor, upstreamUrl } from '../../data/gallery.mjs';
+import { inline } from './inline.mjs';
+
+interface Props {
+  entry: any;
+}
+
+const { entry } = Astro.props;
+const { guides, reference, see } = linksFor(entry);
+const upstream = upstreamUrl(entry);
+const back = `/examples/gallery/#${entry.group.id}`;
+---
+
+<section class="gallery-footer" aria-labelledby="use-this-map">
+  <h2 id="use-this-map">Use this map</h2>
+  <p>
+    {entry.story ? (
+      <Fragment>
+        Save the story file as a <code>.yaml</code> file in your site and load it with
+        <code>&lt;ml-scrollytelling src="story.yaml"&gt;</code> on an
+        <a href="/integrations/scrollytelling-html/">HTML page</a>, or with the
+        <code>&lt;Scrollytelling&gt;</code> component in <a href="/integrations/astro-stories/">Astro</a>.
+      </Fragment>
+    ) : (
+      <Fragment>
+        Save the document as a <code>.yaml</code> file in your site and load it with
+        <code>&lt;ml-map src="map.yaml"&gt;</code> on an <a href="/integrations/web-components/">HTML page</a>,
+        or with the <code>&lt;Map&gt;</code> component in <a href="/integrations/astro/">Astro</a>.
+      </Fragment>
+    )}
+    {entry.kind === 'yaml-js' && (
+      <Fragment>
+        Put the page HTML inside your <code>&lt;ml-map&gt;</code> element, and add the JavaScript
+        to the same page.
+      </Fragment>
+    )}
+    {entry.kind === 'yaml' && !entry.story && (
+      <Fragment>
+        To use it without maplibre-yaml, <a href="/guides/export/">export it to a style.json</a>
+        with <code>mlym emit</code>.
+      </Fragment>
+    )}
+  </p>
+  <dl class="gallery-footer-links">
+    <dt>Guide</dt>
+    <dd>{guides.map((l, i) => <Fragment>{i > 0 && ' · '}<a href={l.href} set:html={inline(l.label)} /></Fragment>)}</dd>
+    <dt>Reference</dt>
+    <dd>{reference.map((l, i) => <Fragment>{i > 0 && ' · '}<a href={l.href} set:html={inline(l.label)} /></Fragment>)}</dd>
+    {see.length > 0 && (
+      <Fragment>
+        <dt>See also</dt>
+        <dd>{see.map((l, i) => <Fragment>{i > 0 && ' · '}<a href={l.href}>{l.label}</a></Fragment>)}</dd>
+      </Fragment>
+    )}
+    {upstream && (
+      <Fragment>
+        <dt>MapLibre original</dt>
+        <dd><a href={upstream}>{entry.title}</a></dd>
+      </Fragment>
+    )}
+  </dl>
+  <p class="gallery-footer-back">
+    <a href={back}>← Back to MapLibre examples in YAML</a>
+  </p>
+</section>
+
+<style>
+  .gallery-footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--sl-color-gray-5);
+  }
+  .gallery-footer-links {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.35rem 1rem;
+  }
+  .gallery-footer-links dt {
+    font-weight: 600;
+    margin: 0;
+  }
+  .gallery-footer-links dd {
+    margin: 0;
+  }
+  @media (max-width: 30rem) {
+    .gallery-footer-links {
+      grid-template-columns: 1fr;
+    }
+    .gallery-footer-links dd {
+      margin-bottom: 0.5rem;
+    }
+  }
+</style>

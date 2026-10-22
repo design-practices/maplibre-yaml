@@ -12,11 +12,23 @@ layers:
       type: geojson
       url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
       refresh:
-        refreshInterval: 60000
-        updateStrategy: replace
+        refreshInterval: 60000     # fetch again every 60 seconds
+        updateStrategy: replace    # each response is the full list
       cache:
-        enabled: false
+        enabled: false             # live data: fetch on every poll
     paint:
+      circle-color:
+        - interpolate
+        - ["linear"]
+        - ["get", "mag"]
+        - 0
+        - "#22c55e"   # magnitude 0: green
+        - 2
+        - "#eab308"   # 2: yellow
+        - 4
+        - "#f97316"   # 4: orange
+        - 6
+        - "#dc2626"   # 6 and above: red
       circle-radius:
         - interpolate
         - ["linear"]
@@ -29,18 +41,6 @@ layers:
         - 12
         - 6
         - 24
-      circle-color:
-        - interpolate
-        - ["linear"]
-        - ["get", "mag"]
-        - 0
-        - "#22c55e"
-        - 2
-        - "#eab308"
-        - 4
-        - "#f97316"
-        - 6
-        - "#dc2626"
       circle-opacity: 0.75
       circle-stroke-width: 1
       circle-stroke-color: "#ffffff"
@@ -54,6 +54,7 @@ layers:
           - p:
               - str: "Magnitude: "
               - property: mag
+                format: { max-fraction-digits: 1 }
 controls:
   navigation: true
   scale: true

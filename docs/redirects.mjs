@@ -34,6 +34,11 @@ export const PAGE_REDIRECTS = {
   "/schema/interactivity/": "/guides/popups/",
   "/schema/root/": "/schema/overview/",
   "/schema/pages/": "/schema/overview/",
+  // The clustering example merged into its gallery twin.
+  "/examples/clustering/": "/examples/gallery/create-and-style-clusters/",
+  // The vehicle-tracking example duplicated the live-data guide's merge
+  // walkthrough, which is now its one home.
+  "/examples/live-vehicles/": "/guides/live-data/#merge",
 };
 
 /**

@@ -7,11 +7,11 @@ import LiveMap from '../../../../components/LiveMap.astro';
 import { Code } from '@astrojs/starlight/components';
 import config from '../../../../../public/configs/gallery/geoparquet-source.yaml?raw';
 
-[GeoParquet](https://geoparquet.org/) stores features as a columnar table. Since 0.9 a `.parquet` URL on a `geojson` source is all it takes: maplibre-yaml reads the file into the source, so layers, popups, `classify:`, the legend and `fitTo` behave exactly as for a `.geojson` file — and it reads only the columns the document uses. Click a district; zoom in past 11 to see the stations, which are read **by view**.
+[GeoParquet](https://geoparquet.org/) stores features as a columnar table. A `.parquet` URL on a `geojson` source is all it takes: maplibre-yaml reads the file into the source, so layers, popups, `classify:`, the legend and `fitTo` behave exactly as for a `.geojson` file — and it reads only the columns the document uses. Click a district; zoom in past 11 to see the stations, which are read **by view**.
 
 <LiveMap src="/configs/gallery/geoparquet-source.yaml" height="460px" />
 
-## The YAML
+## The complete document \{#the-yaml}
 
 <Code code={config} lang="yaml" title="geoparquet-source.yaml" />
 

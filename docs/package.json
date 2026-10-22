@@ -11,7 +11,7 @@
     "preview": "astro preview",
     "astro": "astro",
     "reference:yaml": "tsx scripts/generate-yaml-reference.ts",
-    "test": "node --test test/classics-export.test.mjs test/email-off.test.mjs test/guide-basemap-extract.test.mjs test/live-map-snippets.test.mjs"
+    "test": "node --test test/classics-export.test.mjs test/email-off.test.mjs test/guide-basemap-extract.test.mjs test/live-map-snippets.test.mjs test/gallery-data.test.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.37.1",

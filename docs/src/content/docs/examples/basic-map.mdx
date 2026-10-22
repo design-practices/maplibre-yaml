@@ -1,67 +1,50 @@
 ---
 title: Basic map
-description: A simple map showing major US cities with data-driven styling
+description: Five US cities written into the document as GeoJSON, drawn as circles sized by population, with a popup on click.
 ---
 
-import LiveMap from '../../../components/LiveMap.astro';
+import ExampleMap from '../../../components/examples/ExampleMap.astro';
+import YamlExcerpt from '../../../components/examples/YamlExcerpt.astro';
 
-A simple example showing circle markers for major cities with size based on population.
+The smallest map with data of your own: five US cities written into the
+document, drawn as circles sized by population, with a popup when you click
+one. Read it after the [quick start](/getting-started/quick-start/), when
+you want to see a layer, its data and its styling together.
 
-## Live Demo
+<ExampleMap config="basic-map.yaml" height="460px" caption="Click a city for its population" />
 
-<LiveMap src="/configs/basic-map.yaml" height="500px" caption="Click cities to see population" />
+## How it works
 
-## Key Concepts
+**The data is part of the document.** The layer's `source:` is GeoJSON
+written under `data:`, a `FeatureCollection` with one point per city, so the
+map needs no other file. For data in a file of its own, give the source a
+`url:` instead ([Loading data](/guides/data-sources/)).
 
-### Data-driven circle size
+**`bounds:` frames the cities.** The camera opens on that box (west, south,
+east, north) whatever the map's size, so all five cities show on a phone as
+well as a wide screen. `center:` and `zoom:` are still required.
 
-Circle radius interpolates based on population:
+**The circle size follows population.** `interpolate` with `["linear"]`
+scales the radius between the stops you list, by the value of
+`["get", "population"]`:
 
-```yaml
-circle-radius:
-  - interpolate
-  - ["linear"]
-  - ["get", "population"]
-  - 500000    # Population 500k → radius 8px
-  - 8
-  - 5000000   # Population 5M → radius 20px
-  - 20
-  - 10000000  # Population 10M → radius 30px
-  - 30
-```
+<YamlExcerpt config="basic-map.yaml" at={["circle-radius:"]} />
 
-### Interactive popups
+A city of 2.7 million (Chicago) falls between the first two stops and gets
+about 14 px. These are MapLibre
+[expressions](https://maplibre.org/maplibre-style-spec/expressions/), written
+as YAML lists; [Layers & styling](/guides/layers/) explains them.
 
-Click handlers show feature properties:
+**A click opens a popup.** The `interactive:` block names what the popup
+shows, and `format:` writes the population with separators, so New York
+reads 8,336,817:
 
-```yaml
-interactive:
-  hover:
-    cursor: pointer
-  click:
-    popup:
-      - h3:
-          - property: name
-      - p:
-          - str: "Population: "
-          - property: population
-```
+<YamlExcerpt config="basic-map.yaml" at={["interactive:"]} />
 
-### Inline GeoJSON
+## Next
 
-Data embedded directly in configuration for quick prototyping:
-
-```yaml
-source:
-  type: geojson
-  data:
-    type: FeatureCollection
-    features:
-      - type: Feature
-        geometry:
-          type: Point
-          coordinates: [-74.006, 40.7128]
-        properties:
-          name: "New York"
-          population: 8336817
-```
+- [Interactive points](/examples/interactive-points/): color by category,
+  a legend and a hover highlight.
+- [Popups, hover & controls](/guides/popups/): everything a popup can show.
+- Reference: [circle layers](/reference/yaml/layers/#circle) and
+  [`interactive:`](/reference/yaml/layers/#interactive).

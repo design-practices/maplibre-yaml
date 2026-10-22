@@ -19,6 +19,8 @@ layers:
       refresh:
         refreshInterval: 15000
         updateStrategy: replace
+      cache:
+        enabled: false       # live data: fetch on every poll
     paint:
       circle-radius: 10
       circle-color: "#e63946"

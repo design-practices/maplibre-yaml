@@ -217,12 +217,10 @@ export default defineConfig({
           label: "Examples",
           items: [
             { label: "Overview", link: "/examples/" },
-            { label: "Thematic maps", link: "/examples/thematic-maps/" },
             { label: "Basic map", link: "/examples/basic-map/" },
             { label: "Interactive points", link: "/examples/interactive-points/" },
-            { label: "Clustered data", link: "/examples/clustering/" },
+            { label: "Thematic maps", link: "/examples/thematic-maps/" },
             { label: "Earthquake tracker", link: "/examples/earthquake-tracker/" },
-            { label: "Live vehicle tracking", link: "/examples/live-vehicles/" },
             { label: "MapLibre examples in YAML", link: "/examples/gallery/" },
             { label: "Mapzen classics", link: "/examples/classics/" },
           ],
@@ -308,7 +306,11 @@ export default defineConfig({
       customCss: ["./src/styles/custom.css"],
 
       components: {
-        // Override components if needed
+        // Gallery pages (examples/gallery/<slug>) get a breadcrumb back to
+        // the index and a shared "Use this map" footer, both from
+        // src/data/gallery.mjs. Every other page renders as Starlight's own.
+        PageTitle: "./src/components/overrides/PageTitle.astro",
+        MarkdownContent: "./src/components/overrides/MarkdownContent.astro",
       },
 
       lastUpdated: true,
