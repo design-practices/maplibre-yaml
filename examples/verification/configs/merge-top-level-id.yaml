@@ -1,0 +1,32 @@
+# Assertion (ml-aot.141): `updateStrategy: merge` with `updateKey: id` on a
+# USGS-shaped feed, whose ids sit at each feature's top level (`feature.id`),
+# not in `properties`. Before the fix the first poll dropped every feature
+# (no `properties.id`) and the map emptied. Now features match on their
+# top-level id: a quake whose magnitude changed is updated in place, a new
+# one is added, and one the feed no longer lists stays.
+type: map
+id: merge-top-level-id
+config:
+  center: [-118.2, 34.07]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  quakes:
+    type: geojson
+    url: "/examples/verification/data/usgs-quakes-poll.geojson"
+    # Every poll goes to the network (the refresh cache fix makes this the
+    # default for refreshes; it is spelled out so the fixture doesn't depend
+    # on it).
+    cache:
+      enabled: false
+    refresh:
+      refreshInterval: 1000
+      updateStrategy: merge
+      updateKey: id
+layers:
+  - id: quakes-points
+    type: circle
+    source: quakes
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 5, 5, 16]
+      circle-color: "#e63946"

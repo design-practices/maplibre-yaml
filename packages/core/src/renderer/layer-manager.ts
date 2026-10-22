@@ -33,7 +33,7 @@ import { StreamManager } from "../data/streaming/stream-manager";
 import { DataMerger } from "../data/merge/data-merger";
 import { LoadingManager } from "../ui/loading-manager";
 import { sanitizeAttribution } from "../utils/attribution";
-import type { MergeStrategy } from "../data/merge/data-merger";
+import { mergeKeyOf, type MergeStrategy } from "../data/merge/data-merger";
 import { declaredColumns, formatOfSource, typeReadsFormat } from "../formats/detect";
 import {
   FlatGeobufLoader,
@@ -116,6 +116,11 @@ export interface LayerManagerCallbacks {
    * no layer on the map: the layer goes on top instead of being dropped).
    */
   onLayerHint?: (layerId: string, message: string) => void;
+  /**
+   * An author hint about one source that still draws (a live `merge`
+   * update whose features have no `updateKey`: they are kept, not matched).
+   */
+  onSourceHint?: (sourceId: string, message: string) => void;
 }
 
 /**
@@ -171,6 +176,8 @@ export class LayerManager {
   private activeSourcePipelines: Set<string>;
   /** First loads a host already started, by source id (consumed once). */
   private pendingData: Map<string, Promise<FeatureCollection>>;
+  /** Sources already told their `merge` updates carry keyless features (once each). */
+  private keylessWarned = new Set<string>();
   /** FlatGeobuf / GeoParquet readers by source id (ml-cnv.3/.4), stopped with their source. */
   private formatLoaders = new Map<string, FormatLoader>();
   /** Whether the page registered a URL protocol itself (see LayerManagerDataOptions). */
@@ -916,6 +923,9 @@ export class LayerManager {
 
     const mergeResult = this.dataMerger.merge(existing, incoming, options);
     this.sourceData.set(sourceId, mergeResult.data);
+    if (mergeResult.unkeyed && options.updateKey) {
+      this.warnKeyless(sourceId, incoming, options.updateKey, mergeResult.unkeyed);
+    }
 
     const source = this.map.getSource(sourceId) as GeoJSONSource;
     if (source?.setData) {
@@ -927,6 +937,34 @@ export class LayerManager {
     for (const target of this.layersForPipeline(sourceId, layerId)) {
       this.callbacks.onDataLoaded?.(target, mergeResult.total);
     }
+  }
+
+  /**
+   * Say, once per source, that a `merge` update carried features with no
+   * key: they are kept rather than matched, which is rarely what the author
+   * meant (ml-aot.141). Names the key and some properties the data does have,
+   * since a misspelt or wrongly placed key is the usual cause.
+   */
+  private warnKeyless(
+    sourceId: string,
+    incoming: FeatureCollection,
+    updateKey: string,
+    count: number
+  ): void {
+    if (this.keylessWarned.has(sourceId)) return;
+    this.keylessWarned.add(sourceId);
+    const sample = incoming.features.find((f) => mergeKeyOf(f, updateKey) === undefined);
+    const names = Object.keys(sample?.properties ?? {}).slice(0, 6);
+    const has = names.length
+      ? ` Its features have properties such as ${names.map((n) => `\`${n}\``).join(", ")}.`
+      : " Its features have no properties.";
+    this.callbacks.onSourceHint?.(
+      sourceId,
+      `Source \`${sourceId}\`: ${count} of ${incoming.features.length} updated features have no \`${updateKey}\` ` +
+        `property and no top-level \`id\`, so \`updateStrategy: merge\` can't match them; ` +
+        `they are kept as they are, replaced by each update's own.${has}` +
+        ` Set \`updateKey\` to a property that is different for every feature.`
+    );
   }
 
   /**

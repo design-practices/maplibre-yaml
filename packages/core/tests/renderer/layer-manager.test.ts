@@ -914,4 +914,51 @@ describe("LayerManager", () => {
       await expect(manager.addLayer(inline("walk", "circle") as any)).resolves.toBeUndefined();
     });
   });
+  // ml-aot.141: a `merge` refresh whose features have no key used to drop
+  // them all. They are kept now, and the source says why, once.
+  describe("merge updates with keyless features", () => {
+    const fc = (features: any[]) => ({ type: "FeatureCollection" as const, features });
+    const keyless = (n: number) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [n, n] },
+      properties: { mag: n, place: `p${n}`, time: n },
+    });
+
+    it("keeps the features and hints once per source, naming the key and real properties", () => {
+      const setData = vi.fn();
+      mockMap.getSource.mockReturnValue({ setData });
+      const onSourceHint = vi.fn();
+      manager = new LayerManager(mockMap, { ...callbacks, onSourceHint });
+      const update = (data: any) =>
+        (manager as any).handleDataUpdate("quakes", "quakes-layer", data, {
+          strategy: "merge",
+          updateKey: "eventId",
+        });
+
+      update(fc([keyless(1), keyless(2)]));
+      update(fc([keyless(3), keyless(4), keyless(5)]));
+
+      // The second update's keyless batch replaced the first's: not 0, not 5.
+      expect(setData.mock.calls.at(-1)[0].features).toHaveLength(3);
+      expect(callbacks.onDataLoaded).toHaveBeenLastCalledWith("quakes-layer", 3);
+      expect(onSourceHint).toHaveBeenCalledTimes(1);
+      const [sourceId, message] = onSourceHint.mock.calls[0];
+      expect(sourceId).toBe("quakes");
+      expect(message).toContain("`eventId`");
+      expect(message).toContain("`mag`, `place`, `time`");
+    });
+
+    it("says nothing when every feature has a key (property or top-level id)", () => {
+      mockMap.getSource.mockReturnValue({ setData: vi.fn() });
+      const onSourceHint = vi.fn();
+      manager = new LayerManager(mockMap, { ...callbacks, onSourceHint });
+      (manager as any).handleDataUpdate(
+        "quakes",
+        "quakes-layer",
+        fc([{ ...keyless(1), id: "ci1" }, { ...keyless(2), properties: { id: "x" } }]),
+        { strategy: "merge", updateKey: "id" }
+      );
+      expect(onSourceHint).not.toHaveBeenCalled();
+    });
+  });
 });

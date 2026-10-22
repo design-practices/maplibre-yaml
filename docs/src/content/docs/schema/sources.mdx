@@ -329,7 +329,9 @@ over a WebSocket or Server-Sent Events. `updateStrategy` says how new
 features combine with the ones on the map: `replace` (the default) swaps the
 whole dataset, `merge` updates features that share an `updateKey` and adds
 new ones, and `append-window` adds them while keeping at most `windowSize`
-features or `windowDuration` milliseconds of them.
+features or `windowDuration` milliseconds of them. `updateKey` names a
+property; a feature without it is matched by its top-level `id`, and one with
+neither is kept but not matched (the console says so).
 
 ```yaml
 source:
