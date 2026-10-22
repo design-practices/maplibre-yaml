@@ -11,7 +11,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { YAMLParser } from '@maplibre-yaml/core';
-import { emitStyle } from '../src/commands/emit';
+import { emitStyle, trustFlagNote } from '../src/commands/emit';
 
 const parse = (yaml: string) => {
   const result = YAMLParser.safeParseMapBlock(yaml);
@@ -219,5 +219,17 @@ layers:
         },
       }),
     ).rejects.toThrow(/layers\.grid\.classify.*HTTP 503/s);
+  });
+});
+
+describe('trustFlagNote (ml-aot.144)', () => {
+  it('notes a deprecated --trust in any form, and nothing without it', () => {
+    expect(trustFlagNote(['map.yaml'])).toBeNull();
+    expect(trustFlagNote(['map.yaml', '--trust', 'trusted'])).toMatch(/deprecated and has no effect/);
+    expect(trustFlagNote(['--trust=untrusted', 'map.yaml'])).toMatch(/deprecated/);
+    expect(trustFlagNote(['map.yaml', '--trust'])).toMatch(/deprecated/);
+    // Not a flag after `--`, and not a different flag that starts the same.
+    expect(trustFlagNote(['map.yaml', '--', '--trust'])).toBeNull();
+    expect(trustFlagNote(['map.yaml', '--trusted'])).toBeNull();
   });
 });
