@@ -57,8 +57,28 @@ async function guard(page: Page): Promise<string[]> {
   return errors;
 }
 
+/**
+ * Viewport for the pitched 3D-terrain twins.
+ *
+ * @remarks
+ * They open at pitch 70-77 over zoom-12 relief, and under SwiftShader each
+ * frame of draped terrain costs ~1 s at the default 1280 px width on
+ * maplibre-gl 4.x. maplibre paces tile requests per frame, so the map took
+ * 15-20 s to settle on an idle 12-core box and overran the 60 s
+ * {@link openExample} budget on a contended CI runner (the 4.x leg). Half the
+ * width halves the pixels and drops a third of the horizon tiles: the same
+ * twin settles in ~4 s. Nothing the row asserts — layers present, a painted
+ * canvas, no errors — depends on the width.
+ */
+const TERRAIN_VIEWPORT = { width: 640, height: 720 };
+
 /** One row per gallery twin: expected layers, plus one layer to prove painted features on. */
-const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
+const CASES: Array<{
+  slug: string;
+  layers: string[];
+  rendered?: string;
+  viewport?: { width: number; height: number };
+}> = [
   { slug: "display-a-map", layers: [] },
   { slug: "add-a-geojson-line", layers: ["route"], rendered: "route" },
   { slug: "add-a-geojson-polygon", layers: ["maine"], rendered: "maine" },
@@ -156,9 +176,13 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
   // U15 map-level 3D — terrain/sky/projection twins over the server's
   // synthetic /relief DEM and /landcover raster. The bespoke test below
   // proves each 3D key reached the live map (or declared its absence on 4.x).
-  { slug: "3d-terrain", layers: ["osm", "hills"] },
-  { slug: "display-a-hybrid-satellite-map-with-terrain-elevation", layers: ["satellite", "hills"] },
-  { slug: "sky-fog-terrain", layers: ["osm", "hills"] },
+  { slug: "3d-terrain", layers: ["osm", "hills"], viewport: TERRAIN_VIEWPORT },
+  {
+    slug: "display-a-hybrid-satellite-map-with-terrain-elevation",
+    layers: ["satellite", "hills"],
+    viewport: TERRAIN_VIEWPORT,
+  },
+  { slug: "sky-fog-terrain", layers: ["osm", "hills"], viewport: TERRAIN_VIEWPORT },
   { slug: "display-a-globe-with-a-vector-map", layers: ["land", "graticule"] },
   { slug: "display-a-globe-with-an-atmosphere", layers: ["Satellite"] },
   {
@@ -168,6 +192,7 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
   {
     slug: "create-a-heatmap-layer-on-a-globe-with-terrain-elevation",
     layers: ["hills", "earthquakes-heat", "earthquakes-point"],
+    viewport: TERRAIN_VIEWPORT,
   },
   // U10′ Mapzen classics — static presets over the vendored lower-Manhattan
   // tile fixture. Pixel-level hatch assertions live in the classics block.
@@ -182,6 +207,30 @@ const CASES: Array<{ slug: string; layers: string[]; rendered?: string }> = [
 /** True when the vendor has globe projection (maplibre-gl >= 5.0.0). */
 function vendorHasGlobe(): boolean {
   return meetsVersion(VENDOR_MAPLIBRE_VERSION, GLOBE_RUNTIME_FLOOR);
+}
+
+/**
+ * Resolve after the map has drawn a settled frame (ml-19r).
+ *
+ * @remarks
+ * {@link openExample} returns once every source's tiles have loaded, but a
+ * symbol becomes visible to `queryRenderedFeatures` only after the NEXT
+ * render runs placement over those tiles. Polling `isStyleLoaded()` can land
+ * between the two — under CI load it did, and a drawn icon queried as `[]`.
+ * `idle` fires only after a frame with nothing pending (tiles loaded,
+ * placement settled, no transition running), so a query after it sees
+ * exactly what is on screen. `triggerRepaint` guarantees a frame — and so an
+ * `idle` — even when the map had already gone quiet.
+ */
+async function settledFrame(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const map = (document.getElementById("map") as any).getMap();
+        map.once("idle", () => resolve());
+        map.triggerRepaint();
+      })
+  );
 }
 
 async function openExample(page: Page, slug: string, layers: string[]): Promise<void> {
@@ -200,9 +249,10 @@ async function openExample(page: Page, slug: string, layers: string[]): Promise<
 }
 
 test.describe("gallery twins: each shipped example's YAML renders via <ml-map>", () => {
-  for (const { slug, layers, rendered } of CASES) {
+  for (const { slug, layers, rendered, viewport } of CASES) {
     test(slug, async ({ page }) => {
       const errors = await guard(page);
+      if (viewport) await page.setViewportSize(viewport);
       await openExample(page, slug, layers);
 
       // The map actually painted — a real canvas with non-zero extent.
@@ -294,6 +344,12 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
       if (m.type() === "warning") warnings.push(m.text());
     });
 
+    // The two pitched terrain twins at the narrow terrain viewport (see
+    // TERRAIN_VIEWPORT: at full width they alone used most of this test's
+    // budget on the 4.x leg); the globe twins get the default back below.
+    const defaultViewport = page.viewportSize();
+    await page.setViewportSize(TERRAIN_VIEWPORT);
+
     // terrain: — applied from the named DEM source, the control toggles it,
     // and the synthetic relief is actually under the camera (an elevation
     // query only answers once terrain is live and its tiles decoded).
@@ -327,6 +383,7 @@ test.describe("gallery twins: each shipped example's YAML renders via <ml-map>",
     );
     expect(sky?.["sky-color"]).toBe("#0000ff");
     expect(sky?.["fog-ground-blend"]).toBe(0.1);
+    if (defaultViewport) await page.setViewportSize(defaultViewport);
 
     // projection: — globe on 5.x; on the 4.x leg, exactly one declared
     // absence naming the floor, and the map still renders (mercator).
@@ -800,15 +857,21 @@ test.describe("images: declared images register before layers (U6)", () => {
     const errors = await guard(page);
     await openExample(page, "add-an-icon-to-the-map", ["logo"]);
 
-    const state = await page.evaluate(() => {
-      const map = (document.getElementById("map") as any).getMap();
-      return {
-        hasImage: map.hasImage("osgeo-logo"),
-        rendered: map.queryRenderedFeatures(undefined, { layers: ["logo"] }).length,
-      };
-    });
-    expect(state.hasImage, "images: entry never reached map.addImage").toBe(true);
-    expect(state.rendered, "symbol layer rendered nothing").toBeGreaterThan(0);
+    // Registered before layers (U6): the layer exists, so the image must too
+    // — asserted now, not waited for, or a late registration would pass.
+    const hasImage = await page.evaluate(() =>
+      (document.getElementById("map") as any).getMap().hasImage("osgeo-logo")
+    );
+    expect(hasImage, "images: entry never reached map.addImage").toBe(true);
+
+    await settledFrame(page);
+    const rendered = await page.evaluate(
+      () =>
+        (document.getElementById("map") as any)
+          .getMap()
+          .queryRenderedFeatures(undefined, { layers: ["logo"] }).length
+    );
+    expect(rendered, "symbol layer rendered nothing").toBeGreaterThan(0);
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 
@@ -822,15 +885,20 @@ test.describe("images: declared images register before layers (U6)", () => {
     });
     await openExample(page, "use-a-fallback-image", ["fallback"]);
 
-    const state = await page.evaluate(() => {
-      const map = (document.getElementById("map") as any).getMap();
-      return {
-        hasFallback: map.hasImage("fallback-marker"),
-        rendered: map.queryRenderedFeatures(undefined, { layers: ["fallback"] }).length,
-      };
-    });
-    expect(state.hasFallback).toBe(true);
-    expect(state.rendered).toBeGreaterThan(0);
+    // Registered before layers (U6) — asserted as soon as the layer exists.
+    const hasFallback = await page.evaluate(() =>
+      (document.getElementById("map") as any).getMap().hasImage("fallback-marker")
+    );
+    expect(hasFallback).toBe(true);
+
+    await settledFrame(page);
+    const rendered = await page.evaluate(
+      () =>
+        (document.getElementById("map") as any)
+          .getMap()
+          .queryRenderedFeatures(undefined, { layers: ["fallback"] }).length
+    );
+    expect(rendered, "coalesce fell back to nothing: the symbol did not draw").toBeGreaterThan(0);
     // A coalesce miss is HANDLED — maplibre never fires styleimagemissing
     // for it, so the document produces no warning at all.
     expect(warnings.filter((w) => w.includes("primary-icon")).length).toBe(0);
@@ -846,13 +914,14 @@ test.describe("images: declared images register before layers (U6)", () => {
     await page.waitForFunction(() =>
       (document.getElementById("map") as any).getMap().isStyleLoaded()
     );
-    await page.evaluate(async () => {
+    // Force additional renders — the warning must not repeat — and wait for
+    // them to finish rather than for a fixed time.
+    await page.evaluate(() => {
       const map = (document.getElementById("map") as any).getMap();
-      // Force additional renders — the warning must not repeat.
       map.panBy([30, 0], { duration: 0 });
       map.panBy([-30, 0], { duration: 0 });
-      await new Promise((r) => setTimeout(r, 300));
     });
+    await settledFrame(page);
     expect(
       warnings.filter((w) => w.includes('references image "primary-icon"')).length
     ).toBe(1);
@@ -879,14 +948,14 @@ test.describe("images: declared images register before layers (U6)", () => {
       return route.fulfill({ body, contentType: "text/yaml" });
     });
     await openExample(page, "use-a-fallback-image", ["fallback"]);
-    await page.evaluate(async () => {
-      const map = (document.getElementById("map") as any).getMap();
-      for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate(() => {
+        const map = (document.getElementById("map") as any).getMap();
         map.panBy([30, 0], { duration: 0 });
         map.panBy([-30, 0], { duration: 0 });
-        await new Promise((r) => setTimeout(r, 150));
-      }
-    });
+      });
+      await settledFrame(page);
+    }
     expect(
       warnings.filter((w) => w.includes('[maplibre-yaml] layer references image "definitely-missing"')).length
     ).toBe(1);

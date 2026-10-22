@@ -10,8 +10,11 @@ import { defineConfig, devices } from "@playwright/test";
  * claim of a release about fields that validated but did nothing.
  *
  * WebGL comes from SwiftShader, so rendering is software and slower than a GPU
- * but deterministic. The fixtures fetch demotiles and terrain tiles over the
- * network, so these are excluded from the default unit run.
+ * but deterministic. Every asset (maplibre-gl, basemap style, glyphs, DEM and
+ * imagery tiles, gallery icons) is served by e2e/server.mjs or fulfilled by a
+ * spec's page.route(), so the suite needs no network: a full run with every
+ * non-loopback request refused passes (ml-19r). These are still excluded from
+ * the default unit run because they need a browser and take minutes.
  */
 /**
  * Same env var e2e/server.mjs listens on. `reuseExistingServer` means a
@@ -23,7 +26,7 @@ const PORT = Number(process.env.VERIFY_PORT ?? 4174);
 
 export default defineConfig({
   testDir: "./e2e",
-  // Software rendering plus real tile fetches; generous but bounded.
+  // Software rendering (SwiftShader) is CPU-bound; generous but bounded.
   timeout: 90_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
