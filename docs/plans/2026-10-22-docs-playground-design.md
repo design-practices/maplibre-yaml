@@ -5,7 +5,7 @@ date: 2026-10-22
 topic: docs-playground
 beads: ml-vjs.17 (this spike; parent epic ml-vjs)
 target: docs site, after 0.9 (no package release needed for the MVP)
-status: proposed — for maintainer review before any implementation
+status: accepted 2026-10-22 — maintainer answered §12; MVP in progress
 ---
 
 # Docs playground — design
@@ -29,24 +29,24 @@ scratch bench and a throwaway prototype outside the repo, described in
 
 | # | Decision |
 |---|---|
-| D1 | **Editor: CodeMirror 6** (`@codemirror/view`/`state`/`language`/`commands`/`autocomplete`/`lint` + `@codemirror/lang-yaml`), **128 KB gzip** as a lazy chunk. Monaco + monaco-yaml is rejected: 794 KB gzip of editor and CSS plus 385 KB of workers, about 3× slower to start on a phone profile, officially unsupported on mobile browsers, and `monaco-yaml` 5.5.1 only worked with `monaco-editor` ≤ 0.52 in this spike. A plain `<textarea>` with an overlay is rejected as the primary editor, because it has no completion and keyboard handling would have to be rebuilt by hand. It is kept as an optional "plain text" mode (Q3). |
+| D1 | **Editor: CodeMirror 6** (`@codemirror/view`/`state`/`language`/`commands`/`autocomplete`/`lint` + `@codemirror/lang-yaml`), **128 KB gzip** as a lazy chunk. Monaco + monaco-yaml is rejected: 794 KB gzip of editor and CSS plus 385 KB of workers, about 3× slower to start on a phone profile, officially unsupported on mobile browsers, and `monaco-yaml` 5.5.1 only worked with `monaco-editor` ≤ 0.52 in this spike. A plain `<textarea>` with an overlay is rejected as the primary editor, because it has no completion and keyboard handling would have to be rebuilt by hand. An optional "plain text" mode was proposed (Q3) and **skipped for now** by the maintainer. |
 | D2 | **Schema help comes from a small in-house module, about 4 KB, that reads the published JSON Schema** (`/schema/latest/map.schema.json`, 14 KB gzip; `scrollytelling.schema.json` for stories). It provides key and value completion with descriptions, plus hover. It works out the YAML path from indentation, so it keeps working while the document is half-typed and won't parse, and it narrows layer unions by the sibling `type:`. `codemirror-json-schema` is rejected: 291 KB gzip because it pulls in shiki and markdown-it, its last release was 2025-04, and it lints the schema itself. `yaml-language-server` in a worker is rejected: 303 KB gzip, and it is a second validator. |
 | D3 | **Diagnostics have one source of truth: core's `YAMLParser.safeParseAny`.** Errors and warnings keep their line/column, and "did you mean" becomes a one-tap quick fix. Schema help never lints, so nothing is reported twice. Problems the editor can see stay in the editor. Problems only the running map can see (data that didn't load, CORS, a layer MapLibre rejected) stay in the map's own notice. The playground does not set `debug`, so the notice never repeats the editor's author hints. |
 | D4 | **Live preview reuses `<ml-map>`.** It re-renders 400 ms after typing stops, by assigning the document *as written* (raw YAML parsed to JS) to `el.config`, so the element validates it exactly as it would a `src=` file. A document with errors is **not** handed to the map: the last good map stays up with a "Showing your last working map" pill. **The camera is kept across edits** unless the edit changed `center`/`zoom`/`bearing`/`pitch`/`bounds`/`fitTo`. **Story files render in `<ml-scrollytelling>`** in the same pane. On phones, stories open a full-height preview. |
 | D5 | **Starters come from the existing sources and are not copied.** A build-time manifest is generated from `docs/src/data/gallery.mjs` (the 83 `kind: "yaml"` gallery entries, each with its `public/configs/gallery/<slug>.yaml`) plus a short curated "Start here" list (the getting-started earthquake map, inline GeoJSON, classify + legend, a story). The playground loads a starter through `?src=/configs/…`, so a starter is always the file the docs page renders. A docs test checks the manifest against `gallery.mjs`. |
 | D6 | **Share links put the document in the URL fragment:** `#code/<lz-string compressToEncodedURIComponent>`. The fragment never reaches the server or its logs. The measured starters encode to 665–1,279 characters. Over 2,000 characters the playground warns that some chat apps cut long links. Over 32,000 it refuses and points to Download. **Shared documents run untrusted, as everything in `<ml-map>` does:** `!html` renders as text and `click.emit` is dropped. This was confirmed in code and in the prototype. The playground adds an info note on `!html`/`emit` lines saying so, and a banner that lists the hosts the shared map will fetch from. |
-| D7 | **Take it home with Download:** a zip built in the browser with `fflate` (4.4 KB gzip, loaded on click), containing `my-map/index.html`, `my-map/map.yaml` and `README.txt`. `index.html` is the quick-start page. It comes from a template under `docs/src`, so `scripts/sync-cdn-pins.mjs` keeps its `@maplibre-yaml/core@0.9` pin on the current minor. Site-relative data paths are rewritten to absolute docs URLs, which already send `Access-Control-Allow-Origin: *`. The README says how to serve the folder, because a `file://` page cannot start the map's worker (core already shows a card for that). **"Open in StackBlitz" is Phase 2.** |
+| D7 | **Take it home with Download:** a zip built in the browser with `fflate` (4.4 KB gzip, loaded on click), containing `my-map/index.html`, `my-map/map.yaml` and `README.txt`. `index.html` is the quick-start page. It comes from a template under `docs/src`, so `scripts/sync-cdn-pins.mjs` keeps its `@maplibre-yaml/core@0.9` pin on the current minor. Site-relative data paths are rewritten to absolute docs URLs, which already send `Access-Control-Allow-Origin: *`. The README says how to serve the folder, because a `file://` page cannot start the map's worker (core already shows a card for that). **"Open in StackBlitz" is not planned for now (Q2).** |
 | D8 | **"Try it" entry points.** MVP: the gallery footer (`GalleryFooter.astro`) and `LiveMap.astro` link to `/playground/?src=<their config>`. Phase 2: an Expressive Code / rehype step adds "Try it" to fenced ` ```yaml ` blocks that `validate-doc-snippets.mjs` already classifies as whole documents or wrappable fragments. It reuses that classifier and its placeholder wrapper. ` ```yaml no-validate ` fences get no link. |
 | D9 | **Data files.** Remote URLs work when the host allows CORS, and the map's notice already explains a CORS failure. Inline GeoJSON works and compresses about 3.4:1 in a link. The preview sets `base="/"`, so `/data/…` and `data/…` resolve to the docs site's `public/` as they do in the starters. Phase 2 adds dropping a local file: it is listed as `./data/<name>` in the YAML and mapped to a `blob:` URL only at render time. A share link warns that it can't carry the file, and Download puts it in the zip. |
 | D10 | **Bundle discipline.** Editor dependencies go in `docs/package.json` only, and nothing is added to `packages/*`. The editor is a dynamic import from the playground page's own script. A docs test fails the build if a page other than `/playground/` references a chunk that contains CodeMirror, and it holds the editor chunk to ≤ 140 KB gzip. In the docs build, the parser the playground imports is the same core `dist` chunk `<ml-map>` already loads, so diagnostics cost about 0 KB extra. |
 | D11 | **Map-party: nothing to share today. Align on two patterns.** Map-party's editor is a React + Yjs Monaco wrapper with no diagnostics, no schema help and no share links, and it is not mounted on phones ([§9](#9-map-party-overlap)). We adopt its parse-and-debounce shape and its keep-the-camera-on-`config`-swap trick. The schema-help and diagnostics adapters are written framework-free, so map-party could adopt them later (Q6). |
-| D12 | **Phasing.** The MVP is the editor, live map, diagnostics with quick fixes, starters, share, download, and gallery/LiveMap "Open in playground". Estimate: **about 11 working days**. Phase 2 is snippet "Try it", local file drop, StackBlitz, and a maplibre-free parser entry in core. Phase 3 is multi-file documents. See [§10](#10-phasing-and-effort). |
+| D12 | **Phasing.** The MVP is the editor, live map, diagnostics with quick fixes, starters, share, download, and gallery/LiveMap "Open in playground". Estimate: **about 11 working days**. Phase 2 is snippet "Try it", local file drop, a maplibre-free parser entry in core (Q5), and the screen-reader / real-phone pass if the MVP doesn't finish it. StackBlitz (Q2) and the plain-text mode (Q3) are not planned for now. Phase 3 is multi-file documents. See [§10](#10-phasing-and-effort). |
 
 ---
 
 ## 1. Context and constraints
 
-- **History.** `plans/docs-positioning-and-examples.md` calls a playground "the natural
+- **History.** `docs/plans/docs-positioning-and-examples.md` calls a playground "the natural
   'student' on-ramp but … real infrastructure". The 2026-07-07 roadmap brainstorm
   (`docs/brainstorms/2026-07-07-quality-adoption-roadmap-requirements.md`, "Playground over
   VS Code extension as the adoption lever"; R13) routed it to the Phase 3 docs plan. The vault
@@ -168,8 +168,9 @@ Checked in Playwright with touch emulation, and on screenshots
   else.
 - **Not done in this spike:** a manual NVDA/VoiceOver pass. Headless Chromium can
   check roles, names and focus, but not speech. The MVP includes one pass with
-  VoiceOver on iOS and NVDA on Windows. The offer of a plain-textarea mode for
-  people who prefer it is Q3.
+  VoiceOver on iOS and NVDA on Windows (moved to Phase 2 if the MVP can't do it).
+  A plain-textarea mode for people who prefer it was proposed as Q3 and skipped
+  for now.
 - **Page-level:** the status line is `aria-live="polite"` ("Map updated · 1
   warning"). State is never shown by colour alone: there is a dot, then text.
   The map pane and the code pane are labelled regions.
@@ -367,7 +368,7 @@ information, not as a gate (Q4).
     that. Both paths are covered by the quick start.
 
   The prototype implements this.
-- **Open in StackBlitz** (Phase 2).
+- **Open in StackBlitz** (not planned for now — Q2 answered "skip until someone asks").
   - **How it works:** `@stackblitz/sdk` 1.11.1 is 5.4 KB gzip. `openProject`
     submits a hidden form with `POST` to stackblitz.com (verified in the SDK
     bundle), so there is no backend on our side.
@@ -379,8 +380,8 @@ information, not as a gate (Q4).
     needs a licence. We would only link out to stackblitz.com, as many open-source
     docs do; the Terms of Service apply to the user's session there.
   - **Value:** low for students on phones, since WebContainers is heavy there.
-    It suits an "Astro users" entry on desktop. Q2 asks whether it is worth
-    building at all.
+    It suits an "Astro users" entry on desktop. Q2 asked whether it is worth
+    building at all; the answer was not for now.
 
 ---
 
@@ -477,15 +478,15 @@ under `e2e/` that doubles as a runnable page.
 | P8 | Entry points: `GalleryFooter` + `LiveMap` links | 0.5 d |
 | P9 | Guards and checks: bundle test (D10), e2e spec at 390×844 and 1280×800 (render, edit → re-render with camera kept, error keeps last map, share round-trip, `!html` inert), manual VoiceOver/NVDA and real-phone pass | 2.5 d |
 
-### Phase 2 — about 7 days
+### Phase 2 — about 5.5 days (after Q2/Q3)
 
 | Unit | Work | Est. |
 |---|---|---|
 | P10 | Snippet "Try it": shared classifier module from `validate-doc-snippets.mjs`, Expressive Code/rehype plugin, test | 2 d |
 | P11 | Local file drop/pick: virtual file table, blob mapping at render, share warning, zip inclusion, size guidance | 1.5 d |
-| P12 | Open in StackBlitz (if Q2 says yes): `html` template, or an Astro `node` project | 1 d |
+| ~~P12~~ | ~~Open in StackBlitz~~ — not planned (Q2: skip until someone asks) | — |
 | P13 | Core patch (changeset): a maplibre-free parser entry (for example `@maplibre-yaml/core/parser`), and position the "Unknown layer type" error at `type:` | 1 d |
-| P14 | Plain-textarea mode (if Q3 says yes) | 0.5 d |
+| ~~P14~~ | ~~Plain-textarea mode~~ — skipped for now (Q3) | — |
 | P15 | Polish from the real-phone pass | 1 d |
 
 ### Phase 3 (not estimated in detail)
@@ -541,7 +542,22 @@ All of this is scratch, outside the repo and not in this PR.
 
 ---
 
-## 12. Open questions for the maintainer
+## 12. Maintainer decisions (2026-10-22)
+
+The maintainer accepted every recommendation except Q3. The questions as asked
+follow the table.
+
+| # | Question | Answer |
+|---|---|---|
+| Q1 | Top-level nav item, or under Examples? | **Top-level nav item** ("Playground"), as recommended. |
+| Q2 | Build "Open in StackBlitz"? | **Not for now**, as recommended. Download is the way to take a map home. P12 is dropped. |
+| Q3 | Offer a "plain text" toggle (native textarea, no completion)? | **Skip for now.** P14 is dropped. The screen-reader pass still happens (P9, or P15 in Phase 2); revisit if it shows CM6 is a barrier. |
+| Q4 | Run shared links automatically, or behind a "Run this map" button? | **Run automatically, with the host list shown**, as recommended. |
+| Q5 | Add a maplibre-free `@maplibre-yaml/core/parser` subpath? | **Yes, in Phase 2** (P13, a minor core change with a changeset). Not in the MVP. |
+| Q6 | Keep the schema helper and diagnostics adapter in `docs/`? | **Yes**, as recommended. Extract to a package only when map-party asks. |
+| Q7 | Hand-curated "Start here" list plus the generated gallery? | **Yes**: about 5 hand-picked starters, with the full gallery generated below them. |
+
+### The questions as asked
 
 1. **Q1 — Page placement.** Should it be a top-level nav item ("Playground") next to
    Getting started, or under Examples? Recommendation: top-level, because it is
