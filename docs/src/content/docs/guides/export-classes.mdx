@@ -46,44 +46,35 @@ A warning is one of two kinds:
 
 ## Every part, by class \{#every-construct-classified}
 
-### Exports
+Grouped by class: first what exports, then what exports with a fallback,
+then what doesn't export.
 
-| Part | In the exported style |
-| --- | --- |
-| `center` / `zoom` / `pitch` / `bearing` | The style's camera. |
-| `state` | The style's `state`. Below the maplibre-gl version that reads it (`--target`), its defaults are written into the expressions instead. |
-| `layer.before` | The layer's position in the layers list. |
-| `layer.classify` | Plain paint expressions (`step` or `match`) and a filter for hidden classes. Computed breaks are worked out from the data at export; `mlym emit` fetches a `url:` source for that, and fails, naming the layer and URL, when it can't. See [Thematic maps](/guides/thematic-maps/). |
-| `images` | Fetched and added to the style's sprite; layers refer to them as `mlym:<name>`. |
-| `terrain` / `sky` / `light` / `projection` | The style's own properties, replacing the basemap's. A `terrain` source that isn't a `raster-dem` source is dropped (`lossy`). `sky` and globe `projection` are `lossy` against a `--target` below maplibre-gl 4.5 and 5.0. |
-| `color-relief` layers | The layer as written. `lossy` against a `--target` below maplibre-gl 5.6. |
-| `title` / `description` | The style's `name`, and `maplibre-yaml:description` in its `metadata`. See [Accessibility & languages](/guides/accessibility-languages/). |
-| `format.pmtiles` | A `pmtiles://` URL. A `contract` warning: the page must register the PMTiles protocol. |
-| `format.cog` | A `cog://` URL in the form the map uses (`#dem` on elevation, a `colorRamp:` as `#color:`). A `contract` warning: the page must register the COG protocol. See [COG](/guides/cog/). |
-| `source.format` / `source.colorRamp` | Carried by the exported source's URL or data; the keys themselves are not in the style. |
-
-### Exports with a fallback
-
-| Part | In the exported style |
-| --- | --- |
-| `markers` | A symbol layer with generated pin images (`--sprite-base` needed). Dragging and marker popups don't export (`lossy`). |
-| `fitTo` | A fixed camera: computed from the data when the source is inline, for a 1024×768 view (`lossy`, since a live map fits its own size). For a fetched or tiled source the written `center` and `zoom` stand in (`lossy`). |
-| `layer.effect` | *Experimental.* The layer's own static style, with one `lossy` warning per effect. See [Effects](/guides/effects/). |
-| `format.flatgeobuf` / `format.geoparquet` | The file's features as inline GeoJSON, read at export (for GeoParquet, every column or the `columns:` listed). A file that can't be read exports empty (`lossy`). |
-
-### Doesn't export
-
-| Part | Why |
-| --- | --- |
-| `layer.interactive` | Popups, hover and highlight are behaviour. [`attachInteractions`](/guides/export/#reattachment-attachinteractions) puts them back. |
-| `layer.legend` / `layer.label` / `layer.toggleable` | Legend entries and the layer panel are page furniture; the layer exports with its written visibility. |
-| `source.refresh` / `source.stream` / `source.cache` / `source.loading` / `source.prefetchedData` / `source.refreshInterval` / `source.updateStrategy` / `source.updateKey` | Live data. The exported source has the data present at export: inline `data`, or a GeoJSON `url:` written as `data: <url>`, loaded once. With neither, it is `lossy`. |
-| `source.load` / `source.columns` | How the browser reads a FlatGeobuf or GeoParquet file; the exported source already holds its features. |
-| `map.options` | MapLibre `Map` options are the page's choice; the exported style uses MapLibre's defaults. |
-| `controls` | The exported map gets MapLibre's default controls only. |
-| `legend` / `popups` / `container` | Page furniture around the map. |
-| `parameters` | Labels for `state` keys; the values export through `state`. |
-| `x-*` | Extension blocks, read by the page, not the map. |
+| Part | Class | On export |
+| --- | --- | --- |
+| `center` / `zoom` / `pitch` / `bearing` | `exports` | The style's camera. |
+| `state` | `exports` | The style's `state`. Below the maplibre-gl version that reads it (`--target`), its defaults are written into the expressions instead. |
+| `layer.before` | `exports` | The layer's position in the layers list. |
+| `layer.classify` | `exports` | Plain paint expressions (`step` or `match`) and a filter for hidden classes. Computed breaks are worked out from the data at export; `mlym emit` fetches a `url:` source for that, and fails, naming the layer and URL, when it can't. See [Thematic maps](/guides/thematic-maps/). |
+| `images` | `exports` | Fetched and added to the style's sprite; layers refer to them as `mlym:<name>`. |
+| `terrain` / `sky` / `light` / `projection` | `exports` | The style's own properties, replacing the basemap's. A `terrain` source that isn't a `raster-dem` source is dropped (`lossy`). `sky` and globe `projection` are `lossy` against a `--target` below maplibre-gl 4.5 and 5.0. |
+| `color-relief` layers | `exports` | The layer as written. `lossy` against a `--target` below maplibre-gl 5.6. |
+| `title` / `description` | `exports` | The style's `name`, and `maplibre-yaml:description` in its `metadata`. See [Accessibility & languages](/guides/accessibility-languages/). |
+| `format.pmtiles` | `exports` | A `pmtiles://` URL. A `contract` warning: the page must register the PMTiles protocol. |
+| `format.cog` | `exports` | A `cog://` URL in the form the map uses (`#dem` on elevation, a `colorRamp:` as `#color:`). A `contract` warning: the page must register the COG protocol. See [COG](/guides/cog/). |
+| `source.format` / `source.colorRamp` | `exports` | Carried by the exported source's URL or data; the keys themselves are not in the style. |
+| `markers` | `exports-with-fallback` | A symbol layer with generated pin images (`--sprite-base` needed). Dragging and marker popups don't export (`lossy`). |
+| `fitTo` | `exports-with-fallback` | A fixed camera: computed from the data when the source is inline, for a 1024×768 view (`lossy`, since a live map fits its own size). For a fetched or tiled source the written `center` and `zoom` stand in (`lossy`). |
+| `layer.effect` | `exports-with-fallback` | *Experimental.* The layer's own static style, with one `lossy` warning per effect. See [Effects](/guides/effects/). |
+| `format.flatgeobuf` / `format.geoparquet` | `exports-with-fallback` | The file's features as inline GeoJSON, read at export (for GeoParquet, every column or the `columns:` listed). A file that can't be read exports empty (`lossy`). |
+| `layer.interactive` | `no-export` | Popups, hover and highlight are behaviour. [`attachInteractions`](/guides/export/#reattachment-attachinteractions) puts them back. |
+| `layer.legend` / `layer.label` / `layer.toggleable` | `no-export` | Legend entries and the layer panel are page furniture; the layer exports with its written visibility. |
+| `source.refresh` / `source.stream` / `source.cache` / `source.loading` / `source.prefetchedData` / `source.fetchStrategy` / `source.refreshInterval` / `source.updateStrategy` / `source.updateKey` | `no-export` | Live data. The exported source has the data present at export: inline `data`, or a GeoJSON `url:` written as `data: <url>`, loaded once. With neither, it is `lossy`. |
+| `source.load` / `source.columns` | `no-export` | How the browser reads a FlatGeobuf or GeoParquet file; the exported source already holds its features. |
+| `map.options` | `no-export` | MapLibre `Map` options are the page's choice; the exported style uses MapLibre's defaults. |
+| `controls` | `no-export` | The exported map gets MapLibre's default controls only. |
+| `legend` / `popups` / `container` | `no-export` | Page furniture around the map. |
+| `parameters` | `no-export` | Labels for `state` keys; the values export through `state`. |
+| `x-*` | `no-export` | Extension blocks, read by the page, not the map. |
 
 ## The basemap
 
