@@ -60,8 +60,8 @@ const ASTRO = "docs/src/content/docs/integrations/astro.mdx";
 const STORIES = "docs/src/content/docs/integrations/astro-stories.mdx";
 
 /**
- * The text under a heading path, e.g. ["## FullPageMap Component",
- * "### Basic Usage"]: from the last heading to the next heading of the same
+ * The text under a heading path, e.g. ["## FullPageMap component",
+ * "### Basic usage"]: from the last heading to the next heading of the same
  * or a higher level.
  */
 function docSection(file: string, path: readonly string[]): string {
@@ -239,7 +239,7 @@ describe("full-page snippets work on a phone (ml-aot.33)", () => {
   });
 
   it.each([
-    ["FullPageMap: Basic Usage", ASTRO, ["## FullPageMap Component", "### Basic Usage"]],
+    ["FullPageMap: Basic usage", ASTRO, ["## FullPageMap component", "### Basic usage"]],
     ["Story maps in Astro: Quick start", STORIES, ["## Quick start"]],
   ] as const)(
     "%s is a complete page with a viewport meta and no body margin",
@@ -259,14 +259,19 @@ describe("full-page snippets work on a phone (ml-aot.33)", () => {
 });
 
 describe("entry-point snippets only name files the page provides (ml-aot.49)", () => {
-  // A reader copies the FullPageMap / Scrollytelling "Basic Usage", the
-  // story under "YAML Configuration" and the "Full Example Story" first.
+  // A reader copies the Astro page's first map, the FullPageMap "Basic usage"
+  // and the story maps quick start first.
   // Every file those load (`src`, `loadMapConfig`, `loadScrollytellingConfig`)
   // and every local `url:` / `image:` / `video:` in them must be on the page
   // as a fence titled with its path — otherwise the reader's first page 404s.
   // [label, file, heading path]: the sections a reader copies first.
   const SECTIONS = [
-    ["FullPageMap Component > Basic Usage", ASTRO, ["## FullPageMap Component", "### Basic Usage"]],
+    [
+      "Astro > Show a map from a YAML file",
+      ASTRO,
+      ["## Quick start", "### Show a map from a YAML file \\{#basic-usage-with-map-component}"],
+    ],
+    ["FullPageMap component > Basic usage", ASTRO, ["## FullPageMap component", "### Basic usage"]],
     ["Story maps in Astro > Quick start", STORIES, ["## Quick start"]],
   ] as const;
 

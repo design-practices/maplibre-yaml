@@ -3,176 +3,159 @@ title: Astro content collections
 description: Add maps to Astro content collections — a location, region, route or GeoJSON feature reference in each entry's frontmatter, built into a map per page — or keep whole map documents as validated collection entries.
 ---
 
-import { Tabs, TabItem, Aside, Code, Steps } from "@astrojs/starlight/components";
+import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
-This page shows how to put maps on the pages of an Astro content collection, using content collection schemas and map builder utilities. Whether you're creating a travel blog, restaurant reviews, or hiking guides, maplibre-yaml provides simple patterns for adding geographic context.
+Put a map on every page of an Astro [content collection](https://docs.astro.build/en/guides/content-collections/):
+each entry (a blog post, a project, a trail guide) carries a location, region
+or route in its frontmatter, and its page builds a map from it. You can also
+keep whole map documents as collection entries, validated when the site
+builds.
 
-## Overview
+This page assumes the package is installed ([Astro: Install](/integrations/astro/#installation))
+and that you know how a content collection works.
 
-There are two ways to use maps with a content collection:
+## Quick start
 
-- **Geographic data in your entries.** A blog post, project page or trail
-  guide carries a location, a region, a route, or a reference to a feature in
-  a GeoJSON file in its frontmatter, and its page builds a map from it. Most
-  of this page is about this way.
-- **Whole map documents as entries.** Each entry *is* a map (or a story)
-  YAML file, validated at build time. See
-  [Map documents as collection entries](#map-documents-as-collection-entries).
+A collection of posts, each with an optional point location, and a map on
+every post that has one.
 
-The first way uses three key concepts:
+1. **Define the collection** in `src/content.config.ts`:
 
-1. **Content Collection Schemas** - Pre-built Zod schemas that add location/region/route fields to your collection item frontmatter
-2. **Map Builder Utilities** - Functions that convert simple geographic data into full map configurations
-3. **Global Configuration** - Site-wide map style settings that individual posts can inherit
+   ```ts title="src/content.config.ts"
+   import { defineCollection } from "astro:content";
+   import { glob } from "astro/loaders";
+   import { getCollectionItemWithLocationSchema } from "@maplibre-yaml/astro/utils";
 
-<Aside type="tip">
-  This guide assumes you're familiar with [Astro Content
-  Collections](https://docs.astro.build/en/guides/content-collections/). If not,
-  read their documentation first.
-</Aside>
+   export const collections = {
+     posts: defineCollection({
+       loader: glob({ pattern: "**/*.md", base: "./src/collections/posts" }),
+       schema: getCollectionItemWithLocationSchema(),
+     }),
+   };
+   ```
 
-## Quick Start
+   The schema has `title`, `pubDate`, optional `description` and
+   `updatedDate`, and an optional `location`.
 
-### 1. Define Your Collection Schema
+   <Aside type="caution" title="Import from /utils in the content config">
+     Import schema helpers from `@maplibre-yaml/astro/utils` here, not from
+     `@maplibre-yaml/astro`. The main entry also exports the `.astro`
+     components, which the content config can't load: `astro build` happens to
+     work, but `astro dev` fails with *Cannot read properties of undefined
+     (reading 'get')* and *Content config not loaded*, and every page returns a
+     500. Pages and components can import from either.
+   </Aside>
 
-Choose the schema that matches your content type:
+2. **Give a post a location** in its frontmatter, for example
+   `src/collections/posts/paris.md`:
 
-```typescript
-// src/content.config.ts
-import { defineCollection } from "astro:content";
-import { glob } from "astro/loaders";
-import { getCollectionItemWithLocationSchema } from "@maplibre-yaml/astro/utils";
+   ```yaml
+   ---
+   title: "My trip to Paris"
+   pubDate: 2024-03-15
+   location:
+     coordinates: [2.3522, 48.8566]   # [longitude, latitude]
+     name: "Paris, France"
+     zoom: 12
+   ---
+   We arrived in Paris on a crisp spring morning...
+   ```
 
-export const collections = {
-  posts: defineCollection({
-    loader: glob({ pattern: "**/*.md", base: "./src/collections/posts" }),
-    schema: getCollectionItemWithLocationSchema(),
-  }),
-};
+3. **Build the map on each post's page**, `src/pages/posts/[...slug].astro`:
+
+   ```astro title="src/pages/posts/[...slug].astro"
+   ---
+   import { getCollection, render } from 'astro:content';
+   import { Map, buildPointMapConfig } from '@maplibre-yaml/astro';
+
+   export async function getStaticPaths() {
+     const posts = await getCollection('posts');
+     return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
+   }
+
+   const { post } = Astro.props;
+   const { Content } = await render(post);
+
+   const mapConfig = post.data.location
+     ? buildPointMapConfig({
+         location: post.data.location,
+         mapStyle: 'https://tiles.openfreemap.org/styles/liberty',
+       })
+     : null;
+   ---
+   <html lang="en">
+     <head>
+       <meta charset="utf-8" />
+       <meta name="viewport" content="width=device-width, initial-scale=1" />
+       <title>{post.data.title}</title>
+     </head>
+     <body>
+       <article>
+         <h1>{post.data.title}</h1>
+         {mapConfig && <Map config={mapConfig} height="300px" />}
+         <Content />
+       </article>
+     </body>
+   </html>
+   ```
+
+Open `/posts/paris/` and you see the post with a map centred on Paris and a
+marker labelled with its name. A post without `location` gets no map.
+
+The builder turns the frontmatter into a full map document at build time.
+Every map needs a basemap: pass `mapStyle`, or a
+[global configuration](/integrations/astro/#global-configuration) as the
+builder's second argument. Without either, the builder throws
+`ConfigResolutionError` (*missing required fields: mapStyle*) and the build
+stops at that page.
+
+The `glob()` loader works as written on Astro 5, 6 and 7. Astro 4 needs three
+changes ([Supported versions](/integrations/astro/#supported-versions)).
+Entries have an `id` (the file name without its extension) and render with
+`render()` from `astro:content`; the legacy `post.slug` and `post.render()`
+are gone in Astro 6.
+
+## Common tasks
+
+### Choose a schema \{#schema-options}
+
+Each helper builds a whole schema for posts (`title`, `pubDate` and so on)
+plus one geographic field. Pass your own fields to it as an object:
+
+| Helper | Field | Good for |
+|---|---|---|
+| `getCollectionItemWithLocationSchema()` | `location` | One place: a review, a spotlight |
+| `getCollectionItemWithLocationsSchema()` | `locations` | Several places: an itinerary, a city guide |
+| `getCollectionItemWithRegionSchema()` | `region` | An area: a neighbourhood, a coverage area |
+| `getCollectionItemWithRouteSchema()` | `route` | A line: a hike, a road trip |
+| `getCollectionItemWithGeoSchema()` | all four | Mixed content |
+| `getCollectionItemWithFeatureRefSchema()` | `feature_ref` | A feature in a GeoJSON file ([below](#geojson-feature-references)) |
+
+```ts
+import { z } from "astro/zod";
+import { getCollectionItemWithGeoSchema } from "@maplibre-yaml/astro/utils";
+
+const schema = getCollectionItemWithGeoSchema({
+  category: z.enum(["travel", "hiking", "food"]),
+  tags: z.array(z.string()).default([]),
+});
 ```
 
-<Aside type="caution" title="Import schemas from /utils in the content config">
-  Import from `@maplibre-yaml/astro/utils` here, not from `@maplibre-yaml/astro`.
-  The main entry also exports the `.astro` components, which the content config
-  cannot load. `astro build` happens to work, but `astro dev` fails with *Cannot
-  read properties of undefined (reading 'get')* and *Content config not
-  loaded*, and every page returns a 500. Pages and components can import from
-  either entry.
-</Aside>
+The frontmatter for each field:
 
-A `glob()` loader works on Astro 5, 6 and 7 as written. On Astro 4 it needs
-`experimental: { contentLayer: true }`, the config file at
-`src/content/config.ts`, and a `base` outside `src/content/` (see
-[Supported versions](/integrations/astro/#supported-versions)). Loader entries
-have an `id` (the file name without its extension) and render with `render()`
-from `astro:content`; the legacy `type: "content"` API (`post.slug`,
-`post.render()`) is gone in Astro 6.
-
-### 2. Add Location to Your Posts
-
+<Tabs>
+<TabItem label="location">
 ```yaml
----
-# src/collections/posts/my-trip.md
-title: "My Trip to Paris"
-pubDate: 2024-03-15
-location:
-  coordinates: [2.3522, 48.8566]
-  name: "Paris, France"
-  zoom: 12
----
-We arrived in Paris on a crisp spring morning...
-```
-
-### 3. Render the Map
-
-```astro
----
-// src/pages/posts/[...slug].astro
-import { getCollection, render } from 'astro:content';
-import { Map, buildPointMapConfig } from '@maplibre-yaml/astro';
-
-export async function getStaticPaths() {
-  const posts = await getCollection('posts');
-  return posts.map(post => ({
-    params: { slug: post.id },
-    props: { post }
-  }));
-}
-
-const { post } = Astro.props;
-const { Content } = await render(post);
-
-// Build map config if location exists
-const mapConfig = post.data.location
-  ? buildPointMapConfig({
-      location: post.data.location,
-      mapStyle: 'https://tiles.openfreemap.org/styles/liberty'
-    })
-  : null;
----
-
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <title>{post.data.title}</title>
-  </head>
-  <body>
-    <article>
-      <h1>{post.data.title}</h1>
-
-      {mapConfig && (
-        <Map config={mapConfig} height="300px" />
-      )}
-
-      <Content />
-    </article>
-  </body>
-</html>
-```
-
-## Schema Options
-
-### Single Location Posts
-
-Best for: Restaurant reviews, place spotlights, single-destination content.
-
-```typescript
-import { getCollectionItemWithLocationSchema } from "@maplibre-yaml/astro/utils";
-
-const schema = getCollectionItemWithLocationSchema();
-```
-
-**Frontmatter example:**
-
-```yaml
----
-title: "Best Coffee in Brooklyn"
-pubDate: 2024-03-15
 location:
   coordinates: [-73.9857, 40.6892]
   name: "Devoción Coffee"
+  description: "Open from 7am"
   zoom: 16
   markerColor: "#8B4513"
----
 ```
-
-### Multiple Locations Posts
-
-Best for: Travel itineraries, city guides, comparison posts.
-
-```typescript
-import { getCollectionItemWithLocationsSchema } from "@maplibre-yaml/astro/utils";
-
-const schema = getCollectionItemWithLocationsSchema();
-```
-
-**Frontmatter example:**
-
+</TabItem>
+<TabItem label="locations">
 ```yaml
----
-title: "10 Days in Japan"
-pubDate: 2024-03-15
 locations:
   - coordinates: [139.6917, 35.6895]
     name: "Tokyo"
@@ -180,97 +163,42 @@ locations:
   - coordinates: [135.7681, 35.0116]
     name: "Kyoto"
     description: "Days 5-7"
-  - coordinates: [135.5023, 34.6937]
-    name: "Osaka"
-    description: "Days 8-10"
----
 ```
-
-### Region/Area Posts
-
-Best for: Neighborhood guides, property coverage areas, territorial content.
-
-```typescript
-import { getCollectionItemWithRegionSchema } from "@maplibre-yaml/astro/utils";
-
-const schema = getCollectionItemWithRegionSchema();
-```
-
-**Frontmatter example:**
-
+</TabItem>
+<TabItem label="region">
 ```yaml
----
-title: "Guide to Brooklyn Heights"
-pubDate: 2024-03-15
 region:
   name: "Brooklyn Heights"
-  coordinates:
-    - [
-        [-73.998, 40.698],
-        [-73.985, 40.698],
-        [-73.985, 40.692],
-        [-73.998, 40.692],
-        [-73.998, 40.698],
-      ]
+  coordinates:          # a polygon: rings of [lng, lat], first point repeated last
+    - [[-73.998, 40.698], [-73.985, 40.698], [-73.985, 40.692], [-73.998, 40.692], [-73.998, 40.698]]
   fillColor: "#3388ff"
   fillOpacity: 0.3
----
+  strokeColor: "#1d4ed8"
 ```
-
-### Route/Trail Posts
-
-Best for: Hiking guides, road trips, cycling routes.
-
-```typescript
-import { getCollectionItemWithRouteSchema } from "@maplibre-yaml/astro/utils";
-
-const schema = getCollectionItemWithRouteSchema();
-```
-
-**Frontmatter example:**
-
+</TabItem>
+<TabItem label="route">
 ```yaml
----
-title: "Pacific Coast Highway Road Trip"
-pubDate: 2024-03-15
 route:
   name: "SF to LA via PCH"
-  coordinates:
-    - [-122.4194, 37.7749] # San Francisco
-    - [-122.0322, 36.9741] # Santa Cruz
-    - [-121.8947, 36.6002] # Monterey
-    - [-120.6596, 35.2828] # San Luis Obispo
-    - [-119.6982, 34.4208] # Santa Barbara
-    - [-118.2437, 34.0522] # Los Angeles
+  coordinates:          # at least two [lng, lat] points
+    - [-122.4194, 37.7749]
+    - [-121.8947, 36.6002]
+    - [-118.2437, 34.0522]
   color: "#e74c3c"
   width: 4
----
 ```
+</TabItem>
+</Tabs>
 
-### Flexible Schema
+Only `coordinates` is required. As a guide for `zoom`: 10–12 shows a city,
+13–15 a neighbourhood, 16–18 a building.
 
-For collection items with mixed content types, use the comprehensive schema:
+### Add map fields to an existing schema \{#adding-geographic-data-to-content-collections}
 
-```typescript
-import { z } from "astro/zod";
-import { getCollectionItemWithGeoSchema } from "@maplibre-yaml/astro/utils";
+If your collection already has a schema, add the fields to it instead. Each is
+optional, so entries without one still validate:
 
-const schema = getCollectionItemWithGeoSchema({
-  // Add your custom fields
-  author: z.string(),
-  category: z.enum(["travel", "hiking", "food", "city-guide"]),
-  tags: z.array(z.string()).default([]),
-});
-```
-
-## Adding Geographic Data to Content Collections
-
-You can add map support to any existing Astro content collection by importing the geographic schemas. This works for points, polygons, and lines — all optional, so items without geographic data still work. The `getCollectionItemWith*Schema` helpers [above](#schema-options) build a whole schema for you; when your collection already has one, add the geographic fields to it instead.
-
-### Schema setup
-
-```typescript
-// src/content.config.ts
+```ts title="src/content.config.ts"
 import { defineCollection } from "astro:content";
 import { z } from "astro/zod";
 import { glob } from "astro/loaders";
@@ -278,39 +206,32 @@ import {
   LocationPointSchema,
   RegionPolygonSchema,
   RouteLineSchema,
-} from "@maplibre-yaml/astro/utils"; // /utils in the content config: see the caution above
+} from "@maplibre-yaml/astro/utils";
 
 const projects = defineCollection({
   loader: glob({ pattern: "**/*.md", base: "./src/collections/projects" }),
   schema: z.object({
     title: z.string(),
-    status: z.string(),
     summary: z.string().optional(),
-    // Geographic data — all optional
-    location: LocationPointSchema.optional(),  // point
-    region: RegionPolygonSchema.optional(),     // polygon
-    route: RouteLineSchema.optional(),          // line
+    location: LocationPointSchema.optional(), // a point
+    region: RegionPolygonSchema.optional(),   // a polygon
+    route: RouteLineSchema.optional(),        // a line
   }),
 });
 
 export const collections = { projects };
 ```
 
-### Frontmatter examples
+Use `z` from `astro/zod`, so the helpers nest on every Astro major
+([why](/integrations/astro/#supported-versions)).
 
-The fields take the same frontmatter as in [Schema Options](#schema-options):
-`location` as in [Single Location Posts](#single-location-posts), `region` as
-in [Region/Area Posts](#regionarea-posts), `route` as in
-[Route/Trail Posts](#routetrail-posts), and `locations` (a list of points) as
-in [Multiple Locations Posts](#multiple-locations-posts).
+### Build one map per entry, whatever its geometry \{#dynamic-map-per-collection-item}
 
-### Dynamic map per collection item
+`buildMapConfigFromEntry` looks at an entry's fields and calls the right
+builder, falling back to a default when the entry has none:
 
-Use `buildMapConfigFromEntry` in your dynamic route page (`[slug].astro`). The helper inspects the entry data, dispatches to the appropriate builder by geometry type, and falls back to a supplied default if no geometry is set.
-
-```astro
+```astro title="src/pages/projects/[slug].astro"
 ---
-// src/pages/projects/[slug].astro
 import { getCollection } from "astro:content";
 import { Map, buildMapConfigFromEntry } from "@maplibre-yaml/astro";
 import { globalMapConfig } from "../../lib/map-config";
@@ -324,590 +245,124 @@ const { entry } = Astro.props;
 const mapConfig = await buildMapConfigFromEntry(entry.data, globalMapConfig, {
   label: entry.data.title,
   description: entry.data.summary,
-  fallback: {
-    coordinates: globalMapConfig.defaultCenter!,
-    name: entry.data.title,
-  },
+  fallback: { coordinates: globalMapConfig.defaultCenter!, name: entry.data.title },
 });
 ---
 <Map config={mapConfig} height="300px" />
 ```
 
-`globalMapConfig` here is the site-wide configuration loaded with
-`loadGlobalMapConfig` ([Global Configuration](/integrations/astro/#global-configuration)),
-which supplies the basemap and the `defaultCenter` used as the fallback.
+`globalMapConfig` is the site-wide file loaded with `loadGlobalMapConfig`
+([Global configuration](/integrations/astro/#global-configuration)); it
+supplies the basemap and the `defaultCenter` used for the fallback.
 
-The helper recognizes these fields in this precedence order:
+The first field set wins, in this order: `feature_ref`, `region`, `route`,
+`locations`, `location`, then `options.fallback`. The function is async
+because `feature_ref` reads a file. It knows only these field names; if your
+collection names them differently, call the builders yourself
+([Map builder functions](#map-builder-functions)).
 
-1. `feature_ref` — external GeoJSON file reference
-2. `region` — inline polygon
-3. `route` — inline line
-4. `locations` — inline multi-point
-5. `location` — inline single point
-6. `options.fallback` — supplied default
+### GeoJSON feature references
 
-The first set field wins; later fields are ignored. The helper is always async because `feature_ref` requires file I/O at build time.
+When many entries share geometry from one GeoJSON file, point at the feature
+instead of copying its coordinates. At build time the file is read, the
+feature found, and the builder for its geometry type called.
 
-<Aside type="note" title="Field names are library conventions">
-  These field names (`location`, `region`, `route`, `feature_ref`) are not GeoJSON canonicals — they're conventions established by the library's `getCollectionItemWith*Schema` helpers. If your collection uses different field names, call the underlying builders (`buildPointMapConfig`, `buildPolygonMapConfig`, etc.) directly instead of the helper.
-</Aside>
+1. **Add `feature_ref` to the schema.** `getCollectionItemWithFeatureRefSchema()`
+   gives you a whole schema that rejects an entry with both `feature_ref` and
+   inline geometry. To add it to your own schema:
 
-To handle each geometry type yourself (custom popups or styling per type),
-call the builders directly instead, as the
-[Complete Blog Template Example](#complete-blog-template-example) below does.
-
-## Map Builder Functions
-
-### buildPointMapConfig
-
-Creates a map centered on a single location with a marker:
-
-```typescript
-import { buildPointMapConfig } from "@maplibre-yaml/astro";
-
-const config = buildPointMapConfig({
-  location: {
-    coordinates: [-74.006, 40.7128],
-    name: "New York City",
-    description: "The Big Apple",
-  },
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
-  zoom: 12, // optional, defaults to location.zoom or 12
-  interactive: true, // optional, defaults to true
-});
-```
-
-### buildMultiPointMapConfig
-
-Creates a map showing multiple locations with automatic bounds fitting:
-
-```typescript
-import { buildMultiPointMapConfig } from "@maplibre-yaml/astro";
-
-const config = buildMultiPointMapConfig({
-  locations: [
-    { coordinates: [-74.006, 40.7128], name: "NYC" },
-    { coordinates: [-118.2437, 34.0522], name: "LA" },
-    { coordinates: [-87.6298, 41.8781], name: "Chicago" },
-  ],
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
-});
-```
-
-`buildMultiPointMapConfig` and `buildRouteMapConfig` also take `padding`: the
-pixels kept between the data and the map edge when the map fits it (default
-50; applied from astro 0.7.1).
-
-### buildPolygonMapConfig
-
-Creates a map displaying a polygon region:
-
-```typescript
-import { buildPolygonMapConfig } from "@maplibre-yaml/astro";
-
-const config = buildPolygonMapConfig({
-  region: {
-    coordinates: [
-      [
-        [-74.0, 40.7],
-        [-73.9, 40.7],
-        [-73.9, 40.8],
-        [-74.0, 40.8],
-        [-74.0, 40.7], // Close the polygon
-      ],
-    ],
-    name: "Manhattan",
-    fillColor: "#ff6b6b",
-    fillOpacity: 0.4,
-  },
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
-});
-```
-
-### buildRouteMapConfig
-
-Creates a map showing a line/route with start/end markers:
-
-```typescript
-import { buildRouteMapConfig } from "@maplibre-yaml/astro";
-
-const config = buildRouteMapConfig({
-  route: {
-    coordinates: [
-      [-122.4194, 37.7749],
-      [-121.8947, 36.6002],
-      [-118.2437, 34.0522],
-    ],
-    name: "California Road Trip",
-    color: "#e74c3c",
-    width: 4,
-  },
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
-});
-```
-
-### Other builders
-
-`buildMultiPolygonMapConfig` and `buildMultiLineStringMapConfig` take several
-polygons or lines, and `buildFeatureMapConfig` builds a map from a
-[GeoJSON feature reference](#geojson-feature-references).
-`buildMapConfigFromEntry` picks the right builder from an entry's fields
-([Dynamic map per collection item](#dynamic-map-per-collection-item)). Every
-builder takes a [global configuration](#global-configuration-pattern) as its
-second argument.
-
-## Global Configuration Pattern
-
-Instead of specifying `mapStyle` on every map, create a shared configuration.
-For a validated, YAML-backed version that every builder accepts as its
-second argument, see `loadGlobalMapConfig` in
-[Astro: Global Configuration](/integrations/astro/#global-configuration).
-A plain object works too:
-
-```typescript
-// src/lib/map-config.ts
-export const globalMapConfig = {
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty",
-  // Add any other defaults you want to share
-};
-```
-
-`mapStyle` takes a MapLibre style URL or, for a basemap you host yourself
-with no API key, a Protomaps `.pmtiles` file in `public/`:
-`{ pmtiles: "data/city.pmtiles", flavor: "light" }`
-([Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap)).
-
-Then use it in your pages:
-
-```astro
----
-import { Map, buildPointMapConfig } from '@maplibre-yaml/astro';
-import { globalMapConfig } from '../lib/map-config';
-
-const { location } = Astro.props.post.data;
-
-const mapConfig = location
-  ? buildPointMapConfig({
-      location,
-      mapStyle: globalMapConfig.mapStyle
-    })
-  : null;
----
-
-{mapConfig && <Map config={mapConfig} height="300px" />}
-```
-
-<Aside type="note">
-  Every map needs a basemap style. If you omit `mapStyle` from a builder call
-  and pass no global config with a `defaultMapStyle` as its second argument,
-  the builder throws a `ConfigResolutionError` (*missing required fields:
-  mapStyle*) and the build stops at that page. Pass `mapStyle`, or a global
-  config as shown above.
-</Aside>
-
-## Complete Blog Template Example
-
-Here's a full example of a collection item post template with conditional map rendering:
-
-```astro
----
-// src/pages/posts/[...slug].astro
-import { getCollection, render } from 'astro:content';
-import {
-  Map,
-  buildPointMapConfig,
-  buildMultiPointMapConfig,
-  buildPolygonMapConfig,
-  buildRouteMapConfig
-} from '@maplibre-yaml/astro';
-
-export async function getStaticPaths() {
-  const posts = await getCollection('posts');
-  return posts.map(post => ({
-    params: { slug: post.id },
-    props: { post }
-  }));
-}
-
-const { post } = Astro.props;
-const { Content } = await render(post);
-const { location, locations, region, route } = post.data;
-
-const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
-
-// Build appropriate map config based on available data
-function getMapConfig() {
-  if (location) {
-    return buildPointMapConfig({ location, mapStyle: MAP_STYLE });
-  }
-  if (locations && locations.length > 0) {
-    return buildMultiPointMapConfig({ locations, mapStyle: MAP_STYLE });
-  }
-  if (region) {
-    return buildPolygonMapConfig({ region, mapStyle: MAP_STYLE });
-  }
-  if (route) {
-    return buildRouteMapConfig({ route, mapStyle: MAP_STYLE });
-  }
-  return null;
-}
-
-const mapConfig = getMapConfig();
----
-
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <title>{post.data.title}</title>
-  </head>
-  <body>
-    <article class="post">
-      <header>
-        <h1>{post.data.title}</h1>
-        <time datetime={post.data.pubDate.toISOString()}>
-          {post.data.pubDate.toLocaleDateString()}
-        </time>
-      </header>
-
-      {mapConfig && (
-        <div class="post-map">
-          <Map config={mapConfig} height="350px" />
-        </div>
-      )}
-
-      <div class="post-content">
-        <Content />
-      </div>
-    </article>
-  </body>
-</html>
-
-<style>
-  .post-map {
-    margin: 2rem 0;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
-</style>
-```
-
-## GeoJSON Feature References
-
-When multiple collection items share geometry from a single source-of-truth GeoJSON file, copying coordinates into each frontmatter is fragile and verbose. The `feature_ref` field lets a collection item point at a feature in an external GeoJSON file (matched by `featureId` or by property equality). At build time, the loader reads the file, finds the matching feature, detects its geometry type, and dispatches to the existing point/polygon/route builders.
-
-<Aside type="tip" title="Runnable example">
-  A complete minimal Astro app exercising every scenario covered in this section lives at [`examples/astro/minimal`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/astro/minimal). The `/showcase` page pairs each `FeatureRef` snippet with the map it produces; `/poas/sample` demonstrates `buildMapConfigFromEntry` with a markdown entry.
-</Aside>
-
-### Setting up a feature reference
-
-<Steps>
-
-1. **Add `feature_ref` to your collection schema**
-
-   ```typescript
-   // src/content.config.ts
+   ```ts title="src/content.config.ts"
    import { defineCollection } from "astro:content";
    import { z } from "astro/zod";
    import { glob } from "astro/loaders";
-   import {
-     FeatureRefSchema,
-     LocationPointSchema,
-     RegionPolygonSchema,
-     RouteLineSchema,
-   } from "@maplibre-yaml/astro/utils";
+   import { FeatureRefSchema, LocationPointSchema } from "@maplibre-yaml/astro/utils";
 
    export const collections = {
-     poas: defineCollection({
-       loader: glob({ pattern: "**/*.md", base: "./src/collections/poas" }),
+     areas: defineCollection({
+       loader: glob({ pattern: "**/*.md", base: "./src/collections/areas" }),
        schema: z.object({
          title: z.string(),
-         gotf_id: z.number(),
-         // Either feature_ref OR inline geometry -- not both
-         feature_ref: FeatureRefSchema.optional(),
-         location: LocationPointSchema.optional(),
-         region: RegionPolygonSchema.optional(),
-         route: RouteLineSchema.optional(),
+         feature_ref: FeatureRefSchema.optional(), // either this...
+         location: LocationPointSchema.optional(), // ...or inline geometry
        }),
      }),
    };
    ```
 
-   For automatic mutual-exclusivity validation, use `getCollectionItemWithFeatureRefSchema()` instead. It rejects items declaring both `feature_ref` and inline geometry at content-collection-parse time.
-
-2. **Reference features from frontmatter**
+2. **Reference the feature from the frontmatter**, by its top-level `id` or by
+   a property value:
 
    <Tabs>
-   <TabItem label="Match by feature.id">
-
+   <TabItem label="By feature id">
    ```yaml
    ---
-   title: "Gowanus Rezoning Area"
-   gotf_id: 1.1
+   title: "Gowanus rezoning area"
    feature_ref:
      source: "./src/data/gowanus.geojson"
-     featureId: "poa-1.1"
+     featureId: "area-1"
    ---
    ```
-
    </TabItem>
-   <TabItem label="Match by property">
-
+   <TabItem label="By property">
    ```yaml
    ---
-   title: "Gowanus Rezoning Area"
-   gotf_id: 1.1
+   title: "Gowanus rezoning area"
    feature_ref:
      source: "./src/data/gowanus.geojson"
      match:
-       property: "gotf_id"
-       equals: 1.1
+       property: "area_id"
+       equals: 1
      fillColor: "#3388ff"
      fillOpacity: 0.25
    ---
    ```
-
    </TabItem>
    </Tabs>
 
-3. **Build the map in your dynamic page**
+   `source` is a path from the project root. Exactly one feature must match.
+   Frontmatter `name`, `description` and the style fields override the
+   feature's own properties.
 
-   The simplest path is `buildMapConfigFromEntry` — it inspects the entry data, dispatches by geometry type (including `feature_ref`), and produces a `MapBlock`:
+3. **Build the map** with `buildMapConfigFromEntry`, as
+   [above](#dynamic-map-per-collection-item), or with `buildFeatureMapConfig`
+   to handle feature references yourself.
 
-   ```astro
-   ---
-   // src/pages/poas/[slug].astro
-   import { getCollection } from "astro:content";
-   import { Map, buildMapConfigFromEntry } from "@maplibre-yaml/astro";
-   import { globalMapConfig } from "../../lib/map-config";
+Feature references are read at build time. With `output: 'server'`,
+prerender the pages that use them ([Server output](/integrations/astro/#server-output-ssr)).
+The file is parsed once and cached; after editing it in `astro dev`, reload
+the page (or add the [integration](/integrations/astro/#editing-in-astro-dev),
+which does it for you). The [feature reference details](#feature-reference-details)
+cover geometry types, path rules, errors and file sizes.
 
-   export async function getStaticPaths() {
-     const entries = await getCollection("poas");
-     return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
-   }
-
-   const { entry } = Astro.props;
-   const mapConfig = await buildMapConfigFromEntry(entry.data, globalMapConfig, {
-     label: entry.data.title,
-     fallback: { coordinates: globalMapConfig.defaultCenter! },
-   });
-   ---
-   <Map config={mapConfig} height="300px" />
-   ```
-
-   If you need custom per-type behavior, call the underlying builders directly (`buildFeatureMapConfig`, `buildPolygonMapConfig`, etc.) instead. See [Map Builder Functions](#map-builder-functions).
-
-</Steps>
-
-### Match strategies
-
-Two ways to identify which feature to use:
-
-| Form | When to use |
-|------|-------------|
-| `featureId: <string \| number>` | When your GeoJSON features have stable top-level `id` fields (RFC 7946) |
-| `match: { property, equals }` | When IDs live in `feature.properties` (common -- mirrors MapLibre's `promoteId`) |
-
-Exactly one match must be returned. Zero matches or multiple matches throw `GeoJSONLoadError` with details (file path, total feature count, sample IDs/values).
-
-### Override fields
-
-Frontmatter can override `feature.properties.name` and `feature.properties.description`, plus all style fields (`markerColor`, `fillColor`, `strokeColor`, `fillOpacity`, `color`, `width`, `zoom`). Overrides take priority; `feature.properties` are the fallback.
-
-### Supported geometry types
-
-| Type | Builder dispatched |
-|------|-------------------|
-| `Point` | `buildPointMapConfig` |
-| `MultiPoint` | `buildMultiPointMapConfig` |
-| `LineString` | `buildRouteMapConfig` |
-| `MultiLineString` | `buildMultiLineStringMapConfig` (renders all segments) |
-| `Polygon` | `buildPolygonMapConfig` |
-| `MultiPolygon` | `buildMultiPolygonMapConfig` (renders all polygons) |
-| `GeometryCollection` (single member) | dispatches to the inner geometry type |
-| `GeometryCollection` (multiple members) | throws `GeoJSONLoadError` -- split into separate features |
-
-### Path resolution and security defaults
-
-The `source` value is resolved against `process.cwd()` by default. Two settings on `FeatureLoadOptions` adjust this:
-
-```typescript
-import {
-  buildFeatureMapConfig,
-  type FeatureLoadOptions,
-} from "@maplibre-yaml/astro";
-
-const loadOptions: FeatureLoadOptions = {
-  // Use a custom project root for monorepo builds where cwd != Astro project dir.
-  // Canonicalized via realpath so macOS `/var` -> `/private/var` doesn't trip
-  // the containment check.
-  projectRoot: "/absolute/path/to/astro/project",
-
-  // Opt in to absolute `source` paths. Default: false.
-  // Required for tests using tmpdir, monorepo data outside the project root,
-  // or any controlled call site. Do NOT enable when frontmatter values can
-  // come from untrusted content (CMS-supplied entries, user uploads).
-  allowAbsolutePaths: true,
-};
-
-await buildFeatureMapConfig({ ref, loadOptions }, globalConfig);
-```
-
-The same `loadOptions` flows through `buildMapConfigFromEntry` and `loadFeatureFile`.
-
-<Aside type="caution" title="Path-traversal protection">
-  Relative `source` values that escape the project root via `..` are rejected before any filesystem I/O. Symlinks that live inside the project root but canonicalize OUTSIDE it are also rejected (a post-realpath containment re-check catches this). Absolute paths are rejected unless `allowAbsolutePaths: true` is passed -- the secure-by-default posture protects against UGC frontmatter where an attacker could submit `source: "/etc/passwd"` as a filesystem oracle.
+<Aside type="tip" title="Runnable example">
+  [`examples/astro/minimal`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/astro/minimal)
+  exercises every case: its `/showcase` page pairs each `feature_ref` with the
+  map it produces, and `/poas/sample` uses `buildMapConfigFromEntry` with a
+  Markdown entry.
 </Aside>
 
-### Error classes
+### Map documents as collection entries
 
-The builder throws one of two error classes:
-
-```typescript
-import {
-  buildFeatureMapConfig,
-  GeoJSONLoadError,
-  InvalidFeatureRefError,
-} from "@maplibre-yaml/astro";
-
-try {
-  await buildFeatureMapConfig({ ref }, globalConfig);
-} catch (err) {
-  if (err instanceof InvalidFeatureRefError) {
-    // Thrown when the ref has neither or both of `featureId` and `match`.
-    // Discriminable via instanceof (not wrapped by buildFeatureMapConfig).
-  } else if (err instanceof GeoJSONLoadError) {
-    // Thrown for everything else: missing file/feature, malformed JSON,
-    // unsupported geometry, path-traversal violation, absolute-path
-    // rejection, file too large, degenerate LineString, heterogeneous
-    // GeometryCollection. `.message` carries the actionable message;
-    // `.filePath` carries the resolved path; ES2022 `.cause` carries the
-    // underlying fs/parse error when applicable.
-  }
-}
-```
-
-### Build-time only
-
-`buildFeatureMapConfig` reads from the local filesystem via `process.cwd()` (or the configured `projectRoot`). It is **build-time only** -- invoking it in a deployed SSR adapter context throws a `GeoJSONLoadError` whose ENOENT message includes deployment-context hints. With `output: 'server'`, prerender the pages that use it (see [Server output](/integrations/astro/#server-output-ssr)).
-
-### Performance
-
-| File size | Behavior |
-|-----------|---------|
-| < 10MB | Fully supported, no caveats |
-| 10-50MB | Supported; one-time parse cost |
-| 50-100MB | Build-time warning |
-| > 100MB | Hard error directing toward PMTiles or splitting |
-
-For data this large, load it in the browser instead of at build time: a
-PMTiles, FlatGeobuf or GeoParquet file in `public/` is read in parts as the
-map needs it ([Large data](/guides/cloud-native-data/)).
-
-Files referenced multiple times across collection items are parsed once via an mtime-aware cache. Editing the GeoJSON in `astro dev` invalidates the cache on next page render -- no server restart needed. For files with 200+ features, a per-property index is built lazily on the second access for that property.
-
-<Aside type="note" title="Reloading after an edit">
-  Editing a GeoJSON file in `astro dev` invalidates the cache (you'll see updated geometry on the next page load), but Vite doesn't know the page depends on the file, so reload it yourself, or add the [integration](/integrations/astro/#editing-in-astro-dev), which reloads the page when a referenced file changes.
-</Aside>
-
-### Ignored style overrides
-
-`FeatureRef` accepts every style field (`markerColor`, `fillColor`, `strokeColor`, `fillOpacity`, `color`, `width`) because the geometry type is not known when the schema parses -- it's resolved when the file loads. When a field doesn't apply to the resolved geometry (e.g., `markerColor` on a Polygon ref), the builder ignores it and emits a one-time `console.warn` during `astro dev`:
-
-```
-feature_ref: style override(s) [markerColor, width] do not apply to Polygon geometry from "./src/data/sample.geojson"; they will be ignored.
-```
-
-Warnings are deduplicated per `(source, geometryType, ignored-keys)` so reloading the page won't re-emit them. Restarting `astro dev` clears the dedupe cache.
-
-### Lower-level primitives
-
-For advanced cases (e.g., loading one file once and dispatching to many features manually):
-
-```typescript
-import {
-  loadFeatureFile,
-  findFeature,
-  GeoJSONLoadError,
-  clearFeatureCache,
-} from "@maplibre-yaml/astro";
-
-const fc = await loadFeatureFile("./src/data/gowanus.geojson");
-const feature = findFeature(fc, { source: "...", featureId: "poa-1.1" });
-// Then dispatch manually with the existing sync builders
-```
-
-`clearFeatureCache()` is exported for test isolation between files that share absolute paths.
-
-## Utility Functions
-
-### calculateCenter
-
-Calculate the center point of multiple coordinates:
-
-```typescript
-import { calculateCenter } from "@maplibre-yaml/astro";
-
-const center = calculateCenter([
-  [-74.006, 40.7128],
-  [-73.935, 40.73],
-  [-73.867, 40.752],
-]);
-// Returns approximately [-73.936, 40.732]
-```
-
-### calculateBounds
-
-Calculate the bounding box of coordinates:
-
-```typescript
-import { calculateBounds } from "@maplibre-yaml/astro";
-
-const bounds = calculateBounds([
-  [-74.006, 40.7128],
-  [-73.867, 40.752],
-]);
-// Returns [[-74.006, 40.7128], [-73.867, 40.752]]
-```
-
-## Map documents as collection entries
-
-For a site with many maps that should be validated at build time, keep each
+For a site with many maps that should be checked at build time, keep each
 map's YAML file in a collection. A mistake in any file then fails
-`astro build` (and shows in `astro dev`) instead of appearing as an error
-card in the browser. For a handful of maps, YAML files in `public/` loaded
-with `<Map src>` are simpler ([Astro](/integrations/astro/#basic-usage-with-map-component)).
+`astro build` (and shows in `astro dev`) instead of appearing as an error card
+in the browser. For a handful of maps, YAML files in `public/` with
+`<Map src>` are simpler ([Astro](/integrations/astro/#basic-usage-with-map-component)).
 
-**1. Define the collection** in `src/content.config.ts`:
-
-```typescript
+```ts title="src/content.config.ts"
 import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
 import { getMapSchema } from "@maplibre-yaml/astro/utils";
 
 const maps = defineCollection({
   loader: glob({ pattern: "**/*.yaml", base: "./src/collections/maps" }),
-  // The whole map document schema: sources, layers, legend, markers,
-  // parameters, images, every config key. Add fields with extendSchema().
-  schema: getMapSchema(),
+  schema: getMapSchema(), // the whole map document: every key a map takes
 });
 
 export const collections = { maps };
 ```
 
-<Aside type="caution" title="Don't hand-write the map schema">
-  A `z.object({ type, id, config: z.object({ center, zoom, mapStyle }), layers })`
-  looks enough, but `z.object()` silently drops every key it doesn't list.
-  `sources:`, `legend:`, `markers:`, `parameters:`, `images:` and most
-  `config:` keys (`maxZoom`, `interactive`, ...) vanish before the map sees
-  them, and a layer that names a source then points at nothing. Use
-  `getMapSchema()`, and [`extendSchema()`](/integrations/astro/#advanced-extending-schemas) for
-  fields of your own.
-</Aside>
-
-**2. Add YAML files** to the collection, one map document each:
+Each file in `src/collections/maps/` is one map document:
 
 ```yaml title="src/collections/maps/headquarters.yaml"
 type: map
@@ -915,37 +370,23 @@ id: headquarters
 config:
   center: [-122.4194, 37.7749]
   zoom: 15
-  maxZoom: 18
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-sources:
-  office:
-    type: geojson
-    data:
-      type: Feature
-      geometry:
-        type: Point
-        coordinates: [-122.4194, 37.7749]
-      properties:
-        name: "Headquarters"
 layers:
   - id: office
     type: circle
-    source: office
+    source:
+      type: geojson
+      data:
+        type: Feature
+        geometry: { type: Point, coordinates: [-122.4194, 37.7749] }
+        properties: { name: "Headquarters" }
     legend: { label: Headquarters, color: "#3b82f6" }
     paint:
       circle-radius: 12
       circle-color: "#3b82f6"
-legend:
-  position: bottom-left
-markers:
-  - at: [-122.4180, 37.7762]
-    color: "#e63946"
-    popup:
-      - p:
-          - str: "Visitor parking"
 ```
 
-**3. Show an entry with `<Map>`:**
+Show an entry with `<Map>`:
 
 ```astro
 ---
@@ -955,47 +396,190 @@ import { Map } from '@maplibre-yaml/astro';
 const headquarters = await getEntry('maps', 'headquarters');
 if (!headquarters) throw new Error('maps/headquarters.yaml not found');
 ---
-
 <Map config={headquarters.data} height="500px" />
 ```
 
-To render an entry with your own component around `<ml-map>` instead, pass
-`JSON.stringify(entry.data)` as its `config` attribute (see
-[Component Patterns](/integrations/astro/#component-patterns)).
+In a collection entry, write GeoJSON in full (`data:` or `url:`). The
+[GeoJSON shorthands](/schema/sources/#geojson-sugar) (`location:`, `route:`, …
+on a source) are expanded by `loadMapConfig` and `<Map src>`, but not by
+`getMapSchema()`, which reports *GeoJSON source requires at least one of:
+url, data, or prefetchedData*.
 
-Stories work the same way with `getScrollytellingSchema()`: see
-[Stories as a content collection](/integrations/astro-stories/#stories-as-a-content-collection).
+<Aside type="caution" title="Don't hand-write the map schema">
+  `z.object({ type, id, config: z.object({ center, zoom, mapStyle }), layers })`
+  looks enough, but `z.object()` silently drops every key it doesn't list:
+  `sources:`, `legend:`, `markers:`, `parameters:`, `images:` and most
+  `config:` keys vanish before the map sees them. Use `getMapSchema()`.
+</Aside>
 
-## Tips & Best Practices
+To add fields of your own (a title, a blurb), wrap the schema in
+`extendSchema()`. The example site's content config does this, next to a
+Markdown collection with a point location:
 
-### Keep Maps Simple
-
-For blog posts, simpler maps are often better. A single marker showing "where this happened" is more effective than a complex multi-layer visualization.
-
-### Use Appropriate Zoom Levels
-
-- **City overview**: zoom 10-12
-- **Neighborhood**: zoom 13-15
-- **Specific building/location**: zoom 16-18
-
-### Consider Non-Interactive Maps
-
-For purely illustrative maps, disable interactivity to reduce visual noise:
-
-```typescript
-const config = buildPointMapConfig({
-  location,
-  mapStyle: MAP_STYLE,
-  interactive: false,
+```ts title="examples/astro/site/src/content.config.ts"
+/** Whole map documents as YAML data entries, plus two fields of our own. */
+const maps = defineCollection({
+  loader: glob({ pattern: "*.yaml", base: "./src/collections/maps", generateId: stripExtension }),
+  schema: extendSchema(getMapSchema(), {
+    title: z.string(),
+    blurb: z.string(),
+  }),
 });
 ```
 
-## Next Steps
+Hand `<Map>` only the map document, not your extra fields, or each one
+reaches the map as an unknown key and logs a warning:
 
-- [Astro](/integrations/astro/): the `<Map>` and `<FullPageMap>` components,
-  loaders, and deploying to GitHub Pages
-- [Story maps in Astro](/integrations/astro-stories/): the `<Scrollytelling>`
-  component
-- [Layers & styling](/guides/layers/) for more complex visualizations
-- [Live data](/guides/live-data/) for real-time updates
-- [Examples](/examples/) for more patterns
+```astro
+---
+import { getCollection } from 'astro:content';
+import { Map } from '@maplibre-yaml/astro';
+
+const maps = await getCollection('maps');
+---
+{maps.map((entry) => {
+  const { title, blurb, ...mapDocument } = entry.data;
+  return (
+    <section>
+      <h2>{title}</h2>
+      <p>{blurb}</p>
+      <Map config={mapDocument} />
+    </section>
+  );
+})}
+```
+
+Stories work the same way with `getScrollytellingSchema()`
+([Stories as a content collection](/integrations/astro-stories/#stories-as-a-content-collection)).
+
+## Reference
+
+### Map builder functions
+
+Each builder returns a map document for `<Map config>`. All take `mapStyle`
+(a style URL or a Protomaps `{ pmtiles, flavor }` basemap), `id`, and
+`interactive` (default `true`; `false` makes a map that can't be panned or
+zoomed, for a purely illustrative map), plus a
+[global configuration](/integrations/astro/#global-configuration) as their
+second argument.
+
+```ts
+import {
+  buildPointMapConfig,
+  buildMultiPointMapConfig,
+  buildPolygonMapConfig,
+  buildRouteMapConfig,
+} from "@maplibre-yaml/astro";
+
+const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+
+// A marker, centred. zoom: this option, else location.zoom, else 12.
+buildPointMapConfig({ location: { coordinates: [-74.006, 40.7128], name: "NYC" }, mapStyle: MAP_STYLE });
+
+// Several markers, framed to fit them.
+buildMultiPointMapConfig({
+  locations: [
+    { coordinates: [-74.006, 40.7128], name: "NYC" },
+    { coordinates: [-87.6298, 41.8781], name: "Chicago" },
+  ],
+  mapStyle: MAP_STYLE,
+});
+
+// A filled polygon.
+buildPolygonMapConfig({
+  region: { coordinates: [[[-74.0, 40.7], [-73.9, 40.7], [-73.9, 40.8], [-74.0, 40.8], [-74.0, 40.7]]], name: "Manhattan" },
+  mapStyle: MAP_STYLE,
+});
+
+// A line with start and end markers, framed to fit it.
+buildRouteMapConfig({
+  route: { coordinates: [[-122.4194, 37.7749], [-118.2437, 34.0522]], name: "California trip" },
+  mapStyle: MAP_STYLE,
+});
+```
+
+`buildMultiPointMapConfig` and `buildRouteMapConfig` also take `padding`, the
+pixels kept between the data and the map edge (default 50; applied from
+`@maplibre-yaml/astro` 0.7.1). `buildMultiPolygonMapConfig` and
+`buildMultiLineStringMapConfig` take several polygons or lines,
+`buildFeatureMapConfig` a feature reference, and `buildMapConfigFromEntry`
+picks one for you ([above](#dynamic-map-per-collection-item)).
+
+`calculateCenter(coordinates)` and `calculateBounds(coordinates)` return the
+centre and the `[[west, south], [east, north]]` bounds of a list of
+`[lng, lat]` points, for building your own maps.
+
+### Feature reference details
+
+| Geometry | Built with |
+|------|-------------------|
+| `Point`, `MultiPoint` | `buildPointMapConfig`, `buildMultiPointMapConfig` |
+| `LineString`, `MultiLineString` | `buildRouteMapConfig`, `buildMultiLineStringMapConfig` (every segment) |
+| `Polygon`, `MultiPolygon` | `buildPolygonMapConfig`, `buildMultiPolygonMapConfig` (every polygon) |
+| `GeometryCollection` with one member | that member's builder |
+| `GeometryCollection` with several | an error: split it into separate features |
+
+**Match.** `featureId` matches the feature's top-level `id` (RFC 7946);
+`match: { property, equals }` matches a value in `properties` (as MapLibre's
+`promoteId` does). Zero or several matches throw `GeoJSONLoadError`, naming
+the file, its feature count and sample ids or values.
+
+**Overrides.** `name`, `description` and the style fields (`markerColor`,
+`fillColor`, `strokeColor`, `fillOpacity`, `color`, `width`, `zoom`) override
+the feature's properties. A style field that doesn't fit the geometry (say
+`markerColor` on a polygon) is ignored, with one console warning in
+`astro dev` per file, geometry and set of fields.
+
+**Paths.** `source` is resolved from the project root (`process.cwd()`).
+Paths that leave the project with `..`, symlinks that point outside it, and
+absolute paths are refused before anything is read, so frontmatter from an
+untrusted source can't read other files. To change that, pass `loadOptions`
+to `buildFeatureMapConfig`, `buildMapConfigFromEntry` or `loadFeatureFile`:
+
+```ts
+import type { FeatureLoadOptions } from "@maplibre-yaml/astro";
+
+const loadOptions: FeatureLoadOptions = {
+  projectRoot: "/absolute/path/to/astro/project", // when the build runs elsewhere, as in a monorepo
+  allowAbsolutePaths: true, // only when no frontmatter comes from untrusted content
+};
+```
+
+**Errors.** `InvalidFeatureRefError` means the reference has neither or both
+of `featureId` and `match`. `GeoJSONLoadError` covers everything else: a
+missing file or feature, malformed JSON, an unsupported geometry, a refused
+path, a file too large. Its `message` says what to fix, `filePath` is the
+resolved path, and `cause` the underlying error.
+
+**File size.** Up to 50 MB is read as is (with a one-time parse cost above
+10 MB), 50–100 MB adds a build warning, and over 100 MB is an error. For data
+that large, load it in the browser instead: a PMTiles, FlatGeobuf or
+GeoParquet file in `public/` is read in parts as the map needs it
+([Large data](/guides/cloud-native-data/)).
+
+**Lower level.** `loadFeatureFile(path)` and `findFeature(collection, ref)`
+load a file once and pick features from it yourself; `clearFeatureCache()`
+empties the cache between tests.
+
+## Troubleshooting
+
+Problems every map shares are in [Troubleshooting](/troubleshooting/).
+
+- ***Cannot read properties of undefined (reading 'get')*** and *Content
+  config not loaded* in `astro dev`: the content config imports from
+  `@maplibre-yaml/astro`; import from `@maplibre-yaml/astro/utils`.
+- ***missing required fields: mapStyle*** (`ConfigResolutionError`): pass
+  `mapStyle` to the builder or a global configuration as its second argument.
+- **Keys missing from a collection map** (no legend, a layer naming a source
+  that isn't there): the schema is hand-written; use `getMapSchema()`.
+- **A 500 with *ENOENT* on a server**: `feature_ref` under `output: 'server'`;
+  prerender the page.
+- **Entry ids end in `.md` on Astro 4**: the collection's `base` is inside
+  `src/content/` ([Supported versions](/integrations/astro/#supported-versions)).
+
+## Alternatives
+
+- **A few maps, no collection**: YAML files in `public/` shown with
+  `<Map src>` ([Astro](/integrations/astro/#basic-usage-with-map-component)).
+- **Your own component around `<ml-map>`**: pass `JSON.stringify(entry.data)`
+  as its `config` attribute ([Alternatives](/integrations/astro/#component-patterns)).

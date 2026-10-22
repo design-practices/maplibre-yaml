@@ -9,9 +9,9 @@ This page takes you from an empty folder to a map published on GitHub Pages:
 an Astro site, one YAML map file, and a GitHub Actions workflow that builds
 and publishes the site every time you push. It takes about 15 minutes.
 
-You need [Node.js](https://nodejs.org/) 22.22 or later (Astro 7's
-requirement; check with `node --version`), [git](https://git-scm.com/), and a
-GitHub account. Every command is shown for npm.
+You need [Node.js](https://nodejs.org/) 22.23.4 or later (what Astro 7
+currently asks for; check with `node --version`), [git](https://git-scm.com/),
+and a GitHub account. Every command is shown for npm.
 
 <Aside type="tip" title="No build step wanted?">
   A plain HTML page and a YAML file also publish on GitHub Pages as they are,
@@ -35,8 +35,9 @@ cd my-site
 npm install
 ```
 
-It writes everything in steps 2, 3 and 6 below for you. Read them to see
-what each file does, then continue at [step 4](#4-run-it-on-your-computer).
+It writes the files from steps 2, 3 and 6 below for you (its page puts the
+`<head>` in a small layout, `src/layouts/Layout.astro`). Read those steps to
+see what each file does, then continue at [step 4](#4-run-it-on-your-computer).
 
 </TabItem>
 <TabItem label="npm create astro">
@@ -280,7 +281,7 @@ From now on, every push to `main` publishes the site again.
 |---|---|
 | The map works locally but is blank or 404s on GitHub Pages | `base` must be the repository's name exactly, with its capitals: [404 on GitHub Pages](/guides/publishing/#works-locally-not-once-published) |
 | The *deploy* job fails, saying GitHub Pages isn't enabled or answering 404 | Settings → Pages → Source is not yet **GitHub Actions** (step 8, item 3); change it and run the workflow again |
-| `npm install` or `npm run build` stops with an engine or Node.js version error | Astro 7 needs Node.js 22.22 or later |
+| `npm install` or `npm run build` stops with an engine or Node.js version error | Astro 7 needs Node.js 22.23.4 or later |
 | An error card on the map | The card names the problem and the line; see [Troubleshooting](/troubleshooting/) |
 | Notes you saw on the map locally are gone on GitHub Pages | Expected: author hints show only while you develop. Add `debug` to `<Map>` to see them on the published page while you check it ([Map component API](/integrations/astro/#map-component-api)) |
 
