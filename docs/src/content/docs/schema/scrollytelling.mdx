@@ -1,564 +1,319 @@
 ---
-title: Story file reference
-description: Narrative-driven map stories with chapters and animations
+title: Writing a story file
+description: How a story file is put together — the map, the chapters, camera moves, layers and actions — and how a story map behaves as the reader scrolls.
 ---
 
-:::tip[Complete field reference]
-This guide explains the fields and shows them in use. For every key — type, default, allowed values, and description, generated from the schemas so it always matches the validator — see the generated [Scrollytelling reference](/reference/yaml/scrollytelling/).
-:::
+A story file is one YAML document, `type: scrollytelling`, that describes a
+story map: a map, and the chapters that scroll over it. Each chapter moves the
+camera, and can show or hide layers and run actions (this is often called
+*scrollytelling*). This page explains how to write one. To put it on a page,
+see [Story maps in plain HTML](/integrations/scrollytelling-html/) or
+[Story maps in Astro](/integrations/astro-stories/); every key, with its type
+and default, is in the generated
+[YAML reference for stories](/reference/yaml/scrollytelling/).
 
-Scrollytelling creates immersive narrative map experiences where the map transitions between chapters as users scroll through content. Perfect for data journalism, storytelling, and guided tours.
+## Quick start
 
-## Showing a story
+A story needs a `type`, an `id`, the map's `config:` and at least one chapter.
+This one draws the past week's earthquakes from the USGS feed and visits two
+places:
 
-A story is a YAML file. One engine shows it, from `@maplibre-yaml/core`, in
-whichever kind of site you have.
-
-**A plain HTML page** (no build step; maplibre-yaml from a CDN): the
-`<ml-scrollytelling>` element. Load `@maplibre-yaml/core/register` as in
-[Scrollytelling in plain HTML](/integrations/scrollytelling-html/), then:
-
-```html
-<ml-scrollytelling src="story.yaml"></ml-scrollytelling>
-```
-
-The YAML can also sit inline in a `<script type="text/yaml">` child, or be
-assigned from JavaScript (`element.story = {...}`).
-
-**An Astro site**: the [`<Scrollytelling>`](/integrations/astro-stories/)
-component, which renders the same element. Load and validate the story at build
-time, or let the browser fetch it:
-
-```astro
----
-import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
-const story = await loadScrollytellingConfig('./src/stories/my-story.yaml');
----
-<Scrollytelling config={story} />
-<!-- or, from public/: <Scrollytelling src="/stories/my-story.yaml" /> -->
-```
-
-Both show the same thing for the same file: a sticky map with the chapters
-scrolling over it, the camera moves, layer changes and actions below, the
-chapter rail, themes, and reduced-motion handling. Check a story without a
-browser with `npx maplibre-yaml validate story.yaml`.
-
-## Scrollytelling Block Structure
-
-A story file is a standalone YAML document with `type: scrollytelling` at the
-top level. That is what `<ml-scrollytelling src>`, `loadScrollytellingConfig`,
-`<Scrollytelling src>`, a stories content collection and
-`npx maplibre-yaml validate` all read, and
-every full example on this page is written that way, ready to paste into a
-file of its own. (Only inside a site file's `pages:` → `blocks:` list is a
-story a list item, `- type: scrollytelling`; see
-[Simple Story](#simple-story).)
-
-```yaml no-validate
+```yaml title="story.yaml"
 type: scrollytelling
-id: story
-config:              # Base map configuration
-  center: [lng, lat]
-  zoom: 2
-  mapStyle: "..."
-theme: light         # Visual theme
-showMarkers: false   # Chapter navigation rail
-layers: [...]        # Persistent layers
-chapters: [...]      # Story chapters (required)
-footer: "..."        # Optional footer HTML
-# Optional, as on a type: map document: sources, markers, legend,
-# state + parameters, images, controls, terrain, sky, projection, light
+id: quakes-this-week
+
+# The map when the page opens: its basemap and camera.
+config:
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  center: [0, 20]
+  zoom: 1.5
+
+# Layers drawn for the whole story.
+layers:
+  - id: quakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson"
+    paint:
+      circle-radius: 5
+      circle-color: "#dc2626"
+
+chapters:
+  - id: world
+    title: "A week of earthquakes"
+    description: "<p>Every earthquake of magnitude 4.5 or more in the past seven days.</p>"
+    center: [0, 20]
+    zoom: 1.5
+  - id: japan
+    title: "Japan"
+    description: "<p>Four plates meet under Japan.</p>"
+    center: [138, 37]
+    zoom: 4.5
 ```
 
-## Scrollytelling Properties
+Show it with `<ml-scrollytelling src="story.yaml">` or the Astro
+`<Scrollytelling>` component. The map opens on the whole world; scroll and it
+flies to Japan as the second card reaches the middle of the screen.
 
-| Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `type` | `"scrollytelling"` | Yes | - | Block type |
-| `id` | string | Yes | - | Unique identifier |
-| `config` | object | Yes | - | Base map configuration (its `locale:` also translates the story's own text: the legend button, the chapter rail — see [Accessibility & languages](/guides/accessibility-languages/)) |
-| `chapters` | array | Yes | - | Story chapters (min: 1) |
-| `title` | string | No | - | The story map's name for screen readers (default: "Map") |
-| `description` | string | No | - | What the story map shows, in a sentence or two, read by screen readers |
-| `theme` | `"light"` \| `"dark"` | No | `"light"` | Visual theme |
-| `showMarkers` | boolean | No | `false` | Show a navigation rail: one dot per chapter at the right edge of the page, which readers can click to jump to a chapter. It does not put markers on the map |
-| `markerColor` | string | No | - | Fill color of the rail's dots. Unset, the dots are white with a dark outline and the current one is larger and dark, which stand out on any basemap |
-| `cameraOffset` | boolean | No | `true` | Offset the camera so each chapter's `center` isn't under its card (beside a left/right card, above a centred one, above the card on a phone). `false` centres it in the whole map. A chapter's own `padding` always wins |
-| `layers` | array | No | `[]` | Persistent layers |
-| `footer` | string | No | - | Footer HTML content |
-| `legend` | object or `false` | No | - | The story's legend, pinned above the cards (see [The legend](#the-legend)): the map legend's `title` and `items`, an optional `position`, and `collapsed: auto` (default), `true` or `false`. A story with a `classify:` layer, or a layer with its own `legend:` entry, gets one without it; `false` turns it off |
-| `sources`, `markers`, `state`, `parameters`, `popups`, `images`, `controls`, `terrain`, `sky`, `projection`, `light` | - | No | - | The story's map takes every map-level key a [`type: map` document](/schema/map-config/) does, with the same schema (see [Map-level keys](#map-level-keys)) |
+- `id` names the story. Keep it unique on the page.
+- `config:` is the map's starting point, as in any
+  [map document](/getting-started/first-map/): `mapStyle` (the basemap),
+  `center` and `zoom`. Its other keys (`maxZoom`, `locale`, gestures) work too.
+- `layers:` are drawn for the whole story. Chapters show, hide and restyle
+  them.
+- Each chapter needs an `id`, a `title`, a `center` and a `zoom`.
 
-## Chapters
+Check a story without a browser with `npx maplibre-yaml validate story.yaml`.
+Each problem is listed with its line number and, for a misspelt key, a
+did-you-mean (`centre` → `center`). In the browser, the same list shows in
+place of the story.
 
-Each chapter represents one section of the narrative. As users scroll, the map smoothly transitions between chapters.
+## Common tasks
 
-### Chapter Structure
+### Write a chapter's text, pictures and video \{#media-in-chapters}
+
+- `description` is HTML, shown as written: `<p>`, `<strong>`,
+  `<a href="…">`. Markdown is not converted, so `**bold**` shows literally.
+- `image:` and `video:` show above the text. Give a full `https://` URL, or
+  the path of a file on your site: on an Astro or Vite site, a file in
+  `public/images/fault.jpg` is `/images/fault.jpg`. Images load only as the
+  reader reaches them, and are never taller than 40% of the screen.
+
+```yaml
+chapters:
+  - id: fuji
+    title: "Mount Fuji"
+    description: "<p>Last erupted in <strong>1707</strong>.</p>"
+    image: "/images/fuji.jpg"
+    center: [138.73, 35.36]
+    zoom: 9
+```
+
+A chapter with `hidden: true` has no card: the map moves, and the reader sees
+nothing but the map until the next chapter.
+
+### Place the card \{#content-alignment}
+
+`alignment:` puts the card on the `left`, on the `right`, in the `center`
+(the default), or across the `full` width. The camera is offset so the
+chapter's `center` isn't hidden behind its card: beside a left or right card,
+above a centred or full-width one. On phones every card sits in the lower part
+of the screen, and the chapter's `center` shows above it.
 
 ```yaml
 chapters:
   - id: intro
     title: "Introduction"
-    description: "Welcome to our story."
-    center: [-74.006, 40.7128]
-    zoom: 12
-    pitch: 0
-    bearing: 0
-    animation: flyTo
-    alignment: center
-```
-
-### Required Chapter Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | string | Unique chapter identifier |
-| `title` | string | Chapter title |
-| `center` | [number, number] | Map center [longitude, latitude] |
-| `zoom` | number | Zoom level (0-24) |
-
-Each chapter needs its own `id`: copying a chapter and keeping its `id` is a
-validation error naming both lines (`Two chapters have id "the-met" (lines 96
-and 144)`). Give layers their own ids too: a repeated layer id warns, and the
-map draws the first layer with that id and skips the repeat. A chapter's `layers.show` /
-`layers.hide` or action `layer:` that is a near miss of one of the story's
-layers (`walking` for `walk`) gets a did-you-mean warning; a name unlike any
-of them is taken to be a basemap layer and is not flagged.
-
-### Optional Chapter Properties
-
-#### Content
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `description` | string | Chapter text as HTML (`<p>`, `<strong>`, `<a href>`…). Markdown is not converted: `**bold**` shows literally |
-| `image` | string | Hero image: a full `https://` URL, or a path to a file in your site's `public/` folder such as `/images/fuji.jpg` |
-| `video` | string | Video, given the same way as `image` |
-
-#### Camera
-
-| Property | Type | Default | Range | Description |
-|----------|------|---------|-------|-------------|
-| `pitch` | number | `0` | 0-85 | Camera tilt angle |
-| `bearing` | number | `0` | -180 to 180 | Camera rotation |
-| `speed` | number | `0.6` | 0-2 | Animation speed multiplier |
-| `curve` | number | `1` | 0-2 | Animation curve (0=linear, 1=default, 2=steep) |
-| `animation` | string | `"flyTo"` | - | Animation type: `flyTo`, `easeTo`, `jumpTo` |
-| `rotateAnimation` | boolean | `false` | - | Continuous rotation |
-| `spinGlobe` | boolean | `false` | - | Slowly pan the camera westward while the chapter is active (paused under `prefers-reduced-motion`). Globe itself is the map-level `projection: { type: globe }` |
-
-#### Layout
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `alignment` | string | `"center"` | Content position: `left`, `right`, `center`, `full` |
-| `hidden` | boolean | `false` | Hide chapter content (map-only) |
-| `padding` | number or `{ top, right, bottom, left }` | — | Camera padding in pixels for this chapter, used as written instead of the automatic offset that keeps `center` clear of the card |
-
-## Basic Example
-
-```yaml
-type: scrollytelling
-id: basic-story
-config:
-  center: [-74.006, 40.7128]
-  zoom: 10
-  mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-chapters:
-  - id: intro
-    title: "Welcome to New York"
-    description: "Our story begins in Manhattan."
-    center: [-74.006, 40.7128]
-    zoom: 12
-
-  - id: downtown
-    title: "Downtown Manhattan"
-    description: "The heart of the financial district."
-    center: [-74.0099, 40.7061]
-    zoom: 14
-
-  - id: brooklyn
-    title: "Brooklyn Bridge"
-    description: "Crossing the East River."
-    center: [-73.9969, 40.7061]
-    zoom: 15
-```
-
-## Animation Types
-
-### flyTo (Default)
-
-Smooth, curved flight between locations:
-
-```yaml
-- id: flight
-  title: "Flying Across Country"
-  center: [-118.2437, 34.0522]
-  zoom: 10
-  animation: flyTo
-  speed: 0.8
-  curve: 1.5
-```
-
-### easeTo
-
-Linear transition:
-
-```yaml
-- id: smooth
-  title: "Smooth Transition"
-  center: [-74.006, 40.7128]
-  zoom: 12
-  animation: easeTo
-```
-
-### jumpTo
-
-Instant transition:
-
-```yaml
-- id: instant
-  title: "Instant Jump"
-  center: [-74.006, 40.7128]
-  zoom: 12
-  animation: jumpTo
-```
-
-## 3D Perspectives
-
-Create dramatic camera angles:
-
-```yaml
-- id: 3d-view
-  title: "Bird's Eye View"
-  description: "See the city from above."
-  center: [-74.006, 40.7128]
-  zoom: 16
-  pitch: 60
-  bearing: -45
-  speed: 0.4
-```
-
-## Content Alignment
-
-Control where chapter content appears.
-
-### Left Alignment
-
-```yaml
-- id: left-aligned
-  title: "Story on Left"
-  description: "Content appears on the left side."
-  center: [-74.006, 40.7128]
-  zoom: 12
-  alignment: left
-```
-
-### Right Alignment
-
-```yaml
-- id: right-aligned
-  title: "Story on Right"
-  description: "Content appears on the right side."
-  center: [-74.006, 40.7128]
-  zoom: 12
-  alignment: right
-```
-
-### Center Alignment
-
-```yaml
-- id: centered
-  title: "Centered Story"
-  description: "Content centered on screen."
-  center: [-74.006, 40.7128]
-  zoom: 12
-  alignment: center
-```
-
-### Full Width
-
-```yaml
-- id: fullwidth
-  title: "Immersive Experience"
-  description: "Content spans full width."
-  center: [-74.006, 40.7128]
-  zoom: 12
-  alignment: full
-```
-
-## Media in Chapters
-
-### Hero Images
-
-`image` and `video` take a full `https://` URL, or a path to a file you put in
-your site's `public/` folder: `public/images/vista.jpg` is
-`/images/vista.jpg`.
-
-```yaml
-- id: with-image
-  title: "Beautiful Vista"
-  description: "A stunning view of the landscape."
-  image: "/images/vista.jpg"
-  center: [-120, 35]
-  zoom: 10
-```
-
-### Videos
-
-```yaml
-- id: with-video
-  title: "City Life"
-  description: "Experience the urban energy."
-  video: "https://example.com/city-timelapse.mp4"
-  center: [-74.006, 40.7128]
-  zoom: 14
-```
-
-## Layer Control
-
-Show and hide layers during chapters.
-
-```yaml
-chapters:
-  - id: overview
-    title: "Regional Overview"
-    center: [-120, 35]
-    zoom: 6
-    layers:
-      show:
-        - all-earthquakes
-      hide:
-        - fault-lines
-
-  - id: detail
-    title: "Fault Lines"
-    center: [-118, 34]
-    zoom: 10
-    layers:
-      show:
-        - fault-lines
-        - all-earthquakes
-```
-
-## Chapter Actions
-
-Execute actions when entering or exiting chapters.
-
-### Action Types
-
-| Action | Description |
-|--------|-------------|
-| `setFilter` | Update layer filter |
-| `setPaintProperty` | Update layer paint property |
-| `setLayoutProperty` | Update layer layout property |
-| `flyTo` | Fly the camera to the `options` given (`center`, `zoom`, …) |
-| `easeTo` | Ease the camera to the `options` given |
-| `fitBounds` | Fit map to bounds |
-| `custom` | Custom action (application-defined) |
-
-### Set Filter
-
-```yaml
-- id: filtered
-  title: "High Magnitude Events"
-  center: [-120, 35]
-  zoom: 6
-  onChapterEnter:
-    - action: setFilter
-      layer: earthquakes
-      filter: [">=", ["get", "magnitude"], 5]
-  onChapterExit:
-    - action: setFilter
-      layer: earthquakes
-      filter: null  # Clear filter
-```
-
-### Set Paint Property
-
-```yaml
-- id: highlight
-  title: "Highlighted Buildings"
-  center: [-74.006, 40.7128]
-  zoom: 16
-  onChapterEnter:
-    - action: setPaintProperty
-      layer: buildings
-      property: fill-extrusion-color
-      value: "#ff0000"
-  onChapterExit:
-    - action: setPaintProperty
-      layer: buildings
-      property: fill-extrusion-color
-      value: "#aaaaaa"
-```
-
-### Set Layout Property
-
-```yaml
-- id: show-labels
-  title: "Points of Interest"
-  center: [-74.006, 40.7128]
-  zoom: 14
-  onChapterEnter:
-    - action: setLayoutProperty
-      layer: poi-labels
-      property: visibility
-      value: visible
-  onChapterExit:
-    - action: setLayoutProperty
-      layer: poi-labels
-      property: visibility
-      value: none
-```
-
-### Fit Bounds
-
-```yaml
-- id: bounded
-  title: "City Limits"
-  center: [-74.006, 40.7128]
-  zoom: 10
-  onChapterEnter:
-    - action: fitBounds
-      bounds: [-74.3, 40.5, -73.7, 40.9]
-      options:
-        padding: 50
-        duration: 2000
-```
-
-`bounds` takes either of MapLibre's forms: four numbers
-`[west, south, east, north]`, or two corners `[[west, south], [east, north]]`.
-
-## Themes
-
-### Light Theme (Default)
-
-```yaml
-type: scrollytelling
-id: light-story
-theme: light
-config:
-  center: [0, 20]
-  zoom: 2
-  mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-chapters:
-  - id: start
-    title: "Light cards on a light map"
     center: [0, 20]
-    zoom: 2
-```
-
-### Dark Theme
-
-```yaml
-type: scrollytelling
-id: dark-story
-theme: dark
-config:
-  center: [0, 20]
-  zoom: 2
-  mapStyle: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-chapters:
-  - id: start
-    title: "Dark cards on a dark map"
-    center: [0, 20]
-    zoom: 2
-```
-
-## Chapter Navigation Rail
-
-`showMarkers: true` adds a navigation rail: a column of dots at the right edge
-of the map, one per chapter. The active chapter's dot is highlighted, and
-clicking a dot (or focusing it and pressing Enter) scrolls to that chapter; the
-arrow keys, Home and End move along the rail.
-The dots are white with a dark outline, and the current chapter's dot is
-larger and filled dark with a white ring, so the rail stands out on light and
-dark basemaps alike and the current chapter is marked by size and fill, not
-colour alone. `markerColor` fills the dots with a color of your own; the dark
-outline stays. Despite the name, nothing is drawn on the map itself; to mark
-chapter locations on the map, add a layer.
-
-```yaml
-type: scrollytelling
-id: marked-story
-showMarkers: true
-markerColor: "#ff0000"
-config:
-  center: [-96, 37]
-  zoom: 3
-  mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-chapters:
-  - id: location1
-    title: "First Location"
-    center: [-74, 40]
-    zoom: 12
-
-  - id: location2
-    title: "Second Location"
-    center: [-118, 34]
-    zoom: 12
-```
-
-## Persistent Layers
-
-Layers that remain visible throughout the story.
-
-```yaml
-type: scrollytelling
-id: story-with-layers
-config:
-  center: [0, 20]
-  zoom: 2
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: base-data
-    type: circle
-    source:
-      type: geojson
-      url: "https://example.com/data.geojson"
-    paint:
-      circle-radius: 6
-      circle-color: "#888888"
-      circle-opacity: 0.5
-chapters:
-  - id: chapter1
-    title: "First Chapter"
-    center: [0, 20]
-    zoom: 3
-
-  - id: chapter2
-    title: "Second Chapter"
-    center: [0, 40]
+    zoom: 1.5
+    alignment: full
+  - id: andes
+    title: "The Andes"
+    center: [-70, -20]
     zoom: 4
+    alignment: left
 ```
 
-## Map-level keys
+`cameraOffset: false`, at the top of the file, turns the offset off: each
+`center` is then the middle of the whole map. A chapter's own `padding:` (in
+pixels, one number or `{ top, right, bottom, left }`) replaces the offset for
+that chapter.
 
-A story's map is an ordinary map document, so everything a
-[`type: map` document](/schema/map-config/) takes at its top level works in a
-story too: named `sources:` shared by several layers, standalone `markers:`
-with popups, a `legend:` (pinned above the cards, see [The legend](#the-legend)), the params panel (`state:` + `parameters:`),
-`images:`, `controls:`, and the 3D and globe keys. They are validated with the
-same schema, and a story layer's source takes the
-[GeoJSON sugar](/schema/sources/#geojson-sugar) shorthands (`location:`,
-`locations:`, `region:`, `route:`).
+### Move the camera \{#animation-types}
+
+Each chapter sets the camera with `center` and `zoom`, and optionally `pitch`
+(tilt, 0–85) and `bearing` (rotation, −180 to 180). `animation:` says how the
+map gets there:
+
+- `flyTo` (the default) zooms out, travels and zooms back in, in an arc.
+  `speed` (default 0.6) and `curve` (default 1) tune the arc.
+- `easeTo` moves straight there, with no zoom-out arc. Use it between nearby
+  places.
+- `jumpTo` cuts there at once.
+
+```yaml
+chapters:
+  - id: tokyo
+    title: "Tokyo from above"
+    center: [139.69, 35.69]
+    zoom: 12
+    pitch: 60
+    bearing: -30
+    animation: easeTo
+```
+
+While a chapter is active, `rotateAnimation: true` slowly turns the camera,
+and `spinGlobe: true` slowly pans it westward (for a globe, set
+`projection: { type: globe }` at the top of the file). Both stop at the next
+chapter. When the reader's system asks for reduced motion, every camera move
+is instant and neither runs.
+
+### Show and hide layers \{#layer-control}
+
+`layers: { show: [...], hide: [...] }` on a chapter changes which layers are
+visible, by layer `id`. The names can also be the basemap's own layers.
+
+```yaml
+chapters:
+  - id: plates
+    title: "Plate boundaries"
+    center: [140, 20]
+    zoom: 3
+    layers:
+      show: [plate-boundaries]
+      hide: [quakes]
+```
+
+A chapter's changes stay until another chapter undoes them. Give each layer
+its starting state in the layer itself: a layer that a later chapter reveals
+starts with `layout: { visibility: none }`. A name that is a near miss of one
+of the story's layers (`quake` for `quakes`) gets a did-you-mean warning; a
+name unlike any of them is taken to be a basemap layer.
+
+### Run actions as a chapter starts or ends \{#chapter-actions}
+
+`onChapterEnter` runs when a chapter becomes active, after its camera move and
+layer changes. `onChapterExit` runs when the reader scrolls past it, before
+the next chapter's camera move. Each is a list of actions:
+
+| `action` | What it does | Its fields |
+|---|---|---|
+| `setFilter` | Filter a layer's features | `layer`, `filter` (an expression, or `null` to clear it) |
+| `setPaintProperty` | Change a paint property | `layer`, `property`, `value` |
+| `setLayoutProperty` | Change a layout property | `layer`, `property`, `value` |
+| `flyTo` | Fly the camera | `options`: `center`, `zoom`, `pitch`, `bearing`, `duration`, … |
+| `easeTo` | Ease the camera, with no arc | `options`, as for `flyTo` |
+| `fitBounds` | Frame an area | `bounds`: `[west, south, east, north]` or `[[west, south], [east, north]]`; `options`: `padding`, `duration`, … |
+| `custom` | Run nothing itself; tells your page script | `options`: anything your script reads |
+
+```yaml
+chapters:
+  - id: strongest
+    title: "The strongest"
+    center: [0, 20]
+    zoom: 1.5
+    onChapterEnter:
+      - action: setFilter
+        layer: quakes
+        filter: [">=", ["get", "mag"], 6]
+      - action: setPaintProperty
+        layer: quakes
+        property: circle-radius
+        value: 10
+    onChapterExit:
+      - action: setFilter
+        layer: quakes
+        filter: null
+      - action: setPaintProperty
+        layer: quakes
+        property: circle-radius
+        value: 5
+```
+
+An action that names a layer the map doesn't have does nothing, and the map's
+notice says so while you develop. Under reduced motion the camera actions are
+instant, unless their `options` set `essential: true`.
+
+### Run your own code from a chapter \{#custom-actions}
+
+A `custom` action runs nothing itself. The story element dispatches an
+`ml-scrollytelling:action` event with the action, so a script on the page can
+do anything with it:
+
+```yaml
+chapters:
+  - id: deep
+    title: "Deep earthquakes"
+    center: [-70, -20]
+    zoom: 4
+    callback: deep-quakes
+    onChapterEnter:
+      - action: custom
+        options: { banner: "Deeper than 300 km" }
+```
+
+```js
+const banner = document.getElementById("banner");
+document.addEventListener("ml-scrollytelling:action", (event) => {
+  const { action, phase } = event.detail; // also: chapterId, and map (the MapLibre map)
+  if (phase === "enter") banner.textContent = action.options.banner;
+});
+```
+
+`callback:` is a name you choose. It does nothing by itself: it arrives as
+`callback` on the `ml-scrollytelling:chapter` event, which fires on every
+chapter change. Both events are in the
+[`<ml-scrollytelling>` reference](/reference/elements/#ml-scrollytelling-events).
+
+### Add the chapter rail \{#chapter-navigation-rail}
+
+`showMarkers: true` adds a column of dots at the right edge of the map, one
+per chapter. Despite the key's name, nothing is drawn on the map itself; to
+mark chapter places on the map, add a layer. Readers click a dot to jump to
+its chapter, or Tab to it and use the arrow keys, Home and End. The current
+chapter's dot is larger and filled, so it stands out by more than colour.
+`markerColor` fills the dots with a colour of your own.
+
+```yaml no-validate
+showMarkers: true
+markerColor: "#f97316"
+```
+
+### The legend
+
+A story's legend is pinned: it stays in one corner, above the chapter cards,
+while the story scrolls. Write it as on a map, with `title` and `items`:
+
+```yaml no-validate
+legend:
+  title: Earthquakes
+  collapsed: auto        # auto (the default), true or false
+  # position: top-right  # optional; the default follows the cards
+  items:
+    - { color: "#dc2626", label: "Magnitude 4.5 or more", shape: circle }
+```
+
+- **Corner.** `position:` if you set one. Otherwise top-left (away from the
+  chapter rail), or top-right on a wide screen whose cards are all
+  `alignment: left`.
+- **Open, or a button.** With `collapsed: auto` the legend is a "Legend"
+  button on phones, and on wide screens where cards pass its corner (cards on
+  both sides, or full-width). It is open everywhere else. `true` always starts
+  it as a button, `false` always open. The button's word is translated by
+  `maplibre-yaml.Legend.Title` in `config.locale`.
+- **The panel.** The button opens the legend above the cards. The page stays
+  usable; Escape or (on a phone) a tap outside closes it.
+
+A story with a [`classify:`](/guides/thematic-maps/) layer, or a layer with
+its own `legend:` entry, gets a legend without a `legend:` block, by the same
+rules. `legend: false` at the top turns it off. A `slot="legend"` child of the
+story element fills the panel with your own markup instead.
+
+### Use the rest of a map document \{#map-level-keys}
+
+A story's map is an ordinary map document, so the top-level keys a
+[`type: map` document](/schema/map-config/) takes work here too, with the same
+rules: `title:` and `description:` (the map's name and summary for screen
+readers), named `sources:`, standalone `markers:` and `popups:`,
+`controls:`, `images:`, the params panel (`state:` and `parameters:`), and
+`terrain:`, `sky:`, `light:` and `projection:`. Write them at the top of the
+story file, not under `config:`.
 
 ```yaml
 type: scrollytelling
 id: harbour-tour
+title: "New York harbour"
 config:
-  center: [-74.01, 40.70]
-  zoom: 12
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  center: [-74.02, 40.69]
+  zoom: 12
 sources:
   piers:
     type: geojson
     locations:
-      - coordinates: [-74.017, 40.703]
-        name: Battery Park
-      - coordinates: [-73.997, 40.705]
-        name: South Street Seaport
+      - { coordinates: [-74.017, 40.703], name: Battery Park }
+      - { coordinates: [-73.997, 40.705], name: South Street Seaport }
 layers:
   - id: pier-dots
     type: circle
@@ -572,10 +327,6 @@ markers:
     popup:
       - h3:
           - str: Statue of Liberty
-legend:
-  title: Harbour tour
-  items:
-    - { color: "#0ea5e9", label: Pier, shape: circle }
 chapters:
   - id: piers
     title: "The piers"
@@ -587,346 +338,161 @@ chapters:
     zoom: 14
 ```
 
-The story map's own pan and zoom gestures start off, so the reader's wheel and
-finger scroll the story. Markers, popups, the legend and the params panel stay
-clickable. To let readers move the map, set the gesture in `config:`
-(`scrollZoom: true`, `dragPan: true`, ...), as on any map.
+The story map's own pan and zoom gestures start off, so the reader's wheel
+and finger scroll the story. Markers, popups, the legend and the params panel
+stay clickable. To let readers move the map, turn a gesture back on in
+`config:` (`scrollZoom: true`, `dragPan: true`).
 
-## The legend
+### Theme, footer and the container \{#themes}
 
-A story's legend is pinned: it stays in one corner, above the chapter cards,
-and never moves while the story scrolls.
-
-- **Corner.** `position:` if you set one. Otherwise top-left (opposite the
-  chapter rail), or top-right on a wide screen whose cards are all
-  `alignment: left`.
-- **Open or a button.** With `collapsed: auto` (the default) the legend is a
-  compact button labelled "Legend" (its `title` heads the open panel; the
-  button's word is `maplibre-yaml.Legend.Title` in `config.locale`) on phones,
-  upright or on their side, and on wide screens where cards pass its corner
-  (cards on both sides, or full-width). It is open everywhere else, where no
-  card ever reaches it. `collapsed: true` always starts it as a button;
-  `collapsed: false` always starts it open.
-- **Opening it.** The button opens the legend as a panel above the cards. It
-  is not a dialog: the map and the page stay usable, Escape closes it and puts
-  focus back on the button, and on a phone a tap outside closes it. A long
-  legend scrolls inside the panel.
+- `theme: dark` gives the cards light text on a dark background; `light` is
+  the default.
+- `footer:` is HTML shown after the last chapter.
+- `className:` adds classes to the story element, and `style:` adds inline
+  CSS to it, for example `style: "--ml-scrolly-map-height: 80vh"`. The class
+  names and custom properties you can style are in
+  [Styling](/integrations/scrollytelling-html/#styling).
 
 ```yaml no-validate
-legend:
-  title: Harbour tour
-  collapsed: auto        # true | false | auto
-  # position: top-right  # optional; the default follows the cards
-  items:
-    - { color: "#0ea5e9", label: Pier, shape: circle }
+theme: dark
+className: quake-story
+footer: "<p>Data: <a href=\"https://earthquake.usgs.gov/\">USGS</a></p>"
 ```
 
-A `slot="legend"` child of the story fills the same panel with your own markup
-instead of the entries.
+## How a story behaves
 
-A story with a [`classify:`](/guides/thematic-maps/) layer, or a layer with its
-own `legend: { label, color }` entry, pins a legend even without a `legend:`
-block, by the same rules (a "Legend" button where cards pass its corner, open
-elsewhere), listing the layer's classes or entry; `legend: false` at the top
-level turns it off, and `legend: false` on a layer leaves that layer out. The
-story's map never draws a second legend under the cards.
+- **The active chapter** is the one whose card is on screen and nearest the
+  middle of it, recomputed as the page scrolls. The story starts reacting once
+  its first chapter reaches the middle 20% of the screen. On phones the map
+  moves on once the next card is on screen.
+- **On load**, the map opens on the `config:` camera, then at once applies the
+  chapter in that middle zone. On a page that starts with the story, the first
+  chapter's camera, `layers` and `onChapterEnter` actions all run.
+- **Changing chapter** runs the previous chapter's `onChapterExit` actions,
+  moves the camera, applies `layers`, then runs `onChapterEnter`.
+- **Reading comes first.** The wheel and touch scroll the story, not the map.
+  The rail, legend, markers, popups and slots stay clickable. Nothing on the
+  map moves with the scroll: the legend, controls and corner slots stay in
+  their corners, under the cards.
+- **Reduced motion.** Cards stop animating, every camera move and camera
+  action is instant (an action whose `options` set `essential: true` still
+  animates), and `rotateAnimation` and `spinGlobe` are off.
+- **Problems.** A story that fails to load or validate shows one card listing
+  each problem with its line number, instead of the story. A story map that is
+  slow to start shows "Loading map…" until its basemap draws.
 
-Everything else on the map stays put too. MapLibre's controls (scale bar,
-attribution, zoom buttons), corner slots, the params panel and the on-map
-notice sit in their corners under the cards: a card passes over a corner while
-it scrolls by and rests clear of the bottom corners. On phones the attribution
-stays a compact (i) button.
+## A complete example \{#complete-examples}
 
-## Footer
+The past week's earthquakes, coloured by magnitude, with the chapter rail, a
+legend and a chapter that filters to the strongest:
 
-Add footer content after all chapters.
-
-```yaml
-type: scrollytelling
-id: story
-config:
-  center: [0, 0]
-  zoom: 2
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-chapters:
-  - id: only
-    title: "The only chapter"
-    center: [0, 0]
-    zoom: 2
-footer: |
-  <h3>Data Sources</h3>
-  <p>Data from USGS Earthquake Catalog</p>
-  <p>Created with maplibre-yaml</p>
-  <p>&copy; 2024</p>
-```
-
-## Complete Examples
-
-### Simple Story
-
-A story can also be one block of a multi-page site file (a root document with
-`pages:`). There, and only there, it is a list item under `blocks:`:
-
-```yaml
-pages:
-  - path: "/story"
-    title: "Our Journey"
-    blocks:
-      - type: scrollytelling
-        id: journey
-        config:
-          center: [0, 20]
-          zoom: 2
-          mapStyle: "https://demotiles.maplibre.org/style.json"
-        chapters:
-          - id: start
-            title: "The Beginning"
-            description: "Our story starts here."
-            center: [0, 20]
-            zoom: 2
-
-          - id: destination
-            title: "The Destination"
-            description: "And ends here."
-            center: [100, 30]
-            zoom: 5
-```
-
-### Earthquake Story
-
-```yaml
+```yaml title="story.yaml"
 type: scrollytelling
 id: earthquake-story
+title: "A week of earthquakes"
 theme: dark
 showMarkers: true
-markerColor: "#e74c3c"
+markerColor: "#f97316"
 config:
-  center: [-120, 35]
-  zoom: 4
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  center: [0, 20]
+  zoom: 1.5
+legend:
+  title: Magnitude
+  items:
+    - { color: "#fbbf24", label: "4.5 to 6", shape: circle }
+    - { color: "#dc2626", label: "6 or more", shape: circle }
 layers:
-  - id: earthquakes
+  - id: quakes
     type: circle
     source:
       type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson"
     paint:
-      circle-radius: 6
-      circle-color:
-        - interpolate
-        - ["linear"]
-        - ["get", "mag"]
-        - 0
-        - "#fef3c7"
-        - 8
-        - "#dc2626"
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 4.5, 4, 8, 16]
+      circle-color: ["step", ["get", "mag"], "#fbbf24", 6, "#dc2626"]
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
 chapters:
-  - id: intro
-    title: "Global Seismic Activity"
-    description: "Earthquakes around the world in the past week."
+  - id: world
+    title: "A week of earthquakes"
+    description: "<p>Every earthquake of magnitude 4.5 or more in the past seven days.</p>"
     center: [0, 20]
+    zoom: 1.5
+    alignment: full
+  - id: ring-of-fire
+    title: "The Ring of Fire"
+    description: "<p>Most of them follow the edges of the Pacific.</p>"
+    center: [160, 10]
     zoom: 2
-
-  - id: california
-    title: "California"
-    description: "High seismic activity along the San Andreas Fault."
-    center: [-119, 37]
-    zoom: 6
-    pitch: 0
-
-  - id: la
-    title: "Los Angeles"
-    description: "Urban areas at risk."
-    center: [-118.2437, 34.0522]
-    zoom: 10
-    pitch: 45
-    bearing: 30
-    layers:
-      show:
-        - earthquakes
-
-  - id: major
-    title: "Major Events"
-    description: "Focusing on significant earthquakes."
-    center: [-120, 35]
-    zoom: 6
+    alignment: left
+  - id: japan
+    title: "Japan"
+    description: "<p>Four plates meet under Japan.</p>"
+    center: [138, 37]
+    zoom: 4.5
+    pitch: 40
+    alignment: right
+  - id: strongest
+    title: "The strongest"
+    description: "<p>Only magnitude 6 and above.</p>"
+    center: [0, 20]
+    zoom: 1.5
     onChapterEnter:
       - action: setFilter
-        layer: earthquakes
-        filter: [">=", ["get", "mag"], 5]
+        layer: quakes
+        filter: [">=", ["get", "mag"], 6]
     onChapterExit:
       - action: setFilter
-        layer: earthquakes
+        layer: quakes
         filter: null
-footer: |
-  <p><strong>Data Source:</strong> USGS Earthquake Catalog</p>
-  <p>Updated in real-time</p>
+footer: "<p>Data: USGS earthquake feed, updated every minute.</p>"
 ```
 
-### City Tour
+The repository's
+[`examples/scrollytelling`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/scrollytelling)
+story uses every kind of action, on a plain HTML page.
 
-```yaml
-type: scrollytelling
-id: city-tour
-theme: light
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  mapStyle: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-chapters:
-  - id: intro
-    title: "Welcome to New York"
-    description: "Join us on a tour of the greatest city on Earth."
-    image: "/images/nyc-skyline.jpg"
-    center: [-74.006, 40.7128]
-    zoom: 11
-    alignment: center
+## Reference
 
-  - id: downtown
-    title: "Financial District"
-    description: "The heart of global finance."
-    center: [-74.0099, 40.7061]
-    zoom: 15
-    pitch: 60
-    bearing: -45
-    alignment: left
+- [YAML reference for stories](/reference/yaml/scrollytelling/): every key,
+  with its type, default and allowed values, generated from the schema the
+  validator uses. For example
+  [chapter keys](/reference/yaml/scrollytelling/#chapters),
+  [actions](/reference/yaml/scrollytelling/#chapters-onchapterenter) and
+  [`callback`](/reference/yaml/scrollytelling/#chapters-callback).
+- [`<ml-scrollytelling>` reference](/reference/elements/#ml-scrollytelling):
+  the element's attributes, events, slots and styling hooks.
+- [Story maps in plain HTML](/integrations/scrollytelling-html/) and
+  [Story maps in Astro](/integrations/astro-stories/): putting a story on a
+  page.
 
-  - id: brooklyn
-    title: "Brooklyn Bridge"
-    description: "An iconic landmark connecting Manhattan and Brooklyn."
-    center: [-73.9969, 40.7061]
-    zoom: 16
-    pitch: 45
-    bearing: 90
-    alignment: right
+## Troubleshooting
 
-  - id: central-park
-    title: "Central Park"
-    description: "An urban oasis in the heart of the city."
-    center: [-73.9654, 40.7829]
-    zoom: 14
-    pitch: 0
-    bearing: 0
-    alignment: center
-    animation: easeTo
+Problems every map shares are in [Troubleshooting](/troubleshooting/).
 
-  - id: outro
-    title: "Thank You"
-    description: "Thanks for joining our tour!"
-    center: [-74.006, 40.7128]
-    zoom: 11
-    alignment: full
-    hidden: false
-```
+- **`**bold**` shows literally in a chapter.** `description` is HTML; write
+  `<strong>bold</strong>`.
+- **"Two chapters have id …".** Each chapter needs its own `id`; the message
+  names both lines. Copying a chapter and keeping its `id` is the usual cause.
+- **A layer doesn't appear or disappear.** Check the chapter's `layers` ids
+  against the layers' `id`s. A repeated layer `id` warns, and only the first
+  layer with it is drawn.
+- **A key under `config:` does nothing**, such as `legend:` or `sources:`.
+  These go at the top of the story file; the map's notice says so while you
+  develop.
+- **The map scrolls away with the chapters.** A wrapper around the story has
+  `overflow: hidden`, `auto` or `scroll`, which stops `position: sticky`.
 
-### Data Journalism
+## Moved sections
 
-```yaml
-type: scrollytelling
-id: climate-story
-theme: light
-showMarkers: false
-config:
-  center: [0, 30]
-  zoom: 2
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-layers:
-  - id: temperature
-    type: circle
-    source:
-      type: geojson
-      url: "https://example.com/temperature.geojson"
-    paint:
-      circle-radius: 8
-      circle-color:
-        - interpolate
-        - ["linear"]
-        - ["get", "temp"]
-        - -10
-        - "#3b82f6"
-        - 0
-        - "#ffffff"
-        - 40
-        - "#dc2626"
-      circle-opacity: 0.7
-chapters:
-  - id: overview
-    title: "Global Temperature Changes"
-    description: "How our planet is warming."
-    center: [0, 30]
-    zoom: 2
+### Showing a story
 
-  - id: arctic
-    title: "The Arctic"
-    description: "Temperature rise is most dramatic at the poles."
-    center: [0, 75]
-    zoom: 3
-    onChapterEnter:
-      - action: setPaintProperty
-        layer: temperature
-        property: circle-radius
-        value: 12
+Putting a story on a page is on
+[Story maps in plain HTML](/integrations/scrollytelling-html/) and
+[Story maps in Astro](/integrations/astro-stories/).
 
-  - id: equator
-    title: "The Tropics"
-    description: "Heat stress increasing near the equator."
-    center: [0, 0]
-    zoom: 3
+### Scrollytelling properties
 
-  - id: conclusion
-    title: "What Can We Do?"
-    description: "The time to act is now."
-    center: [0, 30]
-    zoom: 2
-    onChapterEnter:
-      - action: setPaintProperty
-        layer: temperature
-        property: circle-opacity
-        value: 1
-footer: |
-  <h3>Sources</h3>
-  <p>Climate data from NOAA</p>
-  <p>Analysis by Climate Research Institute</p>
-```
-
-## TypeScript Types
-
-```typescript
-import {
-  type ScrollytellingBlock,
-  type Chapter,
-  type ChapterAction,
-  type ChapterLayers
-} from '@maplibre-yaml/core/schemas';
-
-const chapter: Chapter = {
-  id: "intro",
-  title: "Introduction",
-  description: "Welcome to our story",
-  center: [-74.006, 40.7128],
-  zoom: 12,
-  pitch: 45,
-  bearing: 0,
-  animation: "flyTo",
-  alignment: "center"
-};
-
-const action: ChapterAction = {
-  action: "setFilter",
-  layer: "earthquakes",
-  filter: [">=", ["get", "magnitude"], 5]
-};
-
-const scrollytelling: ScrollytellingBlock = {
-  type: "scrollytelling",
-  id: "story",
-  config: {
-    center: [0, 0],
-    zoom: 2,
-    mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-  },
-  chapters: [chapter],
-  theme: "light",
-  showMarkers: false
-};
-```
+The table of every key is the generated
+[YAML reference for stories](/reference/yaml/scrollytelling/).

@@ -83,25 +83,3 @@ YAML could not be expanded: Excessive alias count indicates a resource exhaustio
 It is an ordinary validation error, not a crash, so a collaborative editor or
 a validation endpoint can report it like any other malformed input. Parse
 through `YAMLParser` (above) to get the same guard.
-
-## Documents from people you don't control
-
-YAML aliases can be nested so that a small document expands into an enormous
-one (the "billion laughs" attack). The library keeps the `yaml` package's
-alias-expansion limit on, so such a document is rejected with a parse error
-instead of being expanded:
-
-```text
-YAML could not be expanded: Excessive alias count indicates a resource exhaustion attack
-```
-
-It is an ordinary validation error, not a crash, so a collaborative editor or
-a validation endpoint can report it like any other malformed input. Parse
-through `YAMLParser` (above) to get the same guard.
-
-<Aside type="note" title="What this is not">
-The library doesn't provide a way to edit a document, and it doesn't keep
-comments or formatting through a programmatic edit. If your code changes a
-document, it owns the change and the writing back; these two tools only keep
-your *parsing* and *validation* the same as the library's.
-</Aside>

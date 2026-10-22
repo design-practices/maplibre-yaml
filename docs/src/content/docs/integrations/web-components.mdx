@@ -1,437 +1,139 @@
 ---
 title: "HTML pages: the <ml-map> element"
-description: Use the <ml-map> custom element for zero-JavaScript map embedding
+description: Put a map on any HTML page with the <ml-map> element and a YAML file, loaded from a CDN, with no JavaScript to write.
 ---
 
-import { Aside, Steps } from "@astrojs/starlight/components";
+import { Steps } from "@astrojs/starlight/components";
 
-The `<ml-map>` web component is the simplest way to add maps to any HTML page. No JavaScript required for basic usage - just HTML and a YAML configuration file.
+The `<ml-map>` element draws a map document on an HTML page. It is a web
+component (a custom HTML element), so it works in any page: load it from a
+CDN, point its `src` at a YAML file, and give it a height. There is no
+JavaScript to write.
 
-## Quick Start
+This page is for plain HTML pages. On an Astro site, use the
+[Astro components](/integrations/astro/); in React, Vue or Svelte, see
+[React & other frameworks](/integrations/react/).
 
-Get a map on your page in 4 steps.
+## Quick start
 
 <Steps>
 
-1. **Add the scripts and styles**
+1. **Create `index.html`**
 
    ```html
-   <head>
-     <meta charset="utf-8" />
-     <!-- Without this line, phones lay the page out at desktop width and the map looks tiny -->
-     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-     <!-- MapLibre GL CSS -->
-     <link
-       href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
-       rel="stylesheet"
-     />
-
-     <!-- Tell the browser where to find maplibre-gl -->
-     <script type="importmap">
-       { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-     </script>
-     <!-- Register the web component -->
-     <script
-       type="module"
-       src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
-     ></script>
-   </head>
+   <!DOCTYPE html>
+   <html lang="en">
+     <head>
+       <meta charset="utf-8" />
+       <meta name="viewport" content="width=device-width, initial-scale=1" />
+       <title>My map</title>
+       <link
+         rel="stylesheet"
+         href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
+       />
+       <!-- Tell the browser where to find maplibre-gl -->
+       <script type="importmap">
+         { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
+       </script>
+       <!-- Registers <ml-map> -->
+       <script
+         type="module"
+         src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
+       ></script>
+     </head>
+     <body>
+       <ml-map src="map.yaml" style="display: block; height: 400px;"></ml-map>
+     </body>
+   </html>
    ```
 
-2. **Create a YAML configuration file**
-
-   Create `map.yaml` next to your HTML file:
+2. **Create `map.yaml` next to it**
 
    ```yaml
    type: map
-   id: quick-map
+   id: quakes
    config:
-     center: [-74.006, 40.7128]
-     zoom: 12
      mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+     center: [-120, 37]
+     zoom: 4
    layers:
-     - id: marker
+     - id: quakes
        type: circle
        source:
          type: geojson
-         data:
-           type: FeatureCollection
-           features:
-             - type: Feature
-               geometry:
-                 type: Point
-                 coordinates: [-74.006, 40.7128]
-               properties:
-                 name: "New York"
+         url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
        paint:
-         circle-radius: 10
-         circle-color: "#3b82f6"
+         circle-radius: 5
+         circle-color: "#dc2626"
    ```
 
-3. **Add the map component**
+3. **Serve the folder and open it**
 
-   ```html
-   <ml-map src="./map.yaml" style="width: 100%; height: 400px; display: block;">
-   </ml-map>
+   ```bash
+   npx serve .
    ```
 
-4. **View in browser**
-
-   Serve the folder with `npx serve .` and open the address it prints (another
-   static server works too, if it supports range requests — needed for
-   PMTiles, FlatGeobuf, GeoParquet and COG files; `python -m http.server`
-   doesn't). Opening the HTML file directly does not work: a
-   `file://` page cannot fetch `map.yaml`.
+   Open the address it prints (for example http://localhost:3000). The map
+   shows California with the past week's earthquakes as red dots.
 
 </Steps>
 
-<Aside type="tip">
-  Give every `<ml-map>` `display: block` and a height. Custom elements are
-  inline and zero-height by default, so without them the map is invisible.
-</Aside>
+Open the page from a web server, not by double-clicking it: a page opened as
+`file://` can't fetch `map.yaml`, and the map shows "Open this page through a
+local web server" instead. The [Quick start](/getting-started/quick-start/)
+walks through the same page step by step, and
+[Your first map, explained](/getting-started/first-map/) explains each line
+of the YAML.
 
-## Installation Options
+## Common tasks
 
-### CDN (Recommended for Quick Start)
+### Load a map from a YAML file \{#method-1-external-yaml-file-recommended}
 
-The import map is required: it tells the browser where to find `maplibre-gl`, which the register bundle keeps external.
-
-```html
-<script type="importmap">
-  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-</script>
-<script
-  type="module"
-  src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
-></script>
-```
-
-Loading from unpkg or jsDelivr needs nothing else. If you host
-maplibre-yaml's files on your own site instead, copy the whole `dist/` folder,
-not only `register.js`: the readers for PMTiles, FlatGeobuf, GeoParquet and
-COG files load on demand from `dist/chunks/` next to it
-([Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself)).
-
-<Aside type="note" title="maplibre-gl version">
-  maplibre-yaml works with maplibre-gl **v4, v5 and v6** (v6 recommended for
-  new projects); the peer range is `^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.4.1`. Pin
-  the major your project uses in the import map, the CSS URL, and
-  `npm install`, and keep all three on the same major. v6 is ESM-only (import
-  map entry `dist/maplibre-gl.mjs`) and, under a bundler, needs
-  `setWorkerUrl()` — see [Installation](/getting-started/installation/#supported-maplibre-gl-versions).
-</Aside>
-
-### npm (With Build Tools)
-
-```bash
-npm install @maplibre-yaml/core maplibre-gl@^6
-```
-
-Your JavaScript entry point registers the element, loads MapLibre's CSS and,
-on maplibre-gl 6, tells MapLibre where its worker file is. Inside a bundle
-maplibre-gl cannot find that file by itself: leave the worker lines out and
-the map shows *Worker failed to load* instead of rendering. With Vite:
-
-```javascript
-// src/main.js
-import { setWorkerUrl } from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import "@maplibre-yaml/core/register";
-import "maplibre-gl/dist/maplibre-gl.css";
-
-setWorkerUrl(workerUrl);
-```
+`src` is the address of the map document, relative to the page. Keeping the
+YAML in its own file keeps the page short, and lets you check the file with
+`npx maplibre-yaml validate map.yaml` before you publish.
 
 ```html
-<!-- index.html -->
-<ml-map src="./map.yaml" style="display: block; height: 400px;"></ml-map>
-<script type="module" src="/src/main.js"></script>
+<ml-map src="maps/city.yaml" style="display: block; height: 400px;"></ml-map>
 ```
 
-Put `map.yaml`, and every data file it loads, in Vite's **`public/`** folder.
-A YAML file next to `index.html` loads in `npm run dev`, but `npm run build`
-does not copy it, so the built site shows *YAML syntax error … `<!doctype
-html>`*. On maplibre-gl 4 or 5, leave out the worker lines. The full
-walkthrough is in
-[Installation → Using a bundler](/getting-started/installation/#using-a-bundler-vite).
+Paths *inside* the YAML (`url: "data/points.geojson"`) resolve against the
+page, not the YAML file
+([Files on your own site](/schema/sources/#files-on-your-own-site-relative-paths)).
+Changing `src` loads the new document, and `reload()` loads the same one
+again.
 
-`@maplibre-yaml/core/register` defines the elements as soon as it is
-imported. To decide when that happens yourself, import the element classes
-from `@maplibre-yaml/core/components` instead and call `registerMLMap()`
-(defines `<ml-map>`) or `registerMLScrollytelling()` (defines
-`<ml-scrollytelling>` and `<ml-map>`, which it renders).
+Give every `<ml-map>` `display: block` and a height. A custom element is
+inline and zero-height by default, so without them the map is invisible, and
+the element shows a note asking for a height in its place.
 
-## Configuration Methods
+### Sites under a subpath (GitHub Pages)
 
-There are three ways to configure `<ml-map>`, each suited for different use cases.
-
-<Aside type="note">
-  `<ml-map>` expects a **single map block document** — a YAML file whose top
-  level is `type: map`. It does not accept a root document (one with a
-  `pages:` key); those are multi-page site configurations meant for the Astro
-  integration and will fail validation if passed to `<ml-map>`. A
-  `type: scrollytelling` story has its own element, below.
-</Aside>
-
-<Aside type="note" title="Format v2 renders identically">
-  A **Format v2** document (one with `version: 2` and the `style:` / `runtime:`
-  split) renders through `<ml-map>` exactly like its v1 twin — the two forms
-  collapse to the same internal model, so nothing on this page changes when you
-  adopt v2. See [Format v2](/guides/format-v2/) for the style/runtime split.
-</Aside>
-
-<Aside type="caution" title="`emit` is inert under `<ml-map>` today">
-  The `click.emit` interaction — which hands feature data to a host-supplied
-  handler — does **not** fire from a plain `<ml-map>` mount. The component
-  defaults to an untrusted capability policy and registers no host handlers, so
-  every `emit` fails closed (a silent no-op), even in a document you authored
-  yourself. This is intentional fail-closed behavior, not a bug: `emit` targets
-  the `attachInteractions` path, and wiring it into `<ml-map>` is planned but
-  not available yet. The map-acting interactions (`popup`,
-  `flyTo`, `zoomToFeature`, `hover.highlight`) work under `<ml-map>` as usual.
-  See [Export to style.json](/guides/export/) for the full `emit` story.
-</Aside>
-
-### Method 1: External YAML File (Recommended)
-
-The simplest and cleanest approach - keep your configuration in a separate YAML file:
-
-```html
-<ml-map src="./maps/my-map.yaml" style="height: 400px; display: block;"></ml-map>
-```
-
-**maps/my-map.yaml:**
-
-```yaml
-type: map
-id: my-map
-config:
-  center: [-120, 37]
-  zoom: 4
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: points
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    paint:
-      circle-radius: 5
-      circle-color: "#3b82f6"
-```
-
-Relative paths inside the YAML (`url: "data/points.geojson"`) resolve against
-the **page**, not the YAML file. See
-[Files on your own site](/schema/sources/#files-on-your-own-site-relative-paths).
-Publishing under a subpath, such as a GitHub Pages project site? Add a
-[`base`](#sites-under-a-subpath-github-pages).
-
-**Why this is best:**
-
-- ✅ Clean separation of configuration and markup
-- ✅ No JavaScript required
-- ✅ YAML indentation is never an issue
-- ✅ Easy to edit without touching HTML
-- ✅ Files can be validated independently
-- ✅ Works in all frameworks
-
-### Method 2: Inline YAML (Script Tag)
-
-For self-contained examples or documentation:
-
-```html
-<ml-map style="height: 400px; display: block;">
-  <script type="text/yaml">
-type: map
-id: inline-map
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: marker
-    type: circle
-    source:
-      type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-74.006, 40.7128]
-            properties:
-              name: "New York"
-    paint:
-      circle-radius: 10
-      circle-color: "#3b82f6"
-  </script>
-</ml-map>
-```
-
-**Why this works:**
-
-- Browser doesn't process `<script type="text/yaml">` content
-- Whitespace and indentation are preserved exactly. Start the YAML on the line
-  after `<script type="text/yaml">`, not on the same line, and keep every line
-  at the same depth relative to the first one (indenting the whole block to
-  match your HTML is fine)
-- Works in plain HTML, Astro, MDX and Svelte templates; in React, pass the
-  YAML as a string child (`<script type="text/yaml">{yaml}</script>`)
-- **Not in Vue templates:** Vue's compiler rejects `<script>` tags in a
-  template — use `src` or `config` there (see
-  [Vue](/integrations/react/#vue))
-- Good for examples that need to be self-contained
-
-### Method 3: JSON Attribute (Programmatic)
-
-For dynamic or generated configurations:
-
-```html
-<ml-map
-  id="dynamic-map"
-  style="height: 400px; display: block;"
-></ml-map>
-
-<script type="importmap">
-  { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-</script>
-<script type="module">
-  import "https://unpkg.com/@maplibre-yaml/core@0.9/register.js";
-
-  const config = {
-    type: "map",
-    id: "programmatic",
-    config: {
-      center: [-74.006, 40.7128],
-      zoom: 12,
-      mapStyle: "https://tiles.openfreemap.org/styles/liberty",
-    },
-    layers: [],
-  };
-
-  // Set as property (object)
-  document.getElementById("dynamic-map").config = config;
-
-  // Or as attribute (JSON string)
-  // document.getElementById("dynamic-map").setAttribute("config", JSON.stringify(config));
-</script>
-```
-
-**When to use this:**
-
-- Generating config from user input
-- Loading config from an API
-- Building configs programmatically
-- Framework-based dynamic rendering
-
-<Aside type="note" title="When the config arrives after the element">
-  The element upgrades as soon as `register.js` loads, before the line that
-  assigns `config`. Since 0.7 an element with no configuration waits until
-  the end of the next frame before it reports "No configuration provided.",
-  so a `config` assigned right after the import (or from a framework effect)
-  renders without a transient error, and a `mapReady()` called in between
-  waits for it. A `config` assigned *before* `register.js` loads is picked up
-  when the element upgrades. On 0.6, the error card flashed in both cases.
-</Aside>
-
-## Sites under a subpath (GitHub Pages)
-
-A GitHub Pages *project* site is published at
-`https://<user>.github.io/<repo>/`, so a path in your YAML that starts with
-`/` points at the domain root and 404s. Add the `base` attribute with the
-subpath, and leave the YAML as it is:
-
-```html
-<ml-map src="maps/city.yaml" base="/<repo>/"></ml-map>
-```
-
-Every path to a file of your own (`src`, data, images, a site-hosted style,
-`pmtiles://` files) then resolves under it, whichever page the map is on;
-full `https://` URLs are never changed. Setting the `base` property
-re-renders the map. Which paths it covers, why not `<base href>`, and how to
-preview a subpath on your computer are in
+On a GitHub Pages project site (`https://<user>.github.io/<repo>/`), add
+`base="/<repo>/"` and leave the YAML as it is. `src` and every path to a file
+of your own then load under the subpath. Which paths it covers and how to
+preview it locally:
 [Publishing & subpaths](/guides/publishing/#html-pages-the-base-attribute).
 
-## Component Lifecycle
-
-### Initialization Flow
-
-```
-1. Element added to DOM
-2. connectedCallback() fires
-3. Config attribute/property read
-4. Config validated against schema
-5. MapLibre GL map created
-6. Layers added
-7. 'ml-map:load' event dispatched
+```html
+<ml-map src="maps/city.yaml" base="/<repo>/" style="display: block; height: 400px;"></ml-map>
 ```
 
-### Lifecycle Events
+### Put your own controls over the map \{#slots-your-own-chrome-over-the-map}
 
-```javascript
-const mapEl = document.querySelector("ml-map");
-
-// Map loaded and ready
-mapEl.addEventListener("ml-map:load", (event) => {
-  console.log("Map ready!");
-});
-
-// Error during initialization or runtime. Configuration/validation failures
-// carry `errors` (an array of { path, message }); runtime failures carry `error`.
-mapEl.addEventListener("ml-map:error", (event) => {
-  console.error("Map error:", event.detail.error ?? event.detail.errors);
-});
-
-// Layer data loaded
-mapEl.addEventListener("ml-map:layer-data-loaded", (event) => {
-  const { layerId, featureCount } = event.detail;
-  console.log(`${layerId}: ${featureCount} features`);
-});
-
-// Layer data loading
-mapEl.addEventListener("ml-map:layer-data-loading", (event) => {
-  console.log(`Loading ${event.detail.layerId}...`);
-});
-
-// Layer data error
-mapEl.addEventListener("ml-map:layer-data-error", (event) => {
-  console.error(`${event.detail.layerId} error:`, event.detail.error);
-});
-```
-
-### Event reference
-
-`<ml-map>` dispatches eighteen events, covering its lifecycle, layer data,
-clicks and hovers, markers, images, the params panel, `fitTo` framing and
-classified layers. The list, with each event's `event.detail`, is in the
-[`<ml-map>` reference](/reference/elements/#ml-map-events).
-
-### When something goes wrong
-
-`<ml-map>` shows problems on the page, not only in the console: an **error
-card** in place of a map that can't render, a **notice** over a map when part
-of it didn't load, and **author hints** in that notice while you develop
-(`localhost`, `astro dev`, `vite`), or anywhere with the `debug` attribute.
-`quiet` hides the notice; the error card always shows. What each one means,
-when the hints show, and the common fixes are in
-[Troubleshooting](/troubleshooting/#reading-what-the-map-tells-you).
-
-## Slots: your own chrome over the map
-
-Author markup placed inside `<ml-map>` with a `slot` attribute rides the
-element's corner system — the same one the legend and the params panel use —
-so page chrome (buttons, captions, a custom legend) sits over the map without
-hand-rolled absolute positioning:
+Children with a `slot` attribute go in a corner of the map: `top-left`,
+`top-right`, `bottom-left` or `bottom-right`, stacked with the built-in
+legend and params panel. A `slot="legend"` child replaces the built-in
+legend. Buttons, captions and credits sit over the map without any
+positioning CSS:
 
 ```html
-<ml-map src="./map.yaml" style="display: block; height: 400px;">
+<ml-map src="map.yaml" style="display: block; height: 400px;">
   <div slot="top-right" class="my-controls">
     <button data-action="zoom-in">+</button>
-    <button data-action="reset">⟲</button>
+    <button data-action="reset">Reset</button>
   </div>
-  <div slot="bottom-left">Data: city open data portal</div>
+  <p slot="bottom-left">Data: USGS</p>
 </ml-map>
 
 <script type="module">
@@ -441,7 +143,7 @@ hand-rolled absolute positioning:
     zoom: map.getZoom(),
   }));
   document.querySelector(".my-controls").addEventListener("click", (e) => {
-    const map = el.getMap(); // read at click time — reload() makes a new map
+    const map = el.getMap(); // read at click time: reload() makes a new map
     const action = e.target.closest("[data-action]")?.dataset.action;
     if (action === "zoom-in") map.zoomIn();
     if (action === "reset") map.jumpTo(home);
@@ -449,346 +151,93 @@ hand-rolled absolute positioning:
 </script>
 ```
 
-| Slot | Placement |
-|------|-----------|
-| `top-left`, `top-right`, `bottom-left`, `bottom-right` | Mounted into that corner of the map |
-| `legend` | **Replaces** the built-in legend, at the document's `legend.position` (default `top-left`) |
+Slot children are shown once the map loads, and stay through `reload()` and
+a new document. How they stack and behave is under
+[`<ml-map>` slots](/reference/elements/#ml-map-slots).
 
-How it behaves:
+### Reach the MapLibre map \{#accessing-the-maplibre-instance}
 
-- **Stacking, not overlap.** Pieces sharing a corner stack in registration
-  order: the built-in legend first, then the params panel, then slot
-  children in document order. Bottom corners grow upward. A corner also
-  steps past a MapLibre control (e.g. `navigation`) already in it.
-- **Mounted on load.** Slot children are hidden until the map's `load`, then
-  moved into their corner. They stay the same elements, so event listeners
-  you attached keep working.
-- **They survive the map.** `reload()`, a new `config`/`src`, and an error
-  card all tear the map down but park slot children back on the element;
-  the next successful render mounts them again. Slot children added after
-  load are picked up on the next render (`reload()`).
-- **Pointer events.** Empty corner areas pass gestures through to the map;
-  your slot content receives clicks normally.
-- An unknown slot name logs a warning and the child is left where it is.
-
-Only children with a recognized `slot` are moved. Other children you place
-inside `<ml-map>` (including the inline `<script type="text/yaml">`) are left
-alone: the element removes only what it created itself — its map container
-and its error card.
-
-<Aside type="note">
-Slots are page markup, not part of the map document: they never appear in
-`mlym emit` output, and there is nothing to export. See the
-[export classes guide](/guides/export-classes/).
-</Aside>
-
-<Aside type="caution" title="Astro: spread the slot attribute inside expressions">
-Inside a `{condition && (...)}` expression, Astro's compiler reads a literal
-`slot="top-right"` as its own named-slot directive and strips it (wrapped in
-a `Fragment`, the child disappears entirely). Write
-`{...{ slot: "top-right" }}` there instead; a literal `slot` outside an
-expression is passed through unchanged.
-</Aside>
-
-The element's attributes, methods and events are listed in the
-[`<ml-map>` reference](/reference/elements/#ml-map).
-
-## Story maps: `<ml-scrollytelling>`
-
-The same `register` module also defines `<ml-scrollytelling>`, which shows a
-`type: scrollytelling` document as a scroll-driven story: a sticky `<ml-map>`
-with chapter cards scrolling over it. It takes its story the same three ways
-`<ml-map>` takes a map (`src`, an inline `<script type="text/yaml">`, or a
-`story`/`config` property), hands `slot` children to its map, and dispatches
-`ml-scrollytelling:chapter`, `ml-scrollytelling:action` and
-`ml-scrollytelling:error`.
+`mapReady()` resolves with the MapLibre map once the document has loaded (at
+once if it already has), and rejects if the document fails. From there,
+anything MapLibre can do works:
 
 ```html
-<ml-scrollytelling src="story.yaml"></ml-scrollytelling>
+<script type="module">
+  const el = document.querySelector("ml-map");
+  const map = await el.mapReady();
+
+  map.flyTo({ center: [-122.42, 37.77], zoom: 9 });
+  map.on("moveend", () => console.log("now at", map.getCenter()));
+</script>
 ```
 
-See [Story maps in plain HTML](/integrations/scrollytelling-html/) for a
-complete page and styling, the
-[`<ml-scrollytelling>` reference](/reference/elements/#ml-scrollytelling) for
-its attributes and events, and
-[Scrollytelling](/schema/scrollytelling/) for what a story file contains.
+Layers you add with MapLibre's own `map.addLayer()` are yours to manage; keep
+their ids different from the document's. `getMap()` returns the map without
+waiting (`null` before it loads), and `getRenderer()` returns the
+[`MapRenderer`](/integrations/vanilla-js/) behind the element.
 
-## Accessing the MapLibre Instance
+### React to map events \{#event-reference}
 
-For advanced customization, access the underlying MapLibre GL map. Since 0.7,
-`mapReady()` is the idiomatic way in — it resolves with the live map once the
-document has loaded (immediately if it already has) and rejects if the
-document fails, so there is no load-listener or null-guard boilerplate:
-
-```javascript
-import * as maplibregl from "maplibre-gl"; // resolved by the import map (or your bundler)
-
-const mapEl = document.querySelector("ml-map");
-const map = await mapEl.mapReady();
-
-// Now you can use any MapLibre GL API
-map.flyTo({
-  center: [-122.4194, 37.7749],
-  zoom: 14,
-  duration: 2000,
-});
-
-// Add custom controls
-map.addControl(new maplibregl.NavigationControl());
-
-// Add custom sources and layers
-map.addSource("custom-source", {
-  type: "geojson",
-  data: { type: "FeatureCollection", features: [] },
-});
-map.addLayer({
-  id: "custom-layer",
-  type: "fill",
-  source: "custom-source",
-  paint: { "fill-color": "#ff0000" },
-});
-```
-
-The event-based form (`ml-map:load` listener + `getMap()`) still works and
-suits code that must re-run on every reload.
-
-<Aside type="caution">
-  `getMap()` returns `null` until the `ml-map:load` event fires — guard it,
-  or use `await mapEl.mapReady()` which handles the timing for you.
-</Aside>
-
-## Controlling Live Data
-
-Polling runs on the `refreshInterval` declared in YAML, and every refresh
-fires `ml-map:layer-data-loading` / `ml-map:layer-data-loaded`, so you can
-follow it from the element:
-
-```javascript
-const mapEl = document.querySelector("ml-map");
-
-mapEl.addEventListener("ml-map:layer-data-loaded", (event) => {
-  const { layerId, featureCount } = event.detail;
-  console.log(`${layerId} refreshed: ${featureCount} features`);
-});
-```
-
-<Aside type="caution" title="No programmatic refresh control yet">
-  Earlier versions of this page showed `mapEl.pauseRefresh()`,
-  `resumeRefresh()` and `refreshNow()`. Those methods are **not** exposed on
-  `<ml-map>` (or `MapRenderer`) today — calling them throws. Exposing
-  pause/resume/refresh is planned.
-</Aside>
-
-## Complete Example: Earthquake Monitor
-
-This example demonstrates a complete implementation using the `src` attribute with event handlers for status updates.
-
-**index.html:**
+The element dispatches bubbling `ml-map:*` events: when the map loads, when a
+layer's data arrives or refreshes, when a feature is clicked or hovered, and
+more. Each carries its data on `event.detail`:
 
 ```html
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Earthquake Monitor</title>
-    <link
-      href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
-      rel="stylesheet"
-    />
-    <script type="importmap">
-      { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-    </script>
-    <script
-      type="module"
-      src="https://unpkg.com/@maplibre-yaml/core@0.9/register.js"
-    ></script>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      body {
-        font-family: system-ui, sans-serif;
-      }
-
-      .container {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-      }
-
-      header {
-        padding: 15px 20px;
-        background: #1f2937;
-        color: white;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      h1 {
-        font-size: 1.25rem;
-        font-weight: 600;
-      }
-
-      .status {
-        font-size: 0.875rem;
-        color: #9ca3af;
-      }
-
-      .status.loading {
-        color: #fbbf24;
-      }
-      .status.error {
-        color: #ef4444;
-      }
-      .status.ready {
-        color: #22c55e;
-      }
-
-      ml-map {
-        flex: 1;
-        display: block;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <header>
-        <h1>🌍 Earthquake Monitor</h1>
-        <div class="status" id="status">Initializing...</div>
-      </header>
-
-      <ml-map id="earthquake-map" src="./earthquake-config.yaml"></ml-map>
-    </div>
-
-    <script type="module">
-      const statusEl = document.getElementById("status");
-      const mapEl = document.getElementById("earthquake-map");
-
-      // Event handlers
-      mapEl.addEventListener("ml-map:loading", (event) => {
-        statusEl.textContent = "Loading configuration...";
-        statusEl.className = "status loading";
-      });
-
-      // Fires on the first load and again on every refresh. The first one
-      // arrives before ml-map:load, which only fires once every layer is in.
-      mapEl.addEventListener("ml-map:layer-data-loading", () => {
-        statusEl.textContent = "Loading earthquake data...";
-        statusEl.className = "status loading";
-      });
-
-      mapEl.addEventListener("ml-map:layer-data-loaded", (event) => {
-        const { featureCount } = event.detail;
-        const time = new Date().toLocaleTimeString();
-        statusEl.textContent = `${featureCount} earthquakes · ${time}`;
-        statusEl.className = "status ready";
-      });
-
-      mapEl.addEventListener("ml-map:layer-data-error", (event) => {
-        statusEl.textContent = `Data error: ${event.detail.error.message}`;
-        statusEl.className = "status error";
-      });
-
-      mapEl.addEventListener("ml-map:error", (event) => {
-        statusEl.textContent = `Error: ${event.detail.error?.message || event.detail.errors?.[0]?.message}`;
-        statusEl.className = "status error";
-      });
-    </script>
-  </body>
-</html>
+<script type="module">
+  const el = document.querySelector("ml-map");
+  el.addEventListener("ml-map:layer-click", (event) => {
+    const { layerId, feature } = event.detail;
+    console.log(layerId, feature.properties.title);
+  });
+</script>
 ```
 
-**earthquake-config.yaml:**
+All eighteen events, with each `detail`, are under
+[`<ml-map>` events](/reference/elements/#ml-map-events).
 
-```yaml
-type: map
-id: earthquake-monitor
-config:
-  center: [-120, 40]
-  zoom: 4
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: earthquakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
-      refresh:
-        refreshInterval: 60000
-        updateStrategy: replace
-    paint:
-      circle-radius:
-        - interpolate
-        - ["linear"]
-        - ["get", "mag"]
-        - 0
-        - 4
-        - 5
-        - 20
-      circle-color:
-        - interpolate
-        - ["linear"]
-        - ["get", "mag"]
-        - 0
-        - "#22c55e"
-        - 3
-        - "#eab308"
-        - 5
-        - "#ef4444"
-      circle-opacity: 0.8
-      circle-stroke-width: 1
-      circle-stroke-color: "#ffffff"
-    interactive:
-      hover:
-        cursor: pointer
-      click:
-        popup:
-          - h3:
-              - property: title
-          - p:
-              - str: "Magnitude: "
-              - property: mag
-          - p:
-              - str: "Depth: "
-              - property: depth
-              - str: " km"
+### When something goes wrong
+
+`<ml-map>` shows problems on the page, not only in the console: an **error
+card** in place of a map that can't render, a **notice** over a map when part
+of it didn't load, and **author hints** in that notice while you develop
+(`localhost`), or anywhere with the `debug` attribute. `quiet` hides the
+notice on a finished site; the error card always shows. What each one means,
+and the common fixes, are in
+[Troubleshooting](/troubleshooting/#reading-what-the-map-tells-you). A page
+script can read the same problems from `ml-map:error`:
+
+```js
+el.addEventListener("ml-map:error", (event) => {
+  // A document that can't load or validate: errors, each { path, message }.
+  // A failure while the map runs: error, with fatal true or false.
+  console.error(event.detail.errors ?? event.detail.error);
+});
 ```
 
-**Key improvements in this example:**
+### Multiple maps on one page
 
-- ✅ No YAML parsing code needed - component handles it
-- ✅ Simpler, more readable HTML
-- ✅ YAML file is separate and easy to edit
-- ✅ Event handlers provide rich status feedback
-
-## Multiple Maps on One Page
-
-Each `<ml-map>` is independent:
+Each `<ml-map>` is independent and loads its own document. The page needs the
+import map and `register.js` only once:
 
 ```html
-<div
-  style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 400px;"
->
-  <ml-map src="./map-1.yaml" style="display: block; height: 100%;"></ml-map>
-  <ml-map src="./map-2.yaml" style="display: block; height: 100%;"></ml-map>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+  <ml-map src="map-1.yaml" style="display: block; height: 400px;"></ml-map>
+  <ml-map src="map-2.yaml" style="display: block; height: 400px;"></ml-map>
 </div>
 ```
 
-Each element loads its own document (`map-1.yaml`, `map-2.yaml`), and the
-page needs the import map and `register.js` only once. A map built in
-JavaScript can take its document through the `config` property instead (see
-[Method 3](#method-3-json-attribute-programmatic)).
+### Story maps: `<ml-scrollytelling>`
 
-## Framework Compatibility
+The same `register.js` also defines `<ml-scrollytelling>`, which shows a
+`type: scrollytelling` story file: a sticky map with chapters scrolling over
+it. See [Story maps in plain HTML](/integrations/scrollytelling-html/).
 
-`<ml-map>` is a standard custom element, so React, Vue, Svelte and other
-frameworks render it like any other tag. How each one passes `config`, listens
-for `ml-map:*` events and types the element, with runnable React code and the
-Next.js setup, is on [React & other frameworks](/integrations/react/).
+## Reference \{#component-api-reference}
+
+Every attribute (`src`, `config`, `base`, `debug`, `quiet`), property,
+method, event, slot and styling hook of `<ml-map>` is in the
+[`<ml-map>` reference](/reference/elements/#ml-map). What a map document can
+contain is in the [YAML reference](/reference/yaml/map/).
 
 ## Troubleshooting
 
@@ -798,92 +247,113 @@ Most problems look the same whichever way the map is on the page; they are in
 [`<ml-map>` isn't defined](/troubleshooting/#ml-map-isnt-defined),
 [an error card instead of the map](/troubleshooting/#an-error-card-instead-of-the-map),
 and [the basemap draws but your layer doesn't](/troubleshooting/#the-basemap-draws-but-your-layer-doesnt).
-Page scripts can read the same problems from
-[`ml-map:error`](/reference/elements/#ml-map-events):
 
-```javascript
-mapEl.addEventListener("ml-map:error", (event) => {
-  // Each entry is { path, message }: the path names the invalid field
-  console.error("Config errors:", event.detail.errors);
-});
+### Events not firing
+
+An `ml-map:load` listener added after the map has loaded never runs: the
+event has already happened. Use `await el.mapReady()` instead, which resolves
+whether the map loaded before or after you ask. If the map never loads, an
+`ml-map:error` listener tells you why.
+
+## Alternatives
+
+`src` with a YAML file, above, is the recommended way. Use these when it
+doesn't fit.
+
+### Inline YAML (script tag) \{#method-2-inline-yaml-script-tag}
+
+For a page that must be one file, put the YAML in a `<script type="text/yaml">`
+inside the element. Start the YAML on the line after the opening tag, and
+keep every line at the same depth relative to the first (indenting the whole
+block to match your HTML is fine):
+
+```html
+<ml-map style="display: block; height: 400px;">
+  <script type="text/yaml">
+type: map
+id: inline-map
+config:
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  center: [-74.006, 40.7128]
+  zoom: 12
+  </script>
+</ml-map>
 ```
 
-### Events Not Firing
+### A document built in JavaScript (`config`) \{#method-3-json-attribute-programmatic}
 
-**Symptoms:** Event listeners never trigger.
+When your code builds the document (from a form, or an API response), set
+the `config` property to the object, or the `config` attribute to a JSON
+string:
 
-**Solutions:**
+```html
+<ml-map id="dynamic-map" style="display: block; height: 400px;"></ml-map>
 
-1. **Add listeners before setting config**
+<script type="module">
+  const doc = {
+    type: "map",
+    id: "dynamic",
+    config: {
+      mapStyle: "https://tiles.openfreemap.org/styles/liberty",
+      center: [-74.006, 40.7128],
+      zoom: 12,
+    },
+  };
+  document.getElementById("dynamic-map").config = doc;
+  // or: el.setAttribute("config", JSON.stringify(doc));
+</script>
+```
 
-   ```javascript
-   const mapEl = document.getElementById('my-map');
+The document is validated like a YAML file; an invalid one shows the error
+card. A *changed* `config` builds a fresh map (and resets the camera); one
+equal to the document already shown does nothing. A `config` assigned right
+after the element upgrades renders without a passing "No configuration
+provided" error.
 
-   // ✅ Add listener first
-   mapEl.addEventListener('ml-map:load', () => {});
+### With npm and a bundler \{#npm-with-build-tools}
 
-   // Then set config
-   mapEl.config = { ... };
-   ```
+Install `@maplibre-yaml/core` and `maplibre-gl`, import
+`@maplibre-yaml/core/register` and MapLibre's CSS once in your entry file, and
+point maplibre-gl 6 at its worker:
+[Installation: using a bundler](/getting-started/installation/#using-a-bundler-vite).
+Put the YAML and data files in the bundler's `public/` folder. The element
+then works in your HTML as above.
 
-2. **Check for errors**
-   ```javascript
-   mapEl.addEventListener("ml-map:error", (event) => {
-     console.error("Error prevented load:", event.detail.error);
-   });
-   ```
+### In a framework \{#framework-compatibility}
 
-## Component API Reference
+React, Vue, Svelte and other frameworks render `<ml-map>` like any other tag.
+How each passes `config`, listens for events and types the element is on
+[React & other frameworks](/integrations/react/).
 
-Every attribute, property, method, event, slot and styling hook of `<ml-map>`
-(and of `<ml-scrollytelling>`) is listed on one page: the
-[`<ml-map>` & `<ml-scrollytelling>` reference](/reference/elements/).
+### Format v2 documents
 
-## Trust and attribution
+A [format v2](/guides/format-v2/) document (`version: 2`, with `style:` and
+`runtime:`) works in every way shown on this page and draws the same map as
+its format v1 twin.
 
-Attribution is the one place a document's text reaches an HTML sink that
-maplibre-yaml does not own: MapLibre renders the attribution control with
-`innerHTML`, behind its own sanitizer. That sanitizer can be bypassed in
-every maplibre-gl release up to 6.4.0
-([GHSA-jrc7-96c5-q579](https://github.com/advisories/GHSA-jrc7-96c5-q579)).
-It is patched upstream in maplibre-gl **6.4.1**, which is why the v6 part of
-the peer range starts there (`^6.4.1`) — prefer v6 for new projects. The v4 and
-v5 lines get no fix, and a host may run any version, so MapLibre's sanitizer is
-still not treated as a safe boundary for a document someone else wrote.
+### Your own JavaScript instead of the element
 
-maplibre-yaml therefore sanitizes attribution itself before MapLibre sees it.
-What survives is plain text, character references (`&copy;`), and `<a>` links
-whose `href` uses `http:`, `https:` or `mailto:`, keeping only the `href`,
-`target` and `rel` attributes. Any other markup is escaped and shown as
-literal text rather than dropped, so the credit stays readable. This covers
-every route attribution takes into the control:
+To parse and render a document from your own code, into a `<div>` you
+control, see the [JavaScript API](/integrations/vanilla-js/).
 
-- a source's `attribution:` (named, inline, and v1/v2 alike),
-- `customAttribution` under `controls.attribution` or a
-  `attributionControl: { … }` options object in `config` / `runtime.map`,
-- attribution carried by resources the document points at: a basemap style
-  URL (`mapStyle` / `basemap`), an inline style object, and a TileJSON behind
-  a source `url:`.
+## Moved sections
 
-**This applies under every capability policy, trusted included.** `!html`
-popups render raw markup for a trusted document because maplibre-yaml's own
-popup sink is sound; the attribution sink is MapLibre's, and trusting the
-author does not make it safe. The only cost to a trusted document is that
-non-link markup such as `<b>` in attribution shows as text.
+### Installation options
 
-`mlym emit` applies the same rule to the `style.json` it writes, because that
-file may be rendered by an older maplibre-gl, and reports a `contract`
-warning naming each source whose attribution was changed. Releases before
-this fix (0.6.0 and earlier) forward attribution unsanitized: upgrade
-(0.6.1, 0.7.0, or later), or do not render documents you did not author
-with them.
+Loading from a CDN, versions in CDN URLs and supported maplibre-gl versions
+are in [Installation & versions](/getting-started/installation/). Hosting
+maplibre-yaml's own files is in
+[Publishing & subpaths](/guides/publishing/#hosting-maplibre-yamls-own-files).
 
-## Next Steps
+### Trust and attribution
 
-- [`<ml-map>` & `<ml-scrollytelling>` reference](/reference/elements/) - Every attribute, property, method and event
-- [React & other frameworks](/integrations/react/) - `<ml-map>` in React, Next.js, Vue and Svelte
-- [Format v2](/guides/format-v2/) - The `style:` / `runtime:` split (renders identically here)
-- [Export to style.json](/guides/export/) - Declarative interactions and the `emit` gate
-- [JavaScript API](/integrations/vanilla-js/) - More control with direct API usage
-- [Astro Integration](/integrations/astro/) - For Astro-based sites
-- [Live Data Guide](/guides/live-data/) - Polling and streaming configuration
+How attribution text is sanitized is in the
+[`<ml-map>` reference](/reference/elements/#trust-and-attribution). Why
+`click.emit` does nothing under `<ml-map>` is under
+[Host events](/reference/elements/#host-events-clickemit-under-ml-map).
+
+### Controlling live data
+
+Polling follows the document's `refreshInterval`
+([Live data](/guides/live-data/)); each refresh fires
+`ml-map:layer-data-loaded` ([events](/reference/elements/#ml-map-events)).

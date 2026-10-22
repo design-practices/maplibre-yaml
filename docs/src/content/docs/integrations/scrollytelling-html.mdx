@@ -1,19 +1,21 @@
 ---
 title: Story maps in plain HTML
-description: A scroll-driven story map with one HTML element, from a CDN, with no build step
+description: Put a story map on a plain HTML page with the <ml-scrollytelling> element, loaded from a CDN, with no build step.
 ---
 
-import { Aside, Steps } from "@astrojs/starlight/components";
+import { Steps } from "@astrojs/starlight/components";
 
-`<ml-scrollytelling>` turns a `type: scrollytelling` YAML document into a story
-map: a map that stays on screen while chapters scroll past it, flying the
-camera, showing and hiding layers and running actions as each chapter comes
-into view. It is a web component, so it works in a plain HTML page loaded from
-a CDN: no npm, no bundler, no framework.
+A story map is a map that moves as the reader scrolls: chapters of text and
+images scroll over a sticky map, and each chapter flies the camera somewhere,
+shows or hides layers, and can run actions (this is often called
+*scrollytelling*). On an HTML page, the `<ml-scrollytelling>` element shows a
+story written as one YAML file. It loads from a CDN: no npm, no bundler, no
+framework.
 
-It is the same engine Astro's [`<Scrollytelling>`](/integrations/astro-stories/)
-renders, so a story file works unchanged in both. For every field a story
-takes, see the [Story file reference](/schema/scrollytelling/).
+How to write the story file itself is on
+[Writing a story file](/schema/scrollytelling/). The element is the same one
+the Astro [`<Scrollytelling>`](/integrations/astro-stories/) component
+renders, so a story file works unchanged in both.
 
 ## Quick start
 
@@ -62,7 +64,7 @@ takes, see the [Story file reference](/schema/scrollytelling/).
    theme: dark
    showMarkers: true
    config:
-     mapStyle: "https://demotiles.maplibre.org/style.json"
+     mapStyle: "https://tiles.openfreemap.org/styles/liberty"
      center: [0, 20]
      zoom: 1.5
    layers:
@@ -121,97 +123,32 @@ takes, see the [Story file reference](/schema/scrollytelling/).
    ```
 
    Open the address it prints (for example http://localhost:3000) and scroll.
+   The map flies from Lagos to Lima to Jakarta, a dot per chapter sits at the
+   right edge, and the cities turn green on the last chapter.
 
 </Steps>
 
-<Aside type="caution" title="Open it from a web server, not by double-clicking">
-  `src="story.yaml"` is fetched by the browser, and browsers refuse to fetch
-  files from a page opened as `file://`. Use `npx serve .` locally, and GitHub
-  Pages (or any static host) to publish. A story with PMTiles, FlatGeobuf,
-  GeoParquet or COG files needs a server with range requests: `npx serve` has
-  them, `python3 -m http.server` doesn't (see
-  [Hosting](/guides/publishing/#large-files-range-requests-and-cors)). To
-  keep everything in one file instead, put the YAML inline (next section).
-</Aside>
+Open the page from a web server, not by double-clicking it: a page opened as
+`file://` can't fetch `story.yaml`, and shows "Open this page through a local
+web server" instead. The chapter `description` is HTML, which
+is why the text is in `<p>` tags.
 
-## The story inline, in one file
+A complete story on a plain page, with a legend and every kind of chapter
+action, is
+[`examples/scrollytelling`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/scrollytelling)
+in the repository: `index.html` with `story.yaml`, and `inline.html` with the
+YAML in the page.
 
-Instead of `src`, put the YAML in a `<script type="text/yaml">` inside the
-element, the same way [`<ml-map>`](/integrations/web-components/) takes it.
-Keep the YAML at the left margin: indentation is part of YAML.
+## Common tasks
 
-```html
-<ml-scrollytelling>
-  <script type="text/yaml">
-type: scrollytelling
-id: inline-story
-config:
-  mapStyle: "https://demotiles.maplibre.org/style.json"
-  center: [0, 20]
-  zoom: 1.5
-chapters:
-  - id: start
-    title: Start here
-    description: "<p>Scroll down.</p>"
-    center: [0, 20]
-    zoom: 1.5
-  - id: europe
-    title: Europe
-    center: [10, 50]
-    zoom: 3.5
-  </script>
-</ml-scrollytelling>
-```
+### In the middle of a page
 
-## What you get
-
-- **A sticky map and a chapter column.** The map fills the screen and stays put
-  while the story scrolls; each chapter is a card. `alignment: left | right |
-  center | full` places the card, and the camera is offset so the chapter's
-  `center` is not hidden behind it: beside a left or right card, above a
-  centred or full-width one. On phones the card sits in the lower part of
-  the screen and the map's subject shows above it; on a phone on its side
-  every card is a narrow one on the left, with the subject beside it.
-  Nothing on the map moves with the scroll: the legend is pinned in one
-  corner above the cards (a "Legend" button on phones that opens above
-  them; see [The legend](/schema/scrollytelling/#the-legend)), and a chapter
-  photo is never taller than 40% of the screen.
-- **Camera moves** per chapter: `center`, `zoom`, `pitch`, `bearing`, and
-  `animation: flyTo | easeTo | jumpTo` (with `speed`, `curve`).
-- **Layers and actions:** `layers.show` / `layers.hide`, and
-  `onChapterEnter` / `onChapterExit` actions (`setFilter`, `setPaintProperty`,
-  `setLayoutProperty`, `flyTo`, `easeTo`, `fitBounds`, `custom`).
-- **A chapter rail** (`showMarkers: true`): one dot per chapter at the right
-  edge. Click a dot to jump to its chapter, or Tab to it and use the arrow keys,
-  Home and End.
-- **The whole map document.** A story takes the same map-level keys a
-  `type: map` document does: `title:` and `description:` (the map's name and
-  description for screen readers), `sources:`, `markers:`, `legend:`,
-  `state:` and `parameters:` (the params panel), `images:`, `controls:`,
-  `terrain:`, `projection:`; and `config.locale` translates the story's own
-  text ([Accessibility & languages](/guides/accessibility-languages/)). A
-  [`classify:`](/guides/thematic-maps/) layer, or a layer with its own
-  `legend:` entry, pins a legend even without a `legend:` block. Corner slots
-  work too (below).
-- **Reading comes first.** The mouse wheel and touch scroll the story, not the
-  map (the story map's own pan and zoom gestures are off; set `scrollZoom: true`
-  or `dragPan: true` in `config:` to turn one back on). Links, images and video
-  in a chapter work. Under the reader's *reduce motion* setting every camera
-  move is instant and ambient rotation is off.
-- **One error card.** A story that fails to load or validate shows a single
-  card listing each problem with its line number and any did-you-mean hint
-  (`centre` → `center`), instead of a map. A story map that is slow to start
-  shows a small "Loading map…" until its basemap draws, as
-  [`<ml-map>` does](/troubleshooting/#reading-what-the-map-tells-you).
-
-## In the middle of a page
-
-The element is an ordinary block. Put content before and after it and the map
-is sticky only while the story's chapters are on screen:
+The element is an ordinary block. Put content before and after it, and the
+map is sticky only while the story's chapters are on screen:
 
 ```html
 <header>
-  <h1>Ring of Fire</h1>
+  <h1>Three cities</h1>
   <p>Scroll down to start the story.</p>
 </header>
 
@@ -223,50 +160,56 @@ is sticky only while the story's chapters are on screen:
 </article>
 ```
 
-<Aside type="caution">
-  `position: sticky` stops working inside an ancestor with `overflow: hidden`,
-  `overflow: auto` or `overflow: scroll`. If the map scrolls away with the
-  chapters, look for one of those on a wrapper around the element.
-</Aside>
+To make the map shorter than the window, or stick it below a fixed header,
+see [Styling](#styling).
 
-## Sites under a subpath (GitHub Pages)
+### Sites under a subpath (GitHub Pages)
 
-A GitHub Pages *project* site lives at `https://<user>.github.io/<repo>/`, so
-a path written for the site, like `/images/photo.jpg`, would load from the
-domain root and 404. Add `base` with the subpath and leave the YAML alone:
-
-```html
-<ml-scrollytelling src="story.yaml" base="/my-repo/"></ml-scrollytelling>
-```
-
-The story's `src`, every path in its map document and chapter `image` /
-`video` paths then resolve under `/my-repo/`; full `https://` URLs are never
-changed. It works exactly like `<ml-map base>`: the details, and how to
-preview a subpath on your computer, are in
+On a GitHub Pages project site (`https://<user>.github.io/<repo>/`), add
+`base="/<repo>/"` to the element and leave the YAML as it is. The story's
+`src`, the paths in its map and chapter `image` / `video` paths then load
+under the subpath. Details, and how to preview it on your computer:
 [Publishing & subpaths](/guides/publishing/#sites-under-a-subpath-github-pages).
 
-## Corner slots
+```html
+<ml-scrollytelling src="story.yaml" base="/<repo>/"></ml-scrollytelling>
+```
 
-Children with a `slot` attribute are handed to the story's map, exactly as on
-[`<ml-map>`](/integrations/web-components/): `top-left`, `top-right`,
-`bottom-left` and `bottom-right`. They stay in their corner, under the cards.
+### Corner slots
+
+Children with a `slot` attribute (`top-left`, `top-right`, `bottom-left`,
+`bottom-right`) are placed in that corner of the story's map, under the cards.
 A `slot="legend"` child fills the story's pinned legend panel instead of the
 built-in entries.
 
 ```html
 <ml-scrollytelling src="story.yaml">
-  <p slot="bottom-left">Data: Smithsonian GVP</p>
+  <p slot="bottom-left">Population figures: UN, 2024</p>
 </ml-scrollytelling>
 ```
 
-## Reacting to the story from JavaScript
+### Reacting to the story from JavaScript
 
 The element dispatches bubbling events: `ml-scrollytelling:chapter` when a
 chapter becomes active, `ml-scrollytelling:action` when a `custom` action
 runs, and `ml-scrollytelling:error` when the story can't be loaded or
-validated. It also carries the active chapter's id in `data-active-chapter`.
-The chapter and action events carry `map`, the MapLibre map, so a page script
-can do anything MapLibre can:
+validated. The chapter and action events carry `map`, the MapLibre map.
+
+A `custom` action is how a chapter asks your script to do something. In the
+story:
+
+```yaml
+chapters:
+  - id: jakarta
+    title: Jakarta
+    center: [106.85, -6.21]
+    zoom: 5
+    onChapterEnter:
+      - action: custom
+        options: { name: pulse }
+```
+
+On the page:
 
 ```html
 <script type="module">
@@ -279,27 +222,33 @@ can do anything MapLibre can:
     }
   });
 
+  story.addEventListener("ml-scrollytelling:chapter", (event) => {
+    console.log("now on", event.detail.chapterId);
+  });
+
   // Or wait for the map directly
   const map = await story.mapReady();
   console.log("story map loaded at zoom", map.getZoom());
 </script>
 ```
 
-Two attributes help while you work on a story and once it is published.
-`debug` outlines each chapter (green when active) and shows the story's author
-hints, such as a chapter naming a layer that doesn't exist, wherever the page
-is served; without it they show only while you develop. `quiet` hides the
-on-page notes on a finished site (the map's "Part of this map couldn't load"
-notice and a chapter's "image didn't load" note); the console keeps them.
+A chapter's `callback:` value arrives as `callback` on the chapter event. The
+element also carries the active chapter's id in `data-active-chapter`, and
+`goToChapter(id)` scrolls to a chapter.
 
-Every attribute (`src`, `base`, `debug`, `quiet`), property, method
-(`mapReady()`, `goToChapter(id)`, …), event and its `detail`, slot and styling
-hook is listed in the
-[`<ml-scrollytelling>` reference](/reference/elements/#ml-scrollytelling).
-`mapElement` gives you the story's own `<ml-map>`, whose
-[methods and events](/reference/elements/#ml-map) work as on any map.
+### Check chapter positions with `debug`
 
-## Styling
+`debug` outlines each chapter (green while active) so you can see where it
+starts and ends, and shows the story's author hints, such as a chapter naming
+a layer that doesn't exist, wherever the page is served. Without it they show
+only while you develop (`localhost`). `quiet` hides the on-page notes on a
+finished site; the console keeps them.
+
+```html
+<ml-scrollytelling src="story.yaml" debug></ml-scrollytelling>
+```
+
+### Styling
 
 The element's styles are added to the page for you, before your own
 stylesheets, so plain CSS overrides them:
@@ -323,40 +272,95 @@ ml-scrollytelling .chapter-content {
 }
 ```
 
-The parts are `.scrolly-map-container` (the sticky map), `.scrolly-chapters`
-(the column), `.scrolly-chapter` (one chapter; `.is-active` while active,
-`.align-left` and so on), `.chapter-content` (the card), `.chapter-markers` /
-`.chapter-marker` (the rail) and `.scrolly-footer`.
+Every class and custom property is listed under
+[`<ml-scrollytelling>` styling hooks](/reference/elements/#ml-scrollytelling-styling-hooks).
 
-## With a bundler
+## How a story behaves \{#what-you-get}
 
-Under Vite, webpack or any bundler, install the packages and import the
-registration module once:
+The map fills the screen and stays put while the chapters scroll; each
+chapter is a card. The wheel and touch scroll the story, not the map. The
+legend is pinned in a corner above the cards, and a story that can't load
+shows one card listing each problem. The details (which chapter is active, the
+camera offset beside a card, the chapter rail, the legend, reduced motion)
+are in [How a story behaves](/schema/scrollytelling/#how-a-story-behaves).
 
-```bash
-npm install @maplibre-yaml/core maplibre-gl
+## Reference
+
+- [`<ml-scrollytelling>` reference](/reference/elements/#ml-scrollytelling):
+  every attribute (`src`, `base`, `debug`, `quiet`), property, method, event,
+  slot and styling hook. `mapElement` gives you the story's own `<ml-map>`,
+  whose [methods and events](/reference/elements/#ml-map) work as on any map.
+- [Writing a story file](/schema/scrollytelling/): chapters, camera moves,
+  layers, actions, the rail and the legend.
+- [YAML reference for stories](/reference/yaml/scrollytelling/): every key,
+  with its type and default.
+
+## Troubleshooting
+
+Problems every map shares are in [Troubleshooting](/troubleshooting/).
+
+- **"Open this page through a local web server".** The page was opened as
+  `file://`. Serve the folder (`npx serve .`) and open the address it prints.
+- **The map scrolls away with the chapters.** `position: sticky` stops
+  working inside an ancestor with `overflow: hidden`, `auto` or `scroll`.
+  Look for one on a wrapper around the element.
+- **The map and text come out tiny on a phone.** The page is missing
+  `<meta name="viewport" content="width=device-width, initial-scale=1">`.
+- **A PMTiles, FlatGeobuf, GeoParquet or COG file fails locally.** The local
+  server must support range requests: `npx serve` does,
+  `python3 -m http.server` doesn't
+  ([Range requests and CORS](/guides/publishing/#large-files-range-requests-and-cors)).
+
+## Alternatives
+
+### The story inline, in one file
+
+Instead of `src`, put the YAML in a `<script type="text/yaml">` inside the
+element. Start the YAML on the line after the opening tag and keep every line
+at the same depth relative to the first: indentation is part of YAML.
+
+```html
+<ml-scrollytelling>
+  <script type="text/yaml">
+type: scrollytelling
+id: inline-story
+config:
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  center: [0, 20]
+  zoom: 1.5
+chapters:
+  - id: start
+    title: Start here
+    description: "<p>Scroll down.</p>"
+    center: [0, 20]
+    zoom: 1.5
+  - id: europe
+    title: Europe
+    center: [10, 50]
+    zoom: 3.5
+  </script>
+</ml-scrollytelling>
 ```
 
-```js
-// maplibre-gl 6 loads its worker from a separate file. Inside a bundle it
-// cannot find that file by itself, so tell it where it is (Vite shown).
-import { setWorkerUrl } from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import "maplibre-gl/dist/maplibre-gl.css";
-import "@maplibre-yaml/core/register";
+A page script can also set the story from an object:
+`document.querySelector("ml-scrollytelling").story = { type: "scrollytelling", … }`.
 
-setWorkerUrl(workerUrl);
-```
+### With a bundler
 
-The element is then available in your HTML or templates. On maplibre-gl 4 or
-5, delete the two worker lines and the `setWorkerUrl` call (there is no worker
-file to import). Other bundlers: see
-[Installation](/getting-started/installation/#supported-maplibre-gl-versions).
+Under Vite or another bundler, install `@maplibre-yaml/core` and
+`maplibre-gl`, and import `@maplibre-yaml/core/register` once in your entry
+file, with the worker setup that maplibre-gl 6 needs:
+[Installation: using a bundler](/getting-started/installation/#using-a-bundler-vite).
+The element then works in your HTML or templates. In React, Vue or Svelte,
+see [React & other frameworks](/integrations/react/#story-maps).
 
-## Runnable example
+### In an Astro site
 
-`examples/scrollytelling/` in the repository is a complete story in a plain
-page (`index.html` with `story.yaml`, and `inline.html` with the YAML inline),
-driven in a real browser by the test suite. From a clone, run
-`pnpm verify:serve` and open
-http://localhost:4174/examples/scrollytelling/index.html.
+[Story maps in Astro](/integrations/astro-stories/) shows the same story file
+with the `<Scrollytelling>` component, validated at build time.
+
+## Moved sections
+
+### Runnable example
+
+The runnable example is linked under the [quick start](#quick-start).
