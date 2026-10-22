@@ -13,9 +13,22 @@
  * Tangram draws ground and water UNLIT — earth and landuse are a
  * tile-repeated hatch texture mixed ink→paper, water is a crumpled-paper
  * normal map under the style's fixed lights — so each bakes to a plain
- * image that a `*-pattern` reproduces exactly, not approximately. Buildings
- * are the lit part of the look; their static fallback is one light, seamless
- * pen hatch on every face, shaded by the document's `light:`.
+ * image that a `*-pattern` reproduces.
+ *
+ * Pre-filtered, not verbatim: Tangram mipmapped its hatch textures, MapLibre
+ * samples patterns with NO mipmaps. A pitched map draws the far ground
+ * minified, and a hatch with detail finer than that minification aliases —
+ * the strokes break up and shimmer as the map moves. So the hatches are
+ * baked at twice the period (2x upscale), with strokes softened by a small
+ * Gaussian and their ink↔paper contrast eased to 85 %, then posterized to
+ * 32 tones in a palette PNG. The image itself carries no detail finer than
+ * the worst minification it will see.
+ *
+ * Buildings are the lit part of the look. The crosshatch document draws them
+ * as plain lit extrusions: a pattern on a wall is sampled edge-on, which is
+ * where an un-mipmapped texture shimmers worst, and tonal wall hatching is
+ * the runtime effect's job. `crosshatch-walls` still bakes a wall hatch for
+ * a document that wants one statically, pre-filtered along the stroke.
  */
 
 import sharp from 'sharp';
@@ -56,25 +69,108 @@ export function defaultAssetsDir(from: string = fileURLToPath(import.meta.url)):
 export const INK = [77, 77, 78] as const; // vec3(0.302, 0.302, 0.306)
 export const PAPER = [249, 243, 227] as const; // vec3(0.976, 0.953, 0.890)
 
+/** How a hatch is pre-filtered for un-mipmapped sampling. */
+export interface HatchFilter {
+  /** Enlarge the source this many times: the hatch period grows with it. */
+  upscale: number;
+  /**
+   * Gaussian sigma in OUTPUT pixels, rounding the stroke profile (the
+   * harmonics that alias first). `[x, y]` blurs the axes differently.
+   */
+  sigma: number | readonly [number, number];
+  /** Ink↔paper amplitude kept about the mean coverage (1 = full ink). */
+  contrast: number;
+  /** Posterize coverage to this many tones (0 = no posterize). */
+  levels: number;
+}
+
+/** The ground hatches (earth, landuse): 2x period, soft strokes, 85 % ink, 32 tones. */
+export const GROUND_FILTER: HatchFilter = { upscale: 2, sigma: 1.2, contrast: 0.85, levels: 32 };
+/** The wall hatch: 2x period, smoothed ALONG the stroke so walls seen edge-on stay steady. */
+export const WALL_FILTER: HatchFilter = { upscale: 2, sigma: [12, 2], contrast: 0.9, levels: 32 };
+
 /**
- * Ink-on-paper: the source texture's alpha is stroke coverage, mixed from
- * PAPER (no stroke) to INK (full stroke), output opaque.
+ * Separable 1-D Gaussian along x (`horizontal`) or y over a square
+ * single-channel buffer, edges clamped. The caller tiles 3x3 first, so the
+ * clamp never reaches the centre tile it keeps.
  */
-export async function inkOnPaper(src: string): Promise<Buffer> {
+function gaussian(buf: Buffer, n: number, sigma: number, horizontal: boolean): Buffer {
+  if (!(sigma > 0)) return buf;
+  const r = Math.ceil(sigma * 3);
+  const k: number[] = [];
+  let sum = 0;
+  for (let i = -r; i <= r; i++) {
+    const v = Math.exp(-(i * i) / (2 * sigma * sigma));
+    k.push(v);
+    sum += v;
+  }
+  const out = Buffer.alloc(buf.length);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      let a = 0;
+      for (let i = -r; i <= r; i++) {
+        const xx = horizontal ? Math.min(n - 1, Math.max(0, x + i)) : x;
+        const yy = horizontal ? y : Math.min(n - 1, Math.max(0, y + i));
+        a += k[i + r]! * buf[yy * n + xx]!;
+      }
+      out[y * n + x] = Math.round(a / sum);
+    }
+  }
+  return out;
+}
+
+/**
+ * A pre-filtered ink-on-paper hatch. The source texture's alpha is stroke
+ * coverage; it is upscaled and blurred seamlessly (tiled 3x3, filtered, the
+ * centre cropped), its contrast eased about the mean coverage, posterized,
+ * then mixed PAPER (no stroke) → INK (full stroke) into an opaque palette
+ * PNG. Deterministic: same source, same filter, same pixels.
+ */
+export async function prefilteredHatch(src: string, filter: HatchFilter): Promise<Buffer> {
   const { data, info } = await sharp(src)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
-  const out = Buffer.alloc(info.width * info.height * 4);
-  for (let i = 0; i < info.width * info.height; i++) {
-    const a = data[i * 4 + 3]! / 255;
-    for (let c = 0; c < 3; c++) {
-      out[i * 4 + c] = Math.round(PAPER[c]! * (1 - a) + INK[c]! * a);
+  if (info.width !== info.height) throw new Error(`${src}: hatch source must be square`);
+  const size = info.width;
+  const coverage = Buffer.alloc(size * size);
+  for (let i = 0; i < coverage.length; i++) coverage[i] = data[i * 4 + 3]!;
+
+  // Tile 3x3 so resize and blur wrap around the tile's edges.
+  const big = Buffer.alloc(size * 3 * size * 3);
+  for (let ty = 0; ty < 3; ty++) {
+    for (let y = 0; y < size; y++) {
+      for (let tx = 0; tx < 3; tx++) {
+        coverage.copy(big, (ty * size + y) * size * 3 + tx * size, y * size, (y + 1) * size);
+      }
     }
-    out[i * 4 + 3] = 255;
   }
-  return sharp(out, { raw: { width: info.width, height: info.height, channels: 4 } })
-    .png()
+  const S = size * filter.upscale;
+  let img = sharp(big, { raw: { width: size * 3, height: size * 3, channels: 1 } });
+  if (filter.upscale !== 1) {
+    img = img.resize(S * 3, S * 3, { kernel: filter.upscale > 1 ? 'lanczos3' : 'mitchell' });
+  }
+  let buf: Buffer = await img.extractChannel(0).raw().toBuffer();
+  if (buf.length !== S * 3 * S * 3) throw new Error(`${src}: unexpected resize output`);
+  const [sx, sy] = typeof filter.sigma === 'number' ? [filter.sigma, filter.sigma] : filter.sigma;
+  buf = gaussian(gaussian(buf, S * 3, sx, true), S * 3, sy, false);
+  const tile = await sharp(buf, { raw: { width: S * 3, height: S * 3, channels: 1 } })
+    .extract({ left: S, top: S, width: S, height: S })
+    .extractChannel(0)
+    .raw()
+    .toBuffer();
+
+  let mean = 0;
+  for (const v of tile) mean += v / 255;
+  mean /= tile.length;
+  const px = Buffer.alloc(S * S * 3);
+  for (let i = 0; i < S * S; i++) {
+    let cov = Math.min(1, Math.max(0, mean + (tile[i]! / 255 - mean) * filter.contrast));
+    if (filter.levels > 1) cov = Math.round(cov * (filter.levels - 1)) / (filter.levels - 1);
+    for (let c = 0; c < 3; c++) px[i * 3 + c] = Math.round(PAPER[c]! * (1 - cov) + INK[c]! * cov);
+  }
+  return sharp(px, { raw: { width: S, height: S, channels: 3 } })
+    .png({ compressionLevel: 9, palette: true, colours: 256, dither: 0 })
     .toBuffer();
 }
 
@@ -136,21 +232,27 @@ export async function draftingGrid(): Promise<Buffer> {
 export const BAKE_PRESETS: Record<string, BakePreset> = {
   crosshatch: {
     description:
-      "Tangram's crosshatch: hatched paper ground, denser landuse hatch, pre-lit " +
-      'crumpled-paper water, and a light pen hatch for building faces',
-    outputs: ['earth.png', 'landuse.png', 'water.png', 'building-fallback.png'],
+      "Tangram's crosshatch, pre-filtered for MapLibre: hatched paper ground, denser " +
+      'landuse hatch, pre-lit crumpled-paper water',
+    outputs: ['earth.png', 'landuse.png', 'water.png'],
     bake: async (assets) => [
-      { filename: 'earth.png', data: await inkOnPaper(join(assets, 'hatch_0.png')) },
-      { filename: 'landuse.png', data: await inkOnPaper(join(assets, 'hatch_2.png')) },
+      // 512 px, declared at pixelRatio 2 in the document: a 256 CSS px tile.
+      { filename: 'earth.png', data: await prefilteredHatch(join(assets, 'hatch_0.png'), GROUND_FILTER) },
+      { filename: 'landuse.png', data: await prefilteredHatch(join(assets, 'hatch_2.png'), GROUND_FILTER) },
       { filename: 'water.png', data: await litWater(join(assets, 'normal-0031.jpg')) },
-      // Atlas cells from Tangram's tonal-hatch filter are not tileable (they
-      // repeat as a visible grid), so the static building face reuses
-      // hatch_0 — Tangram's own light stroke — declared at pixelRatio 4 in
-      // the document so strokes read finer on walls than on the ground.
-      {
-        filename: 'building-fallback.png',
-        data: await inkOnPaper(join(assets, 'hatch_0.png')),
-      },
+    ],
+  },
+  'crosshatch-walls': {
+    description:
+      'A pen hatch for building walls (fill-extrusion-pattern), smoothed along the ' +
+      'stroke; the crosshatch document itself draws plain lit walls',
+    outputs: ['building-hatch.png'],
+    // Atlas cells from Tangram's tonal-hatch filter are not tileable (they
+    // repeat as a visible grid), so the wall hatch is hatch_0 — Tangram's
+    // own light stroke. 512 px; declare it at pixelRatio 4 for strokes finer
+    // on walls than on the ground.
+    bake: async (assets) => [
+      { filename: 'building-hatch.png', data: await prefilteredHatch(join(assets, 'hatch_0.png'), WALL_FILTER) },
     ],
   },
   blueprint: {

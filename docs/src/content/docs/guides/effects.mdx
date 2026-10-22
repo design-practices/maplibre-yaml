@@ -33,7 +33,7 @@ any third-party one:
 
 ![tonal-hatch on lower Manhattan: shaded faces carry dense pen strokes, lit faces stay paper, walls are inked](../../../assets/effects/tonal-hatch.webp)
 
-![The same document without the effect: its static fallback, one pen hatch on every face](../../../assets/effects/tonal-hatch-fallback.webp)
+![The same document without the effect: its static fallback, plain lit walls on the hatched ground](../../../assets/effects/tonal-hatch-fallback.webp)
 
 ![blueprint on lower Manhattan: a 4-metre grid on every roof and wall, glowing edges](../../../assets/effects/blueprint.webp)
 
@@ -54,7 +54,6 @@ config:
   bearing: 29
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 images:
-  building-hatch: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/building-fallback.png", pixelRatio: 4 }
   # the 3x3 tonal atlas tonal-hatch samples (Tangram's hatch.png)
   hatch-atlas: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/hatch-atlas.png" }
 sources:
@@ -68,10 +67,12 @@ layers:
     source-layer: building
     minzoom: 13
     paint:
-      # the static fallback: one pen hatch on every face
-      fill-extrusion-pattern: building-hatch
+      # the static fallback: plain lit walls. A wall pattern is drawn
+      # edge-on and shimmers without mipmaps; the tonal hatch is the effect's.
+      fill-extrusion-color: "#ece6d4"
       fill-extrusion-height: ["coalesce", ["get", "render_height"], 10]
       fill-extrusion-base: ["coalesce", ["get", "render_min_height"], 0]
+      fill-extrusion-vertical-gradient: true
     effect:
       type: tonal-hatch
       gain: 0.72

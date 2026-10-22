@@ -70,7 +70,7 @@ reload the page.
 - **`schema [block]`** prints the JSON Schema for `map`, `scrollytelling`,
   `root` or `any`, matching the installed core.
 - **`bake [preset]`** regenerates the pattern images of the `crosshatch` and
-  `blueprint` classic styles.
+  `blueprint` classic styles (and `crosshatch-walls`, an optional wall hatch).
 
 What `emit` keeps, replaces with a fallback, or drops is listed in
 [Export classes](https://docs.maplibre-yaml.org/guides/export-classes/).

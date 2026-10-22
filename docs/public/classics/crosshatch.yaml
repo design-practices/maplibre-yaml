@@ -10,7 +10,11 @@
 #  - With @maplibre-yaml/effects loaded, <ml-map> upgrades the buildings to
 #    Tangram's tonal hatching: stroke DENSITY follows the light on each face.
 #  - Without it — or where the effect cannot run (globe, terrain, no WebGL2)
-#    — the buildings render exactly as authored below: the static fallback.
+#    — the buildings render exactly as authored below: the static fallback,
+#    plain walls shaded by `light:`. Tonal wall hatching is the effect's job;
+#    a static pattern on a wall is drawn edge-on and shimmers without
+#    mipmaps. The ground hatches are pre-filtered for the same reason
+#    (`mlym bake crosshatch`).
 #  - `mlym emit` (--with-fallbacks, the default) ships that same static
 #    layer with one lossy warning; `--strict` refuses, because the exported
 #    map is not the map the effect draws. That is fallback-where-honest.
@@ -41,11 +45,11 @@ light:
   anchor: map
   position: [1.15, 239, 30]
   intensity: 0.5
+# The ground hatches are 512 px at pixelRatio 2: a 256 CSS px tile.
 images:
   earth: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/earth.png", pixelRatio: 2 }
   landuse: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/landuse.png", pixelRatio: 2 }
   water: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/water.png", pixelRatio: 1 }
-  building-hatch: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/building-fallback.png", pixelRatio: 4 }
   # The 3x3 tonal atlas tonal-hatch samples: Tangram's hatch.png
   # (tangrams/blocks filter/imgs, MIT), verbatim. No static layer uses it.
   hatch-atlas: { url: "https://docs.maplibre-yaml.org/classics/crosshatch/hatch-atlas.png" }
@@ -107,8 +111,11 @@ layers:
     source-layer: building
     minzoom: 13
     paint:
-      # The static fallback: one light pen hatch on every face.
-      fill-extrusion-pattern: building-hatch
+      # The static fallback: plain walls, paper-toned, shaded by `light:`
+      # and darkened toward the ground by the vertical gradient. No
+      # fill-extrusion-pattern — a wall pattern is sampled edge-on and
+      # shimmers without mipmaps; the tonal hatch is the effect's.
+      fill-extrusion-color: "#ece6d4"
       # Tangram exaggerates height by max(1, 0.5 + (1 - zoom/20) * 5) — linear
       # in zoom (2.25x at z13 → 1x at z18), so one interpolate reproduces it.
       fill-extrusion-height:

@@ -32,15 +32,20 @@ same map in vanilla MapLibre.
 
 What it reproduces exactly, and what it approximates:
 
-- **Exact: ground, landuse and water.** Tangram draws these unlit: a
-  hatch texture repeated per tile, mixed from ink to paper, and a
+- **Ground, landuse and water: Tangram's own textures.** Tangram draws these
+  unlit: a hatch texture repeated per tile, mixed from ink to paper, and a
   crumpled-paper normal map under fixed lights. Each one bakes to a plain
-  image, and a `*-pattern` repeats that image just as Tangram did.
+  image that a `*-pattern` repeats. Tangram mipmapped its textures and
+  MapLibre samples patterns without mipmaps, so the hatches are baked
+  pre-filtered: at twice Tangram's period, with softened strokes, so the far
+  ground of the pitched view stays steady instead of shimmering.
 - **Approximate: buildings.** In Tangram the buildings are the lit part,
-  with stroke *density* following the light on each face. Here every face
-  gets the same light pen hatch, and the document's `light:` shades the
-  faces. Tangram's height exaggeration (×2.25 at z13 down to ×1 at z18) is
-  kept, as one `interpolate`.
+  with stroke *density* following the light on each face. Here the walls
+  are plain, shaded by the document's `light:` and a vertical gradient. A
+  pattern on a wall is drawn edge-on, where an un-mipmapped texture
+  shimmers most, so the static style leaves the walls to the light.
+  Tangram's height exaggeration (×2.25 at z13 down to ×1 at z18) is kept,
+  as one `interpolate`.
 
 ## What the effect adds
 

@@ -1051,7 +1051,7 @@ test.describe("Mapzen classics: the static presets render their look (U10′)", 
       { timeout: 60_000 }
     );
 
-  test("crosshatch: hatched buildings, pre-lit water, serif labels, the document's light", async ({
+  test("crosshatch: hatched ground, plain lit buildings, pre-lit water, serif labels, the document's light", async ({
     page,
   }) => {
     const errors = await guard(page);
@@ -1062,8 +1062,10 @@ test.describe("Mapzen classics: the static presets render their look (U10′)", 
       const map = (document.getElementById("map") as any).getMap();
       const q = (id: string) => map.queryRenderedFeatures(undefined, { layers: [id] }).length;
       return {
-        images: ["earth", "landuse", "water", "building-hatch"].map((n) => map.hasImage(n)),
-        pattern: map.getPaintProperty("buildings", "fill-extrusion-pattern"),
+        images: ["earth", "landuse", "water"].map((n) => map.hasImage(n)),
+        // Walls carry no pattern: one sampled edge-on shimmers without mipmaps.
+        pattern: map.getPaintProperty("buildings", "fill-extrusion-pattern") ?? null,
+        wall: map.getPaintProperty("buildings", "fill-extrusion-color"),
         landcover: map.getPaintProperty("landcover", "fill-pattern"),
         light: map.getLight(),
         buildings: q("buildings"),
@@ -1071,13 +1073,9 @@ test.describe("Mapzen classics: the static presets render their look (U10′)", 
         labels: q("place-labels"),
       };
     });
-    expect(state.images, "a pattern image never reached map.addImage").toEqual([
-      true,
-      true,
-      true,
-      true,
-    ]);
-    expect(state.pattern).toBe("building-hatch");
+    expect(state.images, "a pattern image never reached map.addImage").toEqual([true, true, true]);
+    expect(state.pattern).toBe(null);
+    expect(state.wall).toBe("#ece6d4");
     // ml-gjf: a data-driven pattern survives validation and reaches MapLibre.
     expect(state.landcover).toEqual(["match", ["get", "class"], "sand", "earth", "landuse"]);
     expect(state.light).toMatchObject({ anchor: "map", position: [1.15, 239, 30] });
@@ -1086,14 +1084,26 @@ test.describe("Mapzen classics: the static presets render their look (U10′)", 
     // Self-hosted Libre Baskerville Italic ranges load from the docs tree.
     expect(state.labels).toBeGreaterThan(0);
 
-    // The hatch is on screen: Tangram's paper and its ink strokes both
-    // cover real area.
-    const { counts, total } = await colourCounts(page, {
-      paper: [249, 243, 227],
-      ink: [77, 77, 78],
-    });
-    expect(counts.paper! / total, "too little paper — hatch missing?").toBeGreaterThan(0.1);
-    expect(counts.ink! / total, "no ink strokes — hatch missing?").toBeGreaterThan(0.01);
+    // The hatch is on screen: Tangram's paper and the hatch strokes both
+    // cover real area. The baked hatches are pre-filtered (softened strokes
+    // at 85 % contrast), so a stroke is a mid-grey ink-on-paper tone rather
+    // than full ink — and the buildings, plain lit walls of the same hue,
+    // are hidden for the stroke count so only the ground speaks.
+    const paperShare = await colourCounts(page, { paper: [249, 243, 227] });
+    await page.evaluate(
+      () =>
+        new Promise<void>((r) => {
+          const map = (document.getElementById("map") as any).getMap();
+          map.setLayoutProperty("buildings", "visibility", "none");
+          map.once("idle", () => r());
+        })
+    );
+    const strokeShare = await colourCounts(page, { stroke: [137, 135, 130] });
+    const paper = paperShare.counts.paper! / paperShare.total;
+    const stroke = strokeShare.counts.stroke! / strokeShare.total;
+    console.log(`[crosshatch] paper ${paper.toFixed(3)}, ground strokes ${stroke.toFixed(3)}`);
+    expect(paper, "too little paper — hatch missing?").toBeGreaterThan(0.1);
+    expect(stroke, "no hatch strokes on the ground — hatch missing?").toBeGreaterThan(0.03);
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 

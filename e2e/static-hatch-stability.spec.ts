@@ -3,15 +3,22 @@
  * devicePixelRatio 2 — hatch stability (ml-aot.139).
  *
  * @remarks
- * Plain style-spec patterns, no effect. Two things only a real map shows:
+ * Plain style-spec patterns, no effect. MapLibre samples its pattern atlas
+ * bilinearly with NO mipmaps, so any pattern drawn minified aliases: thin
+ * strokes break into dots and crawl as the map moves. The document is built
+ * around that (variant E of the static-crosshatch comparison):
  *
- *  1. Density: the document declares the building hatch at `pixelRatio: 4`.
- *     MapLibre samples its pattern atlas bilinearly with no mipmaps, so an
- *     image denser than the screen is drawn minified and its thin strokes
- *     alias (break into dots, crawl as the map moves). `<ml-map>` now hands
- *     MapLibre the image resampled to the screen's ratio — the pixels the
- *     exported @2x sprite already carries.
- *  2. Stability across an integer zoom: MapLibre rescales a pattern 2x at
+ *  1. Density: the ground hatches are 512 px declared at `pixelRatio: 2` —
+ *     pre-filtered by `mlym bake crosshatch` (2x Tangram's period, soft
+ *     strokes). On a DPR-2 screen they reach MapLibre as declared; on a
+ *     DPR-1 screen `<ml-map>` hands MapLibre the image resampled to the
+ *     screen's ratio, the pixels the exported @1x sprite carries.
+ *  2. No wall pattern: walls are sampled edge-on, the worst minification on
+ *     screen, so the buildings are plain lit extrusions. At pitch 60 the
+ *     frame (ground hatch and buildings) must sit at the aliasing floor:
+ *     close to the same camera rendered 8x supersampled and box-filtered
+ *     down, i.e. what a mipmapped renderer would show.
+ *  3. Stability across an integer zoom: MapLibre rescales a pattern 2x at
  *     each integer zoom and cross-fades the two scales over `fadeDuration`.
  *     Driven frame by frame on a 60 fps clock (`setNow`), a slow zoom across
  *     z16 must show no frame where the hatch jumps: each frame must match
@@ -50,7 +57,7 @@ async function open(page: Page): Promise<void> {
   await page.waitForFunction(
     () => {
       const map = (document.getElementById("map") as any)?.getMap?.();
-      return !!map?.isStyleLoaded?.() && !!map.getLayer("buildings") && map.hasImage("building-hatch");
+      return !!map?.isStyleLoaded?.() && !!map.getLayer("buildings") && map.hasImage("earth") && map.hasImage("landuse");
     },
     undefined,
     { timeout: 60_000 }
@@ -86,17 +93,117 @@ function residual(a: Float32Array, b: Float32Array, w: number, h: number, scale:
   return sum / n;
 }
 
-test("the building hatch reaches MapLibre at the screen's pixel ratio, not its declared 4", async ({ page }) => {
+/** One registered image as MapLibre holds it. */
+const imageState = (page: Page, name: string) =>
+  page.evaluate((n) => {
+    const style = (document.getElementById("map") as any).getMap().style;
+    const image = style.getImage?.(n) ?? style.imageManager?.getImage?.(n);
+    return { dpr: devicePixelRatio, width: image?.data?.width, pixelRatio: image?.pixelRatio };
+  }, name);
+
+test("the ground hatch reaches MapLibre as declared, and the buildings carry no pattern", async ({ page }) => {
   const errors = await guard(page);
   await open(page);
-  const img = await page.evaluate(() => {
+  // earth.png / landuse.png are 512 px at pixelRatio 2 (256 CSS px); DPR 2 needs no resample
+  expect(await imageState(page, "earth")).toEqual({ dpr: 2, width: 512, pixelRatio: 2 });
+  expect(await imageState(page, "landuse")).toEqual({ dpr: 2, width: 512, pixelRatio: 2 });
+  const buildings = await page.evaluate(() => {
     const map = (document.getElementById("map") as any).getMap();
-    const style = map.style;
-    const image = style.getImage?.("building-hatch") ?? style.imageManager?.getImage?.("building-hatch");
-    return { dpr: devicePixelRatio, width: image?.data?.width, pixelRatio: image?.pixelRatio };
+    return {
+      pattern: map.getPaintProperty("buildings", "fill-extrusion-pattern") ?? null,
+      color: map.getPaintProperty("buildings", "fill-extrusion-color"),
+      gradient: map.getPaintProperty("buildings", "fill-extrusion-vertical-gradient"),
+      wallImage: map.hasImage("building-hatch"),
+    };
   });
-  // building-fallback.png is 256 px at pixelRatio 4 (64 CSS px); at DPR 2 → 128 px at ratio 2
-  expect(img).toEqual({ dpr: 2, width: 128, pixelRatio: 2 });
+  expect(buildings).toEqual({ pattern: null, color: "#ece6d4", gradient: true, wallImage: false });
+  expect(errors, errors.join("\n")).toEqual([]);
+});
+
+test.describe("on a DPR-1 screen", () => {
+  test.use({ deviceScaleFactor: 1 });
+  test("the ground hatch is resampled to the screen's pixel ratio, not drawn minified from its declared 2", async ({ page }) => {
+    const errors = await guard(page);
+    await open(page);
+    // 512 px at pixelRatio 2 → 256 px at ratio 1: same size on the map, no minification
+    expect(await imageState(page, "earth")).toEqual({ dpr: 1, width: 256, pixelRatio: 1 });
+    expect(await imageState(page, "landuse")).toEqual({ dpr: 1, width: 256, pixelRatio: 1 });
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+});
+
+test("pitch 60: the ground hatch and the buildings sit at the aliasing floor (DPR 2, vs 8x supersampled)", async ({ page }) => {
+  test.setTimeout(180_000);
+  const errors = await guard(page);
+  await open(page);
+  const bands = await page.evaluate(async () => {
+    const map = (document.getElementById("map") as any).getMap();
+    const idle = () => new Promise<void>((r) => { map.once("idle", () => r()); map.triggerRepaint(); });
+    for (const l of map.getStyle().layers) if (l.type === "symbol") map.setLayoutProperty(l.id, "visibility", "none");
+    map.jumpTo({ center: [-74.0118, 40.7075], zoom: 15.9, pitch: 60, bearing: 29 });
+    await idle();
+    await new Promise((r) => setTimeout(r, 500));
+    await idle();
+    const canvas: HTMLCanvasElement = map.getCanvas();
+    const W = canvas.width, H = canvas.height;
+    // Luminance box-filtered onto the device-pixel grid, then a 5-tap
+    // binomial blur (about what the eye resolves on a phone: moiré is
+    // low-frequency and survives it, sub-pixel resampling noise does not).
+    const grab = () =>
+      new Promise<Float32Array>((resolve) => {
+        map.once("render", () => {
+          const c = document.createElement("canvas");
+          c.width = canvas.width;
+          c.height = canvas.height;
+          const ctx = c.getContext("2d")!;
+          ctx.drawImage(canvas, 0, 0);
+          const d = ctx.getImageData(0, 0, c.width, c.height).data;
+          const f = c.width / W;
+          const lum = new Float32Array(W * H);
+          for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            let s = 0;
+            for (let j = 0; j < f; j++) for (let i = 0; i < f; i++) {
+              const p = ((y * f + j) * c.width + x * f + i) * 4;
+              s += 0.299 * d[p]! + 0.587 * d[p + 1]! + 0.114 * d[p + 2]!;
+            }
+            lum[y * W + x] = s / (f * f);
+          }
+          const k5 = [1, 4, 6, 4, 1], tmp = new Float32Array(W * H), out = new Float32Array(W * H);
+          for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            let s = 0;
+            for (let i = -2; i <= 2; i++) s += k5[i + 2]! * lum[y * W + Math.min(W - 1, Math.max(0, x + i))]!;
+            tmp[y * W + x] = s / 16;
+          }
+          for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            let s = 0;
+            for (let i = -2; i <= 2; i++) s += k5[i + 2]! * tmp[Math.min(H - 1, Math.max(0, y + i)) * W + x]!;
+            out[y * W + x] = s / 16;
+          }
+          resolve(out);
+        });
+        map.triggerRepaint();
+      });
+    const frame = await grab();
+    map._maxCanvasSize = [16384, 16384];
+    map.setPixelRatio(devicePixelRatio * 4);
+    await idle();
+    const ref = await grab();
+    map.setPixelRatio(devicePixelRatio);
+    const s = [0, 0, 0], n = [0, 0, 0];
+    for (let y = 0; y < H; y++) {
+      const b = Math.min(2, Math.floor((y / H) * 3));
+      for (let x = 0; x < W; x++) { s[b] += Math.abs(frame[y * W + x]! - ref[y * W + x]!); n[b]++; }
+    }
+    return s.map((v, i) => v / n[i]!);
+  });
+  console.log(`[static hatch] v${VENDOR_MAJOR} DPR 2 pitch 60 alias far/mid/near: ${bands.map((b) => b.toFixed(2)).join(" / ")}`);
+  // Measured (Chromium, SwiftShader): this document 0.62 / 0.56 / 0.68; the
+  // previous one — hatched walls, Tangram-period ground — 1.04 / 0.86 / 1.32,
+  // its walls alone 1.00 / 0.82 / 1.06. A wall pattern or an unfiltered
+  // ground hatch puts a band over the line.
+  for (const [i, band] of ["far", "mid", "near"].entries()) {
+    expect(bands[i]!, `${band} third aliases`).toBeLessThan(0.82);
+  }
   expect(errors, errors.join("\n")).toEqual([]);
 });
 

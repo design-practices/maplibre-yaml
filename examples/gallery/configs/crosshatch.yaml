@@ -26,11 +26,11 @@ light:
   anchor: map
   position: [1.15, 239, 30]
   intensity: 0.5
+# The ground hatches are 512 px at pixelRatio 2: a 256 CSS px tile.
 images:
   earth: { url: "/docs/public/classics/crosshatch/earth.png", pixelRatio: 2 }
   landuse: { url: "/docs/public/classics/crosshatch/landuse.png", pixelRatio: 2 }
   water: { url: "/docs/public/classics/crosshatch/water.png", pixelRatio: 1 }
-  building-hatch: { url: "/docs/public/classics/crosshatch/building-fallback.png", pixelRatio: 4 }
 sources:
   omt:
     type: vector
@@ -92,7 +92,10 @@ layers:
     source-layer: building
     minzoom: 13
     paint:
-      fill-extrusion-pattern: building-hatch
+      # Plain walls: paper-toned, shaded by `light:` and darkened toward the
+      # ground by the vertical gradient. No fill-extrusion-pattern — a wall
+      # pattern is sampled edge-on and shimmers without mipmaps.
+      fill-extrusion-color: "#ece6d4"
       # Tangram exaggerates height by max(1, 0.5 + (1 - zoom/20) * 5) — linear
       # in zoom (2.25x at z13 → 1x at z18), so one interpolate reproduces it.
       fill-extrusion-height:

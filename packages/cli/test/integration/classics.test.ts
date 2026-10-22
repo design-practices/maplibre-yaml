@@ -14,7 +14,8 @@
  *    are read from docs/public, the files the docs site serves);
  *  - each twin differs from its docs page only in where tiles, images and
  *    glyphs come from;
- *  - `mlym bake` reproduces the committed images pixel for pixel.
+ *  - `mlym bake` reproduces the committed images pixel for pixel;
+ *  - the static crosshatch carries no wall pattern (see the test).
  *
  * The browser half (renders, buildings drawn, hatch on screen) lives in
  * e2e/gallery.spec.ts.
@@ -141,8 +142,33 @@ describe.each(PRESETS)('classic preset: %s', (slug) => {
   });
 });
 
+describe('the static crosshatch draws plain walls', () => {
+  // MapLibre samples patterns without mipmaps. A fill-extrusion-pattern is
+  // sampled edge-on on every wall, the steepest minification on screen, so a
+  // static hatch on walls shimmers as the map moves — the dominant aliasing
+  // in the pitched crosshatch. Tonal wall hatching is the live effect's job;
+  // the static tier keeps walls plain and lit. (`mlym bake crosshatch-walls`
+  // still bakes a pre-filtered wall hatch for documents that want one.)
+  it.each([
+    docsPath('crosshatch'),
+    twinPath('crosshatch'),
+    join(REPO, 'docs/public/classics/crosshatch.yaml'),
+    join(REPO, 'examples/verification/effects/crosshatch.yaml'),
+  ])('%s has no fill-extrusion-pattern', (path) => {
+    const doc = parseYAML(readFileSync(path, 'utf-8'));
+    expect(JSON.stringify(doc)).not.toContain('fill-extrusion-pattern');
+    const buildings = doc.layers.find((l: { id: string }) => l.id === 'buildings');
+    expect(buildings.paint['fill-extrusion-color']).toBe('#ece6d4');
+    expect(buildings.paint['fill-extrusion-vertical-gradient']).toBe(true);
+    expect(doc.light).toMatchObject({ anchor: 'map', position: [1.15, 239, 30] });
+  });
+});
+
+/** Presets whose output the docs commit (docs/public/classics/<preset>/). */
+const COMMITTED = ['crosshatch', 'blueprint'];
+
 describe('mlym bake reproduces the committed classic images', () => {
-  it.each(Object.entries(BAKE_PRESETS))('%s', async (preset, def) => {
+  it.each(Object.entries(BAKE_PRESETS).filter(([p]) => COMMITTED.includes(p)))('%s', async (preset, def) => {
     const files = await def.bake(defaultAssetsDir());
     expect(files.map((f) => f.filename)).toEqual([...def.outputs]);
     for (const file of files) {
@@ -152,6 +178,33 @@ describe('mlym bake reproduces the committed classic images', () => {
       expect([a.info.width, a.info.height]).toEqual([b.info.width, b.info.height]);
       // Decoded RGBA, not PNG bytes: encoders differ across libvips builds.
       expect(Buffer.compare(a.data, b.data), `${preset}/${file.filename} drifted`).toBe(0);
+    }
+  });
+
+  it('every committed crosshatch image is a baked output (nothing stale left behind)', async () => {
+    const { readdirSync } = await import('node:fs');
+    const committed = readdirSync(join(REPO, 'docs/public/classics/crosshatch'))
+      .filter((f) => f.endsWith('.png') && f !== 'hatch-atlas.png')
+      .sort();
+    expect(committed).toEqual([...BAKE_PRESETS.crosshatch!.outputs].sort());
+  });
+
+  it('the pre-filtered hatches: 2x period, at most 32 tones, deterministic', async () => {
+    for (const preset of ['crosshatch', 'crosshatch-walls']) {
+      const [a, b] = await Promise.all([
+        BAKE_PRESETS[preset]!.bake(defaultAssetsDir()),
+        BAKE_PRESETS[preset]!.bake(defaultAssetsDir()),
+      ]);
+      for (const [i, file] of a.entries()) {
+        expect(Buffer.compare(file.data, b[i]!.data), `${preset}/${file.filename} not deterministic`).toBe(0);
+        if (file.filename === 'water.png') continue;
+        const { data, info } = await sharp(file.data).raw().toBuffer({ resolveWithObject: true });
+        // Tangram's sources are 256 px; the bake doubles the period.
+        expect([info.width, info.height]).toEqual([512, 512]);
+        const tones = new Set<number>();
+        for (let p = 0; p < data.length; p += info.channels) tones.add((data[p]! << 16) | (data[p + 1]! << 8) | data[p + 2]!);
+        expect(tones.size, `${preset}/${file.filename}`).toBeLessThanOrEqual(32);
+      }
     }
   });
 

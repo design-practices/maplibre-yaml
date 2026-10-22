@@ -195,8 +195,8 @@ const style = `/classics/${name}/exported/style.json`;
     // The emitted style.json carries an ABSOLUTE production sprite URL (what
     // a downloader needs, and what `mlym emit --sprite-base` wrote). On any
     // other origin — a PR preview, astro dev — that URL 404s until the files
-    // are deployed, and every pattern layer (buildings, ground, water)
-    // silently disappears. MapLibre's standard `transformRequest` hook serves
+    // are deployed, and every pattern layer (ground, landuse, water; the
+    // blueprint grid) silently disappears. MapLibre's standard `transformRequest` hook serves
     // those requests from this page's own origin instead; the file itself is
     // untouched (still byte-identical to `mlym emit`).
     const exported = new maplibregl.Map({

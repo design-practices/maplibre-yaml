@@ -23,11 +23,10 @@ in to z17.5).
 | File | Source |
 |---|---|
 | `crosshatch/hatch-atlas.png` | tangrams/blocks `filter/imgs/hatch.png` — the 3×3 tonal hatch atlas (MIT), verbatim |
-| `crosshatch/earth.png`, `landuse.png`, `building-fallback.png` | baked from tangrams/tangram-sandbox `styles/imgs/hatch_0.png` / `hatch_2.png` (crosshatch style by @patriciogv, 2015, MIT): ink-on-paper recolouring |
+| `crosshatch/earth.png`, `landuse.png` | `mlym bake crosshatch` from tangrams/tangram-sandbox `styles/imgs/hatch_0.png` / `hatch_2.png` (crosshatch style by @patriciogv, 2015, MIT): ink-on-paper, pre-filtered for un-mipmapped sampling (same files as `docs/public/classics/crosshatch/`) |
 | `crosshatch/water.png` | baked from tangram-sandbox `styles/imgs/normal-0031.jpg` lit under the crosshatch style's fixed lights |
 | `blueprint/grid.png` | generated drafting grid |
 | `../data/omt/` | OpenStreetMap data (ODbL), see its README |
 
-The bake scripts live on the U12 spike branch (`spike/07-u12-deck-hatch`,
-`packages/spike-deck-hatch/scripts/bake-*.ts`); U10′ owns making them a
-reproducible tool.
+`mlym bake crosshatch --out examples/verification/effects/crosshatch`
+regenerates the baked files (`packages/cli/src/lib/bake.ts`).
