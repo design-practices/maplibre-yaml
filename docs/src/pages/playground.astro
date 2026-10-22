@@ -1,0 +1,524 @@
+---
+/**
+ * /playground/: edit a map document, see the map change as you type, share
+ * it as a link, take it home as a folder (bead ml-vjs.17; design
+ * docs/plans/2026-10-22-docs-playground-design.md).
+ *
+ * The page is Starlight's (header, theme, search) at full width. Its script
+ * loads the editor with a dynamic import, so CodeMirror ships to this page
+ * only; docs/test/playground-bundle.test.mjs fails the build otherwise.
+ * The starter list is rendered here, at build time, from the gallery's one
+ * list, so the browser never downloads it as data.
+ */
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { CURATED, DEFAULT_SRC, galleryStarters } from '../playground/starters.mjs';
+
+const gallery = galleryStarters();
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'Playground',
+    description:
+      'Edit a maplibre-yaml map document in the browser and watch the map change as you type. Mistakes are explained where you make them; share a map as a link or download it as a folder that works.',
+    template: 'splash',
+    tableOfContents: false,
+    editUrl: false,
+    lastUpdated: false,
+    prev: false,
+    next: false,
+  }}
+>
+  <div class="pg-root not-content" data-default-src={DEFAULT_SRC} data-state="loading">
+    <div class="pg-toolbar">
+      <span class="pg-title" aria-hidden="true">Playground</span>
+      <p class="pg-lede">Edit the map document and the map redraws as you type.</p>
+      <label class="sr-only" for="pg-starter">Start from an example</label>
+      <select id="pg-starter" class="pg-control">
+        <option value="">Start from an example…</option>
+        <optgroup label="Start here">
+          {CURATED.map((s) => <option value={s.src}>{s.title}</option>)}
+        </optgroup>
+        {gallery.map((g) => (
+          <optgroup label={`Gallery: ${g.title}`}>
+            {g.starters.map((s) => <option value={s.src}>{s.title}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      <button id="pg-share-btn" class="pg-control" type="button">Share</button>
+      <button id="pg-download-btn" class="pg-control" type="button">Download</button>
+    </div>
+    <p id="pg-message" class="pg-message" role="status" aria-live="polite"></p>
+    <div id="pg-shared" class="pg-banner" hidden>
+      <p>
+        <strong>Opened from a share link.</strong> It runs like every map on this site: raw HTML
+        shows as text and page hooks are off. The sites it names, which your browser may contact: <span id="pg-shared-hosts"></span>.
+      </p>
+      <button id="pg-shared-close" class="pg-control pg-small" type="button">Hide</button>
+    </div>
+    <div class="pg-panes">
+      <section id="pg-code" class="pg-code" aria-labelledby="pg-code-heading">
+        <h2 id="pg-code-heading" class="sr-only">Map document</h2>
+        <div id="pg-status" class="pg-status" data-state="loading">
+          <button id="pg-status-btn" type="button" class="pg-status-btn" aria-describedby="pg-status-hint">
+            <span class="pg-dot" aria-hidden="true"></span>
+            <span id="pg-status-text" aria-live="polite">Loading…</span>
+          </button>
+          <span id="pg-status-hint" class="sr-only">Moves to the first problem and opens the list of problems.</span>
+          <button id="pg-swap" type="button" class="pg-control pg-small pg-swap" aria-pressed="false">Bigger map</button>
+        </div>
+        <div id="pg-editor" class="pg-editor"><p class="pg-loading">Loading the editor…</p></div>
+        <p class="pg-hint">
+          <kbd>Tab</kbd> indents. To leave the editor, press <kbd>Esc</kbd> then <kbd>Tab</kbd>.
+          <kbd>Ctrl</kbd>+<kbd>Space</kbd> lists the keys you can write here.
+        </p>
+      </section>
+      <section id="pg-preview" class="pg-preview" aria-label="Map preview">
+        <p id="pg-stale" class="pg-pill" hidden>Showing your last working map</p>
+        <p id="pg-empty" class="pg-empty" hidden>The map appears once the document has no errors.</p>
+        <div id="pg-story-gate" class="pg-story-gate" hidden>
+          <p>This is a story map: it moves as you scroll through its chapters.</p>
+          <button id="pg-story-open" class="pg-control" type="button">Preview the story</button>
+        </div>
+        <button id="pg-back" class="pg-control pg-back" type="button" hidden>Back to code</button>
+      </section>
+    </div>
+  </div>
+
+  <section class="pg-about">
+    <h2>How the playground works</h2>
+    <p>
+      The editor holds a map document: the same YAML you would save as <code>map.yaml</code> next
+      to an <code>index.html</code>. The map redraws a moment after you stop typing, and keeps
+      the view you panned to unless you change <code>center</code>, <code>zoom</code> or another
+      part of the view yourself.
+    </p>
+    <ul>
+      <li>
+        <strong>Mistakes</strong> are underlined where you make them. Tap or hover one to read
+        what's wrong; when it's a spelling, <em>Change to …</em> fixes it. While the document has
+        an error, the map keeps showing your last working version.
+      </li>
+      <li>
+        <strong>Suggestions:</strong> start a new line, or press <kbd>Ctrl</kbd>+<kbd>Space</kbd>,
+        for the keys and values that fit there, each with its description.
+      </li>
+      <li>
+        <strong>Share</strong> puts the whole document in the link, after the <code>#</code>, so
+        nothing is stored on a server. Anyone who opens it sees your map and can change their copy.
+      </li>
+      <li>
+        <strong>Download</strong> saves <code>my-map.zip</code>: the page, the document and a
+        README that says how to open them with a local web server and publish them.
+      </li>
+      <li>
+        <strong>Data</strong> comes from URLs on sites that allow it (see
+        <a href="/guides/data-sources/">Loading data</a>), or written into the document as GeoJSON.
+      </li>
+    </ul>
+    <p>
+      To make the same map in your own page, follow the
+      <a href="/getting-started/quick-start/">quick start</a>. Every key is in the
+      <a href="/reference/yaml/">YAML reference</a>.
+    </p>
+  </section>
+</StarlightPage>
+
+<script>
+  import '../components/maplibre-worker'; // first: maplibre-gl 6's worker URL
+  import '@maplibre-yaml/core/register';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+  import { start } from '../playground/app';
+
+  start();
+</script>
+
+<style is:global>
+  /* The playground uses the whole width under Starlight's header. */
+  .main-frame:has(.pg-root) .content-panel {
+    padding-inline: 0;
+  }
+  .main-frame:has(.pg-root) .content-panel:first-of-type {
+    /* Starlight's title: kept for screen readers and search, not shown. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    padding: 0;
+    border: 0;
+  }
+  .main-frame:has(.pg-root) .content-panel + .content-panel {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .main-frame:has(.pg-root) .sl-container {
+    max-width: none;
+    margin: 0;
+  }
+  .main-frame:has(.pg-root) .sl-markdown-content {
+    margin: 0;
+  }
+  .main-frame:has(.pg-root) footer {
+    display: none;
+  }
+
+  .pg-root {
+    --pg-bg: var(--sl-color-bg);
+    --pg-fg: var(--sl-color-white);
+    --pg-muted: var(--sl-color-gray-3);
+    --pg-line: var(--sl-color-hairline-light);
+    --pg-panel: var(--sl-color-bg-nav);
+    --pg-accent: var(--sl-color-accent);
+    --pg-on-accent: var(--sl-color-black);
+    --pg-active-line: color-mix(in srgb, var(--sl-color-accent) 9%, transparent);
+    --pg-selection: color-mix(in srgb, var(--sl-color-accent) 30%, transparent);
+    --pg-ok: #15803d;
+    --pg-warn: #a16207;
+    --pg-err: #b91c1c;
+    --pg-tok-key: #1d4ed8;
+    --pg-tok-string: #15803d;
+    --pg-tok-number: #b45309;
+    --pg-tok-comment: #64748b;
+    --pg-tok-meta: #9333ea;
+    --pg-tok-punct: #475569;
+    --pg-head: calc(var(--sl-nav-height) + 0px);
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - var(--sl-nav-height));
+    min-height: 26rem;
+    color: var(--pg-fg);
+    background: var(--pg-bg);
+  }
+  :root[data-theme='dark'] .pg-root {
+    --pg-on-accent: var(--sl-color-black);
+    --pg-ok: #4ade80;
+    --pg-warn: #facc15;
+    --pg-err: #f87171;
+    --pg-tok-key: #93c5fd;
+    --pg-tok-string: #86efac;
+    --pg-tok-number: #fdba74;
+    --pg-tok-comment: #94a3b8;
+    --pg-tok-meta: #d8b4fe;
+    --pg-tok-punct: #cbd5e1;
+  }
+
+  .pg-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--pg-line);
+  }
+  .pg-title {
+    font-weight: 600;
+    font-size: var(--sl-text-lg);
+  }
+  .pg-lede {
+    margin: 0 auto 0 0.25rem;
+    color: var(--pg-muted);
+    font-size: var(--sl-text-sm);
+  }
+  .pg-control {
+    font: inherit;
+    font-size: var(--sl-text-sm);
+    min-height: 2.5rem;
+    padding: 0 0.85rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--sl-color-gray-4);
+    background: var(--pg-panel);
+    color: var(--pg-fg);
+    cursor: pointer;
+  }
+  .pg-control:hover {
+    border-color: var(--pg-accent);
+  }
+  .pg-root :is(button, select, a):focus-visible {
+    outline: 3px solid var(--pg-accent);
+    outline-offset: 2px;
+  }
+  #pg-starter {
+    max-width: 20rem;
+  }
+  .pg-small {
+    min-height: 2rem;
+    padding: 0 0.6rem;
+  }
+  .pg-message {
+    margin: 0;
+    padding: 0 1rem;
+    font-size: var(--sl-text-sm);
+    color: var(--pg-muted);
+  }
+  .pg-message:not(:empty) {
+    padding-block: 0.4rem;
+    border-bottom: 1px solid var(--pg-line);
+  }
+  .pg-link-button {
+    font: inherit;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--sl-color-text-accent);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .pg-banner {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.4rem 1rem;
+    font-size: var(--sl-text-sm);
+    background: color-mix(in srgb, var(--pg-accent) 12%, var(--pg-bg));
+    border-bottom: 1px solid var(--pg-line);
+  }
+  .pg-banner[hidden] {
+    display: none;
+  }
+  .pg-banner p {
+    margin: 0;
+    flex: 1;
+  }
+  #pg-shared-hosts {
+    font-family: var(--__sl-font-mono);
+    overflow-wrap: anywhere;
+  }
+
+  .pg-panes {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .pg-code {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--pg-line);
+  }
+  .pg-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.2rem 0.5rem 0.2rem 0.25rem;
+    border-bottom: 1px solid var(--pg-line);
+    font-size: var(--sl-text-sm);
+  }
+  .pg-status-btn {
+    flex: 1;
+    min-width: 0;
+    min-height: 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.5rem;
+    font: inherit;
+    text-align: left;
+    color: inherit;
+    background: none;
+    border: 0;
+    border-radius: 0.375rem;
+    cursor: pointer;
+  }
+  .pg-status-btn[aria-disabled='true'] {
+    cursor: default;
+  }
+  .pg-dot {
+    flex: none;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background: var(--pg-muted);
+  }
+  .pg-status[data-state='ok'] .pg-dot {
+    background: var(--pg-ok);
+  }
+  .pg-status[data-state='warning'] .pg-dot {
+    background: var(--pg-warn);
+    border-radius: 2px;
+    transform: rotate(45deg) scale(0.85);
+  }
+  .pg-status[data-state='error'] .pg-dot {
+    background: var(--pg-err);
+    border-radius: 2px;
+  }
+  .pg-swap {
+    display: none;
+  }
+  .pg-editor {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .pg-editor .cm-editor {
+    height: 100%;
+  }
+  .pg-editor .cm-content,
+  .pg-editor .cm-gutters {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .pg-loading {
+    margin: 1rem;
+    color: var(--pg-muted);
+  }
+  .pg-hint {
+    margin: 0;
+    padding: 0.35rem 0.75rem;
+    font-size: var(--sl-text-xs);
+    color: var(--pg-muted);
+    border-top: 1px solid var(--pg-line);
+  }
+  .pg-hint kbd,
+  .pg-about kbd {
+    font-size: 0.85em;
+  }
+  .pg-hover {
+    padding: 0.4rem 0.6rem;
+    max-width: 22rem;
+    font-size: var(--sl-text-sm);
+  }
+  .pg-hover code {
+    color: var(--pg-muted);
+    background: none;
+  }
+  .pg-hover p {
+    margin: 0.25rem 0 0;
+  }
+  .cm-completionInfo.cm-completionInfo-below {
+    position: absolute;
+    padding: 0.4rem 0.6rem;
+  }
+  .cm-tooltip-lint a {
+    color: var(--sl-color-text-accent);
+  }
+
+  .pg-preview {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+    container-type: size;
+  }
+  .pg-root[data-kind='scrollytelling'] .pg-preview {
+    overflow: auto;
+  }
+  .pg-preview > ml-map.pg-preview-el {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+  }
+  .pg-preview > ml-scrollytelling.pg-preview-el {
+    --ml-scrolly-map-height: 100cqh;
+  }
+  .pg-pill {
+    position: absolute;
+    z-index: 5;
+    top: 0.6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: var(--sl-text-xs);
+    color: #fff;
+    background: #8c1c1c;
+    white-space: nowrap;
+  }
+  .pg-empty,
+  .pg-story-gate {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--pg-muted);
+    background: var(--pg-panel);
+  }
+  :is(.pg-pill, .pg-empty, .pg-story-gate, .pg-back)[hidden] {
+    display: none;
+  }
+  .pg-back {
+    position: fixed;
+    z-index: 101;
+    top: 0.75rem;
+    left: 0.75rem;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  .pg-about {
+    max-width: 45rem;
+    margin: 0 auto;
+    padding: 2rem 1rem 3rem;
+  }
+
+  @media (max-width: 50rem) {
+    .pg-lede {
+      display: none;
+    }
+    .pg-toolbar {
+      flex-wrap: nowrap;
+      padding: 0.4rem 0.5rem;
+      gap: 0.4rem;
+    }
+    .pg-title {
+      display: none;
+    }
+    #pg-starter {
+      flex: 1 1 0;
+      min-width: 0;
+      width: 0;
+    }
+    .pg-panes {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: 40% minmax(0, 1fr);
+    }
+    .pg-root.pg-map-big .pg-panes {
+      grid-template-rows: 70% minmax(0, 1fr);
+    }
+    .pg-preview {
+      order: -1;
+      border-bottom: 1px solid var(--pg-line);
+    }
+    .pg-code {
+      border-right: 0;
+    }
+    .pg-swap {
+      display: inline-block;
+    }
+    /* 16px: iOS Safari zooms the page into a smaller field on focus. */
+    .pg-editor .cm-content,
+    .pg-editor .cm-gutters {
+      font-size: 16px;
+    }
+    .pg-hint {
+      display: none;
+    }
+    .pg-banner {
+      font-size: var(--sl-text-xs);
+      padding-inline: 0.5rem;
+    }
+    /* A story map takes the whole screen; "Back to code" returns. The
+       site header would sit on top of it (it is in a higher stacking
+       context), so it steps aside meanwhile. */
+    html:has(.pg-root.pg-story-full) header.header {
+      visibility: hidden;
+    }
+    html:has(.pg-root.pg-story-full) {
+      overflow: hidden;
+    }
+    .pg-root.pg-story-full .pg-preview {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: var(--pg-bg);
+    }
+  }
+</style>

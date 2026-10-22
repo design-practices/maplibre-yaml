@@ -35,7 +35,9 @@
  *                                  so the color-relief twin shows its ramp
  *  - `/_astro/*`, `/classics/*`, `/examples/classics/`, `/fonts/*`  the built docs site (docs/dist): the
  *                                  classics launch page, mounted where the
- *                                  site serves it
+ *                                  site serves it; likewise `/playground/`
+ *                                  with the `/configs/`, `/schema/` and
+ *                                  `/data/` files it loads
  *  - `/my-repo/*`                  examples/verification/base-path/site, as
  *                                  GitHub Pages serves a project site
  *                                  (ml-aot.30); `/my-repo/cloud-native/*`
@@ -562,7 +564,12 @@ const server = createServer(async (req, res) => {
       path.startsWith("/classics/") ||
       path.startsWith("/examples/classics/") ||
       path.startsWith("/examples/gallery/fly-to-a-location-based-on-scroll-position/") ||
-      path.startsWith("/configs/gallery/") ||
+      path.startsWith("/configs/") ||
+      // The playground (ml-vjs.17): its page, the schemas its completion
+      // reads, and the site data its starters load.
+      path.startsWith("/playground/") ||
+      path.startsWith("/schema/") ||
+      path.startsWith("/data/") ||
       path === "/favicon.svg" ||
       path.startsWith("/fonts/")
     ) {
