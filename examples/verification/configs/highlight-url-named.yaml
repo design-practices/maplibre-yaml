@@ -1,0 +1,24 @@
+# Assertion (ml-aot.142): the same as highlight-url-layer.yaml through a
+# named `sources:` entry, which is added before any layer: the renderer
+# works out up front that a highlighted layer draws from it.
+type: map
+id: highlight-url-named
+config:
+  center: [-118.25, 34.05]
+  zoom: 11
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  quakes:
+    type: geojson
+    url: "/examples/verification/data/quakes-sample.geojson"
+layers:
+  - id: quakes
+    type: circle
+    source: quakes
+    paint:
+      circle-radius: 30
+      circle-color: "#e63946"
+    interactive:
+      hover:
+        highlight: true
+        cursor: pointer

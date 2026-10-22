@@ -33,7 +33,7 @@ import { StreamManager } from "../data/streaming/stream-manager";
 import { DataMerger } from "../data/merge/data-merger";
 import { LoadingManager } from "../ui/loading-manager";
 import { sanitizeAttribution } from "../utils/attribution";
-import type { MergeStrategy } from "../data/merge/data-merger";
+import { mergeKeyOf, type MergeStrategy } from "../data/merge/data-merger";
 import { declaredColumns, formatOfSource, typeReadsFormat } from "../formats/detect";
 import {
   FlatGeobufLoader,
@@ -98,6 +98,37 @@ function applyHighlightPaint(layerSpec: any, layer: Layer): void {
 }
 
 /**
+ * Put a GeoJSON source's id strategy on its MapLibre spec.
+ *
+ * @remarks
+ * The author's `generateId` / `promoteId` always win, `generateId: false`
+ * included. Otherwise, when a layer over the source uses feature-state
+ * (`hover.highlight`), `generateId: true` is set: feature-state is addressed
+ * by feature id, and without one the highlight is silently dead. That holds
+ * for inline data and for data loaded from `url:` alike (ml-aot.142; the
+ * `url:` path used to only warn).
+ *
+ * Generated ids are the feature's position in the data. That is stable across
+ * a `merge` refresh — merge keeps every keyed feature in its place and appends
+ * new ones — and after any refresh the renderer drops hover state anyway, so
+ * `promoteId` on the merge key would buy nothing and would fail on features
+ * that carry their key only as a top-level `id`. The cost: generated ids
+ * replace ids the data had, so an author who filters on `["id"]` keeps their
+ * own with `generateId: false` (numeric ids) or `promoteId`.
+ */
+function withFeatureIds(
+  spec: Record<string, unknown>,
+  config: { generateId?: boolean; promoteId?: unknown },
+  needsIds: boolean
+): void {
+  if (config.generateId !== undefined) spec["generateId"] = config.generateId;
+  if (config.promoteId !== undefined) spec["promoteId"] = config.promoteId;
+  if (needsIds && config.generateId === undefined && config.promoteId === undefined) {
+    spec["generateId"] = true;
+  }
+}
+
+/**
  * Callbacks for layer data loading events
  */
 export interface LayerManagerCallbacks {
@@ -116,6 +147,11 @@ export interface LayerManagerCallbacks {
    * no layer on the map: the layer goes on top instead of being dropped).
    */
   onLayerHint?: (layerId: string, message: string) => void;
+  /**
+   * An author hint about one source that still draws (a live `merge`
+   * update whose features have no `updateKey`: they are kept, not matched).
+   */
+  onSourceHint?: (sourceId: string, message: string) => void;
 }
 
 /**
@@ -146,6 +182,13 @@ export interface LayerManagerDataOptions {
    * that draws from a source. Absent: every column is read.
    */
   columnsFor?: (sourceId: string) => readonly string[] | "all" | undefined;
+  /**
+   * The named sources a highlighted layer draws from (ml-aot.142): injected
+   * by `MapRenderer`, which sees every layer, because named sources are
+   * added before any layer is. Each gets feature ids unless the author chose
+   * an id strategy. Absent: none.
+   */
+  namedSourcesNeedingIds?: ReadonlySet<string>;
 }
 
 /**
@@ -171,12 +214,16 @@ export class LayerManager {
   private activeSourcePipelines: Set<string>;
   /** First loads a host already started, by source id (consumed once). */
   private pendingData: Map<string, Promise<FeatureCollection>>;
+  /** Sources already told their `merge` updates carry keyless features (once each). */
+  private keylessWarned = new Set<string>();
   /** FlatGeobuf / GeoParquet readers by source id (ml-cnv.3/.4), stopped with their source. */
   private formatLoaders = new Map<string, FormatLoader>();
   /** Whether the page registered a URL protocol itself (see LayerManagerDataOptions). */
   private isProtocolRegistered: (scheme: string) => boolean;
   /** The GeoParquet columns the document reads (see LayerManagerDataOptions). */
   private columnsFor: (sourceId: string) => readonly string[] | "all" | undefined;
+  /** Named sources a highlighted layer draws from (see LayerManagerDataOptions). */
+  private namedSourcesNeedingIds: ReadonlySet<string>;
 
   constructor(
     map: MapLibreMap,
@@ -189,6 +236,7 @@ export class LayerManager {
     this.pendingData = new Map(Object.entries(data.pending ?? {}));
     this.isProtocolRegistered = data.isProtocolRegistered ?? (() => false);
     this.columnsFor = data.columnsFor ?? (() => undefined);
+    this.namedSourcesNeedingIds = data.namedSourcesNeedingIds ?? new Set();
     this.pollingManager = new PollingManager();
     this.streamManager = new StreamManager();
     this.dataMerger = new DataMerger();
@@ -225,12 +273,15 @@ export class LayerManager {
       // setData, and data events fire with the source id as their subject —
       // exactly like the refresh pipeline (startSourcePipeline) already does.
       const geojson = spec as unknown as GeoJSONSourceConfig;
+      const needsIds = this.namedSourcesNeedingIds.has(id);
       if (geojson.type === "geojson" && geojson.url) {
-        void this.addGeoJSONSourceFromURL(id, id, geojson);
+        void this.addGeoJSONSourceFromURL(id, id, geojson, needsIds);
         continue;
       }
 
-      this.addMapSource(id, this.toMapLibreSourceSpec(spec as any, id));
+      const mapLibreSpec = this.toMapLibreSourceSpec(spec as any, id);
+      if (geojson.type === "geojson") withFeatureIds(mapLibreSpec, geojson, needsIds);
+      this.addMapSource(id, mapLibreSpec);
     }
   }
 
@@ -498,33 +549,19 @@ export class LayerManager {
       const geojsonSource = source as unknown as GeoJSONSourceConfig;
 
       if (geojsonSource.url) {
-        await this.addGeoJSONSourceFromURL(sourceId, layer.id, geojsonSource);
+        await this.addGeoJSONSourceFromURL(
+          sourceId,
+          layer.id,
+          geojsonSource,
+          isHighlightEnabled(layer)
+        );
       } else if (geojsonSource.data) {
         const sourceSpec: any = {
           type: "geojson",
           data: geojsonSource.data,
         };
 
-        // Authored id strategy first — it always wins over the fallback below.
-        if (geojsonSource.generateId !== undefined) sourceSpec.generateId = geojsonSource.generateId;
-        if (geojsonSource.promoteId !== undefined) sourceSpec.promoteId = geojsonSource.promoteId;
-
-        // Feature-state is addressed by feature id. Without one, highlight has
-        // nothing to target — so opt the source into generated ids rather than
-        // leaving the configured highlight silently dead.
-        if (
-          isHighlightEnabled(layer) &&
-          !geojsonSource.generateId &&
-          !geojsonSource.promoteId
-        ) {
-          sourceSpec.generateId = true;
-          console.warn(
-            `[maplibre-yaml] hover.highlight on layer "${layer.id}" enabled ` +
-              "`generateId` on its source, because feature-state needs ids. " +
-              "Set `promoteId` if a property should be the id instead — " +
-              "generated ids are not stable across data refreshes."
-          );
-        }
+        withFeatureIds(sourceSpec, geojsonSource, isHighlightEnabled(layer));
 
         // Only add clustering properties if they are defined
         if (geojsonSource.cluster !== undefined) sourceSpec.cluster = geojsonSource.cluster;
@@ -632,7 +669,8 @@ export class LayerManager {
   private async addGeoJSONSourceFromURL(
     sourceId: string,
     layerId: string,
-    config: GeoJSONSourceConfig
+    config: GeoJSONSourceConfig,
+    needsIds = false
   ): Promise<void> {
     // Determine initial data source
     let initialData: FeatureCollection = {
@@ -667,8 +705,10 @@ export class LayerManager {
     if (config.buffer !== undefined) sourceSpec.buffer = config.buffer;
     if (config.maxzoom !== undefined) sourceSpec.maxzoom = config.maxzoom;
     if (config.attribution !== undefined) sourceSpec.attribution = config.attribution;
-    if (config.generateId !== undefined) sourceSpec.generateId = config.generateId;
-    if (config.promoteId !== undefined) sourceSpec.promoteId = config.promoteId;
+    // The same for a GeoJSON file, a FlatGeobuf or GeoParquet file decoded
+    // into this source, or prefetched data: a file loaded by `url:` is the
+    // usual way a student's data arrives (ml-aot.142).
+    withFeatureIds(sourceSpec, config, needsIds);
 
     this.addMapSource(sourceId, sourceSpec);
 
@@ -923,6 +963,9 @@ export class LayerManager {
 
     const mergeResult = this.dataMerger.merge(existing, incoming, options);
     this.sourceData.set(sourceId, mergeResult.data);
+    if (mergeResult.unkeyed && options.updateKey) {
+      this.warnKeyless(sourceId, incoming, options.updateKey, mergeResult.unkeyed);
+    }
 
     const source = this.map.getSource(sourceId) as GeoJSONSource;
     if (source?.setData) {
@@ -934,6 +977,34 @@ export class LayerManager {
     for (const target of this.layersForPipeline(sourceId, layerId)) {
       this.callbacks.onDataLoaded?.(target, mergeResult.total);
     }
+  }
+
+  /**
+   * Say, once per source, that a `merge` update carried features with no
+   * key: they are kept rather than matched, which is rarely what the author
+   * meant (ml-aot.141). Names the key and some properties the data does have,
+   * since a misspelt or wrongly placed key is the usual cause.
+   */
+  private warnKeyless(
+    sourceId: string,
+    incoming: FeatureCollection,
+    updateKey: string,
+    count: number
+  ): void {
+    if (this.keylessWarned.has(sourceId)) return;
+    this.keylessWarned.add(sourceId);
+    const sample = incoming.features.find((f) => mergeKeyOf(f, updateKey) === undefined);
+    const names = Object.keys(sample?.properties ?? {}).slice(0, 6);
+    const has = names.length
+      ? ` Its features have properties such as ${names.map((n) => `\`${n}\``).join(", ")}.`
+      : " Its features have no properties.";
+    this.callbacks.onSourceHint?.(
+      sourceId,
+      `Source \`${sourceId}\`: ${count} of ${incoming.features.length} updated features have no \`${updateKey}\` ` +
+        `property and no top-level \`id\`, so \`updateStrategy: merge\` can't match them; ` +
+        `they are kept as they are, replaced by each update's own.${has}` +
+        ` Set \`updateKey\` to a property that is different for every feature.`
+    );
   }
 
   /**

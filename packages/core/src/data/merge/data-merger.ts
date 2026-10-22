@@ -34,7 +34,14 @@ export interface MergeOptions {
   /** Merge strategy to use */
   strategy: MergeStrategy;
 
-  /** Property key used to identify features for merge strategy */
+  /**
+   * Property used to identify features for the merge strategy.
+   *
+   * @remarks
+   * A feature is matched by `properties[updateKey]`; one without that
+   * property is matched by its top-level GeoJSON `id` instead (the USGS
+   * feeds, for one, keep their id there). See {@link mergeKeyOf}.
+   */
   updateKey?: string;
 
   /** Maximum number of features to keep (append-window) */
@@ -65,6 +72,29 @@ export interface MergeResult {
 
   /** Total number of features in result */
   total: number;
+
+  /**
+   * Merge strategy only: how many incoming features had no key — neither
+   * `properties[updateKey]` nor a top-level `id`. They are kept, not
+   * matched (see {@link DataMerger}).
+   */
+  unkeyed?: number;
+}
+
+/**
+ * The key the merge strategy matches a feature by.
+ *
+ * @remarks
+ * `properties[updateKey]` when the feature has it, otherwise the feature's
+ * top-level GeoJSON `id` — the place the GeoJSON spec itself keeps a
+ * feature's identifier, and where feeds such as USGS's put it. Undefined
+ * when the feature has neither (null counts as absent).
+ */
+export function mergeKeyOf(feature: Feature, updateKey: string): unknown {
+  const own = feature.properties?.[updateKey];
+  if (own !== undefined && own !== null) return own;
+  const id = feature.id;
+  return id !== undefined && id !== null ? id : undefined;
 }
 
 /**
@@ -79,8 +109,14 @@ export interface MergeResult {
  *
  * **merge**: Update by key, keep unmatched
  * - Updates existing features by matching on a key property
+ *   (`properties[updateKey]`, or the feature's top-level `id` when it has
+ *   no such property)
  * - Adds new features that don't match existing keys
- * - Preserves existing features not in the update
+ * - Preserves existing features not in the update, in their order
+ * - Features with no key at all can't be matched, so they are kept as a
+ *   group: an update carrying keyless features replaces the previous
+ *   keyless ones (a re-polled feed doesn't pile up duplicates); an update
+ *   with none leaves them. They are never silently dropped.
  * - Requires `updateKey` option
  *
  * **append-window**: Add with time/size limits
@@ -187,30 +223,40 @@ export class DataMerger {
     let added = 0;
     let updated = 0;
 
-    // Create a map of existing features by their key
+    // Existing features by key. A Map keeps insertion order, and an update
+    // to a key keeps its slot: features stay in place across refreshes, so
+    // index-based ids (`generateId`) keep pointing at the same feature.
     const existingMap = new Map<unknown, Feature>();
+    const existingKeyless: Feature[] = [];
     for (const feature of existing.features) {
-      const key = feature.properties?.[updateKey];
-      if (key !== undefined && key !== null) {
-        existingMap.set(key, feature);
-      }
+      const key = mergeKeyOf(feature, updateKey);
+      if (key === undefined) existingKeyless.push(feature);
+      else existingMap.set(key, feature);
     }
 
-    // Process incoming features
+    const incomingKeyless: Feature[] = [];
     for (const feature of incoming.features) {
-      const key = feature.properties?.[updateKey];
-      if (key !== undefined && key !== null) {
-        if (existingMap.has(key)) {
-          updated++;
-        } else {
-          added++;
-        }
-        existingMap.set(key, feature);
+      const key = mergeKeyOf(feature, updateKey);
+      if (key === undefined) {
+        incomingKeyless.push(feature);
+        continue;
       }
+      if (existingMap.has(key)) {
+        updated++;
+      } else {
+        added++;
+      }
+      existingMap.set(key, feature);
     }
 
-    // Convert map back to features array
-    const features = Array.from(existingMap.values());
+    // Keyless features can't be matched. Dropping them emptied a map whose
+    // features all lacked the key (ml-aot.141); appending them would pile up
+    // a copy per poll. So the latest keyless batch stands in for the last.
+    const keyless = incomingKeyless.length > 0 ? incomingKeyless : existingKeyless;
+    const removed = incomingKeyless.length > 0 ? existingKeyless.length : 0;
+    added += incomingKeyless.length;
+
+    const features = [...existingMap.values(), ...keyless];
 
     return {
       data: {
@@ -219,8 +265,9 @@ export class DataMerger {
       },
       added,
       updated,
-      removed: 0,
+      removed,
       total: features.length,
+      unkeyed: incomingKeyless.length,
     };
   }
 

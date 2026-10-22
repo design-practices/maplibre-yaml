@@ -80,6 +80,7 @@ import {
 } from '../formats/protomaps-style';
 import { elementLanguage } from '../i18n/strings';
 import { geoParquetColumns } from '../formats/columns';
+import { namedSourcesNeedingIds } from './highlight-paint';
 
 /** The document's source ids (named, and `<layer>-source` for inline ones) that read `format`. */
 function sourceIdsReading(
@@ -227,7 +228,8 @@ const MISSING_PROTOMAPS_LAYER = new RegExp(
  * - `layer-hint`: a hint — a layer was added, but not as written (a
  *   `before:` naming no layer on the map: it went on top).
  * - `source-hint`: a hint — a source draws, but its file is served in a
- *   way that makes it slow (a GeoTIFF that isn't cloud-optimized).
+ *   way that makes it slow (a GeoTIFF that isn't cloud-optimized), or its
+ *   live `merge` updates carry features with no `updateKey`.
  *
  * Errors with no context (a basemap tile, a glyph) are not the document's.
  */
@@ -246,7 +248,9 @@ export interface MapErrorContext {
    * Protomaps basemap `pmtiles:` file that is some other kind of PMTiles).
    * The error message is the whole notice.
    * `source-hint`: an author hint, not a failure — a source draws, but its
-   * file could be served better (a GeoTIFF that isn't cloud-optimized).
+   * file could be served better (a GeoTIFF that isn't cloud-optimized), or
+   * its live `merge` updates carry features with no `updateKey` (kept, not
+   * matched).
    */
   kind:
     | 'style'
@@ -845,6 +849,12 @@ export class MapRenderer {
         console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
         options.onError?.(new Error(message), false, { kind: 'layer-hint', layerId });
       },
+      // A live `merge` whose features have no key (ml-aot.141): they are
+      // kept, not matched; the console always, the page while developing.
+      onSourceHint: (sourceId, message) => {
+        console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+        options.onError?.(new Error(message), false, { kind: 'source-hint', sourceId });
+      },
     };
 
     const eventCallbacks: EventHandlerCallbacks = {
@@ -859,6 +869,9 @@ export class MapRenderer {
       ...options.sourceData,
       isProtocolRegistered,
       columnsFor: (sourceId) => parquetColumns.get(sourceId),
+      // Named sources are added before any layer: say up front which ones a
+      // highlighted layer draws from, so they get feature ids (ml-aot.142).
+      namedSourcesNeedingIds: namedSourcesNeedingIds(layers),
     });
     const classifyRuntime = new ClassifyRuntime(
       this.map,

@@ -1,0 +1,26 @@
+# Assertion (ml-aot.141): features with no key at all (no `properties.id`,
+# no top-level `id`) are kept by a `merge` refresh rather than dropped, and
+# the map's author notes say so once, naming the source and the key.
+type: map
+id: merge-keyless
+config:
+  center: [-118.25, 34.05]
+  zoom: 8
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  quakes:
+    type: geojson
+    url: "/examples/verification/data/quakes-sample.geojson"
+    cache:
+      enabled: false
+    refresh:
+      refreshInterval: 1000
+      updateStrategy: merge
+      updateKey: id
+layers:
+  - id: quakes-points
+    type: circle
+    source: quakes
+    paint:
+      circle-radius: 6
+      circle-color: "#457b9d"

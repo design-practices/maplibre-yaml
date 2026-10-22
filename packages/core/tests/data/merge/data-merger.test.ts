@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { DataMerger } from "../../../src/data/merge/data-merger";
 import type { MergeOptions } from "../../../src/data/merge/data-merger";
-import type { FeatureCollection } from "geojson";
+import type { Feature, FeatureCollection } from "geojson";
 
 describe("DataMerger", () => {
   let merger: DataMerger;
@@ -338,9 +338,15 @@ describe("DataMerger", () => {
 
       const result = merger.merge(existing, incoming, options);
 
-      // Feature without key is not included in result
-      expect(result.data.features).toHaveLength(1);
+      // The keyless feature can't be matched, but it is kept (ml-aot.141):
+      // the update carried no keyless features to stand in for it.
+      expect(result.data.features).toHaveLength(2);
+      expect(result.data.features.map((f) => f.properties?.name)).toEqual([
+        "Updated",
+        "No Key",
+      ]);
       expect(result.updated).toBe(1);
+      expect(result.unkeyed).toBe(0);
     });
 
     it("handles null and undefined values for update key", () => {
@@ -378,8 +384,112 @@ describe("DataMerger", () => {
 
       const result = merger.merge(existing, incoming, options);
 
-      expect(result.data.features).toHaveLength(1);
-      expect(result.data.features![0]!.properties?.name).toBe("Valid");
+      // Null and undefined keys count as absent: those features are kept
+      // (not matched), and the keyed one is added after them.
+      expect(result.data.features.map((f) => f.properties?.name)).toEqual([
+        "Valid",
+        "Null Key",
+        "Undefined Key",
+      ]);
+    });
+
+    // ml-aot.141: the USGS feeds keep their id at the feature's top level, not
+    // in `properties`. Matching only `properties[updateKey]` dropped every
+    // feature on the first poll — 20 earthquakes became 0.
+    describe("features keyed by their top-level id (USGS shape)", () => {
+      const quake = (id: string, mag: number, lng: number): Feature => ({
+        type: "Feature",
+        id,
+        geometry: { type: "Point", coordinates: [lng, 34] },
+        properties: { mag, place: `quake ${id}`, url: `https://example.test/${id}` },
+      });
+
+      it("matches on the top-level id when the property is absent", () => {
+        const existing: FeatureCollection = {
+          type: "FeatureCollection",
+          features: [quake("ci1", 2.1, -118), quake("ci2", 3.4, -117)],
+        };
+        const incoming: FeatureCollection = {
+          type: "FeatureCollection",
+          features: [quake("ci2", 3.6, -117), quake("ci3", 1.2, -116)],
+        };
+
+        const result = merger.merge(existing, incoming, { strategy: "merge", updateKey: "id" });
+
+        expect(result.data.features.map((f) => f.id)).toEqual(["ci1", "ci2", "ci3"]);
+        expect(result.data.features[1]!.properties?.mag).toBe(3.6);
+        expect(result).toMatchObject({ added: 1, updated: 1, removed: 0, total: 3, unkeyed: 0 });
+      });
+
+      it("falls back to the top-level id for any updateKey, property first", () => {
+        const existing: FeatureCollection = {
+          type: "FeatureCollection",
+          features: [
+            { type: "Feature", id: 7, geometry: { type: "Point", coordinates: [0, 0] }, properties: { vehicleId: "a" } },
+            { type: "Feature", id: 8, geometry: { type: "Point", coordinates: [1, 1] }, properties: {} },
+          ],
+        };
+        const incoming: FeatureCollection = {
+          type: "FeatureCollection",
+          features: [
+            // Keyed by its property "a", not by its (changed) top-level id.
+            { type: "Feature", id: 99, geometry: { type: "Point", coordinates: [0, 5] }, properties: { vehicleId: "a" } },
+            { type: "Feature", id: 8, geometry: { type: "Point", coordinates: [1, 5] }, properties: {} },
+          ],
+        };
+
+        const result = merger.merge(existing, incoming, { strategy: "merge", updateKey: "vehicleId" });
+
+        expect(result.data.features.map((f) => f.id)).toEqual([99, 8]);
+        expect(result).toMatchObject({ updated: 2, added: 0, total: 2 });
+      });
+
+      it("keeps keyless features, replacing them with each update's own instead of piling up", () => {
+        const keyless = (name: string): Feature => ({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [0, 0] },
+          properties: { name },
+        });
+        const first: FeatureCollection = {
+          type: "FeatureCollection",
+          features: [keyless("a"), keyless("b"), quake("ci1", 1, -118)],
+        };
+        const poll: FeatureCollection = {
+          type: "FeatureCollection",
+          features: [keyless("a2"), keyless("b2"), quake("ci1", 2, -118)],
+        };
+
+        const once = merger.merge(first, poll, { strategy: "merge", updateKey: "id" });
+        const twice = merger.merge(once.data, poll, { strategy: "merge", updateKey: "id" });
+
+        expect(twice.data.features.map((f) => f.id ?? f.properties?.name)).toEqual([
+          "ci1",
+          "a2",
+          "b2",
+        ]);
+        expect(twice).toMatchObject({ unkeyed: 2, removed: 2, total: 3 });
+      });
+
+      it("never empties a source whose features all lack the key", () => {
+        const noKey = (n: number): Feature => ({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [n, n] },
+          properties: { mag: n },
+        });
+        const existing: FeatureCollection = {
+          type: "FeatureCollection",
+          features: Array.from({ length: 20 }, (_, i) => noKey(i)),
+        };
+        const incoming: FeatureCollection = {
+          type: "FeatureCollection",
+          features: Array.from({ length: 21 }, (_, i) => noKey(i)),
+        };
+
+        const result = merger.merge(existing, incoming, { strategy: "merge", updateKey: "eventId" });
+
+        expect(result.total).toBe(21);
+        expect(result.unkeyed).toBe(21);
+      });
     });
   });
 
