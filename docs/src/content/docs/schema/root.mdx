@@ -146,13 +146,13 @@ pages:
               line-color: "#333"
 ```
 
-The `$ref` is resolved at parse time against the root `sources:` map. A dangling reference (unknown source name) produces a clear error with a did-you-mean suggestion, for example:
+The `$ref` is resolved at parse time against the root `sources:` map (a block's own `sources:` are not searched). A dangling reference (unknown source name) fails validation at the `$ref` line, in `mlym validate` and on the page alike, with a did-you-mean suggestion, for example:
 
 ```
 Source reference not found: #/sources/boundary. Did you mean "#/sources/boundaries"? Defined sources: boundaries.
 ```
 
-The bare-string path form `source: "#/sources/name"` is **not** resolved — it validates as a plain string but the source will never be found at render time. Use the `{ $ref: "#/sources/name" }` object form for root-level sources, or a bare name for block-level sources.
+The bare-string path form `source: "#/sources/name"` is **not** resolved, so it fails validation. Use the `{ $ref: "#/sources/name" }` object form for root-level sources, or a bare name for block-level sources.
 
 ## Pages
 

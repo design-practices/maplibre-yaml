@@ -272,7 +272,7 @@ import {
   type SugarRemap,
 } from "./expand-sugar";
 import { checkClassify, checkClassifiedLegendItems } from "../classify/checks";
-import { checkLayerSources } from "./source-refs";
+import { checkLayerSources, refNotFoundMessage } from "./source-refs";
 import { restoreCategoryOrder } from "../classify/category-order";
 import { RootSchema } from "../schemas/page.schema";
 import { MapBlockSchema } from "../schemas/map.schema";
@@ -671,7 +671,7 @@ export class YAMLParser {
       });
       // Not for a layer whose source the schema already rejected.
       const sourceRefErrors = sourceRefs.errors.filter((r) => {
-        const layer = r.path.replace(/\.source$/, "");
+        const layer = r.path.replace(/\.(source(\.\$ref)?|\$ref)$/, "");
         return !errors.some((e) => e.path === layer || e.path.startsWith(`${layer}.source`));
       });
       const finalErrors = replaceHashCommentErrors(
@@ -1508,28 +1508,12 @@ export class YAMLParser {
           // Look up the referenced item
           if (section === "layers") {
             if (!config.layers || !(name in config.layers)) {
-              const defined = Object.keys(config.layers ?? {});
-              const hint = suggest(name, defined);
-              throw new Error(
-                `Layer reference not found: ${ref}.` +
-                  (hint ? ` Did you mean "#/layers/${hint}"?` : "") +
-                  (defined.length
-                    ? ` Defined layers: ${defined.join(", ")}.`
-                    : " No layers are defined at the root level.")
-              );
+              throw new Error(refNotFoundMessage(ref, "layers", config.layers));
             }
             return config.layers[name];
           } else if (section === "sources") {
             if (!config.sources || !(name in config.sources)) {
-              const defined = Object.keys(config.sources ?? {});
-              const hint = suggest(name, defined);
-              throw new Error(
-                `Source reference not found: ${ref}.` +
-                  (hint ? ` Did you mean "#/sources/${hint}"?` : "") +
-                  (defined.length
-                    ? ` Defined sources: ${defined.join(", ")}.`
-                    : " No sources are defined at the root level.")
-              );
+              throw new Error(refNotFoundMessage(ref, "sources", config.sources));
             }
             return config.sources[name];
           }

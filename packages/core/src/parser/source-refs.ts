@@ -24,6 +24,20 @@
  * stories) or `style.sources:` (v2); in a multi-page root document, also the
  * root `sources:`. A root `layers:` record entry is pasted into blocks by
  * `$ref`, so any source the document defines anywhere is in its scope.
+ *
+ * ## `$ref` (0.9.1, ml-aot.147)
+ *
+ * `source: { $ref: "#/sources/quakes" }` and a layer entry
+ * `- $ref: "#/layers/shared"` are resolved when the document is read (see
+ * `YAMLParser.resolveReferences`, and `<ml-map>` for a story's map), always
+ * against the document's top-level `sources:` / `layers:` record. A `$ref`
+ * that resolves nowhere used to pass `mlym validate` for a story (and failed
+ * a map or root document without a line number) while `<ml-map>` showed an
+ * error card. It is now an error at the `$ref` line, worded as the runtime
+ * words it ({@link refNotFoundMessage}), so validation and the page agree.
+ * v2 documents don't resolve `$ref` (their schema rejects one), so they are
+ * not checked here. A reference written as a string (`source:
+ * "#/sources/quakes"`) is never resolved, so it is an error on any layer.
  */
 
 import type { Document, LineCounter } from "yaml";
@@ -87,6 +101,82 @@ interface Context {
   errors: SourceRefError[];
   warnings: ValidationWarning[];
   positions?: { doc: Document; lineCounter: LineCounter };
+  /** What a `$ref` resolves against: the document's top-level records. */
+  refs: { sources: unknown; layers: unknown; root: boolean };
+}
+
+/**
+ * The message for a `$ref` that names nothing — shared with
+ * `YAMLParser.resolveReferences`, so `mlym validate` and `<ml-map>`'s error
+ * card say the same thing.
+ */
+export function refNotFoundMessage(ref: string, section: "layers" | "sources", record: unknown): string {
+  const name = ref.slice(`#/${section}/`.length);
+  // A standalone block's `layers:` is a list, not a record: its indices are
+  // nothing to suggest.
+  const defined = isObject(record) ? Object.keys(record) : [];
+  const hint = suggest(name, defined);
+  const what = section === "layers" ? "Layer" : "Source";
+  return (
+    `${what} reference not found: ${ref}.` +
+    (hint ? ` Did you mean "#/${section}/${hint}"?` : "") +
+    (defined.length
+      ? ` Defined ${section}: ${defined.join(", ")}.`
+      : ` No ${section} are defined at the root level.`)
+  );
+}
+
+const REF = /^#\/(layers|sources)\/(.+)$/;
+
+/** Whether `name` is an entry of a `$ref` target record (the runtime's own test). */
+function inRecord(record: unknown, name: string): boolean {
+  return (isObject(record) || Array.isArray(record)) && name in record;
+}
+
+/**
+ * A `$ref` where a layer (`want: "layers"`) or a layer's source
+ * (`want: "sources"`) goes: it must have the right form and name an entry of
+ * the top-level record, or reading the document fails.
+ */
+function checkRef(
+  ref: string,
+  want: "layers" | "sources",
+  refPath: Path,
+  scope: Scope,
+  ctx: Context
+): void {
+  const match = REF.exec(ref);
+  if (!match || match[1] !== want) {
+    const message = !match
+      ? `Invalid reference format: ${ref}. Expected #/${want}/name.`
+      : want === "sources"
+        ? `A layer's source: $ref must point at a source (#/sources/name), not ${ref}.`
+        : `A layers: entry's $ref must point at a layer (#/layers/name), not ${ref}.`;
+    ctx.errors.push({ path: refPath.join("."), message, ...at(ctx, refPath) });
+    return;
+  }
+  const name = match[2]!;
+  const record = want === "sources" ? ctx.refs.sources : ctx.refs.layers;
+  if (inRecord(record, name)) return;
+
+  let message = refNotFoundMessage(ref, want, record);
+  const hint = suggest(name, isObject(record) ? Object.keys(record) : []);
+  if (want === "sources" && ctx.refs.root && scope.defined.includes(name)) {
+    // A block's own source: a $ref looks only at the root sources: record.
+    message +=
+      ` "${name}" is defined in this block's sources:, which a $ref doesn't look in:` +
+      ` write source: ${name} instead.`;
+  } else if (want === "layers" && !ctx.refs.root) {
+    message +=
+      " A layer $ref names an entry of the root layers: record, which only a multi-page" +
+      " (pages:) document has: write the layer here instead.";
+  }
+  ctx.errors.push({
+    path: refPath.join("."),
+    message,
+    ...at(ctx, refPath),
+    ...(hint ? { suggestion: `#/${want}/${hint}` } : {}),
+  });
 }
 
 function at(ctx: Context, path: Path): { line?: number; column?: number } {
@@ -116,10 +206,45 @@ function list(names: string[]): string {
 
 function checkLayer(layer: unknown, path: Path, scope: Scope, ctx: Context): void {
   if (!isObject(layer)) return;
+  // v2 (`style.layers`) doesn't resolve `$ref`: its schema reports one.
+  const resolvesRefs = scope.home !== "style.sources:";
+  // Any object with a string `$ref` is replaced whole, as the runtime does.
+  if (resolvesRefs && typeof layer["$ref"] === "string") {
+    checkRef(layer["$ref"], "layers", [...path, "$ref"], scope, ctx);
+    return;
+  }
   const source = layer["source"];
+  if (resolvesRefs && isObject(source) && typeof source["$ref"] === "string") {
+    checkRef(source["$ref"], "sources", [...path, "source", "$ref"], scope, ctx);
+    return;
+  }
   if (typeof source !== "string" || source === "") return;
   if (scope.defined.includes(source) || scope.generated.includes(source)) return;
   if (scope.basemap?.has(source)) return;
+
+  // `source: "#/sources/quakes"`: a reference written as a plain string is
+  // never resolved, and no basemap names a source like that — an error even
+  // where an ordinary name might be the basemap's (a raster layer).
+  const asRef = /^#\/sources\/(.+)$/.exec(source);
+  if (asRef) {
+    const name = asRef[1]!;
+    const objectForm = resolvesRefs && inRecord(ctx.refs.sources, name);
+    const bare = scope.defined.includes(name);
+    const fix = objectForm
+      ? `source: { $ref: "${source}" }${bare ? ` or source: ${name}` : ""}`
+      : bare
+        ? `source: ${name}`
+        : `source: ${name} (once ${name} is defined under ${scope.home})`;
+    const sourcePath = [...path, "source"];
+    ctx.errors.push({
+      path: sourcePath.join("."),
+      message:
+        `${typeof layer["id"] === "string" ? `Layer "${layer["id"]}"` : "This layer"} writes a ` +
+        `reference as a plain string, source: "${source}", which is never resolved. Write ${fix}.`,
+      ...at(ctx, sourcePath),
+    });
+    return;
+  }
 
   const type = typeof layer["type"] === "string" ? layer["type"] : "";
   const hasSourceLayer = layer["source-layer"] !== undefined;
@@ -250,9 +375,14 @@ export function checkLayerSources(
   value: unknown,
   positions?: { doc: Document; lineCounter: LineCounter }
 ): { errors: SourceRefError[]; warnings: ValidationWarning[] } {
-  const ctx: Context = { errors: [], warnings: [], ...(positions ? { positions } : {}) };
-  if (!isObject(value)) return { errors: ctx.errors, warnings: ctx.warnings };
+  if (!isObject(value)) return { errors: [], warnings: [] };
   const isRoot = Array.isArray(value["pages"]);
+  const ctx: Context = {
+    errors: [],
+    warnings: [],
+    ...(positions ? { positions } : {}),
+    refs: { sources: value["sources"], layers: value["layers"], root: isRoot },
+  };
   let rootAll: string[] | undefined;
   if (isRoot) {
     const names = new Set<string>();
