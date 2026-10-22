@@ -837,8 +837,14 @@ export function projectStyle(
         exportClass: definition.class,
         message: unloweredFallback
           ? `\`${construct}\` cannot compile without visual change. A documented ` +
-            `fallback exists (${definition.onEmit}) — re-run with --with-fallbacks ` +
-            `to substitute it.`
+            `fallback exists (${definition.onEmit}) — ` +
+            // --with-fallbacks is the default and cannot be combined with
+            // --strict, so the useful advice depends on the mode (ml-aot.146).
+            (mode === "strict"
+              ? `export without --strict (the default, --with-fallbacks) to ` +
+                `substitute it and print a warning instead.`
+              : `\`mlym emit\` substitutes it; a direct projectStyle caller ` +
+                `must apply the fallback lowering (lowerMarkers, lowerFitTo) first.`)
           : `\`${construct}\` — ${definition.onEmit}`,
       });
     } else {

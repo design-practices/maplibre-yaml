@@ -353,6 +353,34 @@ layers:
     expect(help.stdout).not.toContain('--trust');
   });
 
+  // ml-aot.146: the refusal said "re-run with --with-fallbacks", which is
+  // already the default and an error next to --strict.
+  it('a --strict refusal for markers says to export without --strict', async () => {
+    const dir = await mkdir();
+    const doc = join(dir, 'map.yaml');
+    await writeFile(
+      doc,
+      `type: map
+id: pins
+config:
+  center: [0, 0]
+  zoom: 2
+markers:
+  - at: [0, 0]
+layers:
+  - id: bg
+    type: background
+    paint: { background-color: "#eee" }
+`,
+    );
+
+    const failure = await execAsync(`node "${CLI}" emit "${doc}" --strict`).catch((e) => e);
+    expect(failure.code).toBe(1);
+    expect(failure.stderr).toContain('markers');
+    expect(failure.stderr).toContain('export without --strict');
+    expect(failure.stderr).not.toContain('re-run with --with-fallbacks');
+  });
+
   it('rejects a scrollytelling document — only map compiles', async () => {
     const dir = await mkdir();
     const doc = join(dir, 'story.yaml');
