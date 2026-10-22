@@ -1062,7 +1062,9 @@ export const MapFullPageBlockSchema: z.ZodObject<any> = z
       "The style-spec light shading fill-extrusion faces — map.setLight live, style.json `light` on export"
     ),
   })
-  .describe("Full-page map block");
+  .describe(
+    "Full-page map block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet"
+  );
 
 /** Inferred type for full-page map block. */
 export type MapFullPageBlock = z.infer<typeof MapFullPageBlockSchema>;

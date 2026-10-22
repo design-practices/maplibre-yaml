@@ -498,7 +498,9 @@ export const GeoJSONSourceSchema = z
     fetchStrategy: z
       .enum(["runtime", "build", "hybrid"])
       .default("runtime")
-      .describe("When to fetch data: runtime (default), build, or hybrid"),
+      .describe(
+        "No effect (deprecated): data is always fetched in the browser when the map loads. build and hybrid warn and do nothing"
+      ),
     stream: StreamConfigSchema.optional().describe(
       "WebSocket/SSE streaming configuration"
     ),

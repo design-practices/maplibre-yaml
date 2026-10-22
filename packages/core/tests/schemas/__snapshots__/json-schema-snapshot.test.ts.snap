@@ -504,7 +504,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                           "hybrid"
                         ],
                         "default": "runtime",
-                        "description": "When to fetch data: runtime (default), build, or hybrid"
+                        "description": "No effect (deprecated): data is always fetched in the browser when the map loads. build and hybrid warn and do nothing"
                       },
                       "stream": {
                         "type": "object",
@@ -4149,7 +4149,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                     "dark"
                   ],
                   "default": "light",
-                  "description": "Default theme"
+                  "description": "No effect (deprecated): nothing reads it. A story's own theme: is read"
                 },
                 "defaultZoom": {
                   "type": "number",
@@ -4172,23 +4172,23 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                         "hybrid"
                       ],
                       "default": "runtime",
-                      "description": "Default fetch strategy"
+                      "description": "No effect (deprecated)"
                     },
                     "timeout": {
                       "type": "number",
                       "minimum": 1000,
                       "default": 30000,
-                      "description": "Default timeout in milliseconds"
+                      "description": "No effect (deprecated)"
                     },
                     "retryAttempts": {
                       "type": "integer",
                       "minimum": 0,
                       "default": 3,
-                      "description": "Default retry attempts"
+                      "description": "No effect (deprecated)"
                     }
                   },
                   "additionalProperties": false,
-                  "description": "Data fetching configuration",
+                  "description": "No effect (deprecated): nothing reads it",
                   "patternProperties": {
                     "^x-": {}
                   }
@@ -4371,7 +4371,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "content"
                           ],
                           "additionalProperties": false,
-                          "description": "Content block for rich text and media",
+                          "description": "Content block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet",
                           "patternProperties": {
                             "^x-": {}
                           }
@@ -4476,7 +4476,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "config"
                           ],
                           "additionalProperties": false,
-                          "description": "Full-page map block",
+                          "description": "Full-page map block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet",
                           "patternProperties": {
                             "^x-": {}
                           }
@@ -4531,7 +4531,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                             "blocks"
                           ],
                           "additionalProperties": false,
-                          "description": "Mixed block for combining multiple block types",
+                          "description": "Mixed block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet",
                           "patternProperties": {
                             "^x-": {}
                           }
@@ -4547,20 +4547,20 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                   "blocks"
                 ],
                 "additionalProperties": false,
-                "description": "Page configuration",
+                "description": "A page of a multi-page document. No effect (deprecated): no maplibre-yaml package renders it yet",
                 "patternProperties": {
                   "^x-": {}
                 }
               },
               "minItems": 1,
-              "description": "Page definitions"
+              "description": "No effect (deprecated): multi-page documents validate, but no maplibre-yaml package renders them yet"
             }
           },
           "required": [
             "pages"
           ],
           "additionalProperties": false,
-          "description": "Root configuration schema",
+          "description": "Multi-page root document. No effect (deprecated): it validates, but no maplibre-yaml package renders it yet",
           "patternProperties": {
             "^x-": {}
           }
@@ -5074,7 +5074,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                       "hybrid"
                     ],
                     "default": "runtime",
-                    "description": "When to fetch data: runtime (default), build, or hybrid"
+                    "description": "No effect (deprecated): data is always fetched in the browser when the map loads. build and hybrid warn and do nothing"
                   },
                   "stream": {
                     "type": "object",
@@ -8391,7 +8391,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                 "dark"
               ],
               "default": "light",
-              "description": "Default theme"
+              "description": "No effect (deprecated): nothing reads it. A story's own theme: is read"
             },
             "defaultZoom": {
               "type": "number",
@@ -8430,23 +8430,23 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                     "hybrid"
                   ],
                   "default": "runtime",
-                  "description": "Default fetch strategy"
+                  "description": "No effect (deprecated)"
                 },
                 "timeout": {
                   "type": "number",
                   "minimum": 1000,
                   "default": 30000,
-                  "description": "Default timeout in milliseconds"
+                  "description": "No effect (deprecated)"
                 },
                 "retryAttempts": {
                   "type": "integer",
                   "minimum": 0,
                   "default": 3,
-                  "description": "Default retry attempts"
+                  "description": "No effect (deprecated)"
                 }
               },
               "additionalProperties": false,
-              "description": "Data fetching configuration",
+              "description": "No effect (deprecated): nothing reads it",
               "patternProperties": {
                 "^x-": {}
               }
@@ -8568,7 +8568,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                   "hybrid"
                                 ],
                                 "default": "runtime",
-                                "description": "When to fetch data: runtime (default), build, or hybrid"
+                                "description": "No effect (deprecated): data is always fetched in the browser when the map loads. build and hybrid warn and do nothing"
                               },
                               "stream": {
                                 "type": "object",
@@ -11345,7 +11345,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "content"
                       ],
                       "additionalProperties": false,
-                      "description": "Content block for rich text and media",
+                      "description": "Content block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet",
                       "patternProperties": {
                         "^x-": {}
                       }
@@ -12315,7 +12315,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "config"
                       ],
                       "additionalProperties": false,
-                      "description": "Full-page map block",
+                      "description": "Full-page map block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet",
                       "patternProperties": {
                         "^x-": {}
                       }
@@ -12794,7 +12794,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                         "blocks"
                       ],
                       "additionalProperties": false,
-                      "description": "Mixed block for combining multiple block types",
+                      "description": "Mixed block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet",
                       "patternProperties": {
                         "^x-": {}
                       }
@@ -12810,20 +12810,20 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
               "blocks"
             ],
             "additionalProperties": false,
-            "description": "Page configuration",
+            "description": "A page of a multi-page document. No effect (deprecated): no maplibre-yaml package renders it yet",
             "patternProperties": {
               "^x-": {}
             }
           },
           "minItems": 1,
-          "description": "Page definitions"
+          "description": "No effect (deprecated): multi-page documents validate, but no maplibre-yaml package renders them yet"
         }
       },
       "required": [
         "pages"
       ],
       "additionalProperties": false,
-      "description": "Root configuration schema",
+      "description": "Multi-page root document. No effect (deprecated): it validates, but no maplibre-yaml package renders it yet",
       "patternProperties": {
         "^x-": {}
       }
@@ -13362,7 +13362,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                       "hybrid"
                                     ],
                                     "default": "runtime",
-                                    "description": "When to fetch data: runtime (default), build, or hybrid"
+                                    "description": "No effect (deprecated): data is always fetched in the browser when the map loads. build and hybrid warn and do nothing"
                                   },
                                   "stream": {
                                     "type": "object",

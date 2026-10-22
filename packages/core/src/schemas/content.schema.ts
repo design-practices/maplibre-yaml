@@ -304,7 +304,9 @@ export const ContentBlockSchema = z
       .array(ContentItemSchema)
       .describe("Array of content items to render"),
   })
-  .describe("Content block for rich text and media");
+  .describe(
+    "Content block (multi-page documents only). No effect (deprecated): no maplibre-yaml package renders it yet"
+  );
 
 /** Inferred type for content block. */
 export type ContentBlock = z.infer<typeof ContentBlockSchema>;
