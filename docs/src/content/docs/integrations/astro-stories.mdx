@@ -1,62 +1,36 @@
 ---
 title: Story maps in Astro
-description: Tell a scrollytelling story map in an Astro site with the Scrollytelling component — chapters that move the camera, show and hide layers and run actions as the reader scrolls — and lay out chapters yourself with Chapter.
+description: Show a story map (scrollytelling) in an Astro site with the Scrollytelling component — chapters that move the camera, show and hide layers and run actions as the reader scrolls — and lay out chapters yourself with Chapter.
 ---
-
-import { Aside } from "@astrojs/starlight/components";
 
 A story map is a map that moves as the reader scrolls: chapters of text and
 images scroll over a sticky map, and each chapter flies the camera somewhere,
-shows or hides layers, and can run actions (often called *scrollytelling*).
-In an Astro site, the `<Scrollytelling>` component from
+shows or hides layers, and can run actions (this is often called
+*scrollytelling*). In an Astro site, the `<Scrollytelling>` component from
 `@maplibre-yaml/astro` shows a story written as one YAML file.
 
-`<Scrollytelling>` renders core's [`<ml-scrollytelling>`](/integrations/scrollytelling-html/)
-web component, the same element a plain HTML page uses from a CDN. Astro adds
-build-time loading: with `config`, the chapters, the rail and the map's
-document are rendered into the page at build time and the element takes them
-over in the browser; with `src`, the element fetches and renders the story
-itself. Either way one engine drives the camera, layers, actions and rail, so
-a story file behaves the same in an Astro site and in a plain page.
-
-<Aside type="note" title="Version pairing">
-  `@maplibre-yaml/astro` 0.7 needs `@maplibre-yaml/core` 0.9 or later (0.6
-  needed core 0.8, the release that added `<ml-scrollytelling>`). Upgrade both
-  together: `npm install @maplibre-yaml/astro@latest @maplibre-yaml/core@latest`.
-</Aside>
-
-This page covers the Astro side. The story file itself (every chapter key,
-action and theme) is described in the [Story file reference](/schema/scrollytelling/);
-the same story in a plain HTML page is in
-[Story maps in plain HTML](/integrations/scrollytelling-html/). For the
-`<Map>` and `<FullPageMap>` components, installation and deploying, see
-[Astro](/integrations/astro/).
+This page assumes the package is installed ([Astro: Install](/integrations/astro/#installation)).
+Every key of the story file is in the [Story file reference](/schema/scrollytelling/).
 
 ## Quick start
 
 A story is one YAML file: the map (`config:` and `layers:`, as on any map)
-and the `chapters:` the reader scrolls through. This one is self-contained
-(its data is inline), so it works as soon as you save it as
-`src/stories/earthquakes.yaml`:
+and the `chapters:` the reader scrolls through. Save this one as
+`src/stories/earthquakes.yaml`; its data is inline, so it works as it is:
 
 ```yaml title="src/stories/earthquakes.yaml"
 type: scrollytelling
 id: earthquake-story
-theme: dark                    # 'light' or 'dark'
-showMarkers: true             # Show chapter navigation dots
-markerColor: "#3FB1CE"        # Custom marker color
+theme: dark                   # chapter cards: light (default) or dark
+showMarkers: true             # a dot per chapter at the right edge
+markerColor: "#3FB1CE"
 
-# Base map configuration
+# The map: its camera when the page opens, and its layers.
 config:
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
   center: [-118.2437, 34.0522]
   zoom: 9
-  pitch: 0
-  bearing: 0
 
-# Map layers (inline sources here; a `sources:` block works too, as on a map).
-# For your own data, put a GeoJSON file in public/data/ and replace `data:`
-# with `url: "/data/earthquakes.geojson"`.
 layers:
   - id: earthquake-circles
     type: circle
@@ -75,9 +49,6 @@ layers:
             geometry: { type: Point, coordinates: [-118.08, 34.06] }
             properties: { name: "Whittier Narrows, 1987", magnitude: 5.9 }
           - type: Feature
-            geometry: { type: Point, coordinates: [-118.00, 34.26] }
-            properties: { name: "Sierra Madre, 1991", magnitude: 5.6 }
-          - type: Feature
             geometry: { type: Point, coordinates: [-117.76, 33.95] }
             properties: { name: "Chino Hills, 2008", magnitude: 5.4 }
     paint:
@@ -86,45 +57,45 @@ layers:
       circle-stroke-width: 2
       circle-stroke-color: "#ffffff"
 
-# Story chapters
 chapters:
   - id: intro
-    title: "Los Angeles Earthquakes"
+    title: "Los Angeles earthquakes"
     description: "<p>Exploring seismic activity in Southern California.</p>"
     center: [-118.2437, 34.0522]
     zoom: 9
     alignment: center
 
   - id: detail
-    title: "Major Fault Lines"
+    title: "Major fault lines"
     description: "<p>The San Andreas Fault runs through this region.</p>"
-    # To show a picture above the text, add a file in public/images/ and
-    # write `image: "/images/fault-lines.jpg"` (or use a full https:// URL).
     center: [-118.0, 34.0]
     zoom: 11
     pitch: 45
     bearing: 30
-    animation: flyTo
-    speed: 0.8
     alignment: left
-    layers:
-      show: [earthquake-circles]
-      hide: []
+    onChapterEnter:
+      - action: setFilter
+        layer: earthquake-circles
+        filter: [">=", ["get", "magnitude"], 6]
+    onChapterExit:
+      - action: setFilter
+        layer: earthquake-circles
+        filter: null
 
   - id: conclusion
-    title: "Preparing for the Future"
+    title: "Preparing for the future"
     description: "<p>Understanding earthquake patterns helps us prepare.</p>"
     center: [-118.2437, 34.0522]
     zoom: 9
     alignment: full
 
-footer: "<p>Data source: USGS</p><p>&copy; 2024</p>"
+footer: "<p>Data source: USGS</p>"
 ```
 
-Then load the story at build time and pass it to `<Scrollytelling>` as
-`config`, on a whole page such as `src/pages/story.astro`:
+Load it at build time and pass it to `<Scrollytelling>` as `config`, on a
+page of its own such as `src/pages/story.astro`:
 
-```astro
+```astro title="src/pages/story.astro"
 ---
 import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
 const story = await loadScrollytellingConfig('./src/stories/earthquakes.yaml');
@@ -141,95 +112,65 @@ const story = await loadScrollytellingConfig('./src/stories/earthquakes.yaml');
 </html>
 ```
 
-The viewport meta makes phones lay the story out at their own width (without
-it, the map and chapter text come out tiny), and `margin: 0` lets the map
-reach the edges. The other snippets on this page show only the component:
-put them on a page like this one, or in a
+Run `npm run dev` and open `/story`. The map fills the window and the first
+card sits over it; as you scroll, the map flies to each chapter, and the
+second chapter shows only the two strongest earthquakes.
+
+Loading at build time is the recommended way: the chapters' text is in the
+page's HTML, and a mistake in the story fails `astro build` (and shows in
+`astro dev`) with the file, line and a did-you-mean, instead of reaching your
+site. The viewport `<meta>` makes phones lay the story out at their own
+width, and `margin: 0` lets the map reach the edges. The other snippets on
+this page show only the component: put them on a page like this one, or in a
 [layout](https://docs.astro.build/en/basics/layouts/).
 
-Or load it in the browser from `public/`. The component fetches, validates
-and renders the story there, and a validation failure shows the errors in
-place of the chapters:
+## Common tasks
+
+### Write the chapters
+
+Each chapter needs an `id`, a `title`, and a camera: `center` and `zoom`, and
+optionally `pitch`, `bearing` and `animation` (`flyTo`, the default,
+`easeTo` or `jumpTo`). Then add what the chapter changes:
+
+- **Text**: `description` is HTML, shown as written. Markdown is not
+  converted, so write `<strong>bold</strong>` and `<a href="…">a link</a>`.
+- **Pictures and video**: `image:` or `video:` above the text, as a full
+  `https://` URL or the address of a file in `public/` (`/images/fault.jpg`
+  for `public/images/fault.jpg`). Images load only as the reader reaches
+  them; keep them small.
+- **Card position**: `alignment: left | right | center | full`. The camera is
+  offset so the chapter's `center` isn't hidden behind the card.
+- **Layers**: `layers: { show: [...], hide: [...] }` by layer id.
+- **Actions** in `onChapterEnter` and `onChapterExit`: `setFilter`,
+  `setPaintProperty`, `setLayoutProperty`, `flyTo`, `easeTo`, `fitBounds`,
+  and `custom` for your own script ([below](#react-to-the-story-from-a-script)).
+  Enter actions run after the chapter's camera move and layer changes; an
+  action naming a layer the map doesn't have is skipped with a warning.
+
+The [Story file reference](/schema/scrollytelling/) has every key, each
+action's fields and complete examples.
+
+### Load the story in the browser (`src`)
+
+To have the story fetched in the browser instead, save it in `public/` and
+pass its address as `src`:
 
 ```astro title="examples/astro/site/src/pages/story-runtime.astro"
 <Scrollytelling src="/stories/cascadia.yaml" />
 ```
 
-<Aside type="caution" title="src needs @maplibre-yaml/astro 0.5 or later">
-  In 0.4.x, `<Scrollytelling src>` never loads. The chapters stay on *Loading
-  story…* and the console shows *Failed to resolve module specifier
-  '@maplibre-yaml/core'*. On those versions, use `config`.
-</Aside>
-
-## Features
-
-- **Scroll-Driven Navigation**: Map automatically transitions as you scroll through chapters
-- **Smooth Camera Transitions**: Choose from flyTo, easeTo, or jumpTo animations
-- **Layer Control**: Show/hide map layers per chapter for progressive disclosure
-- **Chapter Actions**: Execute custom MapLibre actions on chapter enter/exit
-- **Optional Markers**: A clickable chapter rail, also driven by the keyboard
-- **The whole map document**: `sources:`, `markers:`, `legend:`, the params panel and the rest work in a story
-- **Build-time Loading**: Load and validate the story with `loadScrollytellingConfig`
-- **One error card**: a story that fails in the browser lists each problem with its line number and any did-you-mean
-- **Debug Mode**: Visual indicators to help during development
-- **Accessible**: keyboard navigation, reduced motion, and the wheel scrolls the story rather than the map
-
-## Scrollytelling component API
-
-```typescript
-interface ScrollytellingProps {
-  src?: string;              // Path to YAML config file (in public directory)
-  config?: ScrollytellingBlock;  // Pre-loaded scrollytelling configuration
-  class?: string;            // Additional CSS class for container
-  debug?: boolean;           // Debug mode - chapter outlines, author hints on any host
-  // Where the story's paths start (default: import.meta.env.BASE_URL).
-  // false = resolve relative paths against the page.
-  base?: string | false;
-  // Hide on-page notices for non-fatal problems on the story's map,
-  // as on Map (default: false). Load/validation errors still show.
-  quiet?: boolean;
-}
-```
-
-## Examples
-
-### Build-time loading with debug mode
-
-```astro
----
-import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
-const story = await loadScrollytellingConfig('./src/stories/development.yaml');
----
-<Scrollytelling config={story} debug />
-```
-
-### Custom styling
-
-```astro
----
-import { Scrollytelling, loadScrollytellingConfig } from '@maplibre-yaml/astro';
-const story = await loadScrollytellingConfig('./src/stories/brand-story.yaml');
----
-<Scrollytelling
-  config={story}
-  class="branded-scrollytelling"
-/>
-
-<style>
-  .branded-scrollytelling {
-    font-family: 'Custom Font', sans-serif;
-  }
-</style>
-```
+The element fetches, validates and renders the story there; if it doesn't
+validate, the errors show in place of the chapters. Use this when the story
+must change without a rebuild. `src` needs `@maplibre-yaml/astro` 0.5 or
+later.
 
 ### Stories as a content collection
 
-Keep several stories as YAML files in a content collection and build one page
-per story. `getScrollytellingSchema()` validates each file with the same rules
-as `loadScrollytellingConfig`, at build time and in `astro dev`:
+Keep several stories in a content collection and build one page per story.
+`getScrollytellingSchema()` validates each file with the same rules as
+`loadScrollytellingConfig`, at build time and in `astro dev`:
 
-```ts
-// src/content.config.ts
+```ts title="src/content.config.ts"
 import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { getScrollytellingSchema } from '@maplibre-yaml/astro/utils';
@@ -242,9 +183,8 @@ const stories = defineCollection({
 export const collections = { stories };
 ```
 
-```astro
+```astro title="src/pages/stories/[id].astro"
 ---
-// src/pages/stories/[id].astro
 import { getCollection } from 'astro:content';
 import { Scrollytelling } from '@maplibre-yaml/astro';
 
@@ -258,96 +198,24 @@ const { story } = Astro.props;
 <Scrollytelling config={story.data} />
 ```
 
-Each file in `src/stories/` is one standalone story document (`type:
-scrollytelling` at the top level, as in the [quick start](#quick-start)).
+Each file in `src/stories/` is one whole story (`type: scrollytelling` at the
+top, as in the [quick start](#quick-start)). Import the schema from
+`/utils` in the content config ([why](/integrations/astro-collections/#quick-start)).
 
-## Chapter configuration
+### React to the story from a script
 
-Each chapter supports extensive configuration options:
+The story element (`<ml-scrollytelling>`) dispatches bubbling events:
 
-**Position & Camera:**
-- `id`: Unique chapter identifier (required)
-- `center`: [longitude, latitude] coordinates (required)
-- `zoom`: Zoom level (required)
-- `pitch`: Camera tilt (0-85 degrees, default 0)
-- `bearing`: Camera rotation (-180 to 180 degrees, default 0)
+- `ml-scrollytelling:chapter` on every chapter change, with
+  `detail: { chapterId, previousChapterId, index, callback, map }`
+  (`callback` is the chapter's `callback:` name);
+- `ml-scrollytelling:action` for each `custom` action, with
+  `detail: { action, chapterId, phase, map }`;
+- `ml-scrollytelling:error` when the story can't load or validate, with
+  `detail: { errors, warnings, source }`.
 
-**Animation:**
-- `animation`: "flyTo" (smooth arc), "easeTo" (direct), or "jumpTo" (instant); default "flyTo"
-- `speed`: Animation speed (0-2, default 0.6)
-- `curve`: Fly curve intensity (0-2, default 1)
-- `rotateAnimation`: Keep rotating the camera while the chapter is active
-- `spinGlobe`: Keep panning westward while the chapter is active
-
-**Content:**
-- `title`: Chapter heading (required)
-- `description`: HTML content (rendered as-is, not escaped). Markdown is
-  not converted: `**bold**` and `[link](url)` show literally, so write
-  `<strong>bold</strong>` and `<a href="url">link</a>`
-- `image`: Image shown above the text: a full `https://` URL, or a path to a
-  file in `public/` (`/images/fuji.jpg` for `public/images/fuji.jpg`)
-- `video`: Video with an inline player, given the same way as `image`
-- `alignment`: "left", "right", "center", or "full"
-- `hidden`: Hide content for map-only transitions
-
-**Interactivity:**
-- `layers.show`: Array of layer IDs to make visible
-- `layers.hide`: Array of layer IDs to hide
-- `onChapterEnter`: Actions to execute when entering chapter
-- `onChapterExit`: Actions to execute when leaving chapter
-- `callback`: A name passed in the `ml-scrollytelling:chapter` event, for your page script to dispatch on
-
-The [Story file reference](/schema/scrollytelling/) lists every chapter key
-with its type and default.
-
-## Chapter actions
-
-Execute MapLibre actions when users enter or exit chapters:
-
-```yaml
-chapters:
-  - id: filtered-view
-    title: "Major Earthquakes Only"
-    center: [-118.2, 34.0]
-    zoom: 10
-    onChapterEnter:
-      - action: setFilter
-        layer: earthquake-circles
-        filter: [">=", ["get", "magnitude"], 5.0]
-      - action: setPaintProperty
-        layer: earthquake-circles
-        property: circle-color
-        value: "#ff0000"
-    onChapterExit:
-      - action: setFilter
-        layer: earthquake-circles
-        filter: null
-```
-
-**Available Actions:**
-
-| Action | Fields | Effect |
-|--------|--------|--------|
-| `setFilter` | `layer`, `filter` (`null` clears) | Filter features in a layer |
-| `setPaintProperty` | `layer`, `property`, `value` | Change a paint property |
-| `setLayoutProperty` | `layer`, `property`, `value` | Change a layout property |
-| `flyTo` / `easeTo` | `options` (`center`, `zoom`, `bearing`, `pitch`, `duration`, …) | Move the camera, overriding the chapter's own camera |
-| `fitBounds` | `bounds: [west, south, east, north]` or `[[west, south], [east, north]]`, `options` (`padding`, `duration`, …) | Frame an area |
-| `custom` | anything in `options` | Runs nothing itself. Dispatches `ml-scrollytelling:action` for your page |
-
-A layer action naming a layer the map does not have logs a warning and is
-skipped. Enter actions run after the chapter's camera move and layer toggles.
-
-**Events.** The story element (`<ml-scrollytelling>`, which keeps the
-`scrollytelling-container` class) dispatches bubbling events. On every
-chapter change it dispatches `ml-scrollytelling:chapter`, with
-`detail: { chapterId, previousChapterId, index, callback, map }`. `callback`
-is the chapter's `callback:` name. On each `custom` action it dispatches
-`ml-scrollytelling:action`, with `detail: { action, chapterId, phase, map }`.
-A story that cannot load or validate dispatches `ml-scrollytelling:error`,
-with `detail: { errors, warnings, source }`. The element also carries
-`data-active-chapter`. The example's Tonga chapter
-uses a `custom` action to show a banner:
+It also carries the active chapter's id in `data-active-chapter`. The example
+site uses a `custom` action to show a banner:
 
 ```ts title="examples/astro/site/src/pages/story.astro"
 const banner = document.getElementById("story-banner")!;
@@ -356,137 +224,49 @@ document.addEventListener("ml-scrollytelling:action", (event) => {
   banner.textContent = String(action.options?.banner ?? "");
 ```
 
-`rotateAnimation: true` slowly rotates the camera while a chapter is active,
-and `spinGlobe: true` pans it westward. Both stop on the next chapter and are
-skipped when the reader prefers reduced motion.
+Methods such as `mapReady()` and `goToChapter(id)` are in the
+[`<ml-scrollytelling>` reference](/reference/elements/#ml-scrollytelling).
 
-## Chapter markers
+### Style the story
 
-When `showMarkers: true`, navigation dots appear at the right edge of the map:
+`class` adds a class to the story's container. The styles shipped with the
+element come first, so your own CSS overrides them:
 
-- Click a dot to jump to its chapter (the chapters in between are skipped)
-- Tab to the rail, then use the arrow keys, Home and End; Enter or Space activates a dot
-- The active dot is highlighted (and marked `aria-current` for screen readers)
-- Customizable color via `markerColor`
-- On phones the cards leave a gutter for the rail, so it never sits on a card
+```astro
+<Scrollytelling config={story} class="my-story" />
 
-## Themes
+<style is:global>
+  .my-story .chapter-content {
+    max-width: 520px;
+    font-family: Georgia, serif;
+  }
+</style>
+```
 
-**Light theme** (default):
-- Light chapter cards on map background
-- Suitable for bright map styles
-- Light footer background
+The class names and custom properties (such as `--ml-scrolly-map-top` for a
+page with a fixed header) are listed under
+[Styling](/integrations/scrollytelling-html/#styling). Corner slots work as on
+a map ([Corner slots](/integrations/astro/#corner-slots)); a `slot="legend"`
+child fills the story's pinned legend.
 
-**Dark theme**:
-- Dark semi-transparent chapter cards
-- Works well with satellite/dark base maps
-- Dark footer background
-
-## Debug mode
-
-Enable `debug` prop to see:
-- Red dashed outlines around inactive chapters
-- Green outlines around the active chapter
-- Helpful for fine-tuning scroll trigger points
-- The story's author hints (a chapter naming a layer that doesn't exist, a
-  key nested under `config:`) on the map's notice even on a deployed site;
-  without `debug` they show only in `astro dev` and on `localhost`
+### Check chapter positions with `debug` \{#debug-mode}
 
 ```astro
 <Scrollytelling config={story} debug />
 ```
 
-## Scroll behavior
+`debug` outlines each chapter (green while active, red dashed otherwise) so
+you can see where it starts and ends. It also shows the story's author hints,
+such as a chapter naming a layer that doesn't exist, on a deployed site;
+without it they show only in `astro dev` and on `localhost`. `quiet` hides
+the on-map notices on a finished site.
 
-- The active chapter is the one whose card is on screen and nearest the
-  middle of it, recomputed as the page scrolls, so scrolling back and forth
-  always lands on the chapter you are reading. On phones the map moves on
-  once the next card is on screen, not before.
-- The story starts reacting once its first chapter reaches the middle 20%
-  of the screen (the trigger zone)
-- Smooth map transitions between chapters
-- Progressive chapter content fade in/out
+### Lay out chapters yourself \{#chapter-component}
 
-The chapters scroll over a sticky full-viewport map. The story map's own pan
-and zoom gestures are off (set `scrollZoom: true` or `dragPan: true` in
-`config:` to turn one back on), so the mouse wheel and touch scroll the story
-rather than moving the map, while the rail, legend, markers, popups and slots
-on the map stay clickable. The camera is offset so a chapter's `center` is not
-under its card: beside a left or right card, above a centred or full-width
-card, and above the card on a phone (on a phone on its side every card is a
-narrow one on the left, with the subject beside it). Nothing on the map moves
-with the scroll: the legend is pinned in one corner above the cards (a
-"Legend" button on phones that opens above them; see
-[The legend](/schema/scrollytelling/#the-legend)), the other chrome stays in its
-corner under the cards, and a chapter photo is never taller than 40% of the
-screen. A `slot="legend"` child fills the pinned legend's panel.
-The map opens on the story's `config` camera. As soon as it has loaded, the
-chapter sitting in the trigger zone is applied at once, without any scrolling.
-On a page that starts with the story that is the first chapter: its camera,
-`layers` and `onChapterEnter` actions all run on load. Give layers their starting state in `config` and the
-layers themselves (for example `layout: { visibility: none }` on a layer a
-later chapter reveals), and let the first chapter's actions apply its own
-look.
-
-## Accessibility
-
-- Semantic HTML with proper ARIA labels
-- Keyboard navigation for chapter markers (Tab, arrow keys, Home, End, Enter)
-- Screen reader friendly chapter titles
-- Reduced motion: when the reader's system asks for reduced motion
-  (`prefers-reduced-motion`), chapter cards stop animating, every chapter
-  camera move and camera action (`flyTo`, `easeTo`, `fitBounds`) is instant
-  (an action whose `options` set `essential: true` still animates), and
-  `rotateAnimation` / `spinGlobe` are skipped
-- High contrast mode support
-
-## Performance tips
-
-1. **Use build-time loading** for better initial page load
-2. **Optimize images**: Compress chapter images and use appropriate sizes
-3. **Limit chapters**: 5-10 chapters for optimal scrolling experience
-4. **Simplify transitions**: Use `jumpTo` for instant transitions on slower devices
-5. **Lazy load media**: Images and videos load only when needed
-
-## Chapter component
-
-The `Chapter` component displays one narrative section of a scrollytelling story, for pages that lay out chapters themselves. `Scrollytelling` renders its chapters with the same core renderer (`chapterHTML` from `@maplibre-yaml/core/scrollytelling`) and stylesheet, so a `Chapter` looks exactly like a story's own.
-
-### Chapter features
-
-- **Flexible Content**: Title, HTML description, images, and videos
-- **Multiple Alignments**: left, right, center, or full-width layouts
-- **Theme Support**: Light and dark themes with CSS custom properties
-- **Hidden Mode**: Map-only chapters without visible content
-- **Active States**: Visual feedback based on scroll position
-- **Accessibility**: ARIA labels, semantic HTML, keyboard navigation
-- **Responsive Design**: Mobile-optimized with multiple breakpoints
-- **Reduced Motion**: Respects user's motion preferences
-
-### Chapter component API
-
-```typescript
-interface ChapterProps {
-  id: string;                                  // Unique chapter identifier (required)
-  title: string;                               // Chapter title (required)
-  description?: string;                        // HTML description content
-  image?: string;                              // Image URL (absolute or relative)
-  video?: string;                              // Video URL (absolute or relative)
-  alignment?: 'left' | 'right' | 'center' | 'full';  // Content position (default: 'center')
-  hidden?: boolean;                            // Hide content for map-only chapters
-  isActive?: boolean;                          // Full opacity (default: true)
-  base?: string | false;                       // Base for image/video paths (default: BASE_URL)
-  theme?: 'light' | 'dark';                    // Visual theme (default: 'light')
-}
-```
-
-### Chapter examples
-
-#### Basic chapter
-
-`Chapter` is exported from the `@maplibre-yaml/astro/components` subpath only.
-The package root exports `Map`, `FullPageMap` and `Scrollytelling`, and the
-`ChapterProps` type.
+`Chapter` renders one chapter card, styled exactly like a story's own (it uses
+the same renderer and stylesheet). Use it on pages that place chapters by
+hand. Import it from the `/components` subpath; the package root doesn't
+export it:
 
 ```astro
 ---
@@ -496,100 +276,111 @@ import { Chapter } from '@maplibre-yaml/astro/components';
   id="intro"
   title="Introduction"
   description="<p>Welcome to our story about climate data.</p>"
-  alignment="center"
-/>
-```
-
-#### Chapter with image
-
-```astro
-<Chapter
-  id="hero"
-  title="The Journey Begins"
-  description="<p>Exploring the landscape of our data.</p>"
   image="/images/hero-landscape.jpg"
   alignment="left"
   theme="dark"
 />
 ```
 
-#### Chapter with video
+A standalone `Chapter` is shown as active (full opacity), since nothing on
+the page would activate it; pass `isActive={false}` for the dimmed look.
+`hidden` renders a map-only chapter with no card. Images and videos take the
+same paths as in a story file.
 
-```astro
-<Chapter
-  id="demo"
-  title="How It Works"
-  description="<p>Watch this short demonstration.</p>"
-  video="/videos/tutorial.mp4"
-  alignment="center"
-/>
+## How a story behaves
+
+- **The active chapter** is the one whose card is on screen and nearest the
+  middle of it, recomputed as the page scrolls. The story starts reacting once
+  its first chapter reaches the middle 20% of the screen. On phones the map
+  moves on once the next card is on screen.
+- **On load**, the map opens on the story's `config` camera, then at once
+  applies the chapter in that middle zone: on a page that starts with the
+  story, the first chapter's camera, `layers` and `onChapterEnter` actions all
+  run. So give layers their starting state in the layers themselves (for
+  example `layout: { visibility: none }` on a layer a later chapter reveals),
+  and let the first chapter apply its own look.
+- **Reading comes first.** The wheel and touch scroll the story, not the map:
+  the story map's own pan and zoom gestures are off (set `scrollZoom: true` or
+  `dragPan: true` in `config:` to turn one back on). The rail, legend,
+  markers, popups and slots stay clickable. Nothing on the map moves with the
+  scroll, and a chapter photo is never taller than 40% of the screen.
+- **The chapter rail** (`showMarkers: true`): click a dot to jump to its
+  chapter, or Tab to it and use the arrow keys, Home and End; the active dot
+  is marked `aria-current`. On phones the cards leave a gutter for it.
+- **Reduced motion.** When the reader's system asks for it, cards stop
+  animating, every camera move and camera action is instant (an action whose
+  `options` set `essential: true` still animates), and `rotateAnimation` and
+  `spinGlobe` are skipped.
+- **The whole map document works**: `sources:`, `markers:`, `legend:`,
+  `state:` and `parameters:`, `images:`, `controls:`, `terrain:`,
+  `projection:` (on `@maplibre-yaml/core` 0.8 or later). The legend is pinned
+  in one corner above the cards ([The legend](/schema/scrollytelling/#the-legend)).
+
+## Reference
+
+### Scrollytelling component API
+
+```typescript
+interface ScrollytellingProps {
+  src?: string;                 // The story file's address on the site (a file in public/)
+  config?: ScrollytellingBlock; // Or a story loaded at build time. One of the two is required
+  class?: string;               // A class on the story's container
+  debug?: boolean;              // Chapter outlines, and author hints wherever the page is served
+  base?: string | false;        // Where the story's paths start. Default: your site's base
+                                // (import.meta.env.BASE_URL); false = relative to the page
+  quiet?: boolean;              // Hide the on-map notices (default false)
+}
 ```
 
-#### Hidden chapter (map-only)
+`<Scrollytelling>` renders core's [`<ml-scrollytelling>`](/integrations/scrollytelling-html/)
+element, the same one a plain HTML page uses, so a story file behaves the
+same in both. With `config`, the chapters and the map's document are rendered
+into the page at build time and the element takes them over in the browser.
+`@maplibre-yaml/astro` 0.7 needs `@maplibre-yaml/core` 0.9 or later.
 
-```astro
-<Chapter
-  id="transition"
-  title="Transition View"
-  hidden
-/>
+### Chapter component API
+
+```typescript
+interface ChapterProps {
+  id: string;                                       // Required
+  title: string;                                    // Required
+  description?: string;                             // HTML
+  image?: string;                                   // A full URL or the address of a file in public/
+  video?: string;                                   // The same
+  alignment?: 'left' | 'right' | 'center' | 'full'; // Default 'center'
+  hidden?: boolean;                                 // A map-only chapter, with no card
+  isActive?: boolean;                               // Default true (full opacity)
+  theme?: 'light' | 'dark';                         // Default 'light'
+  base?: string | false;                            // Where image and video paths start
+}
 ```
 
-#### Full-width chapter
+### The story file
 
-```astro
-<Chapter
-  id="finale"
-  title="Conclusion"
-  description="<p>Thank you for following this journey through the data.</p>"
-  alignment="full"
-  theme="dark"
-/>
-```
+- [Story file reference](/schema/scrollytelling/): every key, explained, with
+  chapter actions, themes and the pinned legend.
+- [Generated YAML reference: story](/reference/yaml/scrollytelling/): every
+  key with its type and default.
 
-### Alignment options
+## Troubleshooting
 
-- **left**: Content positioned on the left side (good for right-aligned maps)
-- **right**: Content positioned on the right side (good for left-aligned maps)
-- **center**: Content centered (default, works with most layouts)
-- **full**: Full-width content, centered text (impactful for conclusions)
+Problems every map shares are in [Troubleshooting](/troubleshooting/).
 
-### Chapter themes
+- **The map and text come out tiny on a phone.** The page is missing
+  `<meta name="viewport" content="width=device-width, initial-scale=1">`.
+- **The map scrolls away with the chapters.** `position: sticky` doesn't work
+  inside an element with `overflow: hidden`, `auto` or `scroll`. Look for one
+  on a wrapper around the story.
+- **`**bold**` shows literally in a chapter.** `description` is HTML; write
+  `<strong>bold</strong>`.
+- **With `src`, the chapters stay on *Loading story…*** and the console says
+  *Failed to resolve module specifier '@maplibre-yaml/core'*: upgrade to
+  `@maplibre-yaml/astro` 0.5 or later, or use `config`.
+- **A layer doesn't appear or disappear.** Check the chapter's `layers` ids
+  against the layers' `id`s; the map's notice names a missing one while you
+  develop.
 
-**Light theme** (default):
-- White/translucent background (rgba(255, 255, 255, 0.95))
-- Dark text (#1f2937)
-- Blue links (#3b82f6)
+## Alternatives
 
-**Dark theme**:
-- Dark gray/translucent background (rgba(31, 41, 55, 0.95))
-- Light text (#f9fafb)
-- Light blue links (#60a5fa)
-
-### Active states
-
-The `isActive` prop controls visual emphasis:
-- Active chapters: Full opacity (1.0), normal scale
-- Inactive chapters: Reduced opacity (0.4), slightly scaled down (0.98)
-
-A standalone `Chapter` is active by default (full opacity): nothing on the page would activate it. Pass `isActive={false}` for the dimmed look. Inside a story, `<ml-scrollytelling>` sets `is-active` from the scroll position.
-
-### Chapter accessibility
-
-- Semantic `<section>` with `role="region"`
-- Unique `aria-labelledby` for each chapter
-- Lazy-loaded images with `alt` text
-- Videos with controls and fallback text
-- High contrast mode support
-- Reduced motion support
-
-## Next steps
-
-- [Story file reference](/schema/scrollytelling/): every key of a story
-  document, chapter actions, themes and the pinned legend
-- [Story maps in plain HTML](/integrations/scrollytelling-html/): the same
-  story file with `<ml-scrollytelling>` and no build step
-- [Astro](/integrations/astro/): `<Map>`, `<FullPageMap>`, loaders and
-  [deploying to GitHub Pages](/guides/publishing/#astro-sites)
-- [Astro content collections](/integrations/astro-collections/): maps from
-  your collection entries' frontmatter
+- **Without a build step**: the same story file in a plain HTML page, with
+  `<ml-scrollytelling>` from a CDN: [Story maps in plain HTML](/integrations/scrollytelling-html/).
