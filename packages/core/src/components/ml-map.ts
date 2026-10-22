@@ -42,6 +42,7 @@ import {
   type ParseError,
   type ValidationWarning,
 } from "../parser/yaml-parser.js";
+import { BaseElement } from "./base-element.js";
 import { MapRenderer } from "../renderer/map-renderer.js";
 import {
   toModel,
@@ -317,7 +318,7 @@ function startCogFitPrefetch(sourceId: string, source: { url: string }): FitPref
  * @fires ml-map:camera-fit - The `fitTo` camera framed its source's data (detail: source, bounds)
  * @fires ml-map:layer-classified - A `classify:` layer's classes as drawn (detail: layerId, classify), on load and when fetched data (re)computes them
  */
-export class MLMap extends HTMLElement {
+export class MLMap extends BaseElement {
   /** Internal MapRenderer instance */
   private renderer: MapRenderer | null = null;
 

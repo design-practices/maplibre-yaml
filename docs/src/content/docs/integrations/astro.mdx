@@ -867,13 +867,14 @@ Vue or Svelte components, so client directives don't apply. Remove them:
 
 ### `ReferenceError: HTMLElement is not defined`
 
-This happens when a page or your own component imports
-`@maplibre-yaml/core/register` in its frontmatter (the `---` block). The
-frontmatter runs on the server while the page builds, and the register module
-defines a browser element (`class MLMap extends HTMLElement`), which doesn't
-exist there. Import it in a `<script>` instead, which runs only in the browser
-([example](#using-ml-map-directly)). The `@maplibre-yaml/astro` components do
-this for you.
+With `@maplibre-yaml/core` 0.9.0 or earlier, this happens when a page or your
+own component imports `@maplibre-yaml/core/register` in its frontmatter (the
+`---` block): the frontmatter runs on the server while the page builds, where
+browser elements don't exist. Later versions don't throw there, but the import
+still does nothing in the frontmatter, because the frontmatter never runs in
+the browser, so the map stays empty. Either way, import it in a `<script>`,
+which runs only in the browser ([example](#using-ml-map-directly)). The
+`@maplibre-yaml/astro` components do this for you.
 
 ## Alternatives \{#component-patterns}
 
