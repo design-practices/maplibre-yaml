@@ -3,6 +3,7 @@
  * `my-map/index.html` + `map.yaml` (or `story.yaml`) + `README.txt`. The
  * page zips these in the browser with fflate, loaded on click.
  */
+import { zipSync, strToU8 } from "fflate";
 import { MAP_PAGE, STORY_PAGE, readme } from "./download-template.mjs";
 
 export const SITE = "https://docs.maplibre-yaml.org";
@@ -62,4 +63,17 @@ export function downloadFiles(text, kind = "map") {
     [`my-map/${file}`]: yaml,
     "my-map/README.txt": readme(file),
   };
+}
+
+/**
+ * The download as zip bytes. Imported on click, so fflate (only the zip
+ * writer, a few KB) loads when someone downloads, not with the page.
+ *
+ * @param {string} text
+ * @param {"map" | "scrollytelling"} kind
+ * @returns {Uint8Array}
+ */
+export function downloadZip(text, kind = "map") {
+  const files = downloadFiles(text, kind);
+  return zipSync(Object.fromEntries(Object.entries(files).map(([name, body]) => [name, strToU8(body)])), { level: 6 });
 }

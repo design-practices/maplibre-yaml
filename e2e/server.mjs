@@ -37,7 +37,7 @@
  *                                  classics launch page, mounted where the
  *                                  site serves it; likewise `/playground/`
  *                                  with the `/configs/`, `/schema/` and
- *                                  `/data/` files it loads
+ *                                  `/data/classify/` files it loads
  *  - `/my-repo/*`                  examples/verification/base-path/site, as
  *                                  GitHub Pages serves a project site
  *                                  (ml-aot.30); `/my-repo/cloud-native/*`
@@ -566,10 +566,12 @@ const server = createServer(async (req, res) => {
       path.startsWith("/examples/gallery/fly-to-a-location-based-on-scroll-position/") ||
       path.startsWith("/configs/") ||
       // The playground (ml-vjs.17): its page, the schemas its completion
-      // reads, and the site data its starters load.
+      // reads, and the site data its classify starters load. Only
+      // /data/classify/: base-path.spec.ts needs /data/cities.geojson to
+      // 404 at the domain root, as on a GitHub Pages project site.
       path.startsWith("/playground/") ||
       path.startsWith("/schema/") ||
-      path.startsWith("/data/") ||
+      path.startsWith("/data/classify/") ||
       path === "/favicon.svg" ||
       path.startsWith("/fonts/")
     ) {

@@ -14,7 +14,8 @@ import { createSchemaAssist, schemaNameFor } from "../src/playground/schema-assi
 import { toDiagnostics, trustNotes, holdWhileTyping, lineColToOffset, cleanMessage, summarize } from "../src/playground/diagnostics.mjs";
 import { encodeShare, decodeShare, shareLink, hostsOf, safeSrc, SHARE_MAX_LENGTH } from "../src/playground/share.mjs";
 import { cameraKey, withCamera } from "../src/playground/camera.mjs";
-import { rewriteSiteUrls, downloadFiles } from "../src/playground/download.mjs";
+import { rewriteSiteUrls, downloadFiles, downloadZip } from "../src/playground/download.mjs";
+import { unzipSync, strFromU8 } from "fflate";
 import { CURATED, DEFAULT_SRC, galleryStarters, playgroundHref } from "../src/playground/starters.mjs";
 import { allEntries } from "../src/data/gallery.mjs";
 
@@ -281,6 +282,10 @@ test("download: the folder holds the page, the document and a README, pinned to 
   assert.ok(s["my-map/story.yaml"].startsWith("# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json\n"));
   assert.ok(s["my-map/index.html"].includes('<ml-scrollytelling src="story.yaml">'));
   assert.match(s["my-map/README.txt"], /story\.yaml/);
+
+  const zipped = unzipSync(downloadZip("type: map\nid: z\n", "map"));
+  assert.deepEqual(Object.keys(zipped).sort(), ["my-map/README.txt", "my-map/index.html", "my-map/map.yaml"]);
+  assert.match(strFromU8(zipped["my-map/map.yaml"]), /^# yaml-language-server: .*\ntype: map\nid: z\n$/);
 });
 
 // ---- starters -------------------------------------------------------------

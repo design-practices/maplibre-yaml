@@ -378,15 +378,8 @@ export function start(): void {
   // ---- download ---------------------------------------------------------
 
   el("pg-download-btn").addEventListener("click", async () => {
-    const [{ zipSync, strToU8 }, { downloadFiles }] = await Promise.all([
-      import("fflate"),
-      import("./download.mjs"),
-    ]);
-    const files = downloadFiles(text(), lastKind);
-    const zip = zipSync(
-      Object.fromEntries(Object.entries(files).map(([name, body]) => [name, strToU8(body)])),
-      { level: 6 },
-    );
+    const { downloadZip } = await import("./download.mjs");
+    const zip = downloadZip(text(), lastKind);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
     a.download = "my-map.zip";
