@@ -1,17 +1,17 @@
 # yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
-type: map
-id: quickstart-demo
-config:
-  center: [-120, 37]
-  zoom: 4
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
+type: map              # this file describes one map
+id: earthquake-map     # a short name for it, in your own words
+config:                # the view the map opens on
+  center: [-120, 37]   # [longitude, latitude]: California
+  zoom: 4              # 0 is the whole world; higher numbers zoom in
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"  # the basemap
+layers:                # your data, drawn on top of the basemap
   - id: earthquakes
-    type: circle
-    source:
+    type: circle       # draw each point as a circle
+    source:            # where the points come from
       type: geojson
       url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
-    paint:
+    paint:             # how the circles look
       circle-radius: 6
       circle-color: "#e74c3c"
       circle-stroke-width: 1

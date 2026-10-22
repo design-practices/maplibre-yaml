@@ -1,63 +1,100 @@
 ---
 title: Troubleshooting
-description: What the map's error card, notice and author hints mean (debug and quiet), the common problems in detail, and a list of symptoms (blank map, 404 on GitHub Pages, worker errors, PMTiles and other large-data errors, CLI and editor problems) with the page that fixes each.
+description: Find your symptom — a blank map, an error card, missing data, popups or legends that don't show, a story that doesn't move, a 404 once published, large-data, Astro, CLI and editor problems — with its cause and fix, and what the map's error card, notice and author hints mean.
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
-Start with what the map itself says: in most cases it names the problem and
-the fix. Then find your symptom in the tables below; each row links to the
-page that explains it.
+Start with what the map itself says: an error card or a notice on the map
+usually names the problem and the fix, and the browser console
+(<kbd>F12</kbd>) has every message. Then find your symptom in the tables
+below: each row gives the likely cause and the fix, or links to the section
+that explains it.
+
+## The map doesn't show
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Nothing where the map should be, no error | The element has no height | Give `<ml-map>` `display: block` and a height: [The map has no height](#the-map-has-no-height) |
+| A blank page, and *Failed to resolve module specifier "maplibre-gl"* in the console | The import map is missing, or comes after the script | Copy the `<head>` from [Browser usage (CDN)](/getting-started/installation/#browser-usage-cdn) |
+| A card saying the page was opened from a file | The HTML file was double-clicked (a `file://` address), and browsers block it from fetching the YAML | Serve the folder: [Run a local server](/getting-started/quick-start/#3-run-a-local-server) |
+| A blank map and *Worker failed to load* | maplibre-gl 6 inside a bundler can't find its worker | Set the worker URL: [Worker failed to load](#blank-map-and-worker-failed-to-load) |
+| The element stays empty and `customElements.get("ml-map")` is `undefined` | The script that defines `<ml-map>` didn't run | [`<ml-map>` isn't defined](#ml-map-isnt-defined) |
+| A card in place of the map ("Configuration Error") | The document has a YAML or validation error | Fix the line the card names: [An error card instead of the map](#an-error-card-instead-of-the-map) |
+| *YAML syntax error … `<!doctype html>`* after `npm run build` | `map.yaml` is next to `index.html`, so the build doesn't copy it | Move it into `public/`: [Using a bundler (Vite)](/getting-started/installation/#using-a-bundler-vite) |
+| A card asking for a basemap | `config:` has no `mapStyle` | Add one: [The basemap](/getting-started/first-map/#map-styles) |
+| The map is in the ocean, or far from your data | `center` is written latitude first | Write `[longitude, latitude]`: [Coordinates](/getting-started/first-map/#coordinates) |
+
+## The map shows, but your data doesn't
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| The basemap draws, your layer doesn't | A path, the file, CORS or the layer's style | Read the notice on the map, then [The basemap draws but your layer doesn't](#the-basemap-draws-but-your-layer-doesnt) |
+| A local data file isn't found | Paths are relative to the page, not to the YAML | [Using your own data file](/getting-started/first-map/#using-your-own-data-file) |
+| A data file on another site doesn't load, with a CORS error in the console | That server doesn't let other sites read the file | [CORS considerations](/guides/data-sources/#cors-considerations) |
+| "CSV files aren't supported" | A source can't read a table | Convert the table to GeoJSON: [CSV and spreadsheets](/guides/data-sources/#csv-and-spreadsheets) |
+| A colour is ignored, or the layer fails validation | The colour isn't in quotes, and `#` starts a comment in YAML | Quote it: `circle-color: "#e74c3c"` |
+| A warning about a value starting with `=` | Values starting with `=` are reserved | [Strings starting with `=` are reserved](/guides/layers/#strings-starting-with--are-reserved) |
+| Your page's JavaScript never sees the map's events | The listener was added after the event fired, or an error stopped the map first | [Events not firing](/integrations/web-components/#events-not-firing) |
+
+## Popups, hover and legends
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Clicking a feature does nothing | The layer has no `interactive:` block, or it is indented under `paint:` or `source:` | Put `interactive:` on the layer, at the same depth as `paint:`: [Show a popup on click](/guides/popups/#show-a-popup-on-click) |
+| A popup has a blank where a value should be | The `property:` name doesn't match the data (names are case-sensitive), or that feature has no such value | Copy the name from the data file; `else:` sets text for a missing value: [Choose what the popup shows](/guides/popups/#choose-what-the-popup-shows) |
+| No legend appears | Nothing gives the legend entries | Add `legend: { label, color }` to a layer, or classify it: [The legend](/guides/thematic-maps/#the-legend) |
+| A legend appears that you don't want | A classified layer, or a layer's `legend:` entry, makes one | Write `legend: false` at the top level of the document |
+
+## Story maps
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| A card in place of the story | The story file has a YAML or validation error, or wasn't found | Fix the line the card names, as for a map: [An error card instead of the map](#an-error-card-instead-of-the-map) |
+| *Two chapters have id …* | A chapter was copied and its `id` left unchanged | Give each chapter its own `id` |
+| A chapter doesn't show or hide a layer | Its `layers.show` or `layers.hide` names a layer id that doesn't exist | While you develop, the notice names it with a "did you mean"; match the layer's `id` |
+| A chapter's image doesn't load | The path is wrong, or the site is under a subpath | Paths are relative to the page; on a subpath set `base`: [Publishing & subpaths](/guides/publishing/#sites-under-a-subpath-github-pages) |
+
+## Works on your computer, not once published
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| A 404 for the YAML or the data on GitHub Pages (or any site under a subpath) | Paths starting with `/` point at the domain's root, not your site's folder | Set the base: [Publishing & subpaths](/guides/publishing/#sites-under-a-subpath-github-pages) ([HTML pages](/guides/publishing/#html-pages-the-base-attribute), [Astro](/guides/publishing/#astro-sites)) |
+| Every file 404s on your computer after adding `base` | The local server isn't serving the site under the same subpath | [Previewing a subpath](/guides/publishing/#previewing-a-subpath-on-your-computer) |
+| Author hints you saw while developing are gone | They show only while you develop | Expected; add `debug` to see them: [When are author hints shown?](#when-are-author-hints-shown) |
+| Something changed after upgrading | A behaviour change in the new release | [Upgrading to 0.9](/getting-started/upgrading/#what-behaves-differently) |
 
 ## Reading what the map tells you
 
-`<ml-map>` and `<ml-scrollytelling>` (and the Astro components, which render
-them) report problems on the page, not only in the browser console:
+`<ml-map>` and `<ml-scrollytelling>`, and the Astro components that render
+them, report problems on the page as well as in the console:
 
-- **Error card** (replaces the map). The document can't render at all: a
-  YAML syntax error, a validation error (with its line number and, for a
+- **Error card**, in place of the map: the document can't render at all. A
+  YAML syntax error, a validation error with its line number (and, for a
   typo, a "did you mean"), a `src` file that isn't found (with the full
-  address the browser requested; a wrong path that returns a web page is
-  recognised as one), a page opened from a file (`file://`, which browsers
-  block; the card says to start a local server), or a basemap style that
-  won't load. Fix what the card names and reload. For page scripts,
-  `mapReady()` rejects.
-- **Notice** (over the map, dismissible). The map works but part of the
-  document didn't load: a layer MapLibre rejected (for example a bad colour
-  inside an expression), a layer whose `source:` names a source that doesn't
-  exist, a data file that didn't load, or an `images:` entry or marker icon
-  that failed. Each line names the layer or file. The notice is written for
-  two readers: it leads with "Part of this map couldn't load" for anyone
-  visiting the site, and keeps the fix in a "Details for the site's author"
-  section below it, open while you develop and closed on a published site,
-  where a click opens it. The map still fires `ml-map:load`.
-- **Author hints** (in the same notice). The map works, but the document
-  probably doesn't say what you meant: a "did you mean" for a near-miss name,
-  a key nested under `config:` that belongs at the top level, a `fitTo`
-  typo, a `center` or `bounds` that looks written [latitude, longitude], a
-  `before:` naming a layer the map doesn't have, a chapter naming a missing
-  layer, a value starting with the reserved `=`. These are for you, not your
-  visitors, so they show **only while you develop**
-  ([below](#when-are-author-hints-shown)). A notice holding only hints leads
-  with "Notes for this map's author".
-- **Height hint.** A map with no height is invisible, so the element shows a
-  short note saying to give it one, and removes it once the map has a height
+  address the browser asked for), a page opened from a file, or a basemap
+  that won't load. Fix what the card names and reload.
+- **Notice**, over the map and dismissible: the map works but part of it
+  didn't load, such as a layer MapLibre rejected, a data file that didn't
+  load, or an image or marker icon that failed. Each line names the layer or
+  file. A visitor sees "Part of this map couldn't load"; the fix is in
+  "Details for the site's author" below it, open while you develop and one
+  click away on a published site.
+- **Author hints**, in the same notice: the map works, but the document
+  probably doesn't say what you meant. A near-miss name, a key nested under
+  `config:` that belongs at the top level, a `center` that looks written
+  latitude first, a `before:` naming a layer the map doesn't have, a chapter
+  naming a missing layer. They are for you, not your visitors, so they show
+  only while you develop ([below](#when-are-author-hints-shown)).
+- **Height hint**: a map with no height shows a short note asking for one
   ([The map has no height](#the-map-has-no-height)).
-- **"Loading map…"** in the middle of the map. Not a problem report: while
-  the map starts, the element carries `aria-busy="true"`, and if it hasn't
-  drawn after about a second (usually a slow basemap, or a `fitTo` data file
-  still arriving) a small, muted "Loading map…" appears (`role="status"`).
-  Both go away when the basemap draws or an error card replaces the map, so a
-  fast map never shows it. `quiet` doesn't hide it; a page with its own
-  loading indicator hides it with `ml-map .ml-map-loading { display: none; }`.
-  The text is translatable as `maplibre-yaml.Loading` in `locale:`
-  ([Accessibility & languages](/guides/accessibility-languages/)).
 
-Everything is also written to the browser console, so open the developer
-tools (<kbd>F12</kbd>, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd>;
-<kbd>⌥</kbd>+<kbd>⌘</kbd>+<kbd>I</kbd> on a Mac) when the page says nothing.
+A slow map shows "Loading map…" in its middle until the basemap draws. That
+is not a problem report; to hide it or style it, see the
+[`<ml-map>` styling hooks](/reference/elements/#ml-map-styling-hooks).
+
 To catch mistakes before you load the page, run
-`npx maplibre-yaml validate map.yaml` ([The CLI](/cli/getting-started/)) or
+`npx maplibre-yaml validate map.yaml` ([The CLI](/cli/getting-started/)), or
 set up [your editor](/guides/editor-setup/) to check the YAML as you type.
 Page scripts can listen for the same problems as events
 ([`ml-map:error` and the others](/reference/elements/)).
@@ -70,9 +107,9 @@ off the page otherwise:
 | Situation | Author hints |
 | --------- | ------------ |
 | The page is served from your computer: `localhost`, `127.0.0.1`, `[::1]`, `0.0.0.0` or `[::]` (a dev server started with `--host`), or opened as a `file://` page | shown |
-| A bundler development build: `astro dev`, `vite` (their `import.meta.env.DEV`), on any address, a Codespaces URL included | shown |
+| A bundler development build: `astro dev` or `vite`, on any address, a Codespaces URL included | shown |
 | The element has the `debug` attribute (or its `<ml-scrollytelling>` does; in Astro, the `debug` prop) | shown, wherever the page is served |
-| A published site (GitHub Pages, Netlify, your own domain), including the plain CDN script, which can't know how it was built | hidden |
+| A published site (GitHub Pages, Netlify, your own domain), including a page using the CDN script | hidden |
 | The element has `quiet` | hidden, and so are failures |
 
 Every hint is still written to the browser console, wherever the page runs.
@@ -86,9 +123,9 @@ To check a deployed site, add `debug` to see the author hints there:
 ```
 
 Add `quiet` to keep the notice (failures and hints) and the height hint off
-the page, for a production site that would rather fail quietly. The problems
-are still logged to the console and dispatched as events. `quiet` wins over
-`debug`. The error card is always shown.
+the page, for a site that would rather fail quietly. The problems are still
+logged to the console and dispatched as events. `quiet` wins over `debug`.
+The error card always shows.
 
 ```html
 <ml-map src="/maps/city.yaml" quiet></ml-map>
@@ -96,41 +133,6 @@ are still logged to the console and dispatched as events. `quiet` wins over
 
 The Astro `Map`, `FullPageMap` and `Scrollytelling` components take the same
 two as props: `<Map src="…" debug />`.
-
-## The map doesn't show
-
-| Symptom | Where to look |
-|---|---|
-| Nothing at all where the map should be, no error | The element has no height: [The map has no height](#the-map-has-no-height) |
-| A blank page, and *Failed to resolve module specifier "maplibre-gl"* in the console | The import map is missing: [Browser usage (CDN)](/getting-started/installation/#browser-usage-cdn) |
-| The page was opened by double-clicking the HTML file (a `file://` address) | Serve the folder instead: [Run a local server](/getting-started/quick-start/#3-run-a-local-server) |
-| A blank map and *Worker failed to load* | maplibre-gl 6 inside a bundler needs its worker set: [Worker failed to load](#blank-map-and-worker-failed-to-load) |
-| The element stays empty and `customElements.get("ml-map")` is `undefined` | [`<ml-map>` isn't defined](#ml-map-isnt-defined) |
-| An error card ("Configuration Error") | [An error card instead of the map](#an-error-card-instead-of-the-map) |
-| *YAML syntax error … `<!doctype html>`* after `npm run build` | The YAML is next to `index.html` instead of in `public/`: [YAML next to index.html](/getting-started/installation/#using-a-bundler-vite) |
-| The map refuses to load and says it has no basemap | Add `mapStyle:` under `config:`: [Map styles](/getting-started/first-map/#map-styles) |
-| The map is in the ocean, or far from your data | Coordinates are `[longitude, latitude]`: [Coordinates](/getting-started/first-map/#coordinates) |
-
-## The map shows, but your data doesn't
-
-| Symptom | Where to look |
-|---|---|
-| The basemap draws, your layer doesn't | [The basemap draws but your layer doesn't](#the-basemap-draws-but-your-layer-doesnt) |
-| A data file on another site doesn't load (a CORS error in the console) | [CORS considerations](/guides/data-sources/#cors-considerations) |
-| "CSV files aren't supported" | Convert the table to GeoJSON: [CSV and spreadsheets](/guides/data-sources/#csv-and-spreadsheets) |
-| A colour is ignored, or the layer fails validation | Put colours in quotes: in YAML `#` starts a comment ([Adding a simple layer](/getting-started/first-map/#adding-a-simple-layer)) |
-| A warning about a value starting with `=` | [Strings starting with `=` are reserved](/guides/layers/#strings-starting-with--are-reserved) |
-| A local data file isn't found | Paths are relative to the page, not the YAML: [Using your own data file](/getting-started/first-map/#using-your-own-data-file) |
-| Your page's JavaScript never sees the map's events | [Events not firing](/integrations/web-components/#events-not-firing) |
-
-## Works on your computer, not once published
-
-| Symptom | Where to look |
-|---|---|
-| A 404 for the YAML or the data on GitHub Pages (or any site under a subpath) | Set the base: [Publishing & subpaths](/guides/publishing/#sites-under-a-subpath-github-pages) ([HTML pages](/guides/publishing/#html-pages-the-base-attribute), [Astro](/guides/publishing/#astro-sites)) |
-| Every file 404s on your computer after adding `base` | [Previewing a subpath](/guides/publishing/#previewing-a-subpath-on-your-computer) |
-| Author hints you saw while developing are gone | Expected: they show only while you develop; add `debug` to see them ([above](#reading-what-the-map-tells-you)) |
-| Something changed after upgrading | [Upgrading to 0.9](/getting-started/upgrading/#what-behaves-differently) |
 
 ## Common problems in detail
 
@@ -181,22 +183,14 @@ saying *Worker failed to load*; the console names `maplibre-gl-worker.mjs`.
 
 maplibre-gl 6 draws in a background worker loaded from a separate file, and
 inside a bundle (Vite, Astro, webpack) it can't find that file unless it is
-told where it is. Add the worker lines next to the register import:
+told where it is. Import the worker's URL and pass it to `setWorkerUrl()` in
+the same entry file that imports `@maplibre-yaml/core/register`: the four
+lines are in [Using a bundler (Vite)](/getting-started/installation/#using-a-bundler-vite).
 
-```javascript
-import { setWorkerUrl } from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import "@maplibre-yaml/core/register";
-
-setWorkerUrl(workerUrl);
-```
-
-The CDN page needs nothing (the worker loads from the CDN), and on
-maplibre-gl 4 or 5 leave these lines out. The `@maplibre-yaml/astro`
-components set the worker for you; a component of your own around `<ml-map>`
-does it in its `<script>`
+A CDN page needs nothing (the worker loads from the CDN), and maplibre-gl 4
+and 5 need nothing. The `@maplibre-yaml/astro` components set the worker for
+you; a component of your own around `<ml-map>` does it in its `<script>`
 ([Using `<ml-map>` directly](/integrations/astro/#using-ml-map-directly)).
-Details: [Using a bundler (Vite)](/getting-started/installation/#using-a-bundler-vite).
 
 ### An error card instead of the map
 
@@ -218,8 +212,7 @@ the common causes:
   ```
 
 - **A missing required key.** A map needs `type: map`, an `id`, and a
-  `config:` with `center` and `zoom`; without `mapStyle` (the basemap) it
-  warns in validation and the page shows an error card.
+  `config:` with `center`, `zoom` and `mapStyle` (the basemap).
 
   ```yaml
   type: map
@@ -279,15 +272,15 @@ When one of these files fails, the rest of the map still draws and the
 notice says why. The common messages, with the fix for each, are in
 [When something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong).
 
-| Symptom | Where to look |
-|---|---|
-| "served without range-request support", often with `python -m http.server` | Use a server with range requests (`npx serve`, GitHub Pages, Netlify, S3): [Range requests and CORS](/guides/publishing/#large-files-range-requests-and-cors) |
-| A *416* status (Range Not Satisfiable) | The file was found, but the server refused the part asked for: the upload may be incomplete, or the server doesn't serve parts of files correctly. Upload the file again, or try another host ([Range requests and CORS](/guides/publishing/#large-files-range-requests-and-cors)) |
-| A file on another site is blocked (CORS) | The other server must allow your site and the `Range` header: [CORS rule](/guides/publishing/#large-files-range-requests-and-cors) |
-| "is in EPSG:…" (the wrong projection) | FlatGeobuf needs longitude/latitude (EPSG:4326), a COG Web Mercator (EPSG:3857); the notice gives the command that converts it ([details](/guides/cloud-native-data/#when-something-goes-wrong)) |
-| "The … reader (`…/chunks/….js`) couldn't be downloaded", on a site hosting maplibre-yaml's files itself | Copy the whole `dist/` folder, not only `register.js`: [Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself) |
-| A Protomaps basemap draws without labels or icons, or the notice names the fonts or icons | Labels come from Protomaps' font host unless you copy them: [Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap) |
-| "too large to load whole in a browser" | Add `load: viewport` or convert the file: [When something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong) |
+| Symptom | Cause | Fix |
+|---|---|---|
+| "served without range-request support", often with `python -m http.server` | The server sends whole files only | Use a server with range requests (`npx serve`, GitHub Pages, Netlify, S3): [Range requests and CORS](/guides/publishing/#large-files-range-requests-and-cors) |
+| A *416* status (Range Not Satisfiable) | The file was found, but the server refused the part asked for: the upload may be incomplete | Upload the file again, or try another host ([Range requests and CORS](/guides/publishing/#large-files-range-requests-and-cors)) |
+| A file on another site is blocked (CORS) | The other server doesn't allow your site, or the `Range` header | [CORS rule](/guides/publishing/#large-files-range-requests-and-cors) |
+| "is in EPSG:…" | The file is in another projection | FlatGeobuf needs longitude/latitude (EPSG:4326), a COG Web Mercator (EPSG:3857); the notice gives the command that converts it ([details](/guides/cloud-native-data/#when-something-goes-wrong)) |
+| "The … reader (`…/chunks/….js`) couldn't be downloaded", on a site hosting maplibre-yaml's files itself | Only the script was copied, not the whole `dist/` folder | [Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself) |
+| A Protomaps basemap draws without labels or icons, or the notice names the fonts or icons | Labels come from Protomaps' font host unless you copy them | [Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap) |
+| "too large to load whole in a browser" | The source reads the whole file, and this one is too big for that | Add `load: viewport` or convert the file: [When something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong) |
 
 ## Astro
 

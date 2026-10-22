@@ -118,6 +118,30 @@ export const STUB_ANCHORS = [
   "/guides/accessibility-languages/#while-the-map-loads",
   "/guides/accessibility-languages/#your-own-chrome-in-the-maps-language",
   "/guides/reuse/#safety",
+  // Start here pages: headings other pages link, kept (or kept by an
+  // explicit id) through the rewrite.
+  "/getting-started/introduction/#how-it-works",
+  "/getting-started/quick-start/#3-run-a-local-server",
+  "/getting-started/first-map/#map-structure",
+  "/getting-started/first-map/#the-config-section",
+  "/getting-started/first-map/#coordinates",
+  "/getting-started/first-map/#map-styles",
+  "/getting-started/first-map/#adding-a-simple-layer",
+  "/getting-started/first-map/#using-your-own-data-file",
+  "/getting-started/installation/#browser-usage-cdn",
+  "/getting-started/installation/#versions-in-cdn-urls",
+  "/getting-started/installation/#supported-maplibre-gl-versions",
+  "/getting-started/installation/#hosting-the-files-yourself",
+  "/getting-started/upgrading/#how-to-upgrade",
+  "/getting-started/upgrading/#what-behaves-differently",
+  "/getting-started/upgrading/#older-releases",
+  "/troubleshooting/#reading-what-the-map-tells-you",
+  "/troubleshooting/#when-are-author-hints-shown",
+  "/troubleshooting/#the-map-has-no-height",
+  "/troubleshooting/#ml-map-isnt-defined",
+  "/troubleshooting/#blank-map-and-worker-failed-to-load",
+  "/troubleshooting/#an-error-card-instead-of-the-map",
+  "/troubleshooting/#the-basemap-draws-but-your-layer-doesnt",
 ];
 
 function parseArgs(argv) {

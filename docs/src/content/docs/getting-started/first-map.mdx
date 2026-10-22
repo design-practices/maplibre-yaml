@@ -1,306 +1,246 @@
 ---
 title: Your first map, explained
-description: Understanding the basics of maplibre-yaml configuration
+description: What each part of a map document does — the view, the basemap, a layer, its data and styling, popups and controls — by growing the quick-start earthquake map into a finished one.
 ---
 
 import LiveMap from "../../../components/LiveMap.astro";
-import { Aside } from "@astrojs/starlight/components";
 
-This guide walks you through the fundamentals of maplibre-yaml configuration. By the end, you'll understand how to create maps, configure their appearance, and add basic layers.
+This page goes through the `map.yaml` from the
+[quick start](/getting-started/quick-start/) one part at a time and grows it:
+a view of the whole Pacific, earthquakes sized by magnitude, a better popup
+and map controls. The whole file, and the map it draws, are at the end.
+After each change, save `map.yaml` and reload the page.
 
-<Aside type="note" title="Format v1, the default">
-  This page uses format v1, the default; every page outside *Advanced* uses
-  it. [Format v2](/guides/format-v2/) is an opt-in alternative that renders
-  the same maps, so there is nothing to migrate.
-</Aside>
+## The parts of a map document \{#map-structure}
 
-## Map structure
+Every map document has the same few keys at the top level:
 
-Every maplibre-yaml configuration has this basic structure:
+- `type: map` says what the file is. (A story map is
+  `type: scrollytelling`.)
+- `id:` is a short name for the map, in your own words. It is required.
+- `config:` is the view the map opens on and its basemap.
+- `layers:` is what is drawn on top of the basemap, in order: the first layer
+  is drawn first, at the bottom.
+- `controls:`, optional, adds zoom buttons, a scale bar and the like.
 
-```yaml
-type: map # Required: identifies this as a map block
-id: my-map # Required: unique identifier
-
-config: # Map settings
-  center: [-74.006, 40.7128] # [longitude, latitude]
-  zoom: 12 # Zoom level
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty" # Basemap style URL
-
-layers: [] # Array of layer configurations
-
-controls: {} # Optional: map controls
-```
+A document can hold more, such as a `legend:` or shared `sources:`; the
+[YAML reference](/reference/yaml/map/) lists every key.
 
 ## The host page
 
-The YAML on its own doesn't render anything: it needs a host page with the
-`<ml-map>` element, the MapLibre CSS, and the web component registered. Use
-the page from
-[Browser usage (CDN)](/getting-started/installation/#browser-usage-cdn) (the
-same page as the [quick start](/getting-started/quick-start/)'s), saved as
-`index.html`. Save the YAML on this page as `map.yaml` next to it (the page's
-`<ml-map src="./map.yaml">` loads it), then serve the folder (`npx serve .`)
-and open the address it prints.
+The YAML on its own draws nothing: a web page shows it with
+`<ml-map src="./map.yaml">`. This page uses the quick start's `index.html`
+unchanged. It gives `<ml-map>` a height, which any page of your own must do
+too: the element has no size of its own
+([The map has no height](/troubleshooting/#the-map-has-no-height)).
 
-<Aside type="caution">
-  `<ml-map>` has no intrinsic size. If you don't give it `display: block` and
-  an explicit height (via CSS or an inline `style` attribute), the map renders
-  into a zero-height element and you'll see nothing — even though the YAML is
-  valid. The page above sets both.
-</Aside>
+## The view: `config:` \{#the-config-section}
 
-## The config section
-
-The `config` section defines the initial map view:
+`config:` sets where the map opens. The quick start looks at California. To
+see the earthquakes all around the Pacific, change `center` and `zoom`:
 
 ```yaml
 config:
-  center: [-74.006, 40.7128] # New York City
-  zoom: 12 # Street level
+  center: [-160, 20]
+  zoom: 1
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-
-  # Optional settings
-  pitch: 45 # Tilt angle (0-85)
-  bearing: -17 # Rotation (-180 to 180)
-  minZoom: 2 # Minimum zoom level
-  maxZoom: 18 # Maximum zoom level
 ```
 
-<LiveMap
-  src="/configs/config-demo.yaml"
-  height="350px"
-  caption="Map with pitch and bearing applied"
-/>
+- `center` is the point in the middle of the map, as
+  `[longitude, latitude]`.
+- `zoom` is how close the map is: 0 shows the whole world, about 10 a city,
+  about 15 a few streets.
 
-<Aside type="tip" title="Maps inside a scrolling page, on phones">
-  A map that sits in the middle of a longer page catches one-finger drags on a
-  phone, so the reader pans the map when they meant to scroll the page. Add
-  `cooperativeGestures: true` under `config:` and the map then pans with two
-  fingers (and zooms with Ctrl or ⌘ plus the scroll wheel on a computer),
-  leaving one-finger swipes to the page. See the
-  [cooperative gestures example](/examples/gallery/cooperative-gestures/).
-</Aside>
+`config:` takes more, all optional: `pitch` and `bearing` tilt and turn the
+map, `minZoom` and `maxZoom` limit how far the reader can zoom, and `bounds`
+or `fitTo` frame an area or your data instead of a center and zoom. See
+[`config` in the YAML reference](/reference/yaml/map/#config).
 
 ### Coordinates
 
-Coordinates in maplibre-yaml use **[longitude, latitude]** order (GeoJSON standard), not latitude/longitude:
+Coordinates are always `[longitude, latitude]`, the GeoJSON order, not the
+latitude-first order most map websites show:
 
-```yaml
-# ✓ Correct: [longitude, latitude]
+```yaml no-validate
+# Right: [longitude, latitude]
 center: [-74.006, 40.7128]
 
-# ✗ Wrong: [latitude, longitude]
+# Wrong: [latitude, longitude], an empty spot in Antarctica
 center: [40.7128, -74.006]
 ```
 
-<Aside type="tip">
-  An easy way to remember: longitude comes first because it's the X axis
-  (horizontal), latitude is Y (vertical). While you develop, a `center` that
-  looks written latitude-first gets a "did you mean" note on the map.
-</Aside>
+Longitude is the x axis, latitude the y axis. While you develop, a `center`
+that looks written latitude first gets a note on the map.
 
-### Map styles
+### The basemap: `mapStyle` \{#map-styles}
 
-The `mapStyle` property accepts any MapLibre-compatible style URL:
+`mapStyle` is the basemap, the background map of streets, water and labels
+under your layers. It is the address of any MapLibre style. These docs use
+OpenFreeMap's *liberty* style, which is free and needs no API key. Two
+others:
 
-```yaml
-# OpenFreeMap Liberty: streets and labels, free, no API key (used throughout these docs)
-mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+```yaml no-validate
+# A quieter, light-grey basemap, for maps where your data should stand out
+mapStyle: "https://tiles.openfreemap.org/styles/positron"
 
-# MapLibre demo tiles: country outlines only, fine for world maps
-mapStyle: "https://demotiles.maplibre.org/style.json"
-
-# Self-hosted style
-mapStyle: "https://your-server.com/styles/dark.json"
-
-# MapTiler (requires API key)
+# A keyed provider: add your own key
 mapStyle: "https://api.maptiler.com/maps/streets/style.json?key=YOUR_KEY"
 ```
 
-It can also be a basemap you host yourself: one Protomaps `.pmtiles` file of
-OpenStreetMap data next to your page, with no API key and no tile server. The
-file name alone is enough, and draws the light basemap with labels in the
-page's language:
+It can also be a basemap you host yourself, from one Protomaps `.pmtiles`
+file next to your page:
+[Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap).
 
-```yaml
-mapStyle: data/brooklyn.pmtiles   # the file, next to your page (public/ in Astro)
-```
+A map with no `mapStyle` doesn't draw: it shows an error card asking for one.
 
-To choose the look or the label language, write it out:
+## The layer \{#adding-a-simple-layer}
 
-```yaml
-mapStyle:
-  pmtiles: data/brooklyn.pmtiles
-  flavor: dark                     # light (default), dark, white, grayscale, black
-  lang: es                         # labels in Spanish; default: the page's language
-```
-
-The server must support HTTP range requests (`npx serve`, GitHub Pages and
-Netlify do). See [Host your own basemap](/guides/cloud-native-data/#host-your-own-basemap)
-for making the file.
-
-A map with no `mapStyle` at all doesn't draw: it shows an error card asking
-for one.
-
-## Adding a simple layer
-
-Layers display data on your map. Here's a minimal circle layer:
+The quick start's one layer draws every earthquake as a red circle:
 
 ```yaml
 layers:
-  - id: my-points # Unique layer ID
-    type: circle # Layer type
-    source: # Data source
+  - id: earthquakes
+    type: circle
+    source:
       type: geojson
-      data: # Inline GeoJSON
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-74.006, 40.7128]
-            properties:
-              name: "New York"
-    paint: # Visual styling
-      circle-radius: 10
-      circle-color: "#3b82f6"
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-color: "#e74c3c"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
 ```
 
-<LiveMap
-  src="/configs/simple-layer.yaml"
-  height="350px"
-  caption="Three US cities displayed as circle markers"
-/>
+- `id` names the layer. Each layer's `id` must be different from the others';
+  other parts of the document, such as a story chapter that shows or hides
+  it, refer to the layer by it.
+- `type` is how the data is drawn: `circle` for points, `line` for lines,
+  `fill` for polygons, `symbol` for text labels and icons, and a few more
+  ([Layers & styling](/guides/layers/)).
+- `source` is where the data comes from: here a GeoJSON file, fetched from
+  its `url` when the page opens. Data can also be written in the document
+  itself, or defined once under a top-level `sources:` and shared by several
+  layers ([Loading data](/guides/data-sources/)).
+- `paint` is how it looks. The keys are MapLibre's
+  [paint properties](https://maplibre.org/maplibre-style-spec/layers/), such
+  as `circle-radius` in pixels and `circle-color`.
 
 Colours go in quotes. In YAML `#` starts a comment, so an unquoted
-`circle-color: #3b82f6` leaves the colour empty and the layer fails
+`circle-color: #e74c3c` leaves the colour empty and the layer fails
 validation.
+
+### Size each earthquake by its magnitude
+
+A paint value can come from each feature's data. Every earthquake in the feed
+has a `mag` property, its magnitude. To draw stronger ones bigger, replace
+the `paint:` block with:
+
+```yaml no-validate
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 2, 7, 20]
+      circle-color: "#e74c3c"
+      circle-opacity: 0.7
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+```
+
+The radius is a MapLibre
+[expression](https://maplibre.org/maplibre-style-spec/expressions/): read
+`mag`, and scale it from 2 pixels at magnitude 1 to 20 pixels at magnitude 7.
+`circle-opacity: 0.7` lets overlapping circles show through. To sort features
+into classes with a legend instead, see
+[Thematic maps & legends](/guides/thematic-maps/).
 
 ### Using your own data file
 
-To load a GeoJSON file of your own, put it in your site folder and point the
-source's `url:` at it:
+To map a file of your own, put it in your folder and point `url:` at it. To
+try it with the earthquakes, open the feed's address in your browser, save
+what it shows as `earthquakes.geojson` in a `data` folder next to
+`index.html`, and change the source:
 
-```yaml
-layers:
-  - id: my-places
-    type: circle
+```yaml no-validate
     source:
       type: geojson
-      url: "./data/places.geojson"
-    paint:
-      circle-radius: 8
-      circle-color: "#e63946"
+      url: "data/earthquakes.geojson"
 ```
 
-`data/places.geojson` is a GeoJSON file, for example one you drew on
-[geojson.io](https://geojson.io) and saved. To try the snippet first, save
-this as `data/places.geojson`:
+Two rules for paths to your own files:
 
-```json title="data/places.geojson"
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": { "name": "City Hall" },
-      "geometry": { "type": "Point", "coordinates": [-74.006, 40.7128] }
-    },
-    {
-      "type": "Feature",
-      "properties": { "name": "One World Trade Center" },
-      "geometry": { "type": "Point", "coordinates": [-74.0134, 40.7127] }
-    },
-    {
-      "type": "Feature",
-      "properties": { "name": "Brooklyn Bridge" },
-      "geometry": { "type": "Point", "coordinates": [-73.9969, 40.7061] }
-    }
-  ]
-}
-```
-
-Two rules for local paths:
-
-- `data/places.geojson` and `./data/places.geojson` mean the same thing: a
-  path relative to the page. One that starts with `/` starts at the site root.
+- `data/earthquakes.geojson` and `./data/earthquakes.geojson` mean the same
+  thing: a path relative to the page. A path that starts with `/` starts at
+  the site root.
 - They are resolved against the **page** (`index.html`), not against the YAML
   file. With `index.html` and `map.yaml` side by side and the data in a
-  `data/` folder next to them, `./data/places.geojson` is right.
+  `data/` folder next to them, `data/earthquakes.geojson` is right.
 
-Files on other websites work too (`url: "https://…"`), as long as that server
-allows cross-origin requests (CORS). If it doesn't, the layer stays empty and
-the browser console shows a CORS error.
+Files on other websites work too, as the USGS feed does, when that server
+allows other sites to read them (CORS). If it doesn't, the map's notice says
+the file didn't load and the browser console shows a CORS error.
+
+## The popup
+
+The quick start's popup shows each earthquake's `title`. This one shows the
+place as the heading and the magnitude below it, rounded to one decimal
+place. Replace the layer's `interactive:` block with:
+
+```yaml no-validate
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h3:
+              - property: place
+          - p:
+              - str: "Magnitude "
+              - property: mag
+                format: { max-fraction-digits: 1 }
+```
+
+A popup is a list of HTML elements (`h3`, `p` and others), each holding text
+(`str`) and values from the clicked feature (`property`). `format` writes a
+number the way the page's language does. The
+[popups guide](/guides/popups/) covers what a popup can show, hover
+popups and number formats.
 
 ## Map controls
 
-Add navigation and other controls:
+`controls:` adds MapLibre's controls to the map. Add this at the top level of
+the document, below `layers:`:
 
 ```yaml
 controls:
-  navigation: true # Zoom +/- buttons
-  scale: true # Scale bar
-  fullscreen: true # Fullscreen toggle
-  geolocate: true # User location button
+  navigation: true
+  scale: true
 ```
 
-<LiveMap
-  src="/configs/controls-demo.yaml"
-  height="350px"
-  caption="Map with navigation and scale controls"
-/>
+`navigation` is the zoom and compass buttons, top right; `scale` is a scale
+bar, bottom left. `fullscreen: true` and `geolocate: true` add a full-screen
+button and a "show my location" button. Each control can also take a
+position: [`controls` in the YAML reference](/reference/yaml/map/#controls).
 
 ## Putting it together
 
-Here's a complete example combining everything:
+The whole `map.yaml`, with every change from this page:
 
 ```yaml
 type: map
-id: complete-example
+id: earthquake-map
 config:
-  center: [-98, 39]
-  zoom: 4
-  # [west, south, east, north]: frames all three cities on any screen,
-  # a phone included (it wins over center/zoom)
-  bounds: [-122, 32, -70, 44]
+  center: [-160, 20]
+  zoom: 1
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-  minZoom: 2
-  maxZoom: 18
-
 layers:
-  - id: cities
+  - id: earthquakes
     type: circle
     source:
       type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-74.006, 40.7128]
-            properties:
-              name: "New York"
-              population: 8336817
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-118.243, 34.052]
-            properties:
-              name: "Los Angeles"
-              population: 3979576
-          - type: Feature
-            geometry:
-              type: Point
-              coordinates: [-87.623, 41.881]
-            properties:
-              name: "Chicago"
-              population: 2693976
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     paint:
-      circle-radius: 10
-      circle-color: "#ef4444"
-      circle-stroke-width: 2
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 2, 7, 20]
+      circle-color: "#e74c3c"
+      circle-opacity: 0.7
+      circle-stroke-width: 1
       circle-stroke-color: "#ffffff"
     interactive:
       hover:
@@ -308,38 +248,36 @@ layers:
       click:
         popup:
           - h3:
-              - property: name
+              - property: place
           - p:
-              - str: "Population: "
-              - property: population
-                format: ",.0f" # 8336817 → 8,336,817 on an English page
-
+              - str: "Magnitude "
+              - property: mag
+                format: { max-fraction-digits: 1 }
 controls:
   navigation: true
   scale: true
 ```
 
 <LiveMap
-  src="/configs/complete-example.yaml"
+  src="/configs/earthquakes.yaml"
   height="400px"
-  caption="Complete example with interactive popups and controls"
+  caption="Earthquakes of the past seven days, sized by magnitude. Click one for its place and magnitude"
 />
+
+## About the format
+
+This page, and every page outside *Advanced*, uses format v1, the default.
+[Format v2](/guides/format-v2/) is an opt-in layout of the same document
+that splits it into the part that exports to a MapLibre `style.json` and the
+part that only runs on the page. You don't need it to make any map on these
+pages.
 
 ## Next steps
 
-Now that you understand the basics, learn about:
-
-- [Layer types and styling](/guides/layers/)
-- [Popup content](/schema/layers/#popups)
-- [Loading data from URLs](/guides/data-sources/)
-- [Live data updates](/guides/live-data/)
-- [Thematic maps & legends](/guides/thematic-maps/): colour each feature by
-  a value, with a legend made for you
-- [Large data](/guides/cloud-native-data/): PMTiles, FlatGeobuf, GeoParquet
-  and COG files
-- [Story maps](/integrations/scrollytelling-html/): a map that moves as the
-  reader scrolls
-- [Accessibility & languages](/guides/accessibility-languages/): a title and
-  description for screen readers, and translations
-- [Troubleshooting](/troubleshooting/): when the map doesn't show what you
-  expect
+- [Loading data](/guides/data-sources/): data written in the document,
+  shared sources and clustering.
+- [Layers & styling](/guides/layers/): lines, polygons, labels and
+  data-driven styling.
+- [Popups, hover & controls](/guides/popups/): everything a popup can show.
+- [Thematic maps & legends](/guides/thematic-maps/): colour each feature by a
+  value, with a legend made for you.

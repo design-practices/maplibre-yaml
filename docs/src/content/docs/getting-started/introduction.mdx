@@ -1,98 +1,137 @@
 ---
 title: "What is maplibre-yaml?"
-description: Learn what maplibre-yaml is and who it's for
+description: What maplibre-yaml is, who it's for, how a YAML file becomes a MapLibre map, which package you need, and when to use MapLibre directly instead.
 ---
 
-import { Tabs, TabItem } from "@astrojs/starlight/components";
+maplibre-yaml makes interactive web maps from YAML. You write a *map
+document*, a YAML file that names the basemap, your data, how to style it and
+what happens on click, and the `<ml-map>` element turns it into a
+[MapLibre GL JS](https://maplibre.org/) map on your page. You write no
+JavaScript.
 
-**maplibre-yaml** is a library that lets you create interactive web maps using YAML configuration instead of JavaScript code.
+## Who it's for
 
-## Who Is This For?
-
-Anyone who wants an interactive web map without writing the JavaScript for
-it, for example:
-
-- **Developers**, who want to prototype a map quickly: layers, styling and
-  interactivity in one file that is fast to change.
-- **Writers, journalists and researchers**, who build story maps and data
-  pieces. Write the story (chapters, camera moves, layer changes) as a YAML
-  file, then show it with a few lines of HTML: one `<ml-scrollytelling>`
-  element in a plain page ([Story maps in plain HTML](/integrations/scrollytelling-html/)),
-  or the `<Scrollytelling>` component in an Astro site
-  ([Story maps in Astro](/integrations/astro-stories/)).
-  No JavaScript to write.
-- **People learning web mapping**, who want to focus on cartography and data
-  rather than on programming.
+- **People who want a web map without programming one**: writers,
+  journalists, researchers and anyone learning web mapping. A story map,
+  where the map moves as the reader scrolls, is a YAML file too.
+- **Developers who want a map quickly**, in one file that is fast to change
+  and checked as you write it.
 - **People who already know MapLibre**, who want the style spec they know
-  (`paint:`, `layout:`, expressions) with data loading, popups and legends
-  added in the same file.
+  with data loading, popups and legends in the same file.
 
-## How It Works
+## How it works
 
-Instead of this JavaScript:
+1. **You write a map document**, `map.yaml`. Its `layers:` are MapLibre style
+   layers, written in YAML; around them go the view, the basemap, the data
+   sources, popups, a legend and controls.
+2. **A page shows it** with `<ml-map src="map.yaml"></ml-map>`. The element
+   comes from one script, loaded from a CDN or installed from npm, next to
+   MapLibre GL JS, which your page loads too (maplibre-yaml uses your copy
+   rather than bundling its own).
+3. **When the page opens**, the element fetches the document, checks it, and
+   builds the MapLibre map: it adds the sources and layers, fetches your
+   data, and wires up the popups, hover and controls. A document with a
+   mistake shows a card naming the line and the fix instead of a blank map.
+
+Because the data is fetched when the page opens, a map of a live feed is
+current every time it is opened. Here is one map written both ways, first
+with MapLibre's JavaScript API, then as a map document:
 
 ```javascript
 const map = new maplibregl.Map({
   container: "map",
   style: "https://tiles.openfreemap.org/styles/liberty",
-  center: [-90, 38],
-  zoom: 3.5,
+  center: [-120, 37],
+  zoom: 4,
 });
 
 map.on("load", () => {
-  map.addSource("rivers", {
+  map.addSource("earthquakes", {
     type: "geojson",
-    data: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines.geojson",
+    data: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson",
   });
-
   map.addLayer({
-    id: "rivers",
-    type: "line",
-    source: "rivers",
-    paint: {
-      "line-color": "#2563eb",
-      "line-width": 2,
-    },
+    id: "earthquakes",
+    type: "circle",
+    source: "earthquakes",
+    paint: { "circle-radius": 6, "circle-color": "#e74c3c" },
+  });
+  map.on("click", "earthquakes", (e) => {
+    new maplibregl.Popup()
+      .setLngLat(e.lngLat)
+      .setHTML(`<h3>${e.features[0].properties.title}</h3>`)
+      .addTo(map);
   });
 });
 ```
 
-You write this YAML:
-
 ```yaml
 type: map
-id: my-map
+id: earthquake-map
 config:
-  center: [-90, 38]
-  zoom: 3.5
+  center: [-120, 37]
+  zoom: 4
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
-  - id: rivers
-    type: line
+  - id: earthquakes
+    type: circle
     source:
       type: geojson
-      url: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines.geojson"
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     paint:
-      line-color: "#2563eb"
-      line-width: 2
+      circle-radius: 6
+      circle-color: "#e74c3c"
+    interactive:
+      click:
+        popup:
+          - h3:
+              - property: title
 ```
 
-## Key Features
+## What you can make
 
-| Feature                | Description                         |
-| ---------------------- | ----------------------------------- |
-| **Declarative Config** | Define maps in YAML or JSON         |
-| **Runtime Data**       | Fetch GeoJSON when map loads        |
-| **Thematic maps**      | Choropleths and graduated symbols with `classify:`, legend included ([guide](/guides/thematic-maps/)) |
-| **Large data**         | PMTiles, FlatGeobuf, GeoParquet and COG files from a static host ([guide](/guides/cloud-native-data/)) |
-| **Live Updates**       | WebSocket, SSE, and polling support |
-| **Scrollytelling**     | Narrative story maps                |
-| **Accessible, translatable** | Map titles and descriptions for screen readers, translatable text ([guide](/guides/accessibility-languages/)) |
-| **Web Components**     | `<ml-map>` works anywhere           |
-| **Type Safety**        | Full TypeScript support             |
+| Feature | Where to read about it |
+| --- | --- |
+| Points, lines and polygons from GeoJSON files, inline data or tiles | [Loading data](/guides/data-sources/), [Layers & styling](/guides/layers/) |
+| Popups, hover and map controls | [Popups, hover & controls](/guides/popups/) |
+| Data that updates by polling, server-sent events or WebSockets | [Live data & streaming](/guides/live-data/) |
+| Choropleths and graduated symbols with a legend made for you | [Thematic maps & legends](/guides/thematic-maps/) |
+| PMTiles, FlatGeobuf, GeoParquet and COG files from a static host | [Large data](/guides/cloud-native-data/) |
+| Story maps (scrollytelling) | [Story maps in plain HTML](/integrations/scrollytelling-html/) |
+| A map title and description for screen readers, and translations | [Accessibility & languages](/guides/accessibility-languages/) |
+| Checking a document in your editor or on the command line | [Editor setup](/guides/editor-setup/), [The CLI](/cli/getting-started/) |
+| Exporting a map to a plain MapLibre `style.json` | [Export to style.json](/guides/export/) |
 
-## Next Steps
+## The packages
 
-Ready to get started? [Choose your path](/getting-started/): a map in an
-HTML page, an Astro site on GitHub Pages, a story map, a thematic map, or
-large data, with where to start and what to read next for each.
+| Package | What it is | When you need it |
+| --- | --- | --- |
+| `@maplibre-yaml/core` | The `<ml-map>` and `<ml-scrollytelling>` elements, the parser and the JavaScript API | Always. On a plain HTML page it is the one script you load from the CDN |
+| `@maplibre-yaml/astro` | Astro components (`<Map>`, `<FullPageMap>`, `<Scrollytelling>`) built on core | For an [Astro site](/getting-started/astro/) |
+| `@maplibre-yaml/cli` | The `maplibre-yaml` command: validate, preview, start a project, export | Optional: to [check documents](/cli/getting-started/) on the command line or in CI |
+
+## When to use something else
+
+maplibre-yaml covers maps you can describe: layers, data, popups, legends,
+camera moves. Use MapLibre GL JS directly when:
+
+- the map's behaviour is your application's logic: custom interactions
+  beyond popups and hover, animation driven by code, or drawing and editing
+  tools;
+- you need custom WebGL layers;
+- your code builds the whole map at run time anyway, so a document adds a
+  step without saving one.
+
+You don't have to choose all at once. Page scripts can reach the MapLibre map
+an `<ml-map>` draws and add to it ([JavaScript API](/integrations/vanilla-js/)),
+and `mlym emit` [exports a document](/guides/export/) to a plain
+`style.json` that MapLibre loads on its own.
+
+It is not a hosted map editor, a data-analysis tool or a visual style
+editor: you write the YAML in a text editor.
+
+## Next steps
+
+[Choose your path](/getting-started/): a map in an HTML page, an Astro site,
+an app with a bundler, a story map, a thematic map or large data, with where
+to start and what to read next for each.

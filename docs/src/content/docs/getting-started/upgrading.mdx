@@ -1,9 +1,9 @@
 ---
 title: Upgrading to 0.9
-description: How to move a map, an Astro site or a CLI install to maplibre-yaml 0.9, what behaves differently afterwards, and what is new.
+description: How to move a map, an Astro site or a CLI install to maplibre-yaml 0.9, what changed in 0.9, and the upgrade notes for each older release line.
 ---
 
-import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 {/*
   The CDN addresses on this page carry a release-line pin
@@ -11,15 +11,13 @@ import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
   on the current release, like every other page. The prose stays about 0.9.
 */}
 
-maplibre-yaml 0.9 (`@maplibre-yaml/core` 0.9, `@maplibre-yaml/astro` 0.7,
-`@maplibre-yaml/cli` 0.6) adds thematic maps, large-data formats such as
-PMTiles and GeoParquet, and map titles, descriptions and translations. Most
-maps upgrade with no change to their YAML. This page lists
-[how to upgrade](#how-to-upgrade), the
-[changes you might notice](#what-behaves-differently), and
-[what is new](#whats-new-in-09).
+This page is the release history of maplibre-yaml for anyone with a map that
+already works: how to move it to the current release, and what changed in
+each release line, newest first. The current line is 0.9:
+`@maplibre-yaml/core` 0.9, `@maplibre-yaml/astro` 0.7 and
+`@maplibre-yaml/cli` 0.6. Most maps upgrade with no change to their YAML.
 
-The full list of changes is in each package's changelog on npm.
+Each package's changelog on npm has the complete list of changes.
 
 ## How to upgrade
 
@@ -87,23 +85,31 @@ npm install --save-dev @maplibre-yaml/cli@latest   # in a project: ^0.6.0
 npm install -g @maplibre-yaml/cli@latest           # installed globally
 ```
 
+An installed CLI also answers to its short name, `mlym`, which the notes
+below use: `mlym validate` is `npx maplibre-yaml validate`.
+
 </TabItem>
 </Tabs>
 
-<Aside type="caution" title="Hosting maplibre-yaml's files yourself? Copy the whole dist/ folder">
-  From 0.9, some parts of maplibre-yaml load on demand from `dist/chunks/`,
-  next to the script: the readers for PMTiles, FlatGeobuf, GeoParquet and COG
-  files and the Protomaps basemap. A page that copied only `register.js`
-  keeps working for every other map, but a map that needs a missing reader
-  shows a notice naming the file. Loading from unpkg or jsDelivr needs no
-  change. See [Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself).
-</Aside>
+## 0.9
 
-## What behaves differently
+0.9 adds thematic maps, large-data formats such as PMTiles and GeoParquet,
+and map titles, descriptions and translations.
+
+### What behaves differently
 
 Your YAML keeps working. These are the changes you might see after upgrading,
 and what to do about each, if anything.
 
+- **Hosting maplibre-yaml's files yourself? Copy the whole `dist/` folder.**
+  Some parts of maplibre-yaml now load on demand from `dist/chunks/`, next to
+  the script: the readers for PMTiles, FlatGeobuf, GeoParquet and COG files
+  and the Protomaps basemap. A page that copied only the script keeps working
+  for every other map, but a map that needs a missing reader shows a notice
+  naming the file. Loading from unpkg or jsDelivr needs no change.
+  ([Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself))
+- **`@maplibre-yaml/astro` 0.7 needs `@maplibre-yaml/core` 0.9.** Upgrade
+  both together, as in the Astro tab above.
 - **The legend's header always reads "Legend".** On a plain map, a custom
   `legend.title` now appears as a heading inside the panel instead of
   replacing the header, matching story legends; a screen reader announces
@@ -117,7 +123,7 @@ and what to do about each, if anything.
   `localhost`, in a `file://` page and under `astro dev` or `vite`, not on
   your published site. Add the `debug` attribute (or the `debug` prop on the
   Astro components) to see them on a deployed page; the console always has
-  them. ([Reading what the map tells you](/troubleshooting/#reading-what-the-map-tells-you))
+  them. ([When are author hints shown?](/troubleshooting/#when-are-author-hints-shown))
 - **Strings that start with `=` in a style value now warn.** The format
   reserves them for a future shorthand: `text-field: "=upper({name})"` used to
   draw the text as written and now gets a warning suggesting a MapLibre
@@ -166,12 +172,12 @@ and what to do about each, if anything.
 - **A layer whose `before:` names a layer the map doesn't have is drawn on
   top** instead of disappearing (MapLibre used to refuse it). While you
   develop, the author notes suggest the closest layer id.
-- **The CDN script is larger**: `register.browser.js` grows from about 125 KB
-  to about 175 KB gzip, for thematic maps, translations, number formatting and
-  the large-data formats. The format readers themselves are separate files,
-  downloaded only by maps that use them.
+- **The CDN script is larger**: about 175 KB gzip, up from about 125 KB, for
+  thematic maps, translations, number formatting and the large-data formats.
+  The format readers themselves are separate files, downloaded only by maps
+  that use them.
 
-## What's new in 0.9
+### What's new in 0.9
 
 - **Thematic maps.** A layer's `classify:` block makes a choropleth,
   graduated symbols or a category map from your data, with a legend generated
@@ -190,7 +196,7 @@ and what to do about each, if anything.
   `Intl.NumberFormat` options. See
   [Accessibility & languages](/guides/accessibility-languages/).
 - **Smaller conveniences:**
-  - `fitTo: tracts`, just the source name, as shorthand for
+  - `fitTo: tracts`, the source name alone, as shorthand for
     `fitTo: { source: tracts }`.
   - `legend: false` on a layer keeps it out of the legend.
   - The `debug` attribute on `<ml-map>` and `<ml-scrollytelling>` (and the
@@ -200,14 +206,14 @@ and what to do about each, if anything.
     edge no longer overlap, and a story's pinned legend no longer covers the
     map's notice.
   - `mlym validate` prints *notes* (`ℹ note`) that explain how a valid value
-    is read, such as a basemap written as just a `.pmtiles` file. Notes are
+    is read, such as a basemap written as a `.pmtiles` file alone. Notes are
     not warnings: the file still reads `✓ valid`, and `--strict` never fails
     on them.
   - `mlym init --template basic` and `--template story` load core at the
     release line the CLI was built with, so a new project gets the features
     these docs describe.
 
-## Something broke?
+### Something broke?
 
 See [Troubleshooting](/troubleshooting/). If a map that worked on 0.8 stops
 working on 0.9 and the notes above don't explain it, please
@@ -217,8 +223,45 @@ with the YAML and what you see.
 ## Older releases
 
 Moving a project from an older line, such as 0.5, straight to 0.9? Read the
-notes for each line you skip, oldest first. Each package's changelog on npm
-has the full list.
+notes for each line you skip, oldest first.
+
+### Upgrading to 0.8
+
+0.8 added the on-map notice for a layer or file that didn't load, the `base`
+attribute for sites under a subpath, and story maps in plain HTML
+(`<ml-scrollytelling>`). What changes for an existing project:
+
+- **In Astro, a relative path in a document means "from `public/`".**
+  `@maplibre-yaml/astro` 0.6 passes the site's base to the map, so
+  `data/x.geojson` loads `public/data/x.geojson` on every page. Before, it
+  resolved against the page, so on a nested page such as `/blog/post/` it
+  asked for `/blog/post/data/x.geojson`. Paths that start with `/` and full
+  URLs behave as before. `base={false}` on a component restores the old
+  resolution for that map.
+- **The CLI needs Node.js 20.9 or later** (`@maplibre-yaml/cli` 0.5).
+- **Colour names are checked.** `circle-color: "bleu"` used to validate and
+  then drop the layer on the page; it is now a validation error with a "did
+  you mean".
+- **Two chapters with the same `id` are an error**, naming both lines. Two
+  layers with the same `id` warn: the first is drawn and the repeat skipped.
+- **Keys nested one level too deep under `config:` warn** (for example
+  `legend:` or `controls:`, which belong at the top level), with the line
+  number, instead of being ignored.
+
+### Upgrading to 0.7
+
+0.7 added maplibre-gl 6 support, `markers:`, `images:`, hover popups and
+3D terrain, sky and globe. What changes for an existing project:
+
+- **Install maplibre-gl yourself.** It is a peer dependency of
+  `@maplibre-yaml/core`, no longer installed with it:
+  `npm install @maplibre-yaml/core maplibre-gl@^6`.
+- **maplibre-gl 6 in a bundler needs its worker set**, or every map fails
+  with *Worker failed to load*
+  ([Using a bundler (Vite)](/getting-started/installation/#using-a-bundler-vite)).
+  On a CDN page, point the import map at `maplibre-gl@6/dist/maplibre-gl.mjs`
+  and the stylesheet at `maplibre-gl@6` too. The Astro components set the
+  worker themselves.
 
 ### Upgrading to 0.6
 
