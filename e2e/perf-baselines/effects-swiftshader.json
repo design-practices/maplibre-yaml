@@ -11,18 +11,34 @@
   "method": "median of 5 paired 6 s samples (effect fps / static fps, fresh browser context per sample)",
   "effects": {
     "tonal-hatch": {
-      "ratio": 0.504,
+      "$comment": "Re-recorded 2026-10-22 for the variant-E static crosshatch (PR #177): the fallback walls are now plain lit extrusions instead of a fill-extrusion-pattern, which SwiftShader draws ~3.5x faster (static 4.8 -> 16.2 fps on the CI runner) while the effect itself is unchanged (2.33 fps before and after). The ratio's denominator moved, not the effect. Before: 0.504 against the patterned fallback.",
+      "ratio": 0.144,
       "ci": {
-        "ratio": 0.504,
+        "ratio": 0.144,
         "ratios": [
-          0.659,
-          0.504,
-          0.498,
-          0.492,
-          0.504
-        ]
+          0.146,
+          0.144,
+          0.144,
+          0.144,
+          0.145
+        ],
+        "staticFps": [
+          16.15,
+          16.23,
+          16.11,
+          16.16,
+          16.32
+        ],
+        "effectFps": [
+          2.36,
+          2.33,
+          2.32,
+          2.33,
+          2.36
+        ],
+        "source": "CI: design-practices/maplibre-yaml actions run 39711831449, job browser-verification (^5.24.0), PR #177 (the ^6.12.0 leg measured 0.140)"
       },
-      "local": {
+      "localPatternedFallback": {
         "ratio": 0.549,
         "recordings": [
           {
