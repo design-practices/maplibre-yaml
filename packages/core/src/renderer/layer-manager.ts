@@ -871,8 +871,15 @@ export class LayerManager {
       await this.pollingManager.start(layerId, {
         interval: refreshInterval,
         onTick: async () => {
+          // A tick asks the server what changed: never answer it from the
+          // cache. The cache's TTL (5 minutes by default) is longer than
+          // most refresh intervals, so reading through it served the first
+          // response again until it expired (ml-ahu). `revalidate` still
+          // writes the new response, so other readers of the cache are
+          // current too.
           const result = await this.dataFetcher.fetch(url, {
             skipCache: !cacheEnabled,
+            revalidate: true,
             ttl: cacheTTL,
           });
           this.handleDataUpdate(sourceId, layerId, result.data as FeatureCollection, {

@@ -259,6 +259,45 @@ describe("DataFetcher", () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
+    it("revalidate goes to the network inside the TTL and caches the new answer (ml-ahu)", async () => {
+      const second: FeatureCollection = { type: "FeatureCollection", features: [] };
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => validGeoJSON, headers: new Headers() })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => second, headers: new Headers() });
+
+      await fetcher.fetch(testUrl);
+      const refreshed = await fetcher.fetch(testUrl, { revalidate: true });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(refreshed.fromCache).toBe(false);
+      expect(refreshed.data).toEqual(second);
+
+      // The next plain read gets the refreshed copy, not the first one.
+      const cached = await fetcher.fetch(testUrl);
+      expect(cached.fromCache).toBe(true);
+      expect(cached.data).toEqual(second);
+    });
+
+    it("skipCache does not stamp the response's validators onto the cached copy (ml-ahu)", async () => {
+      const second: FeatureCollection = { type: "FeatureCollection", features: [] };
+      const v2 = new Headers();
+      v2.set("etag", '"v2"');
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => validGeoJSON, headers: new Headers() })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => second, headers: v2 })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => second, headers: v2 });
+
+      await fetcher.fetch(testUrl); // cached: validGeoJSON
+      const fresh = await fetcher.fetch(testUrl, { skipCache: true });
+      expect(fresh.data).toEqual(second);
+
+      // Had "v2" been stamped onto the cached validGeoJSON, this request
+      // would send If-None-Match: "v2", and the server's 304 would serve
+      // the old data as current.
+      await fetcher.fetch(testUrl, { revalidate: true });
+      const sent = mockFetch.mock.calls[2][1].headers as Record<string, string>;
+      expect(sent["If-None-Match"]).toBeUndefined();
+    });
+
     it("sends conditional headers when cached", async () => {
       const headers = new Headers();
       headers.set("etag", '"abc123"');

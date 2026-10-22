@@ -65,6 +65,18 @@ export interface FetchOptions {
   skipCache?: boolean;
 
   /**
+   * Go to the network even when a fresh copy is cached, then cache the
+   * response.
+   *
+   * @remarks
+   * For a refresh: the caller wants the server's current answer, not the one
+   * cached a moment ago, and later readers of the cache should see it too.
+   * Has no effect with `skipCache` (which neither reads nor writes).
+   * @default false
+   */
+  revalidate?: boolean;
+
+  /**
    * AbortSignal for request cancellation
    */
   signal?: AbortSignal;
@@ -253,8 +265,8 @@ export class DataFetcher {
     options.onStart?.();
 
     try {
-      // Check cache first (unless skipCache is true)
-      if (this.config.cache.enabled && !options.skipCache) {
+      // Check cache first (unless skipCache or revalidate is set)
+      if (this.config.cache.enabled && !options.skipCache && !options.revalidate) {
         const cached = this.cache.get(url);
         if (cached) {
           const result: FetchResult = {
@@ -427,8 +439,9 @@ export class DataFetcher {
         ...options.headers,
       };
 
-      // Add conditional headers if we have cached entry
-      if (this.config.cache.enabled && this.cache.has(url)) {
+      // Add conditional headers if we have cached entry. Not when the
+      // caller skips the cache: a 304 would answer with the cached copy.
+      if (this.config.cache.enabled && !options.skipCache && this.cache.has(url)) {
         const conditionalHeaders = this.cache.getConditionalHeaders(url);
         Object.assign(headers, conditionalHeaders);
       }
@@ -494,8 +507,10 @@ export class DataFetcher {
         throw new Error(`Response from ${url} is not valid GeoJSON`);
       }
 
-      // Update cache metadata with response headers
-      if (this.config.cache.enabled) {
+      // Update cache metadata with response headers. Not when the caller
+      // skips the cache: the new validators would be stamped onto the
+      // cached (older) data, and a later 304 would serve that data again.
+      if (this.config.cache.enabled && !options.skipCache) {
         const etag = response.headers.get("etag");
         const lastModified = response.headers.get("last-modified");
 
