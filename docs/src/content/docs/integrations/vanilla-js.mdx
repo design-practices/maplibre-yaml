@@ -1,35 +1,25 @@
 ---
 title: JavaScript API
-description: Parse and render maplibre-yaml documents from your own JavaScript with YAMLParser and MapRenderer, from a CDN or with a bundler.
+description: Parse and render map documents from your own JavaScript with YAMLParser and MapRenderer, the advanced alternative to the <ml-map> element.
 ---
 
-import { Aside, Steps } from "@astrojs/starlight/components";
+import { Steps } from "@astrojs/starlight/components";
 
-This page covers maplibre-yaml's JavaScript API: `YAMLParser` to parse and
-validate a document, and `MapRenderer` to draw it into a `<div>` you control.
-Use it when your own code drives the map. For a map with no JavaScript at
-all, the `<ml-map>` element is simpler.
+This is the advanced route: maplibre-yaml's JavaScript API, `YAMLParser` to
+parse and validate a document and `MapRenderer` to draw it into a `<div>` your
+code owns. Most pages should use the
+[`<ml-map>` element](/integrations/web-components/) instead: it does the same
+with no code, and adds the error card, the notices and the loading message,
+which the API leaves to you. A page with `<ml-map>` can still reach the map
+from a script (`mapReady()`), and `getRenderer()` returns the `MapRenderer`
+behind it. Use the API when your own code must create, replace and destroy
+maps, or parse documents without drawing them.
 
-For a scroll-driven story map, the same setup gives you `<ml-scrollytelling>`:
-see [Story maps in plain HTML](/integrations/scrollytelling-html/).
-
-## Quick Start: Web Component (Recommended)
-
-If you don't need to drive the map from code, use the `<ml-map>` element: one
-HTML page and one YAML file, with no JavaScript to write. The
-[Quick start](/getting-started/quick-start/) walks through it, and
-[HTML pages: the `<ml-map>` element](/integrations/web-components/) covers the
-element in full. A page that starts with `<ml-map>` can still reach the map
-from a script later: `mapReady()` resolves with the MapLibre map, and
-`getRenderer()` returns the `MapRenderer` this page describes.
-
-## Quick Start: JavaScript API (More Control)
-
-For cases where you need programmatic control or want to use the lower-level APIs:
+## Quick start \{#quick-start-javascript-api-more-control}
 
 <Steps>
 
-1. **Create an HTML file**
+1. **Create `index.html`**
 
    ```html
    <!DOCTYPE html>
@@ -37,23 +27,18 @@ For cases where you need programmatic control or want to use the lower-level API
      <head>
        <meta charset="utf-8" />
        <meta name="viewport" content="width=device-width, initial-scale=1" />
-       <title>My Map</title>
+       <title>My map</title>
        <link
-         href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
          rel="stylesheet"
+         href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
        />
        <!-- Tell the browser where to find maplibre-gl -->
        <script type="importmap">
          { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
        </script>
        <style>
-         body {
-           margin: 0;
-         }
-         #map {
-           width: 100%;
-           height: 100vh;
-         }
+         body { margin: 0; }
+         #map { height: 100vh; }
        </style>
      </head>
      <body>
@@ -63,39 +48,27 @@ For cases where you need programmatic control or want to use the lower-level API
    </html>
    ```
 
-2. **Create a YAML configuration file**
-
-   Create `map.yaml` next to it:
+2. **Create `map.yaml` next to it**
 
    ```yaml
    type: map
-   id: my-first-map
+   id: quakes
    config:
-     center: [-74.006, 40.7128]
-     zoom: 12
      mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+     center: [-120, 37]
+     zoom: 4
    layers:
-     - id: points
+     - id: quakes
        type: circle
        source:
          type: geojson
-         data:
-           type: FeatureCollection
-           features:
-             - type: Feature
-               geometry:
-                 type: Point
-                 coordinates: [-74.006, 40.7128]
-               properties:
-                 name: "New York City"
+         url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
        paint:
-         circle-radius: 10
-         circle-color: "#3b82f6"
+         circle-radius: 5
+         circle-color: "#dc2626"
    ```
 
-3. **Create your JavaScript file**
-
-   Create `map.js`:
+3. **Create `map.js`**
 
    ```javascript
    import {
@@ -104,693 +77,264 @@ For cases where you need programmatic control or want to use the lower-level API
      toModel,
    } from "https://esm.sh/@maplibre-yaml/core@0.9?external=maplibre-gl";
 
-   // Fetch and parse YAML configuration
+   const container = document.getElementById("map");
    const response = await fetch("map.yaml");
-   const yamlText = await response.text();
-
-   // Parse and validate
-   const result = YAMLParser.safeParseMapBlock(yamlText);
+   const result = YAMLParser.safeParseMapBlock(await response.text());
 
    if (!result.success) {
-     console.error("Configuration errors:", result.errors);
-     document.getElementById("map").innerHTML = `
-          <div style="color: red; padding: 20px;">
-            <h3>Configuration Error</h3>
-            <pre>${JSON.stringify(result.errors, null, 2)}</pre>
-          </div>
-        `;
+     // Each error is { path, message }, with a line number when it has one.
+     container.textContent = result.errors
+       .map((e) => `${e.line ? `line ${e.line}: ` : ""}${e.message}`)
+       .join("\n");
    } else {
-     // Render the map: normalize the parsed document, then hand it to the renderer
-     const renderer = MapRenderer.fromModel(
-       document.getElementById("map"),
-       toModel(result.data)
-     );
-
-     renderer.on("load", () => {
-       console.log("Map loaded successfully!");
+     const renderer = MapRenderer.fromModel(container, toModel(result.data), {
+       onError: (error, fatal) => console.error(error, { fatal }),
      });
+     renderer.on("load", () => console.log("map loaded"));
    }
    ```
 
-4. **Serve and view**
+4. **Serve the folder and open it**
 
    ```bash
    npx serve .
    ```
 
-   Open the address it prints (usually http://localhost:3000). Opening the
-   HTML file directly does not work: a `file://` page cannot fetch `map.yaml`.
+   Open the address it prints (for example http://localhost:3000). The map
+   shows California with the past week's earthquakes, and the console logs
+   "map loaded".
 
 </Steps>
 
-## Which Approach Should I Use?
+esm.sh's `?external=maplibre-gl` makes the library use the maplibre-gl in
+your import map, not a second copy of its own. With npm and a bundler, see
+[With npm and a bundler](#installation-options).
 
-**Use the Web Component (`<ml-map>`) if:**
-- You want the simplest possible integration
-- You don't need programmatic control
-- You're embedding maps in static pages
-- You want zero JavaScript code
+## Common tasks
 
-**Use the JavaScript API (`YAMLParser` + `MapRenderer`) if:**
-- You need to programmatically modify the map
-- You want to build custom UI controls
-- You need access to the MapLibre GL instance
-- You're building a complex interactive application
+### Parse and validate a document \{#yamlparser}
 
-<Aside type="tip">
-  You can also use **both approaches together** - start with `<ml-map>` for basic rendering,
-  then access the underlying `MapRenderer` via `mapElement.getRenderer()` when you need more control.
-</Aside>
+Every `YAMLParser` method validates against the same schemas `<ml-map>` and
+the CLI use, and returns the same errors. The `safe…` methods return
+`{ success, data, errors, warnings }` and never throw; the others return the
+document or throw.
 
-## Installation Options
+| Method | Takes |
+|---|---|
+| `safeParseMapBlock(yaml)` / `parseMapBlock(yaml)` | A `type: map` document, as YAML text |
+| `safeParseScrollytellingBlock(yaml)` / `parseScrollytellingBlock(yaml)` | A `type: scrollytelling` story file |
+| `safeParseAny(yaml)` | Either, when you don't know which: returns `{ blockType, result }` |
+| `safeParseMapBlockValue(value)` | A document you already hold as an object |
 
-**From a CDN**, with no build step: keep the import map from the quick start
-above and import the API from esm.sh with `?external=maplibre-gl`, so the
-library renders with the maplibre-gl you pinned instead of a second copy esm.sh
-picks. The CDN page, versions in CDN URLs and hosting the files yourself are in
-[Installation](/getting-started/installation/#browser-usage-cdn).
+Each error has a `path` (such as `layers[0].paint`) and a `message`, plus a
+`line` and `column` when it comes from YAML text. To read YAML yourself with
+the `yaml` package and get the same result as the library, use its parse
+options: [Parsing & validating in your own code](/guides/parsing-and-validating/).
 
-**With npm and a bundler**, install `@maplibre-yaml/core` and `maplibre-gl@^6`
-([Installation](/getting-started/installation/#using-a-bundler-vite) has the
-npm, pnpm and yarn lines and the supported maplibre-gl versions). In your
-entry file, point maplibre-gl 6 at its worker before you render a map:
-inside a bundle it cannot find its worker file by itself, and without these
-lines every map fails with *"Worker failed to load"*. With Vite:
+### Render a document \{#maprenderer}
 
-```javascript
-// src/main.js
-import { setWorkerUrl } from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import { YAMLParser, MapRenderer, toModel } from "@maplibre-yaml/core";
-import "maplibre-gl/dist/maplibre-gl.css";
-
-setWorkerUrl(workerUrl);
-
-const response = await fetch("./map.yaml");
-const result = YAMLParser.safeParseMapBlock(await response.text());
-if (result.success) {
-  MapRenderer.fromModel(document.getElementById("map"), toModel(result.data));
-} else {
-  console.error("Configuration errors:", result.errors);
-}
-```
-
-```html
-<!-- index.html: the map container needs a height -->
-<body>
-  <div id="map" style="height: 100vh;"></div>
-  <script type="module" src="/src/main.js"></script>
-</body>
-```
-
-Put `map.yaml` and the data files it loads in Vite's **`public/`** folder.
-A file next to `index.html` loads in `npm run dev` but is not copied by
-`npm run build`. On maplibre-gl 4 or 5, leave out the worker lines.
-
-## Loading YAML Configuration
-
-### Recommended: External YAML Files
-
-External files are the recommended approach for most projects:
-
-```javascript
-// Load from file
-const response = await fetch("/configs/map.yaml");
-const yamlText = await response.text();
-const result = YAMLParser.safeParseMapBlock(yamlText);
-```
-
-**Benefits:**
-
-- Clean separation of configuration and code
-- Easy to edit without touching JavaScript
-- Proper YAML indentation preserved
-- Can be validated independently
-- Cacheable by browsers
-
-### Alternative: Inline YAML Strings
-
-For simple cases where you want everything in one file:
-
-```javascript
-const yamlConfig = `type: map
-id: inline-map
-config:
-  center: [-74.006, 40.7128]
-  zoom: 12
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers: []`;
-
-const result = YAMLParser.safeParseMapBlock(yamlConfig);
-```
-
-<Aside type="caution" title="Template Literal Formatting">
-A template literal keeps every space you type, so the YAML inside it must be
-indented consistently **relative to its own first line**. A leading newline, a
-trailing newline, or indenting the whole block to match your JavaScript are
-all fine; what breaks parsing is a first line that sits at a different
-indentation from the lines after it (for example, content that starts right
-after the backtick while the remaining lines are indented to match the code).
-
-</Aside>
-
-## Core APIs
-
-### YAMLParser
-
-The parser validates YAML against the maplibre-yaml schema.
-
-```javascript
-import { YAMLParser } from "@maplibre-yaml/core";
-
-// Safe parsing (recommended) - returns result object
-const result = YAMLParser.safeParseMapBlock(yamlText);
-
-if (result.success) {
-  console.log("Valid config:", result.data);
-} else {
-  console.error("Errors:", result.errors);
-  // errors: [{ path: 'config.center', message: 'Expected array' }, ...]
-}
-
-// Direct parsing - throws on error
-try {
-  const config = YAMLParser.parseMapBlock(yamlText);
-} catch (error) {
-  console.error("Parse error:", error.message);
-}
-```
-
-Pick the method by document type. `parseMapBlock` / `safeParseMapBlock` take
-one `type: map` document, and `parseScrollytellingBlock` /
-`safeParseScrollytellingBlock` one `type: scrollytelling` story.
-`parseYAMLConfig` / `safeParseYAMLConfig` (the same as `YAMLParser.parse` /
-`safeParse`) parse a whole root document, a `pages:` list of pages and
-blocks, and reject a bare map block. Every parser method, and the data
-utilities (`DataFetcher`, `PollingManager`, `StreamManager`, `DataMerger`),
-are in the [TypeScript API reference](/reference/api/maplibre-yaml/core/).
-
-### MapRenderer
-
-The renderer creates and manages the MapLibre GL map.
+`MapRenderer.fromModel(container, model, options?)` draws a parsed document
+into a container that has a height. `toModel()` turns the parsed document
+into the renderer's model, the shape format v1 and
+[format v2](/guides/format-v2/) documents share, so either renders the same:
 
 ```javascript
 import { YAMLParser, MapRenderer, toModel } from "@maplibre-yaml/core";
 
-// Render a parsed map document (v1 or Format v2). Errors arrive through the
-// `onError` option — there is no "error" event.
 const block = YAMLParser.parseMapBlock(yamlText);
 const renderer = MapRenderer.fromModel(container, toModel(block), {
-  onError: (error, fatal) => {
-    /* Handle error; fatal === false for runtime errors the map survives */
-  },
+  // There is no "error" event: problems arrive here.
+  // fatal is false for a problem the map survives (a layer that failed).
+  onError: (error, fatal) => console.error(error, { fatal }),
 });
 
-// Events
 renderer.on("load", () => {
-  /* Map and every layer ready */
+  /* the basemap and every layer are in */
 });
 renderer.on("layer:click", ({ layerId, feature, lngLat }) => {
-  /* Handle click */
+  console.log(layerId, feature.properties);
 });
-
-// Methods
-renderer.destroy(); // Clean up resources
 ```
 
-`MapRenderer.fromModel(container, model, options?)` is the one-call way to
-render a parsed document. The constructor is the lower-level form,
-`new MapRenderer(container, config, layers?, options?, sources?)`, which takes
-the document's parts (`block.config`, `block.layers`, …) rather than the whole
-document.
+The renderer's events match `<ml-map>`'s, without the `ml-map:` prefix
+(`load`, `layer:click`, `layer:data-loaded`, …); the full list with each
+payload is
+[`MapRendererEvents`](/reference/api/maplibre-yaml/core/interfaces/maprendererevents/).
+Register listeners right after `fromModel`, before the map can load.
 
-The on-page error card, the "Part of this map couldn't load" notice, the
-author hints and the "Loading map…" indicator belong to `<ml-map>`, not to
-`MapRenderer`: with the renderer, every problem arrives through `onError`
-(with `fatal` and a `context` naming the layer or source), and showing it is
-up to your page. The same goes for opening already framed on a `fitTo`
-source: `<ml-map>` starts the download before it builds the map, and hands it
-over through the renderer's `sourceData` option.
+### Reach the MapLibre map \{#accessing-the-maplibre-instance}
 
-### Full Event List
+`renderer.getMap()` returns the MapLibre map. Once `load` has fired, anything
+MapLibre can do works:
 
 ```javascript
-// Map lifecycle (errors arrive through the onError option, not an event)
-renderer.on("load", () => {});
-
-// Layer lifecycle
-renderer.on("layer:added", ({ layerId }) => {});
-renderer.on("layer:removed", ({ layerId }) => {});
-
-// Layer data (initial load and every live-data refresh)
-renderer.on("layer:data-loading", ({ layerId }) => {});
-renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {});
-renderer.on("layer:data-error", ({ layerId, error }) => {});
-
-// Interaction events
-renderer.on("layer:click", ({ layerId, feature, lngLat }) => {});
-renderer.on("layer:hover", ({ layerId, feature, lngLat }) => {});
-
-// Markers, images, and the params panel
-renderer.on("markers:added", ({ count }) => {});
-renderer.on("marker:click", ({ index, at }) => {});
-renderer.on("marker:icon-error", ({ index, icon }) => {});
-renderer.on("image:error", ({ name, url }) => {});
-renderer.on("parameter:change", ({ key, value }) => {});
-renderer.on("layer:visibility", ({ layerId, visible }) => {});
-
-// fitTo framed its source's data; a classify: layer's classes as drawn
-renderer.on("camera:fit", ({ source, bounds }) => {});
-renderer.on("layer:classified", ({ layerId, classify }) => {});
-```
-
-## Working with Live Data
-
-### Polling (Auto-refresh)
-
-```yaml
-# map.yaml
-type: map
-id: live-map
-config:
-  center: [-120, 37]
-  zoom: 5
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: earthquakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-      refresh:
-        refreshInterval: 60000 # Refresh every 60 seconds
-        updateStrategy: replace
-    paint:
-      circle-radius: 8
-      circle-color: "#ef4444"
-```
-
-<Aside type="caution" title="No programmatic refresh control yet">
-  Earlier versions of this page showed `renderer.pauseRefresh()`,
-  `resumeRefresh()` and `refreshNow()`. Those methods are **not** exposed on
-  `MapRenderer` (or on `<ml-map>`) today — calling them throws. Polling runs on
-  the `refreshInterval` you declare in YAML. Exposing pause/resume/refresh is
-  planned.
-</Aside>
-
-### Handling Data Updates
-
-```javascript
-renderer.on("layer:data-loading", ({ layerId }) => {
-  showSpinner(layerId);
-});
-
-renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
-  hideSpinner(layerId);
-  updateStatus(`Loaded ${featureCount} features`);
-});
-
-renderer.on("layer:data-error", ({ layerId, error }) => {
-  hideSpinner(layerId);
-  showError(`Failed to load ${layerId}: ${error.message}`);
-});
-```
-
-## Accessing the MapLibre Instance
-
-For advanced use cases, access the underlying MapLibre GL map:
-
-```javascript
-import * as maplibregl from "maplibre-gl";
-
-const renderer = MapRenderer.fromModel(container, toModel(block));
-
 renderer.on("load", () => {
-  // Access the MapLibre GL map instance
   const map = renderer.getMap();
-
-  // Use any MapLibre GL API
-  map.flyTo({ center: [-122.4, 37.8], zoom: 14 });
-
-  // Add custom controls
-  map.addControl(new maplibregl.NavigationControl());
-
-  // Add custom event handlers
-  map.on("moveend", () => {
-    console.log("Map moved to:", map.getCenter());
-  });
+  map.flyTo({ center: [-122.4, 37.8], zoom: 9 });
+  map.on("moveend", () => console.log("now at", map.getCenter()));
 });
 ```
 
-<Aside type="tip">
-  The MapRenderer manages sources and layers declared in your YAML. You can add
-  additional sources and layers directly via the MapLibre API, but be careful
-  not to conflict with IDs defined in your YAML configuration.
-</Aside>
+The renderer manages the sources and layers in your document. Layers you add
+with MapLibre's own `map.addLayer()` are yours; keep their ids different from
+the document's.
 
-## Complete Example: Interactive Dashboard
+### Replace or remove a map
 
-Here's a complete example showing a map with live data and UI controls:
-
-**index.html:**
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Earthquake Dashboard</title>
-    <link
-      href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css"
-      rel="stylesheet"
-    />
-    <!-- Tell the browser where to find maplibre-gl -->
-    <script type="importmap">
-      { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
-    </script>
-    <style>
-      body {
-        margin: 0;
-        font-family: system-ui, sans-serif;
-      }
-      #map {
-        width: 100%;
-        height: 100vh;
-      }
-      .controls {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        z-index: 1;
-      }
-      .status {
-        margin-top: 10px;
-        font-size: 14px;
-        color: #666;
-      }
-      button {
-        padding: 8px 16px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        background: white;
-        cursor: pointer;
-      }
-      button:hover {
-        background: #f5f5f5;
-      }
-      button.active {
-        background: #3b82f6;
-        color: white;
-        border-color: #3b82f6;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="map"></div>
-    <div class="controls">
-      <button id="toggle">Hide Earthquakes</button>
-      <div class="status" id="status">Loading...</div>
-    </div>
-    <script type="module" src="dashboard.js"></script>
-  </body>
-</html>
-```
-
-**earthquakes.yaml:**
-
-```yaml
-type: map
-id: earthquake-dashboard
-config:
-  center: [-120, 40]
-  zoom: 4
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: earthquakes
-    type: circle
-    source:
-      type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
-      refresh:
-        refreshInterval: 60000
-        updateStrategy: replace
-    paint:
-      circle-radius:
-        - interpolate
-        - ["linear"]
-        - ["get", "mag"]
-        - 0
-        - 4
-        - 5
-        - 20
-      circle-color:
-        - interpolate
-        - ["linear"]
-        - ["get", "mag"]
-        - 0
-        - "#22c55e"
-        - 3
-        - "#eab308"
-        - 5
-        - "#ef4444"
-      circle-opacity: 0.8
-    interactive:
-      hover:
-        cursor: pointer
-      click:
-        popup:
-          - h3:
-              - property: title
-          - p:
-              - str: "Magnitude: "
-              - property: mag
-```
-
-**dashboard.js:**
+`renderer.destroy()` removes the map and stops its live-data timers. To show a
+different document in the same container, destroy the old renderer and create
+a new one:
 
 ```javascript
-import {
-  YAMLParser,
-  MapRenderer,
-  toModel,
-} from "https://esm.sh/@maplibre-yaml/core@0.9?external=maplibre-gl";
-
-// State
-let visible = true;
-let renderer = null;
-
-// DOM elements
-const statusEl = document.getElementById("status");
-const toggleBtn = document.getElementById("toggle");
-
-function showError(message) {
-  statusEl.textContent = message;
-  statusEl.style.color = "#ef4444";
-}
-
-// Load and initialize
-async function init() {
-  try {
-    // Load YAML configuration
-    const response = await fetch("earthquakes.yaml");
-    const yamlText = await response.text();
-
-    // Parse and validate
-    const result = YAMLParser.safeParseMapBlock(yamlText);
-
-    if (!result.success) {
-      showError(`Config error: ${result.errors[0].message}`);
-      return;
-    }
-
-    // Create renderer
-    renderer = MapRenderer.fromModel(
-      document.getElementById("map"),
-      toModel(result.data),
-      { onError: (error) => showError(`Error: ${error.message}`) }
-    );
-
-    // Fires on the first load and again on every 60-second refresh
-    renderer.on("layer:data-loading", ({ layerId }) => {
-      statusEl.textContent = `Loading ${layerId}...`;
-    });
-
-    renderer.on("layer:data-loaded", ({ featureCount }) => {
-      const time = new Date().toLocaleTimeString();
-      statusEl.textContent = `${featureCount} earthquakes · Updated ${time}`;
-      statusEl.style.color = "#666";
-    });
-
-    renderer.on("layer:data-error", ({ error }) => {
-      showError(`Error: ${error.message}`);
-    });
-  } catch (error) {
-    showError(`Failed to initialize: ${error.message}`);
-  }
-}
-
-// Button handler: show or hide the earthquake layer
-toggleBtn.addEventListener("click", () => {
-  if (!renderer) return;
-
-  visible = !visible;
-  renderer.setLayerVisibility("earthquakes", visible);
-  toggleBtn.textContent = visible ? "Hide Earthquakes" : "Show Earthquakes";
-  toggleBtn.classList.toggle("active", !visible);
-});
-
-// Initialize
-init();
+renderer.destroy();
+renderer = MapRenderer.fromModel(container, toModel(nextBlock));
 ```
 
-## Format v2 and Interactions
+### Follow live data \{#working-with-live-data}
 
-Two guides cover capabilities that apply directly to the vanilla-JS path:
+A layer whose source has a `refresh:` block refetches on its own
+([Live data](/guides/live-data/)). Each fetch fires `layer:data-loading`,
+then `layer:data-loaded` or `layer:data-error`:
 
-- **[Format v2](/guides/format-v2/)** — the additive, opt-in `style:` / `runtime:`
-  split. A v2 document parses to the same internal model as its v1 twin, so
-  `YAMLParser` and `MapRenderer` consume it unchanged.
-- **[Export to style.json](/guides/export/)** — how declarative
-  interactions are authored, why a compiled `style.json` is inert on its own
-  (the export guarantee), and how `attachInteractions` wires behavior back onto
-  any `maplibregl.Map`. This is also where the `emit` interaction and its
-  trusted-policy gate are documented in full.
+```javascript
+renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
+  status.textContent = `${layerId}: ${featureCount} features`;
+});
+renderer.on("layer:data-error", ({ layerId, error }) => {
+  status.textContent = `${layerId} failed: ${error.message}`;
+});
+```
+
+There is no method to pause polling or force a refresh.
+
+### Sites under a subpath
+
+On a GitHub Pages project site, paths in the document that start with `/`
+point at the domain root. Put them under the site's base before rendering,
+as `<ml-map base>` does:
+
+```javascript
+import { MapRenderer, toModel, applyDocumentBase } from "@maplibre-yaml/core";
+
+const model = applyDocumentBase(toModel(block), "/<repo>/");
+MapRenderer.fromModel(container, model);
+```
+
+For a single URL of your own, `resolveDocumentUrl(url, "/<repo>/")`. Which
+paths the base covers:
+[Publishing & subpaths](/guides/publishing/#html-pages-the-base-attribute).
+
+### With npm and a bundler \{#installation-options}
+
+Install `@maplibre-yaml/core` and `maplibre-gl`, and import the API from the
+package in your entry file. Point maplibre-gl 6 at its worker first, as
+[Installation: using a bundler](/getting-started/installation/#using-a-bundler-vite)
+shows, or every map fails with *Worker failed to load*:
+
+```javascript
+// src/main.js (Vite)
+import { setWorkerUrl } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { YAMLParser, MapRenderer, toModel } from "@maplibre-yaml/core";
+
+setWorkerUrl(workerUrl);
+```
+
+Put `map.yaml` and its data files in Vite's `public/` folder, so the build
+copies them.
+
+### YAML in a JavaScript string \{#alternative-inline-yaml-strings}
+
+A template literal keeps every space you type, so keep the YAML's lines at
+the same depth as its first line. A leading newline is fine:
+
+```javascript
+const yamlText = `
+type: map
+id: inline-map
+config:
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  center: [-74.006, 40.7128]
+  zoom: 12
+`;
+const result = YAMLParser.safeParseMapBlock(yamlText);
+```
+
+A separate YAML file avoids the problem, and you can check it with
+`npx maplibre-yaml validate`.
+
+## Reference
+
+- TypeScript API:
+  [`YAMLParser`](/reference/api/maplibre-yaml/core/classes/yamlparser/),
+  [`MapRenderer`](/reference/api/maplibre-yaml/core/classes/maprenderer/),
+  [`MapRendererOptions`](/reference/api/maplibre-yaml/core/interfaces/maprendereroptions/)
+  and [`MapRendererEvents`](/reference/api/maplibre-yaml/core/interfaces/maprendererevents/),
+  generated from the source; everything else is in the
+  [`@maplibre-yaml/core` API](/reference/api/maplibre-yaml/core/).
+- [Parsing & validating in your own code](/guides/parsing-and-validating/):
+  parse YAML yourself exactly as the library does.
+- [Export to style.json](/guides/export/): turn a document into a plain
+  MapLibre style, and wire its interactions onto any map with
+  `attachInteractions`. The runnable
+  [`examples/vanilla/export-and-attach.html`](https://github.com/design-practices/maplibre-yaml/blob/main/examples/vanilla/export-and-attach.html)
+  does both.
+- [YAML reference](/reference/yaml/map/): every key of a map document.
 
 ## Troubleshooting
 
-These problems are specific to the JavaScript API. A map with no size, an
-invalid document and the other problems every page shares are in
-[Troubleshooting](/troubleshooting/), for example
-[the map has no height](/troubleshooting/#the-map-has-no-height) and
-[an error card instead of the map](/troubleshooting/#an-error-card-instead-of-the-map),
-which lists the usual YAML mistakes. With `MapRenderer` there is no error
-card: `safeParseMapBlock` returns them as `errors`, each with its `path`.
+Problems every map shares are in [Troubleshooting](/troubleshooting/), for
+example [the map has no height](/troubleshooting/#the-map-has-no-height). With
+`MapRenderer` there is no error card: `safeParseMapBlock` returns the problems
+as `errors`, and the renderer reports the rest through `onError`.
 
-### Map Shows But No Data Appears
+### Map shows but no data appears
 
-**Symptoms:** Base map renders, but layers with URL data don't show any features.
+The basemap draws, but a layer with a `url:` shows nothing.
 
-**Common Causes:**
+- **The request was blocked.** The browser console shows a CORS error: the
+  data's server must allow requests from your page
+  ([CORS](/guides/data-sources/#cors-considerations)).
+- **The data failed to load.** Listen for `layer:data-error`, which names the
+  layer and the error.
+- **The file loaded but is empty.** `layer:data-loaded` reports
+  `featureCount: 0`.
+- **The site is under a subpath** and the paths start with `/`: see
+  [Sites under a subpath](#sites-under-a-subpath).
 
-1. **CORS blocking the request**
+### Template literal YAML issues
 
-   Check the browser console for CORS errors. The data URL must allow cross-origin requests.
-
-```javascript
-// Check network tab - is the request being made?
-renderer.on("layer:data-error", ({ layerId, error }) => {
-  console.error(`${layerId} failed:`, error);
-});
-```
-
-2. **URL returns invalid GeoJSON**
-
-   Test the URL directly in your browser to verify it returns valid GeoJSON.
-
-3. **Data loaded but features have no geometry**
+YAML that works in a file fails inline, with an error such as "YAML
+indentation error: Line 2 is indented differently from line 1 above it". The
+first line of the template literal sits at a different depth from the rest:
 
 ```javascript
-renderer.on("layer:data-loaded", ({ layerId, featureCount }) => {
-  console.log(`${layerId}: ${featureCount} features`);
-  // If featureCount is 0, the GeoJSON may be empty or malformed
-});
-```
-
-4. **The site is published under a subpath** (a GitHub Pages project site,
-   `https://<user>.github.io/<repo>/`) and the paths in the YAML start with
-   `/` (`/data/x.geojson`), so they point at the domain root. With
-   `<ml-map>`, add `base="/<repo>/"`
-   ([details](/guides/publishing/#html-pages-the-base-attribute)).
-   With `MapRenderer`, resolve the paths before rendering, as the element
-   does: `const model = applyDocumentBase(toModel(block), "/<repo>/")`, then
-   build the renderer from `denormalizeConfig(model)`,
-   `denormalizeLayers(model)`, `denormalizeOptions(model)` and
-   `denormalizeSources(model)` (all exported by `@maplibre-yaml/core`). For a
-   single URL, `resolveDocumentUrl(url, "/<repo>/")`.
-
-### Template Literal YAML Issues
-
-**Symptoms:** YAML works in a file but fails when inline in JavaScript.
-
-**Cause:** A template literal keeps the indentation of your source code, so
-the first line and the lines after it can end up at different depths. The
-parser reports a `yaml-syntax` error such as "YAML indentation error: Line 2
-is indented differently from line 1 above it".
-
-```javascript
-// ❌ WRONG - first line starts at column 0, the rest are indented with the code
+// Wrong: the first line starts at column 0, the rest are indented with the code
 function load() {
   const yaml = `type: map
-    id: my-map
-    config:
-      center: [-74, 40]`;
+    id: my-map`;
 }
-
-// ✅ CORRECT - every line at the same depth (a leading newline is fine)
-const yaml = `
-type: map
-id: my-map
-config:
-  center: [-74, 40]
-  zoom: 10
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers: []
-`;
 ```
 
-The same applies to inline YAML in a `<script type="text/yaml">` tag: start
-the YAML on the line after the opening tag, not on the same line, and keep
-every line at the same depth relative to the first.
+Start the YAML on the line after the backtick, as in
+[YAML in a JavaScript string](#alternative-inline-yaml-strings). Indent with
+spaces: YAML rejects tabs.
 
-Indent with spaces only: YAML rejects tab indentation.
+### Events not firing
 
-**Best Practice:** Use external YAML files whenever possible.
+A `load` listener registered long after `fromModel` (in a `setTimeout`, say)
+misses the event. Register listeners right after creating the renderer. If
+`load` never fires, the `onError` option says why.
 
-### Events Not Firing
+## Moved sections
 
-**Symptoms:** `renderer.on('load', ...)` callback never runs.
+### Full event list
 
-**Common Causes:**
+Every renderer event and its payload is in
+[`MapRendererEvents`](/reference/api/maplibre-yaml/core/interfaces/maprendererevents/).
 
-1. **Event registered after map loaded**
+### Which approach should I use?
 
-```javascript
-// ❌ Map might already be loaded
-const renderer = MapRenderer.fromModel(container, toModel(block));
-setTimeout(() => {
-  renderer.on("load", () => {}); // Might miss the event
-}, 1000);
-
-// ✅ Register immediately
-const renderer = MapRenderer.fromModel(container, toModel(block));
-renderer.on("load", () => {});
-```
-
-2. **An error prevented the load**
-
-`MapRenderer` reports errors through the `onError` option rather than an
-event; pass it when you create the renderer:
-
-```javascript
-const renderer = MapRenderer.fromModel(container, toModel(block), {
-  onError: (error, fatal) => {
-    console.error("Map failed:", error, { fatal });
-  },
-});
-```
-
-## Next Steps
-
-- [Format v2](/guides/format-v2/) - The `style:` / `runtime:` split
-- [Export to style.json](/guides/export/) - Interactions, the export guarantee, and `attachInteractions`
-- [`examples/vanilla/export-and-attach.html`](https://github.com/design-practices/maplibre-yaml/blob/main/examples/vanilla/export-and-attach.html) - A runnable export → `attachInteractions` demo: compile a document to a self-contained `style.json`, render it in a plain `new maplibregl.Map(...)`, then reattach the declarative interactions so a click opens a popup
-- [Web Components Integration](/integrations/web-components/) - Even simpler HTML-only approach
-- [Astro Integration](/integrations/astro/) - For Astro-based sites
-- [Live Data Guide](/guides/live-data/) - Deep dive into polling and streaming
-- [TypeScript API Reference](/reference/api/) - Complete API documentation, generated from the source
-- [`@maplibre-yaml/core` README](https://github.com/design-practices/maplibre-yaml/tree/main/packages/core#readme) - Entry points and the parser/renderer API
+Use the [`<ml-map>` element](/integrations/web-components/) unless your own
+code must own the map; see the top of this page.

@@ -10,7 +10,7 @@ shows or hides layers, and can run actions (this is often called
 `@maplibre-yaml/astro` shows a story written as one YAML file.
 
 This page assumes the package is installed ([Astro: Install](/integrations/astro/#installation)).
-Every key of the story file is in the [Story file reference](/schema/scrollytelling/).
+How to write the story file is on [Writing a story file](/schema/scrollytelling/).
 
 ## Quick start
 
@@ -147,8 +147,8 @@ optionally `pitch`, `bearing` and `animation` (`flyTo`, the default,
   Enter actions run after the chapter's camera move and layer changes; an
   action naming a layer the map doesn't have is skipped with a warning.
 
-The [Story file reference](/schema/scrollytelling/) has every key, each
-action's fields and complete examples.
+[Writing a story file](/schema/scrollytelling/) explains each key and
+action, with a complete example.
 
 ### Load the story in the browser (`src`)
 
@@ -289,32 +289,9 @@ same paths as in a story file.
 
 ## How a story behaves
 
-- **The active chapter** is the one whose card is on screen and nearest the
-  middle of it, recomputed as the page scrolls. The story starts reacting once
-  its first chapter reaches the middle 20% of the screen. On phones the map
-  moves on once the next card is on screen.
-- **On load**, the map opens on the story's `config` camera, then at once
-  applies the chapter in that middle zone: on a page that starts with the
-  story, the first chapter's camera, `layers` and `onChapterEnter` actions all
-  run. So give layers their starting state in the layers themselves (for
-  example `layout: { visibility: none }` on a layer a later chapter reveals),
-  and let the first chapter apply its own look.
-- **Reading comes first.** The wheel and touch scroll the story, not the map:
-  the story map's own pan and zoom gestures are off (set `scrollZoom: true` or
-  `dragPan: true` in `config:` to turn one back on). The rail, legend,
-  markers, popups and slots stay clickable. Nothing on the map moves with the
-  scroll, and a chapter photo is never taller than 40% of the screen.
-- **The chapter rail** (`showMarkers: true`): click a dot to jump to its
-  chapter, or Tab to it and use the arrow keys, Home and End; the active dot
-  is marked `aria-current`. On phones the cards leave a gutter for it.
-- **Reduced motion.** When the reader's system asks for it, cards stop
-  animating, every camera move and camera action is instant (an action whose
-  `options` set `essential: true` still animates), and `rotateAnimation` and
-  `spinGlobe` are skipped.
-- **The whole map document works**: `sources:`, `markers:`, `legend:`,
-  `state:` and `parameters:`, `images:`, `controls:`, `terrain:`,
-  `projection:` (on `@maplibre-yaml/core` 0.8 or later). The legend is pinned
-  in one corner above the cards ([The legend](/schema/scrollytelling/#the-legend)).
+Which chapter is active, what runs on load, the chapter rail, reduced motion
+and the pinned legend are the same on every page that shows a story: see
+[How a story behaves](/schema/scrollytelling/#how-a-story-behaves).
 
 ## Reference
 
@@ -357,10 +334,10 @@ interface ChapterProps {
 
 ### The story file
 
-- [Story file reference](/schema/scrollytelling/): every key, explained, with
-  chapter actions, themes and the pinned legend.
-- [Generated YAML reference: story](/reference/yaml/scrollytelling/): every
-  key with its type and default.
+- [Writing a story file](/schema/scrollytelling/): every part of a story,
+  explained, with chapter actions, the rail and the pinned legend.
+- [YAML reference for stories](/reference/yaml/scrollytelling/): every key
+  with its type and default.
 
 ## Troubleshooting
 

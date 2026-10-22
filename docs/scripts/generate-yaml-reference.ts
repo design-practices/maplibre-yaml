@@ -132,7 +132,7 @@ const PAGES: PageDef[] = [
     intro:
       "A `type: scrollytelling` block: one map plus an ordered list of chapters that " +
       "drive the camera and layer visibility as the reader scrolls. For narrative " +
-      "and examples see [Story file reference](/schema/scrollytelling/).",
+      "and examples see [Writing a story file](/schema/scrollytelling/).",
   },
   {
     slug: "root",

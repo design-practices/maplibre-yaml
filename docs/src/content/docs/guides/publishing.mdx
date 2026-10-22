@@ -1,6 +1,6 @@
 ---
 title: Publishing & subpaths
-description: Put a map or story on the web — GitHub Pages, Netlify, Cloudflare Pages or any static host. Sites under a subpath and the `base` setting (HTML pages and Astro), previewing locally, which hosts serve PMTiles, FlatGeobuf, GeoParquet and COG files (range requests and CORS), and hosting maplibre-yaml's own files.
+description: Put a map or story map on GitHub Pages or any static host, including sites under a subpath, large data files and hosting maplibre-yaml's own files.
 ---
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
@@ -86,11 +86,11 @@ Add `base` with the subpath to the element, and leave the YAML as it is:
 With a base, every path to a file of your own resolves against it, whichever
 page the map is on:
 
-| Written in the document | Loads (with `base="/my-repo/"`) |
+| Written in the document | Loads (with `base="/<repo>/"`) |
 | --- | --- |
-| `/data/cities.geojson` | `/my-repo/data/cities.geojson` |
-| `data/cities.geojson` or `./data/cities.geojson` | `/my-repo/data/cities.geojson` |
-| `/my-repo/data/cities.geojson` | used as written (the base is never doubled) |
+| `/data/cities.geojson` | `/<repo>/data/cities.geojson` |
+| `data/cities.geojson` or `./data/cities.geojson` | `/<repo>/data/cities.geojson` |
+| `/<repo>/data/cities.geojson` | used as written (the base is never doubled) |
 | `https://…`, `//cdn…`, `blob:`, `data:` | used as written |
 
 It applies to the `src` attribute and to these fields of the document:
@@ -106,7 +106,7 @@ load are not rewritten.
 
 `base="/<repo>"` and `base="<repo>"` mean the same thing. Without `base`,
 nothing changes: relative paths resolve against the page and `/…` against the
-domain root. Setting the `base` property (`map.base = "/my-repo/"`) re-renders
+domain root. Setting the `base` property (`map.base = "/<repo>/"`) re-renders
 the map. If a `/…` path 404s on a page that sits under a subpath, the notice
 on the map suggests the `base` to add.
 
@@ -180,33 +180,20 @@ components pass the base even when it is the default `/`, so
 page. To resolve a map's paths against its page instead, pass `base={false}`
 to that component.
 
-<Aside type="note" title="&quot;Some chunks are larger than 500 kB&quot; is expected">
-  Every build of a site with a map prints a yellow warning. On Astro 7.4 it
-  reads:
-
-  ```text
-  [WARN] [vite] [plugin builtin:vite-reporter]
-  (!) Some chunks are larger than 500 kB after minification.
-  ```
-
-  (older Astro versions print it on one line). That chunk is the map engine
-  (maplibre-gl plus maplibre-yaml, about 1.5 MB before compression, loaded
-  only by pages with a map); it is a size notice, not an error, and the
-  build succeeded. To quiet it, raise Vite's limit in `astro.config.mjs`:
-  `vite: { build: { chunkSizeWarningLimit: 2000 } }`.
-</Aside>
+The build's *Some chunks are larger than 500 kB* warning is expected
+([Astro troubleshooting](/integrations/astro/#some-chunks-are-larger-than-500-kb)).
 
 ### Previewing a subpath on your computer
 
 With a base, files are looked up under `/<repo>/` on your computer too.
 
 - **HTML page.** `npx serve .` run *inside* the repository folder puts the
-  page at `http://localhost:3000/`, outside `/my-repo/`, so every file 404s
+  page at `http://localhost:3000/`, outside `/<repo>/`, so every file 404s
   (the error card says so). Run `npx serve` from the folder *above* the
-  repository instead and open `http://localhost:3000/my-repo/`, or leave
+  repository instead and open `http://localhost:3000/<repo>/`, or leave
   `base` off until you publish. The repository folder must be named exactly
-  like the base: a GitHub **Download ZIP** unpacks to `my-repo-main`, which is
-  served at `/my-repo-main/`, so rename it to `my-repo` first.
+  like the base: a GitHub **Download ZIP** unpacks to `<repo>-main`, which is
+  served at `/<repo>-main/`, so rename it to `<repo>` first.
 - **Astro site.** `npm run build && npm run preview` serves the built site
   under the base: open `http://localhost:4321/<repo>/`. Every map should show
   its data; a data file that doesn't load is listed in a notice on the map.
@@ -265,10 +252,28 @@ What each large-data error means, and its fix, is in
 
 Pages that load maplibre-yaml from unpkg or jsDelivr need nothing more. To
 serve it from your own site instead (an intranet, a site with a strict
-Content Security Policy), copy the package's **whole `dist/` folder**, not
-only `register.browser.js`: the readers for large-data formats and the
-Protomaps basemap load on demand from `dist/chunks/` next to it. See
-[Hosting the files yourself](/getting-started/installation/#hosting-the-files-yourself).
+Content Security Policy), copy the package's **whole `dist/` folder** (from
+`node_modules/@maplibre-yaml/core/`, or the package on unpkg) and load
+`dist/register.browser.js` from it. That is the file the CDN's `register.js`
+loads:
+
+```html
+<script type="module" src="/js/maplibre-yaml/dist/register.browser.js"></script>
+```
+
+Keep the import map for `maplibre-gl` (or host maplibre-gl too, and point the
+import map at your copy).
+
+Some parts of maplibre-yaml load on demand, only for maps that use them, and
+the browser fetches them from `dist/chunks/` next to the script: the readers
+for [PMTiles, FlatGeobuf, GeoParquet and COG files](/guides/cloud-native-data/)
+(`pmtiles.js`, `flatgeobuf.js`, `geoparquet.js` and `geoparquet-brotli.js`,
+`cog.js` with its image codecs `cog-deflate.js`, `cog-jpeg.js`, `cog-lerc.js`
+and `cog-zstd.js`) and the
+[Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap) style
+generator (`protomaps-basemap.js`). A copy of only `register.browser.js` works
+for every other map; a map that needs a missing reader shows a notice naming
+the file.
 
 ## Works locally, not once published
 
@@ -277,5 +282,6 @@ Protomaps basemap load on demand from `dist/chunks/` next to it. See
 | The YAML or a data file 404s on GitHub Pages | Set the base: [HTML pages](#html-pages-the-base-attribute), [Astro](#astro-sites). On Astro, `base` must match the repository name exactly, capitals included |
 | Every file 404s locally after adding `base` | Serve the folder above the repository, or preview the Astro build: [Previewing a subpath](#previewing-a-subpath-on-your-computer) |
 | A PMTiles, FlatGeobuf, GeoParquet or COG file fails on one host but not another | [Range requests and CORS](#large-files-range-requests-and-cors) |
+| "The … reader (`…/chunks/….js`) couldn't be downloaded" on a site hosting maplibre-yaml itself | Copy the whole `dist/` folder: [Hosting maplibre-yaml's own files](#hosting-maplibre-yamls-own-files) |
 | Notes you saw on the map locally are gone | Expected: author hints show only while you develop; add `debug` to see them |
 | Something else | [Troubleshooting](/troubleshooting/) |

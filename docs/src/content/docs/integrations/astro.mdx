@@ -430,6 +430,11 @@ in that corner, stacked with the built-in legend and params panel. A
 A corner with no content takes no space. On `FullPageMap`, your `top-right`
 content stacks below the zoom and reset buttons.
 
+Inside a `{condition && (...)}` expression, Astro's compiler reads a literal
+`slot="top-right"` as its own named-slot directive and drops it. Write
+`{...{ slot: "top-right" }}` there instead; a literal `slot` outside an
+expression is passed through unchanged.
+
 ### Named sources
 
 When several layers draw the same data (a fill and its outline, say), define
@@ -875,6 +880,14 @@ still does nothing in the frontmatter, because the frontmatter never runs in
 the browser, so the map stays empty. Either way, import it in a `<script>`,
 which runs only in the browser ([example](#using-ml-map-directly)). The
 `@maplibre-yaml/astro` components do this for you.
+
+### *Some chunks are larger than 500 kB*
+
+Every build of a site with a map prints this yellow warning. That chunk is
+the map engine (maplibre-gl plus maplibre-yaml, about 1.5 MB before
+compression, loaded only by pages with a map). It is a size notice, not an
+error, and the build succeeded. To quiet it, raise Vite's limit in
+`astro.config.mjs`: `vite: { build: { chunkSizeWarningLimit: 2000 } }`.
 
 ## Alternatives \{#component-patterns}
 

@@ -1,6 +1,6 @@
 ---
 title: "<ml-map> & <ml-scrollytelling> reference"
-description: Every attribute, property, method, event, slot and styling hook of the <ml-map> and <ml-scrollytelling> web components.
+description: Every attribute, property, method, event, slot and styling hook of the <ml-map> and <ml-scrollytelling> elements.
 ---
 
 The two elements `@maplibre-yaml/core/register` defines (the CDN's
@@ -9,6 +9,17 @@ The two elements `@maplibre-yaml/core/register` defines (the CDN's
 [Story maps in plain HTML](/integrations/scrollytelling-html/). The generated
 [`MLMap` API reference](/reference/api/maplibre-yaml/core/components/classes/mlmap/)
 has the same members with their TypeScript types.
+
+## Registering the elements
+
+Importing `@maplibre-yaml/core/register` (or loading the CDN's `register.js`)
+defines both elements at once. To decide when that happens, import from
+`@maplibre-yaml/core/components` instead and call `registerMLMap()` (defines
+`<ml-map>`) or `registerMLScrollytelling()` (defines `<ml-scrollytelling>` and
+the `<ml-map>` it renders). In TypeScript, `MLMap`, `MLMapEventMap`,
+`MLScrollytelling` and `MLScrollytellingEventMap` come from
+`@maplibre-yaml/core/register`, and `document.querySelector("ml-map")` is
+typed as `MLMap` without a cast.
 
 ## `<ml-map>`
 
@@ -26,7 +37,32 @@ Draws one `type: map` document.
 
 The element reads its document from the first of these it finds: the
 `config` property, an inline `<script type="text/yaml">` child, the `src`
-attribute, the `config` attribute.
+attribute, the `config` attribute. Each takes a format v1 or
+[format v2](/guides/format-v2/) document. An inline document goes in a
+`<script type="text/yaml">` child, starting on the line after the opening tag:
+
+```html
+<ml-map style="display: block; height: 400px;">
+  <script type="text/yaml">
+type: map
+id: inline-map
+config:
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  center: [-74.006, 40.7128]
+  zoom: 12
+  </script>
+</ml-map>
+```
+
+An element with no document yet waits until the end of the next frame before
+it reports "No configuration provided.", so a `config` assigned just after the
+element upgrades (from a script or a framework effect) renders without a
+passing error, and a `mapReady()` called in between waits for it.
+
+The element has no `lang` attribute of its own: it uses the nearest `lang`
+(on the element, an ancestor, or `<html>`) to format numbers in popups and the
+legend, and for the label language of a Protomaps basemap
+([Accessibility & languages](/guides/accessibility-languages/)).
 
 ### `<ml-map>` properties
 
@@ -53,8 +89,10 @@ attribute, the `config` attribute.
 | `updateLayerData(layerId, geojson)` | `void` | Replace a GeoJSON layer's data |
 | `uiString(key, params?)` | `string` | The document's text for a UI string key (`maplibre-yaml.Legend.Title`, `NavigationControl.ZoomIn`, …): its `locale:` translation, or English. For controls you draw next to the map ([Accessibility & languages](/guides/accessibility-languages/)) |
 
-Pausing, resuming and forcing a live-data refresh (`pauseRefresh()`,
-`resumeRefresh()`, `refreshNow()`) are not available on the element.
+Live data refreshes on the document's own `refreshInterval`; there is no
+method to pause it or force a refresh. Each refresh fires
+`ml-map:layer-data-loading` and `ml-map:layer-data-loaded`
+([Live data](/guides/live-data/)).
 
 ### `<ml-map>` events
 
@@ -93,8 +131,25 @@ Children with one of these `slot` values are placed over the map
 | `top-left`, `top-right`, `bottom-left`, `bottom-right` | In that corner, stacked after the built-in legend and the params panel |
 | `legend` | **Replaces** the built-in legend, at the document's `legend.position` (default `top-left`) |
 
-An inline `<script type="text/yaml">` child holds the document instead
-(above). Any other child is left where it is.
+- **Stacking.** Pieces sharing a corner stack in this order: the built-in
+  legend, the params panel, then slot children in document order. Bottom
+  corners grow upward, and a corner steps past a MapLibre control already in
+  it.
+- **Mounted on load.** Slot children are hidden until the map loads, then
+  moved into their corner. They stay the same elements, so listeners you
+  attached keep working.
+- **They survive a new map.** `reload()`, a new `config` or `src`, and an
+  error card park slot children back on the element; the next render mounts
+  them again. Slot children added after load are picked up on the next
+  render.
+- **Pointer events.** Empty corner areas pass gestures through to the map;
+  your slot content receives clicks.
+- An unknown slot name logs a warning, and the child is left where it is.
+
+Slots are page markup, not part of the map document: an
+[export](/guides/export/) to style.json doesn't include them. An inline
+`<script type="text/yaml">` child holds the document instead (above). Any
+other child is left where it is.
 
 ### `<ml-map>` styling hooks
 
@@ -123,6 +178,30 @@ ml-map:not(:defined) {
 }
 ml-map:not(:defined)::before { content: "Loading map…"; }
 ```
+
+### Host events (`click.emit`) under `<ml-map>`
+
+A layer's `click.emit` interaction does nothing under `<ml-map>`: the element
+registers no host handlers, so every `emit` is dropped. The other
+interactions (`popup`, `flyTo`, `zoomToFeature`, `hover.highlight`) work as
+usual. To act on a click in page code, listen for `ml-map:layer-click`.
+`emit` is for maps you build yourself with `attachInteractions`
+([Export to style.json](/guides/export/)).
+
+### Trust and attribution
+
+Attribution text (a source's `attribution:`, `customAttribution` on the
+attribution control, and the attribution a basemap style or TileJSON brings)
+is shown by MapLibre's attribution control as HTML. maplibre-yaml sanitizes
+it first, under every trust policy, because MapLibre's own sanitizer can be
+bypassed before maplibre-gl 6.4.1
+([GHSA-jrc7-96c5-q579](https://github.com/advisories/GHSA-jrc7-96c5-q579)).
+What survives is plain text, character references such as `&copy;`, and
+`<a>` links whose `href` is `http:`, `https:` or `mailto:` (keeping only
+`href`, `target` and `rel`). Other markup, such as `<b>`, is shown as literal
+text rather than dropped, so the credit stays readable. An
+[export](/guides/export/) applies the same rule to the style.json it writes,
+with a `contract` warning naming each source whose attribution changed.
 
 ## `<ml-scrollytelling>`
 

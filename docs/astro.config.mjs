@@ -210,7 +210,7 @@ export default defineConfig({
           items: [
             { label: "Story maps in plain HTML", link: "/integrations/scrollytelling-html/" },
             { label: "Story maps in Astro", link: "/integrations/astro-stories/" },
-            { label: "Story file reference", link: "/schema/scrollytelling/" },
+            { label: "Writing a story file", link: "/schema/scrollytelling/" },
           ],
         },
         {

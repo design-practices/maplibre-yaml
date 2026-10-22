@@ -182,25 +182,8 @@ a bundle needs the worker step in [Using a bundler](#using-a-bundler-vite).
 ## Hosting the files yourself
 
 To serve maplibre-yaml from your own site instead of a CDN, copy the
-package's **whole `dist/` folder** (from `node_modules/@maplibre-yaml/core/`,
-or the package on unpkg) and load `dist/register.browser.js` from it:
-
-```html
-<script type="module" src="/js/maplibre-yaml/dist/register.browser.js"></script>
-```
-
-`register.browser.js` is the script the CDN examples load: `register.js` at
-the package root is a one-line file that loads it, so that the short CDN
-address works.
-
-Keep the folder whole. The readers for
-[large data formats](/guides/cloud-native-data/) (PMTiles, FlatGeobuf,
-GeoParquet, COG) and the
-[Protomaps basemap](/guides/cloud-native-data/#host-your-own-basemap) are
-separate files in `dist/chunks/`, which the browser fetches from next to the
-script only for a map that uses them. A copy of `register.browser.js` alone
-works for every other map; a map that needs a missing reader shows a notice
-naming the file.
+package's whole `dist/` folder, not only `register.browser.js`: see
+[Hosting maplibre-yaml's own files](/guides/publishing/#hosting-maplibre-yamls-own-files).
 
 ## Upgrading
 
