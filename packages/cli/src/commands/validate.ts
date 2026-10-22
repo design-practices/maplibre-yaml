@@ -2,7 +2,7 @@
  * @file Validate command implementation
  */
 
-import { defineCommand } from 'citty';
+import { defineCommand, type ArgsDef } from 'citty';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -45,48 +45,51 @@ export function isRunningInCI(): boolean {
   return ci !== undefined && !CI_FALSY_VALUES.has(ci.toLowerCase());
 }
 
+const VALIDATE_ARGS = {
+  patterns: {
+    type: 'positional',
+    required: true,
+    description: 'One or more file paths or glob patterns (all are validated)',
+  },
+  format: {
+    type: 'string',
+    alias: 'f',
+    description: 'Output format: human, json, sarif, vscode',
+  },
+  strict: {
+    type: 'boolean',
+    // No default: distinguishes an explicit `--strict` (true) / `--no-strict`
+    // (false) from "unset" (undefined), so CI can promote warnings by default
+    // while `--no-strict` still overrides it. (decision D9)
+    description: 'Treat warnings as errors (default: on in CI, use --no-strict to disable)',
+  },
+  'strict-deprecations': {
+    type: 'boolean',
+    default: false,
+    description: 'Also treat deprecation warnings as errors (exempt from --strict by default)',
+  },
+  watch: {
+    type: 'boolean',
+    alias: 'w',
+    default: false,
+    description: 'Watch for changes and re-validate',
+  },
+} satisfies ArgsDef;
+
 export const validateCommand = defineCommand({
   meta: {
     name: 'validate',
     description: 'Validate YAML configuration files',
   },
-  args: {
-    patterns: {
-      type: 'positional',
-      required: true,
-      description: 'One or more file paths or glob patterns (all are validated)',
-    },
-    format: {
-      type: 'string',
-      alias: 'f',
-      description: 'Output format: human, json, sarif, vscode',
-    },
-    strict: {
-      type: 'boolean',
-      // No default: distinguishes an explicit `--strict` (true) / `--no-strict`
-      // (false) from "unset" (undefined), so CI can promote warnings by default
-      // while `--no-strict` still overrides it. (decision D9)
-      description: 'Treat warnings as errors (default: on in CI, use --no-strict to disable)',
-    },
-    'strict-deprecations': {
-      type: 'boolean',
-      default: false,
-      description: 'Also treat deprecation warnings as errors (exempt from --strict by default)',
-    },
-    watch: {
-      type: 'boolean',
-      alias: 'w',
-      default: false,
-      description: 'Watch for changes and re-validate',
-    },
-  },
-  async run({ args }) {
+  args: VALIDATE_ARGS,
+  async run({ args, rawArgs }) {
     // Load project config
     const projectConfig = await loadProjectConfig();
 
-    // Merge CLI args with project config (CLI takes precedence)
+    // Merge CLI args with project config: an explicit flag wins, then the
+    // project config, then citty's defaults (ml-dpe).
     const mergedArgs = projectConfig?.validate
-      ? mergeConfig(args, projectConfig.validate)
+      ? mergeConfig(args, projectConfig.validate, { rawArgs, definitions: VALIDATE_ARGS })
       : args;
 
     const {
