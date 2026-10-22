@@ -248,6 +248,58 @@ The payload projection — `str`, `property`, `else`, and the defined-absent
 rule — is specified in the [`emit` section of the Interactivity
 reference](/schema/interactivity/#emit).
 
+## Large-data files in an exported style
+
+A `style.json` can carry a URL but not a file reader, so the
+[large-data formats](/guides/cloud-native-data/) export like this:
+
+- **PMTiles** sources export as `pmtiles://` URLs (a `.pmtiles` URL gains the
+  scheme). The style then needs a renderer that reads `pmtiles://`, such as
+  maplibre-gl JS with the protocol registered. With a bundler, after
+  `npm install pmtiles`:
+
+  ```js
+  import maplibregl from "maplibre-gl";
+  import { Protocol } from "pmtiles";
+  maplibregl.addProtocol("pmtiles", new Protocol().tile);
+  ```
+
+  In a plain HTML page, import `addProtocol` from the `maplibre-gl` your import
+  map names and `Protocol` from `https://esm.sh/pmtiles@4` (esm.sh resolves
+  its dependencies; unpkg does not), before the map is created.
+- **A Protomaps basemap** (`mapStyle: { pmtiles: … }`) exports as the full
+  style it generates: every layer, the file as `pmtiles://…`, and the glyph
+  and sprite URLs. It needs the same `pmtiles` registration. A relative file
+  path is written as it is, so it resolves against whichever page loads the
+  style; give a full URL for a style used anywhere else. Labels are in `lang:`
+  (English when unset: an exported style has no page language to follow).
+- **FlatGeobuf** and **GeoParquet** sources are converted: `mlym emit` reads
+  the file (next to the YAML, in the current folder or its `public/`, or over
+  http(s)) and writes its features into the style as GeoJSON; for
+  GeoParquet, every column, or the `columns:` you listed. If it can't read
+  the file, the source is exported empty and reported, and `--strict`
+  refuses.
+- **COG** sources export as `cog://` URLs, in the form the map itself uses:
+  `#dem` on an elevation source, a `colorRamp:` written out as the COG
+  protocol's `#color:` fragment, and `tileSize: 256`. The style then needs the
+  protocol from
+  [`@geomatico/maplibre-cog-protocol`](https://github.com/geomatico/maplibre-cog-protocol).
+  With a bundler, after `npm install @geomatico/maplibre-cog-protocol`:
+
+  ```js
+  import maplibregl from "maplibre-gl";
+  import { cogProtocol } from "@geomatico/maplibre-cog-protocol";
+  maplibregl.addProtocol("cog", cogProtocol);
+  ```
+
+  In a plain HTML page, load the plugin's browser build
+  (`<script src="https://unpkg.com/@geomatico/maplibre-cog-protocol@0.10/dist/index.js"></script>`,
+  which defines `MaplibreCOGProtocol`) and call
+  `addProtocol("cog", MaplibreCOGProtocol.cogProtocol)` on the `maplibre-gl`
+  your import map names, before the map is created.
+
+[Export classes](/guides/export-classes/) lists how every construct exports.
+
 ## Next steps
 
 - [Interactivity reference](/schema/interactivity/) — every interaction field,

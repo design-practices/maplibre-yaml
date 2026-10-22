@@ -1,0 +1,157 @@
+---
+title: Host your own basemap
+description: Serve a whole Protomaps basemap from one .pmtiles file next to your site — no tile server, no API key — with one line of YAML.
+---
+
+import LiveMap from "../../../components/LiveMap.astro";
+import { Code } from "@astrojs/starlight/components";
+import brooklyn from "../../../../public/configs/protomaps-basemap-demo.yaml?raw";
+
+A basemap can be one PMTiles file on your own site, served by the same static
+host as the page, with no tile server and no API key. Point `mapStyle:` at the
+file and maplibre-yaml builds the whole [Protomaps](https://protomaps.com/)
+basemap style around it, in the page. Use it when you don't want your map to
+depend on a tile service, or need it to keep working for years.
+
+<LiveMap
+  src="/configs/protomaps-basemap-demo.yaml"
+  height="380px"
+  caption="A Protomaps basemap from one 0.6 MB .pmtiles file served with these docs (DUMBO and Brooklyn Heights). Data © OpenStreetMap contributors."
+/>
+
+<Code code={brooklyn} lang="yaml" title="brooklyn.yaml" />
+
+## Quick start
+
+1. **Cut a regional extract** from the Protomaps daily planet build with the
+   [`pmtiles` command-line tool](https://docs.protomaps.com/pmtiles/cli):
+
+   ```bash
+   pmtiles extract https://build.protomaps.com/<date>.pmtiles nyc.pmtiles \
+     --bbox=-74.26,40.48,-73.70,40.92 --maxzoom=13
+   ```
+
+   Pick `<date>` from [build.protomaps.com](https://build.protomaps.com/).
+   The tool reads only the part of the planet it needs. This extract of New
+   York City is about 12 MB.
+2. **Put the file in your site**: `public/data/nyc.pmtiles` in an Astro or
+   Vite project, or a `data/` folder next to your HTML page.
+3. **Use it** from your document:
+
+   ```yaml
+   type: map
+   id: nyc
+   config:
+     center: [-73.98, 40.71]
+     zoom: 12
+     mapStyle: data/nyc.pmtiles
+   ```
+
+   You should see a light street map of New York, labelled in the page's
+   language where OpenStreetMap has the names.
+
+## Choose a flavor and language
+
+Write `mapStyle:` as a block to choose:
+
+```yaml
+config:
+  center: [-73.98, 40.71]
+  zoom: 12
+  mapStyle:
+    pmtiles: data/nyc.pmtiles
+    flavor: light        # light (default), dark, white, grayscale or black
+    lang: en             # optional: label language
+```
+
+`lang:` picks the language labels are drawn in where OpenStreetMap has the
+name (`en`, `es`, `fr`, `de`, `ja`, `zh-Hans`, and about 40 more). Without
+it, labels follow the page's `lang` when the basemap has that language, and
+English otherwise. Arabic, Hebrew, Persian and Urdu labels (`ar`, `he`, `fa`,
+`ur`) are written right to left: maplibre-gl 6.9 and later draw them as they
+are; with an older maplibre-gl, maplibre-yaml loads MapLibre's right-to-left
+text plugin from unpkg.com the first time such a label is drawn.
+
+## Keep the file small
+
+Each extra zoom level makes an extract roughly three times bigger: the New
+York extract above is about 12 MB at `--maxzoom=13` and about 95 MB with
+every zoom level (to 15). Zoom 13 is enough for a city map: MapLibre draws
+closer zooms from the zoom-13 tiles, with fewer minor street names.
+
+That matters on GitHub: its web upload ("Add file → Upload files") takes
+files up to 25 MB, `git push` warns above 50 MB and refuses files over
+100 MB, and a GitHub Pages site is limited to 1 GB. To go smaller, cut a
+tighter `--bbox` around the area you show, or lower `--maxzoom` (12 still
+reads well for a whole city). For larger areas, use a host meant for big
+files, such as an object store (S3, R2).
+
+## Paths and hosting
+
+- **A relative `pmtiles:` path resolves against the page**, and `base`
+  applies to it like to every other path, so the same YAML works on a GitHub
+  Pages project site (`<ml-map base="/my-repo/">`; the Astro components set
+  it from your site's `base`). A full URL (`https://…/nyc.pmtiles`) or a
+  `pmtiles://` URL works too.
+- **The file is read with range requests**, like any PMTiles file. Preview
+  locally with `npx serve` or `astro dev`; `python -m http.server` doesn't
+  support them ([Publishing › Large files](/guides/publishing/#large-files-range-requests-and-cors)).
+- **Labels and icons** come from Protomaps' hosted fonts and sprites
+  (`protomaps.github.io/basemaps-assets`). To host those yourself too, copy
+  the fonts and the sprite for your flavor from
+  [basemaps-assets](https://github.com/protomaps/basemaps-assets) and name
+  them:
+
+  ```yaml
+  mapStyle:
+    pmtiles: data/nyc.pmtiles
+    glyphs: fonts/{fontstack}/{range}.pbf
+    sprite: sprites/v4/light
+  ```
+
+- **Attribution** to OpenStreetMap and Protomaps is added to the map.
+
+## Your layers on top
+
+Your layers draw on top of the basemap, as with any basemap. `before:` can
+name a basemap layer to slide one underneath, for example
+`before: places_subplace` to keep neighbourhood names above your data. A
+story chapter can restyle basemap layers by id (`water`, `earth`,
+`landuse_park`, `roads_minor`, `buildings` …); `map.getStyle().layers` lists
+them all.
+
+## A full style.json of your own
+
+To change the basemap's design beyond a flavor, use a style file instead.
+Generate one for your file (Protomaps'
+[style generator](https://docs.protomaps.com/basemaps/maplibre), or
+`mlym emit` on a document using the form above), save it as `style.json`
+beside the file, edit it, and point its source at the file:
+`"url": "pmtiles://nyc.pmtiles"`. Then:
+
+```yaml
+config:
+  mapStyle: basemap/style.json   # public/basemap/ in an Astro or Vite site
+```
+
+Relative URLs inside the style resolve against the style
+([PMTiles inside a basemap style](/guides/pmtiles/#pmtiles-inside-a-basemap-style)).
+
+## Troubleshooting
+
+When something is wrong the map shows a notice instead of a blank basemap:
+
+- **"The basemap didn't load:"** followed by the reason: the file isn't
+  there (check the path and `base`), or the server doesn't support range
+  requests.
+- **"…doesn't look like a Protomaps basemap"**: the file holds other tiles.
+  Your own tiles go under `sources:` with layers ([PMTiles](/guides/pmtiles/)).
+- **"…built with an older tile schema … only land and water draw"**: cut a
+  new extract from build.protomaps.com.
+- **No labels or icons**, and the notice names the fonts or icons: the
+  Protomaps asset host isn't reachable from the page; host the assets
+  yourself (above).
+
+In a [format v2](/guides/format-v2/) document the same forms go in
+`style.basemap:`. Exporting this basemap to a `style.json`:
+[Large-data files in an exported style](/guides/export/#large-data-files-in-an-exported-style).

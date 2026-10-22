@@ -1,63 +1,31 @@
 ---
 title: "Popups, hover & controls"
-description: Make a map respond — a popup when a feature is clicked, what it shows (properties, links, images), numbers formatted in the reader's language, hover cursors, highlights and tooltips, flying to a feature, and the zoom, scale, fullscreen and other map controls. Points to legends.
+description: Make a map respond — a popup when a feature is clicked, what it shows (properties, links, images, formatted numbers), hover cursors, highlights and tooltips, moving the camera to a feature, and the zoom, scale, fullscreen and other map controls.
 ---
 
-import { Aside } from "@astrojs/starlight/components";
+import LiveMap from "../../../components/LiveMap.astro";
+import { Aside, Code } from "@astrojs/starlight/components";
+import popupDemo from "../../../../public/configs/popup-demo.yaml?raw";
+import hoverDemo from "../../../../public/configs/hover-demo.yaml?raw";
 
 A map from YAML is already pannable and zoomable. This guide adds the parts
 that answer a reader's "what is this?": a popup when they click a feature, a
 highlight and a tooltip while they point at one, a camera that moves to what
-they chose, and the buttons around the map. Everything here goes in the
-layer's `interactive:` block or the document's `controls:` block; there is no
-JavaScript to write.
+they chose, and the buttons around the map. It all goes in a layer's
+`interactive:` block or the document's `controls:` block, with no JavaScript.
 
-Each complete document below (it starts with `type: map`) runs as printed:
-save it as a `.yaml` file and load it with `<ml-map src="…">`. Snippets that
-start with `popup:`, `interactive:` or `controls:` are one part of a document.
+Complete documents (they start with `type: map`) run as printed. Snippets
+that start with `popup:`, `interactive:` or `controls:` are one part of a
+document.
 
 ## Show a popup on click
 
 Give the layer an `interactive:` block with a `click.popup`. The popup is a
-list of HTML elements; each one lists what goes inside it:
+list of HTML elements, and each one lists what goes inside it:
 
-```yaml
-type: map
-id: cities
-config:
-  center: [-82, 41]
-  zoom: 4
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: cities
-    type: circle
-    source:
-      type: geojson
-      data:
-        type: FeatureCollection
-        features:
-          - type: Feature
-            geometry: { type: Point, coordinates: [-74.006, 40.7128] }
-            properties: { name: "New York", population: 8336817, nickname: "The Big Apple" }
-          - type: Feature
-            geometry: { type: Point, coordinates: [-87.623, 41.881] }
-            properties: { name: "Chicago", population: 2693976 }
-    paint:
-      circle-radius: 10
-      circle-color: "#ef4444"
-      circle-stroke-width: 2
-      circle-stroke-color: "#ffffff"
-    interactive:
-      hover:
-        cursor: pointer
-      click:
-        popup:
-          - h3: [{ property: name }]
-          - p:
-              - str: "Population: "
-              - property: population
-                format: { max-fraction-digits: 0 }
-```
+<Code code={popupDemo} lang="yaml" title="cities.yaml" />
+
+<LiveMap src="/configs/popup-demo.yaml" height="340px" caption="Click a city" />
 
 Click New York and the popup reads **New York** over "Population:
 8,336,817". `cursor: pointer` turns the pointer into a hand over the circles,
@@ -75,7 +43,7 @@ element, and its list holds **items** whose output is joined inside it.
 | `property: population` | The clicked feature's `population` property |
 | `property: nickname` with `else: "none recorded"` | The fallback when the property is missing or `null` (without `else`, nothing) |
 | `property: population` with `format: { … }` | A formatted number ([below](#format-numbers)) |
-| `href: "https://…"` with `str: "Read more"` | A link with that text |
+| `href: "https://…"` with `text: "Read more"` | A link with that text (the URL itself without `text`) |
 | `src: "https://…/photo.jpg"` with `alt: "…"` | An image |
 
 ```yaml
@@ -86,26 +54,41 @@ popup:
       - property: nickname
         else: "none recorded"
   - p:
-      - str: "Read about it on Wikipedia"
-        href: "https://en.wikipedia.org/wiki/New_York_City"
+      - href: "https://en.wikipedia.org/wiki/New_York_City"
+        text: "Read about it on Wikipedia"
   - p:
       - src: "https://maplibre.org/img/maplibre-logo-big.svg"
         alt: "MapLibre logo"
 ```
 
-Put links and images inside `p:` (or `div:`). Elements don't nest: a `ul:`
-can't contain `li:` entries. Feature values are always shown as text, never
-as markup, so data can't inject HTML into your page. A link opens in a new
-tab unless you write `target: _self`, and its URL is fixed text: it can't be
-built from a property. Every tag, item and link rule is in
-[Layers › Popups](/schema/layers/#popups).
+- **Elements:** `h1`–`h6`, `p`, `span`, `div`, `strong`, `em`, `code`, `pre`,
+  `a`, `img`, `ul`, `ol`, `li`, `blockquote`, `hr` and `br`. Any other key is
+  skipped with a console warning. Elements don't nest: a `ul:` can't contain
+  `li:` entries. Put links and images inside `p:` or `div:`.
+- **Text is always text.** Property values and `str` are shown as text, never
+  as markup, so data can't inject HTML into your page.
+- **Links** take an absolute URL (`https://`, `mailto:`, `tel:`) or a path on
+  your site (`/about`, `notes.html`, `#top`); any other scheme, such as
+  `javascript:`, is shown as plain text. A link opens in a new tab unless you
+  write `target: _self` (or `_parent`, `_top`). Its URL is fixed text: it
+  can't be built from a property.
+
+Every popup key is in the [layer reference](/reference/yaml/layers/#interactive).
 
 ## Format numbers
 
-A `property` item with `format:` formats a number with the browser's
-`Intl.NumberFormat`, using the option names of MapLibre's
+A `property` item with `format:` formats a number in the reader's language.
+The options are those of MapLibre's
 [`number-format`](https://maplibre.org/maplibre-style-spec/expressions/#number-format)
 expression, the same ones a label's `text-field` uses:
+
+| Option | What it does | Example |
+| --- | --- | --- |
+| `locale` | The language to format for. Default: the page's language, then the browser's | `de-DE` |
+| `currency` | Format as money | `EUR`, `USD`, `JPY` |
+| `unit` | Add a unit (ignored with `currency`) | `kilometer`, `percent`, `celsius` |
+| `min-fraction-digits` | At least this many decimals | `2` |
+| `max-fraction-digits` | At most this many decimals (rounds) | `0` |
 
 ```yaml
 popup:
@@ -123,63 +106,50 @@ popup:
         format: { unit: kilometer, max-fraction-digits: 1 } # 12.5 km
 ```
 
-Numbers follow the page's language: the `lang` on `<ml-map>` or on `<html>`,
-then the browser's. On a page with `<html lang="de">` the population reads
-"8.336.817" and the rent "1.240 €". Write `locale: en-US` in a format to fix
-one regardless of the page. A number stored as text (`"54000"`, as CSV data
-often is) is formatted like the number; a property without `format:` is
-shown exactly as stored, so years and ids are never grouped. More in
-[Number formats](/schema/layers/#number-formats) and
-[Accessibility & languages](/guides/accessibility-languages/#number-formats).
+- **The page's language decides.** The `lang` on `<ml-map>` or on `<html>`
+  comes first, then the browser's. On a page with `<html lang="de">` the
+  population reads "8.336.817" and the rent "1.240 €". Write `locale: en-US`
+  in a format to fix one regardless of the page.
+- **Text that reads as a number** (`"54000"`, as CSV-derived data often has)
+  is formatted like the number; other text (`"n/a"`) is shown as stored.
+- **Without `format:`** a property is shown exactly as stored, so years and
+  ids (`1999`, `10012`) are never grouped.
+- A d3-style string such as `format: ",.0f"` also works (`,` groups
+  thousands, `.Nf` keeps N decimals) and follows the page's language too.
+
+The same formatter is exported for your own code as
+`formatNumber(value, options, defaultLocale)` from `@maplibre-yaml/core`.
+A [classified](/guides/thematic-maps/) layer's legend takes the same options.
 
 ## Respond to hover
 
 The `hover:` part of `interactive:` takes three things, alone or together:
 
 - **`cursor`**: the CSS cursor over a feature, usually `pointer`.
-- **`highlight: true`**: recolours the feature under the pointer. The source
-  needs feature ids for this: set `generateId: true` on it (or `promoteId`
-  to use a property as the id).
-- **`popup`**: a tooltip, in the same format as `click.popup`, shown while
-  the pointer is over a feature and gone when it leaves. It has no close
-  button. A popup opened by a click stays, and hover tooltips wait until it
-  is closed. Touch screens have no hover: a tap opens `click.popup`.
+- **`highlight: true`**: recolours the feature under the pointer.
+- **`popup`**: a tooltip, in the same format as `click.popup`, shown while the
+  pointer is over a feature and gone when it leaves. It has no close button.
+  A popup opened by a click stays, and hover tooltips wait until it is
+  closed. Touch screens have no hover: a tap opens `click.popup`.
 
-```yaml
-type: map
-id: states
-config:
-  center: [-98, 39]
-  zoom: 3
-  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
-layers:
-  - id: states
-    type: fill
-    source:
-      type: geojson
-      url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
-      generateId: true
-    paint:
-      fill-color: "#94a3b8"
-      fill-opacity: 0.6
-    interactive:
-      hover:
-        cursor: pointer
-        highlight: true
-        popup:
-          - strong: [{ property: STATE_NAME }]
-      click:
-        popup:
-          - h3: [{ property: STATE_NAME }]
-          - p: [{ str: "One of the 50 states." }]
-```
+<Code code={hoverDemo} lang="yaml" title="states.yaml" />
 
-`highlight` changes the layer's main colour (`fill-color` here) for the
-hovered feature, and works on [classified](/guides/thematic-maps/) layers too.
-If that colour is already your own expression, `highlight` leaves it alone
-and warns; to choose the highlight colour yourself, use
-`["feature-state", "hover"]` in the paint, as in
-[Custom highlight styling](/schema/interactivity/#custom-highlight-styling).
+<LiveMap src="/configs/hover-demo.yaml" height="340px" caption="Point at a state to highlight it and see its name; click to zoom to it" />
+
+`highlight` needs an id on each feature. `promoteId` names a property that is
+different for every feature (`STATE_ID` here), which keeps the same id when
+the data refreshes. `generateId: true` numbers the features instead. On a
+layer whose data is written in the YAML, leaving both out generates ids with
+a console warning; a file loaded from `url:` has no ids unless the file has
+them, and the console says "needs feature ids".
+
+`highlight` changes the layer's main colour (`fill-color` here), and works on
+[classified](/guides/thematic-maps/) layers too. If that colour is already an
+expression of your own, `highlight` leaves it alone and warns; to choose the
+highlight colour yourself, use `["feature-state", "hover"]` in the paint, as
+in [Custom highlight styling](/schema/interactivity/#custom-highlight-styling).
+Gallery: [Create a hover effect](/examples/gallery/create-a-hover-effect/),
+[Display a popup on hover](/examples/gallery/display-a-popup-on-hover/).
 
 ## Move the camera to a feature
 
@@ -251,11 +221,24 @@ static map), see [Interaction settings](/schema/map-config/#interaction-settings
 
 ## Legends
 
-A legend explains the colours. A [classified](/guides/thematic-maps/) layer,
-or a layer with its own entry (`legend: { label, color }`), makes the map show
-one by itself; a `legend:` block places and titles it, and `legend: false`
-turns it off. See [Thematic maps & legends](/guides/thematic-maps/#the-legend)
-and [Map configuration › Legend](/schema/map-config/#legend).
+A legend explains colours; how a map gets one is in
+[Thematic maps › The legend](/guides/thematic-maps/#the-legend).
+
+## Troubleshooting
+
+- **Clicking does nothing.** Popups, hover and click actions need an
+  `interactive:` block on the layer itself. Check that it is indented under
+  the layer, beside `paint:`.
+- **The popup shows a label but no value.** The property name doesn't match
+  the data: names are case-sensitive (`Name` is not `name`). Add
+  `else: "…"` to see when a value is missing.
+- **Nothing highlights, and the console says "needs feature ids".** Add
+  `promoteId` or `generateId: true` to the source ([above](#respond-to-hover)).
+- **Highlight warns that the colour is already an expression.** Use
+  [custom highlight styling](/schema/interactivity/#custom-highlight-styling)
+  instead.
+
+More: [Troubleshooting](/troubleshooting/).
 
 ## Reacting from your own JavaScript
 
@@ -272,26 +255,29 @@ map.addEventListener("ml-map:layer-click", (event) => {
 });
 ```
 
-`ml-map:layer-hover` carries the same details for hover.
-[HTML pages: the `<ml-map>` element](/integrations/web-components/) lists
-every event.
+`ml-map:layer-hover` carries the same details for hover. Every event is in
+[`<ml-map>` events](/reference/elements/#ml-map-events). For a named event
+with a payload you choose, see `click.emit` (host event) in
+[Interactivity](/schema/interactivity/#emit).
 
 <Aside type="note" title="Popups and hover stay on the page">
   Popups, hover and click actions are page behaviour, not part of a MapLibre
   style: `mlym emit` leaves them out of the exported `style.json` and says
   so. [Export to style.json](/guides/export/) shows how to attach them to an
-  exported map with `attachInteractions`, and
-  [Export classes](/guides/export-classes/) lists what carries over.
+  exported map with `attachInteractions`.
 </Aside>
 
 ## Look it up
 
-- [Interactivity](/schema/interactivity/): every `interactive:` and control
-  key with its options, including `emit` for host code and the interaction
-  settings.
-- [Layers › Popups](/schema/layers/#popups): the full popup content format,
-  links and escaping.
-- [Map configuration › Popups](/schema/map-config/#popups): popups open at
-  fixed coordinates, with no feature under them.
-- The generated [layer reference](/reference/yaml/layers/#interactive): every
-  key, from the schema the validator uses.
+- The [layer reference](/reference/yaml/layers/#interactive): every
+  `interactive:` key.
+- The [map reference](/reference/yaml/map/#controls): every control and its
+  options.
+- [Map configuration › Popups](/schema/map-config/#popups): popups that open
+  at fixed coordinates, with no feature under them.
+- Examples: [Basic map](/examples/basic-map/) and
+  [Interactive points](/examples/interactive-points/).
+- Gallery: [Display a popup on click](/examples/gallery/display-a-popup-on-click/),
+  [Show polygon information on click](/examples/gallery/show-polygon-information-on-click/),
+  [Center the map on a clicked symbol](/examples/gallery/center-the-map-on-a-clicked-symbol/),
+  [Display map navigation controls](/examples/gallery/display-map-navigation-controls/).

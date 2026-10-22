@@ -109,6 +109,21 @@ An inline `<script type="text/yaml">` child holds the document instead
 
 The element has no size of its own: give it `display: block` and a height.
 
+Before maplibre-yaml's script has loaded, the browser doesn't know
+`<ml-map>` yet and shows nothing inside it. A rule for the not-yet-defined
+element covers that moment too:
+
+```css
+ml-map:not(:defined) {
+  display: grid;
+  place-items: center;
+  background: #f3f4f6;
+  color: #4b5563;
+  font: 13px system-ui, sans-serif;
+}
+ml-map:not(:defined)::before { content: "Loading map…"; }
+```
+
 ## `<ml-scrollytelling>`
 
 Shows one `type: scrollytelling` document as a story: a sticky map, drawn by

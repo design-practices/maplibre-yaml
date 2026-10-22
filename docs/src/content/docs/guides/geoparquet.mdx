@@ -1,0 +1,157 @@
+---
+title: GeoParquet
+description: Load features from a .parquet file into an ordinary GeoJSON source, reading only the columns the map uses — whole, or only the rows in view for a large file.
+---
+
+A GeoParquet (`.parquet` or `.geoparquet`) file stores features as a columnar
+table, the format GeoPandas, DuckDB and GDAL write. maplibre-yaml reads it into
+an ordinary GeoJSON source, and reads **only the columns the map uses**, so a
+table with dozens of columns downloads only the few you show. Popups,
+`classify:`, clustering and `fitTo` work as for a `.geojson` file. It is one
+of the [large-data formats](/guides/cloud-native-data/).
+
+## Quick start
+
+Keep `type: geojson` and point `url:` at the file:
+
+```yaml
+type: map
+id: geoparquet-wells
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+  fitTo: { source: wells, padding: 20 }
+sources:
+  wells:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+layers:
+  - id: wells
+    type: circle
+    source: wells
+    paint:
+      circle-radius: 4
+      circle-color: ["match", ["get", "kind"], "well", "#e63946", "station", "#457b9d", "#2a9d8f"]
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: kind }]
+          - p: [{ str: "Value: " }, { property: value }]
+```
+
+The file is on this documentation site; to run the document on yours,
+download [points.parquet](https://docs.maplibre-yaml.org/gallery-assets/cloud-native/points.parquet)
+into `gallery-assets/cloud-native/`. You should see red and blue points;
+click one for its kind and value. The gallery's
+[GeoParquet source](/examples/gallery/geoparquet-source/) shows it live.
+
+## Which columns are read
+
+maplibre-yaml reads the geometry plus the properties the document uses for
+that source: here `kind` and `value`, not the rest of the file. It finds them
+in `["get", …]` and `["has", …]` in `paint`, `layout` and `filter`, `{name}`
+tokens in text, popup and legend `property:` items, `classify:` `field` and
+`normalize`, the source's `promoteId`, `filter` and `clusterProperties`, and a
+story's `setFilter`, `setPaintProperty` and `setLayoutProperty` actions.
+
+To choose yourself, set `columns:`:
+
+```yaml
+sources:
+  wells:
+    type: geojson
+    url: data/wells.parquet
+    columns: [kind, value, owner]   # or: columns: all
+```
+
+A clicked feature (`ml-map:layer-click`, `queryRenderedFeatures`) carries
+only the columns that were read. If your page's own JavaScript reads other
+properties, list them in `columns:`, or write `columns: all`.
+
+## Whole file or by view
+
+`load:` says how the file is read:
+
+| `load:` | What it reads | Needs |
+|---|---|---|
+| `all` (default) | The columns it uses, from every row | Any web server |
+| `viewport` | Only the rows in view, read again as the map moves; nothing below `minzoom` (default 10) | A **`bbox` column**, rows **sorted by location**, and a server with **range requests** |
+
+Reading by view works because a GeoParquet file stores rows in groups, and
+its footer records each group's extent from the `bbox` column; groups outside
+the view are never downloaded. That only pays off when nearby rows sit in the
+same groups, in a file sorted by location. A file whose groups each span most
+of the area is read whole instead, with a console note; one without a `bbox`
+column is refused with a notice that says how to add it. With `load: viewport`,
+`fitTo` frames the extent recorded in the file's metadata, and `classify:`
+needs explicit `breaks:` rather than `method:`.
+
+**How big?** The limits are FlatGeobuf's, counted on the columns the map
+reads: up to **10 MB** read whole, **10–50 MB** read whole with a console
+note, over **50 MB** read by view if the file allows it and refused
+otherwise. A server without range requests (`python -m http.server`) sends
+the whole file at once: fine for a small file, refused before download for
+one over 50 MB.
+
+## Make a GeoParquet file
+
+**GDAL** (`ogr2ogr`, also inside QGIS):
+
+```bash
+ogr2ogr -f Parquet out.parquet in.geojson -lco COMPRESSION=SNAPPY
+# for load: viewport: a bbox column, rows sorted by location, smaller row groups
+ogr2ogr -f Parquet out.parquet in.geojson -lco WRITE_COVERING_BBOX=YES \
+  -lco SORT_BY_BBOX=YES -lco ROW_GROUP_SIZE=10000
+```
+
+Add `-t_srs EPSG:4326` when the source data is in a projected CRS.
+
+**GeoPandas** (Python):
+
+```python
+import geopandas as gpd
+gdf = gpd.read_file("in.geojson").to_crs(4326)
+gdf.to_parquet("out.parquet")  # WKB geometry, snappy
+# for load: viewport: sort by location, then write the bbox column
+gdf = gdf.iloc[gdf.geometry.hilbert_distance().argsort()]
+gdf.to_parquet("out.parquet", write_covering_bbox=True, row_group_size=10_000)
+```
+
+**DuckDB** (with its spatial extension):
+
+```sql
+INSTALL spatial; LOAD spatial;
+COPY (SELECT * FROM ST_Read('in.geojson')) TO 'out.parquet' (FORMAT parquet);
+```
+
+Whatever writes it, keep the file to the area and columns you show.
+
+## Limits
+
+- **Geometry** must be WKB, the default of GeoPandas, GDAL and DuckDB.
+  GeoArrow-encoded geometry isn't read.
+- **Coordinates** must be longitude/latitude (`OGC:CRS84`, the GeoParquet
+  default, or EPSG:4326).
+- **Compression:** snappy, zstd, gzip, lz4 and brotli all work.
+- **Live data** (`refresh:`, `stream:`) isn't available for GeoParquet;
+  validation says so ([Live data](/guides/live-data/)).
+
+## Troubleshooting
+
+- **"…stores its geometry as GeoArrow"**: rewrite it as WKB,
+  `ogr2ogr -f Parquet -lco GEOMETRY_ENCODING=WKB out.parquet x.parquet`, or
+  GeoPandas `to_parquet(..., geometry_encoding="WKB")`.
+- **"…is a Parquet file but not GeoParquet"**: it has no geometry metadata,
+  such as a table with a WKB column written by hand. Write it with GeoPandas
+  `to_parquet`, `ogr2ogr -f Parquet` or DuckDB's spatial extension.
+- **"…is in EPSG:…"**: the notice gives the `ogr2ogr` command that
+  reprojects it.
+- **Your page's script finds a property missing** on a clicked feature: that
+  column wasn't read. Add it to `columns:`.
+- **Hosting problems** (range requests, CORS): see
+  [Large data › When something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong).
+
+Export to `style.json`: `mlym emit` writes the file's features (every column,
+or the `columns:` you listed) into the style as GeoJSON
+([Large-data files in an exported style](/guides/export/#large-data-files-in-an-exported-style)).

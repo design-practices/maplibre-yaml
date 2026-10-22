@@ -1,0 +1,23 @@
+type: map
+id: states
+config:
+  center: [-98, 39]
+  zoom: 3
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+sources:
+  states:
+    type: geojson
+    url: "https://maplibre.org/maplibre-gl-js/docs/assets/us_states.geojson"
+layers:
+  - id: state-fill
+    type: fill
+    source: states
+    paint:
+      fill-color: "#22c55e"
+      fill-opacity: 0.4
+  - id: state-outline
+    type: line
+    source: states
+    paint:
+      line-color: "#166534"
+      line-width: 1

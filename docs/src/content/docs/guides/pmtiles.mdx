@@ -1,0 +1,118 @@
+---
+title: PMTiles
+description: Draw vector, raster and elevation tiles from one .pmtiles file on a static host, with no tile server — and use PMTiles inside a basemap style.
+---
+
+A `.pmtiles` file holds a whole tile pyramid, every zoom level of a dataset,
+in one file that a static host can serve. The browser reads only the tiles in
+view. Use it for large data that doesn't change: building footprints,
+parcels, a road network, imagery or elevation. It is one of the
+[large-data formats](/guides/cloud-native-data/).
+
+## Quick start
+
+Point a `vector` source's `url:` at the file, and name the tile layer to draw
+in each map layer's `source-layer:`:
+
+```yaml
+type: map
+id: districts
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  outlines:
+    type: vector
+    url: /gallery-assets/cloud-native/districts.pmtiles
+layers:
+  - id: outlines
+    type: line
+    source: outlines
+    source-layer: districts      # a layer inside the archive
+    paint:
+      line-color: "#1d3557"
+```
+
+The file is on this documentation site; to run the document on yours,
+download [districts.pmtiles](https://docs.maplibre-yaml.org/gallery-assets/cloud-native/districts.pmtiles)
+into `gallery-assets/cloud-native/` and serve the folder with `npx serve`.
+You should see district outlines on a coast. The
+[Large data quick start](/guides/cloud-native-data/#quick-start) shows it live
+with a FlatGeobuf layer.
+
+## Vector, raster and elevation archives
+
+The source `type:` says what the tiles hold:
+
+```yaml
+sources:
+  buildings:
+    type: vector
+    url: data/buildings.pmtiles     # layers say which source-layer to draw
+  imagery:
+    type: raster
+    url: data/imagery.pmtiles
+    tileSize: 256                   # most raster archives use 256-pixel tiles
+  terrain:
+    type: raster-dem
+    url: data/terrain.pmtiles
+    encoding: terrarium
+```
+
+- The archive's own metadata (zoom range, bounds, attribution, layer names)
+  reaches MapLibre, so you rarely set `minzoom` or `maxzoom`.
+- **Framing:** a tile archive has no extent the browser can measure, so
+  `fitTo` doesn't apply to it. Set `center` and `zoom` (or `bounds`) for
+  where the data is.
+- `pmtiles://data/buildings.pmtiles` works too, the form MapLibre's own
+  examples use.
+
+## Make a PMTiles file
+
+- **Vector tiles from GeoJSON:** [tippecanoe](https://github.com/felt/tippecanoe),
+  `tippecanoe -o buildings.pmtiles buildings.geojson`. Its `-zg` option picks
+  a zoom range for you.
+- **From GDAL:** `ogr2ogr -f PMTiles out.pmtiles in.gpkg` (GDAL 3.8 or later).
+- **From an existing MBTiles file:** `pmtiles convert in.mbtiles out.pmtiles`
+  with the [`pmtiles` tool](https://docs.protomaps.com/pmtiles/cli). A browser
+  can't read `.mbtiles` directly.
+
+Keep a file small by cutting it to the area and zoom levels you show: each
+extra zoom level makes it about three times bigger.
+
+## PMTiles inside a basemap style
+
+A basemap style loaded from a URL can use PMTiles too, with no page
+JavaScript: `mapStyle:` can point at a style whose sources are `pmtiles://`
+URLs. maplibre-yaml registers the `pmtiles://` protocol before the map is
+created, so the style's first requests find it.
+
+**Relative URLs inside the style are relative to the style.json**, the way a
+stylesheet's `url()` is relative to the stylesheet. That applies to a
+source's `url` (including the file inside `pmtiles://`), `tiles`, `sprite`
+and `glyphs`. `base` applies to the style URL itself, so a style under
+`base="/my-repo/"` finds its own files under `/my-repo/` too. If the style
+names a file that isn't there, the map's notice says which one.
+
+To build a basemap from a Protomaps file, see
+[Host your own basemap](/guides/host-your-own-basemap/).
+
+## Your own protocol registration
+
+A page that already calls `addProtocol("pmtiles", …)` through
+`@maplibre-yaml/core/maplibre` (for custom request headers or a custom
+`Source`) keeps it: maplibre-yaml leaves an existing registration alone.
+
+## Troubleshooting
+
+- **The notice says "…isn't a PMTiles file"**: a wrong path often returns a
+  web page instead. Check the file name and folder.
+- **Nothing draws, no notice**: the `source-layer:` name doesn't match a
+  layer inside the archive. `pmtiles show data/buildings.pmtiles` lists them.
+- **"…was served without range-request support"**: see
+  [Hosting](/guides/cloud-native-data/#hosting-range-requests-and-cors).
+
+More: [Large data › When something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong).
+Export to `style.json`: [Large-data files in an exported style](/guides/export/#large-data-files-in-an-exported-style).
+Gallery: [PMTiles source and protocol](/examples/gallery/pmtiles-source-and-protocol/).

@@ -1,0 +1,118 @@
+---
+title: FlatGeobuf
+description: Load features from a .fgb file into an ordinary GeoJSON source — whole, or only the part in view for a large file — with popups, classify and clustering working as usual.
+---
+
+A FlatGeobuf (`.fgb`) file holds features (points, lines, polygons) with their
+properties in a compact binary form, often with a spatial index. maplibre-yaml
+reads it into an ordinary GeoJSON source, so everything that works with a
+`.geojson` file works with it: popups, `classify:`, clustering, `fitTo`. Use it
+when GeoJSON gets slow; for large static data, [PMTiles](/guides/pmtiles/) is
+faster still. It is one of the [large-data formats](/guides/cloud-native-data/).
+
+## Quick start
+
+Keep `type: geojson` and point `url:` at the file:
+
+```yaml
+type: map
+id: districts
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+  fitTo: { source: districts, padding: 24 }
+sources:
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.fgb
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    paint:
+      fill-color: "#e9c46a"
+      fill-opacity: 0.6
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: name }]
+```
+
+The file is on this documentation site; to run the document on yours,
+download [districts.fgb](https://docs.maplibre-yaml.org/gallery-assets/cloud-native/districts.fgb)
+into `gallery-assets/cloud-native/`. You should see yellow districts on a
+coast; click one for its name. The gallery's
+[FlatGeobuf source](/examples/gallery/flatgeobuf-source/) shows it live.
+
+## Whole file or by view
+
+`load:` says how the file is read:
+
+| `load:` | What it reads | Needs |
+|---|---|---|
+| `all` (default) | The whole file, once | Any web server |
+| `viewport` | Only the features in view, read again as the map moves; nothing below `minzoom` (default 10) | A file with a **spatial index**, and a server with **range requests** |
+
+```yaml
+sources:
+  districts:
+    type: geojson
+    url: data/districts.fgb                  # small file: read whole
+  parcels:
+    type: geojson
+    url: https://data.example.org/parcels.fgb
+    load: { mode: viewport, minzoom: 14 }    # big file: only what's in view
+```
+
+**How big?** Reading a file whole costs memory and time in the browser:
+
+- up to **10 MB**: read whole;
+- **10–50 MB**: read whole, with a console note suggesting `load: viewport`
+  or PMTiles;
+- over **50 MB**: not read whole. A file with a spatial index is read by view
+  instead (with a console note); one without is refused, and the map says so.
+
+As a rule of thumb, a whole file is comfortable up to about 100,000 simple
+features (about 20 MB).
+
+Reading by view changes a few things:
+
+- **`fitTo`** frames the extent recorded in the file's header instead of the
+  features.
+- **`classify:` with `method:`** needs the whole file. On a source read by
+  view, write explicit `breaks:` ([Thematic maps](/guides/thematic-maps/#breaks-computed-from-the-data)).
+
+## Make a FlatGeobuf file
+
+```bash
+ogr2ogr -f FlatGeobuf out.fgb in.geojson
+```
+
+GDAL writes the spatial index by default. Add `-t_srs EPSG:4326` if the data
+is in another projection. In QGIS, use Export → Save Features As →
+FlatGeobuf.
+
+## Limits
+
+- **Coordinates** must be longitude/latitude (EPSG:4326).
+- **Write the file uncompressed.** A Zstandard-compressed file is refused
+  (`zstd -d` decompresses it).
+- **Live data** (`refresh:`, `stream:`) isn't available for FlatGeobuf;
+  validation says so. Serve GeoJSON for data that changes
+  ([Live data](/guides/live-data/)).
+
+## Troubleshooting
+
+- **"…is in EPSG:3857; MapLibre needs longitude/latitude (EPSG:4326)"**: the
+  notice gives the fix, `ogr2ogr -t_srs EPSG:4326 out.fgb x.fgb`.
+- **"…is 180 MB, too large to load whole in a browser"**: add
+  `load: viewport` (the file needs a spatial index), or convert it to
+  PMTiles.
+- **"…was read as JSON, but it is a FlatGeobuf file"**: the URL doesn't end
+  in `.fgb`. Rename the file, or add `format: flatgeobuf` to the source.
+- **Hosting problems** (range requests, CORS): see
+  [Large data › When something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong).
+
+Export to `style.json`: `mlym emit` writes the file's features into the style
+as GeoJSON ([Large-data files in an exported style](/guides/export/#large-data-files-in-an-exported-style)).

@@ -1,23 +1,26 @@
-# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
 type: map
-id: polling-demo
+id: live-earthquakes
 config:
   center: [-120, 37]
-  zoom: 4
+  zoom: 3
   mapStyle: "https://tiles.openfreemap.org/styles/liberty"
 layers:
   - id: earthquakes
     type: circle
     source:
       type: geojson
-      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
       refresh:
-        refreshInterval: 60000
-        updateStrategy: replace
+        refreshInterval: 60000   # milliseconds: fetch the feed again every minute
     paint:
-      circle-radius: 8
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 3, 6, 20]
       circle-color: "#ef4444"
+      circle-opacity: 0.7
       circle-stroke-width: 1
       circle-stroke-color: "#ffffff"
-controls:
-  navigation: true
+    interactive:
+      hover:
+        cursor: pointer
+      click:
+        popup:
+          - h4: [{ property: title }]

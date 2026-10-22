@@ -1,0 +1,182 @@
+---
+title: Cloud Optimized GeoTIFF (COG)
+description: Draw imagery, elevation (hillshade and 3D terrain) and single-band measurements from a .tif file, with colorRamp for values — read tile by tile from a static host.
+---
+
+import LiveMap from "../../../components/LiveMap.astro";
+import { Aside } from "@astrojs/starlight/components";
+
+A Cloud Optimized GeoTIFF (COG) is an ordinary GeoTIFF laid out for the web:
+its pixels are stored in tiles, with smaller copies (overviews) for
+zoomed-out views, so the browser reads only the parts it draws. Satellite and
+aerial imagery, elevation models and gridded measurements (vegetation,
+temperature) are often published this way. It is one of the
+[large-data formats](/guides/cloud-native-data/).
+
+<Aside type="caution" title="COGs must be in Web Mercator (EPSG:3857)">
+maplibre-yaml draws COGs in Web Mercator, the projection of web map tiles,
+and doesn't reproject them in the browser. A COG in another projection, such
+as longitude/latitude (EPSG:4326) or a national grid, is refused with a
+notice that gives the command to convert it ([Make a COG](#making-a-cog)).
+</Aside>
+
+## Quick start: imagery
+
+Point a `raster` source's `url:` at the `.tif` file:
+
+```yaml
+type: map
+id: cog-imagery
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+  fitTo: { source: imagery }
+sources:
+  imagery:
+    type: raster
+    url: /gallery-assets/cloud-native/imagery.cog.tif   # or cog://…
+layers:
+  - id: imagery
+    type: raster
+    source: imagery
+```
+
+The file is on this documentation site; to run the document on yours,
+download [imagery.cog.tif](https://docs.maplibre-yaml.org/gallery-assets/cloud-native/imagery.cog.tif)
+into `gallery-assets/cloud-native/`. You should see the image over a coast,
+framed to its own extent. RGB, greyscale and paletted images draw in their
+own colours. For a URL that doesn't end in `.tif` or `.tiff`, add
+`format: cog`.
+
+## Elevation: hillshade and terrain
+
+The same kind of file on a `raster-dem` source is read as elevation (in
+metres, from the first band). It drives `hillshade` layers and 3D `terrain:`
+like any other elevation source:
+
+```yaml
+type: map
+id: cog-elevation
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+  pitch: 50
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  elevation:
+    type: raster-dem
+    url: /gallery-assets/cloud-native/elevation.cog.tif
+terrain:
+  source: elevation
+  exaggeration: 1.5
+layers:
+  - id: hills
+    type: hillshade
+    source: elevation
+    paint: { hillshade-exaggeration: 0.5 }
+```
+
+You don't write `encoding:`: maplibre-yaml converts the heights for MapLibre.
+
+The gallery's [Add a COG raster source](/examples/gallery/add-a-cog-raster-source/)
+drapes imagery from one COG over terrain and a hillshade from another.
+
+## One band of values: `colorRamp`
+
+A COG with a single band of measurements (a vegetation index, a temperature,
+a probability) has no colours of its own. `colorRamp:` maps the values from
+`min` to `max` onto a palette:
+
+```yaml
+type: map
+id: cog-vegetation
+config:
+  center: [10.2, 42.15]
+  zoom: 9.4
+  mapStyle: "https://tiles.openfreemap.org/styles/positron"
+sources:
+  vegetation:
+    type: raster
+    url: /gallery-assets/cloud-native/ndvi.cog.tif
+    colorRamp: { palette: YlGn, min: 0, max: 0.85 }
+layers:
+  - id: vegetation
+    type: raster
+    source: vegetation
+    paint: { raster-opacity: 0.9 }
+    legend: { label: "Vegetation index, 0 (light) to 0.85 (dark)", color: "#41ab5d", shape: square }
+```
+
+<LiveMap
+  src="/configs/cog-vegetation-demo.yaml"
+  height="380px"
+  caption="One band of values (a vegetation index) coloured with colorRamp: YlGn from 0 to 0.85. Pixels with no value (the sea) stay clear."
+/>
+
+| Key | Meaning |
+|---|---|
+| `palette` | A palette name, the same ones [`classify:`](/guides/thematic-maps/#colours) uses: `viridis` (the default), `cividis`, and the ColorBrewer names (`YlGn`, `Blues`, `RdBu`, `Spectral` …). A misspelt name gets a "did you mean". |
+| `colors` | Your own colours instead of a palette, low to high: `colors: ["#2c7bb6", "#ffffbf", "#d7191c"]` |
+| `min`, `max` | The values drawn in the first and last colour (required). Values outside the range take the end colours. |
+| `reverse` | `true` runs the colours from high to low. |
+| `classes` | A number of flat classes (`classes: 5`) instead of a smooth ramp. Qualitative palettes (`okabe-ito`, `Set1` …) need it: as a smooth ramp they blend unrelated colours. |
+
+Pixels the file marks as having no value (its NoData value, or NaN) are left
+transparent. `colorRamp:` applies to `raster` sources only.
+
+## Make a COG \{#making-a-cog}
+
+[GDAL](https://gdal.org/) (3.1 or later; it also ships with QGIS) writes
+COGs. One command reprojects any georeferenced raster to Web Mercator and
+writes it as a COG:
+
+```bash
+gdalwarp -t_srs EPSG:3857 -of COG -co COMPRESS=DEFLATE input.tif output.tif
+```
+
+A GeoTIFF already in Web Mercator but not cloud-optimized (stored in strips,
+or without overviews) is converted with:
+
+```bash
+gdal_translate -of COG -co COMPRESS=DEFLATE input.tif output.tif
+```
+
+- `-co COMPRESS=DEFLATE` is lossless; `-co COMPRESS=JPEG` makes imagery much
+  smaller (lossy: for photos, not for elevation or measurements).
+- `-co TILING_SCHEME=GoogleMapsCompatible` also aligns the file with web map
+  tiles, which makes reads a little more efficient.
+- Check a file with `gdalinfo output.tif`: it should report
+  `Coordinate System is: … "WGS 84 / Pseudo-Mercator"`, `LAYOUT=COG` and
+  overviews.
+- Clip the file to the area you show (`gdalwarp -te …`) to keep it small.
+
+A COG can be any size, because the browser reads only the tiles in view. The
+limits are the host's: GitHub refuses files over 100 MB, so for a large
+mosaic use an object store (S3, R2, Google Cloud Storage) and point `url:` at
+it.
+
+## Requirements
+
+- **maplibre-gl 4.5 or later.** On an older one the map's notice says so.
+- **Content Security Policy:** COG images are decoded in background workers
+  started from `blob:` URLs. A site with a strict CSP needs
+  `worker-src 'self' blob:`.
+- A page that already calls `addProtocol("cog", …)` through
+  `@maplibre-yaml/core/maplibre` (for example to send request headers) keeps
+  its registration.
+
+## Troubleshooting
+
+- **"…is in EPSG:4326; a COG must be in Web Mercator (EPSG:3857)"**: run the
+  `gdalwarp` command the notice gives ([above](#making-a-cog)).
+- **"…is a GeoTIFF but not a Cloud Optimized one"** (a note while you
+  develop; it still draws): the browser may download most of the file.
+  Convert it with `gdal_translate -of COG`.
+- **"The Cloud Optimized GeoTIFF (COG) reader couldn't be set up"**, mentioning
+  the Content Security Policy: allow `worker-src 'self' blob:`.
+- **Hosting problems** (range requests, CORS): see
+  [Large data › When something goes wrong](/guides/cloud-native-data/#when-something-goes-wrong).
+
+Export to `style.json`: [Large-data files in an exported style](/guides/export/#large-data-files-in-an-exported-style).
+Gallery: [Add a COG raster source](/examples/gallery/add-a-cog-raster-source/).

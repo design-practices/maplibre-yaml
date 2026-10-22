@@ -37,6 +37,21 @@ if (!result.success) {
 
 Use `safeParseMapBlock` for a single map block or `safeParseAny` when the document type is unknown. A value you already hold can be validated with `safeParseMapBlockValue`.
 
+## Documents from people you don't control
+
+YAML aliases can be nested so that a small document expands into an enormous
+one (the "billion laughs" attack). The library keeps the `yaml` package's
+alias-expansion limit on, so such a document is rejected with a parse error
+instead of being expanded:
+
+```text
+YAML could not be expanded: Excessive alias count indicates a resource exhaustion attack
+```
+
+It is an ordinary validation error, not a crash, so a collaborative editor or
+a validation endpoint can report it like any other malformed input. Parse
+through `YAMLParser` (above) to get the same guard.
+
 <Aside type="note" title="What this is not">
 The library does not provide a mutation or write handle, and it does not preserve comments or formatting through a programmatic edit. If you edit a document, you own the mutation and serialization; these two touchpoints only keep your *parsing* and *validation* identical to the library's.
 </Aside>
