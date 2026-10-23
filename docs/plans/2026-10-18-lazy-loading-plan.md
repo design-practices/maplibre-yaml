@@ -4,10 +4,23 @@ type: plan
 date: 2026-10-18
 topic: lazy-loading
 beads: ml-7qa.5 (epic ml-7qa; also ml-7qa.1, ml-7qa.2, ml-7qa.6, ml-7qa.7, ml-aot.57, ml-cnv)
-status: proposal — for maintainer review before any implementation
+status: partly implemented in 0.9.0 (format readers); the rest is open — see Outcome below
 ---
 
 # Lazy-loading across the board for 0.9 — measured plan
+
+> **Outcome (2026-10-23).** 0.9.0 shipped only the first slice: the format
+> readers (PMTiles, FlatGeobuf, GeoParquet with its brotli codec, COG with its
+> image codecs, and the Protomaps basemap generator) load on demand from
+> `dist/chunks/` in the CDN build and from split chunks in the npm build
+> (PRs #166 and #170). A failed chunk shows a notice on that source and is
+> retried on `reload()`. `register.browser.js` is about 175 KB gzip in 0.9.1
+> (124 KB in 0.8.1); everything else in this plan is still open and moved past
+> 0.9 by the maintainer: the story engine, the error catalogue, the live-data
+> machinery (ml-7qa.2), the parser, lazy maplibre-gl, the size budget in CI
+> (ml-7qa.1), and a per-chunk version check (ml-7qa.8). The SSR import fix
+> (ml-7qa.6) shipped separately in 0.9.1. Treat the measurements below as the
+> 0.8.1 baseline.
 
 > **Status.** A design proposal, not an implementation. All prototypes and
 > measurements live outside the repo (`~/dev/lazy-loading-spike/`, see
