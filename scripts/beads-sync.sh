@@ -20,7 +20,7 @@ set -u
 
 if ! command -v bd >/dev/null 2>&1; then
   echo "beads: bd not on PATH — skipping issue-db sync."
-  echo "beads: install it to get the issue tracker (see todos/README.md)."
+  echo "beads: install it to get the issue tracker (see the Beads section of CLAUDE.md)."
   exit 0
 fi
 

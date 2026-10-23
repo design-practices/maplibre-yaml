@@ -3,7 +3,7 @@
  * channel (unknown keys, deprecations, expression checks), discriminated-union
  * error messages, and root-level `$ref` source resolution.
  *
- * @see plans/feat-validation-ergonomics.md
+ * @see docs/plans/feat-validation-ergonomics.md
  */
 import { describe, it, expect } from "vitest";
 import { YAMLParser } from "../../src/parser/yaml-parser";

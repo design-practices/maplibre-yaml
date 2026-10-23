@@ -266,8 +266,8 @@ flowchart TB
 ### Sources / Research
 
 - `docs/brainstorms/2026-07-24-library-direction-requirements.md` — the reconciled direction; that document's R4–R9 (emitter, registry, write seam, interactions package, v2 scoping session, deprecation machinery) are the requirements this plan resolves or defers. Its R-ID namespace is distinct from this plan's.
-- `plans/define-format-v2-scoping-brief.md` — the erasability audit of the shipped 0.4.0 surface and the option sets these decisions chose from.
-- `plans/rfc-schema-versioning.md` — the accepted versioning mechanism carrying v2's migration.
+- `docs/plans/define-format-v2-scoping-brief.md` — the erasability audit of the shipped 0.4.0 surface and the option sets these decisions chose from.
+- `docs/plans/rfc-schema-versioning.md` — the accepted versioning mechanism carrying v2's migration.
 - `docs/brainstorms/2026-07-24-style-parameterization.md` — verification that `state` and `global-state` exist in the style spec, and that `state` carries no metadata.
 - `docs/brainstorms/2026-07-15-tangram-style-replication.md` — the erasability test as the governing classification.
 - `packages/core/src/schemas/map.schema.ts`, `source.schema.ts`, `layer.schema.ts` — the shipped surface the D3 table was read from.

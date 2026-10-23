@@ -74,7 +74,7 @@ Slots"). Use one term per concept:
 - **Base / subpath**: the folder a site is served from, such as `/<repo>/`
   on a GitHub Pages project site.
 - **`mlym emit`**: the CLI command that exports. Write "export with
-  `mlym emit`"; in a command readers copy, `npx maplibre-yaml emit`.
+  `mlym emit`"; in a command readers copy, `npx maplibre-yaml@latest emit`.
 - **`click.emit` (host event)**: an interaction that calls a function the
   page registered when a feature is clicked. Always write it as
   `click.emit` or "host event", never a bare "emit", and say it is not the
@@ -95,7 +95,7 @@ Slots"). Use one term per concept:
   default when the `CI` environment variable is set.
 - **`mlym` / `maplibre-yaml` / `@maplibre-yaml/cli`**: one program.
   `@maplibre-yaml/cli` is the package; `mlym` and `maplibre-yaml` are its
-  command names once installed; `npx maplibre-yaml` runs it with no
+  command names once installed; `npx maplibre-yaml@latest` runs it with no
   install.
 
 ## Code samples

@@ -1,5 +1,10 @@
 # `todos/` is RETIRED — beads (`bd`) is the source of truth
 
+> **Moved 2026-10-22** from the repo root (`todos/`) to `docs/archive/todos/`.
+> A bead's `Migrated from todos/NNN-...md` line refers to the file of that
+> name here. Paths inside these files predate the move: root `plans/` is now
+> `docs/plans/`.
+
 **Retired 2026-07-24** by the beads migration (modeled on map-party's
 2026-07-13 migration; see that repo's `todos/README.md` and
 `docs/plans/completed/2026-07-12-beads-migration-inventory.md` for the

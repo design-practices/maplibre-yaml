@@ -152,6 +152,15 @@ export default defineConfig({
         replacesTitle: false,
       },
 
+      // GitHub icon in the header (desktop) and the mobile menu.
+      social: [
+        {
+          icon: "github",
+          label: "GitHub",
+          href: "https://github.com/design-practices/maplibre-yaml",
+        },
+      ],
+
       editLink: {
         baseUrl:
           "https://github.com/design-practices/maplibre-yaml/edit/main/docs/",

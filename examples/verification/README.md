@@ -1,6 +1,6 @@
 # Phase 1 verification
 
-Bare assertion files for the fixes in `plans/fix-shipped-but-broken.md` (PR: phase-1/integration). Each check states its PASS condition; anything else is a FAIL and a reason not to merge.
+Bare assertion files for the fixes in `docs/plans/fix-shipped-but-broken.md` (PR: phase-1/integration). Each check states its PASS condition; anything else is a FAIL and a reason not to merge.
 
 ## Setup (once, from the repo root)
 

@@ -141,8 +141,11 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
   versa), cross-reference both ways (`GH #NN` in the bead, `ml-xxxx` in a
   GH comment).
 - **Provenance:** beads migrated from the retired `todos/` ledger carry a
-  `Migrated from todos/NNN-...md` line; see `todos/README.md` for the
-  retirement record.
+  `Migrated from todos/NNN-...md` line. That ledger now lives at
+  `docs/archive/todos/` (moved 2026-10-22), so `todos/NNN-...md` in a bead
+  means `docs/archive/todos/NNN-...md`; `docs/archive/todos/README.md` is the
+  retirement record. Likewise a bead citing `plans/<file>.md` means
+  `docs/plans/<file>.md` (the root `plans/` folder was merged into it).
 
 ## Knowledge vault (`~/vault`)
 
@@ -177,7 +180,12 @@ this repo are exported to the vault automatically (nightly
 - `packages/astro` — Astro components (Map, FullPageMap, Scrollytelling)
   built on core.
 - `packages/cli` — validation, preview, scaffolding.
-- `docs/` — Astro docs site. `examples/` — runnable examples.
-- `plans/` — design plans (historical + active); open work items belong in
-  beads, not in plan prose.
+- `docs/` — Astro docs site (pages in `docs/src/content/docs/`).
+  `examples/` — runnable examples. `e2e/` — Playwright browser checks
+  (`pnpm verify:browser`).
+- `docs/plans/` — design plans (historical + active); `docs/brainstorms/` —
+  requirements docs that plans cite. Open work items belong in beads, not in
+  plan prose.
+- `docs/archive/` — retired material kept for provenance (the old `todos/`
+  ledger). Nothing here is current.
 

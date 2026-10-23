@@ -22,7 +22,7 @@ generate  →  validate -f json  →  repair  →  repeat until valid
 2. **Validate** it with the CLI's JSON output:
 
    ```bash
-   npx maplibre-yaml validate map.yaml -f json
+   npx maplibre-yaml@latest validate map.yaml -f json
    ```
 
 3. **Repair** each entry in `errors`, using its `path`, `message`, `line`
@@ -137,7 +137,7 @@ To use exactly the schema of the core version a project has installed, print
 it with the CLI:
 
 ```bash
-npx maplibre-yaml schema map
+npx maplibre-yaml@latest schema map
 ```
 
 ## Three things agents get wrong

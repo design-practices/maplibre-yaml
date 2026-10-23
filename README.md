@@ -72,7 +72,7 @@ layers:
 ```
 
 Serve the folder (`npx serve .`) and open the address it prints. Or let the
-CLI write both files: `npx maplibre-yaml init my-map`.
+CLI write both files: `npx maplibre-yaml@latest init my-map`.
 [Quick start](https://docs.maplibre-yaml.org/getting-started/quick-start/) walks through it;
 [Publishing & subpaths](https://docs.maplibre-yaml.org/guides/publishing/) puts it on GitHub Pages.
 
@@ -85,6 +85,19 @@ import { Map } from '@maplibre-yaml/astro';
 <Map src="/configs/hero-map.yaml" height="500px" />
 ```
 
+## Install
+
+No install is needed for a plain HTML page: the quick start above loads
+everything from a CDN. With a bundler or in Astro:
+
+```bash
+npm install @maplibre-yaml/core maplibre-gl@^6                         # web components
+npm install @maplibre-yaml/astro @maplibre-yaml/core maplibre-gl@^6    # Astro
+```
+
+[Installation & versions](https://docs.maplibre-yaml.org/getting-started/installation/)
+covers each setup.
+
 ## Packages
 
 | Package | What it is |
@@ -92,7 +105,7 @@ import { Map } from '@maplibre-yaml/astro';
 | [`@maplibre-yaml/core`](https://www.npmjs.com/package/@maplibre-yaml/core) | The engine: `<ml-map>` and `<ml-scrollytelling>` web components, YAML parser, schemas, renderer |
 | [`@maplibre-yaml/astro`](https://www.npmjs.com/package/@maplibre-yaml/astro) | Astro components (`Map`, `FullPageMap`, `Scrollytelling`), loaders, content-collection helpers |
 | [`@maplibre-yaml/cli`](https://www.npmjs.com/package/@maplibre-yaml/cli) | `init`, `validate`, `preview`, `emit` (export to `style.json`), `schema` |
-| [`maplibre-yaml`](https://www.npmjs.com/package/maplibre-yaml) | Runs the CLI as `npx maplibre-yaml …` |
+| [`maplibre-yaml`](https://www.npmjs.com/package/maplibre-yaml) | Runs the CLI as `npx maplibre-yaml@latest …` |
 | [`@maplibre-yaml/effects`](https://www.npmjs.com/package/@maplibre-yaml/effects) | Shader effects on 3D buildings (experimental) |
 
 ## Features
@@ -118,10 +131,14 @@ import { Map } from '@maplibre-yaml/astro';
 - **Examples:** the [MapLibre example gallery](https://docs.maplibre-yaml.org/examples/gallery/)
   rebuilt in maplibre-yaml, each marked YAML, YAML + JavaScript or YAML + plugin.
 
-Something wrong? [Troubleshooting](https://docs.maplibre-yaml.org/troubleshooting/). Upgrading?
-[Upgrading to 0.9](https://docs.maplibre-yaml.org/getting-started/upgrading/).
+Something wrong? [Troubleshooting](https://docs.maplibre-yaml.org/troubleshooting/).
+Upgrading? [Upgrading](https://docs.maplibre-yaml.org/getting-started/upgrading/)
+covers moving to a newer release.
 
-## Development
+## Contributing
+
+This is a pnpm monorepo: `packages/` holds the published packages, `docs/`
+the documentation site, `examples/` runnable examples.
 
 ```bash
 pnpm install
@@ -130,9 +147,10 @@ pnpm test
 pnpm presubmit   # build, typecheck, lint, test, docs snippet check
 ```
 
-See [CONTRIBUTING.md](https://github.com/design-practices/maplibre-yaml/blob/main/CONTRIBUTING.md).
-Releases go through [changesets](https://github.com/changesets/changesets).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Releases go through
+[changesets](https://github.com/changesets/changesets). Bugs and ideas:
+[GitHub Issues](https://github.com/design-practices/maplibre-yaml/issues).
 
 ## License
 
-MIT
+[MIT](LICENSE.md)

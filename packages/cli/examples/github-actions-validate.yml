@@ -32,7 +32,7 @@ jobs:
 
       - name: Validate configurations
         run: |
-          npx @maplibre-yaml/cli validate "configs/**/*.yaml" --sarif > results.sarif
+          npx maplibre-yaml@latest validate "configs/**/*.yaml" --sarif > results.sarif
         continue-on-error: true
 
       - name: Upload SARIF results
@@ -44,4 +44,4 @@ jobs:
       - name: Validate configurations (for PR status)
         if: github.event_name == 'pull_request'
         run: |
-          npx @maplibre-yaml/cli validate "configs/**/*.yaml"
+          npx maplibre-yaml@latest validate "configs/**/*.yaml"

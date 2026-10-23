@@ -14,7 +14,7 @@ Users following our own docs hit: silently non-functional global defaults, a CDN
 
 ## Workstream A — Global config inheritance actually inherits (todos 001, 002)
 
-**Problem.** `plans/feat-global-config-inheritance.md` shipped on paper, but:
+**Problem.** `docs/plans/feat-global-config-inheritance.md` shipped on paper, but:
 - `packages/astro/src/utils/map-builders.ts:263` (and `:465`) hardcode `zoom ?? location.zoom ?? 12`, so `globalConfig.defaultZoom` can never win for point/polygon maps. A test asserts the wrong behavior (`expect(...zoom).toBe(12)`).
 - `packages/core/src/utils/config-resolver.ts:132` still returns `resolved as MapConfig` — the unsafe cast the plan promised to eliminate (todo `001`, P1).
 
