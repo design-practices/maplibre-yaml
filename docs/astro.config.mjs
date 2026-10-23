@@ -169,8 +169,7 @@ export default defineConfig({
         replacesTitle: false,
       },
 
-      // GitHub icon in the header (desktop) and the mobile menu, after the
-      // Examples and Playground links (components.SocialIcons below).
+      // GitHub icon in the header (desktop) and the mobile menu.
       social: [
         {
           icon: "github",
@@ -342,8 +341,9 @@ export default defineConfig({
         // header bar on desktop and in the mobile menu's footer on phones.
         SocialIcons: "./src/components/overrides/SocialIcons.astro",
         // Pages without a sidebar (landing, playground) have no menu button
-        // on phones; this adds one that opens the same links and theme picker.
-        Header: "./src/components/overrides/Header.astro",
+        // on phones; this adds one after search, opening the same links and
+        // theme picker. The default search renders unchanged.
+        Search: "./src/components/overrides/Search.astro",
       },
 
       lastUpdated: true,

@@ -1,6 +1,7 @@
 ---
 /**
- * Starlight's header, plus a menu on phones for pages without a sidebar.
+ * Starlight's search button, plus a menu button after it on phones for pages
+ * without a sidebar.
  *
  * A docs page on a phone has Starlight's menu button, and its menu ends with
  * the Examples and Playground links, GitHub and the theme picker
@@ -8,32 +9,35 @@
  * playground) have no menu button, so on a phone those links and the theme
  * picker were nowhere. This adds a menu button there that opens the same
  * footer. On desktop it never shows: the header bar carries the links.
+ *
+ * It wraps `Search` rather than replacing `Header`, so the header's layout,
+ * site title and logo stay Starlight's (and the branding's) own. The default
+ * search renders unchanged; `site-search` is `display: contents`, so the menu
+ * button is its sibling in the header's search group.
  */
-import Default from '@astrojs/starlight/components/Header.astro';
+import Default from '@astrojs/starlight/components/Search.astro';
 import MobileMenuFooter from '@astrojs/starlight/components/MobileMenuFooter.astro';
 import { Icon } from '@astrojs/starlight/components';
 
 const { hasSidebar } = Astro.locals.starlightRoute;
 ---
 
-<div class="sl-flex header-row">
-  <Default />
-  {
-    !hasSidebar && (
-      <site-menu class="md:sl-hidden print:hidden">
-        <details>
-          <summary aria-label="Site menu">
-            <Icon name="bars" class="open-menu" />
-            <Icon name="close" class="close-menu" />
-          </summary>
-          <div class="site-menu-panel">
-            <MobileMenuFooter />
-          </div>
-        </details>
-      </site-menu>
-    )
-  }
-</div>
+<Default {...Astro.props} />
+{
+  !hasSidebar && (
+    <site-menu>
+      <details>
+        <summary aria-label="Site menu">
+          <Icon name="bars" class="open-menu" />
+          <Icon name="close" class="close-menu" />
+        </summary>
+        <div class="site-menu-panel">
+          <MobileMenuFooter />
+        </div>
+      </details>
+    </site-menu>
+  )
+}
 
 <script>
   /** Escape and a tap outside close the menu, as Starlight's own menu does. */
@@ -56,14 +60,21 @@ const { hasSidebar } = Astro.locals.starlightRoute;
 </script>
 
 <style>
-  .header-row {
-    height: 100%;
+  site-menu {
+    display: flex;
     align-items: center;
-    gap: var(--sl-nav-gap);
+    margin-inline-start: var(--sl-nav-gap);
   }
-  .header-row > :global(.header) {
-    flex: 1;
-    min-width: 0;
+  /* Phones only (this rule outranks the md:sl-hidden utility it restates). */
+  @media (min-width: 50rem) {
+    site-menu {
+      display: none;
+    }
+  }
+  @media print {
+    site-menu {
+      display: none;
+    }
   }
   summary {
     display: flex;
