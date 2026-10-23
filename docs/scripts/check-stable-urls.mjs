@@ -15,6 +15,9 @@
  *  - PAGE_REDIRECTS (docs/redirects.mjs): each old path must redirect to its
  *    new one, and public/_redirects must carry a 301 for it (Cloudflare Pages
  *    serves those; a meta-refresh page drops the #fragment, a 301 keeps it).
+ *  - llms.txt and llms-full.txt as served: every docs.maplibre-yaml.org link
+ *    an agent reads there must answer directly (no redirect), so the agent
+ *    index never points at an old address.
  *  - `--readme <file>` (repeatable): every docs.maplibre-yaml.org link in a
  *    README, e.g. one unpacked from `npm pack @maplibre-yaml/core@0.9.0`.
  *  - `--anchors <file>` (repeatable): more addresses to check, one per line.
@@ -34,6 +37,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PAGE_REDIRECTS } from "../redirects.mjs";
+import { siteLinks } from "./generate-agent-assets.mjs";
 
 const DOCS = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SITE = "https://docs.maplibre-yaml.org";
@@ -381,6 +385,18 @@ async function main() {
     if (!target.ok) results.push({ ok: false, address: from, why: `target ${to}: ${target.why}` });
     else if (missing.length) results.push({ ok: false, address: from, why: `_redirects lacks a 301 for ${missing.join(", ")}` });
     else results.push(r);
+  }
+
+  for (const file of ["/llms.txt", "/llms-full.txt"]) {
+    section(`Links in ${file} (agent index)`);
+    const page = await fetchPage(opts.base, file);
+    if (page.status !== 200) {
+      results.push({ ok: false, address: file, why: `HTTP ${page.status}` });
+      continue;
+    }
+    // A playground #code/ fragment is a share-link prefix, not an element id.
+    const links = siteLinks(page.body).map((a) => (a.startsWith("/playground/") ? a.split("#")[0] : a));
+    for (const a of new Set(links)) results.push(await check(opts.base, a, { direct: true }));
   }
 
   for (const file of opts.readmes) {
