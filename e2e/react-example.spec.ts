@@ -19,9 +19,15 @@
  * a changed one does; unmount leaves no canvas behind and remount makes
  * exactly one. The React 19 build also proves the object `config` and the
  * `onml-map:*` props; the React 18 build proves those are absent, not broken.
+ *
+ * recipes.html runs the docs' "Common tasks" recipes, unchanged, on the quick
+ * start's map document (served at /map.yaml, as in a reader's app): a click
+ * shows the quake's `place`, the fly-to button moves the map, the
+ * `useMapEvent` hook fires once per click under StrictMode, and the
+ * "putting it together" example shows the zoom, the click and an error.
  */
-import { test, expect, type Page } from "@playwright/test";
-import { existsSync } from "node:fs";
+import { test, expect, type Locator, type Page } from "@playwright/test";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(__dirname, "..");
@@ -103,7 +109,6 @@ for (const { major, dir: build, dev } of BUILDS) {
         return { x: p.x, y: p.y };
       });
       await yamlMap.locator("canvas").click({ position: point });
-      await expect(page.locator("#yaml")).toContainText("clicked: Cairo");
       await expect(page.getByTestId("event-log")).toContainText("layer-click · cities · Cairo");
       // Popups open above the corner chrome (ml-3d0, #128), so close Cairo's
       // before reaching for the params panel it overlaps — as a user would.
@@ -123,8 +128,6 @@ for (const { major, dir: build, dev } of BUILDS) {
     test("mapReady() resolves, even when asked before the config existed", async ({ page }) => {
       const errors = await open(page);
 
-      // The YamlMap snippet reads the zoom through ref + mapReady().
-      await expect(page.locator("#yaml")).toContainText("Zoom 0.9");
       // LateConfigMap called mapReady() BEFORE assigning el.config (ml-mpm).
       await expect(page.getByTestId("late-center")).toHaveText("-20.0, 25.0");
       const zoom = await page
@@ -224,6 +227,139 @@ for (const { major, dir: build, dev } of BUILDS) {
       // The late-config element never flashed "No configuration provided".
       expect((await recorded(page)).filter((e) => e.type === "ml-map:error")).toEqual([]);
       expect(errors).toEqual([]);
+    });
+  });
+}
+
+/** recipes.html sections whose map must load, per major. */
+const RECIPE_SECTIONS: Record<string, string[]> = {
+  "18": ["click", "flyto", "hook", "together"],
+  "19": ["click19", "click", "flyto", "hook", "together"],
+};
+
+/**
+ * A quake inside the map's view, picked from what MapLibre rendered: where to
+ * click (`nth` visible quake) and the `place` of the top one at that point,
+ * which is the feature a click reports.
+ */
+async function quakeIn(mapEl: Locator, nth: number) {
+  return mapEl.evaluate((el: any, nth: number) => {
+    const map = el.getMap();
+    const canvas = map.getCanvas();
+    const [w, h] = [canvas.clientWidth, canvas.clientHeight];
+    const inView = map
+      .queryRenderedFeatures({ layers: ["earthquakes"] })
+      .map((f: any) => map.project(f.geometry.coordinates))
+      .filter((p: any) => p.x > 60 && p.x < w - 60 && p.y > 60 && p.y < h - 60);
+    const p = inView.at(nth);
+    const top = map.queryRenderedFeatures([p.x, p.y], { layers: ["earthquakes"] })[0];
+    return { position: { x: p.x, y: p.y }, place: top.properties.place as string };
+  }, nth);
+}
+
+for (const { major, dir: build, dev } of BUILDS) {
+  test.describe(`examples/react recipes.html on React ${major} (${dev ? "development" : "production"} build)`, () => {
+    /** The quick start's document, served where the recipes ask for it. */
+    async function serveMapYaml(page: Page, body = readFileSync(join(ROOT, "examples/react", build, "map.yaml"), "utf8")) {
+      await page.route(
+        (url) => url.pathname === "/map.yaml",
+        (route) => route.fulfill({ contentType: "text/yaml; charset=utf-8", body })
+      );
+    }
+
+    async function open(page: Page) {
+      const errors = await guard(page);
+      await serveMapYaml(page);
+      await page.goto(`/examples/react/${build}/recipes.html`, { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("react-version")).toHaveText(new RegExp(`^React ${major}\\.`));
+      for (const section of RECIPE_SECTIONS[major]) {
+        await expect.poll(() => loadsIn(page, section), { timeout: 60_000 }).toBe(1);
+      }
+      return errors;
+    }
+
+    /** Click a quake on the map in `section`; returns its place. */
+    async function clickQuake(page: Page, section: string, nth = 0) {
+      const mapEl = page.locator(`#${section} ml-map`);
+      const { position, place } = await quakeIn(mapEl, nth);
+      await mapEl.locator("canvas").click({ position });
+      return place;
+    }
+
+    test("a click shows the quake's place (ref + addEventListener)", async ({ page }) => {
+      const errors = await open(page);
+      await expect(page.locator("#click")).toContainText("Clicked: nothing yet");
+      const place = await clickQuake(page, "click");
+      expect(place).toBeTruthy();
+      await expect(page.locator("#click")).toContainText(`Clicked: ${place}`);
+      expect((await recorded(page)).filter((e) => e.type === "ml-map:error")).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+
+    if (major === "19") {
+      test("React 19: an onml-map:layer-click prop shows the quake's place", async ({ page }) => {
+        const errors = await open(page);
+        const place = await clickQuake(page, "click19");
+        await expect(page.locator("#click19")).toContainText(`Clicked: ${place}`);
+        expect(errors).toEqual([]);
+      });
+    } else {
+      test("React 18: the onml-map:* recipe is stubbed, not half-working", async ({ page }) => {
+        const errors = await open(page);
+        await expect(page.getByTestId("r19-click-stub")).toBeVisible();
+        expect(await page.locator("#click19 ml-map").count()).toBe(0);
+        expect(errors).toEqual([]);
+      });
+    }
+
+    test("the fly-to button moves the map to Japan", async ({ page }) => {
+      const errors = await open(page);
+      const mapEl = page.locator("#flyto ml-map");
+      await page.locator("#flyto").getByRole("button", { name: "Fly to Japan" }).click();
+      const camera = () =>
+        mapEl.evaluate((el: any) => {
+          const map = el.getMap();
+          return { lng: map.getCenter().lng, lat: map.getCenter().lat, zoom: map.getZoom() };
+        });
+      await expect.poll(async () => (await camera()).zoom, { timeout: 15_000 }).toBeCloseTo(4.5, 5);
+      const { lng, lat } = await camera();
+      expect(lng).toBeCloseTo(138, 3);
+      expect(lat).toBeCloseTo(37, 3);
+      expect(errors).toEqual([]);
+    });
+
+    test("useMapEvent fires once per click, StrictMode included", async ({ page }) => {
+      const errors = await open(page);
+      const items = page.locator("#hook ol li");
+      const first = await clickQuake(page, "hook", 0);
+      await expect(items).toHaveText([first]);
+      await page.locator("#hook .maplibregl-popup-close-button").click();
+      const second = await clickQuake(page, "hook", -1);
+      await expect(items).toHaveText([first, second]);
+      await page.waitForTimeout(300);
+      await expect(items).toHaveCount(2);
+      expect(errors).toEqual([]);
+    });
+
+    test("putting it together: zoom and click reach React", async ({ page }) => {
+      const errors = await open(page);
+      const card = page.locator("#together");
+      await expect(card).toContainText("Zoom 1.0 · clicked: nothing yet");
+      const place = await clickQuake(page, "together");
+      await expect(card).toContainText(`clicked: ${place}`);
+      await card.locator("ml-map").evaluate((el: any) => el.getMap().jumpTo({ zoom: 3 }));
+      await expect(card).toContainText("Zoom 3.0");
+      await expect(card.getByText("Map problem")).toHaveCount(0);
+      expect(errors).toEqual([]);
+    });
+
+    test("putting it together: a broken document's errors reach React", async ({ page }) => {
+      await guard(page);
+      await serveMapYaml(page, "type: map\nlayers: [\n");
+      await page.goto(`/examples/react/${build}/recipes.html`, { waitUntil: "domcontentloaded" });
+      // A YAML syntax error arrives as `errors`, joined into one line.
+      await expect(page.locator("#together").getByText("Map problem: YAML syntax error")).toBeVisible();
+      await expect(page.locator("#together .ml-map-error")).toBeVisible();
     });
   });
 }

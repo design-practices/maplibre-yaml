@@ -26,6 +26,9 @@ import { fileURLToPath } from "node:url";
  * behind `#react19-only`, which the React 18 builds swap for a stub, the
  * same swap tsconfig.react18.json makes for the type-check.
  *
+ * Two pages: index.html (the example) and recipes.html (the docs' "Common
+ * tasks" recipes on the quick start's map document, public/map.yaml).
+ *
  * `base: "./"` keeps asset URLs relative, so the built app also runs from a
  * subdirectory: the repo's hermetic e2e server serves it at
  * /examples/react/dist*\/.
@@ -51,6 +54,12 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     resolve: { alias },
     build: {
+      rollupOptions: {
+        input: {
+          index: fileURLToPath(new URL("./index.html", import.meta.url)),
+          recipes: fileURLToPath(new URL("./recipes.html", import.meta.url)),
+        },
+      },
       outDir: `dist${react18 ? "-react18" : ""}${dev ? "-dev" : ""}`,
       emptyOutDir: true,
       minify: !dev,
