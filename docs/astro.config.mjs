@@ -164,9 +164,10 @@ export default defineConfig({
       ],
       description: "Declarative web maps with YAML configuration",
       customCss: ["./src/styles/custom.css"],
+      // Light/dark ink pair; SiteTitle.astro renders them beside the wordmark.
       logo: {
-        src: "./src/assets/houston.webp",
-        replacesTitle: false,
+        light: "./src/assets/logo-light.svg",
+        dark: "./src/assets/logo-dark.svg",
       },
 
       // GitHub icon in the header (desktop) and the mobile menu.
@@ -344,6 +345,8 @@ export default defineConfig({
         // on phones; this adds one after search, opening the same links and
         // theme picker. The default search renders unchanged.
         Search: "./src/components/overrides/Search.astro",
+        // Logo + the code-style `maplibre: yaml` wordmark.
+        SiteTitle: "./src/components/overrides/SiteTitle.astro",
       },
 
       lastUpdated: true,
@@ -351,6 +354,11 @@ export default defineConfig({
       pagination: true,
 
       favicon: "/favicon.svg",
+      // Fallbacks for browsers without SVG favicons, and the iOS home screen.
+      head: [
+        { tag: "link", attrs: { rel: "icon", href: "/favicon.ico", sizes: "32x32" } },
+        { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
+      ],
     }),
   ],
 });

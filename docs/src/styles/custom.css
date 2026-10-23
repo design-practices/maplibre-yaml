@@ -76,3 +76,20 @@
 .yaml-dash {
   color: var(--sl-color-gray-2);
 }
+/* Wordmark: `maplibre: yaml`, set like code. Used by the header
+   (components/overrides/SiteTitle.astro) and the homepage hero title
+   (content/docs/index.mdx). The key takes the text colour (black/white by
+   theme); the value keeps Starlight's site-title accent. */
+.wordmark {
+  font-family: var(--sl-font-mono, var(--sl-font-system-mono));
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.wordmark-key {
+  color: var(--sl-color-white);
+}
+
+.wordmark-value {
+  color: var(--sl-color-text-accent);
+}
