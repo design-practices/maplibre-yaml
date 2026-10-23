@@ -19,8 +19,6 @@ layers:
         refreshInterval: 30000
         updateStrategy: merge
         updateKey: url
-      cache:
-        enabled: false
     paint:
       circle-radius:
         ["interpolate", ["linear"], ["get", "mag"], 1, 4, 6, 24]

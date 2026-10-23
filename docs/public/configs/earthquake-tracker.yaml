@@ -14,8 +14,6 @@ layers:
       refresh:
         refreshInterval: 60000     # fetch again every 60 seconds
         updateStrategy: replace    # each response is the full list
-      cache:
-        enabled: false             # live data: fetch on every poll
     paint:
       circle-color:
         - interpolate

@@ -224,17 +224,18 @@ function buildLlmsTxt(version) {
 > and rendered with MapLibre GL. A config is the product: author it, validate
 > it, ship it. Core version: ${version}.
 
-maplibre-yaml turns a YAML document into a map. Three document shapes exist:
-a \`type: map\` block, a \`type: scrollytelling\` block, and a root document with
-a top-level \`pages:\` array (a multi-page app). The \`<ml-map src>\` web
-component and the \`mlym\` CLI both dispatch on the top-level \`type\` field.
+maplibre-yaml turns a YAML document into a map. A document is a
+\`type: map\` block (a map, rendered by \`<ml-map src>\`) or a
+\`type: scrollytelling\` block (a story map, rendered by
+\`<ml-scrollytelling src>\`). The web components and the \`mlym\` CLI both
+dispatch on the top-level \`type\` field.
 
 ## Read these first — the three things agents get wrong
 
-1. \`<ml-map src="...">\` expects a **\`type: map\` block**, NOT a \`pages:\` root
-   document. A single map file starts with \`type: map\`. Only use a top-level
-   \`pages:\` array when you are building a multi-page app rendered by a
-   framework integration — never as the \`src\` of \`<ml-map>\`.
+1. \`<ml-map src="...">\` expects a **\`type: map\` block** with a \`config:\`
+   block. A map file starts with \`type: map\`; the camera and the basemap go
+   under \`config:\`, not at the top level, and \`center\` is
+   \`[longitude, latitude]\`.
 
 2. Popups use the **tag-array DSL**: \`popup\` is an array of single-key
    \`{ tag: [items] }\` objects (\`h3\`, \`p\`, \`a\`, \`img\`, ...). Each item is

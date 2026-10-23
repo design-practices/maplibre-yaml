@@ -39,6 +39,10 @@ export const UPSTREAM = "https://maplibre.org/maplibre-gl-js/docs/examples/";
 const FIRST_MAP = { label: "Your first map, explained", href: "/getting-started/first-map/" };
 const DATA = { label: "Loading data", href: "/guides/data-sources/" };
 const LARGE = { label: "Large data", href: "/guides/cloud-native-data/" };
+const PMTILES = { label: "PMTiles", href: "/guides/pmtiles/" };
+const FLATGEOBUF = { label: "FlatGeobuf", href: "/guides/flatgeobuf/" };
+const GEOPARQUET = { label: "GeoParquet", href: "/guides/geoparquet/" };
+const COG = { label: "Cloud Optimized GeoTIFF (COG)", href: "/guides/cog/" };
 const LIVE = { label: "Live data & streaming", href: "/guides/live-data/" };
 const LAYERS = { label: "Layers & styling", href: "/guides/layers/" };
 const THEMATIC = { label: "Thematic maps & legends", href: "/guides/thematic-maps/" };
@@ -140,7 +144,7 @@ export const GROUPS = [
       { slug: "add-a-raster-tile-source", title: "Add a raster tile source", kind: "yaml" },
       { slug: "add-a-wms-source", title: "Add a WMS source", kind: "yaml" },
       { slug: "add-a-canvas-source", title: "Add a canvas source", kind: "yaml-js" },
-      { slug: "add-a-cog-raster-source", title: "Add a COG raster source", kind: "yaml", note: "Imagery, hillshade and 3D terrain from Cloud Optimized GeoTIFFs.", guides: [LARGE] },
+      { slug: "add-a-cog-raster-source", title: "Add a COG raster source", kind: "yaml", note: "Imagery, hillshade and 3D terrain from Cloud Optimized GeoTIFFs.", guides: [COG] },
       { slug: "add-a-video", title: "Add a video", kind: "yaml" },
       { slug: "animate-a-series-of-images", title: "Animate a series of images", kind: "yaml-js" },
       { slug: "add-live-realtime-data", title: "Add live realtime data", kind: "yaml", guides: [LIVE], see: [{ label: "Earthquake tracker", href: "/examples/earthquake-tracker/" }] },
@@ -286,7 +290,7 @@ export const GROUPS = [
     reference: [REF_ELEMENT],
     entries: [
       { upstream: "geocode-with-nominatim", title: "Geocode with Nominatim", kind: "yaml-js", note: "The geocoder takes its `maplibregl` from `@maplibre-yaml/core/maplibre` and is added with `addControl()` from `mapReady()`." },
-      { slug: "pmtiles-source-and-protocol", title: "PMTiles source and protocol", kind: "yaml", note: "A `.pmtiles` file or `pmtiles://` URL, with no page JavaScript.", guides: [LARGE], reference: [REF_SOURCES] },
+      { slug: "pmtiles-source-and-protocol", title: "PMTiles source and protocol", kind: "yaml", note: "A `.pmtiles` file or `pmtiles://` URL, with no page JavaScript.", guides: [PMTILES], reference: [REF_SOURCES] },
       { upstream: "create-deckgl-layer-using-rest-api", title: "Create deck.gl layer using REST API", kind: "yaml-js", note: "deck.gl's `MapboxOverlay` is a control: add it with `addControl()` from `mapReady()`." },
       { upstream: "draw-geometries-with-terra-draw", title: "Draw geometries with Terra Draw", kind: "yaml-js", note: "A plugin control added with `addControl()` from `mapReady()`." },
       { upstream: "draw-polygon-with-mapbox-gl-draw", title: "Draw polygon with mapbox-gl-draw", kind: "yaml-js", note: "A plugin control added with `addControl()` from `mapReady()`; the area shows in a corner slot." },
@@ -302,8 +306,8 @@ export const GROUPS = [
     guides: [LARGE],
     reference: [REF_SOURCES],
     entries: [
-      { slug: "flatgeobuf-source", title: "FlatGeobuf source", kind: "yaml", note: "A `.fgb` file as a GeoJSON source, with popups, a legend and `fitTo`." },
-      { slug: "geoparquet-source", title: "GeoParquet source", kind: "yaml", note: "A `.parquet` file as a GeoJSON source, with `classify:`, popups, `fitTo` and reading by view." },
+      { slug: "flatgeobuf-source", title: "FlatGeobuf source", kind: "yaml", note: "A `.fgb` file as a GeoJSON source, with popups, a legend and `fitTo`.", guides: [FLATGEOBUF] },
+      { slug: "geoparquet-source", title: "GeoParquet source", kind: "yaml", note: "A `.parquet` file as a GeoJSON source, with `classify:`, popups, `fitTo` and reading by view.", guides: [GEOPARQUET] },
     ],
   },
   {

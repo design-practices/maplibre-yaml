@@ -1,8 +1,6 @@
-# A FlatGeobuf file as a GeoJSON source — YAML only (0.9). The .fgb file
+# A FlatGeobuf file as a GeoJSON source — YAML only. The .fgb file
 # name is the only hint; layers, popups, the legend and fitTo work as for
-# a .geojson file. Synthetic, public-domain data (a fictional sea area,
-# scripts/fixtures/cloud-native.py). Hermetic test: e2e/gallery.spec.ts
-# (twin) and e2e/cloud-native.spec.ts.
+# a .geojson file. Synthetic, public-domain data (a fictional sea area).
 type: map
 id: flatgeobuf-source
 config:

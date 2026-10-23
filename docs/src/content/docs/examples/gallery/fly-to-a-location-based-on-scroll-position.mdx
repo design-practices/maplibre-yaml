@@ -19,6 +19,6 @@ Replicates the MapLibre example [Fly to a location based on scroll position](htt
 ## What to notice
 
 - This is a `type: scrollytelling` document. Upstream builds a `chapters` object in JS, listens for scroll events and calls `flyTo`. Here each chapter carries its own `center`, `zoom`, `bearing`, `pitch` and `speed`, and the runtime does the rest.
-- The runtime is the [`<Scrollytelling>`](/integrations/astro/) component from `@maplibre-yaml/astro`. This page passes it the same YAML file shown above, with `src=`.
+- The runtime is the [`<Scrollytelling>`](/integrations/astro-stories/) component from `@maplibre-yaml/astro`. This page passes it the same YAML file shown above, with `src=`.
 - Upstream slows the Aldgate flight with `duration: 6000`. Chapters have no `duration`, so that chapter uses a lower `speed` instead.
-- Chapters can also show and hide layers and run actions on enter and exit. See the [scrollytelling schema](/schema/scrollytelling/).
+- Chapters can also show and hide layers and run actions on enter and exit. See [Writing a story file](/schema/scrollytelling/).

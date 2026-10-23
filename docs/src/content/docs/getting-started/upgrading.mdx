@@ -96,6 +96,53 @@ below use: `mlym validate` is `npx maplibre-yaml validate`.
 0.9 adds thematic maps, large-data formats such as PMTiles and GeoParquet,
 and map titles, descriptions and translations.
 
+### Fixed in 0.9.1
+
+`@maplibre-yaml/core` 0.9.1, `@maplibre-yaml/astro` 0.7.1,
+`@maplibre-yaml/cli` 0.6.1 and `@maplibre-yaml/effects` 0.1.2 are bug-fix
+releases. A page that loads `core@0.9` from the CDN gets them with no change;
+in an npm project, `npm update` installs them.
+
+- **A polled source always shows the latest data.** A `refresh:` source asks
+  the server on every tick; before, a poll faster than five minutes kept
+  showing the first answer until the data cache expired. A
+  `cache: { enabled: false }` added for that can go.
+  ([Live data](/guides/live-data/))
+- **`updateStrategy: merge` works on feeds that keep their id outside
+  `properties`**, such as the USGS feeds: `updateKey: id` matches the
+  feature's own `id`. Before, the first poll emptied the layer.
+  ([Merge](/guides/live-data/#merge))
+- **`hover.highlight` works on GeoJSON loaded from `url:`**, on named sources,
+  and on FlatGeobuf and GeoParquet files, with no "needs feature ids"
+  warning. ([Respond to hover](/guides/popups/#respond-to-hover))
+- **A layer whose `source:` names a source the document doesn't define now
+  fails validation** at that line, with a "did you mean"; so does a `$ref` to
+  a missing source. Before, the layer failed only on the page, so a document
+  that validated on 0.9.0 can now report this: fix the name.
+  ([Sources & layers](/schema/sources-and-layers/#troubleshooting))
+- **Keys that have no effect now warn in validation**, a source's `loading:`
+  block among them. The document still validates, `--strict` included; you
+  can delete the key. A `stream:` without a `refresh:` block also warns,
+  because it never connects.
+- **Pattern and icon images declared at a high `pixelRatio`** no longer break
+  up and crawl as the map moves.
+- **Importing `@maplibre-yaml/core/register` during server-side rendering**
+  (Next.js, SvelteKit, Nuxt, Astro) no longer throws
+  `HTMLElement is not defined`.
+- **Astro:** collection entries accept the GeoJSON shorthands (`location:`,
+  `route:`, …) as map files do
+  ([Map documents as collection entries](/integrations/astro-collections/#map-documents-as-collection-entries)),
+  and `buildMultiPointMapConfig` and `buildRouteMapConfig` apply their
+  `padding`.
+- **CLI:** `mlym preview` follows `preview.port`, `preview.open` and
+  `preview.debug` in the [settings file](/cli/reference/#configuration-file);
+  `mlym emit --trust` is deprecated and has no effect, so remove it from
+  your scripts; `mlym bake crosshatch` writes textures that stay steady on a
+  tilted map and no longer writes `building-fallback.png`; the
+  `mlym init -t astro` project asks for Node.js 22.23.4 or later.
+- **Effects:** buildings no longer flicker with doubled outlines while you
+  zoom across a tile level.
+
 ### What behaves differently
 
 Your YAML keeps working. These are the changes you might see after upgrading,
@@ -137,7 +184,7 @@ and what to do about each, if anything.
   used to be written in US English everywhere; on a page with
   `<html lang="de">` it now reads `8.336.817`. Name a `locale` in the format
   to fix one regardless of the page.
-  ([Number formats](/guides/accessibility-languages/#number-formats))
+  ([Format numbers](/guides/popups/#format-numbers))
 - **`bounds` accepts both of MapLibre's forms**, four numbers
   `[west, south, east, north]` or two corners `[[west, south], [east, north]]`
   (the second used to fail). Values that validated before but broke the map,
