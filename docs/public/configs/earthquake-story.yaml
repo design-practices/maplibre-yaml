@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json
+type: scrollytelling
+id: earthquake-story
+title: "A week of earthquakes"
+theme: dark
+showMarkers: true
+markerColor: "#f97316"
+config:
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+  center: [0, 20]
+  zoom: 1.5
+legend:
+  title: Magnitude
+  items:
+    - { color: "#fbbf24", label: "4.5 to 6", shape: circle }
+    - { color: "#dc2626", label: "6 or more", shape: circle }
+layers:
+  - id: quakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson"
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 4.5, 4, 8, 16]
+      circle-color: ["step", ["get", "mag"], "#fbbf24", 6, "#dc2626"]
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"
+chapters:
+  - id: world
+    title: "A week of earthquakes"
+    description: "<p>Every earthquake of magnitude 4.5 or more in the past seven days.</p>"
+    center: [0, 20]
+    zoom: 1.5
+    alignment: full
+  - id: ring-of-fire
+    title: "The Ring of Fire"
+    description: "<p>Most of them follow the edges of the Pacific.</p>"
+    center: [160, 10]
+    zoom: 2
+    alignment: left
+  - id: japan
+    title: "Japan"
+    description: "<p>Four plates meet under Japan.</p>"
+    center: [138, 37]
+    zoom: 4.5
+    pitch: 40
+    alignment: right
+  - id: strongest
+    title: "The strongest"
+    description: "<p>Only magnitude 6 and above.</p>"
+    center: [0, 20]
+    zoom: 1.5
+    onChapterEnter:
+      - action: setFilter
+        layer: quakes
+        filter: [">=", ["get", "mag"], 6]
+    onChapterExit:
+      - action: setFilter
+        layer: quakes
+        filter: null
+footer: "<p>Data: USGS earthquake feed, updated every minute.</p>"

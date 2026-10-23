@@ -12,13 +12,20 @@ framework path.
 
 ## Quick start \{#setting-up}
 
-In a Vite + React project:
+This makes a new Vite + React app that shows a map from a YAML file. In an
+app you already have, skip the first command.
+
+**1. Create the app and install the packages:**
 
 ```bash
+npm create vite@latest my-map -- --template react-ts
+cd my-map
+npm install
 npm install @maplibre-yaml/core maplibre-gl
 ```
 
-Register the element and import MapLibre's CSS once, in your entry file:
+**2. Register the element and import MapLibre's CSS once.** Add these lines
+at the top of `src/main.tsx`:
 
 ```tsx
 // src/main.tsx
@@ -32,14 +39,44 @@ import "@maplibre-yaml/core/register";
 setWorkerUrl(workerUrl);
 ```
 
-In TypeScript, reference the element's typings once, in `src/vite-env.d.ts`:
+**3. Give TypeScript the element's typings.** Create `src/ml-map.d.ts` (any
+`.d.ts` file under `src/` works) with this one line:
 
 ```ts
 /// <reference types="@maplibre-yaml/core/react" />
 ```
 
-Save your map document as `public/map.yaml` (the
-[Quick start](/getting-started/quick-start/) has one to copy), and render it:
+Without it, `npm run build` stops with *Property 'ml-map' does not exist on
+type 'JSX.IntrinsicElements'*.
+
+**4. Save the map document as `public/map.yaml`.** Vite serves the files in
+`public/` from the site root, so this one is at `/map.yaml`:
+
+```yaml title="public/map.yaml"
+type: map
+id: earthquake-map
+config:
+  center: [-160, 20]
+  zoom: 1
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: earthquakes
+    type: circle
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: ["interpolate", ["linear"], ["get", "mag"], 1, 2, 7, 20]
+      circle-color: "#e74c3c"
+      circle-opacity: 0.7
+    interactive:
+      click:
+        popup:
+          - h3:
+              - property: place
+```
+
+**5. Render it.** Save this component as `src/SrcMap.tsx`:
 
 {/* snippet: examples/react/src/snippets/SrcMap.tsx */}
 ```tsx
@@ -51,11 +88,29 @@ export function SrcMap() {
 }
 ```
 
-Run `npm run dev` and the map appears where the component renders. Files that
-`src` and the YAML's `url:`s point at go in the framework's static folder:
-`public/` in Vite and Next.js, `static/` in SvelteKit. Under another bundler,
-the worker lines differ:
+and render it from `src/App.tsx`:
+
+{/* snippet: examples/react/src/snippets/QuickStartApp.tsx */}
+```tsx
+// src/App.tsx: the whole file. It replaces the starter's demo page.
+import { SrcMap } from "./SrcMap";
+
+export default function App() {
+  return <SrcMap />;
+}
+```
+
+**6. Run `npm run dev`** and open the address it prints
+(http://localhost:5173). The page shows the past week's earthquakes as red
+circles, sized by magnitude, on a world map; click one to see where it
+happened.
+
+Files that `src` and the YAML's `url:`s point at go in the framework's static
+folder: `public/` in Vite and Next.js, `static/` in SvelteKit. Under another
+bundler, the worker lines differ:
 [Installation](/getting-started/installation/#supported-maplibre-gl-versions).
+To try map documents before you put them in your app, use the
+[playground](/playground/).
 
 ## Common tasks
 

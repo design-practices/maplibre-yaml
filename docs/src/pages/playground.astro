@@ -104,6 +104,12 @@ const gallery = galleryStarters();
         for the keys and values that fit there, each with its description.
       </li>
       <li>
+        <strong>Story maps</strong> work here too: pick <em>A story map: a week of earthquakes</em>
+        from the examples and scroll the preview to move through its chapters. On a phone,
+        <em>Preview the story</em> opens it full height. Download saves it with a page that uses
+        <code>&lt;ml-scrollytelling&gt;</code>.
+      </li>
+      <li>
         <strong>Share</strong> puts the whole document in the link, after the <code>#</code>, so
         nothing is stored on a server. Anyone who opens it sees your map and can change their copy.
       </li>
@@ -448,9 +454,8 @@ const gallery = galleryStarters();
   .pg-back {
     position: fixed;
     z-index: 101;
-    top: 0.75rem;
+    top: 0.5rem;
     left: 0.75rem;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
   }
 
   .pg-about {
@@ -514,9 +519,20 @@ const gallery = galleryStarters();
     html:has(.pg-root.pg-story-full) {
       overflow: hidden;
     }
+    /* "Back to code" sits in a bar of its own above the story, so it never
+       covers the story's own top corners (its legend button, slots). */
+    .pg-root.pg-story-full::before {
+      content: '';
+      position: fixed;
+      inset: 0 0 auto;
+      height: 3.5rem;
+      z-index: 100;
+      background: var(--pg-panel);
+      border-bottom: 1px solid var(--pg-line);
+    }
     .pg-root.pg-story-full .pg-preview {
       position: fixed;
-      inset: 0;
+      inset: 3.5rem 0 0;
       z-index: 100;
       background: var(--pg-bg);
     }

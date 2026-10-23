@@ -337,6 +337,13 @@ export default defineConfig({
         // src/data/gallery.mjs. Every other page renders as Starlight's own.
         PageTitle: "./src/components/overrides/PageTitle.astro",
         MarkdownContent: "./src/components/overrides/MarkdownContent.astro",
+        // Examples and Playground links before the GitHub icon: in the
+        // header bar on desktop and in the mobile menu's footer on phones.
+        SocialIcons: "./src/components/overrides/SocialIcons.astro",
+        // Pages without a sidebar (landing, playground) have no menu button
+        // on phones; this adds one after search, opening the same links and
+        // theme picker. The default search renders unchanged.
+        Search: "./src/components/overrides/Search.astro",
       },
 
       lastUpdated: true,
