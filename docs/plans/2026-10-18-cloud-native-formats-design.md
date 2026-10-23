@@ -1,0 +1,837 @@
+---
+title: Cloud-native formats — YAML-only PMTiles, COG, FlatGeobuf, GeoParquet (design)
+type: design
+date: 2026-10-18
+topic: cloud-native-formats
+beads: ml-cnv (epic), ml-cnv.6 (this spike), ml-cnv.1–.5 (implementation), ml-7qa.5 (lazy loading)
+target: 0.9
+status: implemented in 0.9.0 (2026-10-21) — see Outcome below
+---
+
+# Cloud-native formats — design
+
+> **Outcome (2026-10-23).** Shipped in core 0.9.0 (PRs #163 and #170) and
+> refined in 0.9.1. All four formats work from YAML alone, as designed here
+> (D1 syntax, D2 protocols vs decoded data, D3 libraries). Differences from this
+> document:
+> - **More than planned:** a Protomaps basemap shorthand
+>   (`mapStyle: { pmtiles: …, flavor: … }`, or just a `.pmtiles` path), and
+>   `pmtiles://` inside basemap styles resolving against the style.json.
+> - **COG colour ramps** are a source-level `colorRamp: { palette, min, max }`
+>   compiled to the plugin's `#color:` fragment, using the `classify:` palettes.
+> - **Lazy chunks:** the CDN COG reader is about 131 KB gzip with its image
+>   codecs split into on-demand files (the codecs also live inside the worker
+>   source, so the split files are rarely fetched); GeoParquet's brotli codec
+>   is its own 68 KB chunk.
+> - **Hosting quirks found in review:** GitHub Pages, jsDelivr and `npx serve`
+>   answer an oversized suffix range with 416, and some hosts hide
+>   `Content-Range`; the shared range reader handles both. jsDelivr's
+>   Cloudflare leg compresses partial responses and is reported as unsupported
+>   for PMTiles and FlatGeobuf-by-view.
+> - **Deferred:** in-browser COG reprojection (ml-cnv.8), GeoArrow-native
+>   GeoParquet (ml-cnv.13), a gradient legend for `colorRamp` (ml-cnv.10),
+>   `fitTo` for PMTiles (ml-cnv.9).
+>
+> The guides are the reference for current behaviour: /guides/cloud-native-data/
+> and the per-format pages.
+
+**Goal (maintainer direction, 2026-10-18):** "There should be full YAML-only
+support for PMTiles and COGs, same as the other new cloud-native formats like
+GeoParquet and FlatGeobuf." An author writes a URL in YAML and it works in plain
+HTML from the CDN, under a bundler, and in Astro, with no page JavaScript. The
+decoders cost nothing on pages that don't use them.
+
+This document holds the decisions, the evidence behind them, and the open
+questions. It contains no production code. The measurements come from a
+scratch prototype (`~/dev/cloud-native-spike/`, outside the repo), described in
+[§9](#9-prototype-evidence).
+
+---
+
+## 0. Decisions at a glance
+
+| # | Decision |
+|---|---|
+| D1 | **`type:` stays the MapLibre source type** (`vector`, `raster`, `raster-dem`, `geojson`). The file format comes from the URL: the scheme (`pmtiles://`, `cog://`) or the extension (`.pmtiles`, `.tif`/`.tiff`, `.fgb`, `.parquet`/`.geoparquet`). An optional `format:` key names it outright when the URL has no telling extension. `type: pmtiles` and similar spellings are rejected with a positioned error that gives the fix. |
+| D2 | **PMTiles and COG are tile protocols**: core registers `pmtiles://` / `cog://` on the renderer's maplibre module, once, on demand. **FlatGeobuf and GeoParquet are vector data**: core decodes them into a MapLibre GeoJSON source, so layers, popups, legend, `fitTo` and clustering behave exactly as they do for GeoJSON. |
+| D3 | Libraries: **`pmtiles`** (7.4 KB gz), **`@geomatico/maplibre-cog-protocol`** (~134 KB gz in total, COG pages only), **`flatgeobuf`** (10.3 KB gz), **`hyparquet`** with its built-in WKB→GeoJSON decoding (18.1 KB gz, about 23 KB once zstd/gzip/lz4 are in; brotli is a separate 66.6 KB chunk loaded only when a file uses it). DuckDB-WASM (7.7 MB gz of wasm) and parquet-wasm + GeoArrow (1.67 MB gz of wasm plus 98 KB gz of JS) are rejected. |
+| D4 | Decoders are **on-demand chunks, using the same mechanism as ml-7qa.5**. The fetch **starts at parse time** and runs **in parallel with map construction and the basemap load**. The renderer waits for it only at the point of first use, its `load` handler. It never blocks map construction. Measured on a throttled link: cloud-native overhead drops from +460 ms (blocking) to +255 ms (parallel). |
+| D5 | Protocol registration: **the host wins.** If `config.REGISTERED_PROTOCOLS.pmtiles` (or `.cog`) is already set on the renderer's module, core neither loads the chunk nor re-registers. The 0.7 page-JS path and the hatch e2e stub keep working unchanged. |
+| D6 | FlatGeobuf/GeoParquet have two load modes. `load: all` (the default) reads the whole file once. `load: viewport` reads only the features in view, through the FGB spatial index or GeoParquet row-group bbox statistics, and re-queries on `moveend`. Size guards turn a too-large whole-file load into a clear notice instead of a frozen tab. GeoParquet reads only the columns the document references (with a `columns:` override). |
+| D7 | Errors are **non-fatal and appear in the 0.8 notice** ("Part of this map didn't load"). Each failure gets plain wording, no raw library strings. The main cases: range requests unsupported (`python -m http.server`, verified still true on Python 3.14), CORS, wrong file, wrong CRS, too large, decoder chunk failed to download. |
+| D8 | Export classes: **`pmtiles` and `cog` are `exports`** with a `contract` warning (the protocol is needed at runtime). The extension form is rewritten to the canonical `pmtiles://` / `cog://` URL. **`flatgeobuf` and `geoparquet` are `exports-with-fallback`**: `mlym emit` decodes the file and emits GeoJSON, inline or as a sidecar file. With nothing fetchable the result is `lossy` (an empty source). |
+| D9 | Testing: committed **synthetic CC0 fixtures, about 0.8 MB, generated by a committed script**. The e2e server gains **HTTP range support**, plus a `/norange/` mirror and a no-CORS cross-origin variant (`127.0.0.1` vs `localhost`) for the error paths. Browser specs run on maplibre-gl 4/5/6. |
+
+---
+
+## 1. Context and constraints
+
+- **Prior art in the repo.** 0.7 shipped `@maplibre-yaml/core/maplibre` so that page JS can register
+  `addProtocol("pmtiles", …)` on *the module the renderer actually uses* (module identity, gallery
+  "PMTiles source and protocol", `e2e/gallery-hatch.spec.ts` stub protocol). That covers PMTiles
+  only with page JS; COG has the same mechanism and no verified page; FGB and GeoParquet are
+  unsupported.
+- **The CSV precedent (ml-htl, closed won't-do):** "MapLibre has no CSV source; data enters as
+  GeoJSON or tiles. Convert CSV upstream." FlatGeobuf and GeoParquet *also* have no MapLibre
+  source, so this design deliberately departs from that rule for them. Why the departure is
+  principled rather than a reversal: (1) the maintainer directed it explicitly; (2) unlike CSV,
+  converting FGB/GeoParquet upstream to GeoJSON *destroys what the format is for*. A
+  30 MB FlatGeobuf read through its spatial index moved 2.7 MB for a city-scale view
+  ([§9](#9-prototype-evidence)), and GeoParquet's columnar projection cut the heap in half. A CSV
+  converted upstream loses nothing; (3) the eject doctrine is honoured by an
+  `exports-with-fallback` lowering, not a silent drop. **ml-htl stays closed for CSV.** Nothing
+  here reopens it.
+- **Eject doctrine (0.7):** every construct declares an export class; closed-world registry
+  (`packages/core/src/export/registry.ts`). New keys must register. Vault:
+  `decisions/2026-08-08-maplibre-yaml-v050-arc-complete-eject-guarantee.md` (emitter as an allowlist
+  projection, core describes and CLI fetches).
+- **map-party context (vault `decisions/2026-09-16-portolan-evaluation-vs-existing-import-queue.md`):**
+  map-party's import queue already processes PMTiles, GeoJSON and FGB uploads server-side. This library's
+  YAML-only formats are the authoring/viewing side of the same data. Q2 (column projection) is the
+  map-party-facing decision.
+- **TS7056:** `source.schema.ts` warns that extra chained refinements on source schemas blow the
+  layer union past TypeScript's serialization buffer. New source *types* in the `LayerSourceSchema`
+  union are the riskiest possible change on that front. D1 adds **no** new union members.
+- **`base` resolution (ml-aot.30):** `utils/document-base.ts` leaves every scheme URL alone, so
+  today `pmtiles://data/x.pmtiles` is **not** rebased under `<ml-map base="/repo/">`. It 404s on
+  a GitHub Pages project site. This design fixes that for the two protocol schemes.
+- **v2 documents:** the source's spec body compiles to style.json; our keys nest under the
+  source's `runtime:`. The new keys (`format`, `load`, `columns`) are runtime keys
+  (`SOURCE_RUNTIME_KEYS`), so they sit flat on a v1 source and under `runtime:` on a v2 source.
+
+---
+
+## 2. D1 — Authoring syntax
+
+### 2.1 The rule
+
+> **`type:` says what MapLibre renders (vector tiles, raster tiles, elevation, features). The URL
+> says what the file is.** Scheme (`pmtiles://`, `cog://`) or extension (`.pmtiles`, `.tif`,
+> `.tiff`, `.fgb`, `.parquet`, `.geoparquet`) identifies the format; `format:` overrides when the
+> URL can't (signed URLs, API endpoints, `?download=1` paths).
+
+| Format | `type:` | Recognised URL forms | Canonical (what emit writes) |
+|---|---|---|---|
+| PMTiles (vector) | `vector` | `pmtiles://…`, `….pmtiles`, `format: pmtiles` | `pmtiles://<absolute URL>` |
+| PMTiles (raster / terrain) | `raster` / `raster-dem` | same | same |
+| COG (imagery) | `raster` | `cog://…`, `….tif`, `….tiff`, `format: cog` | `cog://<absolute URL>` + `tileSize: 256` |
+| COG (elevation) | `raster-dem` | same | `cog://<absolute URL>#dem` + `tileSize: 256` |
+| FlatGeobuf | `geojson` | `….fgb`, `format: flatgeobuf` | (no style.json form — see D8) |
+| GeoParquet | `geojson` | `….parquet`, `….geoparquet`, `format: geoparquet` | (no style.json form — see D8) |
+
+Extension sniffing is unambiguous on these source types. A `vector`/`raster` source's `url:` is
+otherwise a TileJSON document, and no TileJSON URL ends in `.pmtiles` or `.tif`. A `geojson`
+source's `url:` is otherwise a JSON document, and no JSON URL ends in `.fgb` or `.parquet`.
+Sniffing reads the URL **path** only (query and fragment stripped), so
+`data/x.pmtiles?v=3` works.
+
+### 2.2 Why not `type: pmtiles` (and friends)?
+
+| Option | For | Against (evidence) |
+|---|---|---|
+| **A. `type: pmtiles \| cog \| flatgeobuf \| geoparquet`** | One explicit key; easy to validate | (1) PMTiles holds vector **or** raster **or** terrain tiles, and COG holds imagery **or** a DEM. `type: pmtiles` erases the one thing MapLibre needs, so it must be re-derived from the archive header (a network read before validation) or guessed from the layers. (2) Layer/source compatibility (`source-layer` on vector sources, hillshade on raster-dem) can no longer be checked statically. (3) Every emit has to rewrite `type`, because style.json has no such type. (4) A v2 `style:` source would stop being a style-spec source body. (5) Four new members in `LayerSourceSchema` is exactly the TS7056 hazard the schema file warns about. |
+| **B. URL scheme only** | MapLibre's own convention (`pmtiles://` in the MapLibre example; `cog://` in the geomatico plugin) | No scheme convention exists for FGB/GeoParquet, which are fetched rather than protocol-routed; a `flatgeobuf://` scheme would be our own invention and would leak into emitted styles. |
+| **C. Extension only** | Zero ceremony | Fails for extensionless URLs (presigned S3/R2, APIs). A `.tif` that isn't a COG still sniffs as one. Error UX covers that ([§5](#5-d7--error-ux)). |
+| **D (chosen). `type:` = MapLibre type; format from scheme **or** extension; `format:` override** | Matches MapLibre/ecosystem convention for tiles; the YAML stays a style-spec-shaped document; layers, legend, popups, `fitTo` need zero changes; emit is a rewrite of `url`, not of `type`; no new union members | Two spellings for PMTiles/COG (scheme and extension). Mitigation: emit and `mlym validate --fix`-style hints write the canonical scheme form. Docs lead with the extension form because it's what a student types. |
+
+**`type: pmtiles` is still caught.** The parser turns it into a positioned error that gives the
+fix. It does not accept it silently (see [§2.5](#25-validation-and-did-you-mean)). Whether to *accept* it as sugar
+(inferring vector/raster from the layers that use the source) is
+[open question Q1](#11-open-questions-for-the-maintainer).
+
+### 2.3 YAML by format (v1)
+
+**PMTiles — minimal.**
+
+```yaml
+sources:
+  buildings:
+    type: vector
+    url: data/buildings.pmtiles          # same as pmtiles://data/buildings.pmtiles
+layers:
+  - id: buildings
+    type: fill
+    source: buildings
+    source-layer: buildings
+    paint: { fill-color: "#c9b79c" }
+```
+
+**PMTiles — typical: vector + raster imagery + terrain, popup, legend.**
+
+```yaml
+config:
+  center: [11.2558, 43.7696]
+  zoom: 13
+  pitch: 50
+  mapStyle: https://tiles.openfreemap.org/styles/positron
+sources:
+  firenze:
+    type: vector
+    url: pmtiles://https://pmtiles.io/protomaps(vector)ODbL_firenze.pmtiles
+  ortho:
+    type: raster
+    url: https://example.org/tiles/ortho.pmtiles
+    tileSize: 256                         # raster PMTiles: say the tile size (MapLibre defaults to 512)
+  relief:
+    type: raster-dem
+    url: https://example.org/tiles/terrarium.pmtiles
+    encoding: terrarium
+terrain:
+  source: relief
+  exaggeration: 1.2
+layers:
+  - id: ortho
+    type: raster
+    source: ortho
+  - id: landuse
+    type: fill
+    source: firenze
+    source-layer: landuse
+    paint:
+      fill-color: ["match", ["get", "kind"], "park", "#8bc34a", "#e0d7c6"]
+      fill-opacity: 0.6
+    legend: { label: Land use, color: "#8bc34a", shape: square }
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: name }]
+          - p: [{ str: "Kind: " }, { property: kind }]
+```
+
+**COG — minimal.** The `.tif` extension on a raster source is the only signal needed.
+
+```yaml
+sources:
+  scene:
+    type: raster
+    url: https://example.org/cogs/scene-3857.tif
+layers:
+  - { id: scene, type: raster, source: scene }
+```
+
+**COG — typical: imagery, a DEM for hillshade and terrain, and a colour-ramped single-band layer.**
+
+```yaml
+sources:
+  imagery:
+    type: raster
+    url: data/imagery.tif                 # RGB COG (EPSG:3857)
+  elevation:
+    type: raster-dem
+    url: data/elevation.tif               # single-band DEM COG; core appends #dem and tileSize 256
+  temperature:
+    type: raster
+    # Single-band ramp: the plugin's own fragment syntax, passed through untouched (see Q4).
+    url: "cog://data/temperature.tif#color:BrewerSpectral9,-5,35,c"
+terrain:
+  source: elevation
+  exaggeration: 1.5
+layers:
+  - { id: imagery, type: raster, source: imagery }
+  - id: hills
+    type: hillshade
+    source: elevation
+    paint: { hillshade-exaggeration: 0.5 }
+  - id: temperature
+    type: raster
+    source: temperature
+    paint: { raster-opacity: 0.6 }
+    legend: { label: "Surface temperature (°C)", color: "#d53e4f", shape: square }
+```
+
+**FlatGeobuf — minimal.** It is a GeoJSON source: same layers, same everything.
+
+```yaml
+sources:
+  parcels:
+    type: geojson
+    url: data/parcels.fgb
+layers:
+  - { id: parcels, type: line, source: parcels, paint: { line-color: "#333" } }
+```
+
+**FlatGeobuf — typical: popup, legend, fitTo, viewport streaming for a large indexed file.**
+
+```yaml
+config:
+  center: [-73.98, 40.75]
+  zoom: 14
+  fitTo: { source: districts, padding: 24 }   # fits from data (or from the FGB header envelope in viewport mode)
+sources:
+  districts:
+    type: geojson
+    url: data/districts.fgb                     # 13 KB: whole file (default `load: all`)
+  parcels:
+    type: geojson
+    url: https://data.example.org/nyc-parcels.fgb
+    format: flatgeobuf                          # only needed when the URL lacks the extension
+    load: { mode: viewport, minzoom: 14 }       # read just the features in view, via the spatial index
+    promoteId: bbl
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    paint:
+      fill-color: ["match", ["get", "category"], "park", "#2a9d8f", "#f4a261"]
+      fill-opacity: 0.5
+    legend: { label: Districts, color: "#f4a261", shape: square }
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: name }]
+          - p: [{ str: "Population " }, { property: population }]
+  - id: parcels
+    type: line
+    source: parcels
+    minzoom: 14
+    paint: { line-color: "#6d6875", line-width: 0.6 }
+```
+
+**GeoParquet — minimal.**
+
+```yaml
+sources:
+  wells:
+    type: geojson
+    url: data/wells.parquet
+layers:
+  - { id: wells, type: circle, source: wells, paint: { circle-radius: 3 } }
+```
+
+**GeoParquet — typical: data-driven paint, popup, legend, fitTo, clustering, column projection.**
+
+```yaml
+config:
+  fitTo: { source: wells, padding: 20 }
+sources:
+  wells:
+    type: geojson
+    url: https://data.example.org/wells.geoparquet
+    cluster: true
+    clusterRadius: 40
+    # columns: [kind, depth_m, name]   # optional; by default core reads only the columns this
+    #                                  # document references (here: kind, depth_m, name) + geometry
+layers:
+  - id: wells
+    type: circle
+    source: wells
+    filter: ["!", ["has", "point_count"]]
+    paint:
+      circle-color: ["match", ["get", "kind"], "artesian", "#457b9d", "#e63946"]
+      circle-radius: ["interpolate", ["linear"], ["get", "depth_m"], 0, 3, 500, 9]
+    legend: { label: Wells, color: "#457b9d", shape: circle }
+    interactive:
+      click:
+        popup:
+          - h3: [{ property: name }]
+          - p: [{ str: "Depth (m): " }, { property: depth_m }]
+```
+
+### 2.4 Format v2
+
+The URL stays in the spec half, and `format` / `load` / `columns` move under the source's `runtime:`:
+
+```yaml
+version: 2
+type: map
+id: cloud-native
+style:
+  basemap: https://tiles.openfreemap.org/styles/liberty
+  center: [10.2, 42.15]
+  zoom: 10
+  sources:
+    outlines: { type: vector, url: "pmtiles://data/districts.pmtiles" }
+    elevation: { type: raster-dem, url: data/elevation.tif }
+    parcels:
+      type: geojson
+      url: https://data.example.org/parcels
+      runtime:
+        format: flatgeobuf
+        load: { mode: viewport, minzoom: 14 }
+    wells:
+      type: geojson
+      url: data/wells.parquet
+      runtime:
+        columns: [kind, depth_m]
+  layers:
+    - { id: outlines, type: line, source: outlines, source-layer: districts }
+    - { id: hills, type: hillshade, source: elevation }
+    - { id: parcels, type: line, source: parcels }
+    - id: wells
+      type: circle
+      source: wells
+      runtime:
+        legend: { label: Wells, color: "#457b9d", shape: circle }
+```
+
+### 2.5 Validation and did-you-mean
+
+All checks are static. No network is needed, so `mlym validate` and the Astro content loader
+catch them too:
+
+| Authored | Result |
+|---|---|
+| `type: pmtiles` / `cog` / `flatgeobuf` / `geoparquet` / `fgb` / `parquet` | **Error** at the `type` key: "`pmtiles` is a file format, not a source type. Keep the `url:` and set `type: vector` (or `raster` / `raster-dem` for image or elevation tiles)." For FGB/GeoParquet: "… set `type: geojson`." |
+| `.fgb` / `.parquet` URL on `type: vector`/`raster` | **Error**: "FlatGeobuf files hold features, not tiles: use `type: geojson`." |
+| `.pmtiles` / `.tif` URL on `type: geojson` | **Error**: "PMTiles hold tiles, not features: use `type: vector` (or `raster`)." / "A GeoTIFF is an image: use `type: raster` (or `raster-dem` for elevation)." |
+| `format: flatgeobuff` | **Error** + did-you-mean via `utils/suggest.ts`: "did you mean `flatgeobuf`?" |
+| `format:` disagreeing with the extension or scheme | **Warning** (`format:` wins; the URL may be a redirect). |
+| `columns:` on a non-GeoParquet source; `load:` on a non-FGB/GeoParquet source | **Warning**: no effect. |
+| `refresh:` / `stream:` on an FGB/GeoParquet source | **Error** in 0.9: "Live refresh isn't available for FlatGeobuf/GeoParquet sources yet." (See Q6.) |
+| `load: viewport` without `minzoom` | Accepted; `minzoom` defaults to 10 (see [§4.4](#44-flatgeobuf-whole-file-vs-viewport)). |
+
+The schema adds three optional keys to `GeoJSONSourceSchema` (`format`, `load`, `columns`) and one
+optional `format` to the tile-source schemas. The cross-field checks go into the **existing**
+`superRefine` (geojson) and the parser's semantic pass (tile sources), not into new chained
+refinements, because of TS7056.
+
+---
+
+## 3. D3 — Libraries
+
+Measured by bundling each candidate with core's browser-build settings (esbuild, ESM,
+`platform: browser`, minified, splitting on, `maplibre-gl` external), `gzip -9`. "Chunk" means what
+core's `import()` pulls in. "+lazy" means pieces the library itself loads only when needed.
+
+| Format | Recommended | Chunk (gz) | Licence | Maintenance (npm, as of 2026-10-18) | Range streaming | Workers | Notes |
+|---|---|---|---|---|---|---|---|
+| PMTiles | **`pmtiles` 4.5.0** | **7.4 KB** (in-situ chunk; includes fflate) | BSD-3 | 5 releases/12 mo, ~710k dl/wk, Protomaps | yes (header + directory + tile ranges) | n/a: MapLibre calls the protocol on the main thread; tiles decode in MapLibre's workers | Vector, raster and terrarium/mapbox DEM archives through one protocol. `new Protocol({ metadata: true })` returns TileJSON with `vector_layers`, bounds, min/maxzoom, attribution. |
+| COG | **`@geomatico/maplibre-cog-protocol` 0.10.0** | **125.2 KB + ~8 KB support chunks ≈ 134 KB** | MIT | 5 releases/12 mo, ~6k dl/wk; peer `maplibre-gl ^4.5 \|\| ^5 \|\| ^6` | yes (geotiff.js) | **yes**: decodes in a geotiff `Pool` of blob-URL workers | Imagery by PhotometricInterpretation, DEM (`#dem` → Terrain-RGB), ColorBrewer/CARTO ramps (`#color:`), masks, nodata. **EPSG:3857 only.** About 90 KB of the chunk is the inlined worker source. Per-codec decoders (lerc 36.9, zstd 31.5, jpeg 4.1 KB) load only for files that use them. |
+| FlatGeobuf | **`flatgeobuf` 4.6.0** (`lib/mjs/geojson.js`) | **10.3 KB** (+2.8 KB lazy) | BSD-3 | 5 releases/12 mo, ~62k dl/wk | yes: bbox reads via the packed Hilbert R-tree; whole-file via one streamed GET | main thread (async generator) | Its HTTP reader logs every range request with `console.debug`. Strip it with esbuild `pure: ["console.debug"]` in the chunk build. Its URL mode is **bbox-only** ("The rect option is required"), so whole-file mode passes `fetch().body`. |
+| GeoParquet | **`hyparquet` 1.31.4** (built-in GeoParquet → GeoJSON geometry) | **18.1 KB** (snappy built in); **~23 KB** with zstd (fzstd 3.3) + gzip (1.6) + lz4 (0.4); brotli = separate **66.6 KB** chunk | MIT | 40 releases/12 mo, ~977k dl/wk | yes: footer, then column chunks; row-group skipping from statistics (`filter`) | main thread | Decodes **WKB** geometry columns itself (`src/geoparquet.js`, `wkb.js`). It does **not** decode GeoArrow-native encodings (GeoParquet 1.1 `point`, `polygon`, …), which get a clear error. The codec is known from the footer before any data page is read, so codec chunks load just in time. |
+
+**Rejected, with numbers:**
+
+| Candidate | Size | Why not |
+|---|---|---|
+| DuckDB-WASM 1.33 | 52 KB gz JS + **7.72 MB gz** wasm (eh; mvp 8.79 MB) + the spatial extension on top | Two orders of magnitude over budget for "draw these points". Worth it only for SQL-in-the-browser, which is not this feature. |
+| parquet-wasm 0.9 + apache-arrow 21 + @geoarrow/geoarrow-js 0.3 | 97.8 KB gz JS + **1.67 MB gz** wasm | Arrow/GeoArrow is the right model for deck.gl, not for a GeoJSON source. `@geoarrow/geoarrow-js` had 1 release in 12 months. |
+| `geotiff` alone (custom COG protocol, no `Pool`) | 18.5 KB gz + pako 14.8 KB ≈ **33 KB**, plus our own ~5 KB of tile maths and DEM encoding | About 4× smaller, but decodes on the main thread, and we would own reprojection checks, DEM encoding, nodata/mask rules and colour ramps. Revisit if the COG chunk size draws complaints (Q3). The upstream ask is "make `Pool` optional", which would get most of the saving without forking. |
+| `hyparquet-compressors` (all codecs) | 90.4 KB gz | 74% of it is the brotli dictionary. Split per codec instead (above). |
+| `@loaders.gl/parquet` 5.0-alpha | not measured (pre-release) | Alpha; pulls the loaders.gl core. |
+| Forks of the COG protocol (`@promethee-earth/…`, `@amjed-ali-k-2/…`) | — | Forks of geomatico; stay on upstream. |
+
+**Install footprint:** these become regular `dependencies` of `@maplibre-yaml/core`, because the YAML-only
+promise rules out optional peers. They add about 20 MB on disk, mostly the COG chain (geotiff 4.7 MB, the
+geomatico package 2.3 MB, pako, zstddec, d3-scale family). Node consumers (`mlym validate`, Astro's
+content loader) never load them. See Q5.
+
+---
+
+## 4. D4/D5/D6 — Runtime behaviour
+
+### 4.1 Detection and when decoders load
+
+1. **Detect at parse time.** Once the document normalizes to the model, walk named sources and inline
+   layer sources (`formatsIn(model)`, a pure function that is also used by `mlym validate` and the
+   emitter). The result is the set of formats the document uses.
+2. **Start loading immediately, in parallel with map construction.** `prepareFormats(set)` issues the
+   `import()`s and returns one promise. The map is constructed at once. The basemap style, sprites and
+   glyphs load concurrently with the decoder chunks.
+3. **Wait for decoders at first use only.** The renderer's `load` handler (where named sources are
+   registered and layers added) awaits the formats promise before registering sources. Inline-layer
+   sources await the same promise in `addLayer`. Protocol modules register in their module body.
+4. **Per-format failure isolation.** A chunk that fails to download fails *its* sources only: they and
+   their layers are skipped, with one notice. Everything else renders. A rejected chunk promise is
+   evicted from the cache, so `reload()` retries.
+
+Measured (throttled 150 ms RTT, 1.6 Mbps, gzip, same document with FGB + GeoParquet data vs the
+same data as GeoJSON, basemap from a style URL; mean of 3 runs):
+
+| Variant | `ml-map:load` | last `layer-data-loaded` | vs GeoJSON |
+|---|---|---|---|
+| GeoJSON, 0.8 bundle (baseline) | 3,417 ms | 4,011 ms | — |
+| FGB + GeoParquet, decoders **block map construction** | 3,876 ms | 4,472 ms | **+461 ms** |
+| FGB + GeoParquet, decoders **parallel with the basemap** (chosen) | 3,673 ms | 4,266 ms | **+255 ms** |
+| PMTiles (vector + raster) + FGB + GeoParquet, blocking → parallel | — | 4,545 → 4,435 ms | −110 ms |
+
+The remaining ~255 ms is chunk transfer beyond what the (deliberately tiny) test basemap hides,
+plus one avoidable round trip. hyparquet's `asyncBufferFromUrl` issues a `HEAD` before the first range
+read. The production reader should open with a **suffix range** (`Range: bytes=-524288`), which returns
+the footer *and* the file size (`Content-Range`) in one request. Files under 512 KB are then read in
+a single request. With a real basemap (style + sprite + glyphs + first tiles) the chunk load hides
+almost entirely.
+
+### 4.2 Protocol registration (PMTiles, COG)
+
+- The chunk receives the interop-resolved maplibre module (`renderer/maplibre-interop.ts`) and calls
+  `addProtocol` on it. Identity holds in every build because `maplibre-gl` stays external in every build
+  (the same guarantee `@maplibre-yaml/core/maplibre` documents). Verified on maplibre-gl 5.24 (UMD via
+  import map) and 6.x (ESM) in the prototype.
+- **Host wins.** Before loading, core checks `maplibregl.config?.REGISTERED_PROTOCOLS?.[scheme]`
+  (`config` is a public export of maplibre-gl; confirmed in the v5 source and dist). If the host already
+  registered `pmtiles` or `cog` (custom `Source`, auth headers, the 0.7 page-JS path, the hatch e2e stub),
+  core does not load the chunk and does not re-register. Same rule as `setWorkerModuleUrl`: a host's own
+  call wins. If `config` is missing on some runtime, core registers anyway (worst case equals today's
+  page-JS behaviour, last writer wins).
+- One registration per module per page, not per map. Several `<ml-map>`s share it. `removeProtocol` is
+  never called by core.
+
+### 4.3 URL canonicalization and `base`
+
+- `applyDocumentBase` learns to rebase the **inner** URL of `pmtiles://` and `cog://`:
+  `pmtiles://data/x.pmtiles` with `base="/repo/"` becomes `pmtiles:///repo/data/x.pmtiles`. That is a
+  real fix: today such URLs 404 on GitHub Pages project sites.
+- Before reaching MapLibre, tile-format URLs are absolutized against `document.baseURI` and written in
+  scheme form (`pmtiles://https://host/repo/data/x.pmtiles`). That gives the PMTiles protocol's
+  per-archive cache one key per file, and the URL works no matter where MapLibre's request originates.
+  A COG raster-dem gets `#dem` appended unless the author wrote a fragment, and `tileSize: 256` unless
+  the author set one (the plugin requires 256).
+- FGB/GeoParquet URLs resolve through the same `base` rules as GeoJSON `url:` today. Relative paths
+  resolve against the page, not the YAML file, with the same hint text as `describeDataProblem`.
+
+### 4.4 FlatGeobuf: whole file vs viewport
+
+| Mode | How | When |
+|---|---|---|
+| `load: all` (default) | One streamed `GET`, then `deserialize(stream)`, then `setData` once | Small and medium files |
+| `load: viewport` / `{ mode: viewport, minzoom }` | `deserialize(url, { rect })` reads the header and R-tree with range requests, then only the matching features; re-queried on `moveend` (debounced 250 ms, aborting the previous query). Below `minzoom` (default 10) the source is empty and a status hint says "zoom in to see *label*". | Large files **with** a spatial index |
+
+Measured on 200,000 points (fixture `stress-200k`, 30.2 MB FGB, unthrottled localhost, Chromium):
+
+- whole file: **4.2 s** to decode on the main thread, about 111 MB JS heap. The same data as GeoJSON
+  (38.9 MB) is ready in 0.8–1.5 s, because `JSON.parse` is native. **Whole-file FGB is not
+  a speed win over GeoJSON.** Its value is the index.
+- viewport read of a zoom-12 window (11,610 features, 5.8%): **9 range requests, 2.7 MB moved
+  (9% of the file), 0.75 s.**
+
+Guards for `load: all`, based on the size from `Content-Length`/`Content-Range`, known before decoding:
+
+- **≤ 10 MB:** load.
+- **10–50 MB:** load, plus a console warning recommending `load: viewport`, or PMTiles above ~100k features.
+- **> 50 MB:** if indexed, switch to viewport automatically with a console warning. If not indexed, do not
+  load. The notice says "too large to load whole; make it with a spatial index or convert to PMTiles".
+
+These thresholds are proposals (Q7).
+
+`fitTo` on an FGB source in viewport mode uses the header's `envelope`. The header also gives
+`features_count`, `indexNodeSize` (0 means no index) and `crs`, all from the first range read.
+
+### 4.5 GeoParquet: column projection, row groups, codecs
+
+- **Column projection (default on).** Read the geometry column, plus the properties the document
+  references for that source: `["get", …]` / `["has", …]` in paint, layout and filter on every layer
+  that draws from the source; popup and hover `property:` refs and `{token}` templates; `promoteId`;
+  `clusterProperties` expressions; `parameters`/`state` expressions that reach into features; legend
+  entries that read properties. `columns: [...]` replaces the inferred list; `columns: all` turns
+  projection off.
+  - Measured on the 200k file (14.6 MB, 6 columns): all columns took **1.0–1.5 s, 257–273 MB heap**;
+    projected to one column, **0.4–0.8 s, 111–133 MB heap**. Wide real-world files (Overture has
+    dozens of columns) gain more.
+  - Risk: host JS that reads arbitrary feature properties (`queryRenderedFeatures`, `ml-map:layer-click`
+    detail) only sees projected columns. That is a consumer-observable behaviour, hence **Q2**
+    (map-party reads clicked-feature properties).
+- **Row-group / bbox filtering** (`load: viewport`). Uses the GeoParquet 1.1 `covering.bbox` columns and
+  hyparquet's `filter`, which skips row groups by min/max statistics (`bbox.xmin <= east`, …).
+  **It only helps if the file is spatially sorted.** Measured with the same zoom-12 window:
+  - random row order (10 row groups of 20k): **no pruning**, 12 MB moved, 2.1 s
+  - **Hilbert-sorted** (`geometry.hilbert_distance()`), 20 row groups of 10k: **6 of 20 groups read,
+    3.9 MB moved, 0.52 s**
+
+  Core can tell the difference from the footer alone, by summing the row-group bbox areas against the
+  file bbox. On an unsorted file, `load: viewport` warns "this file isn't spatially sorted, so viewport
+  loading reads almost all of it" and falls back to whole-file rules.
+- **Codecs.** Snappy is built in (it is the default of GeoPandas, GDAL and DuckDB). zstd (Overture's
+  choice), gzip and lz4 add about 5.3 KB gz, recommended inside the GeoParquet chunk. Brotli is a separate
+  66.6 KB chunk, loaded only when the footer says brotli.
+- **Encodings and CRS.** WKB only in 0.9. GeoArrow-native encodings fail with a message that says
+  how to rewrite the file. The CRS must be `OGC:CRS84`/`EPSG:4326` (or absent, which means CRS84 by spec).
+- **No range support detected** (a `200` with the full body in reply to a `Range` request): switch to
+  one whole-file read, with the same size guards, and warn once. Without this, every range read would
+  re-download the whole file. The prototype's no-range run succeeded only because the file was smaller
+  than hyparquet's 512 KB first read.
+- Size guards: same thresholds as FGB, on the *projected* byte estimate (the footer gives per-column
+  compressed sizes, so core knows the transfer size before reading any data).
+
+### 4.6 Memory and file-size guidance (docs page, ml-cnv.5)
+
+From the measurements: a point feature costs about 0.5–1.3 KB of JS heap once decoded (GeoJSON
+objects) before MapLibre's own worker copy. Guidance: **whole-file vector data up to about 100k simple
+features or about 20 MB.** Beyond that, use FGB with `load: viewport` (indexed), Hilbert-sorted
+GeoParquet with `load: viewport`, or, for anything country-scale and static, **PMTiles** (tippecanoe or
+`ogr2ogr -f PMTiles`). COGs: any size, but they must be EPSG:3857, tiled, with overviews
+(`gdalwarp -t_srs EPSG:3857 -of COG`).
+
+### 4.7 Interactions with existing features
+
+- **fitTo:** unchanged for FGB/GeoParquet in `load: all` (fits on first data). In viewport mode it fits
+  from header or metadata bounds (FGB `envelope`, GeoParquet `geo.columns.*.bbox`). Bonus: PMTiles
+  sources gain fitTo from the header bounds. Today "tiled sources cannot be fit" (U14). This is optional
+  scope for ml-cnv.1 (Q8).
+- **Clustering, `promoteId`/`generateId`, hover highlight:** unchanged (it is a GeoJSON source).
+- **`layer-data-loading` / `layer-data-loaded` / `layer-data-error` events:** fire as for GeoJSON `url:`.
+  Viewport mode fires `loaded` after each re-query, with the feature count.
+- **Live data (`refresh`/`stream`):** rejected for FGB/GeoParquet in 0.9 (Q6).
+- **Astro `fetchStrategy: build`/`prefetchedData`:** out of scope for 0.9. A follow-up could decode at
+  build time in Node (both libraries run in Node).
+
+---
+
+## 5. D7 — Error UX
+
+Every case below is **non-fatal**. The map and all other layers render, and the problem goes into the 0.8
+notice ("Part of this map didn't load", `components/map-notice.ts`), suppressed by `quiet`, logged to
+the console, and dispatched as `ml-map:layer-data-error` / `ml-map:error` (non-fatal) as today. The
+wording follows `describeDataProblem` / `describeSourceProblem`. The **observed** column is what the
+prototype surfaced with raw library errors (screenshot `errors-ml5-proto.png`). That is the case for
+mapping them.
+
+| Failure | Detection | Observed today (raw) | Notice wording (proposed) |
+|---|---|---|---|
+| Decoder chunk didn't download | `import()` rejects | — | "Source `parcels` needs the FlatGeobuf reader, which couldn't be downloaded (check the connection or a content blocker). Other layers are unaffected." |
+| Server ignores `Range` (e.g. `python -m http.server`, **still true on Python 3.14.4**, verified) | `200` (not `206`) to a range request; pmtiles' own error | "Server returned no content-length header or content-length exceeding request. Check that your storage backend supports HTTP Byte Serving." | "`data/x.pmtiles` was served without range-request support (the server sent the whole file instead of the part asked for). PMTiles, COG and FlatGeobuf need a host that supports HTTP range requests: GitHub Pages, Netlify, S3, R2 do; `python -m http.server` does not, try `npx serve`." |
+| CORS (cross-origin, no `Access-Control-Allow-Origin`) | `TypeError` from `fetch` on a cross-origin URL | "Failed to fetch" | "The browser wasn't allowed to read `https://data.example.org/x.fgb` from this page (CORS), or the host is unreachable. The host must send `Access-Control-Allow-Origin` and, for range requests, allow the `Range` header." |
+| 404 / HTTP error | status | "Bad response code: 404" | existing `describeDataProblem` text ("Data file `…` didn't load (404 Not Found) … The browser looked for …"), plus the `base` hint |
+| Wrong file (HTML 200 page, wrong format) | magic bytes: PMTiles `PMTiles`, FGB `fgb\x03`, Parquet `PAR1`, TIFF `II*\0`/`MM\0*` | "Wrong magic number for PMTiles archive" / "Not a FlatGeobuf file" | "`data/x.pmtiles` isn't a PMTiles file. A wrong path often returns a web page instead." (same text pattern as the existing "isn't JSON") |
+| Parquet without GeoParquet metadata | no `geo` key | (prototype message) | "`x.parquet` is a Parquet file but not GeoParquet (no geometry metadata). Write it with GeoPandas `to_parquet`, GDAL, or DuckDB's spatial extension." |
+| GeoArrow-encoded GeoParquet | `geo.columns[*].encoding != "WKB"` | — | "`x.parquet` stores geometry as GeoArrow `point`; this version reads WKB-encoded GeoParquet. Rewrite with `geometry_encoding='WKB'` (GeoPandas) or `GEOMETRY_ENCODING=WKB` (GDAL)." |
+| Wrong CRS (FGB / GeoParquet) | FGB header `crs.code`; GeoParquet `crs` | — | "`x.fgb` is in EPSG:2263; MapLibre needs longitude/latitude (EPSG:4326). Reproject: `ogr2ogr -t_srs EPSG:4326 out.fgb x.fgb`." |
+| COG not in EPSG:3857 | **preflight** `getCogMetadata` when the source is added | **No error at all**: an EPSG:4326 GeoTIFF rendered as a blank white rectangle | "`x.tif` is in EPSG:4326; COGs must be in Web Mercator (EPSG:3857). `gdalwarp -t_srs EPSG:3857 -of COG x.tif out.tif`." |
+| TIFF not cloud-optimized (stripped, no overviews) | geotiff: tile width / overview count | — | console warning: "`x.tif` isn't cloud-optimized (no internal tiles/overviews), so the browser may download most of it. `gdal_translate -of COG`." |
+| Too large to load whole | `Content-Length`/footer size vs guards ([§4.4](#44-flatgeobuf-whole-file-vs-viewport)) | (a 4 s main-thread freeze at 30 MB) | "`x.fgb` is 180 MB, too large to load whole in a browser. Add `load: viewport` (needs a spatial index) or convert it to PMTiles." |
+| Unsorted GeoParquet with `load: viewport` | row-group bbox coverage | — | console warning (see [§4.5](#45-geoparquet-column-projection-row-groups-codecs)) |
+
+`mlym validate` cannot see network failures, but it does report the static ones ([§2.5](#25-validation-and-did-you-mean)).
+
+---
+
+## 6. D5 — Plain HTML / CDN path
+
+- **Mechanism (proven in the prototype).** The browser build turns on esbuild/tsup `splitting`.
+  `register.browser.js` contains `import("./chunks/pmtiles-<hash>.js")`, which the browser resolves
+  **relative to the module's own URL**. On unpkg that is the versioned file URL after the
+  `@0.9` → `@0.9.x` redirect, so chunks always match the bundle that asked for them. The import map
+  only needs to map `maplibre-gl`, exactly as today. Chunks import `maplibre-gl` by bare specifier only
+  through the interop module, and the import map resolves it to the same module, so identity holds.
+- **Hazard: jsDelivr floating aliases.** `cdn.jsdelivr.net/npm/@maplibre-yaml/core@0.9/dist/…` does **not**
+  redirect. The chunk URL becomes `…@0.9/dist/chunks/pmtiles-<hash>.js`, which jsDelivr resolves to
+  whatever 0.9.x is newest *at chunk-fetch time*. A release between the two fetches gives a 404 on a
+  hashed name. Options: (a) document pinned versions for jsDelivr; (b) **stable chunk names**
+  (`chunks/format-pmtiles.js`, no hash) so a skewed fetch still finds a file. The chunk interface is
+  small and versioned, but skew is possible. (c) Both. **Agreed with ml-7qa.5 (#157 §2.5):** (c), plus a `VERSION` handshake in every chunk, so
+  skew shows a loud card instead of running silently wrong ([§10](#10-coordination-with-ml-7qa5-lazy-loading), C3).
+- **Core-path cost.** The prototype's entry grew 107.3 → 108.5 KB gz (+1.2 KB: detection, loader, the
+  parallel gate). With esbuild splitting it also produced **two tiny shared chunks (0.5 + 0.6 KB gz) that a
+  plain map page then fetches**. ml-7qa.5 (#157) measured the same esbuild behaviour at full scale and
+  chose **Rollup for the browser build**, which keeps entry-shared code in the entry. Together with
+  dependency injection (C4), a plain page makes zero extra requests.
+- **Fallback if a chunk can't load:** per-format notice, sources skipped ([§4.1](#41-detection-and-when-decoders-load)).
+  The escape hatch is the 0.7 page-JS path. A host that registers the protocol itself (from its own
+  bundle) bypasses the chunk entirely (host wins, [§4.2](#42-protocol-registration-pmtiles-cog)). For
+  FGB/GeoParquet the escape hatch is converting to GeoJSON.
+- **CSP.** Chunks come from the same origin as the bundle, so `script-src` already covers them.
+  **COG's geotiff `Pool` spawns `blob:` workers**, so it needs `worker-src blob:`. maplibre-gl 4/5 need
+  that too (except their CSP builds), but **v6 does not** (module worker file), so a strict-CSP v6 page
+  could run maplibre and still fail COG decoding. Document this, and detect a worker construction failure
+  as its own notice.
+- **Bundler / Astro path.** `dist/index.js` and `dist/register.js` keep bare `import("pmtiles")` (etc.)
+  dynamic imports with the libraries as `dependencies`. Vite, webpack and Rollup turn each into a lazy
+  chunk of the *consumer's* build automatically. Astro: same as Vite. React: same.
+
+---
+
+## 7. D8 — Export classes (`mlym emit`)
+
+New registrations in `export/registrations.ts` (closed world, so they must exist):
+
+| Construct key | Class | Emit behaviour | Warning |
+|---|---|---|---|
+| `format.pmtiles` | `exports` | URL rewritten to the canonical absolute `pmtiles://…`; `type` untouched | `contract`: "The style references `pmtiles://` URLs: renderers must register the PMTiles protocol (maplibre-gl JS: `addProtocol('pmtiles', new Protocol().tile)`; other renderers: check their PMTiles support)." Recent MapLibre Native releases are believed to read `pmtiles://` natively. That was **not verified in this spike**, so ml-cnv.1 should verify it before the docs claim it. |
+| `format.cog` | `exports` | URL rewritten to `cog://…` (+`#dem` on raster-dem), `tileSize: 256` written out | `contract`: "The style uses the `cog://` protocol of @geomatico/maplibre-cog-protocol (including its `#dem`/`#color:` URL syntax); renderers without that plugin can't draw these sources." |
+| `format.flatgeobuf` / `format.geoparquet` | `exports-with-fallback` | Decode at emit time (in the CLI, like `images:` fetch-at-emit). ≤ 2 MB of GeoJSON → **inline `data:`**. Larger → write `<source>.geojson` beside `--out` and reference it via `--sprite-base`'s URL prefix (generalised as `--asset-base`, Q9). The snapshot carries **all** columns unless `columns:` is explicit. | `contract`: "converted to GeoJSON at emit time; the style carries a snapshot." `lossy`: viewport-mode sources (the snapshot is the whole file, not a stream), over the snapshot cap (empty source), or unfetchable at emit time (empty source). `--strict` refuses the lossy cases. |
+| `source.load`, `source.columns` | `no-export` | dropped | `contract` (they describe loading, not cartography) |
+
+Core *describes* and the CLI *fetches/decodes*, matching the existing core/CLI split for images
+(KTD3). The emitter returns `EmitDataRef { source, url, format, columns }` and stays network-free.
+
+**Pre-existing emitter bug found during this spike (filed as ml-xzx):** a named `geojson` source with
+`url:` is emitted verbatim as `{ "type": "geojson", "url": "…" }`. The MapLibre style validator rejects
+that output: `sources.pts: unknown property "url"`, `missing required property "data"`. A GeoJSON `url:`
+should emit as `data: "<url>"`. The FGB/GeoParquet lowering is built on the corrected path, so the fix
+lands first (or with ml-cnv.3).
+
+---
+
+## 8. D9 — Testing plan
+
+**Fixtures, synthetic and CC0, generated by a committed script.**
+`scripts/fixtures/cloud-native.py` (prototype: `~/dev/cloud-native-spike/gen_fixtures.py`). It is
+deterministic (seeded) and set in a fictional area (Tyrrhenian Sea, no real places), so licence is a non-issue:
+
+| File | Size | Exercises |
+|---|---|---|
+| `districts.pmtiles` (vector, z0–11, 2 layers) | 125 KB | vector PMTiles, `source-layer`, header bounds/minzoom/maxzoom, `vector_layers` |
+| `imagery.pmtiles` (raster PNG, z0–8) | 275 KB | raster PMTiles, `tileSize` |
+| `imagery.cog.tif` (RGB 512², deflate, 256 tiles, overviews) | 157 KB | COG imagery |
+| `elevation.cog.tif` (int16 DEM 256², deflate, predictor 2) | 32 KB | COG `#dem`, hillshade, terrain |
+| `not-a-cog-4326.tif` | 4 KB | CRS preflight error |
+| `districts.fgb` (48 polygons, indexed) / `points.fgb` (400) | 13 / 62 KB | FGB whole-file + bbox |
+| `districts.parquet`, `points.parquet` (snappy, bbox covering, small row groups) | 22 / 44 KB | GeoParquet, projection, row-group filter |
+| `points.zstd.parquet` | 40 KB | zstd codec chunk |
+| `plain.parquet` | <1 KB | not-GeoParquet error |
+| **Total** | **≈ 0.8 MB** | |
+
+The 200k stress set (30 / 39 / 15 MB) is **not** committed. The bench script regenerates it on demand
+for the size-guidance numbers. Requirements: Python with `geopandas`, `pyogrio`, `rasterio`, `pyarrow`,
+`pmtiles`, `mapbox-vector-tile` (all wheels, GDAL bundled; `uv` installs them in under a minute). The
+fixtures are committed, so CI never runs Python.
+
+**e2e server (`e2e/server.mjs`).**
+- **Range support** for static files: `Range: bytes=a-b` and suffix `bytes=-n` → `206` with
+  `Content-Range`, `Accept-Ranges: bytes`, `416` out of range. Expose `Content-Range, Content-Length,
+  ETag`. Allow the `Range` header on `OPTIONS`. Prototype: `~/dev/cloud-native-spike/server.mjs`.
+- **`/norange/…`** mirror: ignores `Range` and returns `200` with the full body (the `python -m http.server` failure).
+- **No-CORS:** `/nocors/…` omits `Access-Control-Allow-Origin`. A page on `localhost:4174` fetching
+  `http://127.0.0.1:4174/nocors/…` is cross-origin, so CORS failure is testable with **one** server.
+- Request log endpoint (test-only) so specs can assert "viewport mode moved < N bytes" and "only the
+  projected columns were read".
+
+**Specs (Playwright, the existing `verify:browser` + maplibre 4/5/6 matrix):**
+`cloud-native-pmtiles` (vector + raster, YAML-only, host-registered protocol still wins),
+`cloud-native-cog` (RGB + DEM + terrain; 4326 notice), `cloud-native-flatgeobuf` (whole file +
+viewport re-query on pan), `cloud-native-geoparquet` (projection asserted by request bytes, zstd codec
+chunk loaded only for the zstd file), `cloud-native-errors` (one source per failure row of
+[§5](#5-d7--error-ux), asserting notice text), `cloud-native-cdn` (served as the CDN serves it: `dist/`
+under a versioned path, import map, no bundler; asserts a plain GeoJSON page fetches **zero** chunks).
+Each spec doubles as its gallery or demo page (memory: browser tests as demos).
+
+**Unit (vitest):** `formatOf` / `formatsIn` truth table; validation messages; column-reference
+extraction from expressions, popups and templates; URL canonicalization with and without `base`; export
+registrations exhaustive; emitter lowering with stubbed `EmitDataRef` resolution; chunk-failure
+eviction/retry; no-range detection.
+
+**Size budget (ties to ml-7qa.1):** CI asserts per-chunk gzip ceilings: pmtiles ≤ 9 KB, flatgeobuf ≤ 12 KB,
+geoparquet ≤ 25 KB, geoparquet-brotli ≤ 70 KB, cog ≤ 140 KB. It also asserts the entry grows ≤ 1.5 KB gz
+and has no static chunk imports.
+
+---
+
+## 9. Prototype evidence
+
+Scratch only: `~/dev/cloud-native-spike/` (not in this PR). It holds a copy of `packages/core/src` with
+about 330 added lines (`core-proto.patch`), built by `core-proto/build.mjs` (core's browser-build options +
+`splitting: true`), served by `server.mjs` (range-capable, gzip), and driven by `drive.mjs` (Playwright,
+SwiftShader, the repo's e2e launch flags).
+
+**Proven end to end, YAML-only, no page JS:**
+
+1. **PMTiles auto-registration**, vector and raster, by extension (`/fixtures/imagery.pmtiles`) and by
+   scheme (`pmtiles:///fixtures/districts.pmtiles`). Only range requests: 4 per archive, 46 KB of 275 KB and
+   28 KB of 125 KB.
+2. **FlatGeobuf → GeoJSON source** (48 polygons, data-driven fill, click popup, legend, **fitTo framed
+   the decoded data**).
+3. **GeoParquet → GeoJSON source** (400 points, `match` colours, column projection).
+4. **COG** RGB imagery draped on **3D terrain from a DEM COG**, plus hillshade (`#dem` appended for the
+   author).
+5. Same pages on **maplibre-gl 5.24 (UMD via import map) and 6.x (ESM)**, with identical results.
+
+Screenshots (inspected): `~/crosshatch-proto/cloudnative/vector-formats-ml5-proto.png`,
+`vector-formats-ml6-proto.png`, `cog-ml5-proto.png`, `errors-ml5-proto.png`.
+
+**Chunk sizes in situ (gzip -9; prototype build):**
+
+| Chunk | gz | raw |
+|---|---|---|
+| `register.browser.js` (entry) | 108.5 KB (0.8 baseline: 107.3) | 376.0 KB |
+| `pmtiles` | 7.4 KB | 18.8 KB |
+| `flatgeobuf` | 10.3 KB | 39.2 KB |
+| `geoparquet` (hyparquet, snappy only) | 18.1 KB | 57.6 KB |
+| `cog` (+ ~8 KB support chunks) | 125.2 KB | 351.0 KB |
+
+**Time to first render (unthrottled localhost, Chromium):** decoder chunks loaded in 21–30 ms each;
+`ml-map:load` at about 540 ms either way; all FGB + GeoParquet data rendered at 720–850 ms vs 600–680 ms
+for the same data as GeoJSON. Throttled numbers: [§4.1](#41-detection-and-when-decoders-load).
+Stress and viewport numbers: [§4.4](#44-flatgeobuf-whole-file-vs-viewport) and
+[§4.5](#45-geoparquet-column-projection-row-groups-codecs).
+
+**Bugs and surprises found by the prototype**, all folded into the design: FGB URL mode needs `rect`;
+FGB's `console.debug` chatter; hyparquet's extra `HEAD`; a non-3857 TIFF renders silently wrong; no-range
+GeoParquet "works" for small files and would multiply transfer for large ones; split builds add shared
+chunks to the core path; the existing emitter's GeoJSON `url:` bug.
+
+---
+
+## 10. Coordination with ml-7qa.5 (lazy loading)
+
+Format decoders are lazy chunks **on the same mechanism** as the rest of ml-7qa.5. That plan is PR
+#157 (`docs/plans/2026-10-18-lazy-loading-plan.md`; its §9 is the matching coordination section). It
+was pushed while this document was being finished. This table reconciles the two against that plan's
+seven proposed agreements:
+
+| # | Point | ml-7qa.5 (#157) | This design | Status |
+|---|---|---|---|---|
+| C1 | One loader: `src/lazy/features.ts`, `LazyFeature { name: "format:<x>", detect(model), load(), stage, required }`, memoized, literal `import()` paths, generation tokens | proposed | adopted; `formatsIn(model)` becomes the four `format:*` features' `detect` | **agreed** |
+| C2 | Build: Rollup for `register.browser` (no esbuild stub entry, flat lazy graph), tsup `splitting: true` for npm | proposed | adopted. Rollup also removes the two shared core-path chunks this prototype measured with esbuild splitting ([§6](#6-d5--plain-html--cdn-path)) | **agreed**; supersedes this doc's esbuild-based C3/C5 |
+| C3 | Chunk names: stable, unhashed (`chunks/format-pmtiles.js`, …) + `VERSION` handshake + docs recommend unpkg ranges / exact jsDelivr versions | proposed | same conclusion reached independently (jsDelivr alias hazard, [§6](#6-d5--plain-html--cdn-path)) | **agreed**; closes Q10 |
+| C4 | Install contract: decoder chunk exports `install(ctx: { maplibregl, addProtocol, signal })` and never imports maplibre-gl or `/maplibre` | proposed | adopted, plus a `read(url, { columns, bbox, signal })` export for the data formats (FGB/GeoParquet). The host-wins check ([§4.2](#42-protocol-registration-pmtiles-cog)) runs in the loader **before** `load()`, so a host-registered protocol costs zero bytes | **agreed + extended** |
+| C5 | Packaging: decoder libraries are regular `dependencies`, reached only via `import()`; the CDN build bundles each into its chunk | proposed | same (Q5 asks the maintainer to confirm the ~20 MB install cost) | **agreed** |
+| C6 | **Stage for protocol formats.** #157 says `before-map` (registered before `new Map()`, fetched in parallel with maplibre-gl) | `before-map` | Measured here: awaiting at `before-map` is +461 ms; awaiting at the `load` handler (`style-load`/`map-load`) is +255 ms, because document sources are only added in `load`. **Proposal:** protocol formats default to `style-load`. They are promoted to `before-map` **only when the basemap style itself** (an inline `mapStyle` object, or a v2 inline `basemap`) references `pmtiles://`/`cog://`, since MapLibre fetches those during style load. Remote basemap style URLs that use `pmtiles://` (Protomaps-style basemaps) cannot be detected statically: Q11. | **open; needs reconciling in #157** |
+| C7 | Data formats (FGB/GeoParquet) stage `data`: awaited by the layer manager before that source is added; other layers don't wait | proposed | same | **agreed** |
+| C8 | Failure: decoder failure is a *required-feature* failure **for that source only**: notice naming the source, or the plain-text card if no layer can render | proposed | same; rejected promise evicted so `reload()` retries | **agreed** |
+| C9 | Detection examples in #157 include `type: pmtiles` / `type: flatgeobuf` | — | D1 makes those spellings a validation **error** (Q1), so detection keys on URL scheme/extension + `format:` only | **#157 to adjust** (wording only) |
+| C10 | #157's open points for ml-cnv: library sizes; a GeoParquet size warning in `validate`; whether COG needs a worker | asked | sizes: [§3](#3-d3--libraries). `validate` is static and can't know file sizes, so the guards are runtime ([§4.4](#44-flatgeobuf-whole-file-vs-viewport)). COG: yes, geomatico decodes in a geotiff `Pool` of blob workers (CSP note, [§6](#6-d5--plain-html--cdn-path)). No WASM decoders chosen, so #157's WASM rule (6) does not apply | **answered** |
+
+---
+
+## 11. Open questions for the maintainer
+
+- **Q1. `type: pmtiles` as sugar?** The recommendation is a positioned error with the fix (D1). The alternative
+  accepts `type: pmtiles|cog|flatgeobuf|geoparquet` as sugar, expanding it to the canonical form and
+  inferring vector, raster or raster-dem from the layers that reference the source. It is friendlier for
+  beginners but adds magic and a second canonical spelling.
+- **Q2. Column projection default for GeoParquet.** On (recommended; halves the heap) or off (every
+  property available to host JS)? map-party reads clicked-feature properties, so if on, map-party
+  needs `columns: all` or the inference has to cover its usage. A map-party decision.
+- **Q3. COG library weight.** Accept @geomatico at about 134 KB gz (COG pages only; worker decoding,
+  DEM, ramps, masks), or build a ~40 KB `geotiff`-only protocol that we own and that decodes on the main
+  thread? The recommendation is geomatico, plus an upstream issue asking for an optional `Pool`.
+- **Q4. COG styling surface.** Pass the plugin's URL fragment through as written (`#color:Scheme,min,max,c`;
+  zero design, recommended for 0.9), or add structured YAML (`colorRamp: { scheme, min, max }`) that
+  compiles to the fragment?
+- **Q5. Dependencies.** Ship all four libraries as `dependencies` of core (about 20 MB on disk, mostly COG),
+  or as a separate `@maplibre-yaml/formats` package that core loads dynamically, with a CDN fallback when
+  it isn't installed? Recommended: dependencies of core, because a separate package breaks "YAML-only works" for bundler users.
+- **Q6. Live data on FGB/GeoParquet.** Rejected in 0.9 (recommended), or allow `refresh:` with the
+  replace strategy (a cheap re-read)?
+- **Q7. Size thresholds.** 10 MB soft / 50 MB hard for whole-file loads ([§4.4](#44-flatgeobuf-whole-file-vs-viewport))
+  are proposals from one machine's measurements. Should they be stricter for a classroom audience?
+- **Q8. PMTiles `fitTo` from header bounds.** In scope for ml-cnv.1 (small, and closes a U14 gap) or later?
+- **Q9. Emit sidecar data.** Generalise `--sprite-base` to `--asset-base` for sidecar GeoJSON, or always inline
+  (simpler, but a large style.json)?
+- **Q10. Chunk naming.** *Resolved with ml-7qa.5 (#157):* stable names + `VERSION` handshake + pinned-version guidance (C3).
+- **Q11. PMTiles in a remote basemap style.** A `mapStyle:` URL whose style uses `pmtiles://` sources (Protomaps basemaps) needs the protocol before the style loads, but a static scan can't see inside a remote style. Options: (a) a document-level hint (e.g. `formats: [pmtiles]` under `config`/`runtime`) that promotes the protocol to `before-map`; (b) fetch and scan the basemap style ourselves (an extra fetch of a file MapLibre fetches anyway; maybe cached); (c) keep the 0.7 page-JS registration as the documented route for this case. Recommended: (c) for 0.9 with a clear notice when a basemap request hits an unregistered `pmtiles://`, and (a) if demand shows. Ties to C6.
+
+---
+
+## 12. Implementation breakdown (maps to beads)
+
+Order: ml-cnv.1 (it carries the shared infrastructure), then .2/.3/.4 in parallel, then .5. Each unit
+ships a changeset (`@maplibre-yaml/core: minor`; `@maplibre-yaml/cli: minor` where emit changes) and a
+browser twin.
+
+- **ml-cnv.1 — PMTiles + shared format infrastructure.**
+  `src/formats/` (`detect.ts`: `formatOf`, `formatsIn`; `loader.ts`: cached, evicting, injected-dependency
+  loader on the ml-7qa.5 mechanism; `pmtiles.ts`). Parse-time kick-off and `load`-handler gate in
+  `ml-map`/`MapRenderer`. Host-wins registry check. URL canonicalization and `base` rebasing of
+  `pmtiles://`/`cog://` inner URLs (fixes a real 0.8 bug). Schema `format` key and the
+  static validation table ([§2.5](#25-validation-and-did-you-mean)). Export registration `format.pmtiles` and
+  canonical-URL emit. e2e server range + `/norange/` + `/nocors/`. Fixtures script and the PMTiles fixtures.
+  Convert the gallery "PMTiles source and protocol" page to YAML-only; keep the hatch spec as the
+  host-registered path. (Optional, Q8: fitTo from header bounds.)
+- **ml-cnv.2 — COG.** `formats/cog.ts` (geomatico; host-wins). Raster-dem `#dem` and `tileSize: 256`
+  defaults. **EPSG:3857 / not-a-COG preflight** via `getCogMetadata`. Worker/CSP failure notice.
+  `format.cog` export registration. RGB + DEM + terrain fixture spec. Unblocks gallery row
+  add-a-cog-raster-source.
+- **ml-cnv.3 — FlatGeobuf.** `formats/flatgeobuf.ts` (streamed whole-file; viewport via `rect` with
+  debounced and aborted re-query on `moveend`; header CRS, index and envelope). `load:` key. Size guards.
+  `console.debug` stripped in the chunk build. **Emitter GeoJSON `url:` → `data:` fix** (ml-xzx),
+  then `format.flatgeobuf` exports-with-fallback (`EmitDataRef`, CLI decode, inline/sidecar).
+- **ml-cnv.4 — GeoParquet.** `formats/geoparquet.ts` on hyparquet (suffix-range open, no `HEAD`; no-range
+  detection; WKB only; CRS check). Column-reference extraction for projection, plus `columns:`. Row-group
+  bbox filtering, with a sortedness check, for `load: viewport`. Codec chunks (zstd/gzip/lz4 in, brotli
+  separate). `format.geoparquet` export registration (shares the ml-cnv.3 lowering).
+- **ml-cnv.5 — CDN/plain-HTML verification, docs, gallery.** `cloud-native-cdn` spec (dist served as the
+  CDN serves it; zero chunks on a plain page); docs page "Cloud-native data" (when to use which format;
+  hosting with range requests: GitHub Pages, Netlify, S3/R2/GCS CORS examples, `python -m http.server`
+  warning; size guidance from [§4.6](#46-memory-and-file-size-guidance-docs-page-ml-cnv5); CSP note); gallery pages
+  for all four; per-chunk size budgets in CI; jsDelivr/unpkg version guidance (C3).
