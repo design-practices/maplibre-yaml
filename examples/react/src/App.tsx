@@ -1,30 +1,13 @@
-import { useRef, useState, version as reactVersion, type ReactNode, type RefObject } from "react";
+import { useRef, useState, version as reactVersion, type RefObject } from "react";
 import { React19Panel } from "#react19-only";
+import { Card } from "./Card";
 import { CITIES_YAML, ROUTE_COLORS, routesDocument } from "./maps";
 import { ConfigMap } from "./snippets/ConfigMap";
-import { YamlMap } from "./snippets/YamlMap";
 import { MapWithControls } from "./snippets/SlotControls";
+import { useMapEvent } from "./snippets/useMapEvent";
 import { LateConfigMap } from "./LateConfigMap";
-import { useMapEvent } from "./useMapEvent";
 
 const MAJOR = Number(reactVersion.split(".")[0]);
-
-/** A titled demo card. `wide` spans both grid columns. */
-function Card(props: {
-  id: string;
-  title: string;
-  lede: ReactNode;
-  wide?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <section id={props.id} className={props.wide ? "card wide" : "card"}>
-      <h2>{props.title}</h2>
-      <p className="lede">{props.lede}</p>
-      {props.children}
-    </section>
-  );
-}
 
 /** Every ml-map:* event bubbles, so one listener on the page sees them all. */
 function EventLog({ scope }: { scope: RefObject<HTMLElement | null> }) {
@@ -129,7 +112,8 @@ export function App() {
           <p>
             One Vite + TypeScript app, built against React 18 and React 19 from the same
             source and driven in a browser in CI. Typed by{" "}
-            <code>@maplibre-yaml/core/react</code>.
+            <code>@maplibre-yaml/core/react</code>. The docs' recipes run on{" "}
+            <a href="./recipes.html">recipes.html</a>.
           </p>
         </div>
         <div className="badges">
@@ -151,12 +135,12 @@ export function App() {
           lede={
             <>
               <code>src="./maps/cities.yaml"</code>. The slider and checkboxes come from the
-              document's <code>parameters:</code>. A ref + <code>mapReady()</code> reaches
-              the MapLibre map; click a city.
+              document's <code>parameters:</code>; click a city. The event log below shows
+              both reaching React.
             </>
           }
         >
-          <YamlMap src={CITIES_YAML} />
+          <ml-map src={CITIES_YAML} style={{ display: "block", height: "400px" }} />
         </Card>
 
         <Card

@@ -2,17 +2,21 @@
 
 A Vite + React + TypeScript app that uses `<ml-map>` the documented way, and
 the source of the React snippets in the docs
-(`docs/src/content/docs/integrations/web-components.mdx`; `pnpm test` here
-fails if they differ).
+(`docs/src/content/docs/integrations/react.mdx`; `pnpm test` here fails if
+they differ).
 
 It shows a map from a YAML file with its params panel, one from a config
-object, `ml-map:*` events reaching React state, a ref + `mapReady()` reaching
-the MapLibre map, React-rendered controls in a map corner (a slot), mount and
-unmount under StrictMode with a config assigned from an effect, and the React
+object, `ml-map:*` events reaching React state, React-rendered controls in a
+map corner (a slot), mount and unmount under StrictMode with a config assigned from an effect, and the React
 19 object `config` + typed `onml-map:*` props. Types come from one line in
 `src/vite-env.d.ts`: `/// <reference types="@maplibre-yaml/core/react" />`.
 
-The basemap is local (Natural Earth 1:110m land, public domain, in
+`recipes.html` runs the docs' "Common tasks" recipes as a reader pastes them
+after the quick start: each loads `/map.yaml` (`public/map.yaml`, the quick
+start's document) and reads the quake's `place`.
+
+The basemap and data are local (Natural Earth 1:110m land and populated
+places, and a snapshot of the USGS week feed; all public domain, in
 `public/data/`), so the app needs no network.
 
 ## Run it

@@ -114,63 +114,183 @@ To try map documents before you put them in your app, use the
 
 ## Common tasks
 
-### React: events and the map instance
+Most recipes here are components that load the quick start's `/map.yaml`.
+Save one in `src/` under its component's name, and render it from
+`src/App.tsx` in place of `<SrcMap />`.
 
-React 18 cannot attach listeners for custom events through props, so use a
-ref. The same code works on React 19, and the listeners are typed from
-`MLMapEventMap`. `mapReady()` resolves with the MapLibre map once the
-document has loaded:
+### Respond to a click \{#react-events-and-the-map-instance}
 
-{/* snippet: examples/react/src/snippets/YamlMap.tsx */}
+Clicking a feature fires `ml-map:layer-click`, with the feature in
+`event.detail.feature`. On React 19, listen with an `onml-map:layer-click`
+prop; the typings give the handler its event's type. Save this as
+`src/ClickedPlace.tsx`:
+
+{/* snippet: examples/react/src/react19/ClickedPlace.tsx */}
 ```tsx
 import "@maplibre-yaml/core/register";
-import type { MLMap, MLMapEventMap } from "@maplibre-yaml/core/register";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
-export function YamlMap({ src }: { src: string }) {
-  const ref = useRef<MLMap>(null);
-  const [clicked, setClicked] = useState<string | null>(null);
-  const [zoom, setZoom] = useState<number | null>(null);
-
-  useEffect(() => {
-    const el = ref.current!;
-    const onClick = (event: MLMapEventMap["ml-map:layer-click"]) =>
-      setClicked(String(event.detail.feature?.properties?.name));
-    const onError = (event: MLMapEventMap["ml-map:error"]) =>
-      console.error(event.detail.error ?? event.detail.errors);
-    el.addEventListener("ml-map:layer-click", onClick);
-    el.addEventListener("ml-map:error", onError);
-
-    // mapReady() resolves with the MapLibre map once the document loaded.
-    let cancelled = false;
-    el.mapReady().then(
-      (map) => {
-        if (cancelled) return;
-        setZoom(map.getZoom());
-        map.on("zoomend", () => setZoom(map.getZoom()));
-      },
-      () => {} // a failed document also fires ml-map:error
-    );
-
-    return () => {
-      cancelled = true;
-      el.removeEventListener("ml-map:layer-click", onClick);
-      el.removeEventListener("ml-map:error", onError);
-    };
-  }, []);
+// React 19: an `onml-map:*` prop listens for that ml-map:* event.
+export function ClickedPlace() {
+  const [place, setPlace] = useState<string | null>(null);
 
   return (
     <>
-      <ml-map ref={ref} src={src} style={{ display: "block", height: "400px" }} />
-      <p>
-        Zoom {zoom?.toFixed(1) ?? "…"} · clicked: {clicked ?? "nothing yet"}
-      </p>
+      <ml-map
+        src="/map.yaml"
+        onml-map:layer-click={(event) => setPlace(event.detail.feature.properties.place)}
+        style={{ display: "block", height: "400px" }}
+      />
+      <p>Clicked: {place ?? "nothing yet"}</p>
     </>
   );
 }
 ```
 
-### React: a map from a config object
+Click a red circle: under the map, a line such as *Clicked: 19 km S of
+Makurazaki, Japan* shows where that earthquake happened.
+
+The colon makes `onml-map:layer-click` a namespaced JSX attribute. Vite and
+TypeScript compile it; if your JSX compiler rejects namespaced attributes,
+spread it in: `{...{ "onml-map:layer-click": handler }}`.
+
+React 18 ignores `onml-map:*` props. This `ClickedPlace` works on React 18 and
+19: it adds the listener through a ref and removes it in the effect's cleanup.
+
+{/* snippet: examples/react/src/snippets/ClickedPlace.tsx */}
+```tsx
+import "@maplibre-yaml/core/register";
+import type { MLMap, MLMapEventMap } from "@maplibre-yaml/core/register";
+import { useEffect, useRef, useState } from "react";
+
+// React 18 and 19: listen on the element through a ref.
+export function ClickedPlace() {
+  const ref = useRef<MLMap>(null);
+  const [place, setPlace] = useState<string | null>(null);
+
+  useEffect(() => {
+    const el = ref.current!;
+    const onClick = (event: MLMapEventMap["ml-map:layer-click"]) =>
+      setPlace(event.detail.feature.properties.place);
+    el.addEventListener("ml-map:layer-click", onClick);
+    return () => el.removeEventListener("ml-map:layer-click", onClick);
+  }, []);
+
+  return (
+    <>
+      <ml-map ref={ref} src="/map.yaml" style={{ display: "block", height: "400px" }} />
+      <p>Clicked: {place ?? "nothing yet"}</p>
+    </>
+  );
+}
+```
+
+Every event and its `detail` is listed in the
+[`<ml-map>` reference](/reference/elements/#ml-map).
+
+### Use the MapLibre map
+
+`mapReady()` resolves with the MapLibre
+[`Map`](https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/) once the
+document has loaded, so all of MapLibre's API is there: `flyTo`,
+`setPaintProperty`, `queryRenderedFeatures`, `on`. This button flies to Japan:
+
+{/* snippet: examples/react/src/snippets/FlyToJapan.tsx */}
+```tsx
+import "@maplibre-yaml/core/register";
+import type { MLMap } from "@maplibre-yaml/core/register";
+import { useRef } from "react";
+
+export function FlyToJapan() {
+  const ref = useRef<MLMap>(null);
+
+  // mapReady() resolves with the MapLibre map once the document has loaded.
+  const flyToJapan = async () => {
+    const map = await ref.current!.mapReady();
+    map.flyTo({ center: [138, 37], zoom: 4.5 });
+  };
+
+  return (
+    <>
+      <button type="button" onClick={flyToJapan}>
+        Fly to Japan
+      </button>
+      <ml-map ref={ref} src="/map.yaml" style={{ display: "block", height: "400px" }} />
+    </>
+  );
+}
+```
+
+Once the map has loaded, `ref.current.getMap()` returns the same map without
+waiting (before then it returns `null`).
+
+### Listen with a `useMapEvent` hook
+
+The ref, the listener and the cleanup are the same for every event, so a hook
+can hold them. Save this as `src/useMapEvent.ts` (it is not part of the
+package). It calls the newest handler without re-subscribing on every render,
+and StrictMode's extra mount still leaves one listener:
+
+{/* snippet: examples/react/src/snippets/useMapEvent.ts */}
+```ts
+import { useEffect, useRef, type RefObject } from "react";
+import type { MLMapEventMap } from "@maplibre-yaml/core/register";
+
+// Listen for an ml-map:* event on the element in `ref` (or on an element
+// around maps: the events bubble). Works on React 18 and 19.
+export function useMapEvent<K extends keyof MLMapEventMap>(
+  ref: RefObject<HTMLElement | null>,
+  type: K,
+  handler: (event: MLMapEventMap[K]) => void
+) {
+  // Call the newest handler without re-subscribing on every render.
+  const latest = useRef(handler);
+  useEffect(() => {
+    latest.current = handler;
+  });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const listener = (event: Event) => latest.current(event as MLMapEventMap[K]);
+    el.addEventListener(type, listener);
+    return () => el.removeEventListener(type, listener);
+  }, [ref, type]);
+}
+```
+
+A component then names the event and the handler. Each click adds one place to
+the list:
+
+{/* snippet: examples/react/src/snippets/ClickedPlaces.tsx */}
+```tsx
+import "@maplibre-yaml/core/register";
+import type { MLMap } from "@maplibre-yaml/core/register";
+import { useRef, useState } from "react";
+import { useMapEvent } from "./useMapEvent";
+
+export function ClickedPlaces() {
+  const ref = useRef<MLMap>(null);
+  const [places, setPlaces] = useState<string[]>([]);
+
+  useMapEvent(ref, "ml-map:layer-click", (event) =>
+    setPlaces((list) => [...list, event.detail.feature.properties.place])
+  );
+
+  return (
+    <>
+      <ml-map ref={ref} src="/map.yaml" style={{ display: "block", height: "400px" }} />
+      <ol>
+        {places.map((place, i) => (
+          <li key={i}>{place}</li>
+        ))}
+      </ol>
+    </>
+  );
+}
+```
+
+### A map from a config object \{#react-a-map-from-a-config-object}
 
 When your code builds the document, pass it as `config`. A JSON string works
 on React 18 (which sets it as the attribute) and React 19 (which sets the
@@ -201,11 +321,10 @@ invalid document shows the "Configuration Error" card, as a YAML file would.
 
 ### React 19: object config and event props
 
-React 19 sets custom-element props as properties and attaches `on*` props as
-listeners, using the rest of the name as the event type:
-`onml-map:load={handler}` listens for `ml-map:load`. With the typings, each
-handler gets its event's `detail` type. React 18 ignores these props, and the
-typings reject an object `config` there:
+React 19 sets custom-element props as properties, so `config` takes the object
+itself, and attaches `on*` props as listeners
+([Respond to a click](#react-events-and-the-map-instance)). React 18 ignores
+the event props, and the typings reject an object `config` there:
 
 {/* snippet: examples/react/src/react19/EventPropsMap.tsx */}
 ```tsx
@@ -237,11 +356,7 @@ export function EventPropsMap({
 }
 ```
 
-The colon makes these namespaced JSX attributes. Vite and TypeScript compile
-them; if your JSX compiler rejects namespaced attributes, spread them in:
-`{...{ "onml-map:load": handler }}`.
-
-### React: slot children
+### Slot children \{#react-slot-children}
 
 React can render your own controls into the map's corners
 ([slots](/integrations/web-components/#slots-your-own-chrome-over-the-map)).
@@ -282,14 +397,14 @@ export function MapWithControls({ src }: { src: string }) {
 }
 ```
 
-### React: mounting and unmounting
+### Mounting and unmounting \{#react-mounting-and-unmounting}
 
 Unmounting removes the element, and the element then destroys its MapLibre
 map: no leaked canvas, and a remount creates exactly one new map.
 StrictMode's double-run effects do not re-create the element, so keep
-listener setup in an effect that has a cleanup, as shown above. A `config`
-assigned from an effect (after the element has connected) is waited for, so
-it renders without a passing "No configuration provided" error.
+listener setup in an effect that has a cleanup, as the recipes above do. A
+`config` assigned from an effect (after the element has connected) is waited
+for, so it renders without a passing "No configuration provided" error.
 
 ### Story maps \{#story-maps}
 
@@ -300,6 +415,72 @@ it, `src` points at a story file in `public/`, and its events are
 `<ml-map>` only, so in TypeScript a `<ml-scrollytelling>` tag needs your own
 declaration. Writing the story file:
 [Writing a story file](/schema/scrollytelling/).
+
+### Putting it together
+
+One component with all of the above: the clicked place, the zoom read from the
+MapLibre map, and errors. `ml-map:error` carries `detail.errors`, a list of
+`{ path, message }`, when the document can't be fetched, parsed or validated
+(the map shows the same list), and one `detail.error` for anything else, such
+as a basemap or data file that fails to load. It uses `useMapEvent` from
+[above](#listen-with-a-usemapevent-hook):
+
+{/* snippet: examples/react/src/snippets/EarthquakeMap.tsx */}
+```tsx
+import "@maplibre-yaml/core/register";
+import type { MLMap } from "@maplibre-yaml/core/register";
+import { useEffect, useRef, useState } from "react";
+import { useMapEvent } from "./useMapEvent";
+
+export function EarthquakeMap() {
+  const ref = useRef<MLMap>(null);
+  const [place, setPlace] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  useMapEvent(ref, "ml-map:layer-click", (event) =>
+    setPlace(event.detail.feature.properties.place)
+  );
+  // A document that can't be fetched, parsed or validated reports `errors`
+  // (and the map shows them); anything else reports one `error`.
+  useMapEvent(ref, "ml-map:error", ({ detail }) =>
+    setProblem(detail.error ? detail.error.message : detail.errors.map((e) => e.message).join("; "))
+  );
+
+  useEffect(() => {
+    let live = true;
+    let stop = () => {};
+    ref.current!.mapReady().then(
+      (map) => {
+        if (!live) return;
+        const onZoom = () => setZoom(map.getZoom());
+        onZoom();
+        map.on("zoomend", onZoom);
+        stop = () => map.off("zoomend", onZoom);
+      },
+      () => {} // the document failed: ml-map:error has the details
+    );
+    return () => {
+      live = false;
+      stop();
+    };
+  }, []);
+
+  return (
+    <>
+      <ml-map ref={ref} src="/map.yaml" style={{ display: "block", height: "400px" }} />
+      <p>
+        Zoom {zoom?.toFixed(1) ?? "…"} · clicked: {place ?? "nothing yet"}
+      </p>
+      {problem && <p>Map problem: {problem}</p>}
+    </>
+  );
+}
+```
+
+Under the map: *Zoom 1.0 · clicked: nothing yet*. Click a circle and its place
+appears; zoom in and the number follows. Break `map.yaml` (delete a `]`) and a
+second line reads *Map problem: YAML syntax error…*.
 
 ## What differs between frameworks
 
@@ -458,10 +639,10 @@ it fails with `HTMLElement is not defined`; move it into `onMount`:
 - [`<ml-map>` reference](/reference/elements/#ml-map): every attribute,
   property, method and event.
 - [`examples/react`](https://github.com/design-practices/maplibre-yaml/tree/main/examples/react):
-  a Vite + React + TypeScript app with every React snippet on this page (a
-  YAML file with its params panel, a config object, events reaching React
-  state, slot controls, mount and unmount, the React 19 props), built against
-  React 18 and React 19.
+  a Vite + React + TypeScript app with every React snippet on this page,
+  built and browser-tested against React 18 and React 19. Its `recipes.html`
+  runs the click, MapLibre, hook and putting-it-together recipes on the quick
+  start's map document.
 
 ## Troubleshooting
 
