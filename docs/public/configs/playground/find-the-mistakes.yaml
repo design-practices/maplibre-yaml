@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/map.schema.json
+# Find the mistakes: this map has three. Each one is
+# underlined: tap it to see what's wrong. "Change to …"
+# fixes a spelling. The map shows when no errors are left.
+type: map
+id: find-the-mistakes
+config:
+  center: [-120, 37]
+  zom: 4
+  mapStyle: "https://tiles.openfreemap.org/styles/liberty"
+layers:
+  - id: earthquakes
+    type: circel
+    source:
+      type: geojson
+      url: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+    paint:
+      circle-radius: 6
+      circle-colour: "#e74c3c"
+      circle-stroke-width: 1
+      circle-stroke-color: "#ffffff"

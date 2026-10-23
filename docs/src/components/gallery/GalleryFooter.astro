@@ -7,6 +7,7 @@
  */
 import { linksFor, upstreamUrl } from '../../data/gallery.mjs';
 import { inline } from './inline.mjs';
+import { playgroundHref } from '../../playground/starters.mjs';
 
 interface Props {
   entry: any;
@@ -16,6 +17,8 @@ const { entry } = Astro.props;
 const { guides, reference, see } = linksFor(entry);
 const upstream = upstreamUrl(entry);
 const back = `/examples/gallery/#${entry.group.id}`;
+// Pure-YAML pages only: a YAML + JavaScript map needs its page code.
+const playground = entry.kind === 'yaml' ? playgroundHref(`/configs/gallery/${entry.slug}.yaml`) : null;
 ---
 
 <section class="gallery-footer" aria-labelledby="use-this-map">
@@ -48,6 +51,12 @@ const back = `/examples/gallery/#${entry.group.id}`;
       </Fragment>
     )}
   </p>
+  {playground && (
+    <p class="gallery-footer-playground">
+      <a href={playground}>Open this map in the playground</a>: change it and see the result as you
+      type, then share it as a link or download it as a folder.
+    </p>
+  )}
   <dl class="gallery-footer-links">
     <dt>Guide</dt>
     <dd>{guides.map((l, i) => <Fragment>{i > 0 && ' · '}<a href={l.href} set:html={inline(l.label)} /></Fragment>)}</dd>

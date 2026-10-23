@@ -1,4 +1,7 @@
 ---
+import { galleryEntry } from './overrides/galleryRoute.mjs';
+import { playgroundHref } from '../playground/starters.mjs';
+
 interface Props {
   src: string;
   height?: string;
@@ -12,9 +15,20 @@ interface Props {
    * static HTML from this repo, never user input.
    */
   chrome?: string;
+  /**
+   * Show an "Edit in the playground" link under the map. On by default for
+   * a docs config (`/configs/…`) with no chrome; off on gallery pages whose
+   * map needs page JavaScript, which the playground doesn't run.
+   */
+  playground?: boolean;
 }
 
 const { src, height = '400px', caption, chrome } = Astro.props;
+const route = Astro.locals.starlightRoute;
+const entry = route ? galleryEntry(route) : undefined;
+const playground =
+  Astro.props.playground ??
+  (src.startsWith('/configs/') && !chrome && (!entry || entry.kind === 'yaml'));
 ---
 
 <figure class="livemap-container">
@@ -24,6 +38,11 @@ const { src, height = '400px', caption, chrome } = Astro.props;
     </ml-map>
   </div>
   {caption && <figcaption>{caption}</figcaption>}
+  {playground && (
+    <p class="livemap-playground">
+      <a href={playgroundHref(src)}>Edit this map in the playground</a>
+    </p>
+  )}
 </figure>
 
 <script>
@@ -40,6 +59,11 @@ const { src, height = '400px', caption, chrome } = Astro.props;
     border-radius: 8px;
     border: 1px solid var(--sl-color-gray-5);
     overflow: hidden;
+  }
+  .livemap-playground {
+    margin: 0.4rem 0 0;
+    font-size: 0.875rem;
+    text-align: right;
   }
   figcaption {
     margin-top: 0.5rem;

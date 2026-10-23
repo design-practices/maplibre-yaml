@@ -84,6 +84,22 @@ const API_MODULES = [
 
 export default defineConfig({
   site: "https://docs.maplibre-yaml.org",
+  vite: {
+    resolve: {
+      alias: [
+        // The playground imports the parser from the package root. Bundle the
+        // built package, as `@maplibre-yaml/core/register` is, so the parser
+        // and <ml-map> share one copy; tsconfig's `paths` (for type
+        // checking against source) would otherwise bundle the TS source too.
+        {
+          find: /^@maplibre-yaml\/core$/,
+          replacement: fileURLToPath(new URL("../packages/core/dist/index.js", import.meta.url)),
+        },
+      ],
+      // The playground parses YAML with the same `yaml` the parser uses.
+      dedupe: ["yaml"],
+    },
+  },
   base: "/",
   // Moved pages keep working: meta-refresh pages here, and HTTP 301s in
   // public/_redirects for Cloudflare Pages, both from docs/redirects.mjs.
@@ -111,9 +127,10 @@ export default defineConfig({
           // Pages tell readers to open http://localhost:… after starting a
           // local server; those are instructions, not links into this site.
           errorOnLocalLinks: false,
-          // No exclusions: a link to a page in redirects.mjs fails the build
-          // too. The redirects are for addresses outside this site (published
-          // READMEs, bookmarks); pages here link the new address directly.
+          // A link to a page in redirects.mjs fails the build: pages here link
+          // the new address directly. /playground/ is a page of its own
+          // (src/pages/), not a docs page, so the validator doesn't know it.
+          exclude: ({ link }) => link.split("#")[0].split("?")[0] === "/playground/",
         }),
         /**
          * TypeScript API reference, generated from the core package's public
@@ -188,6 +205,8 @@ export default defineConfig({
             { label: "Upgrading to 0.9", link: "/getting-started/upgrading/" },
           ],
         },
+        // The fastest way to try the format: no install, nothing to save.
+        { label: "Playground", link: "/playground/" },
         {
           label: "Make a map",
           items: [
