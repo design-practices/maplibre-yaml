@@ -1,0 +1,117 @@
+---
+/**
+ * Starlight's header, plus a menu on phones for pages without a sidebar.
+ *
+ * A docs page on a phone has Starlight's menu button, and its menu ends with
+ * the Examples and Playground links, GitHub and the theme picker
+ * (SocialIcons.astro). Pages without a sidebar (the landing page, the
+ * playground) have no menu button, so on a phone those links and the theme
+ * picker were nowhere. This adds a menu button there that opens the same
+ * footer. On desktop it never shows: the header bar carries the links.
+ */
+import Default from '@astrojs/starlight/components/Header.astro';
+import MobileMenuFooter from '@astrojs/starlight/components/MobileMenuFooter.astro';
+import { Icon } from '@astrojs/starlight/components';
+
+const { hasSidebar } = Astro.locals.starlightRoute;
+---
+
+<div class="sl-flex header-row">
+  <Default />
+  {
+    !hasSidebar && (
+      <site-menu class="md:sl-hidden print:hidden">
+        <details>
+          <summary aria-label="Site menu">
+            <Icon name="bars" class="open-menu" />
+            <Icon name="close" class="close-menu" />
+          </summary>
+          <div class="site-menu-panel">
+            <MobileMenuFooter />
+          </div>
+        </details>
+      </site-menu>
+    )
+  }
+</div>
+
+<script>
+  /** Escape and a tap outside close the menu, as Starlight's own menu does. */
+  class SiteMenu extends HTMLElement {
+    connectedCallback() {
+      const details = this.querySelector('details')!;
+      const summary = this.querySelector('summary')!;
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && details.open) {
+          details.open = false;
+          summary.focus();
+        }
+      });
+      document.addEventListener('click', (e) => {
+        if (details.open && !this.contains(e.target as Node)) details.open = false;
+      });
+    }
+  }
+  customElements.define('site-menu', SiteMenu);
+</script>
+
+<style>
+  .header-row {
+    height: 100%;
+    align-items: center;
+    gap: var(--sl-nav-gap);
+  }
+  .header-row > :global(.header) {
+    flex: 1;
+    min-width: 0;
+  }
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--sl-menu-button-size);
+    height: var(--sl-menu-button-size);
+    padding: 0.5rem;
+    border-radius: 50%;
+    list-style: none;
+    cursor: pointer;
+    background-color: var(--sl-color-white);
+    color: var(--sl-color-black);
+    box-shadow: var(--sl-shadow-md);
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary:focus-visible {
+    outline: 2px solid var(--sl-color-text-accent);
+    outline-offset: 2px;
+  }
+  details[open] summary {
+    background-color: var(--sl-color-gray-2);
+    box-shadow: none;
+  }
+  :global([data-theme='light']) summary {
+    background-color: var(--sl-color-black);
+    color: var(--sl-color-white);
+  }
+  :global([data-theme='light']) details[open] summary {
+    background-color: var(--sl-color-gray-5);
+  }
+  details[open] .open-menu,
+  details:not([open]) .close-menu {
+    display: none;
+  }
+  .site-menu-panel {
+    position: fixed;
+    inset-inline: 0;
+    inset-block-start: var(--sl-nav-height);
+    z-index: var(--sl-z-index-menu);
+    padding: 0 var(--sl-nav-pad-x);
+    background-color: var(--sl-color-bg-nav);
+    border-bottom: 1px solid var(--sl-color-hairline-shade);
+    box-shadow: var(--sl-shadow-md);
+  }
+  .site-menu-panel :global(.mobile-preferences) {
+    border-top: 0;
+  }
+</style>

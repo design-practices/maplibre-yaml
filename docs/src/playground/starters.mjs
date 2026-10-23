@@ -8,12 +8,21 @@
  */
 import { GROUPS } from "../data/gallery.mjs";
 
-/** Hand-picked, in the order a newcomer would open them. */
+/**
+ * Hand-picked, in the order a newcomer would open them. The story map is
+ * the complete example on Writing a story file (/schema/scrollytelling/),
+ * character for character; docs/test/playground.test.mjs checks it.
+ */
 export const CURATED = [
   {
     title: "Earthquakes, sized by magnitude",
     src: "/configs/earthquakes.yaml",
     why: "The map from Your first map, explained: live data, styling and a popup.",
+  },
+  {
+    title: "A story map: a week of earthquakes",
+    src: "/configs/earthquake-story.yaml",
+    why: "Four chapters that move the map as you scroll, with the chapter rail and a legend.",
   },
   {
     title: "Cities written in the document",
@@ -24,11 +33,6 @@ export const CURATED = [
     title: "World cities with a legend",
     src: "/configs/classify/graduated.yaml",
     why: "classify: colours and sizes each city by population, and draws the legend.",
-  },
-  {
-    title: "A story map",
-    src: "/configs/gallery/fly-to-a-location-based-on-scroll-position.yaml",
-    why: "Chapters that move the map as you scroll.",
   },
   {
     title: "Find the mistakes",

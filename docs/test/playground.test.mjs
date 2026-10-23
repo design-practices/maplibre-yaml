@@ -312,6 +312,25 @@ test("starters: every starter file exists and validates (except the one with mis
   assert.ok(CURATED.some((s) => YAMLParser.safeParseAny(config(s.src.slice(1))).blockType === "scrollytelling"), "a story starter");
 });
 
+test("starters: the story starter is near the top, short, and the docs' complete example verbatim", () => {
+  const i = CURATED.findIndex((s) => YAMLParser.safeParseAny(config(s.src.slice(1))).blockType === "scrollytelling");
+  assert.ok(i >= 0 && i <= 1, "the story map is the first or second starter");
+  const text = config(CURATED[i].src.slice(1));
+  const doc = YAMLParser.safeParseAny(text).result.data;
+  assert.ok(doc.chapters.length >= 3 && doc.chapters.length <= 4, "three or four chapters");
+  assert.ok(doc.legend, "a legend, so the starter shows one");
+  assert.equal(doc.showMarkers, true, "the chapter rail");
+  // Character for character: the file is the fence plus the schema modeline.
+  const page = readFileSync(join(DOCS, "src/content/docs/schema/scrollytelling.mdx"), "utf8");
+  const fence = /## A complete example[\s\S]*?```yaml title="story\.yaml"\n([\s\S]*?)```/.exec(page)?.[1];
+  assert.ok(fence, "Writing a story file still has its complete example");
+  assert.equal(text, "# yaml-language-server: $schema=https://docs.maplibre-yaml.org/schema/latest/scrollytelling.schema.json\n" + fence);
+  // The download of it is a story page.
+  const files = downloadFiles(text, "scrollytelling");
+  assert.ok(files["my-map/index.html"].includes('<ml-scrollytelling src="story.yaml"></ml-scrollytelling>'));
+  assert.equal(files["my-map/story.yaml"], text);
+});
+
 test("starters: playground links", () => {
   assert.equal(playgroundHref("/configs/gallery/display-a-map.yaml"), "/playground/?src=/configs/gallery/display-a-map.yaml");
 });

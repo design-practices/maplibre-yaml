@@ -14,7 +14,15 @@
  *  - a share link reopens the identical document, with the banner listing
  *    the sites it names;
  *  - Download saves a zip whose page, document and README work as a folder;
- *  - on a phone, the editor and map stack, and a story map opens full height.
+ *  - a story map: the "Start here" story starter renders in
+ *    <ml-scrollytelling> with its chapter rail and legend; editing a chapter
+ *    and the legend re-renders them; scrolling the pane moves the map; a
+ *    share link reopens it; Download saves story.yaml with an index.html
+ *    that uses <ml-scrollytelling>;
+ *  - on a phone, the editor and map stack, and a story map opens full height
+ *    under a "Back to code" bar that leaves the story's legend button free;
+ *  - the header's Examples and Playground links (desktop), and the site menu
+ *    that carries them on a phone, where this page has no sidebar menu.
  *
  * Hermetic like the rest of the suite: the basemap styles and the USGS feed
  * are answered locally, and any other off-box request fails the test.
@@ -44,6 +52,8 @@ const QUAKES = {
 };
 
 const MAP = "#pg-preview ml-map";
+const STORY = "#pg-preview ml-scrollytelling";
+const STORY_SRC = "/configs/earthquake-story.yaml";
 
 /** Page errors fail the test; the basemap and the feed are local; nothing else leaves the box. */
 async function guard(page: Page): Promise<string[]> {
@@ -102,8 +112,35 @@ const camera = (page: Page) =>
     return { lng: c.lng, lat: c.lat, zoom: map.getZoom() };
   }, MAP);
 
+/** Wait until the story's map has drawn `layer`. */
+async function waitForStoryLayer(page: Page, layer: string): Promise<void> {
+  await page.waitForFunction(
+    ([sel, id]) => {
+      const map = (document.querySelector(`${sel} ml-map`) as any)?.getMap?.();
+      return Boolean(map && map.isStyleLoaded?.() && map.getLayer?.(id));
+    },
+    [STORY, layer] as const,
+    { timeout: 60_000 },
+  );
+}
+
+/**
+ * Scroll the editor until a line matching `match` is drawn. CodeMirror only
+ * renders the lines in view, and a story is longer than the pane.
+ */
+async function revealLine(page: Page, match: RegExp): Promise<void> {
+  await page.locator(".cm-scroller").evaluate((el) => (el.scrollTop = 0));
+  for (let i = 0; i < 60; i++) {
+    if (await page.locator(".cm-line", { hasText: match }).count()) return;
+    await page.locator(".cm-scroller").evaluate((el) => (el.scrollTop += 150));
+    await page.waitForTimeout(50);
+  }
+  throw new Error(`no editor line matches ${match}`);
+}
+
 /** Replace one line's text (after its indentation) the way a keyboard does. */
 async function rewriteLine(page: Page, match: RegExp, text: string): Promise<void> {
+  await revealLine(page, match);
   await page.locator(".cm-line", { hasText: match }).first().click();
   await page.keyboard.press("End");
   await page.keyboard.press("Shift+Home");
@@ -253,6 +290,119 @@ test.describe("playground at 1280×800", () => {
   });
 });
 
+test.describe("playground story map at 1280×800", () => {
+  test.use({ viewport: { width: 1280, height: 800 }, permissions: ["clipboard-read", "clipboard-write"] });
+
+  test("the story starter: rail and legend, edits re-render, scrolling moves the map, share and download", async ({ page, context }) => {
+    requireBuild();
+    const errors = await guard(page);
+    await open(page, "");
+    // "Start here" lists the story map near the top.
+    const curated = await page.locator('#pg-starter optgroup[label="Start here"] option').allTextContents();
+    expect(curated.indexOf("A story map: a week of earthquakes")).toBeGreaterThanOrEqual(0);
+    expect(curated.indexOf("A story map: a week of earthquakes")).toBeLessThanOrEqual(1);
+    await page.locator("#pg-starter").selectOption({ label: "A story map: a week of earthquakes" });
+    await expect(page.locator(".pg-root")).toHaveAttribute("data-kind", "scrollytelling");
+    await expect(page.locator("#pg-starter")).toHaveValue(STORY_SRC);
+    expect(page.url()).toContain(`?src=${STORY_SRC}`);
+    await waitForStoryLayer(page, "quakes");
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "ok");
+
+    // Four chapters, the chapter rail with a dot each, and the legend.
+    await expect(page.locator(`${STORY} .scrolly-chapter`)).toHaveCount(4);
+    await expect(page.locator(`${STORY} .chapter-markers > *`)).toHaveCount(4);
+    await expect(page.locator(`${STORY} .scrolly-legend`)).toHaveCount(1);
+    await expect(page.locator(`${STORY} .scrolly-legend`)).toContainText("6 or more");
+    // On desktop the story shows in the pane: no "Preview the story" gate.
+    await expect(page.locator("#pg-story-gate")).toBeHidden();
+
+    // Edit a chapter: its card changes; the rail keeps a dot per chapter.
+    let before = await renders(page);
+    await rewriteLine(page, /title: "Japan"/, 'title: "Japan and its trenches"');
+    await expect.poll(() => renders(page)).toBeGreaterThan(before);
+    await expect(page.locator(`${STORY} .scrolly-chapter[data-chapter-id="japan"]`)).toContainText("Japan and its trenches");
+    await expect(page.locator(`${STORY} .chapter-markers > *`)).toHaveCount(4);
+    await waitForStoryLayer(page, "quakes");
+
+    // Edit the legend: the legend is rebuilt from the new document.
+    before = await renders(page);
+    await rewriteLine(page, /label: "6 or more"/, '- { color: "#dc2626", label: "Six or more", shape: circle }');
+    await expect.poll(() => renders(page)).toBeGreaterThan(before);
+    await expect(page.locator(`${STORY} .scrolly-legend`)).toContainText("Six or more");
+    await expect(page.locator(`${STORY} .scrolly-legend`)).not.toContainText("6 or more");
+    await waitForStoryLayer(page, "quakes");
+    await expect(page.locator("#pg-status")).toHaveAttribute("data-state", "ok");
+
+    // Scrolling the pane makes the Japan chapter active and flies the map there.
+    await page.locator(`${STORY} .scrolly-chapter[data-chapter-id="japan"]`).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await expect(page.locator(STORY)).toHaveAttribute("data-active-chapter", "japan");
+    await expect
+      .poll(() => page.evaluate((sel) => (document.querySelector(`${sel} ml-map`) as any).getMap().getCenter().lng, STORY), { timeout: 30_000 })
+      .toBeCloseTo(138, 0);
+    const written = await docText(page);
+
+    // Share: the link reopens the same story, edits included.
+    await page.locator("#pg-share-btn").click();
+    await expect(page.locator("#pg-message")).toHaveText(/Link copied\.|The link is in the address bar\./);
+    const link = page.url();
+    expect(link).toMatch(/\/playground\/#code\/[A-Za-z0-9+\-$]+$/);
+    const shared = await context.newPage();
+    const sharedErrors = await guard(shared);
+    await open(shared, link.slice(link.indexOf("#")));
+    expect(await docText(shared)).toBe(written);
+    await expect(shared.locator(".pg-root")).toHaveAttribute("data-kind", "scrollytelling");
+    await expect(shared.locator(`${STORY} .scrolly-chapter[data-chapter-id="japan"]`)).toContainText("Japan and its trenches");
+    await expect(shared.locator(`${STORY} .scrolly-legend`)).toContainText("Six or more");
+    await expect(shared.locator("#pg-shared-hosts")).toHaveText("earthquake.usgs.gov, tiles.openfreemap.org");
+    // A shared story opens on its first chapter.
+    expect(await shared.locator("#pg-preview").evaluate((el) => el.scrollTop)).toBe(0);
+
+    // Download: story.yaml and a page that shows it with <ml-scrollytelling>.
+    const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#pg-download-btn").click()]);
+    expect(download.suggestedFilename()).toBe("my-map.zip");
+    const files = unzipSync(readFileSync(await download.path()));
+    expect(Object.keys(files).sort()).toEqual(["my-map/README.txt", "my-map/index.html", "my-map/story.yaml"]);
+    const minor = JSON.parse(readFileSync(join(REPO, "packages/core/package.json"), "utf8")).version.split(".").slice(0, 2).join(".");
+    const html = strFromU8(files["my-map/index.html"]);
+    expect(html).toContain(`https://unpkg.com/@maplibre-yaml/core@${minor}/register.js`);
+    expect(html).toContain('<ml-scrollytelling src="story.yaml"></ml-scrollytelling>');
+    expect(html).not.toContain("<ml-map src");
+    // The story's URLs are already absolute: the file is the document as written.
+    expect(strFromU8(files["my-map/story.yaml"])).toBe(written.endsWith("\n") ? written : `${written}\n`);
+    expect(strFromU8(files["my-map/README.txt"])).toContain("story.yaml");
+
+    // Another story, opened while this one is scrolled down, starts at its
+    // first chapter rather than wherever the pane was.
+    expect(await page.locator("#pg-preview").evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    await page.locator("#pg-starter").selectOption("/configs/gallery/fly-to-a-location-based-on-scroll-position.yaml");
+    await expect(page.locator(`${STORY} .scrolly-chapter`)).toHaveCount(8);
+    expect(await page.locator("#pg-preview").evaluate((el) => el.scrollTop)).toBe(0);
+    await expect(page.locator(STORY)).toHaveAttribute("data-active-chapter", "baker");
+    expect([...errors, ...sharedErrors], `page errors:\n${[...errors, ...sharedErrors].join("\n")}`).toEqual([]);
+  });
+
+  test("the header links to Examples and the Playground, after search and before GitHub", async ({ page }) => {
+    requireBuild();
+    const errors = await guard(page);
+    await open(page, "?src=/configs/earthquakes.yaml", "earthquakes");
+    const nav = page.locator('header .right-group nav[aria-label="Site"]');
+    await expect(nav).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Examples" })).toHaveAttribute("href", "/examples/");
+    await expect(nav.getByRole("link", { name: "Playground" })).toHaveAttribute("aria-current", "page");
+    // Keyboard order: search, Examples, Playground, GitHub, theme.
+    await page.locator("header button[data-open-modal]").focus();
+    const order: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.press("Tab");
+      order.push(await page.evaluate(() => document.activeElement?.textContent?.trim().replace(/\s+/g, " ") ?? ""));
+    }
+    expect(order.slice(0, 3)).toEqual(["Examples", "Playground", "GitHub"]);
+    // No phone menu on desktop.
+    await expect(page.locator("site-menu summary")).toBeHidden();
+    expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
+  });
+});
+
 test.describe("playground at 390×844 (phone)", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
 
@@ -278,19 +428,41 @@ test.describe("playground at 390×844 (phone)", () => {
     await expect.poll(async () => (await page.locator("#pg-preview").boundingBox())!.height).toBeGreaterThan(map.height + 100);
 
     // A story map: the pane offers a full-height preview.
-    await page.locator("#pg-starter").selectOption("/configs/gallery/fly-to-a-location-based-on-scroll-position.yaml");
+    await page.locator("#pg-starter").selectOption(STORY_SRC);
     await expect(page.locator(".pg-root")).toHaveAttribute("data-kind", "scrollytelling");
     await expect(page.locator("#pg-story-gate")).toBeVisible();
     await page.locator("#pg-story-open").tap();
     await expect(page.locator("#pg-back")).toBeVisible();
     await expect(page.locator("#pg-back")).toBeFocused();
+    // The story fills the screen under a 3.5rem bar that holds "Back to code".
     const full = (await page.locator("#pg-preview").boundingBox())!;
-    expect(full.y).toBe(0);
-    expect(full.height).toBe(844);
-    await expect(page.locator("#pg-preview .scrolly-chapter")).toHaveCount(8);
+    expect(full.y).toBe(56);
+    expect(full.y + full.height).toBe(844);
+    const back = (await page.locator("#pg-back").boundingBox())!;
+    expect(back.y + back.height).toBeLessThanOrEqual(full.y);
+    await expect(page.locator(`${STORY} .scrolly-chapter`)).toHaveCount(4);
+    await waitForStoryLayer(page, "quakes");
+    // The story's legend button (top-left) is not under "Back to code": it opens.
+    const toggle = page.locator(`${STORY} .scrolly-legend-toggle`);
+    await toggle.tap();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(`${STORY} .scrolly-legend`)).toContainText("6 or more");
     await page.locator("#pg-back").tap();
     await expect(page.locator("#pg-story-gate")).toBeVisible();
     await expect(page.locator("#pg-back")).toBeHidden();
+
+    // This page has no sidebar, so no Starlight menu: the site menu carries
+    // the header's links on a phone, and Escape closes it.
+    await expect(page.locator('header .right-group nav[aria-label="Site"]')).toBeHidden();
+    const menu = page.locator("site-menu summary");
+    await expect(menu).toHaveAccessibleName("Site menu");
+    await menu.tap();
+    const panel = page.locator(".site-menu-panel");
+    await expect(panel.getByRole("link", { name: "Examples" })).toBeVisible();
+    await expect(panel.getByRole("link", { name: "Playground" })).toBeVisible();
+    await expect(panel.getByRole("link", { name: "GitHub" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
     expect(errors, `page errors:\n${errors.join("\n")}`).toEqual([]);
   });
 });

@@ -169,7 +169,8 @@ export default defineConfig({
         replacesTitle: false,
       },
 
-      // GitHub icon in the header (desktop) and the mobile menu.
+      // GitHub icon in the header (desktop) and the mobile menu, after the
+      // Examples and Playground links (components.SocialIcons below).
       social: [
         {
           icon: "github",
@@ -337,6 +338,12 @@ export default defineConfig({
         // src/data/gallery.mjs. Every other page renders as Starlight's own.
         PageTitle: "./src/components/overrides/PageTitle.astro",
         MarkdownContent: "./src/components/overrides/MarkdownContent.astro",
+        // Examples and Playground links before the GitHub icon: in the
+        // header bar on desktop and in the mobile menu's footer on phones.
+        SocialIcons: "./src/components/overrides/SocialIcons.astro",
+        // Pages without a sidebar (landing, playground) have no menu button
+        // on phones; this adds one that opens the same links and theme picker.
+        Header: "./src/components/overrides/Header.astro",
       },
 
       lastUpdated: true,

@@ -238,6 +238,7 @@ export function start(): void {
 
   function setText(next: string): void {
     lastCamKey = null; // a new document opens on its own view
+    pane.scrollTop = 0; // and a story opens on its first chapter
     if (editor) editor.setValue(next);
     else pendingText = next;
     typingLine = null;

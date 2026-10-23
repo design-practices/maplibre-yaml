@@ -1,6 +1,6 @@
 ---
 title: Choose your path
-description: Where to start with maplibre-yaml — a map in an HTML page, an Astro site on GitHub Pages, a site or app with a bundler, a story map, a thematic map, large data, or coming from MapLibre — and where to look things up or get help.
+description: Where to start with maplibre-yaml — a map in an HTML page, an Astro site on GitHub Pages, a React app, a site or app with a bundler, a story map, a thematic map, large data, or coming from MapLibre — and where to look things up or get help.
 ---
 
 maplibre-yaml draws a web map from a YAML file: you describe the map, its
@@ -40,13 +40,25 @@ push.
 - **Look up:** [Astro components](/integrations/astro/#map-component-api) ·
   [YAML reference](/reference/yaml/)
 
+## A React app
+
+A Vite + React app (or Next.js) that installs the element from npm and
+renders `<ml-map src="/map.yaml">` in a component.
+
+- **Start:** [React quick start](/integrations/react/#setting-up)
+- **Then:** [Events and the map instance](/integrations/react/#react-events-and-the-map-instance) ·
+  [Next.js](/integrations/react/#nextjs) ·
+  [Your first map, explained](/getting-started/first-map/)
+- **Look up:** [`<ml-map>` attributes and events](/reference/elements/) ·
+  [YAML reference](/reference/yaml/)
+
 ## A site or app with a bundler
 
-A Vite project, or a React, Vue or Svelte app, that installs packages from
-npm and builds the page.
+A Vite project, or a Vue or Svelte app, that installs packages from npm and
+builds the page.
 
 - **Start:** [Using a bundler (Vite)](/getting-started/installation/#using-a-bundler-vite)
-- **Then:** [React & other frameworks](/integrations/react/) ·
+- **Then:** [Vue](/integrations/react/#vue) · [Svelte](/integrations/react/#svelte) ·
   [Your first map, explained](/getting-started/first-map/)
 - **Look up:** [`<ml-map>` attributes and events](/reference/elements/) ·
   [JavaScript API](/integrations/vanilla-js/)
