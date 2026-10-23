@@ -5,10 +5,35 @@ date: 2026-10-18
 topic: cloud-native-formats
 beads: ml-cnv (epic), ml-cnv.6 (this spike), ml-cnv.1–.5 (implementation), ml-7qa.5 (lazy loading)
 target: 0.9
-status: proposed — for maintainer review before any implementation
+status: implemented in 0.9.0 (2026-10-21) — see Outcome below
 ---
 
 # Cloud-native formats — design
+
+> **Outcome (2026-10-23).** Shipped in core 0.9.0 (PRs #163 and #170) and
+> refined in 0.9.1. All four formats work from YAML alone, as designed here
+> (D1 syntax, D2 protocols vs decoded data, D3 libraries). Differences from this
+> document:
+> - **More than planned:** a Protomaps basemap shorthand
+>   (`mapStyle: { pmtiles: …, flavor: … }`, or just a `.pmtiles` path), and
+>   `pmtiles://` inside basemap styles resolving against the style.json.
+> - **COG colour ramps** are a source-level `colorRamp: { palette, min, max }`
+>   compiled to the plugin's `#color:` fragment, using the `classify:` palettes.
+> - **Lazy chunks:** the CDN COG reader is about 131 KB gzip with its image
+>   codecs split into on-demand files (the codecs also live inside the worker
+>   source, so the split files are rarely fetched); GeoParquet's brotli codec
+>   is its own 68 KB chunk.
+> - **Hosting quirks found in review:** GitHub Pages, jsDelivr and `npx serve`
+>   answer an oversized suffix range with 416, and some hosts hide
+>   `Content-Range`; the shared range reader handles both. jsDelivr's
+>   Cloudflare leg compresses partial responses and is reported as unsupported
+>   for PMTiles and FlatGeobuf-by-view.
+> - **Deferred:** in-browser COG reprojection (ml-cnv.8), GeoArrow-native
+>   GeoParquet (ml-cnv.13), a gradient legend for `colorRamp` (ml-cnv.10),
+>   `fitTo` for PMTiles (ml-cnv.9).
+>
+> The guides are the reference for current behaviour: /guides/cloud-native-data/
+> and the per-format pages.
 
 **Goal (maintainer direction, 2026-10-18):** "There should be full YAML-only
 support for PMTiles and COGs, same as the other new cloud-native formats like
