@@ -219,9 +219,8 @@ full and slim rows in §4.
 
 ### 3.1 The patch
 
-Applied to a scratch copy of the 0.9.2 branch. The diff is kept as
-`scratchpad/easy-data/overviews-prototype.patch` (not committed). The 0.9.2
-code is untouched.
+Applied to a scratch copy of the 0.9.2 branch. The diff is posted on PR #207
+as a comment (not committed, no tests). The 0.9.2 code is untouched.
 
 - `formats/geoparquet.ts`:
   - `geoInfo()` parses the `geo:overviews` key into levels with row-group and
@@ -847,8 +846,8 @@ The scratch directory was deleted with the data, as before. To rebuild:
    `freestile_query("SELECT … FROM read_parquet('pluto_slim.parquet')", out,
    layer_name="pluto", tile_format="mvt"|"mlt", min_zoom=10, max_zoom=14)`;
    for MLT, `CAST(BBL AS DOUBLE)`.
-5. **Core prototype:** §3.1 applied to `fix/0.9.2-core` (`b80ed39`) and built
-   with `pnpm build`.
+5. **Core prototype:** the patch from PR #207's comment, applied to
+   `fix/0.9.2-core` (`b80ed39`) and built with `pnpm build`.
 6. **Browser:** the benchmark's container (`playwright:v1.60.0-noble`,
    `/dev/dri`, `--use-gl=angle --use-angle=gl-egl`), a Node static server with
    streamed range requests, one page per variant × view, and the harness in
