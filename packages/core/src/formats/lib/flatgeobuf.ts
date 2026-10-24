@@ -38,6 +38,13 @@ async function range(url: string, start: number, length: number): Promise<ArrayB
  * @param nodeSize - The header's `indexNodeSize`.
  */
 export async function readIndexLevel(url: string, count: number, nodeSize: number): Promise<FeaturesInView> {
+  // No features, nothing in any view (and no tree to read). The node size is
+  // clamped as the library's calcTreeSize does: 1 would loop forever (each
+  // level as large as the last), past 65,535 isn't what the library reads
+  // (ml-cnv.31). The loop is capped too: a valid tree has at most
+  // log2(2^53) levels.
+  if (!Number.isFinite(count) || count < 1) return () => 0;
+  nodeSize = Math.min(Math.max(Math.floor(nodeSize) || 0, 2), 65535);
   const treeStart = 12 + new DataView(await range(url, 8, 4)).getUint32(0, true);
   // Nodes per level, leaves first (as the library's generateLevelBounds).
   const sizes = [count];
@@ -45,7 +52,7 @@ export async function readIndexLevel(url: string, count: number, nodeSize: numbe
   do {
     n = Math.ceil(n / nodeSize);
     sizes.push(n);
-  } while (n !== 1);
+  } while (n > 1 && sizes.length < 64);
   let level = 0;
   while (sizes[level]! > 4096) level++;
   let before = 0;

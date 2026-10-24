@@ -63,6 +63,11 @@ interface RawHeader {
   crs?: { org?: string | null; code?: number; code_string?: string | null } | null;
 }
 
+/** Whether an index node size is one FlatGeobuf readers accept (the library's 2–65,535). */
+export function validNodeSize(nodeSize: number): boolean {
+  return Number.isInteger(nodeSize) && nodeSize >= 2 && nodeSize <= 65535;
+}
+
 /** Normalize the library's header. */
 function toHeader(raw: RawHeader): FlatGeobufHeader {
   const env = raw.envelope;
@@ -156,6 +161,19 @@ function readFailure(error: unknown, url: string): unknown {
 function headerCheck(url: string, onHeader?: (header: FlatGeobufHeader) => void) {
   return (raw: RawHeader) => {
     const header = toHeader(raw);
+    // A spatial index with a node size no reader accepts (ml-cnv.31): the
+    // library computes the index's size with 2 instead and reads the wrong
+    // bytes, or throws "Node size must be at least 2".
+    if (header.indexed && !validNodeSize(header.nodeSize)) {
+      throw new FormatError({
+        code: "read",
+        format: "flatgeobuf",
+        url,
+        detail:
+          `its spatial index is malformed (node size ${header.nodeSize}; readers accept 2 to 65,535). ` +
+          `Re-create it: \`ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES indexed.fgb ${url.replace(/[?#].*$/, "").split("/").pop()}\``,
+      });
+    }
     if (!isLonLat(header, raw)) {
       throw new FormatError({
         code: "crs",

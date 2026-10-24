@@ -10,7 +10,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { decodeBytes, probe, openWhole, decodeStream, isLonLat, readIndexLevel } from "../../src/formats/flatgeobuf";
+import {
+  decodeBytes,
+  probe,
+  openWhole,
+  decodeStream,
+  isLonLat,
+  readIndexLevel,
+  validNodeSize,
+} from "../../src/formats/flatgeobuf";
 import { isFormatError } from "../../src/formats/errors";
 import {
   FlatGeobufLoader,
@@ -581,5 +589,31 @@ describe("per-view budget (ml-37r.17)", () => {
     await loader.start();
     expect(onData.mock.calls.at(-1)![0].features).toHaveLength(400);
     expect(onTooDense).not.toHaveBeenCalled();
+  });
+});
+
+describe("the per-view estimate on a malformed index header (ml-cnv.31)", () => {
+  it("clamps the node size as the library does: 1 no longer loops until the tab runs out of memory", async () => {
+    const log: { url: string; range?: string; status: number }[] = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    const one = await readIndexLevel("/points.fgb", { featuresCount: 400, indexed: true, nodeSize: 1 });
+    expect(Number.isFinite(one([9, 41, 11, 43]))).toBe(true);
+    const huge = await readIndexLevel("/points.fgb", { featuresCount: 400, indexed: true, nodeSize: 1_000_000 });
+    expect(Number.isFinite(huge([9, 41, 11, 43]))).toBe(true);
+    // Every read stays inside the file, and small.
+    for (const r of log) expect(r.status).toBe(206);
+  }, 5_000);
+
+  it("no features: nothing in any view, nothing fetched", async () => {
+    const log: { url: string; status: number }[] = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    const none = await readIndexLevel("/points.fgb", { featuresCount: 0, indexed: true, nodeSize: 16 });
+    expect(none([9, 41, 11, 43])).toBe(0);
+    expect(log).toEqual([]);
+  });
+
+  it("a node size readers reject is refused in plain words, not read", () => {
+    expect([0, 1, 1.5, 65536].map(validNodeSize)).toEqual([false, false, false, false]);
+    expect([2, 16, 65535].map(validNodeSize)).toEqual([true, true, true]);
   });
 });
