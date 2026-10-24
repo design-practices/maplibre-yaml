@@ -42,6 +42,12 @@ import type { ColumnChoice, GeoParquetFile } from "../formats/geoparquet";
 import { FormatError, isAbortError, isFormatError } from "../formats/errors";
 import { BodyTooLarge } from "../formats/http";
 import { registerSourceDataLoader, type SourceDataLoader } from "../data/source-data";
+import {
+  formatCount,
+  largeDataLinks,
+  pmtilesCommand,
+  sortedParquetCommand,
+} from "../components/student-messages";
 // No maplibre-gl here: the layer manager imports this module, and it loads
 // without maplibre-gl (types only). Protocol registration, which needs the
 // module, lives in ./cloud-protocols (MapRenderer only).
@@ -88,6 +94,25 @@ export {
   loadModeOf,
   type LoadMode,
 } from "../formats/detect";
+/**
+ * A GeoParquet view is not read when the row groups it touches hold more than
+ * this many times `maxFeatures` rows (M2 of the PR #206 review): a reader
+ * decodes each row group it touches whole, so the per-view estimate (rows
+ * actually in view) can be well under budget while the decode is not.
+ *
+ * @remarks
+ * Measured on NYC PLUTO (856,687 parcels, Chromium on a desktop with a GPU,
+ * 2026-10-24): with 100,000-row groups, a citywide view at zoom 12.5
+ * estimated at about 145,000 features touched 600,000 rows — 3.8 GB of
+ * renderer memory and 10 fps while panning — and a borough view at zoom 13
+ * touched 556,687 rows (3.7 GB, 13 fps). The same views of the file in
+ * 10,000-row groups touched 260,000 and 210,000 rows (2.9 GB at 25 fps,
+ * 2.7 GB at 29 fps). At 2.5 × the default 150,000 (375,000 rows), every
+ * measured view of the 10,000-row file that fit the estimate is read, the
+ * 100,000-row views over 550,000 rows are not, and a block view of the
+ * 100,000-row file (200,000–300,000 rows touched) still is.
+ */
+export const VIEW_DECODE_FACTOR = 2.5;
 /** Pause after the map stops moving before re-reading the view. */
 export const VIEWPORT_DEBOUNCE_MS = 250;
 
@@ -363,6 +388,7 @@ abstract class ViewLoader implements FormatLoader {
   /** Why the last view wasn't read (below `minzoom`, too dense), or undefined. */
   private skipped: "minzoom" | "dense" | undefined;
   private hintedDense = false;
+  private hintedDecode = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly onMoveEnd = () => {
     if (this.timer !== undefined) clearTimeout(this.timer);
@@ -432,6 +458,15 @@ abstract class ViewLoader implements FormatLoader {
   /** About how many features `view` holds, from what the reader already has (no request). */
   protected abstract estimate(view: BBox): number;
 
+  /**
+   * An author hint when reading `view` would decode far more than the
+   * features in it (GeoParquet's whole row groups), else undefined: the view
+   * is then not read either.
+   */
+  protected decodeTooCostly(_view: BBox, _estimate: number): string | undefined {
+    return undefined;
+  }
+
   /** Read the features in `view` (`null` when superseded). */
   protected abstract readView(view: BBox, isCurrent: () => boolean): Promise<FeatureCollection | null>;
 
@@ -486,13 +521,23 @@ abstract class ViewLoader implements FormatLoader {
     if (estimate > max) {
       // Reading it would decode (and draw) more than a tab can take: the
       // citywide parcels view read 261 MB and ran at 8 fps, or crashed.
-      if (this.skip("dense") && !this.hintedDense) {
+      this.skip("dense");
+      if (!this.hintedDense) {
         this.hintedDense = true;
         this.hint(
           `\`${this.url}\` has about ${estimate} features in view, over \`maxFeatures\` (${max}): ` +
             "nothing is read until the map is zoomed in. Convert the file to PMTiles to draw it at " +
             "every zoom, or set `maxFeatures` under `load:`."
         );
+      }
+      return;
+    }
+    const costly = this.decodeTooCostly(view, estimate);
+    if (costly !== undefined) {
+      this.skip("dense");
+      if (!this.hintedDecode) {
+        this.hintedDecode = true;
+        this.hint(costly);
       }
       return;
     }
@@ -860,6 +905,28 @@ export class GeoParquetLoader extends ViewLoader {
   /** The row groups in view, each counting its rows by the share of it in view. */
   protected estimate(view: BBox): number {
     return this.opened ? gp.rowsInView(this.opened, view) : 0;
+  }
+
+  /**
+   * Whether the row groups `view` touches hold more rows than
+   * {@link VIEW_DECODE_FACTOR} × `maxFeatures`: each is decoded whole, so
+   * large row groups cost far more than the features in view.
+   */
+  protected decodeTooCostly(view: BBox, estimate: number): string | undefined {
+    if (!this.opened) return undefined;
+    const touched = gp.rowGroupsInView(this.opened, view);
+    const budget = Math.round(this.load.maxFeatures * VIEW_DECODE_FACTOR);
+    if (touched.rows <= budget) return undefined;
+    const n = formatCount;
+    return (
+      `\`${this.url}\` has row groups of up to ${n(touched.largest)} rows, and each row group a view touches ` +
+      `is decoded whole: this view holds about ${n(estimate)} features but touches ${touched.groups} row group${touched.groups === 1 ? "" : "s"}, ` +
+      `${n(touched.rows)} rows, over this map's decode limit of ${n(budget)} rows (${VIEW_DECODE_FACTOR} × \`maxFeatures\`), ` +
+      "so nothing is read until the map is zoomed in. To fix it, rewrite the file with about 10,000-row groups, " +
+      `sorted: ${sortedParquetCommand(this.url)}. For a citywide view, convert it to PMTiles: ` +
+      `${pmtilesCommand(this.url, "geoparquet")}. Or raise \`maxFeatures\` under \`load:\` (heavier on memory). ` +
+      largeDataLinks("geoparquet")
+    );
   }
 
   protected readView(view: BBox, isCurrent: () => boolean): Promise<FeatureCollection | null> {

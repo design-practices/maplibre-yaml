@@ -20,6 +20,7 @@ import { suggest } from "../utils/suggest.js";
 import { normalizeDocumentBase } from "../utils/document-base.js";
 import type { FormatFailure } from "../formats/errors.js";
 import { DEFAULT_STRINGS, defaultStrings, type Strings } from "../i18n/strings.js";
+import { formatNumber } from "../i18n/number-format.js";
 
 // Titles and hints a reader can meet on a map whose document WAS read (the
 // basemap failed, the worker couldn't start) come from the UI string table,
@@ -469,6 +470,73 @@ function fileNameOf(url: string): string {
 function megabytes(bytes: number): string {
   const mb = bytes / (1024 * 1024);
   return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
+}
+
+// ---------------------------------------------------------------------------
+// Large FlatGeobuf and GeoParquet files: the ways to make them draw (0.9.2).
+// Every size notice and author hint names its cause, then the pathways that
+// apply, each with a command to run — written once here so they agree.
+// ---------------------------------------------------------------------------
+
+/** The docs pages that explain large files, per format. */
+export const LARGE_DATA_DOCS = {
+  geoparquet: "https://docs.maplibre-yaml.org/guides/geoparquet/#large-files",
+  flatgeobuf: "https://docs.maplibre-yaml.org/guides/flatgeobuf/#large-files",
+  pmtiles: "https://docs.maplibre-yaml.org/guides/pmtiles/#from-a-large-file",
+} as const;
+
+/** A count as "856,687" (English grouping: author hints are English). */
+export function formatCount(count: number): string {
+  return formatNumber(Math.round(count), {}, "en");
+}
+
+/** The file name without its extension: "pluto" for `/data/pluto.parquet`. */
+function stemOf(url: string): string {
+  const name = fileNameOf(url);
+  const dot = name.lastIndexOf(".");
+  return (dot > 0 ? name.slice(0, dot) : name).replace(/[^A-Za-z0-9_-]/g, "_") || "data";
+}
+
+/**
+ * Rewrite a file as GeoParquet that reads well by view: a `bbox` covering
+ * column, rows sorted by it, about 10,000 rows per row group (GDAL 3.9+).
+ */
+export function sortedParquetCommand(url: string): string {
+  return (
+    "`ogr2ogr -f Parquet -lco WRITE_COVERING_BBOX=YES -lco SORT_BY_BBOX=YES -lco ROW_GROUP_SIZE=10000 " +
+    `${stemOf(url)}-sorted.parquet ${fileNameOf(url)}\``
+  );
+}
+
+/** Re-create a FlatGeobuf file with a spatial index. */
+export function indexedFlatGeobufCommand(url: string): string {
+  return `\`ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES ${stemOf(url)}-indexed.fgb ${fileNameOf(url)}\``;
+}
+
+/**
+ * Convert a file to PMTiles with tylertoo 0.8.0 (nothing to install but
+ * `uv`): the parcel recipe from the PLUTO benchmark (PR #205) and the
+ * large-data spike (PR #207) — `collapse_square=True` keeps small polygons
+ * visible at coarse zooms, `tile_size_limit=None` stops 0.8.0 dropping
+ * features from dense tiles. tylertoo reads GeoParquet, so a FlatGeobuf file
+ * is converted first.
+ */
+export function pmtilesCommand(url: string, format: string): string {
+  const stem = stemOf(url);
+  const input = format === "geoparquet" ? fileNameOf(url) : `${stem}.parquet`;
+  const first = format === "geoparquet" ? "" : `\`ogr2ogr -f Parquet ${stem}.parquet ${fileNameOf(url)}\`, then `;
+  return (
+    first +
+    `\`uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('${input}', '${stem}-ov.parquet', ` +
+    `min_zoom=10, max_zoom=14, collapse_square=True); t.export_pmtiles('${stem}-ov.parquet', '${stem}.pmtiles', ` +
+    `layer_name='${stem}', tile_size_limit=None)"\` (the parcel recipe: set min_zoom and max_zoom for your map)`
+  );
+}
+
+/** The docs links for a large file of `format`. */
+export function largeDataLinks(format: string): string {
+  const page = format === "flatgeobuf" ? LARGE_DATA_DOCS.flatgeobuf : LARGE_DATA_DOCS.geoparquet;
+  return `More: ${page} and ${LARGE_DATA_DOCS.pmtiles}`;
 }
 
 /**

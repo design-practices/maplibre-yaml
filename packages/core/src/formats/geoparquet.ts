@@ -486,6 +486,29 @@ export function rowsInView(source: GeoParquetFile, view: BBox): number {
   return Math.round(rows);
 }
 
+/**
+ * What reading `view` decodes, from the footer alone: the row groups whose
+ * covering extent the view touches (a group without statistics counts), and
+ * all their rows — a reader decodes a row group whole and filters its rows
+ * afterwards, so a view holding 145,000 features of a file in 100,000-row
+ * groups decoded about 600,000 rows. `largest` is the biggest group's rows.
+ */
+export function rowGroupsInView(source: GeoParquetFile, view: BBox): { groups: number; rows: number; largest: number } {
+  const extents = rowGroupExtents(source);
+  let groups = 0;
+  let rows = 0;
+  let largest = 0;
+  source.metadata.row_groups.forEach((group, i) => {
+    const n = Number(group.num_rows);
+    largest = Math.max(largest, n);
+    const extent = extents[i];
+    if (extent && shareInView(extent, view) === 0) return;
+    groups++;
+    rows += n;
+  });
+  return { groups, rows, largest };
+}
+
 /** The bbox each row group's covering statistics describe (undefined without stats). */
 function rowGroupExtents(source: GeoParquetFile): (BBox | undefined)[] {
   const cover = source.info.covering;

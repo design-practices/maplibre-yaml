@@ -13,6 +13,12 @@
       - "below": a FlatGeobuf file read by view from zoom 12, opened at zoom
                  10: the reader sees "zoom in to see them"; zoomed in, the
                  points draw and the line goes.
+      - "groups": the same points at the same view, maxFeatures: 30, from two
+                 GeoParquet files: points.parquet (row groups of 50) is read;
+                 points-rg100.parquet (row groups of 100) is not — each row
+                 group a view touches is decoded whole, and 100 rows is over
+                 2.5 × maxFeatures (75) — and its author hint says to rewrite
+                 it with smaller row groups.
     Serve from the repo root:  pnpm verify:serve
     Then open: http://localhost:4174/examples/verification/cloud-native/large-data.html
   -->
@@ -29,7 +35,7 @@
   </script>
 </head>
 <body>
-  <header>PASS = "fit" opens at zoom 13 with points; "below" asks to zoom in, then draws points once zoomed in.</header>
+  <header>PASS = "fit" opens at zoom 13 with points; "below" asks to zoom in, then draws points once zoomed in; "groups" draws only the blue points and asks to zoom in.</header>
   <main>
     <section>
       <h2>fitTo on a file read by view from zoom 13</h2>
@@ -75,6 +81,37 @@ layers:
     type: circle
     source: fgb
     paint: { circle-color: "#f4a261", circle-radius: 4 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Row groups of 50 (read) and of 100 (too costly to decode), maxFeatures: 30</h2>
+      <ml-map id="groups">
+        <script type="text/yaml">
+type: map
+id: large-data-groups
+config:
+  center: [10.1, 42.025]
+  zoom: 13
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  small:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+    load: { mode: viewport, minzoom: 8, maxFeatures: 30 }
+  large:
+    type: geojson
+    url: /gallery-assets/cloud-native/points-rg100.parquet
+    load: { mode: viewport, minzoom: 8, maxFeatures: 30 }
+layers:
+  - id: small
+    type: circle
+    source: small
+    paint: { circle-color: "#1d3557", circle-radius: 6 }
+  - id: large
+    type: circle
+    source: large
+    paint: { circle-color: "#e63946", circle-radius: 3 }
         </script>
       </ml-map>
     </section>

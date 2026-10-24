@@ -21,6 +21,7 @@ import {
   projectedBytes,
   canSkipByView,
   rowsInView,
+  rowGroupsInView,
   TAIL_BYTES,
 } from "../../src/formats/geoparquet";
 import { getDecoder, hasDecoder } from "../../src/formats/decoders";
@@ -833,5 +834,60 @@ describe("whole-file guard on rows (ml-37r.16), with a real file", () => {
       (e) => e
     );
     expect(failure(refused)).toMatchObject({ code: "too-large", features: 48 });
+  });
+});
+
+describe("GeoParquet decode budget on the row groups a view touches (M2)", () => {
+  // points.parquet: 400 points in 8 Hilbert-sorted row groups of 50.
+  const ONE_GROUP: [number, number, number, number] = [10.0, 42.0, 10.05, 42.02];
+  const TWO_GROUPS: [number, number, number, number] = [10.0, 42.06, 10.05, 42.08];
+
+  it("counts the whole row groups a view touches, not just the rows in view", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/points.parquet");
+    expect(rowGroupsInView(source, ONE_GROUP)).toEqual({ groups: 1, rows: 50, largest: 50 });
+    expect(rowGroupsInView(source, TWO_GROUPS)).toEqual({ groups: 2, rows: 100, largest: 50 });
+    expect(rowsInView(source, TWO_GROUPS)).toBeLessThan(20);
+    expect(rowGroupsInView(source, [0, 0, 1, 1]).rows).toBe(0);
+  });
+
+  it("a view under maxFeatures whose row groups hold more than 2.5 × maxFeatures rows isn't read; a smaller one is", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const log: Log = [];
+      vi.stubGlobal("fetch", fixtureFetch(log));
+      const map = fakeMap(14, TWO_GROUPS);
+      const onData = vi.fn();
+      const onHint = vi.fn();
+      const onTooDense = vi.fn();
+      const loader = new GeoParquetLoader(
+        map as never,
+        "/points.parquet",
+        loadModeOf({ load: { mode: "viewport", maxFeatures: 20 } }),
+        ["kind"],
+        { onData, onError: vi.fn(), onHint, onTooDense }
+      );
+      await loader.start();
+      // About 4 features in view, but 100 rows decoded: over the 50-row limit.
+      expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
+      expect(onTooDense).toHaveBeenLastCalledWith(true);
+      expect(log).toHaveLength(1); // the footer only
+      expect(onHint).toHaveBeenCalledTimes(1);
+      const hint = onHint.mock.calls[0]![0] as string;
+      expect(hint).toContain("has row groups of up to 50 rows");
+      expect(hint).toContain("touches 2 row groups, 100 rows, over this map's decode limit of 50 rows");
+      expect(hint).toContain("ROW_GROUP_SIZE=10000");
+      expect(hint).toContain("tylertoo");
+      expect(hint).toContain("raise `maxFeatures`");
+
+      map.bounds = ONE_GROUP;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(onData.mock.calls.at(-1)![0].features.length).toBeGreaterThan(0));
+      expect(onTooDense).toHaveBeenLastCalledWith(false);
+      expect(onHint).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

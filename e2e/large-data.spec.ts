@@ -64,3 +64,19 @@ test("below minzoom the reader is asked to zoom in; zoomed in, the features draw
   await expect(line).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("a GeoParquet view whose row groups are too large to decode isn't read, and the author is told why (M2)", async ({
+  page,
+}) => {
+  const errors = await guard(page);
+  await OPEN(page, "groups");
+  await expect.poll(() => count(page, "groups", "small"), { timeout: 30_000 }).toBeGreaterThan(0);
+  expect(await count(page, "groups", "small")).toBeLessThanOrEqual(30);
+  await expect(page.locator("#groups .ml-map-zoom-in")).toBeVisible();
+  expect(await count(page, "groups", "large")).toBe(0);
+  const notice = page.locator("#groups .ml-map-notice");
+  await expect(notice).toContainText("points-rg100.parquet has row groups of up to 100 rows");
+  await expect(notice).toContainText("ROW_GROUP_SIZE=10000");
+  await page.screenshot({ path: "e2e/results/large-data-groups.png" });
+  expect(errors).toEqual([]);
+});

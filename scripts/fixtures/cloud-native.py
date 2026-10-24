@@ -43,6 +43,8 @@ GeoParquet (WKB geometry, the GeoParquet 1.1 `bbox` covering column):
     districts.parquet       48 polygons, snappy, one row group
     points.parquet          400 points, snappy, Hilbert-sorted into 8 row
                             groups of 50 (viewport reads skip row groups)
+    points-rg100.parquet    the same sorted points in 4 row groups of 100 (a
+                            file whose row groups are large for its views)
     points-zstd.parquet     the points, zstd
     points-brotli.parquet   the points, brotli (the separately loaded codec)
     points-geoarrow.parquet the points with GeoArrow-native geometry (refused)
@@ -142,6 +144,7 @@ def write_geoparquet_fixtures(d, p):
     sorted_points = p.loc[order].reset_index(drop=True)
     write_parquet(d, "districts.parquet")
     write_parquet(sorted_points, "points.parquet", row_group_size=50)
+    write_parquet(sorted_points, "points-rg100.parquet", row_group_size=100)
     write_parquet(sorted_points, "points-zstd.parquet", compression="zstd")
     write_parquet(sorted_points, "points-brotli.parquet", compression="brotli")
     write_parquet(sorted_points, "points-geoarrow.parquet", geometry_encoding="geoarrow")
