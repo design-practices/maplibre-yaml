@@ -814,11 +814,23 @@ export class MapRenderer {
             (data ? geojsonBounds(data) : null);
           if (bounds) {
             this.fitApplied = true;
-            this.map.fitBounds(bounds, {
+            const fitOptions = {
               padding: this.fitPadding(fitTo),
               ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
               animate: false,
-            });
+            };
+            // ...and never below the zoom from which it reads anything: a
+            // citywide file framed at zoom 9.9 under a `minzoom` of 10
+            // opened on a blank map. Centred on the extent at that zoom
+            // instead, the map opens where the data loads.
+            const minzoom = this.layerManager.getViewMinzoom?.(fitTo.source);
+            const camera =
+              minzoom !== undefined ? this.map.cameraForBounds?.(bounds, fitOptions) : undefined;
+            if (minzoom !== undefined && camera?.center && camera.zoom !== undefined && camera.zoom < minzoom) {
+              this.map.jumpTo({ center: camera.center, zoom: minzoom });
+            } else {
+              this.map.fitBounds(bounds, fitOptions);
+            }
             this.emit('camera:fit', { source: fitTo.source, bounds });
           }
         }

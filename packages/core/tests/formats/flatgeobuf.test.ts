@@ -348,6 +348,37 @@ describe("FlatGeobufLoader", () => {
     }
   });
 
+  it("below minzoom the reader is asked to zoom in, as for a view too dense to read (M1)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      vi.stubGlobal("fetch", fixtureFetch());
+      const map = fakeMap(9, AREA);
+      const onData = vi.fn();
+      const onTooDense = vi.fn();
+      const loader = new FlatGeobufLoader(map as never, "/points.fgb", loadModeOf({ load: { mode: "viewport", minzoom: 11 } }), {
+        onData,
+        onError: vi.fn(),
+        onTooDense,
+      });
+      await loader.start();
+      expect(loader.minzoom).toBe(11);
+      expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
+      expect(onTooDense).toHaveBeenCalledTimes(1);
+      expect(onTooDense).toHaveBeenLastCalledWith(true);
+      // Panning out there doesn't repeat it.
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      expect(onTooDense).toHaveBeenCalledTimes(1);
+      map.zoom = 12;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(onData.mock.calls.at(-1)![0].features.length).toBeGreaterThan(0));
+      expect(onTooDense).toHaveBeenLastCalledWith(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("load: viewport on a server without ranges reads the whole file instead", async () => {
     const { onData, onError } = await run("/norange/points.fgb", loadModeOf({ load: "viewport" }));
     expect(onError).not.toHaveBeenCalled();

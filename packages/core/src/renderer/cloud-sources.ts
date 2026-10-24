@@ -302,8 +302,9 @@ export interface FlatGeobufCallbacks {
    */
   onHint?: (message: string) => void;
   /**
-   * The view holds more features than one read takes (`true`: nothing was
-   * read, the reader is asked to zoom in) — or no longer does (`false`).
+   * Nothing of the source is drawn until the reader zooms in (`true`): the
+   * map is below the source's `minzoom`, or the view holds more features
+   * than one read takes — or no longer (`false`).
    */
   onTooDense?: (dense: boolean) => void;
 }
@@ -340,6 +341,8 @@ export interface FormatLoader {
   readonly readsByView: boolean;
   /** The file's full extent, `[[w, s], [e, n]]`, when its metadata records one. */
   readonly extent: [[number, number], [number, number]] | undefined;
+  /** The zoom below which a by-view read reads nothing (`load: { minzoom }`). */
+  readonly minzoom: number;
   /** Begin reading; errors go to `onError`, never rejects. */
   start(started?: Promise<FeatureCollection>): Promise<void>;
   /** Stop: no more reads, no more callbacks. */
@@ -380,6 +383,11 @@ abstract class ViewLoader implements FormatLoader {
   /** Whether this loader reads by view (asked for, or switched to for size). */
   get readsByView(): boolean {
     return this.viewport;
+  }
+
+  /** The zoom below which a by-view read reads nothing. */
+  get minzoom(): number {
+    return this.load.minzoom;
   }
 
   abstract get extent(): [[number, number], [number, number]] | undefined;
@@ -495,7 +503,11 @@ abstract class ViewLoader implements FormatLoader {
 
   /**
    * Enter a state. Leaving a read view for a skipped one delivers no
-   * features (once); entering or leaving "dense" tells the host.
+   * features (once) and tells the host the reader must zoom in — below
+   * `minzoom` as much as for a view too dense to read, since either way the
+   * map draws nothing of the source (a `fitTo` that framed a citywide file
+   * at zoom 9.9 opened blank, without a word); reading a view again tells
+   * the host it no longer must.
    *
    * @returns Whether the state is new.
    */
@@ -503,7 +515,7 @@ abstract class ViewLoader implements FormatLoader {
     const was = this.skipped;
     if (was === why) return false;
     this.skipped = why;
-    if (was === "dense" || why === "dense") this.callbacks.onTooDense?.(why === "dense");
+    if (Boolean(was) !== Boolean(why)) this.callbacks.onTooDense?.(Boolean(why));
     if (why && !was) this.deliver({ type: "FeatureCollection", features: [] });
     return true;
   }

@@ -853,6 +853,16 @@ export class LayerManager {
   }
 
   /**
+   * The zoom below which a source read by view reads nothing (its
+   * `load: { minzoom }`), so `fitTo` doesn't frame it where nothing draws.
+   * Undefined for every other source.
+   */
+  getViewMinzoom(sourceId: string): number | undefined {
+    const loader = this.formatLoaders.get(sourceId);
+    return loader?.readsByView ? loader.minzoom : undefined;
+  }
+
+  /**
    * Whether a source holds only the features in view: a FlatGeobuf or
    * GeoParquet source read by view — `load: viewport`, or a file too large to read whole that
    * switched itself to it. Its data is never the whole dataset.

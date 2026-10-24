@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Large data: what the reader sees</title>
+  <!--
+    0.9.2 review round (PR #206): a large file read by view never leaves the
+    reader on a blank map without a word.
+      - "fit":   fitTo on a GeoParquet file read by view from zoom 13. Its
+                 extent frames at about zoom 10, where nothing would be read;
+                 the map opens at zoom 13 instead, with the points drawn.
+      - "below": a FlatGeobuf file read by view from zoom 12, opened at zoom
+                 10: the reader sees "zoom in to see them"; zoomed in, the
+                 points draw and the line goes.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/large-data.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 360px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = "fit" opens at zoom 13 with points; "below" asks to zoom in, then draws points once zoomed in.</header>
+  <main>
+    <section>
+      <h2>fitTo on a file read by view from zoom 13</h2>
+      <ml-map id="fit">
+        <script type="text/yaml">
+type: map
+id: large-data-fit
+config:
+  center: [0, 0]
+  zoom: 2
+  fitTo: { source: gpq }
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  gpq:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+    load: { mode: viewport, minzoom: 13 }
+layers:
+  - id: gpq
+    type: circle
+    source: gpq
+    paint: { circle-color: "#1d3557", circle-radius: 6 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Opened below minzoom (12)</h2>
+      <ml-map id="below">
+        <script type="text/yaml">
+type: map
+id: large-data-below
+config:
+  center: [10.1, 42.08]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  fgb:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.fgb
+    load: { mode: viewport, minzoom: 12 }
+layers:
+  - id: fgb
+    type: circle
+    source: fgb
+    paint: { circle-color: "#f4a261", circle-radius: 4 }
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>
