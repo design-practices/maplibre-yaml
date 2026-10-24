@@ -67,17 +67,20 @@ export const WHOLE_FILE_MAX_BYTES = 50 * 1024 * 1024;
  * Above this many features (a FlatGeobuf header's count, a GeoParquet
  * footer's rows) a whole-file read is not attempted either, whatever the
  * bytes (ml-37r.16): the cost of a whole read is the features it decodes on
- * the page, and compressed bytes hide it.
+ * the page, and compressed bytes hide it. An author's `load: { maxFeatures }`
+ * above it raises it for that source.
  *
  * @remarks
- * From the PLUTO benchmark (docs/plans/2026-10-23-pluto-lonboard-benchmark.md
- * §2–3): GeoParquet of 856,687 parcels whose read columns are 47 MB on the
- * wire (under {@link WHOLE_FILE_MAX_BYTES}) crashed or froze the tab at every
- * view; 275,628 parcels read whole (Brooklyn, as GeoJSON) took 7–8 s on the
- * desktop and 18–26 s on the laptop profiles with 1.5–2.3 GB of memory — the
- * edge of usable. The guard sits just below that.
+ * Measured on NYC PLUTO parcels (Chromium, desktop with a GPU, 2026-10-23/24):
+ * Brooklyn's 275,628 parcels read whole draw in 13–17 s at 2.1–2.3 GB of
+ * renderer memory and pan at 42–50 fps, as GeoJSON or GeoParquet — usable,
+ * and what 0.9.1 did, so a file that size still loads whole. The citywide
+ * 856,687 parcels, whose read columns were 47 MB on the wire (under
+ * {@link WHOLE_FILE_MAX_BYTES}), decoded to about 230 MB and took 3.9–4.3 GB.
+ * 400,000 sits between the two; {@link WHOLE_FILE_MAX_DECODED_BYTES} is the
+ * safety net for fewer, heavier features (the citywide file trips both).
  */
-export const WHOLE_FILE_MAX_FEATURES = 250_000;
+export const WHOLE_FILE_MAX_FEATURES = 400_000;
 /**
  * Above this many decoded bytes of the columns a map reads (a GeoParquet
  * footer's uncompressed sizes) a whole-file read is not attempted: few
@@ -294,15 +297,16 @@ export async function loadFlatGeobufWhole(
 export const cloudSourceDataLoader: SourceDataLoader = (source) => {
   const format = formatOfSource(source);
   if (!format || !typeReadsFormat(source["type"], format)) return undefined;
-  if (format === "flatgeobuf" && loadModeOf(source as Obj).mode === "all") {
+  const load = loadModeOf(source as Obj);
+  if (format === "flatgeobuf" && load.mode === "all") {
     const url = String(source["url"]);
-    return loadFlatGeobufWhole(url).then(
+    return loadFlatGeobufWhole(url, { limits: sizeLimits(undefined, load) }).then(
       (data) => data ?? { type: "FeatureCollection", features: [] }
     );
   }
-  if (format === "geoparquet" && loadModeOf(source as Obj).mode === "all") {
+  if (format === "geoparquet" && load.mode === "all") {
     const url = String(source["url"]);
-    return loadGeoParquetWhole(url, columnChoiceOf(source)).then(
+    return loadGeoParquetWhole(url, columnChoiceOf(source), { limits: sizeLimits(undefined, load) }).then(
       (read) => read.data ?? { type: "FeatureCollection", features: [] }
     );
   }
@@ -594,7 +598,7 @@ export class FlatGeobufLoader extends ViewLoader {
     callbacks: FlatGeobufCallbacks,
     limits?: SizeLimits
   ) {
-    super(map, url, load, callbacks, sizeLimits(limits));
+    super(map, url, load, callbacks, sizeLimits(limits, load));
   }
 
   /**
@@ -733,11 +737,17 @@ const DEFAULT_LIMITS: Required<SizeLimits> = {
 /**
  * The size guards in force: the defaults, then any a browser test set on
  * `globalThis.__MAPLIBRE_YAML_LIMITS__` (a test hook, so a small fixture can
- * stand in for a large file — not an authoring option), then `given`.
+ * stand in for a large file — not an authoring option), then `given`; then
+ * the author's `load: { maxFeatures }`, which raises the feature limit (never
+ * lowers it).
  */
-function sizeLimits(given?: SizeLimits): Required<SizeLimits> {
+export function sizeLimits(given?: SizeLimits, load?: Pick<LoadMode, "authorMaxFeatures">): Required<SizeLimits> {
   const hook = (globalThis as { __MAPLIBRE_YAML_LIMITS__?: Partial<SizeLimits> }).__MAPLIBRE_YAML_LIMITS__;
-  return { ...DEFAULT_LIMITS, ...hook, ...given } as Required<SizeLimits>;
+  const limits = { ...DEFAULT_LIMITS, ...hook, ...given } as Required<SizeLimits>;
+  if (load?.authorMaxFeatures !== undefined && load.authorMaxFeatures > limits.maxFeatures) {
+    limits.maxFeatures = load.authorMaxFeatures;
+  }
+  return limits;
 }
 
 /** The console note for a whole file a server sent because it ignores `Range:`. */
@@ -823,7 +833,7 @@ export class GeoParquetLoader extends ViewLoader {
     callbacks: FlatGeobufCallbacks,
     limits?: SizeLimits
   ) {
-    super(map, url, load, callbacks, sizeLimits(limits));
+    super(map, url, load, callbacks, sizeLimits(limits, load));
   }
 
   /** The file's extent from its GeoParquet metadata — what `fitTo` frames when read by view. */

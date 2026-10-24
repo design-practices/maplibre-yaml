@@ -439,6 +439,26 @@ describe("load: maxFeatures — the per-view budget (ml-37r.17)", () => {
     expect(result.errors[0]!.message).toContain(message);
   });
 
+  it("maxFeatures alone (no mode: the whole file) raises the whole-file limit, and validates the same (M3)", () => {
+    const ok = v1(`  lots:
+    type: geojson
+    url: data/lots.parquet
+    load: { maxFeatures: 600000 }`);
+    expect(ok.errors).toEqual([]);
+    expect(ok.warnings).toEqual([]);
+    const all = v1(`  lots:
+    type: geojson
+    url: data/lots.parquet
+    load: { mode: all, maxFeatures: 600000 }`);
+    expect(all.errors).toEqual([]);
+    const bad = v1(`  lots:
+    type: geojson
+    url: data/lots.parquet
+    load: { maxFeatures: 0 }`);
+    expect(bad.success).toBe(false);
+    expect(bad.errors[0]).toMatchObject({ path: "sources.lots.load.maxFeatures" });
+  });
+
   it("refuses a maxFeatures that isn't a number", () => {
     const result = v1(`  lots:
     type: geojson

@@ -162,16 +162,25 @@ export const ColorRampSchema = z
  *   `minzoom` (default 10), nor for a view estimated to hold more than
  *   `maxFeatures` features (default 150,000): the map asks to zoom in.
  *
+ * Without `load:` a file is read whole up to 400,000 features (and 50 MB
+ * transferred, 150 MB decoded), and by view above that when it can be.
+ * `maxFeatures` is the one override: it sets the per-view budget, and above
+ * 400,000 it also raises the whole-file limit (heavier on memory).
+ *
  * @example
  * ```yaml
  * load: { mode: viewport, minzoom: 12, maxFeatures: 50000 }
+ * load: { maxFeatures: 600000 }   # load a 550,000-feature file whole
  * ```
  */
 export const SourceLoadSchema = z
   .union([
     z.enum(["all", "viewport"]),
     z.object({
-      mode: z.enum(["all", "viewport"]).describe("all (whole file) or viewport (features in view)"),
+      mode: z
+        .enum(["all", "viewport"])
+        .optional()
+        .describe("all (whole file, the default) or viewport (features in view)"),
       minzoom: z
         .number()
         .min(0)
@@ -184,7 +193,7 @@ export const SourceLoadSchema = z
         .min(1)
         .optional()
         .describe(
-          "viewport: read nothing for a view holding more features than this (default 150000); the map asks to zoom in"
+          "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
         ),
     }),
   ])

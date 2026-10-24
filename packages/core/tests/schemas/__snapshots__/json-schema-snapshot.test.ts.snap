@@ -454,7 +454,7 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                   "all",
                                   "viewport"
                                 ],
-                                "description": "all (whole file) or viewport (features in view)"
+                                "description": "all (whole file, the default) or viewport (features in view)"
                               },
                               "minzoom": {
                                 "type": "number",
@@ -465,12 +465,9 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                               "maxFeatures": {
                                 "type": "integer",
                                 "minimum": 1,
-                                "description": "viewport: read nothing for a view holding more features than this (default 150000); the map asks to zoom in"
+                                "description": "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
                               }
                             },
-                            "required": [
-                              "mode"
-                            ],
                             "additionalProperties": false,
                             "patternProperties": {
                               "^x-": {}
@@ -5029,7 +5026,7 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                               "all",
                               "viewport"
                             ],
-                            "description": "all (whole file) or viewport (features in view)"
+                            "description": "all (whole file, the default) or viewport (features in view)"
                           },
                           "minzoom": {
                             "type": "number",
@@ -5040,12 +5037,9 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                           "maxFeatures": {
                             "type": "integer",
                             "minimum": 1,
-                            "description": "viewport: read nothing for a view holding more features than this (default 150000); the map asks to zoom in"
+                            "description": "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
                           }
                         },
-                        "required": [
-                          "mode"
-                        ],
                         "additionalProperties": false,
                         "patternProperties": {
                           "^x-": {}
@@ -8528,7 +8522,7 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                           "all",
                                           "viewport"
                                         ],
-                                        "description": "all (whole file) or viewport (features in view)"
+                                        "description": "all (whole file, the default) or viewport (features in view)"
                                       },
                                       "minzoom": {
                                         "type": "number",
@@ -8539,12 +8533,9 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                       "maxFeatures": {
                                         "type": "integer",
                                         "minimum": 1,
-                                        "description": "viewport: read nothing for a view holding more features than this (default 150000); the map asks to zoom in"
+                                        "description": "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
                                       }
                                     },
-                                    "required": [
-                                      "mode"
-                                    ],
                                     "additionalProperties": false,
                                     "patternProperties": {
                                       "^x-": {}
@@ -13327,7 +13318,7 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                               "all",
                                               "viewport"
                                             ],
-                                            "description": "all (whole file) or viewport (features in view)"
+                                            "description": "all (whole file, the default) or viewport (features in view)"
                                           },
                                           "minzoom": {
                                             "type": "number",
@@ -13338,12 +13329,9 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                           "maxFeatures": {
                                             "type": "integer",
                                             "minimum": 1,
-                                            "description": "viewport: read nothing for a view holding more features than this (default 150000); the map asks to zoom in"
+                                            "description": "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
                                           }
                                         },
-                                        "required": [
-                                          "mode"
-                                        ],
                                         "additionalProperties": false,
                                         "patternProperties": {
                                           "^x-": {}

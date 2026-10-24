@@ -103,6 +103,21 @@ test("files over the whole-file feature limit: refused in plain words, or read b
   expect(errors).toEqual([]);
 });
 
+test("an author's maxFeatures raises the whole-file limit: the same file loads whole (M3)", async ({ page }) => {
+  const errors = await guard(page);
+  await OPEN(page, "raised");
+  // Distinct points (a tiled GeoJSON source can return a point once per tile).
+  const distinct = () =>
+    page.evaluate(() => {
+      const map = (document.getElementById("raised") as any).getMap();
+      return new Set(map.querySourceFeatures("gpq").map((f: any) => JSON.stringify(f.geometry.coordinates))).size;
+    });
+  await expect.poll(distinct, { timeout: 30_000 }).toBe(400);
+  await expect(page.locator("#raised .ml-map-zoom-in")).toHaveCount(0);
+  await expect(page.locator("#raised .ml-map-notice")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("load: viewport stops at maxFeatures: zoomed out, nothing is read and the reader is asked to zoom in", async ({
   page,
 }) => {

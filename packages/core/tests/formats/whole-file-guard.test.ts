@@ -18,6 +18,8 @@ import {
   WHOLE_FILE_MAX_FEATURES,
   WHOLE_FILE_MAX_DECODED_BYTES,
   WHOLE_FILE_MAX_BYTES,
+  sizeLimits,
+  loadModeOf,
 } from "../../src/renderer/cloud-sources";
 import { isFormatError } from "../../src/formats/errors";
 
@@ -108,6 +110,35 @@ describe("the GeoParquet whole-file guard, from a synthetic footer", () => {
     expect(error).toBeInstanceOf(WholeFileTooLarge);
     expect(error.features).toBe(856_687);
     expect(error.opened).toBe(opened);
+  });
+
+  it("Brooklyn (275,628 parcels, 14 MB compressed) still loads whole by default, as in 0.9.1 (M3)", async () => {
+    expect(WHOLE_FILE_MAX_FEATURES).toBe(400_000);
+    const opened = footer(275_628, 28, 14 * MB, 55 * MB, true);
+    const error = await loadGeoParquetWhole("/bk.parquet", "all", { opened }).catch((e) => e);
+    // Not refused, not switched to by view: the guard let it through, and the read began.
+    expect(error).not.toBeInstanceOf(WholeFileTooLarge);
+    // The decoder ran (and failed on a footer with no data behind it).
+    expect(isFormatError(error) && error.failure.code).toBe("read");
+  });
+
+  it("an author's maxFeatures raises the whole-file limit (never lowers it); the decoded-size net stays (M3)", async () => {
+    const big = footer(550_000, 55, 30 * MB, 120 * MB, true);
+    const refused = await loadGeoParquetWhole("/big.parquet", "all", { opened: big }).catch((e) => e);
+    expect(refused).toBeInstanceOf(WholeFileTooLarge);
+    const raised = sizeLimits(undefined, loadModeOf({ load: { maxFeatures: 600_000 } }));
+    expect(raised.maxFeatures).toBe(600_000);
+    const read = await loadGeoParquetWhole("/big.parquet", "all", { opened: big, limits: raised }).catch((e) => e);
+    expect(read).not.toBeInstanceOf(WholeFileTooLarge);
+    expect(isFormatError(read) && read.failure.code).toBe("read"); // past the guard
+    // A lower maxFeatures is the per-view budget only.
+    expect(sizeLimits(undefined, loadModeOf({ load: { mode: "viewport", maxFeatures: 5000 } })).maxFeatures).toBe(400_000);
+    // Citywide PLUTO is still caught on its decoded size, whatever the count allows.
+    const pluto = footer(856_687, 9, 47 * MB, 230 * MB, true);
+    const limits = sizeLimits(undefined, loadModeOf({ load: { maxFeatures: 1_000_000 } }));
+    const caught = await loadGeoParquetWhole("/pluto.parquet", "all", { opened: pluto, limits }).catch((e) => e);
+    expect(caught).toBeInstanceOf(WholeFileTooLarge);
+    expect(pluto.file.slice).not.toHaveBeenCalled();
   });
 
   it("few rows that decode to too many bytes: refused too", async () => {

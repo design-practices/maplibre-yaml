@@ -288,7 +288,15 @@ describe("loadModeOf", () => {
     expect(loadModeOf({ load: { mode: "all" } }).mode).toBe("all");
     // The per-view budget (ml-37r.17), flat or under a v2 source's runtime:.
     expect(loadModeOf({ load: { mode: "viewport", maxFeatures: 5000 } }).maxFeatures).toBe(5000);
+    expect(loadModeOf({ load: { mode: "viewport" } }).authorMaxFeatures).toBeUndefined();
     expect(loadModeOf({ runtime: { load: { mode: "viewport", maxFeatures: 7 } } }).maxFeatures).toBe(7);
+    // The author's own maxFeatures, kept apart: it also raises the whole-file limit (M3).
+    expect(loadModeOf({ load: { maxFeatures: 600_000 } })).toEqual({
+      mode: "all",
+      minzoom: 10,
+      maxFeatures: 600_000,
+      authorMaxFeatures: 600_000,
+    });
   });
 });
 

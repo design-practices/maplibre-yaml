@@ -179,12 +179,19 @@ export interface LoadMode {
   minzoom: number;
   /** The most features one by-view read takes (`load: { maxFeatures }`). */
   maxFeatures: number;
+  /**
+   * The author's own `maxFeatures`, when the document sets one: it also
+   * raises the whole-file feature limit (never lowers it), so one key lets a
+   * file over the limit load whole and a dense view read.
+   */
+  authorMaxFeatures?: number;
 }
 
 /**
  * The source's `load:` key, normalized (`all` when absent or unrecognized):
  * flat (v1, and every source the renderer sees) or under a v2 source's
- * `runtime:`; the bare string or the `{ mode, minzoom, maxFeatures }` object.
+ * `runtime:`; the bare string or the `{ mode, minzoom, maxFeatures }` object
+ * (`mode` defaults to `all`).
  */
 export function loadModeOf(source: unknown): LoadMode {
   const runtime = isObject(source) ? source["runtime"] : undefined;
@@ -194,11 +201,13 @@ export function loadModeOf(source: unknown): LoadMode {
   const viewport =
     (typeof load === "string" && load.trim().toLowerCase() === "viewport") ||
     (isObject(load) && load["mode"] === "viewport");
+  const author = isObject(load) && typeof load["maxFeatures"] === "number" ? (load["maxFeatures"] as number) : undefined;
   return {
     mode: viewport ? "viewport" : "all",
     minzoom: num("minzoom", VIEWPORT_DEFAULT_MINZOOM),
     // Also read for `all`: a file too large to load whole is read by view.
-    maxFeatures: num("maxFeatures", VIEWPORT_DEFAULT_MAX_FEATURES),
+    maxFeatures: author ?? VIEWPORT_DEFAULT_MAX_FEATURES,
+    ...(author !== undefined ? { authorMaxFeatures: author } : {}),
   };
 }
 
