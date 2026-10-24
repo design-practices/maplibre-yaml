@@ -76,7 +76,7 @@ properties, list them in `columns:`, or write `columns: all`.
 | `load:` | What it reads | Needs |
 |---|---|---|
 | `all` (default) | The columns it uses, from every row | Any web server |
-| `viewport` | Only the rows in view, read again as the map moves; nothing below `minzoom` (default 10) | A **`bbox` column**, rows **sorted by location**, and a server with **range requests** |
+| `viewport` | Only the rows in view, read again as the map moves; nothing below `minzoom` (default 10), and nothing for a view holding more than `maxFeatures` rows (default 150,000) | A **`bbox` column**, rows **sorted by location**, and a server with **range requests** |
 
 Reading by view works because a GeoParquet file stores rows in groups, and
 its footer records each group's extent from the `bbox` column; groups outside
@@ -90,7 +90,11 @@ needs explicit `breaks:` rather than `method:`.
 **How big?** The limits are FlatGeobuf's, counted on the columns the map
 reads: up to **10 MB** read whole, **10–50 MB** read whole with a console
 note, over **50 MB** read by view if the file allows it and refused
-otherwise. A server without range requests (`python -m http.server`) sends
+otherwise. Compressed bytes understate what decoding costs, so a file with
+more than **250,000 rows**, or whose columns decode to more than **150 MB**
+(both from the footer), is treated the same way, however small it downloads.
+A view whose row groups hold more than `maxFeatures` rows isn't read: readers
+see "Too many features to show here — zoom in to see them". A server without range requests (`python -m http.server`) sends
 the whole file at once: fine for a small file, refused before download for
 one over 50 MB.
 

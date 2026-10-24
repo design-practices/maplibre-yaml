@@ -154,30 +154,52 @@ export function formatOfSource(source: unknown): CloudFormat | undefined {
 /** `load: viewport` reads nothing below this zoom unless `minzoom` says otherwise. */
 export const VIEWPORT_DEFAULT_MINZOOM = 10;
 
+/**
+ * The most features one by-view read takes unless `maxFeatures` says
+ * otherwise (ml-37r.17). A view estimated to hold more is not read: the map
+ * asks the reader to zoom in instead.
+ *
+ * @remarks
+ * From the PLUTO benchmark (docs/plans/2026-10-23-pluto-lonboard-benchmark.md
+ * §2–3, parcels as polygons, desktop with a GPU and two laptop profiles):
+ * the largest by-view read that stayed usable was a borough view of about
+ * 94,000 lots (FlatGeobuf 36 MB, GeoParquet 20 MB; 5–6 s to draw on the
+ * desktop, 15–21 s on the laptops, 2.5–3.8 GB of renderer memory, 12–54 fps
+ * while panning); the citywide view (about 775,000 lots in view) took 30 s,
+ * 5.3 GB and ran at 8 fps (FlatGeobuf) or crashed the tab (GeoParquet).
+ * 150,000 leaves headroom over the borough view for a larger screen and stays
+ * a fifth of the view that failed.
+ */
+export const VIEWPORT_DEFAULT_MAX_FEATURES = 150_000;
+
 /** How a FlatGeobuf or GeoParquet source is read (`load:`). */
 export interface LoadMode {
   mode: "all" | "viewport";
   /** Viewport mode reads nothing below this zoom. */
   minzoom: number;
+  /** The most features one by-view read takes (`load: { maxFeatures }`). */
+  maxFeatures: number;
 }
 
 /**
  * The source's `load:` key, normalized (`all` when absent or unrecognized):
  * flat (v1, and every source the renderer sees) or under a v2 source's
- * `runtime:`; the bare string or the `{ mode, minzoom }` object.
+ * `runtime:`; the bare string or the `{ mode, minzoom, maxFeatures }` object.
  */
 export function loadModeOf(source: unknown): LoadMode {
-  if (!isObject(source)) return { mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM };
-  const runtime = source["runtime"];
-  const load = source["load"] ?? (isObject(runtime) ? runtime["load"] : undefined);
-  if (typeof load === "string" && load.trim().toLowerCase() === "viewport") {
-    return { mode: "viewport", minzoom: VIEWPORT_DEFAULT_MINZOOM };
-  }
-  if (isObject(load)) {
-    const minzoom = typeof load["minzoom"] === "number" ? load["minzoom"] : VIEWPORT_DEFAULT_MINZOOM;
-    if (load["mode"] === "viewport") return { mode: "viewport", minzoom };
-  }
-  return { mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM };
+  const runtime = isObject(source) ? source["runtime"] : undefined;
+  const load = isObject(source) ? (source["load"] ?? (isObject(runtime) ? runtime["load"] : undefined)) : undefined;
+  const num = (key: string, fallback: number): number =>
+    isObject(load) && typeof load[key] === "number" ? (load[key] as number) : fallback;
+  const viewport =
+    (typeof load === "string" && load.trim().toLowerCase() === "viewport") ||
+    (isObject(load) && load["mode"] === "viewport");
+  return {
+    mode: viewport ? "viewport" : "all",
+    minzoom: num("minzoom", VIEWPORT_DEFAULT_MINZOOM),
+    // Also read for `all`: a file too large to load whole is read by view.
+    maxFeatures: num("maxFeatures", VIEWPORT_DEFAULT_MAX_FEATURES),
+  };
 }
 
 /**

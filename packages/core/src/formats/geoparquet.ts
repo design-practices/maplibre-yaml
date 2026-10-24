@@ -433,15 +433,57 @@ export function columnsToRead(source: GeoParquetFile, columns: ColumnChoice): st
  * footer's per-column-chunk sizes (known before any data is read).
  */
 export function projectedBytes(source: GeoParquetFile, columns: ColumnChoice): number {
+  return projectedSize(source, columns)[0];
+}
+
+/**
+ * What a whole-file read of `columns` costs, from the footer alone:
+ * `[compressed bytes transferred, uncompressed bytes decoded]`. The second is
+ * what decoding holds in memory (ml-37r.16: a file whose read columns are
+ * 47 MB on the wire can be several times that once decompressed).
+ */
+export function projectedSize(source: GeoParquetFile, columns: ColumnChoice): [number, number] {
   const read = new Set(columnsToRead(source, columns));
   let total = 0;
+  let decoded = 0;
   for (const group of source.metadata.row_groups) {
     for (const chunk of group.columns) {
       const meta = chunk.meta_data;
-      if (meta && read.has(meta.path_in_schema[0]!)) total += Number(meta.total_compressed_size);
+      if (meta && read.has(meta.path_in_schema[0]!)) {
+        total += Number(meta.total_compressed_size);
+        decoded += Number(meta.total_uncompressed_size);
+      }
     }
   }
-  return total;
+  return [total, decoded];
+}
+
+/**
+ * The share of `box` that `view` covers, by area (0–1). A box with no area
+ * (one point, a straight line) counts whole when the view touches it.
+ */
+export function shareInView(box: BBox, view: BBox): number {
+  const w = Math.min(box[2], view[2]) - Math.max(box[0], view[0]);
+  const h = Math.min(box[3], view[3]) - Math.max(box[1], view[1]);
+  if (w < 0 || h < 0) return 0;
+  const area = (box[2] - box[0]) * (box[3] - box[1]);
+  return area > 0 ? (w * h) / area : 1;
+}
+
+/**
+ * About how many rows a read of `view` returns, from the footer alone: each
+ * row group's rows times the share of its covering extent the view covers
+ * (rows spread evenly within a group, which is what spatially sorted groups
+ * make roughly true). A group without statistics counts whole.
+ */
+export function rowsInView(source: GeoParquetFile, view: BBox): number {
+  const extents = rowGroupExtents(source);
+  let rows = 0;
+  source.metadata.row_groups.forEach((group, i) => {
+    const extent = extents[i];
+    rows += Number(group.num_rows) * (extent ? shareInView(extent, view) : 1);
+  });
+  return Math.round(rows);
 }
 
 /** The bbox each row group's covering statistics describe (undefined without stats). */

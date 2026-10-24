@@ -41,6 +41,7 @@ import {
   loadModeOf,
   toMapLibreTileSpec,
   withoutFormatKeys,
+  type FlatGeobufCallbacks,
   type FormatLoader,
 } from "./cloud-sources";
 
@@ -152,6 +153,12 @@ export interface LayerManagerCallbacks {
    * update whose features have no `updateKey`: they are kept, not matched).
    */
   onSourceHint?: (sourceId: string, message: string) => void;
+  /**
+   * A source read by view whose view holds more features than one read
+   * takes (`true`: nothing was read, the reader should zoom in), or no longer
+   * does (`false`) (ml-37r.17).
+   */
+  onViewTooDense?: (sourceId: string, dense: boolean) => void;
 }
 
 /**
@@ -780,6 +787,7 @@ export class LayerManager {
           this.callbacks.onDataLoaded?.(layerId, data.features.length);
         },
         onError: (error) => this.callbacks.onDataError?.(layerId, error),
+        ...this.formatHints(sourceId),
       }
     );
     this.formatLoaders.set(sourceId, loader);
@@ -817,12 +825,21 @@ export class LayerManager {
           this.callbacks.onDataLoaded?.(layerId, data.features.length);
         },
         onError: (error) => this.callbacks.onDataError?.(layerId, error),
+        ...this.formatHints(sourceId),
       }
     );
     this.formatLoaders.set(sourceId, loader);
     const pending = this.pendingData.get(sourceId);
     this.pendingData.delete(sourceId);
     await loader.start(pending);
+  }
+
+  /** A cloud-native reader's author hints and "too dense" reports, for its source. */
+  private formatHints(sourceId: string): Pick<FlatGeobufCallbacks, "onHint" | "onTooDense"> {
+    return {
+      onHint: (message) => this.callbacks.onSourceHint?.(sourceId, message),
+      onTooDense: (dense) => this.callbacks.onViewTooDense?.(sourceId, dense),
+    };
   }
 
   /**

@@ -279,7 +279,12 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     // indexed → read by view.
     await waitForFeatures(page, "fallbacks", "norange");
     await waitForFeatures(page, "fallbacks", "big");
-    await expect(page.locator("#fallbacks .ml-map-notice")).toHaveCount(0);
+    // Nothing failed; the author is told (on a local page) that the big file
+    // is read by view (0.9.2: on the page, not only the console).
+    const fallbacks = page.locator("#fallbacks .ml-map-notice");
+    await expect(fallbacks).toContainText("Notes for this map's author");
+    await expect(fallbacks).toContainText("(60 MB) is too large to load whole; reading only the part in view instead");
+    await expect(fallbacks).not.toContainText("couldn't load");
     await page.screenshot({ path: "e2e/results/cnv_errors.png", fullPage: true });
     expect(errors).toEqual([]);
   });

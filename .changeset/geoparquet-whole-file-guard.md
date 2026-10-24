@@ -1,0 +1,5 @@
+---
+"@maplibre-yaml/core": patch
+---
+
+A GeoParquet or FlatGeobuf file too large to decode in a browser tab is no longer read whole. The GeoParquet guard used to count only the compressed bytes of the columns a map reads, so a 857,000-row file that downloads as 47 MB passed it and then froze or crashed the tab with no message. Both formats now also check, before reading any data, how many features the file holds (GeoParquet's footer, FlatGeobuf's header) and, for GeoParquet, how large its columns are once decoded: over 250,000 features or 150 MB decoded, a file that can be read in parts (a GeoParquet file with a `bbox` column and sorted row groups, an indexed FlatGeobuf) is read by view instead, and any other is refused with the usual notice ("…has 856,687 features, too large to load whole in a browser. Add `load: viewport`… or convert it to PMTiles."). A FlatGeobuf served compressed is now measured by its decompressed bytes, and the note that a large file is being read by view now reaches the page while the author is developing, not only the console.

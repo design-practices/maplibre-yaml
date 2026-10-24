@@ -517,20 +517,21 @@ export function describeFormatFailure(failure: FormatFailure): string {
       const line = `${file} didn't load (${failure.status ?? "HTTP error"}${text ? ` ${text}` : ""}).`;
       return failure.status === 416 ? `${line} ${RANGE_REFUSED_HINT}` : line;
     }
-    case "too-large":
-      if (failure.format === "geoparquet") {
-        return (
-          `${file} is ${failure.size !== undefined ? megabytes(failure.size) : "very large"} ` +
-          "(the columns this map reads), too large to load whole in a browser. Add " +
-          "`load: viewport` to the source (the file needs a `bbox` covering column and " +
-          "spatially sorted row groups), list fewer `columns:`, or convert it to PMTiles."
-        );
-      }
+    case "too-large": {
+      const gp = failure.format === "geoparquet";
+      // A count when that is what decided (a footer's or header's rows,
+      // ml-37r.16): the bytes on the wire say little about the decoded size.
+      const what =
+        failure.features !== undefined
+          ? `has ${failure.features.toLocaleString("en")} features`
+          : `is ${failure.size !== undefined ? megabytes(failure.size) : "very large"}` +
+            (gp ? " (the columns this map reads)" : "");
       return (
-        `${file} is ${failure.size !== undefined ? megabytes(failure.size) : "very large"}, ` +
-        "too large to load whole in a browser. Add `load: viewport` to the source (the file " +
-        "needs a spatial index), or convert it to PMTiles."
+        `${file} ${what}, too large to load whole in a browser. Add \`load: viewport\` to the ` +
+        `source (the file needs ${gp ? "a `bbox` covering column and spatially sorted row groups" : "a spatial index"}), ` +
+        `${gp ? "list fewer `columns:`, " : ""}or convert it to PMTiles.`
       );
+    }
     case "no-index":
       if (failure.format === "geoparquet") {
         return (

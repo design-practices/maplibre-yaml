@@ -20,6 +20,7 @@ import {
   readBbox,
   projectedBytes,
   canSkipByView,
+  rowsInView,
   TAIL_BYTES,
 } from "../../src/formats/geoparquet";
 import { getDecoder, hasDecoder } from "../../src/formats/decoders";
@@ -769,5 +770,68 @@ describe("the file's own column names reach the classify hint (ml-aot.118)", () 
     expect(problem).toMatchObject({ reason: "missing", unread: true });
     expect(problem!.suggestion).toBeUndefined();
     expect(classifyFieldMessage("d", problem!)).toContain("is a column of the file, but columns: leaves it out");
+  });
+});
+
+describe("GeoParquet per-view budget (ml-37r.17)", () => {
+  const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+
+  it("estimates a view's rows from the row groups' covering statistics", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/points.parquet");
+    expect(rowsInView(source, [9, 41, 11, 43])).toBe(400);
+    expect(rowsInView(source, [0, 0, 1, 1])).toBe(0);
+    const part = rowsInView(source, [10.0, 42.0, 10.1, 42.08]);
+    expect(part).toBeGreaterThan(0);
+    expect(part).toBeLessThan(200);
+  });
+
+  it("a view over the budget isn't read: no row group fetched, one hint, then read once zoomed in", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const log: Log = [];
+      vi.stubGlobal("fetch", fixtureFetch(log));
+      const map = fakeMap(12, AREA);
+      const onData = vi.fn();
+      const onHint = vi.fn();
+      const onTooDense = vi.fn();
+      const loader = new GeoParquetLoader(
+        map as never,
+        "/points.parquet",
+        loadModeOf({ load: { mode: "viewport", maxFeatures: 100 } }),
+        ["kind"],
+        { onData, onError: vi.fn(), onHint, onTooDense }
+      );
+      await loader.start();
+      expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
+      expect(onTooDense).toHaveBeenLastCalledWith(true);
+      expect(onHint).toHaveBeenCalledTimes(1);
+      expect(onHint.mock.calls[0]![0]).toContain("over `maxFeatures` (100)");
+      // The footer only.
+      expect(log).toHaveLength(1);
+
+      map.zoom = 14;
+      map.bounds = [10.0, 42.0, 10.1, 42.08];
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(onData.mock.calls.at(-1)![0].features.length).toBeGreaterThan(0));
+      expect(onTooDense).toHaveBeenLastCalledWith(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("whole-file guard on rows (ml-37r.16), with a real file", () => {
+  it("rows over the limit, bytes well under: not read whole (read by view when the file allows)", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const limits = { warn: 1e6, max: 50e6, maxFeatures: 100 };
+    const error = await loadGeoParquetWhole("/points.parquet", "all", { limits }).catch((e) => e);
+    expect(error).toBeInstanceOf(WholeFileTooLarge);
+    expect(error.features).toBe(400);
+    const refused = await loadGeoParquetWhole("/districts.parquet", "all", { limits: { ...limits, maxFeatures: 10 } }).catch(
+      (e) => e
+    );
+    expect(failure(refused)).toMatchObject({ code: "too-large", features: 48 });
   });
 });

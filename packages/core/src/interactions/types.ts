@@ -126,6 +126,12 @@ export interface InteractionDeps {
    */
   hidePopup?: () => void;
   /**
+   * Report a one-time author hint about a layer (a highlight with no feature
+   * ids to address). The renderer logs it and shows it on the page while the
+   * author is developing; without it the interaction logs to the console.
+   */
+  hint?: (message: string, layerId: string) => void;
+  /**
    * The host handler map the `emit` interaction resolves event names against.
    *
    * @remarks

@@ -68,7 +68,9 @@ export interface FormatFailure {
   status?: number;
   statusText?: string;
   /** File size in bytes, when known (`too-large`). */
-  size?: number;
+  size?: number | undefined;
+  /** Number of features, when that is what made it too large (`too-large`; wins over `size`). */
+  features?: number | undefined;
   /** The CRS the file declares (`crs`), e.g. "EPSG:3857". */
   crs?: string;
   /** The geometry encoding a GeoParquet file uses (`encoding`), e.g. "point". */
