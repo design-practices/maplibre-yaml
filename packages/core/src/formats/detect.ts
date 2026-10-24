@@ -160,8 +160,8 @@ export const VIEWPORT_DEFAULT_MINZOOM = 10;
  * asks the reader to zoom in instead.
  *
  * @remarks
- * From the PLUTO benchmark (docs/plans/2026-10-23-pluto-lonboard-benchmark.md
- * §2–3, parcels as polygons, desktop with a GPU and two laptop profiles):
+ * Measured on NYC PLUTO parcels as polygons (PR #205's benchmark, Chromium
+ * on a desktop with a GPU and two laptop profiles, 2026-10-23):
  * the largest by-view read that stayed usable was a borough view of about
  * 94,000 lots (FlatGeobuf 36 MB, GeoParquet 20 MB; 5–6 s to draw on the
  * desktop, 15–21 s on the laptops, 2.5–3.8 GB of renderer memory, 12–54 fps

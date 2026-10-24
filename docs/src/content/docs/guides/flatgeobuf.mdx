@@ -47,11 +47,12 @@ coast; click one for its name. The gallery's
 
 ## Whole file or by view
 
-`load:` says how the file is read:
+**By default a file is read whole when it is small and by view when it is
+large.** `load:` changes that:
 
 | `load:` | What it reads | Needs |
 |---|---|---|
-| `all` (default) | The whole file, once | Any web server |
+| none, or `all` (default) | **Small files whole**, once. **Large ones by view** (see [Large files](#large-files)) when the file has a spatial index and the server supports range requests; otherwise the map says why and how to fix it | Any web server for a small file |
 | `viewport` | Only the features in view, read again as the map moves; nothing below `minzoom` (default 10), and nothing for a view holding more than `maxFeatures` (default 150,000) | A file with a **spatial index**, and a server with **range requests** |
 
 ```yaml
@@ -65,30 +66,47 @@ sources:
     load: { mode: viewport, minzoom: 14 }    # big file: only what's in view
 ```
 
-**How big?** Reading a file whole costs memory and time in the browser:
-
-- up to **10 MB**: read whole;
-- **10–50 MB**: read whole, with a console note suggesting `load: viewport`
-  or PMTiles;
-- over **50 MB**, or more than **250,000 features** (the header's count, so a
-  file of many small features counts too): not read whole. A file with a
-  spatial index is read by view instead (with a note for the author); one
-  without is refused, and the map says so.
-
-When a view holds more than `maxFeatures` features (`load: { mode: viewport,
-maxFeatures: 50000 }` to change it), nothing is read and readers see "Too many
-features to show here — zoom in to see them" until they zoom in; the file's
-index tells how many before any feature is downloaded.
-
-As a rule of thumb, a whole file is comfortable up to about 100,000 simple
-features (about 20 MB).
-
 Reading by view changes a few things:
 
 - **`fitTo`** frames the extent recorded in the file's header instead of the
-  features.
+  features, and never further out than `minzoom`, so the map opens where the
+  data loads.
 - **`classify:` with `method:`** needs the whole file. On a source read by
   view, write explicit `breaks:` ([Thematic maps](/guides/thematic-maps/#breaks-computed-from-the-data)).
+
+## Large files
+
+### The limits
+
+- **Read whole** up to **50 MB** and **400,000 features** (the header's count,
+  so a file of many small features counts too). Between 10 and 50 MB a console
+  note says it may take a few seconds. As a rule of thumb, a whole file is
+  comfortable up to about 100,000 simple features (about 20 MB).
+- **Over either**, a file with a spatial index is read by view instead, with a
+  note for the author; one without an index, or on a server without range
+  requests, is refused, and the notice says which and how to fix it.
+- **By view**, a view holding more than `maxFeatures` features (default
+  150,000) isn't read; the file's index tells how many before any feature is
+  downloaded. Readers see "Too many features to show here — zoom in to see
+  them", also below `minzoom`, until they zoom in.
+
+### Make it draw
+
+1. **Say `load: viewport`.** A large indexed file is read by view anyway;
+   saying so drops the note.
+2. **Raise `maxFeatures`** under `load:`: the most features one read takes, by
+   view, and above 400,000 it raises the whole-file feature limit too
+   (`load: { maxFeatures: 600000 }`). It costs memory; the 50 MB limit stays.
+3. **Add a spatial index** so the file can be read by view:
+
+   ```bash
+   ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES parcels-indexed.fgb parcels.fgb
+   ```
+
+4. **For a citywide view, convert it to PMTiles**, which draws at every zoom.
+   tylertoo reads GeoParquet, so convert first
+   (`ogr2ogr -f Parquet parcels.parquet parcels.fgb`), then follow the
+   [PMTiles guide](/guides/pmtiles/#from-a-large-file).
 
 ## Make a FlatGeobuf file
 
@@ -113,12 +131,14 @@ FlatGeobuf.
 
 - **"…is in EPSG:3857; MapLibre needs longitude/latitude (EPSG:4326)"**: the
   notice gives the fix, `ogr2ogr -t_srs EPSG:4326 out.fgb x.fgb`.
-- **"…is 180 MB (or has 400,000 features), too large to load whole in a
-  browser"**: add `load: viewport` (the file needs a spatial index), or
-  convert it to PMTiles.
+- **"…has 500,000 features, more than a page loads whole … and it can't be
+  read by view"**: the notice names what blocks reading by view (no spatial
+  index, or a server without range requests) and the command that fixes it;
+  see [Large files](#large-files) for every way.
 - **"Too many features to show here — zoom in to see them"**: the view holds
-  more than `maxFeatures`; zoom in, raise `maxFeatures` under `load:`, or
-  convert the file to PMTiles to draw it at every zoom.
+  more than `maxFeatures`, or the map is below `minzoom`; zoom in, raise
+  `maxFeatures` or lower `minzoom` under `load:`, or convert the file to
+  PMTiles to draw it at every zoom.
 - **"…was read as JSON, but it is a FlatGeobuf file"**: the URL doesn't end
   in `.fgb`. Rename the file, or add `format: flatgeobuf` to the source.
 - **Hosting problems** (range requests, CORS): see
