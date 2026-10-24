@@ -129,6 +129,29 @@ function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
   return attribution != null && attribution !== false;
 }
 
+/** The reader's "zoom in" line's class (see `MapRenderer.showZoomIn`). */
+export const ZOOM_IN_CLASS = 'ml-map-zoom-in';
+
+/**
+ * The line's stylesheet, once per document: theme-aware colours (the page's
+ * `color-scheme` through `Canvas` / `CanvasText`, or the author's custom
+ * properties), and hidden under `[quiet]` — read live, since it is CSS.
+ */
+function ensureZoomInStyles(doc: Document): void {
+  const id = 'ml-map-zoom-in-styles';
+  if (doc.getElementById(id)) return;
+  const style = doc.createElement('style');
+  style.id = id;
+  style.textContent =
+    `.${ZOOM_IN_CLASS}{position:absolute;bottom:36px;left:50%;transform:translateX(-50%);z-index:4;` +
+    'box-sizing:border-box;max-width:calc(100% - 24px);padding:4px 12px;border-radius:14px;' +
+    'background:var(--ml-map-zoom-in-background,Canvas);color:var(--ml-map-zoom-in-color,CanvasText);' +
+    'font:13px/1.4 system-ui,-apple-system,sans-serif;text-align:center;' +
+    'box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:none}' +
+    `[quiet] .${ZOOM_IN_CLASS}{display:none}`;
+  (doc.head ?? doc.documentElement).append(style);
+}
+
 /**
  * How a `fitTo` (U14) resolves against the document's named sources.
  *
@@ -1854,26 +1877,30 @@ export class MapRenderer {
 
   /**
    * The reader's "zoom in" line (ml-37r.17): shown over the map while any
-   * source read by view holds more features in view than one read takes —
-   * nothing of it is drawn then — and gone once every such view is read.
-   * `<ml-map quiet>` hides it with the notice.
+   * source read by view draws nothing until the reader zooms in (below its
+   * `minzoom`, or its view holds more features than one read takes), and
+   * gone once every such source is read again — or loses its last layer.
+   *
+   * @remarks
+   * Styled by a stylesheet, not inline (ml-cnv.32): `<ml-map quiet>` hides it
+   * whenever the attribute is set, not only when the line was created, and
+   * its colours follow the page's colour scheme (`Canvas` / `CanvasText`,
+   * overridable with `--ml-map-zoom-in-background` / `--ml-map-zoom-in-color`).
    */
   private showZoomIn(sourceId: string, dense: boolean): void {
     const sources = this.denseSources;
     if (dense) sources.add(sourceId);
     else sources.delete(sourceId);
-    const container = this.map.getContainer();
-    if (!sources.size || container.closest('[quiet]')) {
+    if (!sources.size) {
       this.zoomInLine?.remove();
       this.zoomInLine = null;
     } else if (!this.zoomInLine) {
-      const line = (this.zoomInLine = document.createElement('div'));
-      line.className = 'ml-map-zoom-in';
+      const container = this.map.getContainer();
+      ensureZoomInStyles(container.ownerDocument);
+      const line = (this.zoomInLine = container.ownerDocument.createElement('div'));
+      line.className = ZOOM_IN_CLASS;
       line.setAttribute('role', 'status');
       line.textContent = this.strings('maplibre-yaml.Notice.ZoomIn');
-      line.style.cssText =
-        'position:absolute;bottom:36px;left:50%;transform:translateX(-50%);z-index:4;padding:4px 12px;' +
-        'border-radius:14px;background:#fff;color:#222;font:13px system-ui;box-shadow:0 1px 4px #0004;pointer-events:none';
       container.append(line);
     }
   }

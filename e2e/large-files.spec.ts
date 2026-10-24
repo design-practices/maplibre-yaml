@@ -78,11 +78,17 @@ test("files over the whole-file feature limit: refused in plain words, or read b
   // Can't be read in parts: a notice with the count and the fix, the map still works.
   const notice = page.locator("#whole .ml-map-notice");
   await expect(notice).toContainText("districts.parquet");
-  await expect(notice).toContainText("has 48 features, too large to load whole in a browser");
+  // The cause, why it can't be read by view, and the fix with its command.
+  await expect(notice).toContainText(
+    "has 48 features, more than a page loads whole (40 features), and it can't be read by view: its rows aren't in spatially sorted row groups"
+  );
+  await expect(notice).toContainText("SORT_BY_BBOX=YES");
   await expect(notice).toContainText("points-noindex.fgb");
-  await expect(notice).toContainText("has 400 features, too large to load whole in a browser");
-  await expect(notice).toContainText("load: viewport");
-  await expect(notice).toContainText("PMTiles");
+  await expect(notice).toContainText(
+    "has 400 features, more than a page loads whole (40 features), and it can't be read by view: it has no spatial index"
+  );
+  await expect(notice).toContainText("SPATIAL_INDEX=YES");
+  await expect(notice).toContainText("convert it to PMTiles");
   expect(await counts(page, "whole", ["districts", "wells"])).toEqual({ districts: 0, wells: 0 });
 
   // Can be read in parts: read by view, only what's in view.
@@ -95,8 +101,12 @@ test("files over the whole-file feature limit: refused in plain words, or read b
   // The author is told (an author hint: the page is served locally), nothing failed.
   const note = page.locator("#auto .ml-map-notice");
   await expect(note).toContainText("Notes for this map's author");
-  await expect(note).toContainText("points.parquet (400 features) is too large to load whole; reading only the part in view");
-  await expect(note).toContainText("points.fgb (400 features) is too large to load whole; reading only the part in view");
+  await expect(note).toContainText(
+    "points.parquet has 400 features, more than a page loads whole (40 features), so only the part in view is read"
+  );
+  await expect(note).toContainText(
+    "points.fgb has 400 features, more than a page loads whole (40 features), so only the part in view is read"
+  );
   // The map still answers.
   expect(await page.evaluate(() => (document.getElementById("auto") as any).getMap().getZoom())).toBe(12);
   await page.screenshot({ path: "e2e/results/large-files-whole.png" });
@@ -163,6 +173,6 @@ test("load: viewport stops at maxFeatures: zoomed out, nothing is read and the r
   await expect(line).toHaveCount(0);
 
   // The author hint (the page is served locally: the author is developing).
-  await expect(page.locator("#budget .ml-map-notice")).toContainText("over maxFeatures (60)");
+  await expect(page.locator("#budget .ml-map-notice")).toContainText("more than one read takes (maxFeatures: 60)");
   expect(errors).toEqual([]);
 });

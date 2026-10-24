@@ -44,9 +44,12 @@ import { BodyTooLarge } from "../formats/http";
 import { registerSourceDataLoader, type SourceDataLoader } from "../data/source-data";
 import {
   formatCount,
+  indexedFlatGeobufCommand,
   largeDataLinks,
   pmtilesCommand,
   sortedParquetCommand,
+  wholeFileCause,
+  type WholeFileCost,
 } from "../components/student-messages";
 // No maplibre-gl here: the layer manager imports this module, and it loads
 // without maplibre-gl (types only). Protocol registration, which needs the
@@ -215,15 +218,23 @@ export class WholeFileTooLarge extends Error {
    * @param opened - The file already opened (GeoParquet: its footer), reused
    *   by the by-view read instead of a second open.
    * @param features - The feature count, when that is what decided (ml-37r.16).
+   * @param cost - What the read would cost against which limits (the notes
+   *   and notices name the one it is over).
    */
   constructor(
     readonly size?: number,
     readonly opened?: unknown,
-    readonly features?: number
+    readonly features?: number,
+    readonly cost?: Omit<WholeFileCost, "format">
   ) {
     super("too large to load whole");
     this.name = "WholeFileTooLarge";
   }
+}
+
+/** The limits a whole-file read is measured against, as the notes name them. */
+function costLimits(limits: Required<SizeLimits>): WholeFileCost["limits"] {
+  return { features: limits.maxFeatures, bytes: limits.max, decoded: limits.maxDecoded };
 }
 
 /**
@@ -249,15 +260,17 @@ export async function loadFlatGeobufWhole(
   prefetchDecoder("flatgeobuf");
   const abort = new AbortController();
   const opened = await fgb.openWhole(url, abort.signal);
+  const cost = (size: number | undefined, features?: number) => ({ size, features, limits: costLimits(limits) });
   if (opened.size !== undefined && opened.size > limits.max) {
     fgb.discard(opened);
-    throw new WholeFileTooLarge(opened.size);
+    throw new WholeFileTooLarge(opened.size, undefined, undefined, cost(opened.size));
   }
   if (opened.size !== undefined && opened.size > limits.warn) {
     console.warn(
-      `[maplibre-yaml] ${url} is ${mb(opened.size)}; loading it whole may take a ` +
-        "few seconds. For big files add `load: viewport` (needs a spatial index) or " +
-        "convert to PMTiles."
+      `[maplibre-yaml] ${url} is ${mb(opened.size)}; loading it whole may take a few seconds. ` +
+        "To read only the part in view, add `load: viewport` (the file needs a spatial index: " +
+        `${indexedFlatGeobufCommand(url)}); to draw it at every zoom, convert it to PMTiles. ` +
+        largeDataLinks("flatgeobuf")
     );
   }
   // The header's feature count arrives before any feature: what decoding
@@ -279,8 +292,8 @@ export async function loadFlatGeobufWhole(
       ...(opened.size === undefined ? { maxBytes: limits.max } : {}),
     });
   } catch (error) {
-    if (features !== undefined) throw new WholeFileTooLarge(opened.size, undefined, features);
-    if (error instanceof BodyTooLarge) throw new WholeFileTooLarge(error.size);
+    if (features !== undefined) throw new WholeFileTooLarge(opened.size, undefined, features, cost(opened.size, features));
+    if (error instanceof BodyTooLarge) throw new WholeFileTooLarge(error.size, undefined, undefined, cost(error.size));
     throw error;
   }
 }
@@ -376,6 +389,10 @@ export interface FormatLoader {
   start(started?: Promise<FeatureCollection>): Promise<void>;
   /** Stop: no more reads, no more callbacks. */
   destroy(): void;
+  /** Stop reading by view while no layer draws the source; {@link resume} starts again. */
+  suspend?(): void;
+  /** Read by view again after {@link suspend}. */
+  resume?(): void;
 }
 
 /**
@@ -391,6 +408,8 @@ abstract class ViewLoader implements FormatLoader {
   private viewport = false;
   /** Why the last view wasn't read (below `minzoom`, too dense), or undefined. */
   private skipped: "minzoom" | "dense" | undefined;
+  /** Following was stopped by {@link suspend} (and {@link resume} restarts it). */
+  private suspended = false;
   private hintedDense = false;
   private hintedDecode = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -443,11 +462,35 @@ abstract class ViewLoader implements FormatLoader {
 
   /** Stop: no more reads, no more callbacks. */
   destroy(): void {
+    this.suspend();
     this.destroyed = true;
+  }
+
+  /**
+   * Stop following the map while nothing draws the source (its last layer
+   * removed): no reads on `moveend`, and the reader's "zoom in" line for it
+   * withdrawn (ml-cnv.32). {@link resume} starts again.
+   */
+  suspend(): void {
+    if (this.destroyed) return;
     this.generation++;
     if (this.timer !== undefined) clearTimeout(this.timer);
+    this.timer = undefined;
     this.map.off("moveend", this.onMoveEnd);
+    if (this.skipped) this.callbacks.onTooDense?.(false);
+    this.skipped = undefined;
+    this.suspended = this.viewport;
   }
+
+  /** Follow the map again after {@link suspend} (a layer draws the source again). */
+  resume(): void {
+    if (this.destroyed || !this.suspended) return;
+    this.suspended = false;
+    void this.follow().catch((error: unknown) => this.fail(error));
+  }
+
+  /** The file's format, for messages. */
+  protected abstract readonly format: "flatgeobuf" | "geoparquet";
 
   /** The whole-file read (or the host's, already started). */
   protected abstract readWhole(started?: Promise<FeatureCollection>): Promise<void>;
@@ -488,12 +531,25 @@ abstract class ViewLoader implements FormatLoader {
     else console.warn(`[maplibre-yaml] ${message}`);
   }
 
-  /** The note for a file too large to read whole that is read by view instead. */
-  protected autoNote(size: number | undefined, features: number | undefined): void {
+  /**
+   * The note for a file too large to read whole that is read by view
+   * instead: why, and the ways to change it.
+   */
+  protected autoNote(tooLarge: WholeFileTooLarge | undefined, size?: number): void {
+    const cause = wholeFileCause({
+      format: this.format,
+      size: tooLarge?.size ?? size,
+      features: tooLarge?.features,
+      ...tooLarge?.cost,
+    });
     this.hint(
-      `${this.url} (${features !== undefined ? `${features.toLocaleString("en")} features` : size !== undefined ? mb(size) : "very large"}) ` +
-        "is too large to load whole; reading only the part in view instead (add `load: viewport` " +
-        "to say so, or convert the file to PMTiles)."
+      `\`${this.url}\` ${cause.text}, so only the part in view is read, from zoom ${this.load.minzoom}. ` +
+        "Add `load: viewport` to the source to say so (this note then goes). " +
+        (cause.raise !== undefined
+          ? `To load it whole anyway, raise \`load: { maxFeatures: ${cause.raise} }\` (heavier on memory). `
+          : "") +
+        `To draw it at every zoom (a citywide view too), convert it to PMTiles: ${pmtilesCommand(this.url, this.format)}. ` +
+        largeDataLinks(this.format)
     );
   }
 
@@ -513,8 +569,10 @@ abstract class ViewLoader implements FormatLoader {
       // Once per stretch below minzoom, not on every pan.
       if (this.skip("minzoom")) {
         console.info(
-          `[maplibre-yaml] ${this.url} is read by view (load: viewport) from zoom ` +
-            `${this.load.minzoom}; zoom in to see its features.`
+          `[maplibre-yaml] ${this.url} is read by view from zoom ${this.load.minzoom}, so nothing ` +
+            "of it is drawn further out and the reader is asked to zoom in. Lower `minzoom` under " +
+            "`load:` to read it further out, or convert it to PMTiles to draw it at every zoom. " +
+            largeDataLinks(this.format)
         );
       }
       return;
@@ -529,9 +587,11 @@ abstract class ViewLoader implements FormatLoader {
       if (!this.hintedDense) {
         this.hintedDense = true;
         this.hint(
-          `\`${this.url}\` has about ${estimate} features in view, over \`maxFeatures\` (${max}): ` +
-            "nothing is read until the map is zoomed in. Convert the file to PMTiles to draw it at " +
-            "every zoom, or set `maxFeatures` under `load:`."
+          `\`${this.url}\` has about ${formatCount(estimate)} features in view, more than one read ` +
+            `takes (\`maxFeatures\`: ${formatCount(max)}), so nothing of it is drawn until the map is ` +
+            "zoomed in. To draw more at once, raise `maxFeatures` under `load:` (heavier on memory). " +
+            `To draw it at every zoom (a citywide view too), convert it to PMTiles: ${pmtilesCommand(this.url, this.format)}. ` +
+            largeDataLinks(this.format)
         );
       }
       return;
@@ -588,6 +648,7 @@ abstract class ViewLoader implements FormatLoader {
  * note), a larger one is refused.
  */
 export class FlatGeobufLoader extends ViewLoader {
+  protected readonly format = "flatgeobuf" as const;
   private header: FlatGeobufHeader | undefined;
   private inView: fgb.FeaturesInView | undefined;
 
@@ -649,15 +710,13 @@ export class FlatGeobufLoader extends ViewLoader {
     const total = probe.size ?? tooLarge?.size;
     if (!probe.ranges) {
       if (!auto && (total === undefined || total <= this.limits.max)) {
-        console.warn(
-          `[maplibre-yaml] ${this.url}: this server doesn't support range requests, so ` +
-            "`load: viewport` reads the whole file instead. Hosts like GitHub Pages, Netlify, " +
-            "S3 and R2 support them (`python -m http.server` doesn't; `npx serve` does)."
-        );
+        console.warn(noRangeNote(this.url, "`load: viewport` reads the whole file instead"));
         await this.readWhole();
         return;
       }
-      throw new FormatError({ code: "no-range", format: "flatgeobuf", url: this.url });
+      // Too large to read whole, and this host can't serve it by view: the
+      // hosting is what to change (not `load: viewport`, which needs it).
+      throw this.tooLarge(tooLarge, total, "no-range");
     }
 
     // Header first: fitTo frames the whole file, and a missing index fails
@@ -666,18 +725,12 @@ export class FlatGeobufLoader extends ViewLoader {
       await fgb.readBbox(this.url, HEADER_ONLY, { onHeader: (h) => (this.header = h) });
     } catch (error) {
       if (auto && isFormatError(error) && error.failure.code === "no-index") {
-        throw new FormatError({
-          code: "too-large",
-          format: "flatgeobuf",
-          url: this.url,
-          size: total,
-          features: tooLarge?.features,
-        });
+        throw this.tooLarge(tooLarge, total, "no-index");
       }
       throw error;
     }
     if (this.destroyed) return;
-    if (auto) this.autoNote(total, tooLarge?.features);
+    if (auto) this.autoNote(tooLarge, total);
     // One level of the index (at most 160 KB, once): each view's features
     // are estimated from it before anything is read (ml-37r.17). Without
     // it, the header's count and extent estimate them.
@@ -687,6 +740,23 @@ export class FlatGeobufLoader extends ViewLoader {
       /* the header's estimate */
     }
     await this.follow();
+  }
+
+  /** The refusal of a file too large to read whole that can't be read by view either. */
+  private tooLarge(
+    tooLarge: WholeFileTooLarge | undefined,
+    size: number | undefined,
+    blocker: "no-range" | "no-index"
+  ): FormatError {
+    return new FormatError({
+      code: "too-large",
+      format: "flatgeobuf",
+      url: this.url,
+      size: tooLarge?.size ?? size,
+      features: tooLarge?.features ?? this.header?.featuresCount,
+      limits: costLimits(this.limits),
+      blocker,
+    });
   }
 
   /** From the index (or the header's count and extent, without it). */
@@ -777,22 +847,33 @@ function noRangeNote(url: string, what: string): string {
 export async function loadGeoParquetWhole(
   url: string,
   columns: ColumnChoice,
-  options: { isCurrent?: () => boolean; opened?: GeoParquetFile; limits?: SizeLimits } = {}
+  options: {
+    isCurrent?: () => boolean;
+    opened?: GeoParquetFile;
+    limits?: SizeLimits;
+  } = {}
 ): Promise<{ data: FeatureCollection | null; source: GeoParquetFile }> {
   const limits = sizeLimits(options.limits);
   const source = options.opened ?? (await gp.open(url, { maxWholeBytes: limits.max }));
-  const [size, decoded] = gp.projectedSize(source, columns);
-  const rows = source.info.rows;
-  const features = rows > limits.maxFeatures || decoded > limits.maxDecoded ? rows : undefined;
-  if (size > limits.max || features !== undefined) {
-    if (source.ranges && gp.canSkipByView(source)) throw new WholeFileTooLarge(size, source, features);
-    throw new FormatError({ code: "too-large", format: "geoparquet", url, size, features });
+  const tooLarge = geoParquetTooLarge(source, columns, limits);
+  if (tooLarge) {
+    const blocker = byViewBlocker(source);
+    if (!blocker) throw tooLarge;
+    throw new FormatError({
+      code: "too-large",
+      format: "geoparquet",
+      url,
+      ...tooLarge.cost,
+      blocker,
+    });
   }
+  const [size] = gp.projectedSize(source, columns);
   if (size > limits.warn) {
     console.warn(
-      `[maplibre-yaml] ${url}: the columns this map reads are ${mb(size)}; loading them whole ` +
-        "may take a few seconds. For big files add `load: viewport` (needs a bbox covering " +
-        "column and spatially sorted row groups), list fewer `columns:`, or convert to PMTiles."
+      `[maplibre-yaml] ${url}: the columns this map reads are ${mb(size)}; loading them whole may take ` +
+        "a few seconds. To read only the part in view, add `load: viewport` (the file needs a `bbox` " +
+        `column and sorted row groups: ${sortedParquetCommand(url)}); or list fewer \`columns:\`; or, ` +
+        `to draw it at every zoom, convert it to PMTiles. ${largeDataLinks("geoparquet")}`
     );
   }
   if (!source.ranges && source.byteLength > gp.TAIL_BYTES) {
@@ -803,6 +884,37 @@ export async function loadGeoParquetWhole(
     ...(options.isCurrent ? { isCurrent: options.isCurrent } : {}),
   });
   return { data, source };
+}
+
+/**
+ * Whether a GeoParquet file is over the whole-file limits (rows, decoded
+ * bytes of the read columns, compressed bytes transferred), from its footer
+ * alone: the {@link WholeFileTooLarge} to throw (carrying the opened file
+ * and what it costs), or undefined when it can be read whole.
+ */
+function geoParquetTooLarge(
+  source: GeoParquetFile,
+  columns: ColumnChoice,
+  limits: Required<SizeLimits>
+): WholeFileTooLarge | undefined {
+  const [size, decoded] = gp.projectedSize(source, columns);
+  const rows = source.info.rows;
+  if (size <= limits.max && rows <= limits.maxFeatures && decoded <= limits.maxDecoded) return undefined;
+  const features = rows > limits.maxFeatures || decoded > limits.maxDecoded ? rows : undefined;
+  return new WholeFileTooLarge(size, source, features, {
+    size,
+    features: rows,
+    decoded,
+    limits: costLimits(limits),
+  });
+}
+
+/** Why a GeoParquet file can't be read by view, or undefined when it can. */
+function byViewBlocker(source: GeoParquetFile): "no-bbox" | "unsorted" | "no-range" | undefined {
+  if (!source.info.covering) return "no-bbox";
+  if (!gp.canSkipByView(source)) return "unsorted";
+  if (!source.ranges) return "no-range";
+  return undefined;
 }
 
 /**
@@ -823,6 +935,7 @@ export async function loadGeoParquetWhole(
  * size guards.
  */
 export class GeoParquetLoader extends ViewLoader {
+  protected readonly format = "geoparquet" as const;
   private opened: GeoParquetFile | undefined;
 
   constructor(
@@ -899,35 +1012,35 @@ export class GeoParquetLoader extends ViewLoader {
     this.opened ??= await gp.open(this.url, { maxWholeBytes: this.limits.max });
     const source = this.opened;
     this.noteOverviews(source);
-    if (!source.info.covering) {
-      if (auto) {
+    const blocker = byViewBlocker(source);
+    if (blocker) {
+      // Can't be read by view. Whole, then — unless that is too large too,
+      // when the refusal names what blocks the by-view read (not "add
+      // `load: viewport`", which the source may already say; ml-cnv.33),
+      // before anything is said about reading it whole.
+      const whole = tooLarge ?? geoParquetTooLarge(source, this.columns, this.limits);
+      if (whole) {
         throw new FormatError({
           code: "too-large",
           format: "geoparquet",
           url: this.url,
-          size: tooLarge?.size,
-          features: tooLarge?.features,
+          ...whole.cost,
+          blocker,
         });
       }
-      throw new FormatError({ code: "no-index", format: "geoparquet", url: this.url });
-    }
-    if (!auto && !source.ranges) {
-      console.warn(noRangeNote(this.url, "`load: viewport` reads the whole file instead"));
-      await this.readWhole();
-      return;
-    }
-    if (!auto && !gp.canSkipByView(source)) {
+      if (blocker === "no-bbox") throw new FormatError({ code: "no-index", format: "geoparquet", url: this.url });
       console.warn(
-        `[maplibre-yaml] ${this.url} isn't spatially sorted (each row group spans most of the ` +
-          "file), so reading by view would read almost all of it: reading it whole instead. " +
-          "Sort it before writing (e.g. by `geometry.hilbert_distance()` in GeoPandas, or " +
-          "`ORDER BY ST_Hilbert(geometry)` in DuckDB) to make `load: viewport` pay off."
+        blocker === "no-range"
+          ? noRangeNote(this.url, "`load: viewport` reads the whole file instead")
+          : `[maplibre-yaml] ${this.url} isn't spatially sorted (each row group spans most of the file), so ` +
+              `reading by view would read almost all of it: reading it whole instead. Sort it to make ` +
+              `\`load: viewport\` pay off: ${sortedParquetCommand(this.url)}.`
       );
       await this.readWhole();
       return;
     }
     if (this.destroyed) return;
-    if (auto) this.autoNote(tooLarge?.size, tooLarge?.features);
+    if (auto) this.autoNote(tooLarge);
     await this.follow();
   }
 
@@ -952,7 +1065,7 @@ export class GeoParquetLoader extends ViewLoader {
       `is decoded whole: this view holds about ${n(estimate)} features but touches ${touched.groups} row group${touched.groups === 1 ? "" : "s"}, ` +
       `${n(touched.rows)} rows, over this map's decode limit of ${n(budget)} rows (${VIEW_DECODE_FACTOR} × \`maxFeatures\`), ` +
       "so nothing is read until the map is zoomed in. To fix it, rewrite the file with about 10,000-row groups, " +
-      `sorted: ${sortedParquetCommand(this.url)}. For a citywide view, convert it to PMTiles: ` +
+      `sorted: ${sortedParquetCommand(this.url)}. To draw it at every zoom (a citywide view too), convert it to PMTiles: ` +
       `${pmtilesCommand(this.url, "geoparquet")}. Or raise \`maxFeatures\` under \`load:\` (heavier on memory). ` +
       largeDataLinks("geoparquet")
     );

@@ -395,6 +395,49 @@ describe("FlatGeobufLoader", () => {
     }
   });
 
+  it("destroying a loader whose reader was asked to zoom in withdraws the request (ml-cnv.32)", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const onTooDense = vi.fn();
+    const loader = new FlatGeobufLoader(fakeMap(9, AREA) as never, "/points.fgb", loadModeOf({ load: "viewport" }), {
+      onData: vi.fn(),
+      onError: vi.fn(),
+      onTooDense,
+    });
+    await loader.start();
+    expect(onTooDense).toHaveBeenLastCalledWith(true);
+    loader.destroy();
+    expect(onTooDense).toHaveBeenLastCalledWith(false);
+    loader.destroy();
+    expect(onTooDense).toHaveBeenCalledTimes(2);
+  });
+
+  it("suspend() stops reading by view and withdraws the zoom-in line; resume() reads again (ml-cnv.32)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      vi.stubGlobal("fetch", fixtureFetch());
+      const map = fakeMap(9, AREA);
+      const onData = vi.fn();
+      const onTooDense = vi.fn();
+      const loader = new FlatGeobufLoader(map as never, "/points.fgb", loadModeOf({ load: "viewport" }), {
+        onData,
+        onError: vi.fn(),
+        onTooDense,
+      });
+      await loader.start();
+      expect(onTooDense).toHaveBeenLastCalledWith(true);
+      loader.suspend();
+      expect(onTooDense).toHaveBeenLastCalledWith(false);
+      expect(map.off).toHaveBeenCalled();
+      const calls = onData.mock.calls.length;
+      map.zoom = 12;
+      loader.resume();
+      await vi.waitFor(() => expect(onData.mock.calls.length).toBeGreaterThan(calls));
+      expect(onData.mock.calls.at(-1)![0].features.length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("load: viewport on a server without ranges reads the whole file instead", async () => {
     const { onData, onError } = await run("/norange/points.fgb", loadModeOf({ load: "viewport" }));
     expect(onError).not.toHaveBeenCalled();
@@ -407,7 +450,9 @@ describe("FlatGeobufLoader", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(loader.readsByView).toBe(true);
     expect(onData).toHaveBeenCalled();
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("too large to load whole"));
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining("is 60 MB, more than a page loads whole (50 MB transferred), so only the part in view is read")
+    );
   });
 
   it("too large to load whole + no index → refused, with the size", async () => {
@@ -469,7 +514,14 @@ describe("whole-file guard on the header's feature count (ml-37r.16)", () => {
     await loader.start();
     expect(onError).not.toHaveBeenCalled();
     expect(loader.readsByView).toBe(true);
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("(400 features) is too large to load whole"));
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining("has 400 features, more than a page loads whole (100 features), so only the part in view is read")
+    );
+    // The ways to change it: say so, raise maxFeatures (the count is all that is over), PMTiles.
+    const note = (console.warn as unknown as { mock: { calls: string[][] } }).mock.calls.map((c) => c[0]).join("\n");
+    expect(note).toContain("Add `load: viewport` to the source to say so");
+    expect(note).toContain("raise `load: { maxFeatures: 10000 }`");
+    expect(note).toContain("tylertoo");
   });
 
   it("unindexed and over the feature limit → refused with the count, in plain words", async () => {
@@ -485,9 +537,12 @@ describe("whole-file guard on the header's feature count (ml-37r.16)", () => {
     await loader.start();
     const error = onError.mock.calls[0]![0];
     expect(isFormatError(error) && error.failure).toMatchObject({ code: "too-large", features: 400 });
-    expect(error.message).toContain("has 400 features, too large to load whole in a browser");
-    expect(error.message).toContain("`load: viewport`");
-    expect(error.message).toContain("PMTiles");
+    expect(error.message).toContain(
+      "has 400 features, more than a page loads whole (100 features), and it can't be read by view: it has no spatial index."
+    );
+    expect(error.message).toContain("`ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES points-noindex-indexed.fgb points-noindex.fgb`");
+    expect(error.message).toContain("Or load it whole anyway with `load: { maxFeatures: 10000 }`");
+    expect(error.message).toContain("convert it to PMTiles");
   });
 
   it("a compressed response's Content-Length isn't taken for the file's size", async () => {
@@ -548,7 +603,9 @@ describe("per-view budget (ml-37r.17)", () => {
       expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
       expect(onTooDense).toHaveBeenLastCalledWith(true);
       expect(onHint).toHaveBeenCalledTimes(1);
-      expect(onHint.mock.calls[0]![0]).toMatch(/has about 4\d\d features in view, over `maxFeatures` \(50\)/);
+      expect(onHint.mock.calls[0]![0]).toMatch(/has about 4\d\d features in view, more than one read takes \(`maxFeatures`: 50\)/);
+      expect(onHint.mock.calls[0]![0]).toContain("raise `maxFeatures` under `load:` (heavier on memory)");
+      expect(onHint.mock.calls[0]![0]).toContain("ogr2ogr -f Parquet points.parquet points.fgb");
       // Only the probe, the header and the index were fetched: no features.
       const fetched = log.reduce((sum, r) => {
         const m = /bytes=(\d+)-(\d+)/.exec(r.range ?? "");

@@ -101,3 +101,52 @@ test("an overview GeoParquet (geo:overviews) draws each feature once, from its f
   await page.screenshot({ path: "e2e/results/large-data-overviews.png" });
   expect(errors).toEqual([]);
 });
+
+test("the zoom-in line: hidden by quiet whenever it is set, gone with its source's last layer (ml-cnv.32)", async ({
+  page,
+}) => {
+  const errors = await guard(page);
+  await OPEN(page, "below");
+  const line = page.locator("#below .ml-map-zoom-in");
+  await expect(line).toBeVisible();
+  // quiet, set after the line showed, hides it; removed, it shows again.
+  await page.evaluate(() => document.getElementById("below")!.setAttribute("quiet", ""));
+  await expect(line).toBeHidden();
+  await page.evaluate(() => document.getElementById("below")!.removeAttribute("quiet"));
+  await expect(line).toBeVisible();
+  // The source's last layer removed: nothing of it is drawn, nothing to zoom in for.
+  await page.evaluate(() => (document.getElementById("below") as any).removeLayer("fgb"));
+  await expect(line).toHaveCount(0);
+  // And the source no longer reads on every move.
+  const reads: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().endsWith("/points.fgb")) reads.push(r.url());
+  });
+  await page.evaluate(() => (document.getElementById("below") as any).getMap().jumpTo({ zoom: 13 }));
+  await page.waitForTimeout(1000);
+  expect(reads).toEqual([]);
+  await expect(line).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("the zoom-in line follows the page's colour scheme (ml-cnv.32)", async ({ page }) => {
+  const errors = await guard(page);
+  await OPEN(page, "below", "dark");
+  const colours = (id: string) =>
+    page.evaluate((id) => {
+      const line = document.querySelector(`#${id} .ml-map-zoom-in`)!;
+      const style = getComputedStyle(line);
+      const lum = (c: string) => {
+        const [r, g, b] = c.match(/\d+/g)!.map(Number);
+        return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+      };
+      return { background: lum(style.backgroundColor), text: lum(style.color) };
+    }, id);
+  await expect(page.locator("#dark .ml-map-zoom-in")).toBeVisible();
+  const light = await colours("below");
+  const dark = await colours("dark");
+  expect(light.background).toBeGreaterThan(light.text);
+  expect(dark.background).toBeLessThan(dark.text);
+  await page.locator("#dark").screenshot({ path: "e2e/results/large-data-dark.png" });
+  expect(errors).toEqual([]);
+});

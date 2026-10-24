@@ -539,6 +539,95 @@ export function largeDataLinks(format: string): string {
   return `More: ${page} and ${LARGE_DATA_DOCS.pmtiles}`;
 }
 
+/** What a whole-file read of a file would cost, and the limits it was measured against. */
+export interface WholeFileCost {
+  format: string;
+  /** Features (a FlatGeobuf header's count, a GeoParquet footer's rows). */
+  features?: number | undefined;
+  /** Bytes transferred (GeoParquet: the columns a map reads, unless `sizeIsFile`). */
+  size?: number | undefined;
+  /** GeoParquet: the read columns' decoded bytes. */
+  decoded?: number | undefined;
+  limits?: { features?: number; bytes?: number; decoded?: number } | undefined;
+  sizeIsFile?: boolean | undefined;
+}
+
+/**
+ * Why a file is too large to load whole, in words — "has 856,687 features,
+ * more than a page loads whole (400,000 features)" — and the `maxFeatures` that
+ * would load it whole anyway, when the feature count is all that stands in
+ * the way (not the bytes, nor the decoded size).
+ */
+export function wholeFileCause(cost: WholeFileCost): { text: string; raise?: number } {
+  const { features, size, decoded } = cost;
+  const limits = cost.limits ?? {};
+  const overFeatures = features !== undefined && limits.features !== undefined && features > limits.features;
+  const overDecoded = decoded !== undefined && limits.decoded !== undefined && decoded > limits.decoded;
+  const overBytes = size !== undefined && limits.bytes !== undefined && size > limits.bytes;
+  const columns = cost.format === "geoparquet" && !cost.sizeIsFile ? " (the columns this map reads)" : "";
+  const what: string[] = [];
+  const over: string[] = [];
+  if (overFeatures) {
+    what.push(`has ${formatCount(features!)} features`);
+    over.push(`${formatCount(limits.features!)} features`);
+  }
+  if (overDecoded) {
+    what.push(`reads columns that decode to ${megabytes(decoded!)}`);
+    over.push(`${megabytes(limits.decoded!)} decoded`);
+  }
+  if (overBytes) {
+    what.push(`is ${megabytes(size!)}${columns}`);
+    over.push(`${megabytes(limits.bytes!)} transferred`);
+  }
+  const parts = over.length
+    ? [`${what.join(" and ")}, more than a page loads whole (${over.join(", ")})`]
+    : [
+        // No limits recorded: the count when known, else the size.
+        (features !== undefined
+          ? `has ${formatCount(features)} features`
+          : `is ${size !== undefined ? megabytes(size) : "very large"}${columns}`) + ", too large to load whole in a browser",
+      ];
+  const text = parts.join(" and ");
+  if (!overFeatures || overDecoded || overBytes) return { text };
+  // The next round 10,000 above the count, with a little room.
+  return { text, raise: Math.ceil((features! * 1.05) / 10_000) * 10_000 };
+}
+
+/** Why a file can't be read by view, and how to change that. */
+function blockerAdvice(blocker: FormatFailure["blocker"], url: string, format: string): { why: string; fix: string } | undefined {
+  switch (blocker) {
+    case "no-bbox":
+      return {
+        why: "it has no `bbox` covering column",
+        fix: `Rewrite it with one, sorted: ${sortedParquetCommand(url)}`,
+      };
+    case "unsorted":
+      return {
+        why: "its rows aren't in spatially sorted row groups (each row group spans most of the file, so every view would read most of it)",
+        fix: `Sort it: ${sortedParquetCommand(url)}`,
+      };
+    case "no-index":
+      return { why: "it has no spatial index", fix: `Re-create it with one: ${indexedFlatGeobufCommand(url)}` };
+    case "no-range":
+      return {
+        why: "this server doesn't support HTTP range requests",
+        fix: "Host it where they work (GitHub Pages, Netlify, Cloudflare, S3, R2; preview locally with `npx serve`, not `python -m http.server`)",
+      };
+    case "no-size":
+      return {
+        why: "the server doesn't let this page read the file's size",
+        fix: "Have it send `Access-Control-Expose-Headers: Content-Range` (or answer `HEAD` with `Content-Length`)",
+      };
+    default:
+      return format === "geoparquet"
+        ? {
+            why: "",
+            fix: `Reading it by view needs a \`bbox\` column, sorted row groups and a server with range requests: ${sortedParquetCommand(url)}`,
+          }
+        : { why: "", fix: `Reading it by view needs a spatial index: ${indexedFlatGeobufCommand(url)}` };
+  }
+}
+
 /**
  * Hosts that serve range requests, and the local preview that doesn't — the
  * advice every range failure ends with.
@@ -586,27 +675,40 @@ export function describeFormatFailure(failure: FormatFailure): string {
       return failure.status === 416 ? `${line} ${RANGE_REFUSED_HINT}` : line;
     }
     case "too-large": {
+      // The cause first (a count when that is what decided, ml-37r.16: the
+      // bytes on the wire say little about the decoded size), then why it
+      // can't be read by view, then every way to make it draw — each with
+      // a command to run (0.9.2 review round).
       const gp = failure.format === "geoparquet";
-      // A count when that is what decided (a footer's or header's rows,
-      // ml-37r.16): the bytes on the wire say little about the decoded size.
-      const what =
-        failure.features !== undefined
-          ? `has ${failure.features.toLocaleString("en")} features`
-          : `is ${failure.size !== undefined ? megabytes(failure.size) : "very large"}` +
-            (gp ? " (the columns this map reads)" : "");
+      const cause = wholeFileCause({ ...failure, format: failure.format });
+      const blocked = blockerAdvice(failure.blocker, failure.url, failure.format);
+      // Over the limit, a file that can be read by view is (the default):
+      // fixing the blocker is enough, `load: viewport` or not.
+      const then = "; it is then read by view.";
+      const ways = [
+        blocked ? `${blocked.fix}${then}` : "",
+        cause.raise !== undefined
+          ? `Or load it whole anyway with \`load: { maxFeatures: ${cause.raise} }\` (heavier on memory).`
+          : "",
+        gp && failure.decoded !== undefined && failure.limits?.decoded !== undefined && failure.decoded > failure.limits.decoded
+          ? "Or list fewer `columns:`."
+          : "",
+        `To draw it at every zoom (a citywide view too), convert it to PMTiles: ${pmtilesCommand(failure.url, failure.format)}.`,
+        largeDataLinks(failure.format),
+      ].filter(Boolean);
       return (
-        `${file} ${what}, too large to load whole in a browser. Add \`load: viewport\` to the ` +
-        `source (the file needs ${gp ? "a `bbox` covering column and spatially sorted row groups" : "a spatial index"}), ` +
-        `${gp ? "list fewer `columns:`, " : ""}or convert it to PMTiles.`
+        `${file} ${cause.text}` +
+        (blocked?.why ? `, and it can't be read by view: ${blocked.why}. ` : ". ") +
+        ways.join(" ")
       );
     }
     case "no-index":
       if (failure.format === "geoparquet") {
         return (
           `${file} has no \`bbox\` covering column, so it can't be read one part at a time ` +
-          "(`load: viewport`). Write it with one — GeoPandas `to_parquet(..., " +
-          "write_covering_bbox=True)`, or `ogr2ogr -f Parquet -lco WRITE_COVERING_BBOX=YES " +
-          `out.parquet ${fileNameOf(failure.url)}\` — or use \`load: all\`.`
+          "(`load: viewport`). Write it with one, sorted — " +
+          `${sortedParquetCommand(failure.url)}, or GeoPandas \`to_parquet(..., write_covering_bbox=True)\` ` +
+          "after sorting by `geometry.hilbert_distance()` — or use `load: all`."
         );
       }
       return (

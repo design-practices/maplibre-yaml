@@ -312,10 +312,16 @@ export const HOVER_INTERACTIONS: readonly Interaction[] = [
             // point the author at the same remedy `highlight` uses.
             if (!warned.has(ctx.layerId)) {
               warned.add(ctx.layerId);
+              // Vector tiles (PMTiles, `tiles:`) take ids from the tiles or a
+              // property; `generateId` is GeoJSON-only (ml-cnv.33).
+              const sourceLayer: string | undefined =
+                ctx.feature?.sourceLayer ?? ctx.feature?.layer?.["source-layer"];
               console.warn(
-                `[maplibre-yaml] hover.emit on layer "${ctx.layerId}" needs ` +
-                  "feature ids to dedupe. Set `generateId: true` on the source, " +
-                  "or `promoteId` to use a property as the id."
+                `[maplibre-yaml] hover.emit on layer "${ctx.layerId}" needs feature ids to dedupe. ` +
+                  (sourceLayer
+                    ? `Add \`promoteId: { ${sourceLayer}: <property> }\` to source \`${ctx.sourceId}\`, ` +
+                      "naming a property that is different for every feature (its tiles carry no ids)."
+                    : "Set `generateId: true` on the source, or `promoteId` to use a property as the id.")
               );
             }
             return;

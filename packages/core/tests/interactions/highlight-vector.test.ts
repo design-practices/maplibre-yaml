@@ -125,3 +125,29 @@ describe("hover.highlight on a vector source", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 });
+
+describe("hover.emit on a vector source without ids (ml-cnv.33)", () => {
+  it("names promoteId with the source layer, not generateId (which vector sources don't take)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const map = mockMap();
+    attachInteractions(map, {
+      layers: { lots: { source: "parcels", interactive: { hover: { emit: { event: "lot" } } } as any } },
+    });
+    fire(map, "mousemove", tileFeature(undefined));
+    fire(map, "mousemove", tileFeature(undefined));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toContain("hover.emit on layer \"lots\" needs feature ids to dedupe");
+    expect(warn.mock.calls[0]![0]).toContain("`promoteId: { pluto: <property> }` to source `parcels`");
+    expect(warn.mock.calls[0]![0]).not.toContain("generateId");
+  });
+
+  it("a GeoJSON feature (no source layer) keeps the generateId advice", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const map = mockMap();
+    attachInteractions(map, {
+      layers: { pts: { source: "pts", interactive: { hover: { emit: { event: "pt" } } } as any } },
+    });
+    fire(map, "mousemove", { properties: {}, source: "pts", layer: { id: "pts", source: "pts" } });
+    expect(warn.mock.calls[0]![0]).toContain("generateId: true");
+  });
+});

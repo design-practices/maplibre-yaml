@@ -98,9 +98,14 @@ describe("the GeoParquet whole-file guard, from a synthetic footer", () => {
     expect(47 * MB).toBeLessThan(WHOLE_FILE_MAX_BYTES); // what let it through in 0.9.1
     const error = await loadGeoParquetWhole("/pluto.parquet", "all", { opened }).catch((e) => e);
     expect(isFormatError(error) && error.failure).toMatchObject({ code: "too-large", features: 856_687 });
-    expect(error.message).toContain("has 856,687 features, too large to load whole in a browser");
-    expect(error.message).toContain("`load: viewport`");
-    expect(error.message).toContain("PMTiles");
+    expect(error.message).toContain(
+      "has 856,687 features and reads columns that decode to 230 MB, more than a page loads whole (400,000 features, 150 MB decoded)"
+    );
+    // Not readable by view here: no ranges. The hosting is what to change.
+    expect(error.message).toContain("it can't be read by view: this server doesn't support HTTP range requests");
+    expect(error.message).toContain("Or list fewer `columns:`.");
+    expect(error.message).not.toContain("maxFeatures"); // the decoded size is over too: raising it wouldn't help
+    expect(error.message).toContain("convert it to PMTiles");
     expect(opened.file.slice).not.toHaveBeenCalled();
   });
 

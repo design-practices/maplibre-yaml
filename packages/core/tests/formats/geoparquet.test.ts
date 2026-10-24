@@ -53,6 +53,8 @@ type Log = { url: string; range?: string; method?: string; status: number; bytes
  *
  * - `/norange/<file>`: `Range` ignored, 200 with the whole file;
  * - `/suffix416/<file>`: a suffix longer than the file is 416 (Fastly);
+ * - `/suffix416all/<file>`: every suffix range is 416, without `Content-Range`
+ *   (`npx http-server`), while plain ranges work;
  * - `/noexpose/<file>`: `Content-Range` unreadable, as a page on another
  *   origin sees GitHub Pages (`Content-Length` stays readable);
  * - `/nolength/<file>`: no `Content-Length` (a chunked response).
@@ -62,9 +64,10 @@ type Log = { url: string; range?: string; method?: string; status: number; bytes
 function fixtureFetch(log: Log = []) {
   return vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
-    const m = /^(?:https?:\/\/[^/]+)?((?:\/(?:norange|suffix416|noexpose|nolength))*)\/(.+)$/.exec(url)!;
+    const m = /^(?:https?:\/\/[^/]+)?((?:\/(?:norange|suffix416all|suffix416|noexpose|nolength))*)\/(.+)$/.exec(url)!;
     const ranges = !m[1]!.includes("/norange");
-    const suffix416 = m[1]!.includes("/suffix416");
+    const suffix416 = /\/suffix416(?!all)/.test(m[1]!);
+    const suffix416all = m[1]!.includes("/suffix416all");
     const expose = !m[1]!.includes("/noexpose");
     const length = !m[1]!.includes("/nolength");
     let bytes: Uint8Array;
@@ -81,6 +84,10 @@ function fixtureFetch(log: Log = []) {
     }
     const range = new Headers(init?.headers ?? {}).get("Range");
     const r = range && ranges ? /bytes=(\d*)-(\d*)/.exec(range) : null;
+    if (r && suffix416all && r[1] === "") {
+      log.push({ url, range, status: 416, bytes: 0 });
+      return new Response(null, { status: 416 });
+    }
     if (r && suffix416 && r[1] === "" && Number(r[2]) > size) {
       log.push({ url, range, status: 416, bytes: 0 });
       return new Response(null, { status: 416, headers: expose ? { "content-range": `bytes */${size}` } : {} });
@@ -346,6 +353,22 @@ describe("open: the footer in one suffix-range request", () => {
     expect((await readAll(source))!.features).toHaveLength(48);
   });
 
+  it("a host that answers every suffix range with 416 (npx http-server): the tail by offsets, not the whole file (ml-cnv.33)", async () => {
+    const log: Log = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    const size = fixture("points.parquet").length;
+    const source = await open("/suffix416all/points.parquet", { tailBytes: 16 * 1024 });
+    expect(source.ranges).toBe(true);
+    expect(source.byteLength).toBe(size);
+    expect(log.slice(0, 3).map((r) => [r.status, r.method ?? r.range ?? null])).toEqual([
+      [416, "bytes=-16384"],
+      [200, "HEAD"],
+      [206, `bytes=${size - 16384}-${size - 1}`],
+    ]);
+    expect(log.some((r) => r.status === 200 && !r.method)).toBe(false); // never the whole file
+    expect((await readBbox(source, [10.0, 42.0, 10.1, 42.08]))!.features.length).toBeLessThan(400);
+  });
+
   it("an oversized suffix answered 416 on a host that also hides the size: still read whole", async () => {
     vi.stubGlobal("fetch", fixtureFetch());
     const source = await open("/suffix416/noexpose/points.parquet");
@@ -543,7 +566,7 @@ describe("GeoParquetLoader", () => {
 
   async function run(
     url: string,
-    options: { load?: ReturnType<typeof loadModeOf>; map?: ReturnType<typeof fakeMap>; columns?: readonly string[] | "all"; limits?: { warn: number; max: number } } = {}
+    options: { load?: ReturnType<typeof loadModeOf>; map?: ReturnType<typeof fakeMap>; columns?: readonly string[] | "all"; limits?: { warn: number; max: number; maxFeatures?: number } } = {}
   ) {
     const log: Log = [];
     vi.stubGlobal("fetch", fixtureFetch(log));
@@ -601,7 +624,8 @@ describe("GeoParquetLoader", () => {
       map: fakeMap(9, AREA),
     });
     expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
-    expect(console.info).toHaveBeenCalledWith(expect.stringContaining("zoom in to see its features"));
+    expect(console.info).toHaveBeenCalledWith(expect.stringContaining("is read by view from zoom 11"));
+    expect(console.info).toHaveBeenCalledWith(expect.stringContaining("Lower `minzoom` under `load:`"));
   });
 
   it("load: viewport on a server without ranges reads the whole file instead", async () => {
@@ -619,6 +643,31 @@ describe("GeoParquetLoader", () => {
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("isn't spatially sorted"));
   });
 
+  it("load: viewport on an unsorted file over the limit: refused for being unsorted, with no 'reading it whole' note first (ml-cnv.33)", async () => {
+    const { onError } = await run("/points-zstd.parquet", {
+      load: loadModeOf({ load: "viewport" }),
+      limits: { warn: 1e6, max: 50e6, maxFeatures: 100 },
+    });
+    const error = onError.mock.calls[0]![0];
+    expect(failure(error)).toMatchObject({ code: "too-large", features: 400, blocker: "unsorted" });
+    expect(error.message).toContain("it can't be read by view: its rows aren't in spatially sorted row groups");
+    expect(error.message).toContain("SORT_BY_BBOX=YES");
+    expect(error.message).not.toContain("Add `load: viewport`");
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("reading it whole instead"));
+  });
+
+  it("load: viewport on a host without range requests, over the limit: the refusal names the hosting (ml-cnv.33)", async () => {
+    const { onError } = await run("/norange/points.parquet", {
+      load: loadModeOf({ load: "viewport" }),
+      limits: { warn: 1e6, max: 50e6, maxFeatures: 100 },
+    });
+    const error = onError.mock.calls[0]![0];
+    expect(failure(error)).toMatchObject({ code: "too-large", blocker: "no-range" });
+    expect(error.message).toContain("this server doesn't support HTTP range requests. Host it where they work");
+    expect(error.message).not.toContain("Add `load: viewport`");
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("reads the whole file instead"));
+  });
+
   it("load: viewport on a file without a covering column → says so", async () => {
     const { onError } = await run("/districts-nobbox.parquet", { load: loadModeOf({ load: "viewport" }) });
     expect(failure(onError.mock.calls[0]![0])?.code).toBe("no-index");
@@ -629,13 +678,13 @@ describe("GeoParquetLoader", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(loader.readsByView).toBe(true);
     expect(onData).toHaveBeenCalled();
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("reading only the part in view"));
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("so only the part in view is read"));
   });
 
   it("too large to load whole + not readable by view → refused, with the size", async () => {
     const { onError } = await run("/districts.parquet", { limits: { warn: 1_000, max: 2_000 } });
     expect(failure(onError.mock.calls[0]![0])).toMatchObject({ code: "too-large", size: expect.any(Number) });
-    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("reading only the part in view"));
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("only the part in view is read"));
   });
 
   it("a server without ranges and a file over the guard → the no-range notice", async () => {
@@ -810,7 +859,7 @@ describe("GeoParquet per-view budget (ml-37r.17)", () => {
       expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
       expect(onTooDense).toHaveBeenLastCalledWith(true);
       expect(onHint).toHaveBeenCalledTimes(1);
-      expect(onHint.mock.calls[0]![0]).toContain("over `maxFeatures` (100)");
+      expect(onHint.mock.calls[0]![0]).toContain("more than one read takes (`maxFeatures`: 100)");
       // The footer only.
       expect(log).toHaveLength(1);
 

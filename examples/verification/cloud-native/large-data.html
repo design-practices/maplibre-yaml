@@ -22,6 +22,10 @@
       - "overviews": a tylertoo overview GeoParquet (geo:overviews: 600 lots
                  at zoom 14 plus coarser copies at zooms 10-13, 1,732 rows):
                  each lot is drawn once, from the full-detail level.
+      - "dark":  the "below" case on a dark page section (color-scheme: dark):
+                 the zoom-in line follows it (dark background, light text).
+    Under <ml-map quiet> the line is hidden — toggled live, not only when the
+    line first shows — and it goes when its source's last layer is removed.
     Serve from the repo root:  pnpm verify:serve
     Then open: http://localhost:4174/examples/verification/cloud-native/large-data.html
   -->
@@ -138,6 +142,29 @@ layers:
     type: fill
     source: lots
     paint: { fill-color: "#457b9d", fill-opacity: 0.35, fill-outline-color: "#1d3557" }
+        </script>
+      </ml-map>
+    </section>
+    <section style="color-scheme: dark; background: #111; color: #eee; padding: 4px">
+      <h2>A dark page: the line follows its colour scheme</h2>
+      <ml-map id="dark">
+        <script type="text/yaml">
+type: map
+id: large-data-dark
+config:
+  center: [10.1, 42.08]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  fgb:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.fgb
+    load: { mode: viewport, minzoom: 12 }
+layers:
+  - id: fgb
+    type: circle
+    source: fgb
+    paint: { circle-color: "#f4a261", circle-radius: 4 }
         </script>
       </ml-map>
     </section>

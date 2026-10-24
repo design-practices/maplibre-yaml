@@ -253,8 +253,18 @@ export async function open(url: string, options: OpenOptions = {}): Promise<GeoP
       // A whole file over the guard: from a server without ranges, the
       // hosting is what to fix; otherwise the file is simply too big to
       // read whole (a host that hid its size from this page).
-      const code = error.ranges === false ? "no-range" : "too-large";
-      throw new FormatError({ code, format: "geoparquet", url, size: error.size });
+      if (error.ranges === false) throw new FormatError({ code: "no-range", format: "geoparquet", url, size: error.size });
+      // The whole file had to be read (the host hid its size), and it is
+      // over the limit: its size is the file's, not the columns' (ml-cnv.33).
+      throw new FormatError({
+        code: "too-large",
+        format: "geoparquet",
+        url,
+        size: error.size,
+        sizeIsFile: true,
+        ...(options.maxWholeBytes !== undefined ? { limits: { bytes: options.maxWholeBytes } } : {}),
+        blocker: "no-size",
+      });
     }
     if (typeof (error as { status?: unknown } | null)?.status === "number") throw error;
     throw fetchFailure(error, url);

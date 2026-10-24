@@ -82,12 +82,12 @@ describe("describeFormatFailure — the on-page sentences", () => {
       "`d/p.fgb` is in EPSG:2263; MapLibre needs longitude/latitude (EPSG:4326). Reproject it: " +
         "`ogr2ogr -t_srs EPSG:4326 out.fgb p.fgb`."
     );
-    expect(
-      describeFormatFailure({ code: "too-large", format: "flatgeobuf", url: "p.fgb", size: 180 * 1024 * 1024 })
-    ).toBe(
-      "`p.fgb` is 180 MB, too large to load whole in a browser. Add `load: viewport` to the source (the " +
-        "file needs a spatial index), or convert it to PMTiles."
-    );
+    const big = describeFormatFailure({ code: "too-large", format: "flatgeobuf", url: "p.fgb", size: 180 * 1024 * 1024 });
+    expect(big).toContain("`p.fgb` is 180 MB, too large to load whole in a browser. Reading it by view needs a spatial index: ");
+    expect(big).toContain("`ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES p-indexed.fgb p.fgb`; it is then read by view.");
+    // tylertoo reads GeoParquet: a FlatGeobuf file is converted first.
+    expect(big).toContain("convert it to PMTiles: `ogr2ogr -f Parquet p.parquet p.fgb`, then `uv run --with tylertoo==0.8.0");
+    expect(big).toContain("https://docs.maplibre-yaml.org/guides/flatgeobuf/#large-files");
     expect(describeFormatFailure({ code: "no-index", format: "flatgeobuf", url: "p.fgb" })).toContain(
       "has no spatial index"
     );
@@ -137,11 +137,7 @@ describe("describeFormatFailure — the on-page sentences", () => {
     );
     expect(
       describeFormatFailure({ code: "too-large", format: "geoparquet", url: "p.parquet", size: 80 * 1024 * 1024 })
-    ).toBe(
-      "`p.parquet` is 80 MB (the columns this map reads), too large to load whole in a browser. Add " +
-        "`load: viewport` to the source (the file needs a `bbox` covering column and spatially sorted row " +
-        "groups), list fewer `columns:`, or convert it to PMTiles."
-    );
+    ).toContain("`p.parquet` is 80 MB (the columns this map reads), too large to load whole in a browser.");
     expect(describeFormatFailure({ code: "no-index", format: "geoparquet", url: "p.parquet" })).toContain(
       "has no `bbox` covering column, so it can't be read one part at a time (`load: viewport`)"
     );
@@ -189,5 +185,84 @@ describe("the notice wraps them", () => {
     expect(text).toContain("didn't load (404");
     expect(text).toContain("The browser looked for http://localhost:4321/data/districts.pmtiles.");
     expect(text).toContain('add base="/my-repo/"');
+  });
+});
+
+describe("too-large: the cause, why it can't be read by view, and every way to make it draw (0.9.2 review)", () => {
+  const MB = 1024 * 1024;
+  const limits = { features: 400_000, bytes: 50 * MB, decoded: 150 * MB };
+
+  it("an unsorted GeoParquet file over the feature limit: sort it (never 'add load: viewport'), raise maxFeatures, or PMTiles", () => {
+    expect(
+      describeFormatFailure({
+        code: "too-large",
+        format: "geoparquet",
+        url: "/data/lots.parquet",
+        size: 30 * MB,
+        features: 475_628,
+        decoded: 120 * MB,
+        limits,
+        blocker: "unsorted",
+      })
+    ).toBe(
+      "`/data/lots.parquet` has 475,628 features, more than a page loads whole (400,000 features), and it can't be " +
+        "read by view: its rows aren't in spatially sorted row groups (each row group spans most of the file, " +
+        "so every view would read most of it). Sort it: `ogr2ogr -f Parquet -lco WRITE_COVERING_BBOX=YES -lco SORT_BY_BBOX=YES -lco " +
+        "ROW_GROUP_SIZE=10000 lots-sorted.parquet lots.parquet`; it is then read by view. Or load it whole anyway " +
+        "with `load: { maxFeatures: 500000 }` (heavier on memory). To draw it at every zoom (a citywide view too), " +
+        "convert it to PMTiles: `uv run --with tylertoo==0.8.0 python -c \"import tylertoo as t; " +
+        "t.overview('lots.parquet', 'lots-ov.parquet', min_zoom=10, max_zoom=14, collapse_square=True); " +
+        "t.export_pmtiles('lots-ov.parquet', 'lots.pmtiles', layer_name='lots', tile_size_limit=None)\"` (the parcel " +
+        "recipe: set min_zoom and max_zoom for your map). More: " +
+        "https://docs.maplibre-yaml.org/guides/geoparquet/#large-files and " +
+        "https://docs.maplibre-yaml.org/guides/pmtiles/#from-a-large-file"
+    );
+  });
+
+  it("a host without range requests: the hosting is what to change", () => {
+    const text = describeFormatFailure({
+      code: "too-large",
+      format: "geoparquet",
+      url: "bk.parquet",
+      size: 45 * MB,
+      features: 475_628,
+      decoded: 100 * MB,
+      limits,
+      blocker: "no-range",
+    });
+    expect(text).toContain("it can't be read by view: this server doesn't support HTTP range requests. Host it where they work");
+    expect(text).not.toContain("Add `load: viewport`");
+  });
+
+  it("over the decoded size: no maxFeatures (it wouldn't help), list fewer columns", () => {
+    const text = describeFormatFailure({
+      code: "too-large",
+      format: "geoparquet",
+      url: "pluto.parquet",
+      size: 47 * MB,
+      features: 856_687,
+      decoded: 230 * MB,
+      limits,
+      blocker: "no-bbox",
+    });
+    expect(text).toContain("has 856,687 features and reads columns that decode to 230 MB, more than a page loads whole (400,000 features, 150 MB decoded)");
+    expect(text).toContain("it has no `bbox` covering column. Rewrite it with one, sorted:");
+    expect(text).toContain("Or list fewer `columns:`.");
+    expect(text).not.toContain("maxFeatures");
+  });
+
+  it("a whole file the host hid the size of: the file's size, and the header to send", () => {
+    const text = describeFormatFailure({
+      code: "too-large",
+      format: "geoparquet",
+      url: "big.parquet",
+      size: 139 * MB,
+      sizeIsFile: true,
+      limits: { bytes: 50 * MB },
+      blocker: "no-size",
+    });
+    expect(text).toContain("`big.parquet` is 139 MB, more than a page loads whole (50 MB transferred)");
+    expect(text).not.toContain("the columns this map reads");
+    expect(text).toContain("Access-Control-Expose-Headers: Content-Range");
   });
 });

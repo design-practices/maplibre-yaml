@@ -71,6 +71,20 @@ export interface FormatFailure {
   size?: number | undefined;
   /** Number of features, when that is what made it too large (`too-large`; wins over `size`). */
   features?: number | undefined;
+  /**
+   * `too-large`: the GeoParquet columns' decoded bytes, the limits the file
+   * was measured against (so the notice can say which it is over), and
+   * whether `size` is the whole file rather than the columns a map reads.
+   */
+  decoded?: number | undefined;
+  limits?: { features?: number; bytes?: number; decoded?: number } | undefined;
+  sizeIsFile?: boolean | undefined;
+  /**
+   * `too-large`: why the file can't be read by view instead — no `bbox`
+   * column, unsorted row groups, no spatial index, a server without range
+   * requests, or one that hides the file's size from the page.
+   */
+  blocker?: "no-bbox" | "unsorted" | "no-index" | "no-range" | "no-size" | undefined;
   /** The CRS the file declares (`crs`), e.g. "EPSG:3857". */
   crs?: string;
   /** The geometry encoding a GeoParquet file uses (`encoding`), e.g. "point". */
