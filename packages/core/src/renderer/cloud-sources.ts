@@ -836,6 +836,23 @@ export class GeoParquetLoader extends ViewLoader {
     super(map, url, load, callbacks, sizeLimits(limits, load));
   }
 
+  private overviewsNoted = false;
+
+  /**
+   * An overview file whose `geo:overviews` major version this version
+   * doesn't know: its full-detail level is read, and the author told (once).
+   */
+  private noteOverviews(source: GeoParquetFile | undefined): void {
+    const overviews = source?.info.overviews;
+    if (!overviews || overviews.known || this.overviewsNoted) return;
+    this.overviewsNoted = true;
+    this.hint(
+      `\`${this.url}\` has overviews in a newer format (geo:overviews ${overviews.version || "?"}) than this ` +
+        `version of maplibre-yaml reads: ${overviews.canonical ? "drawing its full-detail level only" : "reading every row"}. ` +
+        "Update maplibre-yaml, or write the file without overviews."
+    );
+  }
+
   /** The file's extent from its GeoParquet metadata — what `fitTo` frames when read by view. */
   get extent(): [[number, number], [number, number]] | undefined {
     const bbox = this.opened?.info.bbox;
@@ -859,6 +876,7 @@ export class GeoParquetLoader extends ViewLoader {
           ...(this.opened ? { opened: this.opened } : {}),
         });
         this.opened = read.source;
+        this.noteOverviews(read.source);
         data = read.data;
       }
     } catch (error) {
@@ -880,6 +898,7 @@ export class GeoParquetLoader extends ViewLoader {
   protected async startViewport(auto: boolean, tooLarge?: WholeFileTooLarge): Promise<void> {
     this.opened ??= await gp.open(this.url, { maxWholeBytes: this.limits.max });
     const source = this.opened;
+    this.noteOverviews(source);
     if (!source.info.covering) {
       if (auto) {
         throw new FormatError({

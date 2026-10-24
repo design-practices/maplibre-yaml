@@ -19,6 +19,9 @@
                  group a view touches is decoded whole, and 100 rows is over
                  2.5 × maxFeatures (75) — and its author hint says to rewrite
                  it with smaller row groups.
+      - "overviews": a tylertoo overview GeoParquet (geo:overviews: 600 lots
+                 at zoom 14 plus coarser copies at zooms 10-13, 1,732 rows):
+                 each lot is drawn once, from the full-detail level.
     Serve from the repo root:  pnpm verify:serve
     Then open: http://localhost:4174/examples/verification/cloud-native/large-data.html
   -->
@@ -35,7 +38,7 @@
   </script>
 </head>
 <body>
-  <header>PASS = "fit" opens at zoom 13 with points; "below" asks to zoom in, then draws points once zoomed in; "groups" draws only the blue points and asks to zoom in.</header>
+  <header>PASS = "fit" opens at zoom 13 with points; "below" asks to zoom in, then draws points once zoomed in; "groups" draws only the blue points and asks to zoom in; "overviews" draws 600 lots, each once.</header>
   <main>
     <section>
       <h2>fitTo on a file read by view from zoom 13</h2>
@@ -112,6 +115,29 @@ layers:
     type: circle
     source: large
     paint: { circle-color: "#e63946", circle-radius: 3 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>An overview GeoParquet (geo:overviews): each lot once</h2>
+      <ml-map id="overviews">
+        <script type="text/yaml">
+type: map
+id: large-data-overviews
+config:
+  center: [10.117, 42.058]
+  zoom: 14
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  lots:
+    type: geojson
+    url: /gallery-assets/cloud-native/lots-overviews.parquet
+    columns: [lot, level, floors]
+layers:
+  - id: lots
+    type: fill
+    source: lots
+    paint: { fill-color: "#457b9d", fill-opacity: 0.35, fill-outline-color: "#1d3557" }
         </script>
       </ml-map>
     </section>

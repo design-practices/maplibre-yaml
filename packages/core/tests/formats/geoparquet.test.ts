@@ -22,6 +22,7 @@ import {
   canSkipByView,
   rowsInView,
   rowGroupsInView,
+  projectedSize,
   TAIL_BYTES,
 } from "../../src/formats/geoparquet";
 import { getDecoder, hasDecoder } from "../../src/formats/decoders";
@@ -40,7 +41,9 @@ const FIXTURES = join(
   dirname(fileURLToPath(import.meta.url)),
   "../../../../docs/public/gallery-assets/cloud-native"
 );
-const fixture = (name: string) => new Uint8Array(readFileSync(join(FIXTURES, name)));
+/** Files served in place of (or beside) the fixtures, by name. */
+const overrides = new Map<string, Uint8Array>();
+const fixture = (name: string) => overrides.get(name) ?? new Uint8Array(readFileSync(join(FIXTURES, name)));
 
 type Log = { url: string; range?: string; method?: string; status: number; bytes: number }[];
 
@@ -889,5 +892,108 @@ describe("GeoParquet decode budget on the row groups a view touches (M2)", () =>
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("geo:overviews: only the canonical level is read (ml-cnv.21)", () => {
+  // tylertoo 0.8.0 (scripts/fixtures/overviews.py): 600 lots at zoom 14, plus
+  // coarser copies at zooms 10–13 — 1,732 rows in 11 row groups.
+  const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+  afterEach(() => overrides.clear());
+
+  it("reads the key: the canonical level's rows and row groups", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    expect(Number(source.metadata.num_rows)).toBe(1732);
+    expect(source.info.overviews).toEqual({
+      version: "0.2.0",
+      mode: "duplicating",
+      levels: 5,
+      known: true,
+      canonical: { groupStart: 8, groupEnd: 10, rowStart: 1132, rowEnd: 1732 },
+    });
+    expect(source.info.rows).toBe(600);
+    expect(source.info.rowGroups).toBe(3);
+  });
+
+  it("a whole read, mlym emit's decode and classify see each lot once", async () => {
+    const fc = await decodeBytes(fixture("lots-overviews.parquet"), "lots-overviews.parquet", { columns: "all" });
+    expect(fc.features).toHaveLength(600);
+    expect(new Set(fc.features.map((f) => f.properties!["lot"])).size).toBe(600);
+    expect(fc.features.every((f) => f.properties!["level"] === 4)).toBe(true);
+    vi.stubGlobal("fetch", fixtureFetch());
+    const whole = await loadGeoParquetWhole("/lots-overviews.parquet", ["floors"]);
+    expect(whole.data!.features).toHaveLength(600);
+  });
+
+  it("by view, the estimate, the decode budget and the size guards count the canonical level only", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    expect(rowsInView(source, [9, 41, 11, 43])).toBe(600);
+    expect(rowGroupsInView(source, [9, 41, 11, 43])).toMatchObject({ groups: 3, rows: 600 });
+    const fc = await readBbox(source, [9, 41, 11, 43], { columns: "all" });
+    expect(fc!.features).toHaveLength(600);
+    expect(fc!.features.every((f) => f.properties!["level"] === 4)).toBe(true);
+    // The canonical level's bytes, not the whole file's.
+    const [, decoded] = projectedSize(source, "all");
+    let everything = 0;
+    for (const group of source.metadata.row_groups) {
+      for (const chunk of group.columns) everything += Number(chunk.meta_data?.total_uncompressed_size ?? 0);
+    }
+    expect(decoded).toBeLessThan(everything * 0.6);
+    // The whole-file guard counts 600 rows, not 1,732.
+    const limits = { warn: 1e6, max: 50e6, maxFeatures: 1000 };
+    const read = await loadGeoParquetWhole("/lots-overviews.parquet", "all", { limits });
+    expect(read.data!.features).toHaveLength(600);
+  });
+
+  it("the loader by view draws each lot once", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const onData = vi.fn();
+    const onHint = vi.fn();
+    const loader = new GeoParquetLoader(fakeMap(14, AREA) as never, "/lots-overviews.parquet", loadModeOf({ load: "viewport" }), "all", {
+      onData,
+      onError: vi.fn(),
+      onHint,
+    });
+    await loader.start();
+    expect(onData.mock.calls.at(-1)![0].features).toHaveLength(600);
+    expect(onHint).not.toHaveBeenCalled();
+  });
+
+  it("an unknown major version: the full-detail level, and the author is told", async () => {
+    const bytes = fixture("lots-overviews.parquet").slice();
+    const text = new TextDecoder("latin1").decode(bytes);
+    const at = text.indexOf('"version":"0.2.0","mode"');
+    expect(at).toBeGreaterThan(0);
+    bytes.set(new TextEncoder().encode('"version":"1.0.0","mode"'), at);
+    overrides.set("lots-v1.parquet", bytes);
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-v1.parquet");
+    expect(source.info.overviews).toMatchObject({ version: "1.0.0", known: false, canonical: { rowStart: 1132 } });
+    const onData = vi.fn();
+    const onHint = vi.fn();
+    await new GeoParquetLoader(fakeMap(14, AREA) as never, "/lots-v1.parquet", loadModeOf({}), "all", {
+      onData,
+      onError: vi.fn(),
+      onHint,
+    }).start();
+    expect(onData.mock.calls.at(-1)![0].features).toHaveLength(600);
+    expect(onHint).toHaveBeenCalledTimes(1);
+    expect(onHint.mock.calls[0]![0]).toContain("has overviews in a newer format (geo:overviews 1.0.0)");
+    expect(onHint.mock.calls[0]![0]).toContain("drawing its full-detail level only");
+  });
+
+  it("a key whose levels don't cover the row groups is ignored (plain GeoParquet)", async () => {
+    const bytes = fixture("lots-overviews.parquet").slice();
+    const text = new TextDecoder("latin1").decode(bytes);
+    const at = text.indexOf('"row_group_end":10,');
+    expect(at).toBeGreaterThan(0);
+    bytes.set(new TextEncoder().encode('"row_group_end":99,'), at);
+    overrides.set("lots-bad.parquet", bytes);
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-bad.parquet");
+    expect(source.info.overviews).toBeUndefined();
+    expect(source.info.rows).toBe(1732);
   });
 });

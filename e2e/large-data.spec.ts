@@ -80,3 +80,24 @@ test("a GeoParquet view whose row groups are too large to decode isn't read, and
   await page.screenshot({ path: "e2e/results/large-data-groups.png" });
   expect(errors).toEqual([]);
 });
+
+test("an overview GeoParquet (geo:overviews) draws each feature once, from its full-detail level (ml-cnv.21)", async ({
+  page,
+}) => {
+  const errors = await guard(page);
+  await OPEN(page, "overviews");
+  const lots = () =>
+    page.evaluate(() => {
+      const map = (document.getElementById("overviews") as any).getMap();
+      const features = map.querySourceFeatures("lots");
+      return {
+        lots: new Set(features.map((f: any) => f.properties.lot)).size,
+        levels: [...new Set(features.map((f: any) => f.properties.level))],
+      };
+    });
+  await expect.poll(async () => (await lots()).lots, { timeout: 30_000 }).toBe(600);
+  // Every row drawn comes from the canonical level (4): no coarser copy overlaid.
+  expect((await lots()).levels).toEqual([4]);
+  await page.screenshot({ path: "e2e/results/large-data-overviews.png" });
+  expect(errors).toEqual([]);
+});
