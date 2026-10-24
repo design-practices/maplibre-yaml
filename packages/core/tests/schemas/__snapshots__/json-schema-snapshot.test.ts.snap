@@ -461,6 +461,11 @@ exports[`emitted JSON Schema artifacts > any.schema.json matches snapshot 1`] = 
                                 "minimum": 0,
                                 "maximum": 24,
                                 "description": "viewport: read nothing below this zoom (default 10)"
+                              },
+                              "maxFeatures": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "description": "viewport: read nothing for a view holding more features than this (default 150000); the map asks to zoom in"
                               }
                             },
                             "required": [
@@ -5031,6 +5036,11 @@ exports[`emitted JSON Schema artifacts > map.schema.json matches snapshot 1`] = 
                             "minimum": 0,
                             "maximum": 24,
                             "description": "viewport: read nothing below this zoom (default 10)"
+                          },
+                          "maxFeatures": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "viewport: read nothing for a view holding more features than this (default 150000); the map asks to zoom in"
                           }
                         },
                         "required": [
@@ -8525,6 +8535,11 @@ exports[`emitted JSON Schema artifacts > root.schema.json matches snapshot 1`] =
                                         "minimum": 0,
                                         "maximum": 24,
                                         "description": "viewport: read nothing below this zoom (default 10)"
+                                      },
+                                      "maxFeatures": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "description": "viewport: read nothing for a view holding more features than this (default 150000); the map asks to zoom in"
                                       }
                                     },
                                     "required": [
@@ -13319,6 +13334,11 @@ exports[`emitted JSON Schema artifacts > scrollytelling.schema.json matches snap
                                             "minimum": 0,
                                             "maximum": 24,
                                             "description": "viewport: read nothing below this zoom (default 10)"
+                                          },
+                                          "maxFeatures": {
+                                            "type": "integer",
+                                            "minimum": 1,
+                                            "description": "viewport: read nothing for a view holding more features than this (default 150000); the map asks to zoom in"
                                           }
                                         },
                                         "required": [

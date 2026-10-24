@@ -457,6 +457,9 @@ export class MapRenderer {
    * table MapLibre reads for its controls).
    */
   private readonly strings: Strings;
+  /** Sources whose view is too dense to read, and the line asking to zoom in. */
+  private readonly denseSources = new Set<string>();
+  private zoomInLine: HTMLElement | null = null;
   /** Lazily created on the first chrome mount (KTD10 corner system). */
   private chrome: ChromeLayout | null = null;
   /** Panel toggles made before the layer chain settles — applied after. */
@@ -855,11 +858,15 @@ export class MapRenderer {
         console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
         options.onError?.(new Error(message), false, { kind: 'source-hint', sourceId });
       },
+      onViewTooDense: (sourceId, dense) => this.showZoomIn(sourceId, dense),
     };
 
     const eventCallbacks: EventHandlerCallbacks = {
       onClick: (layerId, feature, lngLat) => this.emit('layer:click', { layerId, feature, lngLat }),
       onHover: (layerId, feature, lngLat) => this.emit('layer:hover', { layerId, feature, lngLat }),
+      // A highlight with no feature ids (ml-37r.15): an author hint, like a
+      // `before:` that names no layer.
+      onHint: layerCallbacks.onLayerHint!,
     };
 
     // GeoParquet reads only the columns the document references (ml-cnv.4):
@@ -1834,6 +1841,32 @@ export class MapRenderer {
   }
 
   /**
+   * The reader's "zoom in" line (ml-37r.17): shown over the map while any
+   * source read by view holds more features in view than one read takes —
+   * nothing of it is drawn then — and gone once every such view is read.
+   * `<ml-map quiet>` hides it with the notice.
+   */
+  private showZoomIn(sourceId: string, dense: boolean): void {
+    const sources = this.denseSources;
+    if (dense) sources.add(sourceId);
+    else sources.delete(sourceId);
+    const container = this.map.getContainer();
+    if (!sources.size || container.closest('[quiet]')) {
+      this.zoomInLine?.remove();
+      this.zoomInLine = null;
+    } else if (!this.zoomInLine) {
+      const line = (this.zoomInLine = document.createElement('div'));
+      line.className = 'ml-map-zoom-in';
+      line.setAttribute('role', 'status');
+      line.textContent = this.strings('maplibre-yaml.Notice.ZoomIn');
+      line.style.cssText =
+        'position:absolute;bottom:36px;left:50%;transform:translateX(-50%);z-index:4;padding:4px 12px;' +
+        'border-radius:14px;background:#fff;color:#222;font:13px system-ui;box-shadow:0 1px 4px #0004;pointer-events:none';
+      container.append(line);
+    }
+  }
+
+  /**
    * Destroy the map and clean up resources
    */
   destroy(): void {
@@ -1851,6 +1884,7 @@ export class MapRenderer {
     this.autoLegendContainer = null;
     this.chrome?.destroy();
     this.chrome = null;
+    this.zoomInLine?.remove();
     this.eventListeners.clear();
     this.attributionGuard.dispose();
     this.map.remove();

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>hover.highlight on vector tiles</title>
+  <!--
+    0.9.2 (ml-37r.15): hover.highlight on a vector-tile source. Feature-state
+    on a vector source must name the tile layer (`sourceLayer`); 0.9.1 left it
+    out, so MapLibre rejected every write and nothing lit.
+      - "ids":     a PMTiles archive whose tiles carry feature ids.
+      - "promote": a PMTiles archive without ids, `promoteId: { districts: name }`.
+      - "tiles":   plain vector tiles (`tiles: [.../{z}/{x}/{y}.pbf]`), ids in
+                   the tiles. The /vt/ URLs are answered by the browser test
+                   (e2e/highlight-vector.spec.ts) from districts-ids.pmtiles; open
+                   standalone, this map stays empty.
+      - "noids":   a PMTiles archive without ids and no promoteId: nothing can
+                   light; the author is told once to add promoteId (on the page
+                   while developing, and on the console).
+    PASS = hovering the middle district of the first three maps turns it gold
+    (red otherwise); the fourth shows the promoteId hint.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/highlight-vector.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 320px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = hovering the middle district of the first three maps turns it gold; the fourth explains promoteId.</header>
+  <main>
+    <section>
+      <h2>PMTiles, ids in the tiles</h2>
+      <ml-map id="ids">
+        <script type="text/yaml">
+type: map
+id: highlight-ids
+config:
+  center: [10.225, 42.175]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  districts:
+    type: vector
+    url: /gallery-assets/cloud-native/districts-ids.pmtiles
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    source-layer: districts
+    paint: { fill-color: "#e63946", fill-outline-color: "#ffffff" }
+    interactive:
+      hover: { cursor: pointer, highlight: true }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>PMTiles without ids, promoteId</h2>
+      <ml-map id="promote">
+        <script type="text/yaml">
+type: map
+id: highlight-promote
+config:
+  center: [10.225, 42.175]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  districts:
+    type: vector
+    url: /gallery-assets/cloud-native/districts.pmtiles
+    promoteId: { districts: name }
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    source-layer: districts
+    paint: { fill-color: "#e63946", fill-outline-color: "#ffffff" }
+    interactive:
+      hover: { cursor: pointer, highlight: true }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Plain vector tiles (tiles:)</h2>
+      <ml-map id="tiles">
+        <script type="text/yaml">
+type: map
+id: highlight-tiles
+config:
+  center: [10.225, 42.175]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  districts:
+    type: vector
+    tiles: ["/vt/{z}/{x}/{y}.pbf"]
+    maxzoom: 9
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    source-layer: districts
+    paint: { fill-color: "#e63946", fill-outline-color: "#ffffff" }
+    interactive:
+      hover: { cursor: pointer, highlight: true }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>PMTiles without ids, no promoteId (hint)</h2>
+      <ml-map id="noids">
+        <script type="text/yaml">
+type: map
+id: highlight-noids
+config:
+  center: [10.225, 42.175]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  districts:
+    type: vector
+    url: /gallery-assets/cloud-native/districts.pmtiles
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    source-layer: districts
+    paint: { fill-color: "#e63946", fill-outline-color: "#ffffff" }
+    interactive:
+      hover: { cursor: pointer, highlight: true }
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

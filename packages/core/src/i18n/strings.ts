@@ -50,6 +50,9 @@ export const DEFAULT_STRINGS = {
   "maplibre-yaml.Notice.AuthorDetails": "Details for the site's author",
   "maplibre-yaml.Notice.Dismiss": "Dismiss this notice",
   "maplibre-yaml.Notice.More": "…and {count} more (see the browser console).",
+  // A file read by view whose current view holds too many features to read
+  // (ml-37r.17): shown over the map until the reader zooms in.
+  "maplibre-yaml.Notice.ZoomIn": "Too many features to show here — zoom in to see them.",
 
   // Error cards that replace a document that was read but can't render.
   "maplibre-yaml.ErrorCard.HowToFix": "How to fix it:",

@@ -159,11 +159,12 @@ export const ColorRampSchema = z
  *   server with range requests and a file that can be read in parts — a
  *   FlatGeobuf with a spatial index, or a GeoParquet file with a `bbox`
  *   covering column and spatially sorted row groups. Nothing is read below
- *   `minzoom` (default 10).
+ *   `minzoom` (default 10), nor for a view estimated to hold more than
+ *   `maxFeatures` features (default 150,000): the map asks to zoom in.
  *
  * @example
  * ```yaml
- * load: { mode: viewport, minzoom: 12 }
+ * load: { mode: viewport, minzoom: 12, maxFeatures: 50000 }
  * ```
  */
 export const SourceLoadSchema = z
@@ -177,6 +178,14 @@ export const SourceLoadSchema = z
         .max(24)
         .optional()
         .describe("viewport: read nothing below this zoom (default 10)"),
+      maxFeatures: z
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe(
+          "viewport: read nothing for a view holding more features than this (default 150000); the map asks to zoom in"
+        ),
     }),
   ])
   .describe(

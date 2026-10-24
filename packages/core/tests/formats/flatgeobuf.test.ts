@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { decodeBytes, probe, openWhole, decodeStream, isLonLat } from "../../src/formats/flatgeobuf";
+import { decodeBytes, probe, openWhole, decodeStream, isLonLat, readIndexLevel } from "../../src/formats/flatgeobuf";
 import { isFormatError } from "../../src/formats/errors";
 import {
   FlatGeobufLoader,
@@ -19,6 +19,7 @@ import {
   cloudSourceDataLoader,
   WholeFileTooLarge,
   VIEWPORT_DEFAULT_MINZOOM,
+  VIEWPORT_DEFAULT_MAX_FEATURES,
 } from "../../src/renderer/cloud-sources";
 import { loadSourceData } from "../../src/data/source-data";
 
@@ -276,10 +277,18 @@ describe("the whole-file guard without Content-Length (ml-cnv.19)", () => {
 
 describe("loadModeOf", () => {
   it("normalizes load:", () => {
-    expect(loadModeOf({})).toEqual({ mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM });
-    expect(loadModeOf({ load: "viewport" })).toEqual({ mode: "viewport", minzoom: 10 });
-    expect(loadModeOf({ load: { mode: "viewport", minzoom: 13 } })).toEqual({ mode: "viewport", minzoom: 13 });
+    const max = VIEWPORT_DEFAULT_MAX_FEATURES;
+    expect(loadModeOf({})).toEqual({ mode: "all", minzoom: VIEWPORT_DEFAULT_MINZOOM, maxFeatures: max });
+    expect(loadModeOf({ load: "viewport" })).toEqual({ mode: "viewport", minzoom: 10, maxFeatures: max });
+    expect(loadModeOf({ load: { mode: "viewport", minzoom: 13 } })).toEqual({
+      mode: "viewport",
+      minzoom: 13,
+      maxFeatures: max,
+    });
     expect(loadModeOf({ load: { mode: "all" } }).mode).toBe("all");
+    // The per-view budget (ml-37r.17), flat or under a v2 source's runtime:.
+    expect(loadModeOf({ load: { mode: "viewport", maxFeatures: 5000 } }).maxFeatures).toBe(5000);
+    expect(loadModeOf({ runtime: { load: { mode: "viewport", maxFeatures: 7 } } }).maxFeatures).toBe(7);
   });
 });
 
@@ -389,5 +398,149 @@ describe("FlatGeobufLoader", () => {
     map.moveend();
     await new Promise((r) => setTimeout(r, 300));
     expect(onData.mock.calls.length).toBe(calls);
+  });
+});
+
+describe("whole-file guard on the header's feature count (ml-37r.16)", () => {
+  const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+
+  it("a file over the feature limit isn't decoded: indexed → read by view, with the count in the note", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const error = await loadFlatGeobufWhole("/points.fgb", { limits: { warn: 1e6, max: 2e6, maxFeatures: 100 } }).catch(
+      (e) => e
+    );
+    expect(error).toBeInstanceOf(WholeFileTooLarge);
+    expect(error.features).toBe(400);
+
+    const onData = vi.fn();
+    const onError = vi.fn();
+    const loader = new FlatGeobufLoader(fakeMap(12, AREA) as never, "/points.fgb", loadModeOf({}), { onData, onError }, {
+      warn: 1e6,
+      max: 2e6,
+      maxFeatures: 100,
+    });
+    await loader.start();
+    expect(onError).not.toHaveBeenCalled();
+    expect(loader.readsByView).toBe(true);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("(400 features) is too large to load whole"));
+  });
+
+  it("unindexed and over the feature limit → refused with the count, in plain words", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const onError = vi.fn();
+    const loader = new FlatGeobufLoader(
+      fakeMap(12, AREA) as never,
+      "/points-noindex.fgb",
+      loadModeOf({}),
+      { onData: vi.fn(), onError },
+      { warn: 1e6, max: 2e6, maxFeatures: 100 }
+    );
+    await loader.start();
+    const error = onError.mock.calls[0]![0];
+    expect(isFormatError(error) && error.failure).toMatchObject({ code: "too-large", features: 400 });
+    expect(error.message).toContain("has 400 features, too large to load whole in a browser");
+    expect(error.message).toContain("`load: viewport`");
+    expect(error.message).toContain("PMTiles");
+  });
+
+  it("a compressed response's Content-Length isn't taken for the file's size", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("x", { headers: { "content-length": "1000", "content-encoding": "gzip" } }))
+    );
+    expect((await openWhole("/f.fgb")).size).toBeUndefined();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("x", { headers: { "content-length": "1000" } })));
+    expect((await openWhole("/f.fgb")).size).toBe(1000);
+  });
+});
+
+describe("per-view budget (ml-37r.17)", () => {
+  const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+
+  it("the index estimates a view's features before reading any", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const inView = await readIndexLevel("/points.fgb", {
+      featuresCount: 400,
+      indexed: true,
+      nodeSize: 16,
+    });
+    const whole = inView([9, 41, 11, 43]);
+    expect(whole).toBeCloseTo(400, 0);
+    // A quarter of the area holds about a quarter of the (uniform) points —
+    // and exactly the ones there, since this small index is read to its leaves.
+    const corner: [number, number, number, number] = [10.0, 42.0, 10.2, 42.15];
+    const actual = pointCoords.filter(([x, y]) => x >= corner[0] && x <= corner[2] && y >= corner[1] && y <= corner[3]).length;
+    expect(Math.round(inView(corner))).toBe(actual);
+    expect(inView([0, 0, 1, 1])).toBe(0);
+  });
+
+  /** The fixture's point coordinates. */
+  let pointCoords: [number, number][] = [];
+  beforeEach(async () => {
+    pointCoords = (await decodeBytes(fixture("points.fgb"), "points.fgb")).features.map(
+      (f) => (f.geometry as { coordinates: [number, number] }).coordinates
+    );
+  });
+
+  it("a view over the budget isn't read: no features, one author hint, the reader told to zoom in — until a view fits", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const log: { url: string; range?: string; status: number }[] = [];
+      vi.stubGlobal("fetch", fixtureFetch(log));
+      const map = fakeMap(12, AREA);
+      const onData = vi.fn();
+      const onHint = vi.fn();
+      const onTooDense = vi.fn();
+      const loader = new FlatGeobufLoader(map as never, "/points.fgb", loadModeOf({ load: { mode: "viewport", maxFeatures: 50 } }), {
+        onData,
+        onError: vi.fn(),
+        onHint,
+        onTooDense,
+      });
+      await loader.start();
+      expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
+      expect(onTooDense).toHaveBeenLastCalledWith(true);
+      expect(onHint).toHaveBeenCalledTimes(1);
+      expect(onHint.mock.calls[0]![0]).toMatch(/has about 4\d\d features in view, over `maxFeatures` \(50\)/);
+      // Only the probe, the header and the index were fetched: no features.
+      const fetched = log.reduce((sum, r) => {
+        const m = /bytes=(\d+)-(\d+)/.exec(r.range ?? "");
+        return sum + (m ? Number(m[2]) - Number(m[1]) + 1 : 0);
+      }, 0);
+      expect(fetched).toBeLessThan(fixture("points.fgb").length / 2);
+
+      // Still too dense after a pan: no new hint, no new empty delivery.
+      const deliveries = onData.mock.calls.length;
+      map.bounds = [10.05, 42.0, 10.4, 42.3];
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      expect(onHint).toHaveBeenCalledTimes(1);
+      expect(onData.mock.calls.length).toBe(deliveries);
+
+      // Zoomed in to a view that fits: read, and the reader's line goes away.
+      map.zoom = 14;
+      map.bounds = [10.0, 42.0, 10.05, 42.04];
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(onData.mock.calls.at(-1)![0].features.length).toBeGreaterThan(0));
+      expect(onData.mock.calls.at(-1)![0].features.length).toBeLessThanOrEqual(50);
+      expect(onTooDense).toHaveBeenLastCalledWith(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the default budget lets an ordinary view through", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const onData = vi.fn();
+    const onTooDense = vi.fn();
+    const loader = new FlatGeobufLoader(fakeMap(12, AREA) as never, "/points.fgb", loadModeOf({ load: "viewport" }), {
+      onData,
+      onError: vi.fn(),
+      onTooDense,
+    });
+    await loader.start();
+    expect(onData.mock.calls.at(-1)![0].features).toHaveLength(400);
+    expect(onTooDense).not.toHaveBeenCalled();
   });
 });

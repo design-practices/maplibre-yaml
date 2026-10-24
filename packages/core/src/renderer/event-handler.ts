@@ -40,6 +40,8 @@ type PopupContent = z.infer<typeof PopupContentSchema>;
 export interface EventHandlerCallbacks {
   onClick?: (layerId: string, feature: any, lngLat: LngLat) => void;
   onHover?: (layerId: string, feature: any, lngLat: LngLat) => void;
+  /** A one-time author hint about a layer (see `InteractionDeps.hint`). */
+  onHint?: (layerId: string, message: string) => void;
 }
 
 export type {
@@ -101,6 +103,9 @@ export class EventHandler {
       showPopup: (content, feature, lngLat, options) =>
         this.showPopup(content, feature, lngLat, options),
       hidePopup: () => this.hidePopup(),
+      ...(this.callbacks.onHint
+        ? { hint: (message: string, layerId: string) => this.callbacks.onHint!(layerId, message) }
+        : {}),
       hostHandlers,
       policy,
     };

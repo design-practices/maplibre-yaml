@@ -52,7 +52,7 @@ coast; click one for its name. The gallery's
 | `load:` | What it reads | Needs |
 |---|---|---|
 | `all` (default) | The whole file, once | Any web server |
-| `viewport` | Only the features in view, read again as the map moves; nothing below `minzoom` (default 10) | A file with a **spatial index**, and a server with **range requests** |
+| `viewport` | Only the features in view, read again as the map moves; nothing below `minzoom` (default 10), and nothing for a view holding more than `maxFeatures` (default 150,000) | A file with a **spatial index**, and a server with **range requests** |
 
 ```yaml
 sources:
@@ -70,8 +70,15 @@ sources:
 - up to **10 MB**: read whole;
 - **10–50 MB**: read whole, with a console note suggesting `load: viewport`
   or PMTiles;
-- over **50 MB**: not read whole. A file with a spatial index is read by view
-  instead (with a console note); one without is refused, and the map says so.
+- over **50 MB**, or more than **250,000 features** (the header's count, so a
+  file of many small features counts too): not read whole. A file with a
+  spatial index is read by view instead (with a note for the author); one
+  without is refused, and the map says so.
+
+When a view holds more than `maxFeatures` features (`load: { mode: viewport,
+maxFeatures: 50000 }` to change it), nothing is read and readers see "Too many
+features to show here — zoom in to see them" until they zoom in; the file's
+index tells how many before any feature is downloaded.
 
 As a rule of thumb, a whole file is comfortable up to about 100,000 simple
 features (about 20 MB).
@@ -106,9 +113,12 @@ FlatGeobuf.
 
 - **"…is in EPSG:3857; MapLibre needs longitude/latitude (EPSG:4326)"**: the
   notice gives the fix, `ogr2ogr -t_srs EPSG:4326 out.fgb x.fgb`.
-- **"…is 180 MB, too large to load whole in a browser"**: add
-  `load: viewport` (the file needs a spatial index), or convert it to
-  PMTiles.
+- **"…is 180 MB (or has 400,000 features), too large to load whole in a
+  browser"**: add `load: viewport` (the file needs a spatial index), or
+  convert it to PMTiles.
+- **"Too many features to show here — zoom in to see them"**: the view holds
+  more than `maxFeatures`; zoom in, raise `maxFeatures` under `load:`, or
+  convert the file to PMTiles to draw it at every zoom.
 - **"…was read as JSON, but it is a FlatGeobuf file"**: the URL doesn't end
   in `.fgb`. Rename the file, or add `format: flatgeobuf` to the source.
 - **Hosting problems** (range requests, CORS): see
