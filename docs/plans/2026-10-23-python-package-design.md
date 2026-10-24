@@ -5,7 +5,7 @@ date: 2026-10-23
 topic: python-package
 beads: ml-37r.2 (this spike; parent epic ml-37r)
 target: a new `maplibre-yaml` package on PyPI, released at core's minor (0.9 → first release on the 0.9 line, or 0.10 if core moves first)
-status: proposed 2026-10-23 — awaiting maintainer answers in §13
+status: proposed 2026-10-23; preview revised 2026-10-24 after maintainer review (no feature cap, size guard, widget in v0). Awaiting answers in §13
 ---
 
 # Python package — design
@@ -44,12 +44,12 @@ Several decisions below change because of what the prototype showed:
 | D7 | **Validation in three tiers.** (1) The helpers produce valid documents by construction, and CI proves it (D12). (2) `doc.validate()` checks against the bundled JSON Schema with `jsonschema`: offline, fast, and **advisory**. (3) `doc.validate(strict=True)` / `mlym.check(path)` runs **`npx --yes @maplibre-yaml/cli@<stamped> validate -f json`** when Node is present, and that check is **authoritative**. In the spike, JSON Schema caught **3 of 8** common mistakes and `mlym validate` caught **8 of 8** ([§5](#5-d6d7--schema-sync-and-validation)). The docs say so plainly. |
 | D8 | **API v0: plain dicts with thin helpers, not a typed model of the schema.** A typed model would be a second copy of the zod schemas, and it would drift. `Map` / `Story` wrap a `doc` dict that you can always edit directly. They add `add()`, `chapter()`, `save()`, `to_yaml()`, `validate()` and the Jupyter repr. Alongside them: writers (`write_geoparquet`, `write_flatgeobuf`, `write_cog`, `write_pmtiles`), `classify()`/`breaks()` through mapclassify, story actions, `view()` (bounds → center/zoom), a GeoPandas-shaped `explore()`, and `load()` for editing hand-written YAML. Editing goes through a **ruamel.yaml round trip** that keeps comments, anchors, merge keys and `!html`. Core has no comment-preserving write seam: ml-0fg dropped that scope on 2026-08-08. ruamel is also YAML 1.2, which matches core's `yaml` parser; PyYAML is 1.1, where `yes`/`no`/`on` become booleans. |
 | D9 | **Saved paths are site-relative.** Core resolves a relative `url:` against the **page** (in Astro, against `public/`), **not** against the YAML file. `save(dir)` therefore writes data beside the YAML, as `dir/data/<source>.<ext>`, but writes each `url:` relative to the **site root**. The site root is found automatically (the nearest `public/` above `dir`) or set with `mlym.site_root(...)`. Without a site root, the URL is relative to the YAML's folder, and the docs and the repr say that the page must sit beside the YAML. |
-| D10 | **Inline preview: `_repr_mimebundle_` with a custom MIME type plus an HTML `srcdoc` fallback**, as Folium does. `application/vnd.maplibre-yaml+yaml` carries the **saved** YAML, with `{path, site_path, core}` in the output metadata, so the notebook→site converter emits `<ml-map src>` instead of an iframe. `text/html` is an iframe whose document loads `<ml-map>` (`<ml-scrollytelling>` for stories) from the CDN. The document is **gzip+base64** in the srcdoc, decoded with `DecompressionStream`. A small inline script **chooses maplibre-gl 6, or 5 in an opaque origin** (a `file://` export, a sandboxed output frame), because v6's worker cannot start there. Data is inlined with only the columns the map uses, at most 5,000 features per source by default. Breaks are explicit, so the classes still match the full data. Measured outputs are **4.1 KB** for the 96-tract choropleth and **128 KB** for 5,000 points. anywidget is Phase 2 (`[widget]` extra), and a "playground" link is Phase 2. |
-| D11 | **Interop.** Python ≥ 3.12 (numpy 2.5, mapclassify 2.11 and rasterio 1.5 all require it; Colab runs 3.12). The base install has only two dependencies, `ruamel.yaml` and `jsonschema`, so the YAML/story path also works in Pyodide/JupyterLite. Extras: **`[geo]`** (geopandas ≥ 1.0, pyarrow ≥ 16; shapely 2 and pyogrio come with geopandas), **`[classify]`** (mapclassify ≥ 2.8), **`[raster]`** (rasterio ≥ 1.4), **`[widget]`** (anywidget, Phase 2), and **`[all]`**. `explore()` takes the arguments of `GeoDataFrame.explore()`, so a Folium user's one-liner keeps working. Lonboard-scale data (ml-37r.5, NYC PLUTO) goes to files read by view, or to PMTiles. It never goes inline. |
-| D12 | **Tests and CI.** pytest on 3.12 and 3.14, plus a 3.13 base-only leg. The **round trip**: every document the examples and tests write is validated by the workspace CLI in strict mode, in one batched call. A **browser check** `e2e/python-output.spec.ts`: the CI `python` job writes GeoParquet, FlatGeobuf, COG and a story into `e2e/.generated/python/`, then Playwright loads them with `<ml-map>`. The spec skips when that directory is absent, so `pnpm verify:browser` stays hermetic. ruff (lint + format) and pyright (basic mode, `py.typed`). |
+| D10 | **Inline preview: `_repr_mimebundle_` with a custom MIME type plus an HTML `srcdoc` fallback**, as Folium does. **There is no feature cap: all the data is embedded, as Folium does, but compactly.** `application/vnd.maplibre-yaml+yaml` carries the **saved** YAML, with `{path, site_path, core}` in the output metadata, so the notebook→site converter emits `<ml-map src>` instead of an iframe. `text/html` is an iframe that loads `<ml-map>` (`<ml-scrollytelling>` for stories) from the CDN, with maplibre-gl 6, or 5 in an opaque origin (§7.3). Each GeoDataFrame source is embedded **in full as GeoParquet** (used columns only, WKB rounded to 1e-6°, brotli, base64) and read by **core's own GeoParquet reader from a `blob:` URL** (verified on core 0.9.1, so no core change). **A size guard replaces the cap**, using core's whole-file constants: up to 10 MiB embeds silently; 10–25 MiB embeds with a note; 25–50 MiB needs `preview(embed=True)`; above 50 MiB nothing is embedded. Each note offers `m.save()` + `mlym preview`, `m.widget()`, or `preview(sample=…)`. The IOPub data-rate limit does not apply to display or comm messages (only `stream`, since notebook 5.1; verified). Measured: 96 tracts 14.9 KB; 20k points 569 KB, 2.3 s; 100k polygons **8.1 MB, 6.8 s**, against Folium's **80.6 MB, 82 s**. **anywidget `m.widget()` moves into v0** (`[widget]` extra): binary comm, nothing saved in the notebook (2.4 KB for 100k polygons), camera back to Python. |
+| D11 | **Interop.** Python ≥ 3.12 (numpy 2.5, mapclassify 2.11 and rasterio 1.5 all require it; Colab runs 3.12). The base install has only two dependencies, `ruamel.yaml` and `jsonschema`, so the YAML/story path also works in Pyodide/JupyterLite. Extras: **`[geo]`** (geopandas ≥ 1.0, pyarrow ≥ 16; shapely 2 and pyogrio come with geopandas), **`[classify]`** (mapclassify ≥ 2.8), **`[raster]`** (rasterio ≥ 1.4), **`[widget]`** (anywidget, v0), and **`[all]`**. `explore()` takes the arguments of `GeoDataFrame.explore()`, so a Folium user's one-liner keeps working. Lonboard-scale data (ml-37r.5, NYC PLUTO) previews through `m.widget()` (binary comm, read by view above 50 MiB) and ships as files read by view, or as PMTiles. |
+| D12 | **Tests and CI.** pytest on 3.12 and 3.14, plus a 3.13 base-only leg. The **round trip**: every document the examples and tests write is validated by the workspace CLI in strict mode, in one batched call. A **browser check** `e2e/python-output.spec.ts`: the CI `python` job writes GeoParquet, FlatGeobuf, COG and a story into `e2e/.generated/python/`, then Playwright loads them with `<ml-map>`. The same spec also asserts that the preview's `blob:` GeoParquet path works (whole and `load: viewport`), and that the size guard behaves. The spec skips when that directory is absent, so `pnpm verify:browser` stays hermetic. ruff (lint + format) and pyright (basic mode, `py.typed`). |
 | D13 | **Docs.** A Starlight section **"Python & notebooks"** with three pages. "Maps from Python" is the guide; it takes over the scope of the ml-37r.4 guide. "Notebooks and your site" covers preview and the converter MIME. The third is the **API reference**, generated at docs build from a committed `docs/src/data/python-api.json` (a `griffe` dump, checked for freshness by the Python CI job), so the docs build still needs no Python. `llms.txt` gets a short "Python" section: install, a ten-line example, and a link. `llms-full.txt` gets the API summary. The PyPI README is pin-synced by adding `packages/python/README.md` to `sync-cdn-pins.mjs` ROOTS. |
 | D14 | **Catalog hook, not catalog code.** `add()` accepts any object with `__maplibre_yaml_source__() -> dict`, and optionally `__maplibre_yaml_bounds__()` for framing. That is the seam the Portolan/STAC work (ml-37r.6) plugs into, for example a later `mlym.stac.asset(item, "data")`. This spike designs nothing else for catalogs. |
-| D15 | **Phasing.** v0 for the course is about **16 working days** ([§11](#11-phasing-and-effort)). It covers the package, release and CI, writers, builder, classify, preview, validation, docs, and the e2e check. Phase 2 is about **9 days**: an anywidget with full-data preview and camera and clicks back to Python, a playground link, offline mode, and story preview polish. Phase 3 covers a JupyterLab MIME-renderer extension, catalog sources, and JupyterLite. |
+| D15 | **Phasing.** v0 for the course is about **20 working days** ([§11](#11-phasing-and-effort)). It covers the package, release and CI, writers, builder, classify, the preview with its size guard, **the anywidget preview**, validation, docs, and the e2e check. Phase 2 is about **5 days**: a playground link, `python -m` forwarding, offline mode, and source helpers. Phase 3 covers a JupyterLab MIME-renderer extension, catalog sources, and JupyterLite. |
 
 ---
 
@@ -358,7 +358,7 @@ on eight mutations of the generated choropleth:
 
 | Area | v0 surface |
 |---|---|
-| Documents | `Map(id, *, basemap="positron", center=None, zoom=None, title=None, **config)` · `.add(data, *, id, type="fill", source=None, format="geoparquet", viewport=False, classify=None, popup=None, hover=None, paint=None, label=None, legend=None, fit=None, **layer)` · `Story(id, *, title, map, theme="light")` · `.chapter(id, title, text=None, *, html=None, frame=None, alignment="left", on_enter=None, on_exit=None, **camera)` · `.doc` (the dict) · `.to_yaml()` · `.to_dict()` · `.save(dir, name=None)` · `.validate(strict=False)` · Jupyter repr |
+| Documents | `Map(id, *, basemap="positron", center=None, zoom=None, title=None, **config)` · `.add(data, *, id, type="fill", source=None, format="geoparquet", viewport=False, classify=None, popup=None, hover=None, paint=None, label=None, legend=None, fit=None, **layer)` · `Story(id, *, title, map, theme="light")` · `.chapter(id, title, text=None, *, html=None, frame=None, alignment="left", on_enter=None, on_exit=None, **camera)` · `.doc` (the dict) · `.to_yaml()` · `.to_dict()` · `.save(dir, name=None)` · `.validate(strict=False)` · Jupyter repr · `.preview(*, sample=None, simplify=None, embed=None, height=420)` · `.widget()` (anywidget: camera, click and selection traitlets) |
 | Editing | `load(path)` → a document with ruamel round-trip state · `.save()` writes back in place |
 | Data | `write_geoparquet(gdf, path, *, viewport=False, row_group_size=None, compression="snappy")` · `write_flatgeobuf(gdf, path)` · `write_cog(src, path, *, compress="DEFLATE", resampling="bilinear")` · `write_pmtiles(gdf, path, *, layer, minzoom=0, maxzoom=None)` |
 | Classes | `classify(gdf, field, *, scheme="quantile", k=5, palette="viridis" or a list of colours, reverse=False, format=None, no_data=None, normalize=None)` → a `classify:` dict with **explicit `breaks:`** · `breaks(values, scheme, k)` · `categories(gdf, field, palette=…)` · `palettes` |
@@ -399,7 +399,7 @@ on eight mutations of the generated choropleth:
 classes identical in four places:
 
 - the analysis;
-- a subsampled preview;
+- a sampled preview (`preview(sample=…)`);
 - a source read by view or from PMTiles, where core refuses `method:`;
 - the site.
 
@@ -535,25 +535,37 @@ mlym.explore(gdf, column="pop_density", scheme="quantiles", k=5, cmap="viridis")
 
 ## 7. D10 — Inline Jupyter preview
 
+*Revised 2026-10-24 after maintainer review. The first draft capped previews
+at 5,000 features per source. That cap is gone. The preview now embeds all the
+data, encoded compactly, and a size guard takes the cap's place. The
+measurements are in [§7.5](#75-measured-sizes-and-time-to-first-render).*
+
 ### 7.1 Options compared
 
-| | Mimebundle + HTML `srcdoc` (Folium-style) | anywidget | Open `mlym preview` / docs playground |
+| | Mimebundle + HTML `srcdoc` (Folium-style) | anywidget (`m.widget()`) | Save + `mlym preview` / docs playground |
 |---|---|---|---|
-| Install | none (base package) | `anywidget` + a frontend widget manager | Node (preview), or a browser tab (playground) |
-| Two-way (camera, clicks → Python) | no | **yes** | no |
-| Exported notebook / nbconvert / site build | **renders**; the converter reads the custom MIME | needs saved widget state; otherwise blank | nothing in the notebook |
-| Notebook size | the inlined data, **gzip+base64** (4.1 KB / 128 KB measured) | small (state not saved by default) | none |
+| Install | none (base package) | `[widget]` extra (anywidget) + a frontend widget manager | Node (preview), or a browser tab (playground) |
+| Two-way (camera, clicks → Python) | no | **yes**: camera read back in Python, verified in JupyterLab 4.6 | no |
+| Exported notebook / nbconvert / site build | **renders**; the converter reads the custom MIME | blank without saved widget state; the repr carries a short HTML note and the custom MIME | nothing in the notebook |
+| How data travels | all of it, as base64 GeoParquet in the output | **binary comm buffer**, no base64, **not stored in the notebook** | files on disk |
+| Notebook size, 100k polygons | **8.1 MB** | **2.4 KB** (measured) | none |
 | Offline | needs the CDN (as Folium does) | the ESM can be bundled in the wheel; basemap still remote | preview yes (local CLI), playground no |
 | Trust prompt | untrusted notebooks strip it; re-run or "Trust" | widgets need a live kernel | n/a |
-| JupyterLab / VS Code / Colab | all render `text/html` (Lab and nbconvert verified here; VS Code and Colab still to verify, Q7) | all support anywidget (Colab via its custom widget manager) | n/a |
-| Large data | subsample (5,000 per source) | **full data**: send the GeoParquet bytes over the comm, then a `blob:` URL that core reads | full data from files |
+| JupyterLab / VS Code / Colab | Lab and nbconvert verified here; VS Code and Colab still to verify (Q7) | Lab verified here; VS Code supports anywidget; Colab via its custom widget manager (to verify) | n/a |
+| Data size | everything up to the size guard (§7.4) | beyond 50 MiB, via `load: viewport` from a `blob:` URL (verified) | unlimited (files, PMTiles) |
 
-**Chosen:** the mimebundle is v0, and it is the only one of the three that
-survives export, which is what the course's notebook→site pipeline needs.
-anywidget comes in Phase 2 as `mlym.Widget(m)`, for exploring big data and for
-two-way state. Its repr returns the widget view *and* the same `text/html` +
-custom MIME, so exports still work. The playground link (`#code/` share
-fragment, inline-data documents only) is Phase 2, half a day.
+**Chosen.** The mimebundle stays the default `repr`. It is the only option
+that survives export, and the course's notebook→site pipeline depends on that.
+**anywidget moves into v0** as `m.widget()` (the `[widget]` extra), for three
+reasons:
+
+- Big data is the course's main Lonboard use (NYC PLUTO, ml-37r.5). The widget
+  is how that data reaches the notebook without bloating the file.
+- It is the escape route the size guard offers.
+- It costs about 3 days, because it reuses the same preview page and the same
+  bytes.
+
+The playground link stays in Phase 2.
 
 ### 7.2 How the bundle is built
 
@@ -564,21 +576,61 @@ fragment, inline-data documents only) is Phase 2, half a day.
   readable in the `.ipynb`. **The converter rule** for the template's
   `build-content.py`: an output with this MIME type becomes
   `<ml-map src="{site_path}">` (or the Astro `<Map>`), and its `text/html` is
-  dropped. The site then serves the real files, not an iframe of inlined data.
-  The current pipeline's 5–7 MB iframes disappear.
+  dropped. The site then serves the real files, not an iframe of embedded
+  data. The current pipeline's 5–7 MB iframes disappear.
 - **`text/html`:** `<iframe srcdoc="…" style="width:100%;height:420px;border:0" loading="lazy">`.
   The srcdoc page:
-  - loads `register.js` from `unpkg.com/@maplibre-yaml/core@<stamped minor>`;
-  - carries the document gzip-compressed and base64-encoded (no HTML escaping
-    needed), decoded with `DecompressionStream('gzip')` and assigned to
-    `el.config`;
-  - inlines each GeoDataFrame source as GeoJSON with **only the used columns**
-    (found the way core's column pruning does: `["get"]`, `property:`,
-    `field`, `normalize`), with coordinates at 6 decimals and at most 5,000
-    features sampled with a fixed seed. A note under the frame says "showing
-    5,000 of 20,000 features".
+  - loads `register.js` from `unpkg.com/@maplibre-yaml/core@<stamped minor>`,
+    with the v6/v5 picker of §7.3;
+  - carries the document **without its data**, gzip+base64-encoded;
+  - carries **each GeoDataFrame source in full, as GeoParquet bytes in
+    base64**:
+    - only the columns the map uses (found the way core's column pruning
+      does: `["get"]`, `property:`, `field`, `normalize`);
+    - WKB geometry, coordinates rounded to 1e-6° (about 11 cm; the saved
+      files keep full precision);
+    - brotli compression;
+  - turns those bytes into a `blob:` URL with `fetch("data:…;base64,…").blob()`
+    and `URL.createObjectURL`, then sets the source to
+    `{type: geojson, format: geoparquet, url: <blob:…>}`.
+  - Core 0.9.1's own GeoParquet reader reads the blob. It is the same code
+    that reads the saved file on the site, with the same column projection.
 - A Folium-style line under the frame shows when the iframe was stripped:
   "Run the cell (or File → Trust Notebook) to see the map".
+- A size line shows when the embedded data exceeds 1 MB ("12.4 MB of data in
+  this output"), and the §7.4 notes appear above the thresholds.
+
+**Why GeoParquet in a blob, not GeoJSON.** The first draft assigned the
+FeatureCollection straight into `el.config.sources.x.data`. At 100k polygons
+that took **32.9 s and 2.8 GB of heap** to first render. The same data behind
+a `blob:` URL took **6.2 s (GeoJSON) or 6.8 s (GeoParquet)**. So the data
+always goes through a URL. Between the two formats, at 100k polygons:
+
+- **Size:** a wash, 6.06 MB for gzip GeoJSON against 6.10 MB for
+  brotli+rounded GeoParquet.
+- **Python encode time:** GeoParquet wins. pyogrio GeoJSON at 6 digits plus
+  gzip took 4.4 s. Rounding plus brotli GeoParquet took 2.6 s. Plain
+  `to_json` took 5.4–9.5 s.
+- **What it exercises:** GeoParquet exercises the site's real reader.
+- **Widget reuse:** the widget sends the same bytes over the comm unencoded.
+
+GeoJSON is smaller only for tiny data (tracts: a 4.2 KB page against
+14.9 KB), which doesn't matter.
+
+**Does core accept a `blob:` URL? Yes, no core change needed.** Verified in
+Chromium with core 0.9.1:
+
+- whole-file reads from `blob:` and from `data:` URLs;
+- `load: viewport` from a `blob:` URL: 100k polygons sorted and with a bbox
+  column (15.0 MB), rendered with 184,575 tile features and no errors or
+  notices;
+- `format: geoparquet` is needed, because a `blob:` URL has no extension.
+
+The fetch helpers' HEAD and Range paths cope. One caveat: with
+`load: viewport`, nothing loads below `minzoom` (default 10), by design.
+Because a future core change, such as a HEAD-first size probe (HEAD is not
+defined for `blob:` URLs), could break this, the Python CI's e2e asserts it
+(D12).
 
 ### 7.3 The origin finding
 
@@ -608,17 +660,140 @@ checks `location.protocol === "file:"`. Inside a srcdoc it sees
 `about:srcdoc`, so the user gets the raw worker error. The check should also
 look at `self.origin === "null"` (a small patch with a changeset).
 
-### 7.4 Sizes (measured, prototype)
+### 7.4 The size guard (replaces the feature cap)
 
-| Output | Before (HTML-escaped JSON srcdoc) | Shipped (gzip+base64) |
+**What Folium does, verified in folium 0.20.0, branca and geopandas 1.2:**
+
+- `folium.GeoJson(data, embed=True)` embeds the data by default.
+  `embed=False` is only allowed with a file link or URL
+  (`folium/features.py`).
+- `GeoDataFrame.explore()` passes the whole frame to `folium.GeoJson`, with
+  no sampling (`geopandas/explore.py`).
+- branca's `Figure._repr_html_` HTML-escapes the whole rendered page into
+  `<iframe srcdoc="…">`, next to the "Make this Notebook Trusted to load
+  map" line (`branca/element.py`).
+
+So Folium has no cap, and every quote in the JSON becomes `&quot;`.
+Measured with `explore()`:
+
+- 96 tracts: 88.8 KB;
+- 20k points: 8.6 MB;
+- 100k polygons: **80.6 MB** of output, 16.8 s in Python, **82 s** until
+  Leaflet painted (SVG, one DOM node per feature).
+
+**The IOPub data-rate limit is not what limits this.** I checked it, because
+the review named it.
+
+- **Source.** Since classic notebook **5.1** (September 2017), and in every
+  jupyter_server release checked (1.24, 2.0, 2.2.1, 2.10, 2.14 and 2.21.1),
+  `_limit_rate` counts bytes only for `stream` messages: `byte_count = … if
+  msg_type == "stream" else 0` (`jupyter_server/services/kernels/connection/channels.py`).
+  Only notebook 5.0.0 counted every message.
+- **The settings.** The limit is `iopub_data_rate_limit = 1000000` bytes/s
+  over `rate_limit_window = 3` s. It now lives on
+  `ZMQChannelsWebsocketConnection`, and `ServerApp.*` is a deprecated alias.
+- **Display outputs** (`display_data`/`execute_result`, where Folium's
+  iframe and ours go) and **comm messages** (anywidget) don't count toward
+  the byte rate. Comm messages still count toward the 1,000 msgs/s message
+  rate, so the widget sends one binary message per data change, not chunks.
+- **Measured** against a live jupyter_server 2.21.1 over its websocket: a
+  **30 MB** `display(HTML(…))` arrived whole, and a **5 MB `print()`** was
+  replaced by the "IOPub data rate exceeded" notice.
+- **VS Code** talks to local kernels directly, without jupyter_server, so the
+  limit doesn't apply there at all.
+
+**What students actually see, and how to avoid it.**
+
+- **"IOPub data rate exceeded. The Jupyter server will temporarily stop
+  sending output…"** appears as red stderr text in the cell, with the output
+  cut off. It comes from **printing** big things, such as
+  `print(gdf.to_json())`, a large `gdf.to_dict()` echoed as text, or a loop
+  that prints per feature. It never comes from a map preview.
+- The package never prints data. Its notes are one line long. The docs'
+  troubleshooting entry says: don't print data; look at `gdf.head()`; if you
+  really must, start Jupyter with
+  `--ZMQChannelsWebsocketConnection.iopub_data_rate_limit=1e10`.
+- **What a big preview actually costs** is notebook file size, time to
+  first render, and memory in the tab:
+  - an `.ipynb` grows by about 1.33× the embedded GeoParquet (base64);
+  - GitHub warns on files over 50 MiB and rejects them over 100 MiB;
+  - core itself refuses to read more than 50 MiB of projected columns whole
+    (`WHOLE_FILE_MAX_BYTES`), and warns above 10 MiB.
+
+The guard reuses core's two constants. It measures the embedded GeoParquet
+bytes, summed over the sources in the output, before base64:
+
+| Embedded data | What the preview does |
+|---|---|
+| ≤ 10 MiB (core's warn size; about 13 MB in the notebook; about 160k simple polygons or about 500k points with 1–2 columns) | Embeds everything. Shows a size line above 1 MB. |
+| 10–25 MiB | Embeds everything, with a note: "This map adds 21 MB to the notebook. To keep the notebook small: `m.widget()`, or `m.save(…)` and `mlym preview`. For a quick look: `m.preview(sample=50_000)`." |
+| 25–50 MiB | **Not embedded unless you opt in** (`m.preview(embed=True)`). One such output already makes the notebook 33–67 MB, past GitHub's 50 MiB warning. The cell shows the note with the three options. |
+| > 50 MiB | Not embedded, and no opt-in: core would refuse the whole-file read. The note offers `m.widget()` (it switches to `load: viewport`, which reads from the blob in the browser) or save + `mlym preview` / PMTiles. |
+
+**The options the note offers:**
+
+- **(a)** `m.save("site/public/maps/x")` writes the real files, then
+  `mlym preview site/public/maps/x/map.yaml` (or `mlym.preview_server(m)`
+  through the pinned npx) serves them locally with range requests. This is
+  the same path the site takes.
+- **(b)** `m.widget()` streams the GeoParquet as one binary comm buffer
+  (Lonboard's approach). Nothing is stored in the notebook. Above 50 MiB it
+  sends the viewport-ready file (bbox column, Hilbert sort, small row
+  groups), and the map reads by view.
+- **(c)** `m.preview(sample=n)` (a seeded random sample, with "showing n of
+  N" under the map) or `m.preview(simplify=metres)` (fewer vertices, for
+  polygons) for a quick look. Breaks are explicit, so the classes still match
+  the full data. Only the legend's end labels come from the sample.
+
+The thresholds are `mlym.options.preview_warn_bytes`/`preview_embed_bytes`,
+so a course can lower them (Q11).
+
+### 7.5 Measured sizes and time to first render
+
+Setup: Chromium (Playwright 1.62, SwiftShader software GL), core 0.9.1 and
+maplibre-gl 6.15 from the CDN, a fresh browser context per run (so CDN
+loading is included, about 1 s), and the page served over http. Time runs
+from navigation to the source having features with `map.loaded()`. Medians
+are of 1–2 runs. Real GPUs are faster. The comparison between columns is
+what matters.
+
+| Data (columns embedded) | Data object in config (first draft) | GeoJSON gzip → `blob:` | **GeoParquet brotli → `blob:` (chosen)** | Folium `explore()` |
+|---|---|---|---|---|
+| 96 tracts (2) | 4.2 KB, 1.6 s | 4.3 KB, 1.3 s | **14.9 KB, 1.5–2.2 s** | 88.8 KB, 0.24 s |
+| 20k points (1) | 511 KB, 4.2 s | 511 KB, 2.2 s | **569 KB, 2.3 s** | 8.6 MB, 4.8 s |
+| 100k octagons (2) | 8.08 MB, **32.9 s, 2.8 GB heap** | 8.08 MB, 6.2 s, 0.2 GB | **8.13 MB, 6.8 s, 0.4 GB** | **80.6 MB, 82 s**, 0.6 GB |
+
+Sizes are the whole output page as it sits in the notebook. Folium's are its
+`_repr_html_`.
+
+| Python-side encode, 100k polygons | Time | Bytes |
 |---|---|---|
-| Choropleth, 96 polygons, 2 used columns | 31,275 B | **4,077 B** |
-| 5,000 of 20,000 points | 1,011,910 B | **128,053 B** |
-| Whole executed notebook (5 cells, 3 maps) | 1,081,253 B | **142,997 B** |
-| nbconvert HTML of it | 1,363,153 B | 424,593 B (mostly nbconvert's CSS) |
-| Custom MIME payload (saved YAML) | — | 850 B |
+| GeoParquet, rounded 1e-6, brotli (chosen) | 2.6 s | 6.10 MB |
+| GeoParquet, zstd (default level) | 0.2 s | 8.73 MB |
+| GeoJSON via pyogrio, 6 digits, + gzip | 4.4 s | 6.23 MB |
+| `gdf.to_json()` + gzip | 6.6 s | 9.49 MB |
+| Folium `explore()` (whole output) | 16.8 s | 80.6 MB |
 
-`nbconvert --to notebook --execute` of that notebook took 7.3 s.
+In JupyterLab 4.6.4 (jupyter_server 2.21.1):
+
+- **Embedded:** the 100k-polygon output saved as an **8,137,282-byte
+  `.ipynb`**, and the map drew in the output frame (5,062 tile features at
+  z14).
+- **Widget:** the same 100k polygons were sent as a 6.1 MB binary comm
+  buffer. They reached the frame 4.1–4.7 s after Run, which includes
+  generating and encoding the data. The map drew. After a pan,
+  `w.camera` read `{'center': [-73.9, 40.7], 'zoom': 13}` in Python. The
+  saved notebook was **2,452 bytes**, with no widget state (JupyterLab's
+  default).
+
+So against Folium, the preview shows all the data, as Folium does, in about
+**a tenth of the notebook size**, and on 100k polygons it paints about
+**12× sooner**. That is geojson-vt tiling in a worker against one SVG node
+per feature.
+
+The first draft's numbers (4.1 KB tracts, 128 KB for 5,000 sampled points)
+are superseded. `nbconvert --to notebook --execute` of the 5-cell spike
+notebook took 7.3 s.
 
 ---
 
@@ -646,11 +821,16 @@ look at `self.origin === "null"` (a small patch with a changeset).
     shows.
   - The full feature inventory is ml-37r.5's job.
 - **Lonboard users.** Lonboard's strength is millions of features over
-  GeoArrow in a widget. The v0 inline preview subsamples, and the site reads
-  files: GeoParquet with `viewport=True`, or `write_pmtiles` for the largest.
-  Where the switch to tiles has to happen (NYC PLUTO, about 850k polygons) is
-  ml-37r.5's benchmark. Phase 2's widget closes the in-notebook gap by sending
-  GeoParquet bytes to the browser, not inlined JSON.
+  GeoArrow in a widget. In v0:
+  - `m.widget()` does the same job: GeoParquet bytes over one binary comm
+    buffer, nothing stored in the notebook, and reading by view above
+    50 MiB;
+  - the embedded preview shows everything up to the size guard (§7.4);
+  - the site reads files: GeoParquet with `viewport=True`, or
+    `write_pmtiles` for the largest.
+
+  Where the switch to tiles has to happen on the site (NYC PLUTO, about
+  850k polygons) is ml-37r.5's benchmark.
 - **The base install** (ruamel.yaml + jsonschema) needs no compiled wheels.
   Authoring YAML and stories therefore works in JupyterLite/Pyodide. The
   writers need `[geo]`. Course instructions:
@@ -681,7 +861,12 @@ The new `python` job in `ci.yml`:
    - only the used columns are read;
    - the classes and legend match Python's breaks;
    - the COG draws;
-   - a chapter's `setFilter` applies on scroll.
+   - a chapter's `setFilter` applies on scroll;
+   - the **preview path**: the `text/html` output renders all the features of
+     a 100k-polygon source from its embedded `blob:` GeoParquet; a
+     viewport-ready file reads by view from a `blob:` URL; and the size
+     guard's notes appear at the 10, 25 and 50 MiB thresholds (tested with
+     the thresholds lowered).
 
    The spec is the demo page too (the browser-tests-as-demos rule). It skips
    when the directory is absent, so `verify:browser` stays hermetic and runs
@@ -691,7 +876,12 @@ The new `python` job in `ci.yml`:
 
 A preview test also renders the `text/html` output in Chromium, both over
 http and from `file://`, and asserts the v6/v5 choice of §7.3, so a
-maplibre-gl change can't silently blank notebook previews.
+maplibre-gl change can't silently blank notebook previews. The widget gets
+a JupyterLab smoke test in the same job, about 1 minute: start `jupyter lab`,
+run a 3-cell notebook, check that the map draws, and check that `w.camera`
+changes after a pan. That is the prototype's harness, made robust. Probe at
+z14: geojson-vt drops sub-pixel polygons at low zoom, which fooled the first
+probe.
 
 ---
 
@@ -702,9 +892,10 @@ maplibre-gl change can't silently blank notebook previews.
     when to use it (sizes from the large-data guide), classify, stories,
     editing YAML, validation tiers, and paths/site root. This takes over
     ml-37r.4's scope, and that bead points here.
-  - **Notebooks and your site:** the preview, what an export can and can't
-    show, the custom MIME type and the converter rule (§7.2), and migrating
-    from Folium and Lonboard.
+  - **Notebooks and your site:** the preview and its size guard, `m.widget()`,
+    what an export can and can't show, the custom MIME type and the
+    converter rule (§7.2), a troubleshooting entry for "IOPub data rate
+    exceeded" (§7.4), and migrating from Folium and Lonboard.
   - **Python API reference:** generated at docs build by
     `docs/scripts/generate-python-reference.mjs` from a committed
     `docs/src/data/python-api.json`, written by `griffe dump maplibre_yaml`,
@@ -724,7 +915,7 @@ maplibre-gl change can't silently blank notebook previews.
 
 Effort is in focused working days for one developer, including tests.
 
-### v0, for the course: about 16 days
+### v0, for the course: about 20 days
 
 | Unit | Work | Est. |
 |---|---|---|
@@ -734,23 +925,23 @@ Effort is in focused working days for one developer, including tests.
 | Y4 | Writers: GeoParquet (whole and viewport), FlatGeobuf, COG, PMTiles (tippecanoe), tests | 1.5 d |
 | Y5 | Documents: `Map`/`Story`, defaults that validate, site-root paths, YAML style representer, `load()`/save round trip, actions, `view()`, `SourceLike` | 2.5 d |
 | Y6 | Classify: `classify`/`breaks`/`categories`; core `palettes.json` emit (core changeset) | 1 d |
-| Y7 | Preview: mimebundle, v6/v5 picker, column pruning + subsample, story frame, trust line; manual pass in JupyterLab, VS Code, Colab | 2 d |
+| Y7 | Preview: mimebundle, v6/v5 picker, column projection, GeoParquet → `blob:` embedding, size guard (thresholds, notes, `sample=`/`simplify=`/`embed=`), story frame, trust line; manual pass in JupyterLab, VS Code, Colab | 2.5 d |
+| Y7b | `m.widget()` (anywidget, `[widget]` extra): one binary comm buffer per data change, the same preview page, viewport-ready bytes above 50 MiB, camera/click/selection traitlets, a repr with a short HTML note + the custom MIME; JupyterLab smoke test in CI | 3 d |
 | Y8 | Validation tiers: advisory (messages narrowed by type) and pinned npx; `explore()` | 1 d |
-| Y9 | CI `python` job, round-trip fixture, e2e fixtures + `python-output.spec.ts` | 1.5 d |
+| Y9 | CI `python` job, round-trip fixture, e2e fixtures + `python-output.spec.ts` (including the blob and guard cases) | 2 d |
 | Y10 | Docs: two guide pages, generated API reference, llms.txt section, README | 2 d |
 | Y11 | Core patch: srcdoc/opaque-origin friendly card (changeset) | 0.5 d |
 
-### Phase 2: about 9 days
+### Phase 2: about 5 days
 
-- `mlym.Widget` (anywidget `[widget]`): GeoParquet bytes over the comm, then a
-  `blob:` URL, for full-data preview; camera, click and selection traitlets
-  back to Python; the repr keeps the HTML fallback. 4 d.
-- A "playground" link for inline-data documents. 0.5 d.
+- A "playground" link for small documents. 0.5 d.
 - `python -m maplibre_yaml validate|preview`, forwarding to the pinned npx. 0.5 d.
 - Offline preview: core and maplibre-gl 5 shipped in the wheel and served
   through a tiny Jupyter server extension. 2 d.
 - `cog_source()`/`pmtiles_source()` helpers and the polish the course asks
   for. 2 d.
+
+The anywidget preview (4 d here in the first draft) moved into v0 as Y7b.
 
 ### Phase 3 (not estimated in detail)
 
@@ -803,8 +994,25 @@ scratchpad (`python-spike/`). It is a mock monorepo:
   - HTML-escaping a JSON srcdoc inflates it about 1.6×, and gzip+base64 cuts
     it about 8× (D10);
   - the CLI must be pinned exactly (§5.1);
-  - the classify legend's end labels in a preview come from the subsample's
-    min/max. The breaks are unaffected; this is documented.
+  - the classify legend's end labels in a sampled preview come from the
+    sample's min/max. The breaks are unaffected; this is documented.
+- **Preview revision, 2026-10-24.** Bench pages in `bench/`, the JupyterLab
+  harness in `jroot/` (ports 5020–5023), everything deleted afterwards. The
+  results are in §7.4–§7.5:
+  - Folium/branca/geopandas embedding read from their source;
+  - the IOPub counting rule read in the notebook 5.0/5.1 and jupyter_server
+    1.24–2.21.1 wheels, and measured on a live server (30 MB display
+    delivered, 5 MB print limited);
+  - four embeddings × three datasets timed in Chromium, plus Folium;
+  - `blob:`/`data:` GeoParquet, whole and `load: viewport`, on core 0.9.1;
+  - in JupyterLab 4.6.4, an 8.1 MB embedded output and a 6.1 MB binary
+    widget transfer, with the camera read back in Python.
+- **Surprises in the revision:**
+  - assigning a large FeatureCollection to `el.config` costs about 5× more
+    time than a URL (32.9 s against 6.2 s) and 2.8 GB of heap;
+  - GeoParquet only matches gzip GeoJSON in size once coordinates are
+    rounded (8.7 MB → 6.1 MB at 100k polygons);
+  - the IOPub data-rate limit has ignored rich outputs since 2017.
 
 ---
 
@@ -822,3 +1030,5 @@ scratchpad (`python-spike/`). It is a mock monorepo:
 | Q8 | Python tests in presubmit when uv is present (fast subset), as proposed? Or CI-only? | In presubmit. It adds a few seconds and catches schema drift before CI does. |
 | Q9 | Default data format for `add(gdf)`: GeoParquet always, or GeoJSON under about 1 MB? | GeoParquet always. It teaches the course's format, and column pruning is free. `format="geojson"` stays available. |
 | Q10 | Should the "Python & notebooks" pages absorb ml-37r.4's guide? | Yes. Close ml-37r.4 into Y10. |
+| Q11 | Size-guard thresholds: quiet ≤ 10 MiB, note 10–25 MiB, opt-in 25–50 MiB, never above 50 MiB (embedded GeoParquet; the notebook grows by about 1.33×). The review suggested opt-in from about 50 MB. | These numbers: 10 and 50 are core's own whole-file constants, and 25 MiB keeps one output under GitHub's 50 MiB warning. A course can lower them with `mlym.options`. |
+| Q12 | Move `m.widget()` into v0 (+3 d, v0 becomes about 20 days)? | Yes. It is the course's Lonboard replacement for big data in the notebook, and the size guard's escape route. |
