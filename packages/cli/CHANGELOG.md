@@ -1,5 +1,18 @@
 # @maplibre-yaml/cli
 
+## 0.6.2
+
+### Patch Changes
+
+- 51e9505: `init` now prints its follow-up commands as `npx maplibre-yaml@latest …` (for example `npx maplibre-yaml@latest validate map.yaml`), and the `story` template's comment uses the same spelling. Without `@latest`, npx can silently reuse an older CLI it cached on an earlier run, so a reader following the printed steps could validate against an out-of-date schema.
+- Updated dependencies [491aafc]
+- Updated dependencies [1b941a4]
+- Updated dependencies [b80ed39]
+- Updated dependencies [b80ed39]
+- Updated dependencies [b15c3bf]
+- Updated dependencies [b80ed39]
+  - @maplibre-yaml/core@0.9.2
+
 ## 0.6.1
 
 ### Patch Changes
