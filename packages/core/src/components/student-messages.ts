@@ -21,6 +21,7 @@ import { normalizeDocumentBase } from "../utils/document-base.js";
 import type { FormatFailure } from "../formats/errors.js";
 import { DEFAULT_STRINGS, defaultStrings, type Strings } from "../i18n/strings.js";
 import { formatNumber } from "../i18n/number-format.js";
+import { memoryEstimateGB, roundedRaise, SAFE_WHOLE_FILE_FEATURES } from "../formats/large-data.js";
 
 // Titles and hints a reader can meet on a map whose document WAS read (the
 // basemap failed, the worker couldn't start) come from the UI string table,
@@ -553,10 +554,20 @@ export interface WholeFileCost {
 }
 
 /**
+ * The cost of a suggested `maxFeatures`, as a hint words it: "about 3.5 GB of
+ * browser memory for parcel-like polygons, less for points".
+ */
+export function raiseCost(features: number, byView: boolean): string {
+  return `about ${memoryEstimateGB(features, byView)} GB of browser memory for parcel-like polygons, less for points`;
+}
+
+/**
  * Why a file is too large to load whole, in words — "has 856,687 features,
  * more than a page loads whole (400,000 features)" — and the `maxFeatures` that
- * would load it whole anyway, when the feature count is all that stands in
- * the way (not the bytes, nor the decoded size).
+ * would load it whole anyway: only when the feature count is all that stands
+ * in the way (not the bytes, nor the decoded size), and only up to
+ * {@link SAFE_WHOLE_FILE_FEATURES} — a raise that loads the whole of a
+ * citywide file froze the page for seconds (formats/large-data).
  */
 export function wholeFileCause(cost: WholeFileCost): { text: string; raise?: number } {
   const { features, size, decoded } = cost;
@@ -589,8 +600,8 @@ export function wholeFileCause(cost: WholeFileCost): { text: string; raise?: num
       ];
   const text = parts.join(" and ");
   if (!overFeatures || overDecoded || overBytes) return { text };
-  // The next round 10,000 above the count, with a little room.
-  return { text, raise: Math.ceil((features! * 1.05) / 10_000) * 10_000 };
+  const raise = roundedRaise(features!);
+  return raise <= SAFE_WHOLE_FILE_FEATURES ? { text, raise } : { text };
 }
 
 /** Why a file can't be read by view, and how to change that. */
@@ -688,7 +699,7 @@ export function describeFormatFailure(failure: FormatFailure): string {
       const ways = [
         blocked ? `${blocked.fix}${then}` : "",
         cause.raise !== undefined
-          ? `Or load it whole anyway with \`load: { maxFeatures: ${cause.raise} }\` (heavier on memory).`
+          ? `Or load it whole anyway with \`load: { maxFeatures: ${cause.raise} }\` (${raiseCost(cause.raise, false)}).`
           : "",
         gp && failure.decoded !== undefined && failure.limits?.decoded !== undefined && failure.decoded > failure.limits.decoded
           ? "Or list fewer `columns:`."

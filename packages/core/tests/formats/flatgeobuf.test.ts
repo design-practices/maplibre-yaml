@@ -520,7 +520,7 @@ describe("whole-file guard on the header's feature count (ml-37r.16)", () => {
     // The ways to change it: say so, raise maxFeatures (the count is all that is over), PMTiles.
     const note = (console.warn as unknown as { mock: { calls: string[][] } }).mock.calls.map((c) => c[0]).join("\n");
     expect(note).toContain("Add `load: viewport` to the source to say so");
-    expect(note).toContain("raise `load: { maxFeatures: 10000 }`");
+    expect(note).toContain("raise `load: { maxFeatures: 10000 }` (about 2 GB of browser memory");
     expect(note).toContain("tylertoo");
   });
 
@@ -604,7 +604,7 @@ describe("per-view budget (ml-37r.17)", () => {
       expect(onTooDense).toHaveBeenLastCalledWith(true);
       expect(onHint).toHaveBeenCalledTimes(1);
       expect(onHint.mock.calls[0]![0]).toMatch(/has about 4\d\d features in view, more than one read takes \(`maxFeatures`: 50\)/);
-      expect(onHint.mock.calls[0]![0]).toContain("raise `maxFeatures` under `load:` (heavier on memory)");
+      expect(onHint.mock.calls[0]![0]).toContain("raise `maxFeatures` to 10000 under `load:` (about 2.5 GB of browser memory");
       expect(onHint.mock.calls[0]![0]).toContain("ogr2ogr -f Parquet points.parquet points.fgb");
       // Only the probe, the header and the index were fetched: no features.
       const fetched = log.reduce((sum, r) => {
@@ -672,5 +672,35 @@ describe("the per-view estimate on a malformed index header (ml-cnv.31)", () => 
   it("a node size readers reject is refused in plain words, not read", () => {
     expect([0, 1, 1.5, 65536].map(validNodeSize)).toEqual([false, false, false, false]);
     expect([2, 16, 65535].map(validNodeSize)).toEqual([true, true, true]);
+  });
+});
+
+describe("the dense-view hint offers a raise only while the view stays usable (PR #206 verification)", () => {
+  const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+  async function hintFor(estimate: number): Promise<string> {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const onHint = vi.fn();
+    const loader = new FlatGeobufLoader(fakeMap(12, AREA) as never, "/points.fgb", loadModeOf({ load: "viewport" }), {
+      onData: vi.fn(),
+      onError: vi.fn(),
+      onHint,
+    });
+    (loader as unknown as { estimate: () => number }).estimate = () => estimate;
+    await loader.start();
+    return onHint.mock.calls[0]![0] as string;
+  }
+
+  it("a citywide view (856,606): no raise — 800,000 by view ran at 6 fps on 5.1 GB", async () => {
+    const hint = await hintFor(856_606);
+    expect(hint).not.toContain("raise");
+    expect(hint).toContain("That is too many to draw at once in a browser.");
+    expect(hint).toContain("convert it to PMTiles");
+  });
+
+  it("a view just over the budget (180,000): the raise, with its cost", async () => {
+    const hint = await hintFor(180_000);
+    expect(hint).toContain(
+      "To draw this view, raise `maxFeatures` to 190000 under `load:` (about 3.5 GB of browser memory for parcel-like polygons, less for points)."
+    );
   });
 });

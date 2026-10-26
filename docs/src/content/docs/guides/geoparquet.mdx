@@ -98,7 +98,8 @@ understate it, so everything is decided from the file's footer before any data
 is downloaded:
 
 - **Read whole** up to **400,000 rows**, **50 MB** of the columns the map reads
-  (compressed), and **150 MB** once those columns are decoded. Between 10 and
+  (compressed), and **100 MB** once those columns are decoded (NYC's citywide
+  parcels decode to 142 MB and took over 4 GB to draw). Between 10 and
   50 MB a console note says it may take a few seconds. Brooklyn's 275,628
   parcels read whole in 13–17 s on a desktop and pan at 42–50 fps.
 - **Over any of those**, the file is read by view when it has a `bbox` column
@@ -125,7 +126,9 @@ Each note and notice names the way that applies; here they all are.
    drops the note.
 2. **Raise `maxFeatures`.** It is the one override: the most features one read
    takes, by view, and above 400,000 it raises the whole-file limit too. It
-   costs memory; the 150 MB decoded limit still applies.
+   costs memory, so the notes suggest it only up to 600,000 features loaded
+   whole, or 250,000 in a view, and say how much; the 100 MB decoded limit
+   still applies.
 
    ```yaml
    sources:

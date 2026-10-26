@@ -29,6 +29,7 @@ import {
   formatOfSource,
   loadModeOf,
   stripScheme,
+  VIEWPORT_DEFAULT_MAX_FEATURES,
   typeReadsFormat,
   type CloudFormat,
   type LoadMode,
@@ -48,9 +49,11 @@ import {
   largeDataLinks,
   pmtilesCommand,
   sortedParquetCommand,
+  raiseCost,
   wholeFileCause,
   type WholeFileCost,
 } from "../components/student-messages";
+import { roundedRaise, SAFE_VIEW_FEATURES } from "../formats/large-data";
 // No maplibre-gl here: the layer manager imports this module, and it loads
 // without maplibre-gl (types only). Protocol registration, which needs the
 // module, lives in ./cloud-protocols (MapRenderer only).
@@ -79,19 +82,27 @@ export const WHOLE_FILE_MAX_BYTES = 50 * 1024 * 1024;
  * renderer memory and pan at 42–50 fps, as GeoJSON or GeoParquet — usable,
  * and what 0.9.1 did, so a file that size still loads whole. The citywide
  * 856,687 parcels, whose read columns were 47 MB on the wire (under
- * {@link WHOLE_FILE_MAX_BYTES}), decoded to about 230 MB and took 3.9–4.3 GB.
+ * {@link WHOLE_FILE_MAX_BYTES}), decode to 142 MB and took 3.9–4.3 GB.
  * 400,000 sits between the two; {@link WHOLE_FILE_MAX_DECODED_BYTES} is the
- * safety net for fewer, heavier features (the citywide file trips both).
+ * safety net for fewer, heavier features — and for an author who raised the
+ * feature limit (the citywide file trips both).
  */
 export const WHOLE_FILE_MAX_FEATURES = 400_000;
 /**
  * Above this many decoded bytes of the columns a map reads (a GeoParquet
  * footer's uncompressed sizes) a whole-file read is not attempted: few
- * features with heavy geometry cost as much as many light ones. About three
- * times the 47 MB (compressed) that crashed the tab, which zstd-compressed
- * WKB parcels decode to.
+ * features with heavy geometry cost as much as many light ones, and an
+ * author's `maxFeatures` doesn't lift it.
+ *
+ * @remarks
+ * Measured on NYC PLUTO (zstd GeoParquet): the citywide map's 7 read
+ * columns decode to 142 MB (the geometry alone to 111 MB) and drawing them
+ * took 4.3 GB; Brooklyn's decode to 44 MB (2.3–2.5 GB). 100 MB catches the
+ * citywide file whatever its columns, passes the borough, and matches the
+ * 600,000 parcels a hint may suggest loading whole (formats/large-data).
+ * It was 150 MB, which the real citywide file passed.
  */
-export const WHOLE_FILE_MAX_DECODED_BYTES = 150 * 1024 * 1024;
+export const WHOLE_FILE_MAX_DECODED_BYTES = 100 * 1024 * 1024;
 // `load:` is read by `loadModeOf` in formats/detect (side-effect free, so the
 // parser's classify check can use it too); re-exported here for the renderer.
 export {
@@ -546,7 +557,7 @@ abstract class ViewLoader implements FormatLoader {
       `\`${this.url}\` ${cause.text}, so only the part in view is read, from zoom ${this.load.minzoom}. ` +
         "Add `load: viewport` to the source to say so (this note then goes). " +
         (cause.raise !== undefined
-          ? `To load it whole anyway, raise \`load: { maxFeatures: ${cause.raise} }\` (heavier on memory). `
+          ? `To load it whole anyway, raise \`load: { maxFeatures: ${cause.raise} }\` (${raiseCost(cause.raise, false)}). `
           : "") +
         `To draw it at every zoom (a citywide view too), convert it to PMTiles: ${pmtilesCommand(this.url, this.format)}. ` +
         largeDataLinks(this.format)
@@ -586,10 +597,16 @@ abstract class ViewLoader implements FormatLoader {
       this.skip("dense");
       if (!this.hintedDense) {
         this.hintedDense = true;
+        // A raise only while the view stays usable (formats/large-data):
+        // 800,000 parcels by view ran at 6 fps on 5.1 GB.
+        const raise = roundedRaise(estimate);
         this.hint(
           `\`${this.url}\` has about ${formatCount(estimate)} features in view, more than one read ` +
             `takes (\`maxFeatures\`: ${formatCount(max)}), so nothing of it is drawn until the map is ` +
-            "zoomed in. To draw more at once, raise `maxFeatures` under `load:` (heavier on memory). " +
+            "zoomed in. " +
+            (raise <= SAFE_VIEW_FEATURES
+              ? `To draw this view, raise \`maxFeatures\` to ${raise} under \`load:\` (${raiseCost(raise, true)}). `
+              : "That is too many to draw at once in a browser. ") +
             `To draw it at every zoom (a citywide view too), convert it to PMTiles: ${pmtilesCommand(this.url, this.format)}. ` +
             largeDataLinks(this.format)
         );
@@ -1060,13 +1077,18 @@ export class GeoParquetLoader extends ViewLoader {
     const budget = Math.round(this.load.maxFeatures * VIEW_DECODE_FACTOR);
     if (touched.rows <= budget) return undefined;
     const n = formatCount;
+    // A raise only when the author lowered maxFeatures below the default:
+    // the default's decode limit is already the most a view should decode.
+    const raise = roundedRaise(touched.rows / VIEW_DECODE_FACTOR);
+    const offer = touched.rows <= VIEWPORT_DEFAULT_MAX_FEATURES * VIEW_DECODE_FACTOR;
     return (
       `\`${this.url}\` has row groups of up to ${n(touched.largest)} rows, and each row group a view touches ` +
       `is decoded whole: this view holds about ${n(estimate)} features but touches ${touched.groups} row group${touched.groups === 1 ? "" : "s"}, ` +
       `${n(touched.rows)} rows, over this map's decode limit of ${n(budget)} rows (${VIEW_DECODE_FACTOR} × \`maxFeatures\`), ` +
       "so nothing is read until the map is zoomed in. To fix it, rewrite the file with about 10,000-row groups, " +
       `sorted: ${sortedParquetCommand(this.url)}. To draw it at every zoom (a citywide view too), convert it to PMTiles: ` +
-      `${pmtilesCommand(this.url, "geoparquet")}. Or raise \`maxFeatures\` under \`load:\` (heavier on memory). ` +
+      `${pmtilesCommand(this.url, "geoparquet")}. ` +
+      (offer ? `Or raise \`maxFeatures\` to ${raise} under \`load:\` (${raiseCost(raise, true)}). ` : "") +
       largeDataLinks("geoparquet")
     );
   }

@@ -163,7 +163,7 @@ export const ColorRampSchema = z
  *   `maxFeatures` features (default 150,000): the map asks to zoom in.
  *
  * Without `load:` a file is read whole up to 400,000 features (and 50 MB
- * transferred, 150 MB decoded), and by view above that when it can be.
+ * transferred, 100 MB decoded), and by view above that when it can be.
  * `maxFeatures` is the one override: it sets the per-view budget, and above
  * 400,000 it also raises the whole-file limit (heavier on memory).
  *

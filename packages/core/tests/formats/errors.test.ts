@@ -8,6 +8,8 @@ import {
   describeFormatFailure,
   describeDataProblem,
   describeSourceProblem,
+  raiseCost,
+  wholeFileCause,
 } from "../../src/components/student-messages";
 
 const URL = "/data/x.pmtiles";
@@ -190,7 +192,7 @@ describe("the notice wraps them", () => {
 
 describe("too-large: the cause, why it can't be read by view, and every way to make it draw (0.9.2 review)", () => {
   const MB = 1024 * 1024;
-  const limits = { features: 400_000, bytes: 50 * MB, decoded: 150 * MB };
+  const limits = { features: 400_000, bytes: 50 * MB, decoded: 100 * MB };
 
   it("an unsorted GeoParquet file over the feature limit: sort it (never 'add load: viewport'), raise maxFeatures, or PMTiles", () => {
     expect(
@@ -200,7 +202,7 @@ describe("too-large: the cause, why it can't be read by view, and every way to m
         url: "/data/lots.parquet",
         size: 30 * MB,
         features: 475_628,
-        decoded: 120 * MB,
+        decoded: 80 * MB,
         limits,
         blocker: "unsorted",
       })
@@ -209,7 +211,7 @@ describe("too-large: the cause, why it can't be read by view, and every way to m
         "read by view: its rows aren't in spatially sorted row groups (each row group spans most of the file, " +
         "so every view would read most of it). Sort it: `ogr2ogr -f Parquet -lco WRITE_COVERING_BBOX=YES -lco SORT_BY_BBOX=YES -lco " +
         "ROW_GROUP_SIZE=10000 lots-sorted.parquet lots.parquet`; it is then read by view. Or load it whole anyway " +
-        "with `load: { maxFeatures: 500000 }` (heavier on memory). To draw it at every zoom (a citywide view too), " +
+        "with `load: { maxFeatures: 500000 }` (about 3.5 GB of browser memory for parcel-like polygons, less for points). To draw it at every zoom (a citywide view too), " +
         "convert it to PMTiles: `uv run --with tylertoo==0.8.0 python -c \"import tylertoo as t; " +
         "t.overview('lots.parquet', 'lots-ov.parquet', min_zoom=10, max_zoom=14, collapse_square=True); " +
         "t.export_pmtiles('lots-ov.parquet', 'lots.pmtiles', layer_name='lots', tile_size_limit=None)\"` (the parcel " +
@@ -241,11 +243,11 @@ describe("too-large: the cause, why it can't be read by view, and every way to m
       url: "pluto.parquet",
       size: 47 * MB,
       features: 856_687,
-      decoded: 230 * MB,
+      decoded: 142 * MB,
       limits,
       blocker: "no-bbox",
     });
-    expect(text).toContain("has 856,687 features and reads columns that decode to 230 MB, more than a page loads whole (400,000 features, 150 MB decoded)");
+    expect(text).toContain("has 856,687 features and reads columns that decode to 142 MB, more than a page loads whole (400,000 features, 100 MB decoded)");
     expect(text).toContain("it has no `bbox` covering column. Rewrite it with one, sorted:");
     expect(text).toContain("Or list fewer `columns:`.");
     expect(text).not.toContain("maxFeatures");
@@ -264,5 +266,28 @@ describe("too-large: the cause, why it can't be read by view, and every way to m
     expect(text).toContain("`big.parquet` is 139 MB, more than a page loads whole (50 MB transferred)");
     expect(text).not.toContain("the columns this map reads");
     expect(text).toContain("Access-Control-Expose-Headers: Content-Range");
+  });
+});
+
+describe("a maxFeatures raise is offered only while it stays usable, with its cost (PR #206 verification)", () => {
+  const MB = 1024 * 1024;
+  const limits = { features: 400_000, bytes: 50 * MB, decoded: 100 * MB };
+  const refuse = (features: number) =>
+    describeFormatFailure({ code: "too-large", format: "flatgeobuf", url: "c.fgb", features, size: 40 * MB, limits, blocker: "no-index" });
+
+  it("citywide (856,687): no raise — loading it whole froze the page for 10–37 s", () => {
+    expect(wholeFileCause({ format: "flatgeobuf", features: 856_687, limits }).raise).toBeUndefined();
+    const text = refuse(856_687);
+    expect(text).not.toContain("maxFeatures");
+    expect(text).toContain("convert it to PMTiles");
+  });
+
+  it("up to 600,000: the raise, with what it costs", () => {
+    expect(wholeFileCause({ format: "flatgeobuf", features: 571_000, limits }).raise).toBe(600_000);
+    expect(wholeFileCause({ format: "flatgeobuf", features: 572_000, limits }).raise).toBeUndefined();
+    expect(refuse(475_628)).toContain(
+      "Or load it whole anyway with `load: { maxFeatures: 500000 }` (about 3.5 GB of browser memory for parcel-like polygons, less for points)."
+    );
+    expect(raiseCost(250_000, true)).toBe("about 3.5 GB of browser memory for parcel-like polygons, less for points");
   });
 });

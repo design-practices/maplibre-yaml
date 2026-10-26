@@ -5,7 +5,8 @@
  * The PLUTO benchmark's citywide file: 856,687 rows, nine 100k-row groups,
  * and the 7 columns a map read were 47 MB compressed — under the 50 MB
  * transfer guard, so core decoded every row on the page and the tab crashed.
- * A synthetic footer of that shape (no data behind it: nothing may be read)
+ * The real file's read columns decode to 142 MB (measured). A synthetic
+ * footer of that shape (no data behind it: nothing may be read)
  * is refused on rows, as is one whose few rows decode to too many bytes.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -88,18 +89,32 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("the GeoParquet whole-file guard, from a synthetic footer", () => {
   it("reads both sizes from the footer", () => {
-    const [compressed, decoded] = projectedSize(footer(856_687, 9, 47 * MB, 230 * MB), "all");
+    const [compressed, decoded] = projectedSize(footer(856_687, 9, 47 * MB, 142 * MB), "all");
     expect(compressed).toBeCloseTo(47 * MB, -3);
-    expect(decoded).toBeCloseTo(230 * MB, -3);
+    expect(decoded).toBeCloseTo(142 * MB, -3);
+  });
+
+  it("the decoded-size guard catches the real citywide file on its own: an author's maxFeatures can't lift it", async () => {
+    // 142 MB for the 7 columns the benchmark map reads; 111 MB for the geometry alone.
+    for (const decoded of [142 * MB, 111 * MB]) {
+      expect(decoded).toBeGreaterThan(WHOLE_FILE_MAX_DECODED_BYTES);
+      const opened = footer(856_687, 86, 40 * MB, decoded, true);
+      const limits = sizeLimits(undefined, loadModeOf({ load: { maxFeatures: 1_000_000 } }));
+      const error = await loadGeoParquetWhole("/pluto.parquet", "all", { opened, limits }).catch((e) => e);
+      expect(error).toBeInstanceOf(WholeFileTooLarge);
+      expect(opened.file.slice).not.toHaveBeenCalled();
+    }
+    // Brooklyn's 44 MB passes.
+    expect(44 * MB).toBeLessThan(WHOLE_FILE_MAX_DECODED_BYTES);
   });
 
   it("PLUTO citywide (856,687 rows, 47 MB compressed): refused on rows, before any data is read", async () => {
-    const opened = footer(856_687, 9, 47 * MB, 230 * MB, false);
+    const opened = footer(856_687, 9, 47 * MB, 142 * MB, false);
     expect(47 * MB).toBeLessThan(WHOLE_FILE_MAX_BYTES); // what let it through in 0.9.1
     const error = await loadGeoParquetWhole("/pluto.parquet", "all", { opened }).catch((e) => e);
     expect(isFormatError(error) && error.failure).toMatchObject({ code: "too-large", features: 856_687 });
     expect(error.message).toContain(
-      "has 856,687 features and reads columns that decode to 230 MB, more than a page loads whole (400,000 features, 150 MB decoded)"
+      "has 856,687 features and reads columns that decode to 142 MB, more than a page loads whole (400,000 features, 100 MB decoded)"
     );
     // Not readable by view here: no ranges. The hosting is what to change.
     expect(error.message).toContain("it can't be read by view: this server doesn't support HTTP range requests");
@@ -110,7 +125,7 @@ describe("the GeoParquet whole-file guard, from a synthetic footer", () => {
   });
 
   it("the same file, readable by view: switches to reading by view instead", async () => {
-    const opened = footer(856_687, 9, 47 * MB, 230 * MB, true);
+    const opened = footer(856_687, 9, 47 * MB, 142 * MB, true);
     const error = await loadGeoParquetWhole("/pluto.parquet", "all", { opened }).catch((e) => e);
     expect(error).toBeInstanceOf(WholeFileTooLarge);
     expect(error.features).toBe(856_687);
@@ -128,7 +143,7 @@ describe("the GeoParquet whole-file guard, from a synthetic footer", () => {
   });
 
   it("an author's maxFeatures raises the whole-file limit (never lowers it); the decoded-size net stays (M3)", async () => {
-    const big = footer(550_000, 55, 30 * MB, 120 * MB, true);
+    const big = footer(550_000, 55, 30 * MB, 90 * MB, true);
     const refused = await loadGeoParquetWhole("/big.parquet", "all", { opened: big }).catch((e) => e);
     expect(refused).toBeInstanceOf(WholeFileTooLarge);
     const raised = sizeLimits(undefined, loadModeOf({ load: { maxFeatures: 600_000 } }));
@@ -139,7 +154,7 @@ describe("the GeoParquet whole-file guard, from a synthetic footer", () => {
     // A lower maxFeatures is the per-view budget only.
     expect(sizeLimits(undefined, loadModeOf({ load: { mode: "viewport", maxFeatures: 5000 } })).maxFeatures).toBe(400_000);
     // Citywide PLUTO is still caught on its decoded size, whatever the count allows.
-    const pluto = footer(856_687, 9, 47 * MB, 230 * MB, true);
+    const pluto = footer(856_687, 9, 47 * MB, 142 * MB, true);
     const limits = sizeLimits(undefined, loadModeOf({ load: { maxFeatures: 1_000_000 } }));
     const caught = await loadGeoParquetWhole("/pluto.parquet", "all", { opened: pluto, limits }).catch((e) => e);
     expect(caught).toBeInstanceOf(WholeFileTooLarge);
@@ -165,7 +180,7 @@ describe("the GeoParquet whole-file guard, from a synthetic footer", () => {
   });
 
   it("estimates a view's rows from the row groups it overlaps", () => {
-    const source = footer(900_000, 9, 47 * MB, 230 * MB);
+    const source = footer(900_000, 9, 47 * MB, 142 * MB);
     // The whole extent: every row.
     expect(rowsInView(source, [-75, 40, -73, 41])).toBe(900_000);
     // One group's strip (0.55 / 9 degrees wide), half of its height: half its rows.

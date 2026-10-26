@@ -96,7 +96,9 @@ Reading by view changes a few things:
    saying so drops the note.
 2. **Raise `maxFeatures`** under `load:`: the most features one read takes, by
    view, and above 400,000 it raises the whole-file feature limit too
-   (`load: { maxFeatures: 600000 }`). It costs memory; the 50 MB limit stays.
+   (`load: { maxFeatures: 600000 }`). It costs memory, so the notes suggest it
+   only up to 600,000 features loaded whole, or 250,000 in a view, and say how
+   much; the 50 MB limit stays.
 3. **Add a spatial index** so the file can be read by view:
 
    ```bash
