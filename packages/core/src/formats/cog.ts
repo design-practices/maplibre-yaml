@@ -26,6 +26,7 @@
  * MapLibre.
  */
 
+import { consoleText } from "../utils/console-text";
 import { getDecoder } from "./decoders";
 import type { CogHeader, FilePart } from "./cog-header";
 import { FormatError, isAbortError, isFormatError } from "./errors";
@@ -239,7 +240,7 @@ async function readHeader(fileUrl: string, report: CogHintReporter | undefined):
   }
   if (!isCloudOptimized(header)) {
     const message = describeFormatFailure({ ...base, code: "not-cloud-optimized" });
-    console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+    console.warn(`[maplibre-yaml] ${consoleText(message)}`);
     report?.(fileUrl, message);
   }
   return header;

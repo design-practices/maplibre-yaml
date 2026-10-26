@@ -159,24 +159,42 @@ export const ColorRampSchema = z
  *   server with range requests and a file that can be read in parts — a
  *   FlatGeobuf with a spatial index, or a GeoParquet file with a `bbox`
  *   covering column and spatially sorted row groups. Nothing is read below
- *   `minzoom` (default 10).
+ *   `minzoom` (default 10), nor for a view estimated to hold more than
+ *   `maxFeatures` features (default 150,000): the map asks to zoom in.
+ *
+ * Without `load:` a file is read whole up to 400,000 features (and 50 MB
+ * transferred, 100 MB decoded), and by view above that when it can be.
+ * `maxFeatures` is the one override: it sets the per-view budget, and above
+ * 400,000 it also raises the whole-file limit (heavier on memory).
  *
  * @example
  * ```yaml
- * load: { mode: viewport, minzoom: 12 }
+ * load: { mode: viewport, minzoom: 12, maxFeatures: 50000 }
+ * load: { maxFeatures: 600000 }   # load a 550,000-feature file whole
  * ```
  */
 export const SourceLoadSchema = z
   .union([
     z.enum(["all", "viewport"]),
     z.object({
-      mode: z.enum(["all", "viewport"]).describe("all (whole file) or viewport (features in view)"),
+      mode: z
+        .enum(["all", "viewport"])
+        .optional()
+        .describe("all (whole file, the default) or viewport (features in view)"),
       minzoom: z
         .number()
         .min(0)
         .max(24)
         .optional()
         .describe("viewport: read nothing below this zoom (default 10)"),
+      maxFeatures: z
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe(
+          "The most features one read takes: a view holding more isn't read (default 150000; the map asks to zoom in), and above 400000 it also raises the whole-file limit (heavier on memory)"
+        ),
     }),
   ])
   .describe(

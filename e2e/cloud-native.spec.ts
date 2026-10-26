@@ -262,8 +262,8 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
         "needs longitude/latitude (EPSG:4326). Reproject it: ogr2ogr -t_srs EPSG:4326 out.fgb districts-3857.fgb."
     );
     await expect(fgb).toContainText(
-      "Layer huge has no data: /oversize/60/gallery-assets/cloud-native/points-noindex.fgb is 60 MB, too large " +
-        "to load whole in a browser."
+      "Layer huge has no data: /oversize/60/gallery-assets/cloud-native/points-noindex.fgb is 60 MB, more than a " +
+        "page loads whole (50 MB transferred), and it can't be read by view: it has no spatial index."
     );
     await expect(fgb).toContainText(
       "Layer unindexed has no data: /gallery-assets/cloud-native/points-noindex.fgb has no spatial index"
@@ -279,7 +279,14 @@ test.describe("cloud-native data: PMTiles and FlatGeobuf with no page JavaScript
     // indexed → read by view.
     await waitForFeatures(page, "fallbacks", "norange");
     await waitForFeatures(page, "fallbacks", "big");
-    await expect(page.locator("#fallbacks .ml-map-notice")).toHaveCount(0);
+    // Nothing failed; the author is told (on a local page) that the big file
+    // is read by view (0.9.2: on the page, not only the console).
+    const fallbacks = page.locator("#fallbacks .ml-map-notice");
+    await expect(fallbacks).toContainText("Notes for this map's author");
+    await expect(fallbacks).toContainText(
+      "is 60 MB, more than a page loads whole (50 MB transferred), so only the part in view is read"
+    );
+    await expect(fallbacks).not.toContainText("couldn't load");
     await page.screenshot({ path: "e2e/results/cnv_errors.png", fullPage: true });
     expect(errors).toEqual([]);
   });

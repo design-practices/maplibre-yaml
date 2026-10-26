@@ -27,7 +27,9 @@ serves (gallery pages) and the e2e server serves at
 /gallery-assets/cloud-native/ (browser tests):
 
     districts.pmtiles       vector PMTiles: layers `districts` (48 polygons)
-                            and `points` (400 points), z0-11
+                            and `points` (400 points), z0-11; no feature ids
+    districts-ids.pmtiles   vector PMTiles: layer `districts` only, with
+                            feature ids (1-48) in the tiles, z0-9
     imagery.pmtiles         raster PMTiles (PNG), z0-8
     districts.fgb           48 polygons, spatial index, EPSG:4326
     points.fgb              400 points, spatial index (viewport reads)
@@ -41,6 +43,8 @@ GeoParquet (WKB geometry, the GeoParquet 1.1 `bbox` covering column):
     districts.parquet       48 polygons, snappy, one row group
     points.parquet          400 points, snappy, Hilbert-sorted into 8 row
                             groups of 50 (viewport reads skip row groups)
+    points-rg100.parquet    the same sorted points in 4 row groups of 100 (a
+                            file whose row groups are large for its views)
     points-zstd.parquet     the points, zstd
     points-brotli.parquet   the points, brotli (the separately loaded codec)
     points-geoarrow.parquet the points with GeoArrow-native geometry (refused)
@@ -53,7 +57,8 @@ and copies districts.pmtiles, districts.fgb and districts.parquet into the
 Astro example site (examples/astro/site/public/data/cloud-native/).
 
 `--geoparquet` writes only the GeoParquet files (same data, same seed), so
-the other fixtures stay byte-for-byte as committed.
+the other fixtures stay byte-for-byte as committed; `--vector-ids` writes
+only districts-ids.pmtiles.
 """
 import gzip
 import math
@@ -139,6 +144,7 @@ def write_geoparquet_fixtures(d, p):
     sorted_points = p.loc[order].reset_index(drop=True)
     write_parquet(d, "districts.parquet")
     write_parquet(sorted_points, "points.parquet", row_group_size=50)
+    write_parquet(sorted_points, "points-rg100.parquet", row_group_size=100)
     write_parquet(sorted_points, "points-zstd.parquet", compression="zstd")
     write_parquet(sorted_points, "points-brotli.parquet", compression="brotli")
     write_parquet(sorted_points, "points-geoarrow.parquet", geometry_encoding="geoarrow")
@@ -190,7 +196,7 @@ def header(tile_type, compression, maxzoom):
     }
 
 
-def vector_pmtiles(path, layers, maxzoom):
+def vector_pmtiles(path, layers, maxzoom, ids=False):
     merc = {name: gdf.to_crs("EPSG:3857") for name, gdf in layers.items()}
     with open(path, "wb") as f:
         writer = Writer(f)
@@ -204,7 +210,7 @@ def vector_pmtiles(path, layers, maxzoom):
                     tile_layers = []
                     for name, gdf in merc.items():
                         feats = []
-                        for _, row in gdf[gdf.intersects(clip)].iterrows():
+                        for index, row in gdf[gdf.intersects(clip)].iterrows():
                             g = row.geometry.intersection(clip)
                             if g.is_empty:
                                 continue
@@ -213,7 +219,10 @@ def vector_pmtiles(path, layers, maxzoom):
                                 g, lambda c: (c - np.array([minx, miny])) / scale * 4096)
                             props = {k: (v.item() if hasattr(v, "item") else v)
                                      for k, v in row.items() if k != "geometry"}
-                            feats.append({"geometry": g.wkt, "properties": props})
+                            feat = {"geometry": g.wkt, "properties": props}
+                            if ids:
+                                feat["id"] = int(index) + 1  # tile feature ids, 1-based
+                            feats.append(feat)
                         if feats:
                             tile_layers.append({"name": name, "features": feats})
                     if not tile_layers:
@@ -273,6 +282,11 @@ NOT_A_FILE = (
 if __name__ == "__main__":
     d = districts()
     p = points(400)
+    if "--vector-ids" in sys.argv:
+        path = os.path.join(OUT, "districts-ids.pmtiles")
+        vector_pmtiles(path, {"districts": d}, maxzoom=9, ids=True)
+        print(f"{os.path.getsize(path) / 1024:8.1f} KB  districts-ids.pmtiles")
+        sys.exit(0)
     if "--geoparquet" in sys.argv:
         write_geoparquet_fixtures(d, p)
         astro = os.path.join(ROOT, "examples", "astro", "site", "public", "data", "cloud-native")
@@ -286,6 +300,7 @@ if __name__ == "__main__":
     write_fgb(p, "points-noindex.fgb", index=False)
     write_fgb(d.to_crs("EPSG:3857"), "districts-3857.fgb")
     vector_pmtiles(os.path.join(OUT, "districts.pmtiles"), {"districts": d, "points": p}, maxzoom=11)
+    vector_pmtiles(os.path.join(OUT, "districts-ids.pmtiles"), {"districts": d}, maxzoom=9, ids=True)
     raster_pmtiles(os.path.join(OUT, "imagery.pmtiles"), maxzoom=8)
     write_geoparquet_fixtures(d, p)
     for name in ("not-really.pmtiles", "not-really.fgb"):

@@ -71,12 +71,13 @@ properties, list them in `columns:`, or write `columns: all`.
 
 ## Whole file or by view
 
-`load:` says how the file is read:
+**By default a file is read whole when it is small and by view when it is
+large.** `load:` changes that:
 
 | `load:` | What it reads | Needs |
 |---|---|---|
-| `all` (default) | The columns it uses, from every row | Any web server |
-| `viewport` | Only the rows in view, read again as the map moves; nothing below `minzoom` (default 10) | A **`bbox` column**, rows **sorted by location**, and a server with **range requests** |
+| none, or `all` (default) | **Small files whole** (the columns the map uses, from every row). **Large ones by view** (see [Large files](#large-files)), when the file and server allow it; otherwise the map says why and how to fix it | Any web server for a small file |
+| `viewport` | Only the rows in view, read again as the map moves; nothing below `minzoom` (default 10), and nothing for a view holding more than `maxFeatures` features (default 150,000) | A **`bbox` column**, rows **sorted by location**, and a server with **range requests** |
 
 Reading by view works because a GeoParquet file stores rows in groups, and
 its footer records each group's extent from the `bbox` column; groups outside
@@ -84,23 +85,103 @@ the view are never downloaded. That only pays off when nearby rows sit in the
 same groups, in a file sorted by location. A file whose groups each span most
 of the area is read whole instead, with a console note; one without a `bbox`
 column is refused with a notice that says how to add it. With `load: viewport`,
-`fitTo` frames the extent recorded in the file's metadata, and `classify:`
-needs explicit `breaks:` rather than `method:`.
+`fitTo` frames the extent recorded in the file's metadata, at the outermost
+zoom whose view is read (never below `minzoom` nor over `maxFeatures`), so the
+map opens with features drawn; and `classify:` needs explicit `breaks:` rather
+than `method:`.
 
-**How big?** The limits are FlatGeobuf's, counted on the columns the map
-reads: up to **10 MB** read whole, **10–50 MB** read whole with a console
-note, over **50 MB** read by view if the file allows it and refused
-otherwise. A server without range requests (`python -m http.server`) sends
-the whole file at once: fine for a small file, refused before download for
-one over 50 MB.
+## Large files
+
+### The limits
+
+A whole read costs memory and time in the browser, and compressed bytes
+understate it, so everything is decided from the file's footer before any data
+is downloaded:
+
+- **Read whole** up to **400,000 rows**, **50 MB** of the columns the map reads
+  (compressed), and **100 MB** once those columns are decoded (NYC's citywide
+  parcels decode to 142 MB and took over 4 GB to draw). Between 10 and
+  50 MB a console note says it may take a few seconds. Brooklyn's 275,628
+  parcels read whole in 13–17 s on a desktop and pan at 42–50 fps.
+- **Over any of those**, the file is read by view when it has a `bbox` column
+  and sorted row groups and the server supports range requests, with a note
+  for the author. Otherwise it is refused, and the notice names what stops it
+  being read by view and how to fix that.
+- **By view**, a view isn't read when it would hold more than `maxFeatures`
+  features (default 150,000), estimated from the footer: each row group's rows
+  times the share of the group's `bbox` extent that the view covers. Nor is it
+  read when the row groups it touches hold more than 3 × `maxFeatures` rows:
+  a row group is decoded whole, so a file in 100,000-row groups decoded about
+  600,000 rows for a view of 145,000 features (3.8 GB, 10 fps). Readers see
+  "Too many features to show here — zoom in to see them", also below
+  `minzoom`, until they zoom in.
+
+A server without range requests (`python -m http.server`) sends the whole file
+at once: fine for a small file, refused before download for one over 50 MB.
+
+### Make it draw
+
+Each note and notice names the way that applies; here they all are.
+
+1. **Say `load: viewport`.** A large file is read by view anyway; saying so
+   drops the note.
+2. **Raise `maxFeatures`.** It is the one override: the most features one read
+   takes, by view, and above 400,000 it raises the whole-file limit too. It
+   costs memory, so the notes suggest it only up to 600,000 features loaded
+   whole, or 250,000 in a view, and say how much; the 100 MB decoded limit
+   still applies.
+
+   ```yaml
+   sources:
+     lots:
+       type: geojson
+       url: data/lots.parquet
+       load: { maxFeatures: 600000 }   # a 550,000-feature file, read whole
+   ```
+
+3. **Make the file readable by view:** a `bbox` column, rows sorted along a
+   Hilbert curve, about 10,000 rows per row group. With
+   [geoparquet-io](https://github.com/geoparquet/geoparquet-io), nothing to
+   install but [uv](https://docs.astral.sh/uv/):
+
+   ```bash
+   uvx --from geoparquet-io==1.7.0 gpio sort hilbert lots.parquet lots-hilbert.parquet \
+     --row-group-size 10000 --add-bbox
+   # from a FlatGeobuf, GeoJSON or GeoPackage file (sorted the same way)
+   uvx --from geoparquet-io==1.7.0 gpio convert geoparquet lots.fgb lots.parquet --row-group-size 10000
+   ```
+
+   GDAL's `ogr2ogr -f Parquet -lco WRITE_COVERING_BBOX=YES -lco SORT_BY_BBOX=YES
+   -lco ROW_GROUP_SIZE=10000` works too, but packs row groups less tightly:
+   on NYC's parcels a borough view touched 1.5–2 times the rows of a Hilbert
+   sort, which can be enough to keep a view unread.
+
+4. **For a citywide view, convert it to PMTiles.** PMTiles draws at every zoom
+   (1–3 s and 58–60 fps on a desktop for NYC's 856,687 parcels). The
+   [PMTiles guide](/guides/pmtiles/#from-a-large-file) has the one-line
+   tylertoo command.
+
+**Overview files.** A GeoParquet file written by tylertoo's `overview` stores a
+simplified copy per zoom level as extra rows (its `geo:overviews` key). The map
+reads its full-detail level, so each feature is drawn once; reading a coarser
+level when zoomed out is planned.
 
 ## Make a GeoParquet file
 
-**GDAL** (`ogr2ogr`, also inside QGIS):
+**geoparquet-io** (`gpio`; no GDAL needed): `uvx --from geoparquet-io==1.7.0 gpio
+convert geoparquet in.geojson out.parquet --row-group-size 10000` writes a
+Hilbert-sorted file with a `bbox` column, ready for `load: viewport`.
+
+**GDAL** (`ogr2ogr`, also inside QGIS). Writing Parquet needs GDAL built with
+its Arrow/Parquet driver (3.9 or later for the `bbox` options): many distro
+packages leave it out. conda-forge's `gdal` with `libgdal-arrow-parquet`, or
+the `ghcr.io/osgeo/gdal` Docker image, have it; `ogrinfo --formats | grep
+Parquet` tells.
 
 ```bash
 ogr2ogr -f Parquet out.parquet in.geojson -lco COMPRESSION=SNAPPY
 # for load: viewport: a bbox column, rows sorted by location, smaller row groups
+# (a Hilbert sort, above, packs them tighter)
 ogr2ogr -f Parquet out.parquet in.geojson -lco WRITE_COVERING_BBOX=YES \
   -lco SORT_BY_BBOX=YES -lco ROW_GROUP_SIZE=10000
 ```

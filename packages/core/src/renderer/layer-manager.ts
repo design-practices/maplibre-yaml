@@ -41,6 +41,7 @@ import {
   loadModeOf,
   toMapLibreTileSpec,
   withoutFormatKeys,
+  type FlatGeobufCallbacks,
   type FormatLoader,
 } from "./cloud-sources";
 
@@ -152,6 +153,12 @@ export interface LayerManagerCallbacks {
    * update whose features have no `updateKey`: they are kept, not matched).
    */
   onSourceHint?: (sourceId: string, message: string) => void;
+  /**
+   * A source read by view whose view holds more features than one read
+   * takes (`true`: nothing was read, the reader should zoom in), or no longer
+   * does (`false`) (ml-37r.17).
+   */
+  onViewTooDense?: (sourceId: string, dense: boolean) => void;
 }
 
 /**
@@ -471,10 +478,10 @@ export class LayerManager {
 
       if (isSourceRef) {
         // One pipeline per source id regardless of how many layers reference it.
-        this.sourceRefCounts.set(
-          sourceId,
-          (this.sourceRefCounts.get(sourceId) ?? 0) + 1
-        );
+        const refs = (this.sourceRefCounts.get(sourceId) ?? 0) + 1;
+        this.sourceRefCounts.set(sourceId, refs);
+        // A file read by view that no layer drew follows the map again.
+        if (refs === 1) this.formatLoaders.get(sourceId)?.resume?.();
         if (!this.map.getSource(sourceId)) {
           // Name the nearest source that does exist — the document's own or
           // the basemap style's — since a typo is the usual cause (ml-aot.15).
@@ -780,6 +787,7 @@ export class LayerManager {
           this.callbacks.onDataLoaded?.(layerId, data.features.length);
         },
         onError: (error) => this.callbacks.onDataError?.(layerId, error),
+        ...this.formatHints(sourceId),
       }
     );
     this.formatLoaders.set(sourceId, loader);
@@ -817,12 +825,21 @@ export class LayerManager {
           this.callbacks.onDataLoaded?.(layerId, data.features.length);
         },
         onError: (error) => this.callbacks.onDataError?.(layerId, error),
+        ...this.formatHints(sourceId),
       }
     );
     this.formatLoaders.set(sourceId, loader);
     const pending = this.pendingData.get(sourceId);
     this.pendingData.delete(sourceId);
     await loader.start(pending);
+  }
+
+  /** A cloud-native reader's author hints and "too dense" reports, for its source. */
+  private formatHints(sourceId: string): Pick<FlatGeobufCallbacks, "onHint" | "onTooDense"> {
+    return {
+      onHint: (message) => this.callbacks.onSourceHint?.(sourceId, message),
+      onTooDense: (dense) => this.callbacks.onViewTooDense?.(sourceId, dense),
+    };
   }
 
   /**
@@ -833,6 +850,32 @@ export class LayerManager {
   getSourceExtent(sourceId: string): [[number, number], [number, number]] | undefined {
     const loader = this.formatLoaders.get(sourceId);
     return loader?.readsByView ? loader.extent : undefined;
+  }
+
+  /**
+   * The zoom below which a source read by view reads nothing (its
+   * `load: { minzoom }`), so `fitTo` doesn't frame it where nothing draws.
+   * Undefined for every other source.
+   */
+  getViewMinzoom(sourceId: string): number | undefined {
+    const loader = this.formatLoaders.get(sourceId);
+    return loader?.readsByView ? loader.minzoom : undefined;
+  }
+
+  /**
+   * The outermost zoom, from `from` in, at which a source read by view
+   * reads a `width` × `height` px view around `center` (see
+   * `FormatLoader.zoomThatFits`); undefined for any other source, or none.
+   */
+  getViewZoomThatFits(
+    sourceId: string,
+    center: [number, number],
+    from: number,
+    width: number,
+    height: number
+  ): number | undefined {
+    const loader = this.formatLoaders.get(sourceId);
+    return loader?.readsByView ? loader.zoomThatFits?.(center, from, width, height) : undefined;
   }
 
   /**
@@ -1094,7 +1137,12 @@ export class LayerManager {
     } else {
       // Shared: the data stays as long as a sibling still draws from it.
       this.releaseSource(sourceId);
-      if (!this.sourceRefCounts.has(sourceId)) this.sourceData.delete(sourceId);
+      if (!this.sourceRefCounts.has(sourceId)) {
+        this.sourceData.delete(sourceId);
+        // Nothing draws it now: a file read by view stops reading on every
+        // move, and its "zoom in" line goes with its last layer (ml-cnv.32).
+        this.formatLoaders.get(sourceId)?.suspend?.();
+      }
     }
   }
 

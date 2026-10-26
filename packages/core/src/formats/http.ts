@@ -57,6 +57,12 @@ export function contentRangeOf(response: Response): { start: number; end: number
   return { start: Number(m[1]), end: Number(m[2]), ...(m[3] !== "*" ? { size: Number(m[3]) } : {}) };
 }
 
+/** The size in a 416's `Content-Range: bytes *\/size`, when this page may read it. */
+function contentRangeSize(response: Response): number | undefined {
+  const m = /bytes\s+\*\/(\d+)/i.exec(response.headers.get("content-range") ?? "");
+  return m ? Number(m[1]) : undefined;
+}
+
 /** Raised by {@link readCapped} once a body passes its limit. */
 export class BodyTooLarge extends Error {
   /**
@@ -208,7 +214,21 @@ export async function fetchTail(url: string, length: number, options: TailOption
   }
   if (response.status === 416) {
     // Fastly's answer to a suffix longer than the file: the file is short.
+    // But some servers (`npx http-server`) answer 416 to every suffix range
+    // while serving plain ones (ml-cnv.33): when the size says the file is
+    // longer than the suffix, ask for the same bytes by their offsets.
+    const size = contentRangeSize(response) ?? (await headSize(url, signal));
     discardBody(response);
+    if (size !== undefined && size > length) {
+      const start = size - length;
+      const retry = await fetch(url, { ...init, headers: { Range: `bytes=${start}-${size - 1}` } });
+      if (retry.status === 206) {
+        const bytes = await retry.arrayBuffer();
+        if (bytes.byteLength === length) return { start, bytes, size, ranges: true };
+      } else {
+        discardBody(retry);
+      }
+    }
     return whole();
   }
   if (!response.ok) {

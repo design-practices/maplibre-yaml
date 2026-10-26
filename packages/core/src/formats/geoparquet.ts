@@ -81,10 +81,38 @@ export interface GeoParquetInfo {
   covering?: { xmin: string; ymin: string; xmax: string; ymax: string };
   /** The attribute columns (every top-level column but geometry and covering). */
   columns: string[];
-  /** Number of row groups. */
+  /** Number of row groups (of the canonical level, for an overview file). */
   rowGroups: number;
-  /** Number of rows (features). */
+  /** Number of rows (features; of the canonical level, for an overview file). */
   rows: number;
+  /** The file's `geo:overviews` pyramid, when it has one (see {@link Overviews}). */
+  overviews?: Overviews;
+}
+
+/**
+ * A GeoParquet overview file's levels (`geo:overviews`, draft spec 0.2.0,
+ * written by tylertoo): each zoom level is a run of row groups, coarse to
+ * fine. In `duplicating` mode each level is a complete copy of the data, so
+ * a reader that reads every row draws each feature once per level (2,201
+ * features for 601 parcels in the spike, ml-cnv.21); core reads only the
+ * canonical — full-detail — level. Choosing a coarser level by zoom is 0.10
+ * (ml-cnv.22). In `partitioning` mode each feature appears once: every row
+ * is the data.
+ */
+export interface Overviews {
+  /** The key's `version`, e.g. "0.2.0". */
+  version: string;
+  mode: "duplicating" | "partitioning";
+  /** How many levels the file has. */
+  levels: number;
+  /** Whether this version knows the key's major version (0). */
+  known: boolean;
+  /**
+   * The canonical level's rows and row groups (`duplicating` mode):
+   * groups `groupStart`..`groupEnd` (inclusive), rows `rowStart`..`rowEnd`
+   * (exclusive) — what every read and size check is restricted to.
+   */
+  canonical?: { groupStart: number; groupEnd: number; rowStart: number; rowEnd: number };
 }
 
 /** An opened GeoParquet file: its footer parsed, ready to read. */
@@ -225,8 +253,18 @@ export async function open(url: string, options: OpenOptions = {}): Promise<GeoP
       // A whole file over the guard: from a server without ranges, the
       // hosting is what to fix; otherwise the file is simply too big to
       // read whole (a host that hid its size from this page).
-      const code = error.ranges === false ? "no-range" : "too-large";
-      throw new FormatError({ code, format: "geoparquet", url, size: error.size });
+      if (error.ranges === false) throw new FormatError({ code: "no-range", format: "geoparquet", url, size: error.size });
+      // The whole file had to be read (the host hid its size), and it is
+      // over the limit: its size is the file's, not the columns' (ml-cnv.33).
+      throw new FormatError({
+        code: "too-large",
+        format: "geoparquet",
+        url,
+        size: error.size,
+        sizeIsFile: true,
+        ...(options.maxWholeBytes !== undefined ? { limits: { bytes: options.maxWholeBytes } } : {}),
+        blocker: "no-size",
+      });
     }
     if (typeof (error as { status?: unknown } | null)?.status === "number") throw error;
     throw fetchFailure(error, url);
@@ -327,6 +365,61 @@ function crsFacts(crs: unknown): { org?: string; code?: number | string; name?: 
  * Read the GeoParquet facts from a parsed footer, and refuse what this
  * version can't draw.
  */
+/**
+ * The `geo:overviews` key (or its planned home, `geo.overviews`), read into
+ * {@link Overviews}; undefined when the file has none, or one whose levels
+ * don't tile the row groups (then it is read as plain GeoParquet).
+ */
+function parseOverviews(metadata: FileMetaData, geo: Obj | undefined): Overviews | undefined {
+  const text = metadata.key_value_metadata?.find((kv) => kv.key === "geo:overviews")?.value;
+  let raw: unknown = isObject(geo?.["overviews"]) ? geo!["overviews"] : undefined;
+  if (text) {
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!isObject(raw) || !Array.isArray(raw["levels"]) || raw["levels"].length === 0) return undefined;
+  const version = String(raw["version"] ?? "");
+  const mode = raw["mode"] === "partitioning" ? "partitioning" : "duplicating";
+  const groups = metadata.row_groups;
+  const levels = raw["levels"] as unknown[];
+  // Each level ends at a row group (inclusive); together they cover every group, in order.
+  const ends: number[] = [];
+  for (const level of levels) {
+    const end = isObject(level) ? Number(level["row_group_end"]) : NaN;
+    if (!Number.isInteger(end) || end < (ends.at(-1) ?? -1) + 1 || end >= groups.length) return undefined;
+    ends.push(end);
+  }
+  if (ends.at(-1) !== groups.length - 1) return undefined;
+  const overviews: Overviews = { version, mode, levels: ends.length, known: version.split(".")[0] === "0" };
+  if (mode === "duplicating") {
+    const declared = raw["canonical_level"];
+    const index = typeof declared === "number" && Number.isInteger(declared) && declared >= 0 && declared < ends.length
+      ? declared
+      : ends.length - 1;
+    const groupStart = index === 0 ? 0 : ends[index - 1]! + 1;
+    const groupEnd = ends[index]!;
+    let rowStart = 0;
+    for (let i = 0; i < groupStart; i++) rowStart += Number(groups[i]!.num_rows);
+    let rowEnd = rowStart;
+    for (let i = groupStart; i <= groupEnd; i++) rowEnd += Number(groups[i]!.num_rows);
+    overviews.canonical = { groupStart, groupEnd, rowStart, rowEnd };
+  }
+  return overviews;
+}
+
+/**
+ * The row groups that hold the file's data, with their indexes: every one,
+ * or an overview file's canonical level (ml-cnv.21).
+ */
+export function dataRowGroups(source: GeoParquetFile): { group: FileMetaData["row_groups"][number]; index: number }[] {
+  const band = source.info.overviews?.canonical;
+  const all = source.metadata.row_groups.map((group, index) => ({ group, index }));
+  return band ? all.slice(band.groupStart, band.groupEnd + 1) : all;
+}
+
 /** The file's top-level columns (a struct's children are not columns of their own). */
 function topLevelColumns(metadata: FileMetaData): { name: string; logical_type?: LogicalType }[] {
   const out: { name: string; logical_type?: LogicalType }[] = [];
@@ -405,6 +498,8 @@ export function geoInfo(metadata: FileMetaData, url: string): GeoParquetInfo {
       ? (cover as { xmin: string; ymin: string; xmax: string; ymax: string })
       : undefined;
   const coveringColumn = coveringPaths?.xmin.split(".")[0];
+  const overviews = parseOverviews(metadata, geo);
+  const band = overviews?.canonical;
 
   return {
     geometryColumn: geometryColumn!,
@@ -412,8 +507,9 @@ export function geoInfo(metadata: FileMetaData, url: string): GeoParquetInfo {
     ...(bbox ? { bbox } : {}),
     ...(coveringPaths ? { covering: coveringPaths } : {}),
     columns: topColumns.filter((name) => name !== geometryColumn && name !== coveringColumn),
-    rowGroups: metadata.row_groups.length,
-    rows: Number(metadata.num_rows),
+    rowGroups: band ? band.groupEnd - band.groupStart + 1 : metadata.row_groups.length,
+    rows: band ? band.rowEnd - band.rowStart : Number(metadata.num_rows),
+    ...(overviews ? { overviews } : {}),
   };
 }
 
@@ -433,22 +529,90 @@ export function columnsToRead(source: GeoParquetFile, columns: ColumnChoice): st
  * footer's per-column-chunk sizes (known before any data is read).
  */
 export function projectedBytes(source: GeoParquetFile, columns: ColumnChoice): number {
-  const read = new Set(columnsToRead(source, columns));
-  let total = 0;
-  for (const group of source.metadata.row_groups) {
-    for (const chunk of group.columns) {
-      const meta = chunk.meta_data;
-      if (meta && read.has(meta.path_in_schema[0]!)) total += Number(meta.total_compressed_size);
-    }
-  }
-  return total;
+  return projectedSize(source, columns)[0];
 }
 
-/** The bbox each row group's covering statistics describe (undefined without stats). */
+/**
+ * What a whole-file read of `columns` costs, from the footer alone:
+ * `[compressed bytes transferred, uncompressed bytes decoded]`. The second is
+ * what decoding holds in memory (ml-37r.16: a file whose read columns are
+ * 47 MB on the wire can be several times that once decompressed).
+ */
+export function projectedSize(source: GeoParquetFile, columns: ColumnChoice): [number, number] {
+  const read = new Set(columnsToRead(source, columns));
+  let total = 0;
+  let decoded = 0;
+  for (const { group } of dataRowGroups(source)) {
+    for (const chunk of group.columns) {
+      const meta = chunk.meta_data;
+      if (meta && read.has(meta.path_in_schema[0]!)) {
+        total += Number(meta.total_compressed_size);
+        decoded += Number(meta.total_uncompressed_size);
+      }
+    }
+  }
+  return [total, decoded];
+}
+
+/**
+ * The share of `box` that `view` covers, by area (0–1). A box with no area
+ * (one point, a straight line) counts whole when the view touches it.
+ */
+export function shareInView(box: BBox, view: BBox): number {
+  const w = Math.min(box[2], view[2]) - Math.max(box[0], view[0]);
+  const h = Math.min(box[3], view[3]) - Math.max(box[1], view[1]);
+  if (w < 0 || h < 0) return 0;
+  const area = (box[2] - box[0]) * (box[3] - box[1]);
+  return area > 0 ? (w * h) / area : 1;
+}
+
+/**
+ * About how many rows a read of `view` returns, from the footer alone: each
+ * row group's rows times the share of its covering extent the view covers
+ * (rows spread evenly within a group, which is what spatially sorted groups
+ * make roughly true). A group without statistics counts whole.
+ */
+export function rowsInView(source: GeoParquetFile, view: BBox): number {
+  const extents = rowGroupExtents(source);
+  let rows = 0;
+  dataRowGroups(source).forEach(({ group }, i) => {
+    const extent = extents[i];
+    rows += Number(group.num_rows) * (extent ? shareInView(extent, view) : 1);
+  });
+  return Math.round(rows);
+}
+
+/**
+ * What reading `view` decodes, from the footer alone: the row groups whose
+ * covering extent the view touches (a group without statistics counts), and
+ * all their rows — a reader decodes a row group whole and filters its rows
+ * afterwards, so a view holding 145,000 features of a file in 100,000-row
+ * groups decoded about 600,000 rows. `largest` is the biggest group's rows.
+ */
+export function rowGroupsInView(source: GeoParquetFile, view: BBox): { groups: number; rows: number; largest: number } {
+  const extents = rowGroupExtents(source);
+  let groups = 0;
+  let rows = 0;
+  let largest = 0;
+  dataRowGroups(source).forEach(({ group }, i) => {
+    const n = Number(group.num_rows);
+    largest = Math.max(largest, n);
+    const extent = extents[i];
+    if (extent && shareInView(extent, view) === 0) return;
+    groups++;
+    rows += n;
+  });
+  return { groups, rows, largest };
+}
+
+/**
+ * The bbox each data row group's covering statistics describe (undefined
+ * without stats), in {@link dataRowGroups} order.
+ */
 function rowGroupExtents(source: GeoParquetFile): (BBox | undefined)[] {
   const cover = source.info.covering;
   if (!cover) return [];
-  return source.metadata.row_groups.map((group) => {
+  return dataRowGroups(source).map(({ group }) => {
     const stat = (path: string, which: "min" | "max"): number | undefined => {
       const chunk = group.columns.find((c) => c.meta_data?.path_in_schema.join(".") === path);
       const s = chunk?.meta_data?.statistics;
@@ -502,7 +666,7 @@ export async function compressorsFor(source: GeoParquetFile, columns: readonly s
   const { compressors } = await getDecoder("geoparquet");
   const read = new Set(columns);
   const codecs = new Set<string>();
-  for (const group of source.metadata.row_groups) {
+  for (const { group } of dataRowGroups(source)) {
     for (const chunk of group.columns) {
       const meta = chunk.meta_data;
       if (meta && read.has(meta.path_in_schema[0]!)) codecs.add(meta.codec);
@@ -555,11 +719,15 @@ async function read(
     ]);
     if (options.isCurrent && !options.isCurrent()) return null;
     const { parquetReadObjects, toFeatures } = await getDecoder("geoparquet");
+    // An overview file: its canonical level's rows only (hyparquet plans
+    // only the row groups in that range, before any fetch).
+    const band = source.info.overviews?.canonical;
     const rows = (await parquetReadObjects({
       file: source.file,
       metadata: source.metadata,
       columns,
       compressors,
+      ...(band ? { rowStart: band.rowStart, rowEnd: band.rowEnd } : {}),
       ...(filter ? { filter: filter as never } : {}),
     })) as Obj[];
     if (options.isCurrent && !options.isCurrent()) return null;

@@ -408,3 +408,62 @@ describe("GeoParquet and COG are both read: neither is reported as 'not yet'", (
     expect(v1(`  a:\n    type: raster\n    url: https://x.org/a\n    format: cog`).success).toBe(true);
   });
 });
+
+describe("load: maxFeatures — the per-view budget (ml-37r.17)", () => {
+  it("accepts a positive whole number, flat (v1) and under runtime: (v2)", () => {
+    const flat = v1(`  lots:
+    type: geojson
+    url: data/lots.parquet
+    load: { mode: viewport, minzoom: 12, maxFeatures: 50000 }`);
+    expect(flat.errors).toEqual([]);
+    expect(flat.warnings).toEqual([]);
+    const nested = v2(`    lots:
+      type: geojson
+      url: data/lots.fgb
+      runtime:
+        load: { mode: viewport, maxFeatures: 20000 }`);
+    expect(nested.errors).toEqual([]);
+  });
+
+  it.each([
+    ["0", "Value must be >= 1"],
+    ["-5", "Value must be >= 1"],
+    ["1.5", "Expected integer"],
+  ])("refuses maxFeatures: %s", (value, message) => {
+    const result = v1(`  lots:
+    type: geojson
+    url: data/lots.fgb
+    load: { mode: viewport, maxFeatures: ${value} }`);
+    expect(result.success).toBe(false);
+    expect(result.errors[0]).toMatchObject({ path: "sources.lots.load.maxFeatures" });
+    expect(result.errors[0]!.message).toContain(message);
+  });
+
+  it("maxFeatures alone (no mode: the whole file) raises the whole-file limit, and validates the same (M3)", () => {
+    const ok = v1(`  lots:
+    type: geojson
+    url: data/lots.parquet
+    load: { maxFeatures: 600000 }`);
+    expect(ok.errors).toEqual([]);
+    expect(ok.warnings).toEqual([]);
+    const all = v1(`  lots:
+    type: geojson
+    url: data/lots.parquet
+    load: { mode: all, maxFeatures: 600000 }`);
+    expect(all.errors).toEqual([]);
+    const bad = v1(`  lots:
+    type: geojson
+    url: data/lots.parquet
+    load: { maxFeatures: 0 }`);
+    expect(bad.success).toBe(false);
+    expect(bad.errors[0]).toMatchObject({ path: "sources.lots.load.maxFeatures" });
+  });
+
+  it("refuses a maxFeatures that isn't a number", () => {
+    const result = v1(`  lots:
+    type: geojson
+    url: data/lots.fgb
+    load: { mode: viewport, maxFeatures: lots }`);
+    expect(result.success).toBe(false);
+  });
+});

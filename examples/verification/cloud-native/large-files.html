@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Large FlatGeobuf and GeoParquet files</title>
+  <!--
+    0.9.2 (ml-37r.16, ml-37r.17): files too large for a tab are refused or
+    read in parts, never decoded whole until the tab crashes.
+      - "whole": a GeoParquet file and a FlatGeobuf without an index, each
+                 over the whole-file feature limit (400,000 features; lowered
+                 to 40 on this page, see below, so small fixtures stand in
+                 for large files): refused with a notice naming the count and
+                 the fix. Their compressed size is far under the 50 MB byte
+                 guard, which is all 0.9.1 checked.
+      - "auto":  the same limit on files that CAN be read in parts (a sorted
+                 GeoParquet with a bbox column, an indexed FlatGeobuf): read by
+                 view instead.
+      - "raised": the same over-the-limit GeoParquet file with
+                 load: { maxFeatures: 500 }: the author's maxFeatures raises
+                 the whole-file limit, so all 400 points load whole.
+      - "budget": load: viewport with maxFeatures: 60. Opened close in, the
+                 points draw; zoomed out to where the view holds more than 60,
+                 nothing is read and a "zoom in" line shows; zoomed back in,
+                 the points return.
+    The limit is lowered through the browser-test hook
+    `window.__MAPLIBRE_YAML_LIMITS__` (not an authoring option).
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/large-files.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 360px; }
+  </style>
+  <script>
+    // Test hook: small fixtures stand in for files over the whole-file limit.
+    window.__MAPLIBRE_YAML_LIMITS__ = { maxFeatures: 40 };
+  </script>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = "whole" explains both refusals; "auto" draws points; "raised" draws all 400 points; "budget" draws points close in and asks to zoom in when zoomed out.</header>
+  <main>
+    <section>
+      <h2>Over the whole-file limit, can't be read in parts: refused</h2>
+      <ml-map id="whole">
+        <script type="text/yaml">
+type: map
+id: large-whole
+config:
+  center: [10.2, 42.15]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  districts:
+    type: geojson
+    url: /gallery-assets/cloud-native/districts.parquet
+  wells:
+    type: geojson
+    url: /gallery-assets/cloud-native/points-noindex.fgb
+layers:
+  - id: districts
+    type: fill
+    source: districts
+    paint: { fill-color: "#457b9d", fill-opacity: 0.6 }
+  - id: wells
+    type: circle
+    source: wells
+    paint: { circle-color: "#e63946", circle-radius: 4 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Over the whole-file limit, readable in parts: read by view</h2>
+      <ml-map id="auto">
+        <script type="text/yaml">
+type: map
+id: large-auto
+config:
+  center: [10.1, 42.08]
+  zoom: 12
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  gpq:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+  fgb:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.fgb
+layers:
+  - id: gpq
+    type: circle
+    source: gpq
+    paint: { circle-color: "#1d3557", circle-radius: 6 }
+  - id: fgb
+    type: circle
+    source: fgb
+    paint: { circle-color: "#f4a261", circle-radius: 3 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Over the whole-file limit, load: { maxFeatures: 500 }: read whole</h2>
+      <ml-map id="raised">
+        <script type="text/yaml">
+type: map
+id: large-raised
+config:
+  center: [10.2, 42.15]
+  zoom: 9
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  gpq:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+    load: { maxFeatures: 500 }
+layers:
+  - id: gpq
+    type: circle
+    source: gpq
+    paint: { circle-color: "#2a9d8f", circle-radius: 4 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>load: viewport, maxFeatures: 60</h2>
+      <ml-map id="budget">
+        <script type="text/yaml">
+type: map
+id: large-budget
+config:
+  center: [10.1, 42.08]
+  zoom: 13
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  gpq:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+    load: { mode: viewport, minzoom: 8, maxFeatures: 60 }
+  fgb:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.fgb
+    load: { mode: viewport, minzoom: 8, maxFeatures: 60 }
+layers:
+  - id: gpq
+    type: circle
+    source: gpq
+    paint: { circle-color: "#1d3557", circle-radius: 6 }
+  - id: fgb
+    type: circle
+    source: fgb
+    paint: { circle-color: "#f4a261", circle-radius: 3 }
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

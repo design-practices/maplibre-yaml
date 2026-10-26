@@ -3,6 +3,7 @@
  * @module @maplibre-yaml/core/renderer
  */
 
+import { consoleText } from "../utils/console-text";
 import type { LngLat } from 'maplibre-gl';
 import { Map as MapLibreMap, AttributionControl, runtimeVersion, withWorkerUrlHint } from './maplibre-interop';
 import { installAttributionGuard, type AttributionGuard } from './attribution-guard';
@@ -127,6 +128,29 @@ type LegendConfig = z.infer<typeof LegendConfigSchema>;
 function isAttributionControlEnabled(controls?: ControlsConfig): boolean {
   const attribution = controls?.attribution;
   return attribution != null && attribution !== false;
+}
+
+/** The reader's "zoom in" line's class (see `MapRenderer.showZoomIn`). */
+export const ZOOM_IN_CLASS = 'ml-map-zoom-in';
+
+/**
+ * The line's stylesheet, once per document: theme-aware colours (the page's
+ * `color-scheme` through `Canvas` / `CanvasText`, or the author's custom
+ * properties), and hidden under `[quiet]` — read live, since it is CSS.
+ */
+function ensureZoomInStyles(doc: Document): void {
+  const id = 'ml-map-zoom-in-styles';
+  if (doc.getElementById(id)) return;
+  const style = doc.createElement('style');
+  style.id = id;
+  style.textContent =
+    `.${ZOOM_IN_CLASS}{position:absolute;bottom:36px;left:50%;transform:translateX(-50%);z-index:4;` +
+    'box-sizing:border-box;max-width:calc(100% - 24px);padding:4px 12px;border-radius:14px;' +
+    'background:var(--ml-map-zoom-in-background,Canvas);color:var(--ml-map-zoom-in-color,CanvasText);' +
+    'font:13px/1.4 system-ui,-apple-system,sans-serif;text-align:center;' +
+    'box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:none}' +
+    `[quiet] .${ZOOM_IN_CLASS}{display:none}`;
+  (doc.head ?? doc.documentElement).append(style);
 }
 
 /**
@@ -457,6 +481,9 @@ export class MapRenderer {
    * table MapLibre reads for its controls).
    */
   private readonly strings: Strings;
+  /** Sources whose view is too dense to read, and the line asking to zoom in. */
+  private readonly denseSources = new Set<string>();
+  private zoomInLine: HTMLElement | null = null;
   /** Lazily created on the first chrome mount (KTD10 corner system). */
   private chrome: ChromeLayout | null = null;
   /** Panel toggles made before the layer chain settles — applied after. */
@@ -811,11 +838,38 @@ export class MapRenderer {
             (data ? geojsonBounds(data) : null);
           if (bounds) {
             this.fitApplied = true;
-            this.map.fitBounds(bounds, {
+            const fitOptions = {
               padding: this.fitPadding(fitTo),
               ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
               animate: false,
-            });
+            };
+            // ...and never further out than it is read: a citywide file
+            // framed at zoom 9.9 opened blank under a `minzoom` of 10, and at
+            // zoom 10 its view held 855,773 features — over the 150,000 one
+            // read takes — so it opened on the "zoom in" line. Centred on the
+            // extent, at the outermost zoom whose view the reader's index or
+            // row-group statistics say is read (or the source's minzoom when
+            // none is near; the author's maxZoom still caps it).
+            const minzoom = this.layerManager.getViewMinzoom?.(fitTo.source);
+            const camera =
+              minzoom !== undefined ? this.map.cameraForBounds?.(bounds, fitOptions) : undefined;
+            if (minzoom !== undefined && camera?.center && camera.zoom !== undefined) {
+              const center = camera.center as { lng: number; lat: number };
+              const container = this.map.getContainer?.();
+              const fits = this.layerManager.getViewZoomThatFits?.(
+                fitTo.source,
+                [center.lng, center.lat],
+                camera.zoom,
+                container?.clientWidth ?? 0,
+                container?.clientHeight ?? 0
+              );
+              let zoom = Math.max(camera.zoom, fits ?? minzoom);
+              if (fitTo.maxZoom !== undefined) zoom = Math.min(zoom, Math.max(fitTo.maxZoom, minzoom, camera.zoom));
+              if (zoom > camera.zoom) this.map.jumpTo({ center: camera.center, zoom });
+              else this.map.fitBounds(bounds, fitOptions);
+            } else {
+              this.map.fitBounds(bounds, fitOptions);
+            }
             this.emit('camera:fit', { source: fitTo.source, bounds });
           }
         }
@@ -841,25 +895,29 @@ export class MapRenderer {
       // A source in a format this version can't read (ml-cnv): reported
       // once, against the source, like any non-fatal source failure.
       onSourceError: (sourceId, error) => {
-        console.warn(`[maplibre-yaml] ${error.message.replace(/`/g, '"')}`);
+        console.warn(`[maplibre-yaml] ${consoleText(error.message)}`);
         options.onError?.(error, false, { kind: 'source', sourceId });
       },
       // A `before:` naming no layer: the layer was added on top (ml-aot.119).
       onLayerHint: (layerId, message) => {
-        console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+        console.warn(`[maplibre-yaml] ${consoleText(message)}`);
         options.onError?.(new Error(message), false, { kind: 'layer-hint', layerId });
       },
       // A live `merge` whose features have no key (ml-aot.141): they are
       // kept, not matched; the console always, the page while developing.
       onSourceHint: (sourceId, message) => {
-        console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+        console.warn(`[maplibre-yaml] ${consoleText(message)}`);
         options.onError?.(new Error(message), false, { kind: 'source-hint', sourceId });
       },
+      onViewTooDense: (sourceId, dense) => this.showZoomIn(sourceId, dense),
     };
 
     const eventCallbacks: EventHandlerCallbacks = {
       onClick: (layerId, feature, lngLat) => this.emit('layer:click', { layerId, feature, lngLat }),
       onHover: (layerId, feature, lngLat) => this.emit('layer:hover', { layerId, feature, lngLat }),
+      // A highlight with no feature ids (ml-37r.15): an author hint, like a
+      // `before:` that names no layer.
+      onHint: layerCallbacks.onLayerHint!,
     };
 
     // GeoParquet reads only the columns the document references (ml-cnv.4):
@@ -885,12 +943,12 @@ export class MapRenderer {
       {
         readsByView: (sourceId) => this.layerManager.readsByView?.(sourceId) ?? false,
         onRefused: (layerId, sourceId, error) => {
-          console.warn(`[maplibre-yaml] ${error.message.replace(/`/g, '"')}`);
+          console.warn(`[maplibre-yaml] ${consoleText(error.message)}`);
           options.onError?.(error, false, { kind: 'classify', layerId, sourceId });
         },
         // An author hint: the console always, the page while developing.
         onFieldProblem: (layerId, message) => {
-          console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+          console.warn(`[maplibre-yaml] ${consoleText(message)}`);
           options.onError?.(new Error(message), false, { kind: 'classify-field', layerId });
         },
       }
@@ -1390,12 +1448,12 @@ export class MapRenderer {
         void archiveMetadata(url).then((metadata) => {
           const older = olderProtomapsSchema(metadata, url);
           if (!older || this.destroyed) return;
-          console.warn(`[maplibre-yaml] ${older.replace(/`/g, '"')}`);
+          console.warn(`[maplibre-yaml] ${consoleText(older)}`);
           options.onError?.(new Error(older), false, { kind: 'basemap' });
         });
         return;
       }
-      console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
+      console.warn(`[maplibre-yaml] ${consoleText(problem)}`);
       options.onError?.(new Error(problem), false, { kind: 'basemap' });
     });
     // A basemap icon its sprite lacks (the generator names "townhall", which
@@ -1448,7 +1506,7 @@ export class MapRenderer {
             const major = Number(runtimeVersion()?.split('.')[0]);
             const labelsHidden = failed.includes('glyphs') && major > 0 && major < 5 && this.hideBasemapLabels();
             const problem = basemapAssetMessage(failed, assets, { labelsHidden });
-            console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
+            console.warn(`[maplibre-yaml] ${consoleText(problem)}`);
             options.onError?.(new Error(problem), false, { kind: 'basemap' });
           });
         };
@@ -1473,7 +1531,7 @@ export class MapRenderer {
         if (this.destroyed) return;
         const cause = error instanceof Error ? error : new Error(String(error));
         map.setStyle(fallbackBasemapStyle(spec, pageUrl) as never);
-        console.warn(`[maplibre-yaml] the basemap could not be built: ${cause.message.replace(/`/g, '"')}`);
+        console.warn(`[maplibre-yaml] the basemap could not be built: ${consoleText(cause.message)}`);
         options.onError?.(cause, false, { kind: 'basemap' });
       }
     );
@@ -1834,6 +1892,36 @@ export class MapRenderer {
   }
 
   /**
+   * The reader's "zoom in" line (ml-37r.17): shown over the map while any
+   * source read by view draws nothing until the reader zooms in (below its
+   * `minzoom`, or its view holds more features than one read takes), and
+   * gone once every such source is read again — or loses its last layer.
+   *
+   * @remarks
+   * Styled by a stylesheet, not inline (ml-cnv.32): `<ml-map quiet>` hides it
+   * whenever the attribute is set, not only when the line was created, and
+   * its colours follow the page's colour scheme (`Canvas` / `CanvasText`,
+   * overridable with `--ml-map-zoom-in-background` / `--ml-map-zoom-in-color`).
+   */
+  private showZoomIn(sourceId: string, dense: boolean): void {
+    const sources = this.denseSources;
+    if (dense) sources.add(sourceId);
+    else sources.delete(sourceId);
+    if (!sources.size) {
+      this.zoomInLine?.remove();
+      this.zoomInLine = null;
+    } else if (!this.zoomInLine) {
+      const container = this.map.getContainer();
+      ensureZoomInStyles(container.ownerDocument);
+      const line = (this.zoomInLine = container.ownerDocument.createElement('div'));
+      line.className = ZOOM_IN_CLASS;
+      line.setAttribute('role', 'status');
+      line.textContent = this.strings('maplibre-yaml.Notice.ZoomIn');
+      container.append(line);
+    }
+  }
+
+  /**
    * Destroy the map and clean up resources
    */
   destroy(): void {
@@ -1851,6 +1939,7 @@ export class MapRenderer {
     this.autoLegendContainer = null;
     this.chrome?.destroy();
     this.chrome = null;
+    this.zoomInLine?.remove();
     this.eventListeners.clear();
     this.attributionGuard.dispose();
     this.map.remove();

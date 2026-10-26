@@ -7,6 +7,7 @@
  * each registry array is behavior — see the per-array remarks.
  */
 
+import { consoleText } from "../utils/console-text";
 import type {
   Map as MapLibreMap,
   FlyToOptions,
@@ -202,6 +203,18 @@ export const CLICK_INTERACTIONS: readonly Interaction[] = [
  */
 export const HOVER_FEATURE_STATE_KEY = "hover";
 
+/** The feature a highlight lit: what `setFeatureState` addresses. */
+interface FeatureTarget {
+  source: string;
+  id: string | number;
+  /** The vector-tile layer the feature is in (vector sources only). */
+  sourceLayer?: string;
+}
+
+/** The console fallback when no host hint channel is wired (the compiled path). */
+const warn = (message: string): void =>
+  console.warn(`[maplibre-yaml] ${consoleText(message)}`);
+
 /**
  * Hover interactions, in dispatch order.
  *
@@ -214,49 +227,54 @@ export const HOVER_INTERACTIONS: readonly Interaction[] = [
   defineInteraction<boolean>({
     name: "highlight",
     select: (trigger) => trigger.highlight,
-    create: () => {
+    create: (deps) => {
       /** The lit feature per layer — per handler instance, never shared. */
-      const lit = new Map<string, { sourceId: string; featureId: string | number }>();
+      const lit = new Map<string, FeatureTarget>();
       /** Warn once per layer, not once per mousemove. */
       const warned = new Set<string>();
 
-      const unset = (
-        map: MapLibreMap,
-        entry: { sourceId: string; featureId: string | number }
-      ) => {
-        map.setFeatureState(
-          { source: entry.sourceId, id: entry.featureId },
-          { [HOVER_FEATURE_STATE_KEY]: false }
-        );
+      const unset = (map: MapLibreMap, target: FeatureTarget) => {
+        map.setFeatureState(target, { [HOVER_FEATURE_STATE_KEY]: false });
       };
 
       return {
         run(_config, ctx) {
-          const featureId = ctx.feature?.id;
+          const feature = ctx.feature;
+          const id = feature?.id;
+          // A vector-tile feature (PMTiles, `tiles:`) lives in one of the
+          // source's layers, and feature-state on a vector source must name
+          // it: without `sourceLayer` MapLibre rejects every write (ml-37r.15).
+          // MapLibre puts it on every feature it hands an event; the layer's
+          // own `source-layer` is the fallback.
+          const sourceLayer: string | undefined =
+            feature?.sourceLayer ?? feature?.layer?.["source-layer"];
 
-          if (featureId === undefined || featureId === null) {
+          if (id === undefined || id === null) {
             // Feature-state is addressed by id; without one there is nothing to
-            // target. Authors fix this with `generateId: true` or `promoteId`.
+            // target. GeoJSON gets ids with `generateId`; tiles carry their own
+            // or take a property through `promoteId`.
             if (!warned.has(ctx.layerId)) {
               warned.add(ctx.layerId);
-              console.warn(
-                `[maplibre-yaml] hover.highlight on layer "${ctx.layerId}" ` +
-                  "needs feature ids. Set `generateId: true` on the source, or " +
-                  "`promoteId` to use a property as the id."
+              (deps.hint ?? warn)(
+                `\`hover.highlight\` on layer \`${ctx.layerId}\` needs feature ids: ` +
+                  (sourceLayer
+                    ? `add \`promoteId: { ${sourceLayer}: <property> }\` to source \`${ctx.sourceId}\`, ` +
+                      "naming a property that is different for every feature (its tiles carry no ids)."
+                    : "set `generateId: true` on the source, or `promoteId` to use a property as the id."),
+                ctx.layerId
               );
             }
             return;
           }
 
           const current = lit.get(ctx.layerId);
-          if (current?.featureId === featureId) return; // same feature, no churn
+          if (current?.id === id && current?.sourceLayer === sourceLayer) return; // same feature, no churn
 
           if (current) unset(ctx.map, current);
-          ctx.map.setFeatureState(
-            { source: ctx.sourceId, id: featureId },
-            { [HOVER_FEATURE_STATE_KEY]: true }
-          );
-          lit.set(ctx.layerId, { sourceId: ctx.sourceId, featureId });
+          const target: FeatureTarget = { source: ctx.sourceId, id };
+          if (sourceLayer) target.sourceLayer = sourceLayer;
+          ctx.map.setFeatureState(target, { [HOVER_FEATURE_STATE_KEY]: true });
+          lit.set(ctx.layerId, target);
         },
 
         clearLayer(layerId, map) {
@@ -295,10 +313,16 @@ export const HOVER_INTERACTIONS: readonly Interaction[] = [
             // point the author at the same remedy `highlight` uses.
             if (!warned.has(ctx.layerId)) {
               warned.add(ctx.layerId);
+              // Vector tiles (PMTiles, `tiles:`) take ids from the tiles or a
+              // property; `generateId` is GeoJSON-only (ml-cnv.33).
+              const sourceLayer: string | undefined =
+                ctx.feature?.sourceLayer ?? ctx.feature?.layer?.["source-layer"];
               console.warn(
-                `[maplibre-yaml] hover.emit on layer "${ctx.layerId}" needs ` +
-                  "feature ids to dedupe. Set `generateId: true` on the source, " +
-                  "or `promoteId` to use a property as the id."
+                `[maplibre-yaml] hover.emit on layer "${ctx.layerId}" needs feature ids to dedupe. ` +
+                  (sourceLayer
+                    ? `Add \`promoteId: { ${sourceLayer}: <property> }\` to source \`${ctx.sourceId}\`, ` +
+                      "naming a property that is different for every feature (its tiles carry no ids)."
+                    : "Set `generateId: true` on the source, or `promoteId` to use a property as the id.")
               );
             }
             return;

@@ -151,6 +151,89 @@ describe("fitTo (U14)", () => {
     ]);
   });
 
+  it("a source read by view is framed no further out than its minzoom: the map opens where data loads (M1)", () => {
+    const renderer = new MapRenderer(
+      document.createElement("div"),
+      { ...BASE, fitTo: { source: "lots" } } as any,
+      [],
+      {},
+      { lots: { type: "geojson", url: "/data/lots.parquet", load: "viewport" } } as any
+    );
+    const map = renderer.getMap() as any;
+    const extent = [[-74.26, 40.49], [-73.7, 40.92]];
+    map.cameraForBounds = vi.fn(() => ({ center: { lng: -73.98, lat: 40.7 }, zoom: 9.92 }));
+    map.jumpTo = vi.fn();
+    const layers = (renderer as any).layerManager;
+    layers.getSourceExtent = () => extent;
+    layers.getViewMinzoom = () => 10;
+    const seen: unknown[] = [];
+    renderer.on("camera:fit", (e) => seen.push(e));
+    layers.callbacks.onDataLoaded("lots", 0);
+    expect(map.jumpTo).toHaveBeenCalledWith({ center: { lng: -73.98, lat: 40.7 }, zoom: 10 });
+    expect(map.fitBounds).not.toHaveBeenCalled();
+    expect(seen).toEqual([{ source: "lots", bounds: extent }]);
+  });
+
+  it("a source read by view too dense at its minzoom is framed at the outermost zoom whose view is read (PR #206 verification)", () => {
+    const renderer = new MapRenderer(
+      document.createElement("div"),
+      { ...BASE, fitTo: { source: "lots" } } as any,
+      [],
+      {},
+      { lots: { type: "geojson", url: "/data/lots.parquet", load: "viewport" } } as any
+    );
+    const map = renderer.getMap() as any;
+    map.cameraForBounds = vi.fn(() => ({ center: { lng: -73.98, lat: 40.7 }, zoom: 9.92 }));
+    map.jumpTo = vi.fn();
+    const layers = (renderer as any).layerManager;
+    layers.getSourceExtent = () => [[-74.26, 40.49], [-73.7, 40.92]];
+    layers.getViewMinzoom = () => 10;
+    const fits = vi.fn(() => 12.25);
+    layers.getViewZoomThatFits = fits;
+    layers.callbacks.onDataLoaded("lots", 0);
+    expect(fits).toHaveBeenCalledWith("lots", [-73.98, 40.7], 9.92, expect.any(Number), expect.any(Number));
+    expect(map.jumpTo).toHaveBeenCalledWith({ center: { lng: -73.98, lat: 40.7 }, zoom: 12.25 });
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+
+  it("the author's fitTo.maxZoom still caps it (but never below minzoom)", () => {
+    const renderer = new MapRenderer(
+      document.createElement("div"),
+      { ...BASE, fitTo: { source: "lots", maxZoom: 11 } } as any,
+      [],
+      {},
+      { lots: { type: "geojson", url: "/data/lots.parquet", load: "viewport" } } as any
+    );
+    const map = renderer.getMap() as any;
+    map.cameraForBounds = vi.fn(() => ({ center: { lng: -73.98, lat: 40.7 }, zoom: 9.92 }));
+    map.jumpTo = vi.fn();
+    const layers = (renderer as any).layerManager;
+    layers.getSourceExtent = () => [[-74.26, 40.49], [-73.7, 40.92]];
+    layers.getViewMinzoom = () => 10;
+    layers.getViewZoomThatFits = () => 12.25;
+    layers.callbacks.onDataLoaded("lots", 0);
+    expect(map.jumpTo).toHaveBeenCalledWith({ center: { lng: -73.98, lat: 40.7 }, zoom: 11 });
+  });
+
+  it("a source read by view whose extent frames at or above its minzoom is fitted as usual", () => {
+    const renderer = new MapRenderer(
+      document.createElement("div"),
+      { ...BASE, fitTo: { source: "lots", maxZoom: 16 } } as any,
+      [],
+      {},
+      { lots: { type: "geojson", url: "/data/lots.parquet", load: "viewport" } } as any
+    );
+    const map = renderer.getMap() as any;
+    map.cameraForBounds = vi.fn(() => ({ center: { lng: -73.98, lat: 40.7 }, zoom: 14 }));
+    map.jumpTo = vi.fn();
+    const layers = (renderer as any).layerManager;
+    layers.getSourceExtent = () => [[-74, 40.69], [-73.97, 40.71]];
+    layers.getViewMinzoom = () => 10;
+    layers.callbacks.onDataLoaded("lots", 0);
+    expect(map.jumpTo).not.toHaveBeenCalled();
+    expect(map.fitBounds).toHaveBeenCalledWith([[-74, 40.69], [-73.97, 40.71]], expect.objectContaining({ maxZoom: 16, animate: false }));
+  });
+
   it("a tiled source warns once and keeps the authored camera", () => {
     const renderer = new MapRenderer(
       document.createElement("div"),

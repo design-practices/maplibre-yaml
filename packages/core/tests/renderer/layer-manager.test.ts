@@ -657,6 +657,24 @@ describe("LayerManager", () => {
       expect(manager.isRefreshing("shared")).toBe(false);
     });
 
+    it("a file read by view stops reading — and its zoom-in line goes — with its last layer, and resumes with the next (ml-cnv.32)", async () => {
+      manager.registerSources({ parcels: namedGeojson() });
+      mockMap.getSource = vi.fn(() => ({ setData: vi.fn() }));
+      const loader = { readsByView: true, extent: undefined, minzoom: 10, start: vi.fn(), destroy: vi.fn(), suspend: vi.fn(), resume: vi.fn() };
+      (manager as any).formatLoaders.set("parcels", loader);
+      const add = (id: string) =>
+        manager.addLayer({ id, type: "fill", visible: true, toggleable: false, source: "parcels" } as any);
+      await add("lots");
+      await add("outlines");
+      expect(loader.resume).toHaveBeenCalledTimes(1); // the first layer (a no-op unless suspended)
+      manager.removeLayer("lots");
+      expect(loader.suspend).not.toHaveBeenCalled(); // outlines still draws it
+      manager.removeLayer("outlines");
+      expect(loader.suspend).toHaveBeenCalledTimes(1);
+      await add("lots-again");
+      expect(loader.resume).toHaveBeenCalledTimes(2);
+    });
+
     // `url` is our key, not MapLibre's — a geojson source spec carrying it
     // fails style validation and aborted the whole render. The named path
     // must route through the DataFetcher like inline layer sources do.

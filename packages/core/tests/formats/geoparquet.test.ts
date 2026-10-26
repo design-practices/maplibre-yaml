@@ -20,6 +20,9 @@ import {
   readBbox,
   projectedBytes,
   canSkipByView,
+  rowsInView,
+  rowGroupsInView,
+  projectedSize,
   TAIL_BYTES,
 } from "../../src/formats/geoparquet";
 import { getDecoder, hasDecoder } from "../../src/formats/decoders";
@@ -38,7 +41,9 @@ const FIXTURES = join(
   dirname(fileURLToPath(import.meta.url)),
   "../../../../docs/public/gallery-assets/cloud-native"
 );
-const fixture = (name: string) => new Uint8Array(readFileSync(join(FIXTURES, name)));
+/** Files served in place of (or beside) the fixtures, by name. */
+const overrides = new Map<string, Uint8Array>();
+const fixture = (name: string) => overrides.get(name) ?? new Uint8Array(readFileSync(join(FIXTURES, name)));
 
 type Log = { url: string; range?: string; method?: string; status: number; bytes: number }[];
 
@@ -48,6 +53,8 @@ type Log = { url: string; range?: string; method?: string; status: number; bytes
  *
  * - `/norange/<file>`: `Range` ignored, 200 with the whole file;
  * - `/suffix416/<file>`: a suffix longer than the file is 416 (Fastly);
+ * - `/suffix416all/<file>`: every suffix range is 416, without `Content-Range`
+ *   (`npx http-server`), while plain ranges work;
  * - `/noexpose/<file>`: `Content-Range` unreadable, as a page on another
  *   origin sees GitHub Pages (`Content-Length` stays readable);
  * - `/nolength/<file>`: no `Content-Length` (a chunked response).
@@ -57,9 +64,10 @@ type Log = { url: string; range?: string; method?: string; status: number; bytes
 function fixtureFetch(log: Log = []) {
   return vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
-    const m = /^(?:https?:\/\/[^/]+)?((?:\/(?:norange|suffix416|noexpose|nolength))*)\/(.+)$/.exec(url)!;
+    const m = /^(?:https?:\/\/[^/]+)?((?:\/(?:norange|suffix416all|suffix416|noexpose|nolength))*)\/(.+)$/.exec(url)!;
     const ranges = !m[1]!.includes("/norange");
-    const suffix416 = m[1]!.includes("/suffix416");
+    const suffix416 = /\/suffix416(?!all)/.test(m[1]!);
+    const suffix416all = m[1]!.includes("/suffix416all");
     const expose = !m[1]!.includes("/noexpose");
     const length = !m[1]!.includes("/nolength");
     let bytes: Uint8Array;
@@ -76,6 +84,10 @@ function fixtureFetch(log: Log = []) {
     }
     const range = new Headers(init?.headers ?? {}).get("Range");
     const r = range && ranges ? /bytes=(\d*)-(\d*)/.exec(range) : null;
+    if (r && suffix416all && r[1] === "") {
+      log.push({ url, range, status: 416, bytes: 0 });
+      return new Response(null, { status: 416 });
+    }
     if (r && suffix416 && r[1] === "" && Number(r[2]) > size) {
       log.push({ url, range, status: 416, bytes: 0 });
       return new Response(null, { status: 416, headers: expose ? { "content-range": `bytes */${size}` } : {} });
@@ -341,6 +353,22 @@ describe("open: the footer in one suffix-range request", () => {
     expect((await readAll(source))!.features).toHaveLength(48);
   });
 
+  it("a host that answers every suffix range with 416 (npx http-server): the tail by offsets, not the whole file (ml-cnv.33)", async () => {
+    const log: Log = [];
+    vi.stubGlobal("fetch", fixtureFetch(log));
+    const size = fixture("points.parquet").length;
+    const source = await open("/suffix416all/points.parquet", { tailBytes: 16 * 1024 });
+    expect(source.ranges).toBe(true);
+    expect(source.byteLength).toBe(size);
+    expect(log.slice(0, 3).map((r) => [r.status, r.method ?? r.range ?? null])).toEqual([
+      [416, "bytes=-16384"],
+      [200, "HEAD"],
+      [206, `bytes=${size - 16384}-${size - 1}`],
+    ]);
+    expect(log.some((r) => r.status === 200 && !r.method)).toBe(false); // never the whole file
+    expect((await readBbox(source, [10.0, 42.0, 10.1, 42.08]))!.features.length).toBeLessThan(400);
+  });
+
   it("an oversized suffix answered 416 on a host that also hides the size: still read whole", async () => {
     vi.stubGlobal("fetch", fixtureFetch());
     const source = await open("/suffix416/noexpose/points.parquet");
@@ -538,7 +566,7 @@ describe("GeoParquetLoader", () => {
 
   async function run(
     url: string,
-    options: { load?: ReturnType<typeof loadModeOf>; map?: ReturnType<typeof fakeMap>; columns?: readonly string[] | "all"; limits?: { warn: number; max: number } } = {}
+    options: { load?: ReturnType<typeof loadModeOf>; map?: ReturnType<typeof fakeMap>; columns?: readonly string[] | "all"; limits?: { warn: number; max: number; maxFeatures?: number } } = {}
   ) {
     const log: Log = [];
     vi.stubGlobal("fetch", fixtureFetch(log));
@@ -596,7 +624,8 @@ describe("GeoParquetLoader", () => {
       map: fakeMap(9, AREA),
     });
     expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
-    expect(console.info).toHaveBeenCalledWith(expect.stringContaining("zoom in to see its features"));
+    expect(console.info).toHaveBeenCalledWith(expect.stringContaining("is read by view from zoom 11"));
+    expect(console.info).toHaveBeenCalledWith(expect.stringContaining('To read it from here, lower "minzoom" to 9 under "load:"'));
   });
 
   it("load: viewport on a server without ranges reads the whole file instead", async () => {
@@ -614,6 +643,31 @@ describe("GeoParquetLoader", () => {
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("isn't spatially sorted"));
   });
 
+  it("load: viewport on an unsorted file over the limit: refused for being unsorted, with no 'reading it whole' note first (ml-cnv.33)", async () => {
+    const { onError } = await run("/points-zstd.parquet", {
+      load: loadModeOf({ load: "viewport" }),
+      limits: { warn: 1e6, max: 50e6, maxFeatures: 100 },
+    });
+    const error = onError.mock.calls[0]![0];
+    expect(failure(error)).toMatchObject({ code: "too-large", features: 400, blocker: "unsorted" });
+    expect(error.message).toContain("it can't be read by view: its rows aren't in spatially sorted row groups");
+    expect(error.message).toContain("gpio sort hilbert points-zstd.parquet points-zstd-hilbert.parquet --row-group-size 10000");
+    expect(error.message).not.toContain("Add `load: viewport`");
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("reading it whole instead"));
+  });
+
+  it("load: viewport on a host without range requests, over the limit: the refusal names the hosting (ml-cnv.33)", async () => {
+    const { onError } = await run("/norange/points.parquet", {
+      load: loadModeOf({ load: "viewport" }),
+      limits: { warn: 1e6, max: 50e6, maxFeatures: 100 },
+    });
+    const error = onError.mock.calls[0]![0];
+    expect(failure(error)).toMatchObject({ code: "too-large", blocker: "no-range" });
+    expect(error.message).toContain("this server doesn't support HTTP range requests. Host it where they work");
+    expect(error.message).not.toContain("Add `load: viewport`");
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("reads the whole file instead"));
+  });
+
   it("load: viewport on a file without a covering column → says so", async () => {
     const { onError } = await run("/districts-nobbox.parquet", { load: loadModeOf({ load: "viewport" }) });
     expect(failure(onError.mock.calls[0]![0])?.code).toBe("no-index");
@@ -624,13 +678,13 @@ describe("GeoParquetLoader", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(loader.readsByView).toBe(true);
     expect(onData).toHaveBeenCalled();
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("reading only the part in view"));
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("so only the part in view is read"));
   });
 
   it("too large to load whole + not readable by view → refused, with the size", async () => {
     const { onError } = await run("/districts.parquet", { limits: { warn: 1_000, max: 2_000 } });
     expect(failure(onError.mock.calls[0]![0])).toMatchObject({ code: "too-large", size: expect.any(Number) });
-    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("reading only the part in view"));
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("only the part in view is read"));
   });
 
   it("a server without ranges and a file over the guard → the no-range notice", async () => {
@@ -769,5 +823,249 @@ describe("the file's own column names reach the classify hint (ml-aot.118)", () 
     expect(problem).toMatchObject({ reason: "missing", unread: true });
     expect(problem!.suggestion).toBeUndefined();
     expect(classifyFieldMessage("d", problem!)).toContain("is a column of the file, but columns: leaves it out");
+  });
+});
+
+describe("GeoParquet per-view budget (ml-37r.17)", () => {
+  const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+
+  it("estimates a view's rows from the row groups' covering statistics", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/points.parquet");
+    expect(rowsInView(source, [9, 41, 11, 43])).toBe(400);
+    expect(rowsInView(source, [0, 0, 1, 1])).toBe(0);
+    const part = rowsInView(source, [10.0, 42.0, 10.1, 42.08]);
+    expect(part).toBeGreaterThan(0);
+    expect(part).toBeLessThan(200);
+  });
+
+  it("a view over the budget isn't read: no row group fetched, one hint, then read once zoomed in", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const log: Log = [];
+      vi.stubGlobal("fetch", fixtureFetch(log));
+      const map = fakeMap(12, AREA);
+      const onData = vi.fn();
+      const onHint = vi.fn();
+      const onTooDense = vi.fn();
+      const loader = new GeoParquetLoader(
+        map as never,
+        "/points.parquet",
+        loadModeOf({ load: { mode: "viewport", maxFeatures: 100 } }),
+        ["kind"],
+        { onData, onError: vi.fn(), onHint, onTooDense }
+      );
+      await loader.start();
+      expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
+      expect(onTooDense).toHaveBeenLastCalledWith(true);
+      expect(onHint).toHaveBeenCalledTimes(1);
+      expect(onHint.mock.calls[0]![0]).toContain("more than one read takes (`maxFeatures`: 100)");
+      // The footer only.
+      expect(log).toHaveLength(1);
+
+      map.zoom = 14;
+      map.bounds = [10.0, 42.0, 10.1, 42.08];
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(onData.mock.calls.at(-1)![0].features.length).toBeGreaterThan(0));
+      expect(onTooDense).toHaveBeenLastCalledWith(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("whole-file guard on rows (ml-37r.16), with a real file", () => {
+  it("rows over the limit, bytes well under: not read whole (read by view when the file allows)", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const limits = { warn: 1e6, max: 50e6, maxFeatures: 100 };
+    const error = await loadGeoParquetWhole("/points.parquet", "all", { limits }).catch((e) => e);
+    expect(error).toBeInstanceOf(WholeFileTooLarge);
+    expect(error.features).toBe(400);
+    const refused = await loadGeoParquetWhole("/districts.parquet", "all", { limits: { ...limits, maxFeatures: 10 } }).catch(
+      (e) => e
+    );
+    expect(failure(refused)).toMatchObject({ code: "too-large", features: 48 });
+  });
+});
+
+describe("GeoParquet decode budget on the row groups a view touches (M2)", () => {
+  // points.parquet: 400 points in 8 Hilbert-sorted row groups of 50.
+  const ONE_GROUP: [number, number, number, number] = [10.0, 42.0, 10.05, 42.02];
+  const TWO_GROUPS: [number, number, number, number] = [10.0, 42.06, 10.05, 42.08];
+
+  it("counts the whole row groups a view touches, not just the rows in view", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/points.parquet");
+    expect(rowGroupsInView(source, ONE_GROUP)).toEqual({ groups: 1, rows: 50, largest: 50 });
+    expect(rowGroupsInView(source, TWO_GROUPS)).toEqual({ groups: 2, rows: 100, largest: 50 });
+    expect(rowsInView(source, TWO_GROUPS)).toBeLessThan(20);
+    expect(rowGroupsInView(source, [0, 0, 1, 1]).rows).toBe(0);
+  });
+
+  it("a view under maxFeatures whose row groups hold more than 3 × maxFeatures rows isn't read; a smaller one is", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const log: Log = [];
+      vi.stubGlobal("fetch", fixtureFetch(log));
+      const map = fakeMap(14, TWO_GROUPS);
+      const onData = vi.fn();
+      const onHint = vi.fn();
+      const onTooDense = vi.fn();
+      const loader = new GeoParquetLoader(
+        map as never,
+        "/points.parquet",
+        loadModeOf({ load: { mode: "viewport", maxFeatures: 20 } }),
+        ["kind"],
+        { onData, onError: vi.fn(), onHint, onTooDense }
+      );
+      await loader.start();
+      // About 4 features in view, but 100 rows decoded: over the 60-row limit (3 × 20).
+      expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
+      expect(onTooDense).toHaveBeenLastCalledWith(true);
+      expect(log).toHaveLength(1); // the footer only
+      expect(onHint).toHaveBeenCalledTimes(1);
+      const hint = onHint.mock.calls[0]![0] as string;
+      expect(hint).toContain("has row groups of up to 50 rows");
+      expect(hint).toContain("touches 2 row groups, 100 rows, over this map's decode limit of 60 rows (3 × `maxFeatures`)");
+      // Small row groups, loosely packed: a Hilbert sort, not another 10,000-row rewrite.
+      expect(hint).toContain("Its row groups are already small, but loosely packed");
+      expect(hint).toContain("`uvx --from geoparquet-io==1.7.0 gpio sort hilbert points.parquet points-hilbert.parquet --row-group-size 10000 --add-bbox`");
+      expect(hint).not.toContain("rewrite the file with about 10,000-row groups");
+      expect(hint).toContain("tylertoo");
+      expect(hint).toContain("raise `maxFeatures`");
+
+      map.bounds = ONE_GROUP;
+      map.moveend();
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.waitFor(() => expect(onData.mock.calls.at(-1)![0].features.length).toBeGreaterThan(0));
+      expect(onTooDense).toHaveBeenLastCalledWith(false);
+      expect(onHint).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("geo:overviews: only the canonical level is read (ml-cnv.21)", () => {
+  // tylertoo 0.8.0 (scripts/fixtures/overviews.py): 600 lots at zoom 14, plus
+  // coarser copies at zooms 10–13 — 1,732 rows in 11 row groups.
+  const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+  afterEach(() => overrides.clear());
+
+  it("reads the key: the canonical level's rows and row groups", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    expect(Number(source.metadata.num_rows)).toBe(1732);
+    expect(source.info.overviews).toEqual({
+      version: "0.2.0",
+      mode: "duplicating",
+      levels: 5,
+      known: true,
+      canonical: { groupStart: 8, groupEnd: 10, rowStart: 1132, rowEnd: 1732 },
+    });
+    expect(source.info.rows).toBe(600);
+    expect(source.info.rowGroups).toBe(3);
+  });
+
+  it("a whole read, mlym emit's decode and classify see each lot once", async () => {
+    const fc = await decodeBytes(fixture("lots-overviews.parquet"), "lots-overviews.parquet", { columns: "all" });
+    expect(fc.features).toHaveLength(600);
+    expect(new Set(fc.features.map((f) => f.properties!["lot"])).size).toBe(600);
+    expect(fc.features.every((f) => f.properties!["level"] === 4)).toBe(true);
+    vi.stubGlobal("fetch", fixtureFetch());
+    const whole = await loadGeoParquetWhole("/lots-overviews.parquet", ["floors"]);
+    expect(whole.data!.features).toHaveLength(600);
+  });
+
+  it("by view, the estimate, the decode budget and the size guards count the canonical level only", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-overviews.parquet");
+    expect(rowsInView(source, [9, 41, 11, 43])).toBe(600);
+    expect(rowGroupsInView(source, [9, 41, 11, 43])).toMatchObject({ groups: 3, rows: 600 });
+    const fc = await readBbox(source, [9, 41, 11, 43], { columns: "all" });
+    expect(fc!.features).toHaveLength(600);
+    expect(fc!.features.every((f) => f.properties!["level"] === 4)).toBe(true);
+    // The canonical level's bytes, not the whole file's.
+    const [, decoded] = projectedSize(source, "all");
+    let everything = 0;
+    for (const group of source.metadata.row_groups) {
+      for (const chunk of group.columns) everything += Number(chunk.meta_data?.total_uncompressed_size ?? 0);
+    }
+    expect(decoded).toBeLessThan(everything * 0.6);
+    // The whole-file guard counts 600 rows, not 1,732.
+    const limits = { warn: 1e6, max: 50e6, maxFeatures: 1000 };
+    const read = await loadGeoParquetWhole("/lots-overviews.parquet", "all", { limits });
+    expect(read.data!.features).toHaveLength(600);
+  });
+
+  it("the loader by view draws each lot once", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const onData = vi.fn();
+    const onHint = vi.fn();
+    const loader = new GeoParquetLoader(fakeMap(14, AREA) as never, "/lots-overviews.parquet", loadModeOf({ load: "viewport" }), "all", {
+      onData,
+      onError: vi.fn(),
+      onHint,
+    });
+    await loader.start();
+    expect(onData.mock.calls.at(-1)![0].features).toHaveLength(600);
+    expect(onHint).not.toHaveBeenCalled();
+  });
+
+  it("an unknown major version: the full-detail level, and the author is told", async () => {
+    const bytes = fixture("lots-overviews.parquet").slice();
+    const text = new TextDecoder("latin1").decode(bytes);
+    const at = text.indexOf('"version":"0.2.0","mode"');
+    expect(at).toBeGreaterThan(0);
+    bytes.set(new TextEncoder().encode('"version":"1.0.0","mode"'), at);
+    overrides.set("lots-v1.parquet", bytes);
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-v1.parquet");
+    expect(source.info.overviews).toMatchObject({ version: "1.0.0", known: false, canonical: { rowStart: 1132 } });
+    const onData = vi.fn();
+    const onHint = vi.fn();
+    await new GeoParquetLoader(fakeMap(14, AREA) as never, "/lots-v1.parquet", loadModeOf({}), "all", {
+      onData,
+      onError: vi.fn(),
+      onHint,
+    }).start();
+    expect(onData.mock.calls.at(-1)![0].features).toHaveLength(600);
+    expect(onHint).toHaveBeenCalledTimes(1);
+    expect(onHint.mock.calls[0]![0]).toContain("has overviews in a newer format (geo:overviews 1.0.0)");
+    expect(onHint.mock.calls[0]![0]).toContain("drawing its full-detail level only");
+  });
+
+  it("a key whose levels don't cover the row groups is ignored (plain GeoParquet)", async () => {
+    const bytes = fixture("lots-overviews.parquet").slice();
+    const text = new TextDecoder("latin1").decode(bytes);
+    const at = text.indexOf('"row_group_end":10,');
+    expect(at).toBeGreaterThan(0);
+    bytes.set(new TextEncoder().encode('"row_group_end":99,'), at);
+    overrides.set("lots-bad.parquet", bytes);
+    vi.stubGlobal("fetch", fixtureFetch());
+    const source = await open("/lots-bad.parquet");
+    expect(source.info.overviews).toBeUndefined();
+    expect(source.info.rows).toBe(1732);
+  });
+});
+
+describe("the 10–50 MB GeoParquet note names only what the file lacks (ml-cnv.35)", () => {
+  it("sorted with a bbox column: just load: viewport; unsorted: the sort; no ranges: no load: viewport", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const limits = { warn: 1_000, max: 1e8 };
+    const warns = () => (console.warn as unknown as { mock: { calls: string[][] } }).mock.calls.map((c) => c[0]);
+    await loadGeoParquetWhole("/points.parquet", "all", { limits });
+    const sorted = warns().find((w) => w.includes("may take a few seconds"))!;
+    expect(sorted).toContain('add "load: viewport" (it has a "bbox" column and sorted row groups)');
+    expect(sorted).not.toContain("gpio");
+    (console.warn as unknown as { mockClear(): void }).mockClear();
+    await loadGeoParquetWhole("/points-zstd.parquet", "all", { limits });
+    expect(warns().find((w) => w.includes("may take a few seconds"))).toContain('sort it ("uvx --from geoparquet-io==1.7.0 gpio sort hilbert');
+    (console.warn as unknown as { mockClear(): void }).mockClear();
+    await loadGeoParquetWhole("/norange/points.parquet", "all", { limits });
+    const norange = warns().find((w) => w.includes("may take a few seconds"))!;
+    expect(norange).not.toContain("load: viewport");
+    expect(norange).toContain('list fewer "columns:"');
   });
 });

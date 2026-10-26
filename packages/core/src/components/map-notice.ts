@@ -94,6 +94,30 @@ export function appendMessage(doc: Document, parent: HTMLElement, text: string):
         "font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(120, 53, 15, 0.08); padding: 0 3px; border-radius: 3px;";
       parent.appendChild(code);
     } else {
+      appendLinked(doc, parent, part);
+    }
+  });
+}
+
+/**
+ * The docs links a message ends with ("More: https://docs.maplibre-yaml.org/…"),
+ * as links that open in a new tab (ml-cnv.35). Only this site's pages: any
+ * other URL in a message (a data file's) stays text.
+ */
+const DOCS_LINK = /(https:\/\/docs\.maplibre-yaml\.org\/[A-Za-z0-9/_#.-]*[A-Za-z0-9/_#-])/;
+
+function appendLinked(doc: Document, parent: HTMLElement, text: string): void {
+  text.split(DOCS_LINK).forEach((part, index) => {
+    if (part === "") return;
+    if (index % 2 === 1) {
+      const link = doc.createElement("a");
+      link.href = part;
+      link.textContent = part;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.style.cssText = "color: inherit; text-decoration: underline;";
+      parent.appendChild(link);
+    } else {
       parent.appendChild(doc.createTextNode(part));
     }
   });

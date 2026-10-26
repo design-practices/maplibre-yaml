@@ -67,6 +67,10 @@ sources:
   where the data is.
 - `pmtiles://data/buildings.pmtiles` works too, the form MapLibre's own
   examples use.
+- **`hover.highlight`** works on vector archives (core 0.9.2 or later) when
+  the tiles carry feature ids; if they don't, add `promoteId: { <layer>:
+  <property> }` to the source, naming a property that is different for every
+  feature, and the map tells you so while you develop.
 
 ## Make a PMTiles file
 
@@ -80,6 +84,44 @@ sources:
 
 Keep a file small by cutting it to the area and zoom levels you show: each
 extra zoom level makes it about three times bigger.
+
+### From a large file
+
+A GeoParquet or FlatGeobuf file too large to draw at every zoom (a city's
+parcels or buildings seen whole) is what PMTiles is for: the map reads only the
+tiles in view, simplified for the zoom. [tylertoo](https://github.com/geoparquet-io/tylertoo)
+builds the archive from a GeoParquet file in seconds, with nothing to install
+but [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('lots.parquet', 'lots-ov.parquet', min_zoom=0, max_zoom=14, collapse_square=True); t.export_pmtiles('lots-ov.parquet', 'lots.pmtiles', layer_name='lots', tile_size_limit=None)"
+```
+
+- This is the parcel recipe measured on NYC's 856,687 lots (8 columns): 26 s
+  and 2.1 GB to build a 115 MB archive (tippecanoe took 8 min 40 s), and the
+  citywide map draws in 1–3 s at 58–60 fps on a desktop.
+  `collapse_square=True` keeps lots too small for a zoom visible as small
+  squares; `tile_size_limit=None` stops tylertoo 0.8.0 dropping features from
+  dense tiles. `min_zoom=0` draws the data at every zoom, a region-wide view
+  too: starting at zoom 10 instead saves only 1.3 s and 3.5 MB, and leaves the
+  map blank further out. MapLibre draws zoom 14's tiles further in; raise
+  `max_zoom` for finer detail.
+- tylertoo reads GeoParquet. Convert a FlatGeobuf, GeoJSON or GeoPackage file
+  first with geoparquet-io (nothing to install but uv):
+  `uvx --from geoparquet-io==1.7.0 gpio convert geoparquet lots.fgb lots.parquet`.
+  GDAL's `ogr2ogr -f Parquet` works too when your GDAL has its Arrow/Parquet
+  driver (`ogrinfo --formats | grep Parquet`; conda-forge's `gdal` with
+  `libgdal-arrow-parquet`, or the `ghcr.io/osgeo/gdal` Docker image).
+- Every column stays a tile property. To highlight on hover or address
+  features by id, name an id column with `promoteId`:
+
+```yaml
+sources:
+  lots:
+    type: vector
+    url: data/lots.pmtiles
+    promoteId: { lots: BBL }
+```
 
 ## PMTiles inside a basemap style
 

@@ -144,7 +144,9 @@ different for every feature (`STATE_ID` here), which keeps the same id when
 the data refreshes. `generateId: true` numbers the features instead. Leave
 both out and maplibre-yaml turns on `generateId` for you, whether the data is
 written in the YAML or loaded from `url:` (core 0.9.1 or later). Write
-`generateId: false` to keep the ids your data has.
+`generateId: false` to keep the ids your data has. Vector tiles (PMTiles,
+`tiles:`) use the ids in the tiles, or `promoteId: { <source-layer>: <property> }`
+when they have none (core 0.9.2 or later).
 
 `highlight` changes the layer's main colour (`fill-color` here), and works on
 [classified](/guides/thematic-maps/) layers too. If that colour is already an

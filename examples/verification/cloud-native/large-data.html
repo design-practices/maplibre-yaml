@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Large data: what the reader sees</title>
+  <!--
+    0.9.2 review round (PR #206): a large file read by view never leaves the
+    reader on a blank map without a word.
+      - "fit":   fitTo on a GeoParquet file read by view from zoom 13. Its
+                 extent frames at about zoom 10, where nothing would be read;
+                 the map opens at zoom 13 instead, with the points drawn.
+      - "dense": fitTo on a GeoParquet file read by view with maxFeatures: 60:
+                 its whole extent holds 400 points, so the map opens at the
+                 outermost zoom whose view holds at most 60 — points drawn,
+                 no zoom-in line.
+      - "below": a FlatGeobuf file read by view from zoom 12, opened at zoom
+                 10: the reader sees "zoom in to see them"; zoomed in, the
+                 points draw and the line goes.
+      - "groups": the same points at the same view, maxFeatures: 30, from two
+                 GeoParquet files: points.parquet (row groups of 50) is read;
+                 points-rg100.parquet (row groups of 100) is not — each row
+                 group a view touches is decoded whole, and 100 rows is over
+                 3 × maxFeatures (90) — and its author hint says to sort it
+                 along a Hilbert curve (its groups are already small).
+      - "overviews": a tylertoo overview GeoParquet (geo:overviews: 600 lots
+                 at zoom 14 plus coarser copies at zooms 10-13, 1,732 rows):
+                 each lot is drawn once, from the full-detail level.
+      - "dark":  the "below" case on a dark page section (color-scheme: dark):
+                 the zoom-in line follows it (dark background, light text).
+    Under <ml-map quiet> the line is hidden — toggled live, not only when the
+    line first shows — and it goes when its source's last layer is removed.
+    Serve from the repo root:  pnpm verify:serve
+    Then open: http://localhost:4174/examples/verification/cloud-native/large-data.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    header { padding: 8px 16px; background: #1d3557; color: white; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    ml-map { display: block; height: 360px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <header>PASS = "fit" opens at zoom 13 with points; "dense" opens zoomed in with points, no zoom-in line; "below" asks to zoom in, then draws points once zoomed in; "groups" draws only the blue points and asks to zoom in; "overviews" draws 600 lots, each once.</header>
+  <main>
+    <section>
+      <h2>fitTo on a file read by view from zoom 13</h2>
+      <ml-map id="fit">
+        <script type="text/yaml">
+type: map
+id: large-data-fit
+config:
+  center: [0, 0]
+  zoom: 2
+  fitTo: { source: gpq }
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  gpq:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+    load: { mode: viewport, minzoom: 13 }
+layers:
+  - id: gpq
+    type: circle
+    source: gpq
+    paint: { circle-color: "#1d3557", circle-radius: 6 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>fitTo on a file too dense at its minzoom (maxFeatures: 60)</h2>
+      <ml-map id="dense">
+        <script type="text/yaml">
+type: map
+id: large-data-dense
+config:
+  center: [0, 0]
+  zoom: 2
+  fitTo: { source: gpq }
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  gpq:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+    load: { mode: viewport, minzoom: 8, maxFeatures: 60 }
+layers:
+  - id: gpq
+    type: circle
+    source: gpq
+    paint: { circle-color: "#2a9d8f", circle-radius: 5 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Opened below minzoom (12)</h2>
+      <ml-map id="below">
+        <script type="text/yaml">
+type: map
+id: large-data-below
+config:
+  center: [10.1, 42.08]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  fgb:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.fgb
+    load: { mode: viewport, minzoom: 12 }
+layers:
+  - id: fgb
+    type: circle
+    source: fgb
+    paint: { circle-color: "#f4a261", circle-radius: 4 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>Row groups of 50 (read) and of 100 (too costly to decode), maxFeatures: 30</h2>
+      <ml-map id="groups">
+        <script type="text/yaml">
+type: map
+id: large-data-groups
+config:
+  center: [10.1, 42.025]
+  zoom: 13
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  small:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+    load: { mode: viewport, minzoom: 8, maxFeatures: 30 }
+  large:
+    type: geojson
+    url: /gallery-assets/cloud-native/points-rg100.parquet
+    load: { mode: viewport, minzoom: 8, maxFeatures: 30 }
+layers:
+  - id: small
+    type: circle
+    source: small
+    paint: { circle-color: "#1d3557", circle-radius: 6 }
+  - id: large
+    type: circle
+    source: large
+    paint: { circle-color: "#e63946", circle-radius: 3 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>An overview GeoParquet (geo:overviews): each lot once</h2>
+      <ml-map id="overviews">
+        <script type="text/yaml">
+type: map
+id: large-data-overviews
+config:
+  center: [10.117, 42.058]
+  zoom: 14
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  lots:
+    type: geojson
+    url: /gallery-assets/cloud-native/lots-overviews.parquet
+    columns: [lot, level, floors]
+layers:
+  - id: lots
+    type: fill
+    source: lots
+    paint: { fill-color: "#457b9d", fill-opacity: 0.35, fill-outline-color: "#1d3557" }
+        </script>
+      </ml-map>
+    </section>
+    <section style="color-scheme: dark; background: #111; color: #eee; padding: 4px">
+      <h2>A dark page: the line follows its colour scheme</h2>
+      <ml-map id="dark">
+        <script type="text/yaml">
+type: map
+id: large-data-dark
+config:
+  center: [10.1, 42.08]
+  zoom: 10
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  fgb:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.fgb
+    load: { mode: viewport, minzoom: 12 }
+layers:
+  - id: fgb
+    type: circle
+    source: fgb
+    paint: { circle-color: "#f4a261", circle-radius: 4 }
+        </script>
+      </ml-map>
+    </section>
+  </main>
+  <script type="module" src="../../../packages/core/register.js"></script>
+</body>
+</html>

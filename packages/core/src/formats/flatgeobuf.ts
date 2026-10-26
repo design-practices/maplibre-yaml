@@ -35,6 +35,9 @@ import { isLonLatCrs } from "./crs";
 import { getDecoder, type Decoders } from "./decoders";
 import { FormatError, isAbortError, isFormatError } from "./errors";
 import { BodyTooLarge, rangeRepliesUnreadable, isEncodedRange } from "./http";
+import type { FeaturesInView } from "./lib/flatgeobuf";
+
+export type { FeaturesInView };
 
 /** The library's `deserialize` (`flatgeobuf/geojson`), loaded on demand. */
 type Deserialize = Decoders["flatgeobuf"]["deserialize"];
@@ -44,6 +47,8 @@ export interface FlatGeobufHeader {
   featuresCount: number;
   /** Whether the file carries a spatial index (needed to read part of it). */
   indexed: boolean;
+  /** The index's node size (0 without one). */
+  nodeSize: number;
   /** `[west, south, east, north]`, when the header records an extent. */
   envelope?: [number, number, number, number];
   /** The declared CRS, e.g. "EPSG:4326", when the header records one. */
@@ -56,6 +61,11 @@ interface RawHeader {
   indexNodeSize?: number;
   envelope?: ArrayLike<number> | null;
   crs?: { org?: string | null; code?: number; code_string?: string | null } | null;
+}
+
+/** Whether an index node size is one FlatGeobuf readers accept (the library's 2–65,535). */
+export function validNodeSize(nodeSize: number): boolean {
+  return Number.isInteger(nodeSize) && nodeSize >= 2 && nodeSize <= 65535;
 }
 
 /** Normalize the library's header. */
@@ -73,6 +83,7 @@ function toHeader(raw: RawHeader): FlatGeobufHeader {
   return {
     featuresCount: Number(raw.featuresCount ?? 0),
     indexed: (raw.indexNodeSize ?? 0) > 0,
+    nodeSize: raw.indexNodeSize ?? 0,
     ...(envelope ? { envelope } : {}),
     ...(crsName ? { crs: crsName } : {}),
   };
@@ -150,6 +161,19 @@ function readFailure(error: unknown, url: string): unknown {
 function headerCheck(url: string, onHeader?: (header: FlatGeobufHeader) => void) {
   return (raw: RawHeader) => {
     const header = toHeader(raw);
+    // A spatial index with a node size no reader accepts (ml-cnv.31): the
+    // library computes the index's size with 2 instead and reads the wrong
+    // bytes, or throws "Node size must be at least 2".
+    if (header.indexed && !validNodeSize(header.nodeSize)) {
+      throw new FormatError({
+        code: "read",
+        format: "flatgeobuf",
+        url,
+        detail:
+          `its spatial index is malformed (node size ${header.nodeSize}; readers accept 2 to 65,535). ` +
+          `Re-create it: \`ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES indexed.fgb ${url.replace(/[?#].*$/, "").split("/").pop()}\``,
+      });
+    }
     if (!isLonLat(header, raw)) {
       throw new FormatError({
         code: "crs",
@@ -195,7 +219,11 @@ export async function openWhole(url: string, signal?: AbortSignal): Promise<Open
     throw fetchFailure(error, url);
   }
   if (!response.ok) throw httpError(response, url);
-  const length = Number(response.headers.get("content-length"));
+  // A compressed response's Content-Length counts the compressed bytes, not
+  // what is decoded (ml-37r.16): then the guard counts the bytes as they
+  // stream, decompressed, instead.
+  const encoding = response.headers.get("content-encoding");
+  const length = encoding && encoding !== "identity" ? 0 : Number(response.headers.get("content-length"));
   return { response, ...(Number.isFinite(length) && length > 0 ? { size: length } : {}) };
 }
 
@@ -343,6 +371,15 @@ export async function probe(url: string, signal?: AbortSignal): Promise<ProbeRes
   if (!magic) throw new FormatError({ code: "not-format", format: "flatgeobuf", url });
   const total = /\/(\d+)\s*$/.exec(response.headers.get("content-range") ?? "")?.[1];
   return { ranges: true, ...(total ? { size: Number(total) } : {}) };
+}
+
+/**
+ * How many features of an indexed file a view holds, estimated from its
+ * spatial index before reading any (see the chunk's `readIndexLevel`).
+ */
+export async function readIndexLevel(url: string, header: FlatGeobufHeader): Promise<FeaturesInView> {
+  const { readIndexLevel } = await getDecoder("flatgeobuf");
+  return readIndexLevel(url, header.featuresCount, header.nodeSize);
 }
 
 /**
