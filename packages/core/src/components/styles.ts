@@ -36,7 +36,10 @@ export const defaultStyles = `
 
   ml-map script[type="text/yaml"],
   ml-map script[type="application/yaml"],
-  ml-map script[type="application/json"] {
+  ml-map script[type="text/x-yaml"],
+  ml-map script[type="application/x-yaml"],
+  ml-map script[type="application/json"],
+  ml-map script[type="text/json"] {
     display: none;
   }
 `;

@@ -11,7 +11,8 @@
  * ## Giving it a story (same order as `<ml-map>`)
  *
  * 1. The `story` (alias `config`) property: an object or a JSON string.
- * 2. An inline `<script type="text/yaml">` child.
+ * 2. An inline `<script type="text/yaml">` child (or `application/yaml`,
+ *    `application/json`: JSON is read as the YAML 1.2 it is).
  * 3. `src="story.yaml"`: fetched, parsed and validated in the browser.
  * 4. The `config` attribute: the story as JSON.
  *
@@ -53,6 +54,7 @@
  */
 
 import { BaseElement } from "./base-element.js";
+import { findDocumentScript, isJsonScript, wordForJson } from "./document-script.js";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
   YAMLParser,
@@ -440,12 +442,15 @@ export class MLScrollytelling extends BaseElement {
       this.applyValue(value);
       return;
     }
-    const script = this.querySelector(
-      ':scope > script[type="text/yaml"], :scope > script[type="application/yaml"]'
-    );
+    // An inline document script: YAML or JSON, one parser (ml-4cn.2).
+    const script = findDocumentScript(this, true);
     if (script?.textContent?.trim()) {
       this.storyFromElsewhere = true;
-      this.applyResult(YAMLParser.safeParseScrollytellingBlock(script.textContent), null);
+      const result = YAMLParser.safeParseScrollytellingBlock(script.textContent);
+      this.applyResult(
+        isJsonScript(script) && !result.success ? { ...result, errors: wordForJson(result.errors) } : result,
+        null
+      );
       return;
     }
     const src = this.getAttribute("src");

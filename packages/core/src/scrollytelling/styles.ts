@@ -35,6 +35,10 @@ ml-scrollytelling {
 
 ml-scrollytelling > script[type="text/yaml"],
 ml-scrollytelling > script[type="application/yaml"],
+ml-scrollytelling > script[type="text/x-yaml"],
+ml-scrollytelling > script[type="application/x-yaml"],
+ml-scrollytelling > script[type="application/json"],
+ml-scrollytelling > script[type="text/json"],
 ml-scrollytelling > [slot] {
   display: none;
 }
