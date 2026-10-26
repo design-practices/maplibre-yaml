@@ -10,6 +10,10 @@
       - "fit":   fitTo on a GeoParquet file read by view from zoom 13. Its
                  extent frames at about zoom 10, where nothing would be read;
                  the map opens at zoom 13 instead, with the points drawn.
+      - "dense": fitTo on a GeoParquet file read by view with maxFeatures: 60:
+                 its whole extent holds 400 points, so the map opens at the
+                 outermost zoom whose view holds at most 60 — points drawn,
+                 no zoom-in line.
       - "below": a FlatGeobuf file read by view from zoom 12, opened at zoom
                  10: the reader sees "zoom in to see them"; zoomed in, the
                  points draw and the line goes.
@@ -42,7 +46,7 @@
   </script>
 </head>
 <body>
-  <header>PASS = "fit" opens at zoom 13 with points; "below" asks to zoom in, then draws points once zoomed in; "groups" draws only the blue points and asks to zoom in; "overviews" draws 600 lots, each once.</header>
+  <header>PASS = "fit" opens at zoom 13 with points; "dense" opens zoomed in with points, no zoom-in line; "below" asks to zoom in, then draws points once zoomed in; "groups" draws only the blue points and asks to zoom in; "overviews" draws 600 lots, each once.</header>
   <main>
     <section>
       <h2>fitTo on a file read by view from zoom 13</h2>
@@ -65,6 +69,30 @@ layers:
     type: circle
     source: gpq
     paint: { circle-color: "#1d3557", circle-radius: 6 }
+        </script>
+      </ml-map>
+    </section>
+    <section>
+      <h2>fitTo on a file too dense at its minzoom (maxFeatures: 60)</h2>
+      <ml-map id="dense">
+        <script type="text/yaml">
+type: map
+id: large-data-dense
+config:
+  center: [0, 0]
+  zoom: 2
+  fitTo: { source: gpq }
+  mapStyle: "/examples/verification/configs/local-style.json"
+sources:
+  gpq:
+    type: geojson
+    url: /gallery-assets/cloud-native/points.parquet
+    load: { mode: viewport, minzoom: 8, maxFeatures: 60 }
+layers:
+  - id: gpq
+    type: circle
+    source: gpq
+    paint: { circle-color: "#2a9d8f", circle-radius: 5 }
         </script>
       </ml-map>
     </section>

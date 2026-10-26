@@ -842,15 +842,30 @@ export class MapRenderer {
               ...(fitTo.maxZoom !== undefined ? { maxZoom: fitTo.maxZoom } : {}),
               animate: false,
             };
-            // ...and never below the zoom from which it reads anything: a
-            // citywide file framed at zoom 9.9 under a `minzoom` of 10
-            // opened on a blank map. Centred on the extent at that zoom
-            // instead, the map opens where the data loads.
+            // ...and never further out than it is read: a citywide file
+            // framed at zoom 9.9 opened blank under a `minzoom` of 10, and at
+            // zoom 10 its view held 855,773 features — over the 150,000 one
+            // read takes — so it opened on the "zoom in" line. Centred on the
+            // extent, at the outermost zoom whose view the reader's index or
+            // row-group statistics say is read (or the source's minzoom when
+            // none is near; the author's maxZoom still caps it).
             const minzoom = this.layerManager.getViewMinzoom?.(fitTo.source);
             const camera =
               minzoom !== undefined ? this.map.cameraForBounds?.(bounds, fitOptions) : undefined;
-            if (minzoom !== undefined && camera?.center && camera.zoom !== undefined && camera.zoom < minzoom) {
-              this.map.jumpTo({ center: camera.center, zoom: minzoom });
+            if (minzoom !== undefined && camera?.center && camera.zoom !== undefined) {
+              const center = camera.center as { lng: number; lat: number };
+              const container = this.map.getContainer?.();
+              const fits = this.layerManager.getViewZoomThatFits?.(
+                fitTo.source,
+                [center.lng, center.lat],
+                camera.zoom,
+                container?.clientWidth ?? 0,
+                container?.clientHeight ?? 0
+              );
+              let zoom = Math.max(camera.zoom, fits ?? minzoom);
+              if (fitTo.maxZoom !== undefined) zoom = Math.min(zoom, Math.max(fitTo.maxZoom, minzoom, camera.zoom));
+              if (zoom > camera.zoom) this.map.jumpTo({ center: camera.center, zoom });
+              else this.map.fitBounds(bounds, fitOptions);
             } else {
               this.map.fitBounds(bounds, fitOptions);
             }

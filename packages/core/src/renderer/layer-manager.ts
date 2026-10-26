@@ -863,6 +863,22 @@ export class LayerManager {
   }
 
   /**
+   * The outermost zoom, from `from` in, at which a source read by view
+   * reads a `width` × `height` px view around `center` (see
+   * `FormatLoader.zoomThatFits`); undefined for any other source, or none.
+   */
+  getViewZoomThatFits(
+    sourceId: string,
+    center: [number, number],
+    from: number,
+    width: number,
+    height: number
+  ): number | undefined {
+    const loader = this.formatLoaders.get(sourceId);
+    return loader?.readsByView ? loader.zoomThatFits?.(center, from, width, height) : undefined;
+  }
+
+  /**
    * Whether a source holds only the features in view: a FlatGeobuf or
    * GeoParquet source read by view — `load: viewport`, or a file too large to read whole that
    * switched itself to it. Its data is never the whole dataset.

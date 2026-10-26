@@ -51,6 +51,18 @@ test("fitTo on a file read by view opens at its minzoom, with features drawn (M1
   expect(errors).toEqual([]);
 });
 
+test("fitTo on a file too dense at its minzoom opens where its view is read: features, no zoom-in line (PR #206 verification)", async ({
+  page,
+}) => {
+  const errors = await guard(page);
+  await OPEN(page, "dense");
+  await expect.poll(() => count(page, "dense", "gpq"), { timeout: 30_000 }).toBeGreaterThan(0);
+  expect(await count(page, "dense", "gpq")).toBeLessThanOrEqual(60);
+  expect(await zoomOf(page, "dense")).toBeGreaterThan(8);
+  await expect(page.locator("#dense .ml-map-zoom-in")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("below minzoom the reader is asked to zoom in; zoomed in, the features draw and the line goes (M1)", async ({ page }) => {
   const errors = await guard(page);
   await OPEN(page, "below");

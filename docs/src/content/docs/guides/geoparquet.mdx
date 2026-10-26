@@ -85,9 +85,10 @@ the view are never downloaded. That only pays off when nearby rows sit in the
 same groups, in a file sorted by location. A file whose groups each span most
 of the area is read whole instead, with a console note; one without a `bbox`
 column is refused with a notice that says how to add it. With `load: viewport`,
-`fitTo` frames the extent recorded in the file's metadata (never further out
-than `minzoom`, so the map opens where the data loads), and `classify:` needs
-explicit `breaks:` rather than `method:`.
+`fitTo` frames the extent recorded in the file's metadata, at the outermost
+zoom whose view is read (never below `minzoom` nor over `maxFeatures`), so the
+map opens with features drawn; and `classify:` needs explicit `breaks:` rather
+than `method:`.
 
 ## Large files
 

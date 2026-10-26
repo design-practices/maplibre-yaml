@@ -69,8 +69,8 @@ sources:
 Reading by view changes a few things:
 
 - **`fitTo`** frames the extent recorded in the file's header instead of the
-  features, and never further out than `minzoom`, so the map opens where the
-  data loads.
+  features, at the outermost zoom whose view is read (never below `minzoom`
+  nor over `maxFeatures`), so the map opens with features drawn.
 - **`classify:` with `method:`** needs the whole file. On a source read by
   view, write explicit `breaks:` ([Thematic maps](/guides/thematic-maps/#breaks-computed-from-the-data)).
 

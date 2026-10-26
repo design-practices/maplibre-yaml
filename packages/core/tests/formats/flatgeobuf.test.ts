@@ -28,6 +28,7 @@ import {
   WholeFileTooLarge,
   VIEWPORT_DEFAULT_MINZOOM,
   VIEWPORT_DEFAULT_MAX_FEATURES,
+  viewAround,
 } from "../../src/renderer/cloud-sources";
 import { loadSourceData } from "../../src/data/source-data";
 
@@ -701,6 +702,38 @@ describe("the dense-view hint offers a raise only while the view stays usable (P
     const hint = await hintFor(180_000);
     expect(hint).toContain(
       "To draw this view, raise `maxFeatures` to 190000 under `load:` (about 3.5 GB of browser memory for parcel-like polygons, less for points)."
+    );
+  });
+});
+
+describe("zoomThatFits: where fitTo opens a source read by view (PR #206 verification)", () => {
+  it("the outermost quarter zoom whose view of the map's size fits maxFeatures, never below minzoom", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+    const loader = new FlatGeobufLoader(fakeMap(14, [10.19, 42.14, 10.21, 42.16]) as never, "/points.fgb", loadModeOf({ load: { mode: "viewport", minzoom: 8, maxFeatures: 60 } }), {
+      onData: vi.fn(),
+      onError: vi.fn(),
+    });
+    await loader.start();
+    const center: [number, number] = [10.2, 42.15];
+    const zoom = loader.zoomThatFits(center, 8, 600, 400)!;
+    // At that zoom the view holds at most 60 of the 400 points; a quarter zoom out, more.
+    const count = (z: number) => {
+      const [w, s, e, n] = viewAround(center, z, 600, 400);
+      return pointCoords.filter(([x, y]) => x >= w && x <= e && y >= s && y <= n).length;
+    };
+    expect(zoom).toBeGreaterThan(8);
+    expect(count(zoom)).toBeLessThanOrEqual(60);
+    expect(count(zoom - 0.25)).toBeGreaterThan(40);
+    expect(loader.zoomThatFits(center, 15, 600, 400)).toBe(15);
+    void AREA;
+  });
+
+  /** The fixture's point coordinates. */
+  let pointCoords: [number, number][] = [];
+  beforeEach(async () => {
+    pointCoords = (await decodeBytes(fixture("points.fgb"), "points.fgb")).features.map(
+      (f) => (f.geometry as { coordinates: [number, number] }).coordinates
     );
   });
 });

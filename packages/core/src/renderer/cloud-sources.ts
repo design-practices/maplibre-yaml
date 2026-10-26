@@ -398,6 +398,24 @@ function viewBBox(map: MapLibreMap): BBox {
   return [w, s, e, n];
 }
 
+/**
+ * The bbox a `width` × `height` px view centred on `center` covers at
+ * `zoom` (Web Mercator, 512 px tiles, as MapLibre draws), clamped like
+ * {@link viewBBox}.
+ */
+export function viewAround(center: [number, number], zoom: number, width: number, height: number): BBox {
+  const world = 512 * 2 ** zoom;
+  const lat = Math.max(-85.0511, Math.min(85.0511, center[1]));
+  const x = ((center[0] + 180) / 360) * world;
+  const sin = Math.sin((lat * Math.PI) / 180);
+  const y = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * world;
+  const lng = (px: number) => (px / world) * 360 - 180;
+  const latOf = (py: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * py) / world))) * 180) / Math.PI;
+  const w = Math.max(-180, lng(x - width / 2));
+  const e = Math.min(180, lng(x + width / 2));
+  return [w, Math.max(-90, latOf(y + height / 2)), e, Math.min(90, latOf(y - height / 2))];
+}
+
 /** "180 MB". */
 function mb(bytes: number): string {
   return `${Math.round(bytes / (1024 * 1024))} MB`;
@@ -411,6 +429,13 @@ export interface FormatLoader {
   readonly extent: [[number, number], [number, number]] | undefined;
   /** The zoom below which a by-view read reads nothing (`load: { minzoom }`). */
   readonly minzoom: number;
+  /**
+   * The outermost zoom, from `from` in, at which a by-view read of a
+   * `width` × `height` px view centred on `center` is read — at or above
+   * `minzoom`, within the per-view budget — or undefined when none is within
+   * 8 zooms. From what the reader already holds (no request).
+   */
+  zoomThatFits?(center: [number, number], from: number, width: number, height: number): number | undefined;
   /** Begin reading; errors go to `onError`, never rejects. */
   start(started?: Promise<FeatureCollection>): Promise<void>;
   /** Stop: no more reads, no more callbacks. */
@@ -463,6 +488,23 @@ abstract class ViewLoader implements FormatLoader {
   /** The zoom below which a by-view read reads nothing. */
   get minzoom(): number {
     return this.load.minzoom;
+  }
+
+  /**
+   * The outermost zoom, in quarter steps from `from` (and never below
+   * `minzoom`), whose view of `width` × `height` px around `center` would be
+   * read: its estimate within `maxFeatures`, and (GeoParquet) its row groups
+   * within the decode budget. What `fitTo` frames a source read by view at,
+   * so the map opens showing features rather than the zoom-in line.
+   */
+  zoomThatFits(center: [number, number], from: number, width: number, height: number): number | undefined {
+    const start = Math.max(from, this.load.minzoom);
+    for (let zoom = start; zoom <= Math.min(start + 8, 22); zoom += 0.25) {
+      const view = viewAround(center, zoom, width, height);
+      const estimate = Math.round(this.estimate(view));
+      if (estimate <= this.load.maxFeatures && this.decodeTooCostly(view, estimate) === undefined) return zoom;
+    }
+    return undefined;
   }
 
   abstract get extent(): [[number, number], [number, number]] | undefined;
