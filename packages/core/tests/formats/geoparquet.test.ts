@@ -651,7 +651,7 @@ describe("GeoParquetLoader", () => {
     const error = onError.mock.calls[0]![0];
     expect(failure(error)).toMatchObject({ code: "too-large", features: 400, blocker: "unsorted" });
     expect(error.message).toContain("it can't be read by view: its rows aren't in spatially sorted row groups");
-    expect(error.message).toContain("SORT_BY_BBOX=YES");
+    expect(error.message).toContain("gpio sort hilbert points-zstd.parquet points-zstd-hilbert.parquet --row-group-size 10000");
     expect(error.message).not.toContain("Add `load: viewport`");
     expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("reading it whole instead"));
   });
@@ -903,7 +903,7 @@ describe("GeoParquet decode budget on the row groups a view touches (M2)", () =>
     expect(rowGroupsInView(source, [0, 0, 1, 1]).rows).toBe(0);
   });
 
-  it("a view under maxFeatures whose row groups hold more than 2.5 × maxFeatures rows isn't read; a smaller one is", async () => {
+  it("a view under maxFeatures whose row groups hold more than 3 × maxFeatures rows isn't read; a smaller one is", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
       const log: Log = [];
@@ -920,15 +920,18 @@ describe("GeoParquet decode budget on the row groups a view touches (M2)", () =>
         { onData, onError: vi.fn(), onHint, onTooDense }
       );
       await loader.start();
-      // About 4 features in view, but 100 rows decoded: over the 50-row limit.
+      // About 4 features in view, but 100 rows decoded: over the 60-row limit (3 × 20).
       expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
       expect(onTooDense).toHaveBeenLastCalledWith(true);
       expect(log).toHaveLength(1); // the footer only
       expect(onHint).toHaveBeenCalledTimes(1);
       const hint = onHint.mock.calls[0]![0] as string;
       expect(hint).toContain("has row groups of up to 50 rows");
-      expect(hint).toContain("touches 2 row groups, 100 rows, over this map's decode limit of 50 rows");
-      expect(hint).toContain("ROW_GROUP_SIZE=10000");
+      expect(hint).toContain("touches 2 row groups, 100 rows, over this map's decode limit of 60 rows (3 × `maxFeatures`)");
+      // Small row groups, loosely packed: a Hilbert sort, not another 10,000-row rewrite.
+      expect(hint).toContain("Its row groups are already small, but loosely packed");
+      expect(hint).toContain("`uvx --from geoparquet-io==1.7.0 gpio sort hilbert points.parquet points-hilbert.parquet --row-group-size 10000 --add-bbox`");
+      expect(hint).not.toContain("rewrite the file with about 10,000-row groups");
       expect(hint).toContain("tylertoo");
       expect(hint).toContain("raise `maxFeatures`");
 

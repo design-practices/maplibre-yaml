@@ -82,7 +82,7 @@ test("files over the whole-file feature limit: refused in plain words, or read b
   await expect(notice).toContainText(
     "has 48 features, more than a page loads whole (40 features), and it can't be read by view: its rows aren't in spatially sorted row groups"
   );
-  await expect(notice).toContainText("SORT_BY_BBOX=YES");
+  await expect(notice).toContainText("gpio sort hilbert districts.parquet districts-hilbert.parquet");
   await expect(notice).toContainText("points-noindex.fgb");
   await expect(notice).toContainText(
     "has 400 features, more than a page loads whole (40 features), and it can't be read by view: it has no spatial index"

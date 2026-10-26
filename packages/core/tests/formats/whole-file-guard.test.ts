@@ -14,6 +14,8 @@ import type { FileMetaData } from "hyparquet";
 import type { GeoParquetFile } from "../../src/formats/geoparquet";
 import { projectedSize, rowsInView, shareInView } from "../../src/formats/geoparquet";
 import {
+  GeoParquetLoader,
+  VIEW_DECODE_FACTOR,
   loadGeoParquetWhole,
   WholeFileTooLarge,
   WHOLE_FILE_MAX_FEATURES,
@@ -192,5 +194,54 @@ describe("the GeoParquet whole-file guard, from a synthetic footer", () => {
     expect(shareInView([0, 0, 2, 2], [1, 1, 3, 3])).toBe(0.25);
     expect(shareInView([0, 0, 2, 2], [5, 5, 6, 6])).toBe(0);
     expect(shareInView([1, 1, 1, 1], [0, 0, 2, 2])).toBe(1);
+  });
+});
+
+describe("the row-group decode hint names the right fix (PR #206 verification)", () => {
+  /** The hint for a view over `footer`'s whole extent, holding `estimate` features. */
+  function hint(url: string, opened: GeoParquetFile, estimate: number): string | undefined {
+    const loader = new GeoParquetLoader({} as never, url, loadModeOf({ load: "viewport" }), "all", {
+      onData: vi.fn(),
+      onError: vi.fn(),
+    });
+    (loader as unknown as { opened: GeoParquetFile }).opened = opened;
+    const decode = (loader as unknown as { decodeTooCostly(v: number[], e: number): string | undefined }).decodeTooCostly;
+    return decode.call(loader, [-75, 40, -73, 41], estimate);
+  }
+
+  it("decodes up to 3 × maxFeatures: a GDAL-sorted 10,000-row view (449,120 rows) is read", () => {
+    expect(VIEW_DECODE_FACTOR).toBe(3);
+    expect(hint("/c.parquet", footer(449_120, 45, 1e6, 1e6), 120_000)).toBeUndefined();
+    expect(hint("/c.parquet", footer(600_000, 6, 1e6, 1e6), 145_000)).toBeDefined();
+  });
+
+  it("large row groups: rewrite with 10,000-row groups along a Hilbert curve", () => {
+    const text = hint("/city_rg100k.parquet", footer(600_000, 6, 1e6, 1e6), 145_000)!;
+    expect(text).toContain("has row groups of up to 100,000 rows");
+    expect(text).toContain(
+      "To fix it, rewrite the file with about 10,000-row groups, sorted along a Hilbert curve: `uvx --from geoparquet-io==1.7.0 gpio sort hilbert city_rg100k.parquet city_rg100k-hilbert.parquet --row-group-size 10000 --add-bbox`."
+    );
+    // At the default maxFeatures, decoding more isn't offered.
+    expect(text).not.toContain("raise `maxFeatures`");
+  });
+
+  it("small row groups, loosely packed (GDAL's SORT_BY_BBOX): a Hilbert sort, never the same rewrite again", () => {
+    const text = hint("/city-sorted.parquet", footer(500_000, 50, 1e6, 1e6), 94_189)!;
+    expect(text).toContain("Its row groups are already small, but loosely packed");
+    expect(text).toContain("gpio sort hilbert city-sorted.parquet city-sorted-hilbert.parquet");
+    expect(text).not.toContain("-sorted-sorted");
+    expect(text).not.toContain("10,000-row groups,");
+  });
+
+  it("a file the hint's own command already sorted: no rewrite suggested, PMTiles is", () => {
+    const text = hint("/city-hilbert.parquet", footer(500_000, 50, 1e6, 1e6), 94_189)!;
+    expect(text).not.toContain("gpio sort");
+    expect(text).toContain("convert it to PMTiles");
+  });
+
+  it("a blob: URL names the command's files neutrally", () => {
+    const text = hint("blob:http://localhost:5090/30df85f3-d9e1-41f6-bd5f-32875ea08ba0", footer(600_000, 6, 1e6, 1e6), 145_000)!;
+    expect(text).toContain("gpio sort hilbert data.parquet data-hilbert.parquet");
+    expect(text).not.toMatch(/30df85f3[^`]*\.parquet|'30df85f3/);
   });
 });

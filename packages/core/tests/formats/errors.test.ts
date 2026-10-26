@@ -88,7 +88,9 @@ describe("describeFormatFailure — the on-page sentences", () => {
     expect(big).toContain("`p.fgb` is 180 MB, too large to load whole in a browser. Reading it by view needs a spatial index: ");
     expect(big).toContain("`ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES p-indexed.fgb p.fgb`; it is then read by view.");
     // tylertoo reads GeoParquet: a FlatGeobuf file is converted first.
-    expect(big).toContain("convert it to PMTiles: `ogr2ogr -f Parquet p.parquet p.fgb`, then `uv run --with tylertoo==0.8.0");
+    expect(big).toContain(
+      "convert it to PMTiles: `uvx --from geoparquet-io==1.7.0 gpio convert geoparquet p.fgb p.parquet`, then `uv run --with tylertoo==0.8.0"
+    );
     expect(big).toContain("https://docs.maplibre-yaml.org/guides/flatgeobuf/#large-files");
     expect(describeFormatFailure({ code: "no-index", format: "flatgeobuf", url: "p.fgb" })).toContain(
       "has no spatial index"
@@ -209,8 +211,8 @@ describe("too-large: the cause, why it can't be read by view, and every way to m
     ).toBe(
       "`/data/lots.parquet` has 475,628 features, more than a page loads whole (400,000 features), and it can't be " +
         "read by view: its rows aren't in spatially sorted row groups (each row group spans most of the file, " +
-        "so every view would read most of it). Sort it: `ogr2ogr -f Parquet -lco WRITE_COVERING_BBOX=YES -lco SORT_BY_BBOX=YES -lco " +
-        "ROW_GROUP_SIZE=10000 lots-sorted.parquet lots.parquet`; it is then read by view. Or load it whole anyway " +
+        "so every view would read most of it). Sort it: `uvx --from geoparquet-io==1.7.0 gpio sort hilbert lots.parquet " +
+        "lots-hilbert.parquet --row-group-size 10000 --add-bbox`; it is then read by view. Or load it whole anyway " +
         "with `load: { maxFeatures: 500000 }` (about 3.5 GB of browser memory for parcel-like polygons, less for points). To draw it at every zoom (a citywide view too), " +
         "convert it to PMTiles: `uv run --with tylertoo==0.8.0 python -c \"import tylertoo as t; " +
         "t.overview('lots.parquet', 'lots-ov.parquet', min_zoom=10, max_zoom=14, collapse_square=True); " +

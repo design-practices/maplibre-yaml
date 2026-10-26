@@ -491,27 +491,40 @@ export function formatCount(count: number): string {
   return formatNumber(Math.round(count), {}, "en");
 }
 
-/** The file name without its extension: "pluto" for `/data/pluto.parquet`. */
-function stemOf(url: string): string {
-  const name = fileNameOf(url);
+/**
+ * The file name a command reads: the URL's last segment, or `data.<ext>`
+ * for a `blob:` or `data:` URL (the Python preview path), whose name is a
+ * UUID or the data itself.
+ */
+function commandFileName(url: string, ext: string): string {
+  return /^(blob|data):/i.test(url) ? `data.${ext}` : fileNameOf(url);
+}
+
+/** The file name without its extension: "pluto" for `/data/pluto.parquet`; "data" for a blob. */
+export function commandStem(url: string, ext: string): string {
+  const name = commandFileName(url, ext);
   const dot = name.lastIndexOf(".");
   return (dot > 0 ? name.slice(0, dot) : name).replace(/[^A-Za-z0-9_-]/g, "_") || "data";
 }
 
 /**
- * Rewrite a file as GeoParquet that reads well by view: a `bbox` covering
- * column, rows sorted by it, about 10,000 rows per row group (GDAL 3.9+).
+ * Rewrite a GeoParquet file to read well by view: rows sorted along a
+ * Hilbert curve, about 10,000 rows per row group, a `bbox` covering column
+ * (added when missing). geoparquet-io (`gpio`) needs nothing installed but
+ * `uv`, and packs row groups 1.5–2 × tighter than GDAL's `SORT_BY_BBOX`
+ * (measured on NYC PLUTO; see VIEW_DECODE_FACTOR in renderer/cloud-sources).
+ * Its row-group size snaps to 10,240.
  */
 export function sortedParquetCommand(url: string): string {
   return (
-    "`ogr2ogr -f Parquet -lco WRITE_COVERING_BBOX=YES -lco SORT_BY_BBOX=YES -lco ROW_GROUP_SIZE=10000 " +
-    `${stemOf(url)}-sorted.parquet ${fileNameOf(url)}\``
+    `\`uvx --from geoparquet-io==1.7.0 gpio sort hilbert ${commandFileName(url, "parquet")} ` +
+    `${commandStem(url, "parquet")}-hilbert.parquet --row-group-size 10000 --add-bbox\``
   );
 }
 
 /** Re-create a FlatGeobuf file with a spatial index. */
 export function indexedFlatGeobufCommand(url: string): string {
-  return `\`ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES ${stemOf(url)}-indexed.fgb ${fileNameOf(url)}\``;
+  return `\`ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES ${commandStem(url, "fgb")}-indexed.fgb ${commandFileName(url, "fgb")}\``;
 }
 
 /**
@@ -523,9 +536,12 @@ export function indexedFlatGeobufCommand(url: string): string {
  * is converted first.
  */
 export function pmtilesCommand(url: string, format: string): string {
-  const stem = stemOf(url);
-  const input = format === "geoparquet" ? fileNameOf(url) : `${stem}.parquet`;
-  const first = format === "geoparquet" ? "" : `\`ogr2ogr -f Parquet ${stem}.parquet ${fileNameOf(url)}\`, then `;
+  const gp = format === "geoparquet";
+  const stem = commandStem(url, gp ? "parquet" : "fgb");
+  const input = gp ? commandFileName(url, "parquet") : `${stem}.parquet`;
+  const first = gp
+    ? ""
+    : `\`uvx --from geoparquet-io==1.7.0 gpio convert geoparquet ${commandFileName(url, "fgb")} ${stem}.parquet\`, then `;
   return (
     first +
     `\`uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('${input}', '${stem}-ov.parquet', ` +

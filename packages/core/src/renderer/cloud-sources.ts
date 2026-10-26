@@ -49,6 +49,7 @@ import {
   largeDataLinks,
   pmtilesCommand,
   sortedParquetCommand,
+  commandStem,
   raiseCost,
   wholeFileCause,
   type WholeFileCost,
@@ -124,12 +125,26 @@ export {
  * renderer memory and 10 fps while panning — and a borough view at zoom 13
  * touched 556,687 rows (3.7 GB, 13 fps). The same views of the file in
  * 10,000-row groups touched 260,000 and 210,000 rows (2.9 GB at 25 fps,
- * 2.7 GB at 29 fps). At 2.5 × the default 150,000 (375,000 rows), every
- * measured view of the 10,000-row file that fit the estimate is read, the
- * 100,000-row views over 550,000 rows are not, and a block view of the
- * 100,000-row file (200,000–300,000 rows touched) still is.
+ * 2.7 GB at 29 fps).
+ *
+ * How tightly 10,000-row groups pack depends on the sort (the 26 measured
+ * views of 1280 × 800 px at zooms 12–14 that hold at most 150,000 features,
+ * 2026-10-26): a Hilbert sort (GeoPandas or `gpio sort hilbert`) touches at
+ * most 260,000 rows; GDAL's `SORT_BY_BBOX` up to 329,495 from a sorted input
+ * and 449,120 from an unsorted one (379,394 at Brooklyn zoom 13). The
+ * 100,000-row file touches 500,000–600,000 rows in the same views, except
+ * close in. At 3 × the default 150,000 (450,000 rows) every view of every
+ * 10,000-row file that fits the estimate is read — at 2.5 × a file sorted by
+ * the hint's own command was refused — while the 100,000-row views of
+ * 500,000 rows and more are not, and its block views (200,000–300,000 rows)
+ * still are.
  */
-export const VIEW_DECODE_FACTOR = 2.5;
+export const VIEW_DECODE_FACTOR = 3;
+/**
+ * Row groups up to this many rows are small enough: a decode over budget is
+ * then their packing (the sort), not their size.
+ */
+const SMALL_ROW_GROUP = 15_000;
 /** Pause after the map stops moving before re-reading the view. */
 export const VIEWPORT_DEBOUNCE_MS = 250;
 
@@ -1081,13 +1096,25 @@ export class GeoParquetLoader extends ViewLoader {
     // the default's decode limit is already the most a view should decode.
     const raise = roundedRaise(touched.rows / VIEW_DECODE_FACTOR);
     const offer = touched.rows <= VIEWPORT_DEFAULT_MAX_FEATURES * VIEW_DECODE_FACTOR;
+    // What to rewrite, if anything (PR #206 verification): large row groups
+    // → 10,000-row groups; small ones loosely packed (GDAL's SORT_BY_BBOX
+    // packs 1.5–2 × looser than a Hilbert sort) → a Hilbert sort; a file
+    // already Hilbert-sorted by the hint's own command → nothing to rewrite.
+    const stem = commandStem(this.url, "parquet");
+    const rewrite =
+      touched.largest > SMALL_ROW_GROUP
+        ? `To fix it, rewrite the file with about 10,000-row groups, sorted along a Hilbert curve: ${sortedParquetCommand(this.url)}. `
+        : /-hilbert$/.test(stem)
+          ? ""
+          : "Its row groups are already small, but loosely packed (each spans a wide area): sort it along a Hilbert " +
+            `curve, which packs nearby rows tightly: ${sortedParquetCommand(this.url)}. `;
     return (
       `\`${this.url}\` has row groups of up to ${n(touched.largest)} rows, and each row group a view touches ` +
       `is decoded whole: this view holds about ${n(estimate)} features but touches ${touched.groups} row group${touched.groups === 1 ? "" : "s"}, ` +
       `${n(touched.rows)} rows, over this map's decode limit of ${n(budget)} rows (${VIEW_DECODE_FACTOR} × \`maxFeatures\`), ` +
-      "so nothing is read until the map is zoomed in. To fix it, rewrite the file with about 10,000-row groups, " +
-      `sorted: ${sortedParquetCommand(this.url)}. To draw it at every zoom (a citywide view too), convert it to PMTiles: ` +
-      `${pmtilesCommand(this.url, "geoparquet")}. ` +
+      "so nothing is read until the map is zoomed in. " +
+      rewrite +
+      `To draw it at every zoom (a citywide view too), convert it to PMTiles: ${pmtilesCommand(this.url, "geoparquet")}. ` +
       (offer ? `Or raise \`maxFeatures\` to ${raise} under \`load:\` (${raiseCost(raise, true)}). ` : "") +
       largeDataLinks("geoparquet")
     );

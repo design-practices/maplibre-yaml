@@ -605,7 +605,7 @@ describe("per-view budget (ml-37r.17)", () => {
       expect(onHint).toHaveBeenCalledTimes(1);
       expect(onHint.mock.calls[0]![0]).toMatch(/has about 4\d\d features in view, more than one read takes \(`maxFeatures`: 50\)/);
       expect(onHint.mock.calls[0]![0]).toContain("raise `maxFeatures` to 10000 under `load:` (about 2.5 GB of browser memory");
-      expect(onHint.mock.calls[0]![0]).toContain("ogr2ogr -f Parquet points.parquet points.fgb");
+      expect(onHint.mock.calls[0]![0]).toContain("gpio convert geoparquet points.fgb points.parquet");
       // Only the probe, the header and the index were fetched: no features.
       const fetched = log.reduce((sum, r) => {
         const m = /bytes=(\d+)-(\d+)/.exec(r.range ?? "");

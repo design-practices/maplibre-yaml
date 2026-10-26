@@ -17,8 +17,8 @@
                  GeoParquet files: points.parquet (row groups of 50) is read;
                  points-rg100.parquet (row groups of 100) is not — each row
                  group a view touches is decoded whole, and 100 rows is over
-                 2.5 × maxFeatures (75) — and its author hint says to rewrite
-                 it with smaller row groups.
+                 3 × maxFeatures (90) — and its author hint says to sort it
+                 along a Hilbert curve (its groups are already small).
       - "overviews": a tylertoo overview GeoParquet (geo:overviews: 600 lots
                  at zoom 14 plus coarser copies at zooms 10-13, 1,732 rows):
                  each lot is drawn once, from the full-detail level.

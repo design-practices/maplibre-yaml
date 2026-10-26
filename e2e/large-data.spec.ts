@@ -76,7 +76,9 @@ test("a GeoParquet view whose row groups are too large to decode isn't read, and
   expect(await count(page, "groups", "large")).toBe(0);
   const notice = page.locator("#groups .ml-map-notice");
   await expect(notice).toContainText("points-rg100.parquet has row groups of up to 100 rows");
-  await expect(notice).toContainText("ROW_GROUP_SIZE=10000");
+  // Row groups of 100 are small: the fix is the packing, a Hilbert sort.
+  await expect(notice).toContainText("Its row groups are already small, but loosely packed");
+  await expect(notice).toContainText("gpio sort hilbert points-rg100.parquet points-rg100-hilbert.parquet");
   await page.screenshot({ path: "e2e/results/large-data-groups.png" });
   expect(errors).toEqual([]);
 });
