@@ -163,6 +163,41 @@ describe("rendering a story", () => {
     expect(el.querySelector(".scrolly-error, .ml-map-error")).toBeNull();
   });
 
+  // ml-4cn.2: the same media types as <ml-map>, read by the one parser.
+  it.each([
+    ["text/yaml", STORY_YAML],
+    ["application/yaml", STORY_YAML],
+    ["text/x-yaml", STORY_YAML],
+    ["application/x-yaml", STORY_YAML],
+    ["application/json", JSON.stringify(storyObject(), null, 2)],
+    ["text/json", JSON.stringify(storyObject())],
+  ])("an inline <script type=%j> story renders", async (type, text) => {
+    const el = document.createElement("ml-scrollytelling");
+    const script = document.createElement("script");
+    script.setAttribute("type", type);
+    script.textContent = text;
+    el.appendChild(script);
+    document.body.appendChild(el);
+
+    expect(el.querySelector(":scope > .scrolly-map-container > ml-map")).not.toBeNull();
+    expect(el.querySelectorAll(".scrolly-chapters > .scrolly-chapter")).toHaveLength(2);
+    await settle();
+    expect(el.querySelector(".scrolly-error, .ml-map-error")).toBeNull();
+  });
+
+  it("an inline JSON story with a syntax error says JSON, with its line", async () => {
+    mute("error");
+    mute("warn");
+    const el = document.createElement("ml-scrollytelling");
+    el.innerHTML = '<script type="application/json">{\n  "type": "scrollytelling",\n  "id": "x"\n  "chapters": []\n}</script>';
+    document.body.appendChild(el);
+    await settle();
+    const card = el.querySelector(".scrolly-error")!;
+    expect(card.textContent).toContain("JSON syntax error");
+    expect(card.textContent).not.toContain("YAML syntax error");
+    expect(card.textContent).toMatch(/line \d+/);
+  });
+
   it("the story property, assigned before the element connects", async () => {
     const el = document.createElement("ml-scrollytelling");
     el.story = storyObject() as never;

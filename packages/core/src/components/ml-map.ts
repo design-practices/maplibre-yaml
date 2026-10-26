@@ -14,6 +14,8 @@
  * ```
  *
  * ### 2. Inline YAML via Script Tag
+ * `type="text/yaml"`, `application/yaml` (or the `x-yaml` variants) and
+ * `application/json` all work; JSON is parsed as the YAML 1.2 it is.
  * ```html
  * <ml-map>
  *   <script type="text/yaml">
@@ -54,6 +56,7 @@ import {
 } from "../model/index.js";
 import type { MapModel } from "../model/types.js";
 import { createErrorCard, ERROR_CARD_CLASS } from "./error-card.js";
+import { findDocumentScript, isJsonScript, wordForJson } from "./document-script.js";
 import { MapNotice, appendMessage, type NoticeKind } from "./map-notice.js";
 import { showAuthorHints } from "./author-hints.js";
 import {
@@ -729,10 +732,10 @@ export class MLMap extends BaseElement {
       return;
     }
 
-    // Priority 2: Script tag with YAML
-    const yamlScript = this.querySelector('script[type="text/yaml"]');
-    if (yamlScript?.textContent) {
-      this.loadFromScriptTag(yamlScript.textContent);
+    // Priority 2: an inline document script (YAML or JSON, ml-4cn.2)
+    const script = findDocumentScript(this);
+    if (script?.textContent) {
+      this.loadFromScriptTag(script.textContent, isJsonScript(script));
       return;
     }
 
@@ -811,9 +814,10 @@ export class MLMap extends BaseElement {
   }
 
   /**
-   * Load and parse YAML from a script tag's text content
+   * Load and parse a document from an inline script's text content. JSON is
+   * YAML 1.2, so one parser reads both; `json` only words syntax errors.
    */
-  private loadFromScriptTag(yamlContent: string): void {
+  private loadFromScriptTag(yamlContent: string, json = false): void {
     this.cancelEmptyConfigCheck();
     this.appliedConfigKey = null;
     this.documentUrl = null;
@@ -827,7 +831,7 @@ export class MLMap extends BaseElement {
       this._config = result.data;
       this.renderMap(result.data);
     } else {
-      this.handleError(result.errors);
+      this.handleError(json ? wordForJson(result.errors) : result.errors);
     }
   }
 
@@ -2127,9 +2131,9 @@ export class MLMap extends BaseElement {
     if (src) {
       await this.loadFromURL(src);
     } else {
-      const yamlScript = this.querySelector('script[type="text/yaml"]');
-      if (yamlScript?.textContent) {
-        this.loadFromScriptTag(yamlScript.textContent);
+      const script = findDocumentScript(this);
+      if (script?.textContent) {
+        this.loadFromScriptTag(script.textContent, isJsonScript(script));
       }
     }
   }

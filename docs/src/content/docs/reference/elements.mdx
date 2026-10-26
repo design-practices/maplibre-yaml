@@ -54,6 +54,20 @@ config:
 </ml-map>
 ```
 
+`type="application/yaml"` works too, and so does `type="application/json"`
+for a document written as JSON. The same parser reads it, so errors still
+carry line numbers:
+
+```html
+<ml-map style="display: block; height: 400px;">
+  <script type="application/json">
+    { "type": "map", "id": "inline-json",
+      "config": { "mapStyle": "https://tiles.openfreemap.org/styles/liberty",
+                  "center": [-74.006, 40.7128], "zoom": 12 } }
+  </script>
+</ml-map>
+```
+
 An element with no document yet waits until the end of the next frame before
 it reports "No configuration provided.", so a `config` assigned just after the
 element upgrades (from a script or a framework effect) renders without a
@@ -220,7 +234,8 @@ an `<ml-map>` inside it, with the chapters scrolling past.
 
 The element reads its story from the first of these it finds: the `story` (or
 `config`) property, an inline `<script type="text/yaml">` child, the `src`
-attribute, the `config` attribute.
+attribute, the `config` attribute. As on `<ml-map>`, the inline script may
+also be `type="application/yaml"` or `type="application/json"`.
 
 ### `<ml-scrollytelling>` properties and methods
 

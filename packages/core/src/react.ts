@@ -28,7 +28,8 @@
  * - `onml-map:*` event props (React 19 only; React 18 ignores them), each
  *   typed with its `CustomEvent` detail from {@link MLMapEventMap}.
  * - `children` — slot children (`<div slot="top-right">`) and an inline
- *   `<script type="text/yaml">`, through the standard HTML attributes.
+ *   `<script type="text/yaml">` (or `application/yaml`, `application/json`),
+ *   through the standard HTML attributes.
  *
  * Works with `@types/react` 18 and 19. The React major is detected from the
  * types themselves: `@types/react` 19 is the first to export `use`.

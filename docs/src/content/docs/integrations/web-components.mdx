@@ -280,6 +280,19 @@ config:
 </ml-map>
 ```
 
+`<script type="application/yaml">` works the same way, and
+`<script type="application/json">` takes the document written as JSON:
+
+```html
+<ml-map style="display: block; height: 400px;">
+  <script type="application/json">
+    { "type": "map", "id": "inline-json",
+      "config": { "mapStyle": "https://tiles.openfreemap.org/styles/liberty",
+                  "center": [-74.006, 40.7128], "zoom": 12 } }
+  </script>
+</ml-map>
+```
+
 ### A document built in JavaScript (`config`) \{#method-3-json-attribute-programmatic}
 
 When your code builds the document (from a form, or an API response), set

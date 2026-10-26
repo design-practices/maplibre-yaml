@@ -428,8 +428,135 @@ layers:
     });
   });
 
+  // ml-4cn.2: every YAML/JSON media type, read by the one parser.
+  describe("inline document script types", () => {
+    const DOC = {
+      type: "map",
+      id: "inline-doc",
+      config: {
+        mapStyle: "https://demotiles.maplibre.org/style.json",
+        center: [3, 4],
+        zoom: 5,
+      },
+      layers: [],
+    };
+    const YAML_DOC = `type: map
+id: inline-doc
+config:
+  mapStyle: https://demotiles.maplibre.org/style.json
+  center: [3, 4]
+  zoom: 5
+layers: []
+`;
+    const withScript = (type: string, text: string) => {
+      const element = document.createElement("ml-map") as MLMap;
+      const script = document.createElement("script");
+      script.setAttribute("type", type);
+      script.textContent = text;
+      element.appendChild(script);
+      return element;
+    };
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+    it.each([
+      ["text/yaml", YAML_DOC],
+      ["application/yaml", YAML_DOC],
+      ["text/x-yaml", YAML_DOC],
+      ["application/x-yaml", YAML_DOC],
+      ["application/json", JSON.stringify(DOC, null, 2)],
+      ["text/json", JSON.stringify(DOC)],
+      ["Application/JSON; charset=utf-8", JSON.stringify(DOC)],
+    ])("renders the document from <script type=%j>", async (type, text) => {
+      const element = withScript(type, text);
+      document.body.appendChild(element);
+      await tick();
+
+      expect(element.querySelector(".ml-map-error")).toBeNull();
+      expect(element.getRenderer()?.config.center).toEqual([3, 4]);
+    });
+
+    it("ignores other script types (no document there)", async () => {
+      const element = withScript("application/ld+json", JSON.stringify(DOC));
+      document.body.appendChild(element);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      expect(element.getRenderer()).toBeNull();
+      expect(element.querySelector(".ml-map-error")?.textContent).toContain(
+        "No configuration provided"
+      );
+    });
+
+    it("the first document script wins, whatever its type", async () => {
+      const element = withScript(
+        "application/json",
+        JSON.stringify({ ...DOC, config: { ...DOC.config, center: [7, 8] } })
+      );
+      const second = document.createElement("script");
+      second.type = "text/yaml";
+      second.textContent = YAML_DOC;
+      element.appendChild(second);
+      document.body.appendChild(element);
+      await tick();
+      expect(element.getRenderer()?.config.center).toEqual([7, 8]);
+    });
+
+    it("a JSON script inside slot content is not the map's document", async () => {
+      const element = document.createElement("ml-map") as MLMap;
+      element.innerHTML =
+        '<div slot="top-right"><script type="application/json">{"widget": true}</script></div>' +
+        `<script type="application/json">${JSON.stringify(DOC)}</script>`;
+      document.body.appendChild(element);
+      await tick();
+      expect(element.querySelector(".ml-map-error")).toBeNull();
+      expect(element.getRenderer()?.config.center).toEqual([3, 4]);
+    });
+
+    it("reload() re-reads a JSON script", async () => {
+      const element = withScript("application/json", JSON.stringify(DOC));
+      document.body.appendChild(element);
+      await tick();
+      element.querySelector("script")!.textContent = JSON.stringify({
+        ...DOC,
+        config: { ...DOC.config, center: [9, 9] },
+      });
+      await element.reload();
+      await tick();
+      expect(element.getRenderer()?.config.center).toEqual([9, 9]);
+    });
+
+    it("a JSON syntax error says JSON, with its line", async () => {
+      const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+      const element = withScript(
+        "application/json",
+        '{\n  "type": "map",\n  "id": "x"\n  "layers": []\n}'
+      );
+      document.body.appendChild(element);
+      await tick();
+      const card = element.querySelector(".ml-map-error")!;
+      expect(card.textContent).toContain("JSON syntax error");
+      expect(card.textContent).not.toContain("YAML syntax error");
+      expect(card.textContent).toMatch(/line \d+/);
+      quiet.mockRestore();
+    });
+
+    it("the same broken text in a YAML script still says YAML", async () => {
+      const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+      const element = withScript(
+        "text/yaml",
+        '{\n  "type": "map",\n  "id": "x"\n  "layers": []\n}'
+      );
+      document.body.appendChild(element);
+      await tick();
+      expect(element.querySelector(".ml-map-error")!.textContent).toContain(
+        "YAML syntax error"
+      );
+      quiet.mockRestore();
+    });
+  });
+
   describe("config priority", () => {
-    it("prefers config attribute over scripts", async () => {
+    // Documented order: property > inline script > src > config attribute.
+    // Before ml-4cn.2 a JSON script was never read, so the attribute won.
+    it("prefers an inline JSON script over the config attribute", async () => {
       const element = document.createElement('ml-map') as MLMap;
 
       // Add JSON script
@@ -464,9 +591,7 @@ layers:
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       const renderer = element.getRenderer();
-      expect(renderer?.config.mapStyle).toBe(
-        "https://attribute.com/style.json"
-      );
+      expect(renderer?.config.mapStyle).toBe("https://script.com/style.json");
     });
   });
 

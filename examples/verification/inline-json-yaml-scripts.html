@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inline JSON and application/yaml documents</title>
+  <!--
+    ml-4cn.2 — both elements read their document from an inline script of
+    any YAML or JSON media type, not only text/yaml. The <ml-map> below holds
+    JSON in <script type="application/json">; the story holds YAML in
+    <script type="application/yaml">. One parser reads both (JSON is YAML 1.2).
+    PASS = a map with a red point, then a story with a blue point and two
+    chapters. FAIL = "No configuration provided" cards (the 0.9.1 behaviour).
+    Serve from the repo root (pnpm verify:serve), then open
+    /examples/verification/inline-json-yaml-scripts.html
+  -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    ml-map#map { display: block; height: 360px; }
+  </style>
+  <script type="importmap">
+    { "imports": { "maplibre-gl": "/vendor/maplibre-gl.esm.js" } }
+  </script>
+</head>
+<body>
+  <ml-map id="map">
+    <script type="application/json">
+{
+  "type": "map",
+  "id": "inline-json",
+  "config": {
+    "center": [0, 0],
+    "zoom": 3,
+    "mapStyle": "/examples/verification/configs/local-style.json"
+  },
+  "layers": [
+    {
+      "id": "json-point",
+      "type": "circle",
+      "source": {
+        "type": "geojson",
+        "data": {
+          "type": "FeatureCollection",
+          "features": [
+            { "type": "Feature", "geometry": { "type": "Point", "coordinates": [0, 0] }, "properties": {} }
+          ]
+        }
+      },
+      "paint": { "circle-radius": 12, "circle-color": "#e63946" }
+    }
+  ]
+}
+    </script>
+  </ml-map>
+
+  <ml-scrollytelling id="story">
+    <script type="application/yaml">
+type: scrollytelling
+id: inline-yaml-story
+config:
+  center: [0, 0]
+  zoom: 3
+  mapStyle: "/examples/verification/configs/local-style.json"
+layers:
+  - id: yaml-point
+    type: circle
+    source:
+      type: geojson
+      data:
+        type: FeatureCollection
+        features:
+          - type: Feature
+            geometry: { type: Point, coordinates: [0, 0] }
+            properties: {}
+    paint:
+      circle-radius: 12
+      circle-color: "#1d4ed8"
+chapters:
+  - id: one
+    title: One
+    description: "<p>This story came from an application/yaml script.</p>"
+    center: [0, 0]
+    zoom: 3
+  - id: two
+    title: Two
+    center: [0, 0]
+    zoom: 4
+    </script>
+  </ml-scrollytelling>
+  <script type="module" src="/packages/core/register.js"></script>
+</body>
+</html>
