@@ -7,6 +7,7 @@
  * each registry array is behavior — see the per-array remarks.
  */
 
+import { consoleText } from "../utils/console-text";
 import type {
   Map as MapLibreMap,
   FlyToOptions,
@@ -212,7 +213,7 @@ interface FeatureTarget {
 
 /** The console fallback when no host hint channel is wired (the compiled path). */
 const warn = (message: string): void =>
-  console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+  console.warn(`[maplibre-yaml] ${consoleText(message)}`);
 
 /**
  * Hover interactions, in dispatch order.

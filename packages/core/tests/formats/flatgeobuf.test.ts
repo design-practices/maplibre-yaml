@@ -520,8 +520,9 @@ describe("whole-file guard on the header's feature count (ml-37r.16)", () => {
     );
     // The ways to change it: say so, raise maxFeatures (the count is all that is over), PMTiles.
     const note = (console.warn as unknown as { mock: { calls: string[][] } }).mock.calls.map((c) => c[0]).join("\n");
-    expect(note).toContain("Add `load: viewport` to the source to say so");
-    expect(note).toContain("raise `load: { maxFeatures: 10000 }` (about 2 GB of browser memory");
+    // On the console, code spans are quoted.
+    expect(note).toContain('Add "load: viewport" to the source to say so');
+    expect(note).toContain('raise "load: { maxFeatures: 10000 }" (about 2 GB of browser memory');
     expect(note).toContain("tylertoo");
   });
 
@@ -735,5 +736,35 @@ describe("zoomThatFits: where fitTo opens a source read by view (PR #206 verific
     pointCoords = (await decodeBytes(fixture("points.fgb"), "points.fgb")).features.map(
       (f) => (f.geometry as { coordinates: [number, number] }).coordinates
     );
+  });
+});
+
+describe("hint nits (ml-cnv.35)", () => {
+  it("the 10–50 MB note gives the index command only to a file without one", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const limits = { warn: 1_000, max: 1e8 };
+    await loadFlatGeobufWhole("/points.fgb", { limits });
+    await loadFlatGeobufWhole("/points-noindex.fgb", { limits });
+    const [indexed, plain] = (console.warn as unknown as { mock: { calls: string[][] } }).mock.calls.map((c) => c[0]);
+    expect(indexed).toContain('add "load: viewport" (it has a spatial index');
+    expect(indexed).not.toContain("ogr2ogr");
+    expect(plain).toContain("give it a spatial index (\"ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=YES points-noindex-indexed.fgb points-noindex.fgb\")");
+  });
+
+  it("below minzoom, 'lower minzoom' only when this view would then be read", async () => {
+    const AREA: [number, number, number, number] = [10.0, 42.0, 10.4, 42.3];
+    vi.stubGlobal("fetch", fixtureFetch());
+    const run = async (maxFeatures: number) => {
+      (console.info as unknown as { mockClear(): void }).mockClear();
+      await new FlatGeobufLoader(fakeMap(9.5, AREA) as never, "/points.fgb", loadModeOf({ load: { mode: "viewport", minzoom: 11, maxFeatures } }), {
+        onData: vi.fn(),
+        onError: vi.fn(),
+      }).start();
+      return (console.info as unknown as { mock: { calls: string[][] } }).mock.calls[0]![0];
+    };
+    expect(await run(1000)).toContain('To read it from here, lower "minzoom" to 9 under "load:"');
+    const dense = await run(50);
+    expect(dense).toContain("Further out its views hold more than \"maxFeatures\", so a lower \"minzoom\" wouldn't draw it");
+    expect(dense).not.toContain("lower \"minzoom\" to");
   });
 });

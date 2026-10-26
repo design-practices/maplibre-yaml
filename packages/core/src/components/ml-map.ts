@@ -34,6 +34,7 @@
  * ```
  */
 
+import { consoleText } from "../utils/console-text";
 import { prefetchProtomapsBasemap } from "../formats/protomaps-style";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
@@ -1372,7 +1373,7 @@ export class MLMap extends BaseElement {
     message: string,
     options: { log?: boolean; kind?: NoticeKind } = {}
   ): void {
-    if (options.log) console.error(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+    if (options.log) console.error(`[maplibre-yaml] ${consoleText(message)}`);
     const kind = options.kind ?? "failure";
     if (!this.noticeEntries.some((e) => e.message === message)) {
       this.noticeEntries.push({ message, kind });

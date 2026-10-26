@@ -625,7 +625,7 @@ describe("GeoParquetLoader", () => {
     });
     expect(onData.mock.calls.at(-1)![0].features).toHaveLength(0);
     expect(console.info).toHaveBeenCalledWith(expect.stringContaining("is read by view from zoom 11"));
-    expect(console.info).toHaveBeenCalledWith(expect.stringContaining("Lower `minzoom` under `load:`"));
+    expect(console.info).toHaveBeenCalledWith(expect.stringContaining('To read it from here, lower "minzoom" to 9 under "load:"'));
   });
 
   it("load: viewport on a server without ranges reads the whole file instead", async () => {
@@ -1047,5 +1047,25 @@ describe("geo:overviews: only the canonical level is read (ml-cnv.21)", () => {
     const source = await open("/lots-bad.parquet");
     expect(source.info.overviews).toBeUndefined();
     expect(source.info.rows).toBe(1732);
+  });
+});
+
+describe("the 10–50 MB GeoParquet note names only what the file lacks (ml-cnv.35)", () => {
+  it("sorted with a bbox column: just load: viewport; unsorted: the sort; no ranges: no load: viewport", async () => {
+    vi.stubGlobal("fetch", fixtureFetch());
+    const limits = { warn: 1_000, max: 1e8 };
+    const warns = () => (console.warn as unknown as { mock: { calls: string[][] } }).mock.calls.map((c) => c[0]);
+    await loadGeoParquetWhole("/points.parquet", "all", { limits });
+    const sorted = warns().find((w) => w.includes("may take a few seconds"))!;
+    expect(sorted).toContain('add "load: viewport" (it has a "bbox" column and sorted row groups)');
+    expect(sorted).not.toContain("gpio");
+    (console.warn as unknown as { mockClear(): void }).mockClear();
+    await loadGeoParquetWhole("/points-zstd.parquet", "all", { limits });
+    expect(warns().find((w) => w.includes("may take a few seconds"))).toContain('sort it ("uvx --from geoparquet-io==1.7.0 gpio sort hilbert');
+    (console.warn as unknown as { mockClear(): void }).mockClear();
+    await loadGeoParquetWhole("/norange/points.parquet", "all", { limits });
+    const norange = warns().find((w) => w.includes("may take a few seconds"))!;
+    expect(norange).not.toContain("load: viewport");
+    expect(norange).toContain('list fewer "columns:"');
   });
 });

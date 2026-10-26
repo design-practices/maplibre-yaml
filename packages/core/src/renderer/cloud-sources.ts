@@ -55,6 +55,7 @@ import {
   type WholeFileCost,
 } from "../components/student-messages";
 import { roundedRaise, SAFE_VIEW_FEATURES } from "../formats/large-data";
+import { consoleText } from "../utils/console-text";
 // No maplibre-gl here: the layer manager imports this module, and it loads
 // without maplibre-gl (types only). Protocol registration, which needs the
 // module, lives in ./cloud-protocols (MapRenderer only).
@@ -291,14 +292,10 @@ export async function loadFlatGeobufWhole(
     fgb.discard(opened);
     throw new WholeFileTooLarge(opened.size, undefined, undefined, cost(opened.size));
   }
-  if (opened.size !== undefined && opened.size > limits.warn) {
-    console.warn(
-      `[maplibre-yaml] ${url} is ${mb(opened.size)}; loading it whole may take a few seconds. ` +
-        "To read only the part in view, add `load: viewport` (the file needs a spatial index: " +
-        `${indexedFlatGeobufCommand(url)}); to draw it at every zoom, convert it to PMTiles. ` +
-        largeDataLinks("flatgeobuf")
-    );
-  }
+  // Over the note's size, the note waits for the header: whether the file
+  // has an index decides what to suggest (ml-cnv.35).
+  const noteSize = opened.size !== undefined && opened.size > limits.warn ? opened.size : undefined;
+  const ranges = /bytes/i.test(opened.response.headers.get("accept-ranges") ?? "");
   // The header's feature count arrives before any feature: what decoding
   // will cost, whatever the bytes (ml-37r.16).
   let features: number | undefined;
@@ -312,6 +309,18 @@ export async function loadFlatGeobufWhole(
           features = header.featuresCount;
           abort.abort();
           throw Error();
+        }
+        if (noteSize !== undefined) {
+          const byView = header.indexed
+            ? `To read only the part in view, add \`load: viewport\` (it has a spatial index${ranges ? "" : "; it needs a host with HTTP range requests"})`
+            : `To read only the part in view, give it a spatial index (${indexedFlatGeobufCommand(url)}) and add \`load: viewport\``;
+          console.warn(
+            "[maplibre-yaml] " +
+              consoleText(
+              `${url} is ${mb(noteSize)}; loading it whole may take a few seconds. ${byView}; to draw it at ` +
+                `every zoom, convert it to PMTiles. ${largeDataLinks("flatgeobuf")}`
+            )
+          );
         }
         options.onHeader?.(header);
       },
@@ -596,7 +605,7 @@ abstract class ViewLoader implements FormatLoader {
 
   protected hint(message: string): void {
     if (this.callbacks.onHint) this.callbacks.onHint(message);
-    else console.warn(`[maplibre-yaml] ${message}`);
+    else console.warn(`[maplibre-yaml] ${consoleText(message)}`);
   }
 
   /**
@@ -636,11 +645,22 @@ abstract class ViewLoader implements FormatLoader {
     if (this.map.getZoom() < this.load.minzoom) {
       // Once per stretch below minzoom, not on every pan.
       if (this.skip("minzoom")) {
+        // Lowering minzoom helps only when this view would then be read
+        // (ml-cnv.35): further out, a citywide file's view is over budget.
+        const view = viewBBox(this.map);
+        const estimate = Math.round(this.estimate(view));
+        const lower = Math.floor(this.map.getZoom());
+        const helps = estimate <= this.load.maxFeatures && this.decodeTooCostly(view, estimate) === undefined;
         console.info(
-          `[maplibre-yaml] ${this.url} is read by view from zoom ${this.load.minzoom}, so nothing ` +
-            "of it is drawn further out and the reader is asked to zoom in. Lower `minzoom` under " +
-            "`load:` to read it further out, or convert it to PMTiles to draw it at every zoom. " +
-            largeDataLinks(this.format)
+          "[maplibre-yaml] " +
+            consoleText(
+            `${this.url} is read by view from zoom ${this.load.minzoom}, so nothing of it is drawn further ` +
+              "out and the reader is asked to zoom in. " +
+              (helps
+                ? `To read it from here, lower \`minzoom\` to ${lower} under \`load:\`; to draw it at every zoom, convert it to PMTiles. `
+                : `Further out its views hold more than \`maxFeatures\`, so a lower \`minzoom\` wouldn't draw it; to draw it at every zoom, convert it to PMTiles: ${pmtilesCommand(this.url, this.format)}. `) +
+              largeDataLinks(this.format)
+          )
         );
       }
       return;
@@ -897,9 +917,12 @@ export function sizeLimits(given?: SizeLimits, load?: Pick<LoadMode, "authorMaxF
 /** The console note for a whole file a server sent because it ignores `Range:`. */
 function noRangeNote(url: string, what: string): string {
   return (
-    `[maplibre-yaml] ${url}: this server doesn't support range requests, so ${what}. ` +
-    "Hosts like GitHub Pages, Netlify, S3 and R2 support them (`python -m http.server` " +
-    "doesn't; `npx serve` does)."
+    "[maplibre-yaml] " +
+    consoleText(
+      `${url}: this server doesn't support range requests, so ${what}. ` +
+        "Hosts like GitHub Pages, Netlify, S3 and R2 support them (`python -m http.server` " +
+        "doesn't; `npx serve` does)."
+    )
   );
 }
 
@@ -943,11 +966,23 @@ export async function loadGeoParquetWhole(
   }
   const [size] = gp.projectedSize(source, columns);
   if (size > limits.warn) {
+    // What reading by view would take, from the footer (ml-cnv.35): nothing
+    // when the file is ready for it, the sort when it isn't, and nothing at
+    // all from a host without range requests (its own note follows).
+    const blocker = byViewBlocker(source);
+    const byView =
+      blocker === "no-range"
+        ? ""
+        : blocker
+          ? `To read only the part in view, sort it (${sortedParquetCommand(url)}) and add \`load: viewport\`; or `
+          : "To read only the part in view, add `load: viewport` (it has a `bbox` column and sorted row groups); or ";
     console.warn(
-      `[maplibre-yaml] ${url}: the columns this map reads are ${mb(size)}; loading them whole may take ` +
-        "a few seconds. To read only the part in view, add `load: viewport` (the file needs a `bbox` " +
-        `column and sorted row groups: ${sortedParquetCommand(url)}); or list fewer \`columns:\`; or, ` +
-        `to draw it at every zoom, convert it to PMTiles. ${largeDataLinks("geoparquet")}`
+      "[maplibre-yaml] " +
+        consoleText(
+        `${url}: the columns this map reads are ${mb(size)}; loading them whole may take a few seconds. ` +
+          `${byView}list fewer \`columns:\`; or, to draw it at every zoom, convert it to PMTiles. ` +
+          largeDataLinks("geoparquet")
+      )
     );
   }
   if (!source.ranges && source.byteLength > gp.TAIL_BYTES) {
@@ -1106,9 +1141,12 @@ export class GeoParquetLoader extends ViewLoader {
       console.warn(
         blocker === "no-range"
           ? noRangeNote(this.url, "`load: viewport` reads the whole file instead")
-          : `[maplibre-yaml] ${this.url} isn't spatially sorted (each row group spans most of the file), so ` +
-              `reading by view would read almost all of it: reading it whole instead. Sort it to make ` +
-              `\`load: viewport\` pay off: ${sortedParquetCommand(this.url)}.`
+          : "[maplibre-yaml] " +
+              consoleText(
+                `${this.url} isn't spatially sorted (each row group spans most of the file), so reading by view ` +
+                  `would read almost all of it: reading it whole instead. Sort it to make \`load: viewport\` pay ` +
+                  `off: ${sortedParquetCommand(this.url)}.`
+              )
       );
       await this.readWhole();
       return;

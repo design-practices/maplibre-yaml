@@ -3,6 +3,7 @@
  * @module @maplibre-yaml/core/renderer
  */
 
+import { consoleText } from "../utils/console-text";
 import type { LngLat } from 'maplibre-gl';
 import { Map as MapLibreMap, AttributionControl, runtimeVersion, withWorkerUrlHint } from './maplibre-interop';
 import { installAttributionGuard, type AttributionGuard } from './attribution-guard';
@@ -894,18 +895,18 @@ export class MapRenderer {
       // A source in a format this version can't read (ml-cnv): reported
       // once, against the source, like any non-fatal source failure.
       onSourceError: (sourceId, error) => {
-        console.warn(`[maplibre-yaml] ${error.message.replace(/`/g, '"')}`);
+        console.warn(`[maplibre-yaml] ${consoleText(error.message)}`);
         options.onError?.(error, false, { kind: 'source', sourceId });
       },
       // A `before:` naming no layer: the layer was added on top (ml-aot.119).
       onLayerHint: (layerId, message) => {
-        console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+        console.warn(`[maplibre-yaml] ${consoleText(message)}`);
         options.onError?.(new Error(message), false, { kind: 'layer-hint', layerId });
       },
       // A live `merge` whose features have no key (ml-aot.141): they are
       // kept, not matched; the console always, the page while developing.
       onSourceHint: (sourceId, message) => {
-        console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+        console.warn(`[maplibre-yaml] ${consoleText(message)}`);
         options.onError?.(new Error(message), false, { kind: 'source-hint', sourceId });
       },
       onViewTooDense: (sourceId, dense) => this.showZoomIn(sourceId, dense),
@@ -942,12 +943,12 @@ export class MapRenderer {
       {
         readsByView: (sourceId) => this.layerManager.readsByView?.(sourceId) ?? false,
         onRefused: (layerId, sourceId, error) => {
-          console.warn(`[maplibre-yaml] ${error.message.replace(/`/g, '"')}`);
+          console.warn(`[maplibre-yaml] ${consoleText(error.message)}`);
           options.onError?.(error, false, { kind: 'classify', layerId, sourceId });
         },
         // An author hint: the console always, the page while developing.
         onFieldProblem: (layerId, message) => {
-          console.warn(`[maplibre-yaml] ${message.replace(/`/g, '"')}`);
+          console.warn(`[maplibre-yaml] ${consoleText(message)}`);
           options.onError?.(new Error(message), false, { kind: 'classify-field', layerId });
         },
       }
@@ -1447,12 +1448,12 @@ export class MapRenderer {
         void archiveMetadata(url).then((metadata) => {
           const older = olderProtomapsSchema(metadata, url);
           if (!older || this.destroyed) return;
-          console.warn(`[maplibre-yaml] ${older.replace(/`/g, '"')}`);
+          console.warn(`[maplibre-yaml] ${consoleText(older)}`);
           options.onError?.(new Error(older), false, { kind: 'basemap' });
         });
         return;
       }
-      console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
+      console.warn(`[maplibre-yaml] ${consoleText(problem)}`);
       options.onError?.(new Error(problem), false, { kind: 'basemap' });
     });
     // A basemap icon its sprite lacks (the generator names "townhall", which
@@ -1505,7 +1506,7 @@ export class MapRenderer {
             const major = Number(runtimeVersion()?.split('.')[0]);
             const labelsHidden = failed.includes('glyphs') && major > 0 && major < 5 && this.hideBasemapLabels();
             const problem = basemapAssetMessage(failed, assets, { labelsHidden });
-            console.warn(`[maplibre-yaml] ${problem.replace(/`/g, '"')}`);
+            console.warn(`[maplibre-yaml] ${consoleText(problem)}`);
             options.onError?.(new Error(problem), false, { kind: 'basemap' });
           });
         };
@@ -1530,7 +1531,7 @@ export class MapRenderer {
         if (this.destroyed) return;
         const cause = error instanceof Error ? error : new Error(String(error));
         map.setStyle(fallbackBasemapStyle(spec, pageUrl) as never);
-        console.warn(`[maplibre-yaml] the basemap could not be built: ${cause.message.replace(/`/g, '"')}`);
+        console.warn(`[maplibre-yaml] the basemap could not be built: ${consoleText(cause.message)}`);
         options.onError?.(cause, false, { kind: 'basemap' });
       }
     );
