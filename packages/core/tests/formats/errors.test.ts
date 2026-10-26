@@ -215,9 +215,9 @@ describe("too-large: the cause, why it can't be read by view, and every way to m
         "lots-hilbert.parquet --row-group-size 10000 --add-bbox`; it is then read by view. Or load it whole anyway " +
         "with `load: { maxFeatures: 500000 }` (about 3.5 GB of browser memory for parcel-like polygons, less for points). To draw it at every zoom (a citywide view too), " +
         "convert it to PMTiles: `uv run --with tylertoo==0.8.0 python -c \"import tylertoo as t; " +
-        "t.overview('lots.parquet', 'lots-ov.parquet', min_zoom=10, max_zoom=14, collapse_square=True); " +
+        "t.overview('lots.parquet', 'lots-ov.parquet', min_zoom=0, max_zoom=14, collapse_square=True); " +
         "t.export_pmtiles('lots-ov.parquet', 'lots.pmtiles', layer_name='lots', tile_size_limit=None)\"` (the parcel " +
-        "recipe: set min_zoom and max_zoom for your map). More: " +
+        "recipe; MapLibre draws zoom 14's tiles further in). More: " +
         "https://docs.maplibre-yaml.org/guides/geoparquet/#large-files and " +
         "https://docs.maplibre-yaml.org/guides/pmtiles/#from-a-large-file"
     );

@@ -107,8 +107,8 @@ Reading by view changes a few things:
 
 4. **For a citywide view, convert it to PMTiles**, which draws at every zoom.
    tylertoo reads GeoParquet, so convert first
-   (`ogr2ogr -f Parquet parcels.parquet parcels.fgb`), then follow the
-   [PMTiles guide](/guides/pmtiles/#from-a-large-file).
+   (`uvx --from geoparquet-io==1.7.0 gpio convert geoparquet parcels.fgb parcels.parquet`,
+   no GDAL needed), then follow the [PMTiles guide](/guides/pmtiles/#from-a-large-file).
 
 ## Make a FlatGeobuf file
 

@@ -532,8 +532,10 @@ export function indexedFlatGeobufCommand(url: string): string {
  * `uv`): the parcel recipe from the PLUTO benchmark (PR #205) and the
  * large-data spike (PR #207) — `collapse_square=True` keeps small polygons
  * visible at coarse zooms, `tile_size_limit=None` stops 0.8.0 dropping
- * features from dense tiles. tylertoo reads GeoParquet, so a FlatGeobuf file
- * is converted first.
+ * features from dense tiles — from zoom 0, so the map draws at every zoom
+ * (on PLUTO, zooms 0–9 cost 1.3 s, 0.1 GB and 3.5 MB more than starting at
+ * 10: 26 s, 2.1 GB, a 115 MB archive). tylertoo reads GeoParquet, so a
+ * FlatGeobuf file is converted first, with geoparquet-io (no GDAL needed).
  */
 export function pmtilesCommand(url: string, format: string): string {
   const gp = format === "geoparquet";
@@ -545,8 +547,8 @@ export function pmtilesCommand(url: string, format: string): string {
   return (
     first +
     `\`uv run --with tylertoo==0.8.0 python -c "import tylertoo as t; t.overview('${input}', '${stem}-ov.parquet', ` +
-    `min_zoom=10, max_zoom=14, collapse_square=True); t.export_pmtiles('${stem}-ov.parquet', '${stem}.pmtiles', ` +
-    `layer_name='${stem}', tile_size_limit=None)"\` (the parcel recipe: set min_zoom and max_zoom for your map)`
+    `min_zoom=0, max_zoom=14, collapse_square=True); t.export_pmtiles('${stem}-ov.parquet', '${stem}.pmtiles', ` +
+    `layer_name='${stem}', tile_size_limit=None)"\` (the parcel recipe; MapLibre draws zoom 14's tiles further in)`
   );
 }
 
