@@ -26,11 +26,7 @@ import type { LayerSource } from "../../schemas/source.schema";
 import type { MapErrorContext, MapRendererOptions } from "../map-renderer";
 import type { LayerManager } from "../layer-manager";
 import type { EventHandler } from "../event-handler";
-import type { LegendBuilder } from "../legend-builder";
-import type { ParamsBuilder } from "../params-builder";
 import type { ControlsManager } from "../controls-manager";
-import type { ClassifyRuntime } from "../classify-runtime";
-import type { Strings } from "../../i18n";
 
 /**
  * The option blocks a document carries outside `config:`, as
@@ -249,7 +245,8 @@ export interface UpdateSummary {
   sourcesReplaced: string[];
   cameraMoved: boolean;
   rebuild: boolean;
-  failures: { op: string; message: string }[];
+  /** One per operation or re-sync step that threw (KTD7), naming the layer or source it was about when it was about one. */
+  failures: { op: string; message: string; layerId?: string; sourceId?: string }[];
 }
 
 /** Why a document was rejected (KTD9). */
@@ -272,17 +269,15 @@ export interface DiffResult {
  * What `MapRenderer.update` hands the engine chunk (KTD10): the engine
  * reaches the map and the renderer's collaborators only through this, since
  * it imports nothing from the main bundle. The methods U2 to U4 add to the
- * collaborators are reached through the collaborators themselves.
+ * collaborators are reached through the collaborators themselves; the
+ * features the renderer builds from private state (legend, panel,
+ * classify, strings) are reached through {@link RuntimeHost}, never held here.
  */
 export interface UpdateHost {
   readonly map: MapLibreMap;
   readonly layerManager: LayerManager;
   readonly eventHandler: EventHandler;
-  readonly legendBuilder: LegendBuilder;
-  readonly paramsBuilder: ParamsBuilder | null;
   readonly controlsManager: ControlsManager;
-  readonly classify: ClassifyRuntime | null;
-  readonly strings: Strings;
   /** The renderer's non-fatal error path: every per-operation failure goes here too (KTD7). */
   onError(error: Error, context?: MapErrorContext): void;
   /** Detach and re-attach `@maplibre-yaml/effects` (KTD6b). */

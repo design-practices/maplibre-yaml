@@ -32,8 +32,7 @@ import type {
   UpdateSummary,
 } from "./types";
 import { beforeIdOf, documentOrderMoves } from "./order";
-
-type Obj = Record<string, unknown>;
+import { asObject, changedKeys, same, sourceIdOf, type Obj } from "./compare";
 
 const CAMERA_KEYS = ["center", "zoom", "bearing", "pitch"] as const;
 
@@ -108,37 +107,8 @@ interface SourceNode {
 
 type SourceGraph = Map<string, SourceNode>;
 
-function jsonKey(value: unknown): string | undefined {
-  return JSON.stringify(value);
-}
-
-function same(a: unknown, b: unknown): boolean {
-  return jsonKey(a) === jsonKey(b);
-}
-
-function asObject(value: unknown): Obj {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Obj) : {};
-}
-
-/** Keys present in either object whose values differ, in first-seen order. */
-function changedKeys(a: Obj, b: Obj): string[] {
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  return [...keys].filter((key) => !same(a[key], b[key]));
-}
-
-function hintsEmpty(hints: DiffHints): boolean {
-  return hints.failedSources.size === 0 && !hints.urlsRebased;
-}
-
-function isBackground(layer: Layer): boolean {
-  return layer.type === "background";
-}
-
-/** The id of the source a layer draws: its named source, or its own inline one. */
-function sourceIdOf(layer: Layer): string | undefined {
-  if (isBackground(layer)) return undefined;
-  return typeof layer.source === "string" ? layer.source : `${layer.id}-source`;
-}
+/** The inline payload of a GeoJSON source: compared last, and by reference before content (see `sourceChange`). */
+const SOURCE_DATA_KEY: ReadonlySet<string> = new Set(["data"]);
 
 function hasHoverHighlight(layer: Layer): boolean {
   const interactive = (layer as { interactive?: { hover?: { highlight?: unknown } } }).interactive;
@@ -211,23 +181,33 @@ function inPlaceSourceOp(changed: readonly string[], source: LayerSource): "sour
   return bearsUrl(source) ? "sourceSetUrl" : "sourceSetData";
 }
 
-/** Why a source present in both documents must be replaced, if it must. */
-function sourceReplaceReason(
+/**
+ * How a source present in both documents changed: why it must be replaced,
+ * if it must, else the keys that changed. Every key but `data` is compared
+ * first, so a constructor-only change never costs a look at the payload;
+ * `data` — an inline GeoJSON payload of any size — is compared last, and
+ * by reference before content, so a payload the next document shares with
+ * the applied one is never serialised.
+ */
+function sourceChange(
   before: SourceNode,
   after: SourceNode,
   appliedLayers: readonly Layer[],
   nextLayers: readonly Layer[]
-): string | undefined {
-  if (sourceKind(before.source) !== sourceKind(after.source)) return "kind";
-  const type = String(asObject(after.source)["type"]);
-  const changed = changedKeys(asObject(before.source), asObject(after.source));
+): { reason?: string; changed: string[] } {
+  if (sourceKind(before.source) !== sourceKind(after.source)) return { reason: "kind", changed: [] };
+  const a = asObject(before.source);
+  const b = asObject(after.source);
+  const type = String(b["type"]);
+  const changed = changedKeys(a, b, SOURCE_DATA_KEY);
   const constructorOnly = changed.find((key) => !isSettableSourceKey(type, key));
-  if (constructorOnly) return constructorOnly;
+  if (constructorOnly) return { reason: constructorOnly, changed };
+  if (!same(a["data"], b["data"])) changed.push("data");
   // The author's keys are unchanged; the hover rule may still flip `generateId`.
   if (type === "geojson" && !same(effectiveIds(before, appliedLayers), effectiveIds(after, nextLayers))) {
-    return "generateId";
+    return { reason: "generateId", changed };
   }
-  return undefined;
+  return { changed };
 }
 
 /** One operation per source the hints mark as changed, when the diff found none. */
@@ -255,13 +235,12 @@ function sourceOps(applied: AppliedDocument, next: AppliedDocument, hints: DiffH
       ops.push({ op: "sourceAdd", ...base });
       continue;
     }
-    const reason = sourceReplaceReason(previous, node, applied.layers, next.layers);
+    const { reason, changed } = sourceChange(previous, node, applied.layers, next.layers);
     if (reason) {
       replaced.add(id);
       ops.push({ op: "sourceReplace", reason, ...base });
       continue;
     }
-    const changed = changedKeys(asObject(previous.source), asObject(node.source));
     if (changed.length > 0) {
       ops.push({ op: inPlaceSourceOp(changed, node.source), ...base });
       continue;
@@ -305,8 +284,10 @@ function layerReplaceReason(before: Layer, after: Layer, replacedSources: Readon
 /** The property sets that turn one layer into the next, when nothing forces a replacement. */
 function layerPropertyOps(before: Layer, after: Layer): UpdateOp[] {
   const ops: UpdateOp[] = [];
-  for (const key of changedKeys(before as Obj, after as Obj)) {
-    if (LAYER_STRUCTURAL_KEYS.has(key)) continue;
+  // Structural keys are decided elsewhere (`source` by `sourceOps`, over the
+  // source graph): skipped before any comparison, so an inline payload is
+  // never serialised here.
+  for (const key of changedKeys(before as Obj, after as Obj, LAYER_STRUCTURAL_KEYS)) {
     const target = LAYER_PROPERTY_TARGETS[key] ?? "runtime";
     if (target === "paint" || target === "layout") {
       for (const property of changedKeys(asObject((before as Obj)[key]), asObject((after as Obj)[key]))) {
@@ -461,15 +442,16 @@ function result(ops: UpdateOp[]): DiffResult {
  * The operations that turn `applied` into `next` on a running map.
  *
  * @remarks
- * Equal documents short-circuit only when `hints` is empty: `reload()` and a
- * `base` change pass hints, so an unchanged document still retries failed
- * sources (KTD11). A fallback is decided first and is the only operation
- * (KTD7). Otherwise the list is in apply order: source adds and changes,
- * layer removes, replacements and adds in document position, property sets,
- * moves, source removals, camera, then option blocks.
+ * Equal documents yield no operations and `changed: false` from the granular
+ * comparison itself — there is no whole-document serialisation, so an update
+ * costs in proportion to the document's keys, never to an inline payload.
+ * `reload()` and a `base` change pass hints, so an unchanged document still
+ * retries failed sources (KTD11). A fallback is decided first and is the only
+ * operation (KTD7). Otherwise the list is in apply order: source adds and
+ * changes, layer removes, replacements and adds in document position,
+ * property sets, moves, source removals, camera, then option blocks.
  */
 export function diff(applied: AppliedDocument, next: AppliedDocument, hints: DiffHints): DiffResult {
-  if (hintsEmpty(hints) && same(applied, next)) return result([]);
   const fallback = fallbackReason(applied.config, next.config);
   if (fallback) return result([{ op: "fallback", reason: fallback }]);
   const replacedSources = new Set<string>();

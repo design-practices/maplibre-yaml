@@ -317,6 +317,37 @@ describe("provenance across update() (KTD6)", () => {
     expect(map.getLayoutProperty("a", "visibility")).toBe("none");
     expect(toggles().map((t) => t.checked)).toEqual([false, true]);
   });
+
+  it("a layer the reader hid stays hidden across a replacement forced by its source, and across a re-add after a host removed it", async () => {
+    const { renderer, map } = await loaded(years());
+    const [a] = toggles();
+    a!.checked = false;
+    a!.dispatchEvent(new Event("change"));
+    expect(map.getLayoutProperty("a", "visibility")).toBe("none");
+
+    // `cluster` has no setter: the source is rebuilt and the layer replaced from the document, whose `visible` is on.
+    const clustered = circle("a", { label: "Points", source: { type: "geojson", data: EMPTY, cluster: true } });
+    const replaced = await renderer.update(years({}, [clustered]));
+    expect(replaced.summary?.replaced).toEqual(["a"]);
+    expect(replaced.summary?.failures).toEqual([]);
+    expect(map.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }), undefined);
+    expect(map.getLayoutProperty("a", "visibility")).toBe("none");
+    expect(toggles().map((t) => t.checked)).toEqual([false]);
+    expect(renderer.getState()).toEqual({ year: 2010 });
+
+    // A host takes the layer off the map; the next update puts it back (KTD1), still hidden.
+    map.removeLayer("a");
+    const readded = await renderer.update(years({}, [{ ...clustered, paint: { "circle-color": "#00f" } } as Layer]));
+    expect(readded.summary?.added).toEqual(["a"]);
+    expect(map.getLayoutProperty("a", "visibility")).toBe("none");
+    expect(toggles().map((t) => t.checked)).toEqual([false]);
+
+    // Checking the box again shows the replaced layer.
+    const [again] = toggles();
+    again!.checked = true;
+    again!.dispatchEvent(new Event("change"));
+    expect(map.getLayoutProperty("a", "visibility")).toBe("visible");
+  });
 });
 
 describe("initialState, initialVisibility and writes before load", () => {

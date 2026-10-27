@@ -11,9 +11,10 @@
  * a `fallback` operation here means the differ disagreed, and nothing is
  * applied either way.
  *
- * Type-only imports beside `./diff`, `./apply` and `./resync`, which the
- * build bundles into this one file: the chunk shares nothing with the main
- * bundle, and never imports `emitter/` or `export/`.
+ * Type-only imports beside the chunk's own modules (`./diff`, `./apply`,
+ * `./resync` and the helpers they share, `./order`, `./compare`, `./guard`),
+ * which the build bundles into this one file: the chunk shares nothing with
+ * the main bundle, and never imports `emitter/` or `export/`.
  */
 
 import { diff } from "./diff";

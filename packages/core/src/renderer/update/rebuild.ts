@@ -28,8 +28,12 @@ export const IN_PLACE_CONFIG_KEYS: ReadonlySet<string> = new Set([
   "maxBounds",
 ]);
 
-/** The `config:` keys that own the camera (KTD13). */
-const CAMERA_KEYS = ["center", "zoom", "bearing", "pitch", "fitTo"] as const;
+/**
+ * The `config:` keys under camera ownership (KTD13): the camera values plus
+ * `fitTo`, which frames it. Wider than the differ's `CAMERA_KEYS` (diff.ts),
+ * which names only the values a `cameraSet` carries.
+ */
+const CAMERA_OWNERSHIP_KEYS = ["center", "zoom", "bearing", "pitch", "fitTo"] as const;
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
@@ -48,5 +52,5 @@ export function needsRebuild(applied: MapConfig, next: MapConfig): boolean {
 export function cameraChanged(applied: MapConfig, next: MapConfig): boolean {
   const a = applied as Record<string, unknown>;
   const b = next as Record<string, unknown>;
-  return CAMERA_KEYS.some((key) => !same(a[key], b[key]));
+  return CAMERA_OWNERSHIP_KEYS.some((key) => !same(a[key], b[key]));
 }

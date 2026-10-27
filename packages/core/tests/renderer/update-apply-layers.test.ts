@@ -124,11 +124,7 @@ function createHost(map: MockMap) {
     map: map as any,
     layerManager,
     eventHandler,
-    legendBuilder: {} as any,
-    paramsBuilder: null,
     controlsManager: {} as any,
-    classify: null,
-    strings: {} as any,
     onError: (error, context) => onError(error, false, context),
     reattachEffects: vi.fn(),
     prepareLayer: (layer) => layer,
@@ -297,7 +293,7 @@ describe("applyOps: source reference settlement (KTD4)", () => {
 
     const summary = await update(h, applied, doc([layer("a", { source: "s2" }), layer("b", { source: "s1" })], sources));
 
-    expect(summary.failures).toEqual([{ op: "layerReplace", message: expect.stringContaining("boom") }]);
+    expect(summary.failures).toEqual([{ op: "layerReplace", message: expect.stringContaining("boom"), layerId: "a" }]);
     expect(h.onError).toHaveBeenCalledTimes(1);
     expect(h.onError).toHaveBeenCalledWith(expect.any(Error), false, { kind: "layer", layerId: "a" });
     // `a` is gone, `b` draws s1: s1 has one reference, s2 none, both sources alive.
@@ -322,7 +318,7 @@ describe("applyOps: source reference settlement (KTD4)", () => {
     expect(h.map.removeSource).not.toHaveBeenCalled();
     expect(h.map.getSource("s")).toBeDefined();
     expect(summary.failures).toHaveLength(1);
-    expect(summary.failures[0]).toEqual({ op: "sourceRemove", message: expect.stringContaining('"h"') });
+    expect(summary.failures[0]).toEqual({ op: "sourceRemove", message: expect.stringContaining('"h"'), sourceId: "s" });
     expect(h.onError).toHaveBeenCalledTimes(1);
     expect(h.onError).toHaveBeenCalledWith(expect.any(Error), false, { kind: "source", sourceId: "s" });
   });
@@ -462,7 +458,7 @@ describe("applyOps: property sets (R10)", () => {
       doc([layer("a", { paint: { "circle-color": "#00f", "circle-radius": 6 } }), layer("b", { layout: { "circle-sort-key": 3 } })])
     );
 
-    expect(summary.failures).toEqual([{ op: "layerSetProperty", message: expect.stringContaining("bad colour") }]);
+    expect(summary.failures).toEqual([{ op: "layerSetProperty", message: expect.stringContaining("bad colour"), layerId: "a" }]);
     expect(h.onError).toHaveBeenCalledTimes(1);
     expect(h.onError).toHaveBeenCalledWith(expect.any(Error), false, { kind: "layer", layerId: "a" });
     expect(h.map.layer("a")!.paint["circle-radius"]).toBe(6);
@@ -501,11 +497,48 @@ describe("applyOps: existence reconciliation (KTD1)", () => {
 
     const summary = await update(h, applied, doc([layer("a"), layer("x")]));
 
-    expect(summary.failures).toEqual([{ op: "layerAdd", message: expect.stringMatching(/not declared by the document/) }]);
+    expect(summary.failures).toEqual([{ op: "layerAdd", message: expect.stringMatching(/not declared by the document/), layerId: "x" }]);
     expect(h.onError).toHaveBeenCalledWith(expect.any(Error), false, { kind: "layer", layerId: "x" });
     expect(h.map.removeLayer).not.toHaveBeenCalledWith("x");
     expect(h.map.layer("x")!.type).toBe("line");
     expect(h.layerManager.ownsLayer("x")).toBe(false);
+  });
+
+  it("after a collision, the document's paint, visibility and interactive changes never reach the host's layer: one failure per update, its setters and events untouched (KTD1)", async () => {
+    const h = createHost(createMockMap(["land"]));
+    const applied = doc([layer("a")]);
+    await render(h, applied);
+    hostAddsLayer(h.map, "x");
+    // The renderer records the colliding document as applied, failures and all.
+    const collided = doc([layer("a"), layer("x")]);
+    await update(h, applied, collided);
+    h.onError.mockClear();
+    h.map.on.mockClear();
+    h.map.setPaintProperty.mockClear();
+    h.map.setLayoutProperty.mockClear();
+    h.map.setFilter.mockClear();
+
+    const next = doc([
+      layer("a"),
+      layer("x", {
+        paint: { "circle-color": "#000" },
+        visible: false,
+        filter: ["==", "x", 1],
+        interactive: { click: { popup: [{ p: [{ property: "title" }] }] }, hover: { cursor: "pointer" } },
+      }),
+    ]);
+    const summary = await update(h, collided, next);
+
+    expect(summary.failures).toEqual([{ op: "layerSetProperty", message: expect.stringMatching(/"x".*not declared by the document/), layerId: "x" }]);
+    expect(h.onError).toHaveBeenCalledTimes(1);
+    expect(h.onError).toHaveBeenCalledWith(expect.any(Error), false, { kind: "layer", layerId: "x" });
+    expect(h.map.setPaintProperty).not.toHaveBeenCalled();
+    expect(h.map.setLayoutProperty).not.toHaveBeenCalled();
+    expect(h.map.setFilter).not.toHaveBeenCalled();
+    expect(h.map.on).not.toHaveBeenCalledWith(expect.anything(), "x", expect.any(Function));
+    expect(h.map.layer("x")).toMatchObject({ type: "line", paint: {}, layout: {} });
+    expect(h.map.layer("x")!.filter).toBeUndefined();
+    expect(h.map.removeLayer).not.toHaveBeenCalledWith("x");
   });
 
   it("removing a layer stops its polling, detaches its events and drops its inline source", async () => {

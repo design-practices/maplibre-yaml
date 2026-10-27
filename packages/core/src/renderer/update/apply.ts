@@ -21,13 +21,12 @@
  * order so every layer's anchor — the next document layer — is already on
  * the map when the layer is placed before it.
  *
- * Type-only imports: this module ships in the engine's lazy chunk, which
- * shares nothing with the main bundle.
+ * Type-only imports beside the chunk's own modules: this module ships in
+ * the engine's lazy chunk, which shares nothing with the main bundle.
  */
 
 import type { FeatureCollection } from "geojson";
 import type { Layer } from "../../schemas/layer.schema";
-import type { MapErrorContext } from "../map-renderer";
 import type {
   AppliedDocument,
   ApplyRequest,
@@ -47,6 +46,9 @@ import type {
   UpdateOp,
   UpdateSummary,
 } from "./types";
+import { beforeIdOf } from "./order";
+import { sourceIdOf } from "./compare";
+import { guard, layerContext, sourceContext } from "./guard";
 
 type StructuralOp = LayerAddOp | LayerReplaceOp;
 type SourceChangeOp = SourceAddOp | SourceReplaceOp | SourceSetDataOp | SourceSetUrlOp | SourceSetTilesOp;
@@ -105,17 +107,9 @@ function partition(ops: readonly UpdateOp[]): Phases {
   return phases;
 }
 
-/** The id of the source a layer draws: its named source, or its own inline one. */
-function sourceIdOf(layer: Layer): string | undefined {
-  if (layer.type === "background") return undefined;
-  return typeof layer.source === "string" ? layer.source : `${layer.id}-source`;
-}
-
-/** Where a layer sits in the document, as the differ computes it (see `LayerPosition`). */
+/** Where a layer sits in the document, as the differ computes it (the one rule in order.ts; see `LayerPosition`). */
 function positionOf(layers: readonly Layer[], index: number): LayerPosition {
-  const anchor = (layers[index] as { before?: unknown }).before;
-  const beforeId =
-    typeof anchor === "string" && !layers.some((layer) => layer.id === anchor) ? anchor : layers[index + 1]?.id;
+  const beforeId = beforeIdOf(layers, index);
   return beforeId === undefined ? { index } : { index, beforeId };
 }
 
@@ -138,29 +132,6 @@ function reconcile(host: UpdateHost, next: AppliedDocument, phases: Phases, summ
   phases.properties = phases.properties.filter((op) => !reconciled.has(op.layerId));
   phases.moves = phases.moves.filter((op) => !reconciled.has(op.layerId));
 }
-
-/**
- * Run one operation; a throw becomes a recorded failure and a non-fatal
- * error report, and the update goes on (KTD7).
- */
-async function attempt(
-  host: UpdateHost,
-  summary: UpdateSummary,
-  op: UpdateOp,
-  context: MapErrorContext,
-  run: () => void | Promise<void>
-): Promise<void> {
-  try {
-    await run();
-  } catch (thrown) {
-    const error = thrown instanceof Error ? thrown : new Error(String(thrown));
-    summary.failures.push({ op: op.op, message: error.message });
-    host.onError(error, context);
-  }
-}
-
-const layerContext = (layerId: string): MapErrorContext => ({ kind: "layer", layerId });
-const sourceContext = (sourceId: string): MapErrorContext => ({ kind: "source", sourceId });
 
 /**
  * Replace a source and every document layer over it in document position
@@ -211,7 +182,7 @@ async function applySourceChange(host: UpdateHost, request: ApplyRequest, phases
       await layerManager.retargetPipeline(op.sourceId, op.source as Record<string, unknown>);
       // New features: a retained highlight id would light up whichever feature now holds it.
       for (const layer of request.next.layers) {
-        if (sourceIdOf(layer) === op.sourceId) host.eventHandler.resetFeatureState(layer.id);
+        if (sourceIdOf(layer) === op.sourceId && layerManager.ownsLayer(layer.id)) host.eventHandler.resetFeatureState(layer.id);
       }
       return;
     }
@@ -238,6 +209,22 @@ function removeLayer(host: UpdateHost, op: LayerRemoveOp): void {
 }
 
 /**
+ * An update completes when its operations are applied, not when a layer's
+ * `url:` has been read: the layer is placed with its source and the fetch
+ * goes on as a generation-guarded task, as a named source's does (KTD5).
+ * First render keeps awaiting the data for its `load` contract.
+ */
+const PLACE_ONLY = { awaitData: false } as const;
+
+/** The message for a document layer whose id a host's layer holds (KTD1): the document's changes never reach it. */
+function notOurs(layerId: string, what: string): Error {
+  return new Error(
+    `Layer "${layerId}" is on the map but was not declared by the document ` +
+      `(a host added it through addLayer or getMap().addLayer), so ${what}. Give one of them another id.`
+  );
+}
+
+/**
  * Add or replace a document layer in document position. A layer id the map
  * already has that the document did not declare is a host's: the document
  * layer is refused with a hint and the host's is left alone (KTD1).
@@ -259,9 +246,9 @@ async function placeLayer(host: UpdateHost, op: StructuralOp): Promise<void> {
     // through the same claim path as a fresh add (ml-aot.142).
     host.eventHandler.detachEvents(layerId);
     if (op.op === "layerReplace") host.emit("layer:removed", { layerId });
-    await host.layerManager.replaceLayer(prepared, position.beforeId);
+    await host.layerManager.replaceLayer(prepared, position.beforeId, PLACE_ONLY);
   } else {
-    await host.layerManager.addLayer(prepared, position.beforeId);
+    await host.layerManager.addLayer(prepared, position.beforeId, PLACE_ONLY);
   }
   host.eventHandler.attachEvents(prepared);
   host.emit("layer:added", { layerId });
@@ -270,16 +257,35 @@ async function placeLayer(host: UpdateHost, op: StructuralOp): Promise<void> {
 /**
  * Set one changed layer key. Keys the renderer owns (`runtime`) belong to
  * the runtime re-sync (U4), except `interactive`, whose whole effect is
- * the layer's event bindings: those are re-bound here.
+ * the layer's event bindings: those are re-bound here — never onto a host's
+ * layer (KTD1): `LayerManager` refuses the setters for one, and the event
+ * bindings are refused here the same way.
  */
 function setProperty(host: UpdateHost, next: AppliedDocument, op: LayerSetPropertyOp): void {
   if (op.target === "runtime") {
     if (op.property !== "interactive") return;
+    if (!host.layerManager.ownsLayer(op.layerId)) throw notOurs(op.layerId, "its interactions are not bound to it");
     const layer = next.layers.find((entry) => entry.id === op.layerId);
     if (layer) host.eventHandler.reattachEvents(layer);
     return;
   }
   host.layerManager.setLayerProperty(op.layerId, op.target, op.property, op.value);
+}
+
+/**
+ * The property sets aimed at a layer this document does not own on the map
+ * — its id collided with a host's layer on an earlier update, so the map
+ * has the host's and the document's was refused (KTD1). One failure per
+ * such layer, not one per key, and none of its sets run.
+ */
+function dropForeignProperties(host: UpdateHost, summary: UpdateSummary, properties: LayerSetPropertyOp[]): LayerSetPropertyOp[] {
+  const foreign = new Set(properties.map((op) => op.layerId).filter((layerId) => !host.layerManager.ownsLayer(layerId)));
+  for (const layerId of foreign) {
+    const error = notOurs(layerId, "the document's changes to it are skipped");
+    summary.failures.push({ op: "layerSetProperty", message: error.message, layerId });
+    host.onError(error, layerContext(layerId));
+  }
+  return foreign.size === 0 ? properties : properties.filter((op) => !foreign.has(op.layerId));
 }
 
 /**
@@ -322,27 +328,27 @@ export async function applyOps(host: UpdateHost, request: ApplyRequest): Promise
   host.layerManager.beginSourceSettlement();
   try {
     for (const op of phases.sourceChanges) {
-      await attempt(host, summary, op, sourceContext(op.sourceId), () => applySourceChange(host, request, phases, op));
+      await guard(host, summary, op.op, () => applySourceChange(host, request, phases, op), sourceContext(op.sourceId));
     }
     for (const op of phases.removes) {
-      await attempt(host, summary, op, layerContext(op.layerId), () => removeLayer(host, op));
+      await guard(host, summary, op.op, () => removeLayer(host, op), layerContext(op.layerId));
     }
     // Last to first: each layer goes before the next document layer, which is then already there.
     const structural = [...phases.structural].sort((a, b) => b.position.index - a.position.index);
     for (const op of structural) {
-      await attempt(host, summary, op, layerContext(op.layerId), () => placeLayer(host, op));
+      await guard(host, summary, op.op, () => placeLayer(host, op), layerContext(op.layerId));
     }
-    for (const op of phases.properties) {
-      await attempt(host, summary, op, layerContext(op.layerId), () => setProperty(host, next, op));
+    for (const op of dropForeignProperties(host, summary, phases.properties)) {
+      await guard(host, summary, op.op, () => setProperty(host, next, op), layerContext(op.layerId));
     }
     for (const op of [...phases.moves].reverse()) {
-      await attempt(host, summary, op, layerContext(op.layerId), () => host.layerManager.moveLayer(op.layerId, op.beforeId));
+      await guard(host, summary, op.op, () => host.layerManager.moveLayer(op.layerId, op.beforeId), layerContext(op.layerId));
     }
   } finally {
     host.layerManager.settleSources();
   }
   for (const op of phases.sourceRemovals) {
-    await attempt(host, summary, op, sourceContext(op.sourceId), () => host.layerManager.removeSource(op.sourceId));
+    await guard(host, summary, op.op, () => host.layerManager.removeSource(op.sourceId), sourceContext(op.sourceId));
   }
   hintContradictedAnchors(host, next);
   return summary;

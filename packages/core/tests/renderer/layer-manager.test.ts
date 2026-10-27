@@ -1237,7 +1237,60 @@ describe("LayerManager", () => {
       expect(map.setLayerZoomRange).toHaveBeenCalledWith("a", 3, null);
       expect(map.setLayerZoomRange).toHaveBeenCalledWith("a", null, 24);
       expect(map.setLayoutProperty).toHaveBeenCalledWith("a", "visibility", "none");
-      expect(() => manager.setLayerProperty("nope", "paint", "circle-color", "#000")).toThrow(/not on the map/);
+      expect(() => manager.setLayerProperty("nope", "paint", "circle-color", "#000")).toThrow(/not declared by the document/);
+      // Declared, then taken off the map by a host: no setter to call.
+      map.removeLayer("a");
+      expect(() => manager.setLayerProperty("a", "paint", "circle-color", "#000")).toThrow(/not on the map/);
+    });
+
+    it("setLayerProperty refuses a host's layer, as moveLayer does: no setter runs against it (KTD1)", async () => {
+      await manager.addLayer(circle("a"));
+      map.addLayer({ id: "h", type: "line", source: "basemap" });
+      map.setPaintProperty.mockClear();
+      map.setLayoutProperty.mockClear();
+
+      expect(() => manager.setLayerProperty("h", "paint", "line-color", "#000")).toThrow(/"h" was not declared by the document, so "line-color" is not set/);
+      expect(() => manager.setLayerProperty("h", "visibility", "visibility", "none")).toThrow(/not declared by the document/);
+      expect(() => manager.setLayerProperty("h", "filter", "filter", ["==", "x", 1])).toThrow(/not declared by the document/);
+      expect(map.setPaintProperty).not.toHaveBeenCalled();
+      expect(map.setLayoutProperty).not.toHaveBeenCalled();
+      expect(map.setFilter).not.toHaveBeenCalled();
+    });
+
+    it("addLayer with awaitData: false places a url-sourced layer before its fetch answers; the data still lands under its generation", async () => {
+      let resolveFetch!: (value: { data: unknown; fromCache: boolean; featureCount: number; duration: number }) => void;
+      const fetcher = { fetch: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))) };
+      const callbacks = { onDataLoading: vi.fn(), onDataLoaded: vi.fn(), onDataError: vi.fn() };
+      const lazy = new LayerManager(map, callbacks, { fetcher: fetcher as any });
+      const layer = circle("quakes", { source: { type: "geojson", url: "https://example.com/quakes.geojson" } });
+
+      let placed = false;
+      const add = lazy.addLayer(layer, undefined, { awaitData: false }).then(() => (placed = true));
+      await Promise.resolve();
+      await add;
+      expect(placed).toBe(true);
+      expect(map.order()).toEqual(["land", "quakes"]);
+      expect(map.getSource("quakes-source")).toBeDefined();
+      expect(fetcher.fetch).toHaveBeenCalledTimes(1);
+      expect(callbacks.onDataLoaded).not.toHaveBeenCalled();
+
+      const data = { type: "FeatureCollection", features: [{ type: "Feature", geometry: null, properties: {} }] };
+      resolveFetch({ data, fromCache: false, featureCount: 1, duration: 0 });
+      await new Promise((done) => setTimeout(done, 0));
+      expect(map.getSource("quakes-source").setData).toHaveBeenCalledWith(data);
+      expect(callbacks.onDataLoaded).toHaveBeenCalledWith("quakes", 1);
+
+      // The default keeps first render's contract: the add resolves with the data in.
+      let resolveSecond!: typeof resolveFetch;
+      fetcher.fetch.mockImplementationOnce(() => new Promise((resolve) => (resolveSecond = resolve)));
+      let done = false;
+      const awaited = lazy.addLayer(circle("other", { source: { type: "geojson", url: "https://example.com/other.geojson" } })).then(() => (done = true));
+      await new Promise((tick) => setTimeout(tick, 0));
+      expect(done).toBe(false);
+      resolveSecond({ data, fromCache: false, featureCount: 1, duration: 0 });
+      await awaited;
+      expect(done).toBe(true);
+      lazy.destroy();
     });
 
     it("releases deferred by beginSourceSettlement settle only at settleSources, so a swap keeps the pipeline", async () => {

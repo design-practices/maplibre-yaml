@@ -105,11 +105,7 @@ function createHost(map: ReturnType<typeof createMockMap>) {
     map: map as any,
     layerManager,
     eventHandler,
-    legendBuilder: {} as any,
-    paramsBuilder: null,
     controlsManager: { removeAllControls: noop, addControls: noop } as any,
-    classify: null,
-    strings: {} as any,
     camera: "document",
     runtime: {
       syncLegend: noop,

@@ -12,18 +12,18 @@
  * renderer's {@link RuntimeHost} supplies *how*, since most features need
  * its private state or a value import this chunk must not make (KTD10).
  *
- * Every step is guarded the way an operation is (KTD7): a throw becomes a
- * `summary.failures` record and a non-fatal `onError` report, and the rest
- * of the re-sync goes on.
+ * Every step is guarded the way an operation is (`guard.ts`, KTD7): a throw
+ * becomes a `summary.failures` record and a non-fatal `onError` report, and
+ * the rest of the re-sync goes on.
  *
- * Type-only imports: this module ships in the engine's lazy chunk.
+ * Type-only imports beside the chunk's own modules: this module ships in
+ * the engine's lazy chunk.
  */
 
 import type { Layer } from "../../schemas/layer.schema";
-import type { MapErrorContext } from "../map-renderer";
 import type { AppliedDocument, CameraValues, OptionKey, OptionSetOp, UpdateHost, UpdateOp, UpdateRequest, UpdateSummary } from "./types";
-
-type Obj = Record<string, unknown>;
+import { asObject, same, type Obj } from "./compare";
+import { guard } from "./guard";
 
 /** `CLASSIFY_METADATA_KEY` in classify/compile.ts — a literal here, since the chunk imports no values. */
 const CLASSIFY_KEY = "maplibre-yaml:classify";
@@ -33,39 +33,11 @@ const CAMERA_EASE_MS = 300;
 
 const SCENE_OPTIONS = ["projection", "sky", "terrain", "light"] as const;
 
-function same(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-function asObject(value: unknown): Obj {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Obj) : {};
-}
-
 /** The `optionSet` operations by option key. */
 function optionSets(ops: readonly UpdateOp[]): Map<OptionKey, OptionSetOp> {
   const sets = new Map<OptionKey, OptionSetOp>();
   for (const op of ops) if (op.op === "optionSet") sets.set(op.option, op);
   return sets;
-}
-
-/**
- * Run one re-sync step; a throw is recorded and reported, never fatal
- * (KTD7). `op` names the step in the failure record.
- */
-async function guard(
-  host: UpdateHost,
-  summary: UpdateSummary,
-  op: string,
-  run: () => void | Promise<void>,
-  context?: MapErrorContext
-): Promise<void> {
-  try {
-    await run();
-  } catch (thrown) {
-    const error = thrown instanceof Error ? thrown : new Error(String(thrown));
-    summary.failures.push({ op, message: error.message });
-    host.onError(error, context);
-  }
 }
 
 /** What the legend reads from a layer (legend-builder.ts): its kind, labels, classes and colours. */

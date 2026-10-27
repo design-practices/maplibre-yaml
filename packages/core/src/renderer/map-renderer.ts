@@ -2361,6 +2361,9 @@ export class MapRenderer {
       return { outcome: 'rejected', errors };
     }
     if (stale()) return { outcome: 'superseded' };
+    // The hover rule for named sources follows the next document (ml-aot.142): a
+    // source the engine rebuilds for `generateId` gets its ids from these layers.
+    this.layerManager.setNamedSourcesNeedingIds(namedSourcesNeedingIds(next.layers));
     const result = await engine.runUpdate(this.updateHost(), { applied: this.applied, next, hints });
     if (stale()) return { outcome: 'superseded' };
     if (result.summary.rebuild) return { outcome: 'fallback', summary: result.summary };
@@ -2396,17 +2399,22 @@ export class MapRenderer {
       map: this.map,
       layerManager: this.layerManager,
       eventHandler: this.eventHandler,
-      legendBuilder: this.legendBuilder,
-      paramsBuilder: this.paramsBuilder,
       controlsManager: this.controlsManager,
-      classify: this.classify,
-      strings: this.strings,
       camera: this.options.camera ?? 'document',
       runtime,
       onError: (error, context) => this.options.onError?.(error, false, context),
       reattachEffects: () => this.options.onReattachEffects?.(),
       prepareLayer: (layer) => this.prepareLayer(layer),
-      emit: (event, payload) => this.emit(event, payload),
+      emit: (event, payload) => {
+        // A layer the update added again (replaced, or re-added after a host
+        // removed it) carries the document's `visible`; the reader's panel
+        // toggle outlives it (KTD6), as `pendingVisibility` does on load.
+        if (event === 'layer:added') {
+          const visible = this.visibility.get(payload.layerId);
+          if (visible !== undefined && this.map.getLayer(payload.layerId)) this.layerManager.setVisibility(payload.layerId, visible);
+        }
+        this.emit(event, payload);
+      },
     };
   }
 

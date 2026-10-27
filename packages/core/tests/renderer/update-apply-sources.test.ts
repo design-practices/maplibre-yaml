@@ -187,11 +187,7 @@ function createHost(map: MockMap) {
     map: map as any,
     layerManager,
     eventHandler,
-    legendBuilder: {} as any,
-    paramsBuilder: null,
     controlsManager: {} as any,
-    classify: null,
-    strings: {} as any,
     onError: (error, context) => onError(error, false, context),
     reattachEffects: vi.fn(),
     prepareLayer: (layer) => layer,
@@ -628,6 +624,80 @@ describe("applyOps: failed sources are remembered for hints.failedSources (KTD11
     await update(h, applied, doc([]));
 
     expect(h.layerManager.failedSources().size).toBe(0);
+    h.layerManager.destroy();
+  });
+});
+
+describe("applyOps: an update completes when its operations are applied, not when a url: has been read (KTD5)", () => {
+  it("adding a layer over an inline url: source resolves before the fetch answers, and a second update is not held behind it", async () => {
+    const h = createHost(createMockMap());
+    const applied = doc([layer("a")]);
+    await render(h, applied);
+
+    // The fetcher never answers for A: the layer is placed with its source all the same.
+    const withQuakes = doc([layer("a"), layer("quakes", { source: geojson({ url: A }) })]);
+    const first = await update(h, applied, withQuakes);
+    expect(first.failures).toEqual([]);
+    expect(first.added).toEqual(["quakes"]);
+    expect(h.map.order()).toEqual(["land", "a", "quakes"]);
+    expect(h.map.getSource("quakes-source")).toBeDefined();
+    expect(h.fetcher.requests(A)).toBe(1);
+    expect(h.callbacks.onDataLoading).toHaveBeenCalledWith("quakes");
+    expect(h.callbacks.onDataLoaded).not.toHaveBeenCalled();
+
+    // A second update applies at once: a paint change lands while A is still in flight.
+    const recoloured = doc([layer("a", { paint: { "circle-color": "#00f" } }), layer("quakes", { source: geojson({ url: A }) })]);
+    const second = await update(h, withQuakes, recoloured);
+    expect(second.failures).toEqual([]);
+    expect(h.map.setPaintProperty).toHaveBeenCalledWith("a", "circle-color", "#00f");
+
+    // When A finally answers, the data lands under the generation it started in.
+    await h.fetcher.respond(A, fc("q1"));
+    expect(names(lastSetData(h, "quakes-source"))).toEqual(["q1"]);
+    expect(h.callbacks.onDataLoaded).toHaveBeenCalledWith("quakes", 1);
+    h.layerManager.destroy();
+  });
+
+  it("a replaced layer over an inline url: source is placed before its fetch answers too, and a stale answer never lands", async () => {
+    const h = createHost(createMockMap());
+    const applied = doc([layer("quakes", { source: geojson({ url: A }) })]);
+    // First render keeps awaiting the data (its `load` contract): answer A while it waits.
+    const rendering = render(h, applied);
+    await flush();
+    await h.fetcher.respond(A, fc("a"));
+    await rendering;
+
+    // A type change replaces the layer; its source is re-added and fetched again (never answered here).
+    const asSymbol = doc([layer("quakes", { type: "symbol", source: geojson({ url: A }) })]);
+    const summary = await update(h, applied, asSymbol);
+    expect(summary.failures).toEqual([]);
+    expect(summary.replaced).toEqual(["quakes"]);
+    expect(h.map.getLayer("quakes")!.type).toBe("symbol");
+    expect(h.fetcher.requests(A)).toBe(2);
+    h.layerManager.destroy();
+  });
+});
+
+describe("applyOps: the generateId rule follows the next document's layers (ml-aot.142)", () => {
+  it("a sourceReplace with reason generateId rebuilds the named source with generateId: true once the manager is told which sources need ids", async () => {
+    const h = createHost(createMockMap());
+    const applied = doc([layer("pins", { source: "pts" })], { pts: geojson({ data: fc("x") }) });
+    await render(h, applied);
+    expect(h.map.addSource).toHaveBeenCalledWith("pts", expect.not.objectContaining({ generateId: true }));
+    h.map.addSource.mockClear();
+
+    const hovered = doc([layer("pins", { source: "pts", interactive: { hover: { highlight: true } } })], applied.sources);
+    const { ops } = diff(applied, hovered, NO_HINTS);
+    expect(ops).toContainEqual(expect.objectContaining({ op: "sourceReplace", sourceId: "pts", reason: "generateId" }));
+
+    // What `MapRenderer.performUpdate` does before running the engine.
+    h.layerManager.setNamedSourcesNeedingIds(new Set(["pts"]));
+    const summary = await update(h, applied, hovered);
+
+    expect(summary.failures).toEqual([]);
+    expect(summary.sourcesReplaced).toEqual(["pts"]);
+    expect(h.map.addSource).toHaveBeenCalledTimes(1);
+    expect(h.map.addSource).toHaveBeenCalledWith("pts", expect.objectContaining({ type: "geojson", generateId: true }));
     h.layerManager.destroy();
   });
 });

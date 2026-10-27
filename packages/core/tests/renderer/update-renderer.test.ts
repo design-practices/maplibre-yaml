@@ -294,4 +294,29 @@ describe("MapRenderer.update(): runtime features", () => {
     await renderer.update({ ...withFit, layers: [{ id: "a", type: "circle", source: "pts", paint: { "circle-color": "#00f" } } as Layer] });
     expect((renderer.getMap() as any).fitBounds).toHaveBeenCalledTimes(1);
   });
+
+  it("adding hover.highlight over a named GeoJSON source rebuilds the source with generateId: true, from the next document's layers (ml-aot.142)", async () => {
+    const pts = { type: "geojson", data: EMPTY } as never;
+    const plain = { id: "a", type: "circle", source: "pts", paint: { "circle-color": "#f00" } } as Layer;
+    const renderer = await loaded(doc([plain], {}, { pts }));
+    const map = renderer.getMap() as any;
+    expect(map.addSource).toHaveBeenCalledWith("pts", expect.not.objectContaining({ generateId: true }));
+    map.addSource.mockClear();
+
+    const hovered = { ...plain, interactive: { hover: { highlight: true } } } as Layer;
+    const result = await renderer.update(doc([hovered], {}, { pts }));
+
+    expect(result.outcome).toBe("applied");
+    expect(result.summary?.failures).toEqual([]);
+    expect(result.summary?.sourcesReplaced).toEqual(["pts"]);
+    expect(map.addSource).toHaveBeenCalledTimes(1);
+    expect(map.addSource).toHaveBeenCalledWith("pts", expect.objectContaining({ generateId: true }));
+    // The hover paint wrapping reads the feature-state the ids make addressable.
+    expect(JSON.stringify(map.getLayer("a").paint["circle-color"])).toContain("feature-state");
+
+    // And back: a source nothing highlights any more is rebuilt without ids.
+    map.addSource.mockClear();
+    await renderer.update(doc([plain], {}, { pts }));
+    expect(map.addSource).toHaveBeenCalledWith("pts", expect.not.objectContaining({ generateId: true }));
+  });
 });

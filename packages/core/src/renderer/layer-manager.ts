@@ -190,6 +190,12 @@ function withFeatureIds(
   }
 }
 
+/** How {@link LayerManager.addLayer} treats a layer's inline `url:` read. */
+export interface LayerAddOptions {
+  /** Resolve once the data is in (default) — or once the layer is placed, the read going on alongside. */
+  awaitData?: boolean;
+}
+
 /**
  * Callbacks for layer data loading events
  */
@@ -351,6 +357,17 @@ export class LayerManager {
     this.namedSources = new Map();
     this.sourceRefCounts = new Map();
     this.activeSourcePipelines = new Set();
+  }
+
+  /**
+   * The named sources a highlighted layer draws from, for the next document
+   * (live documents): `registerSources` reads this set when a source is
+   * added or rebuilt, so an update that adds `hover.highlight` over a named
+   * source — which the differ answers with a `generateId` replacement — gets
+   * feature ids on the rebuilt source, not the first document's answer.
+   */
+  setNamedSourcesNeedingIds(ids: ReadonlySet<string>): void {
+    this.namedSourcesNeedingIds = ids;
   }
 
   /**
@@ -628,7 +645,8 @@ export class LayerManager {
   private pipelineOwner(sourceId: string): { key: string; layerId: string } {
     if (this.namedSources.has(sourceId)) return { key: sourceId, layerId: sourceId };
     for (const [layerId, id] of this.layerToSource) {
-      if (id === sourceId) return { key: layerId, layerId };
+      // The one rule for a layer's pipeline key (`pipelineKeyFor`): its own id for an inline source.
+      if (id === sourceId) return { key: this.pipelineKeyFor(layerId), layerId };
     }
     return { key: sourceId, layerId: sourceId };
   }
@@ -893,9 +911,13 @@ export class LayerManager {
    * Add a document layer. `beforeId` (live documents, U2) is where an update
    * puts it — the next document layer — and wins over the layer's own
    * `before:` while the map has it; otherwise `before:` is honoured as on
-   * first render.
+   * first render. `awaitData` (default on, first render's `load` contract:
+   * every layer added and its data in) resolves once the layer's inline
+   * `url:` has been read; off — a live update, which completes when its
+   * operations are applied — the layer is placed with its source and the
+   * read goes on as a generation-guarded task, as a named source's does.
    */
-  async addLayer(layer: Layer, beforeId?: string): Promise<void> {
+  async addLayer(layer: Layer, beforeId?: string, options: LayerAddOptions = {}): Promise<void> {
     // A document that repeats a layer id (review F3): the first one wins, as
     // in 0.8.0, and the repeat is refused here -- synchronously, before any
     // await, so the first in document order claims the id even when the
@@ -911,7 +933,7 @@ export class LayerManager {
     }
     this.claimedLayerIds.add(layer.id);
     try {
-      await this.addClaimedLayer(layer, beforeId);
+      await this.addClaimedLayer(layer, beforeId, options.awaitData !== false);
     } catch (error) {
       // A layer that failed to add holds no id, no source claim and no inline
       // source: a later retry is not a repeat, and a named source's count
@@ -929,10 +951,10 @@ export class LayerManager {
    * already removed from the map. With no `beforeId` the layer keeps its
    * slot on the map (its current successor, host layers included).
    */
-  async replaceLayer(layer: Layer, beforeId?: string): Promise<void> {
+  async replaceLayer(layer: Layer, beforeId?: string, options: LayerAddOptions = {}): Promise<void> {
     const anchor = beforeId ?? this.successorOf(layer.id) ?? this.parkedAnchors.get(layer.id);
     this.removeLayer(layer.id);
-    await this.addLayer(layer, anchor);
+    await this.addLayer(layer, anchor, options);
   }
 
   /**
@@ -956,7 +978,8 @@ export class LayerManager {
    * U2): `paint`, `layout`, `filter` (`undefined` clears), `zoom`
    * (`minzoom` / `maxzoom`; `undefined` restores the layer defaults) or
    * `visibility`. Values are the next document's; nothing is read back from
-   * the map (R10).
+   * the map (R10). Host layers — anything this manager did not add — are
+   * never touched (KTD1), as `moveLayer` never moves them.
    */
   setLayerProperty(
     layerId: string,
@@ -964,6 +987,9 @@ export class LayerManager {
     property: string,
     value: unknown
   ): void {
+    if (!this.claimedLayerIds.has(layerId)) {
+      throw new Error(`Layer "${layerId}" was not declared by the document, so "${property}" is not set.`);
+    }
     if (!this.map.getLayer(layerId)) {
       throw new Error(`Layer "${layerId}" is not on the map, so "${property}" cannot be set.`);
     }
@@ -1041,7 +1067,7 @@ export class LayerManager {
     return this.beforeOrTop(layer);
   }
 
-  private async addClaimedLayer(layer: Layer, beforeId?: string): Promise<void> {
+  private async addClaimedLayer(layer: Layer, beforeId: string | undefined, awaitData: boolean): Promise<void> {
     // Background layers are sourceless by spec — resolving a source for one
     // dereferenced `layer.source.type` on undefined and threw, so a
     // schema-valid background layer killed the whole document (ml-chf).
@@ -1078,7 +1104,7 @@ export class LayerManager {
           );
         }
       } else {
-        await this.addSource(sourceId, layer);
+        await this.addSource(sourceId, layer, awaitData);
       }
     }
 
@@ -1127,7 +1153,7 @@ export class LayerManager {
     }
   }
 
-  private async addSource(sourceId: string, layer: Layer): Promise<void> {
+  private async addSource(sourceId: string, layer: Layer, awaitData: boolean): Promise<void> {
     // layer.source is guaranteed to be an object (string refs handled in addLayer)
     const source = layer.source as { type: string };
     this.sourceSpecs.set(sourceId, source as unknown as Record<string, unknown>);
@@ -1140,7 +1166,8 @@ export class LayerManager {
           sourceId,
           layer.id,
           geojsonSource,
-          isHighlightEnabled(layer)
+          isHighlightEnabled(layer),
+          awaitData
         );
       } else if (geojsonSource.data) {
         const sourceSpec: any = {
@@ -1253,11 +1280,21 @@ export class LayerManager {
     }
   }
 
+  /**
+   * Add a GeoJSON source whose data arrives by `url:` (or was prefetched):
+   * the source goes on the map at once with its initial data, then the
+   * read — a JSON fetch, or a FlatGeobuf / GeoParquet reader — fills it.
+   * With `awaitData` the returned promise settles when the read has (first
+   * render's contract); without it the read goes on as a task under the
+   * source's current generation, failures reported as on first load, and
+   * the promise settles once the source is placed (live documents, KTD5).
+   */
   private async addGeoJSONSourceFromURL(
     sourceId: string,
     layerId: string,
     config: GeoJSONSourceConfig,
-    needsIds = false
+    needsIds = false,
+    awaitData = true
   ): Promise<void> {
     // Determine initial data source
     let initialData: FeatureCollection = {
@@ -1303,6 +1340,28 @@ export class LayerManager {
     // This load's generation: a re-target before it lands makes it stale (KTD5).
     const generation = this.nextGeneration(sourceId);
 
+    const load = this.loadGeoJSONSource(sourceId, layerId, config, initialData, generation);
+    if (awaitData) {
+      await load;
+      return;
+    }
+    void load.catch((error: unknown) => {
+      // A reader that failed to start, after the layer was placed: the
+      // source's failure, reported as a failed load is (KTD11).
+      if (!this.isCurrent(sourceId, generation)) return;
+      this.failed.add(sourceId);
+      this.callbacks.onDataError?.(layerId, error instanceof Error ? error : new Error(String(error)));
+    });
+  }
+
+  /** The read behind {@link addGeoJSONSourceFromURL}: a fetch's failure is reported, a reader's thrown. */
+  private async loadGeoJSONSource(
+    sourceId: string,
+    layerId: string,
+    config: GeoJSONSourceConfig,
+    initialData: FeatureCollection,
+    generation: number
+  ): Promise<void> {
     // Cloud-native vector data (ml-cnv): a FlatGeobuf or GeoParquet file is
     // decoded into this GeoJSON source by its own data provider instead of
     // the JSON fetch below.

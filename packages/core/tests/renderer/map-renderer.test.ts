@@ -1038,7 +1038,7 @@ describe("MapRenderer", () => {
       const next = document("#0f0");
       const result = await renderer.update(next);
       expect(result.outcome).toBe("applied");
-      expect(result.summary?.failures).toEqual([{ op: "layerSetProperty", message: "paint rejected" }]);
+      expect(result.summary?.failures).toEqual([{ op: "layerSetProperty", message: "paint rejected", layerId: "a" }]);
       expect(onError).toHaveBeenCalledTimes(1);
       expect(onError.mock.calls[0][1]).toBe(false);
       expect(onError.mock.calls[0][2]).toEqual({ kind: "layer", layerId: "a" });

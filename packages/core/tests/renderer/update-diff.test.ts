@@ -9,7 +9,7 @@
  * (docs/plans/2026-10-27-001-feat-live-documents-plan.md).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { diff } from "../../src/renderer/update/diff";
 import type { AppliedDocument, DiffHints, UpdateOp } from "../../src/renderer/update/types";
 import type { Layer } from "../../src/schemas/layer.schema";
@@ -359,5 +359,79 @@ describe("diff: parity with first render", () => {
     });
     expect(result.success).toBe(false);
     expect(result.errors.find((e) => e.path === "layers.0.source")?.message).toContain('uses source "quakes"');
+  });
+});
+
+describe("diff: cost is proportional to the edit, never to an inline payload", () => {
+  /** A FeatureCollection big enough that serialising it would dominate the diff. */
+  const bigData = () => ({
+    type: "FeatureCollection",
+    features: Array.from({ length: 20_000 }, (_, i) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [i % 360, (i % 180) - 90] },
+      properties: { id: i, name: `feature ${i}`, value: i * 1.5 },
+    })),
+  });
+  const over = (data: unknown, overrides: Record<string, unknown> = {}) =>
+    lotsLayer({ id: "pins", type: "circle", source: { type: "geojson", data }, ...overrides });
+
+  it("a paint-only edit on a layer over a shared 20k-feature payload never serialises the payload", () => {
+    const data = bigData();
+    const applied = doc({ layers: [over(data)] });
+    const next = doc({ layers: [over(data, { paint: { "fill-color": "#f00", "fill-opacity": 0.5 } })] });
+    const stringify = vi.spyOn(JSON, "stringify");
+
+    const started = performance.now();
+    const result = diff(applied, next, NO_HINTS);
+    const elapsed = performance.now() - started;
+
+    expect(result.ops).toEqual([expect.objectContaining({ op: "layerSetProperty", layerId: "pins", property: "fill-color", value: "#f00" })]);
+    const serialisedPayload = stringify.mock.calls.some(([value]) => {
+      const seen = new Set<unknown>();
+      const walk = (v: unknown): boolean => {
+        if (v === data) return true;
+        if (typeof v !== "object" || v === null || seen.has(v)) return false;
+        seen.add(v);
+        return Object.values(v as object).some(walk);
+      };
+      return walk(value);
+    });
+    expect(serialisedPayload).toBe(false);
+    // Generous for CI; serialising 20k features twice over would take an order more.
+    expect(elapsed).toBeLessThan(50);
+    stringify.mockRestore();
+  });
+
+  it("equal documents over a shared payload yield no operations without a whole-document serialisation", () => {
+    const data = bigData();
+    const applied = doc({ layers: [over(data)] });
+    const next = doc({ layers: [over(data)] });
+    const stringify = vi.spyOn(JSON, "stringify");
+    const result = diff(applied, next, NO_HINTS);
+    expect(result.changed).toBe(false);
+    expect(result.ops).toEqual([]);
+    expect(stringify.mock.calls.some(([value]) => value === applied || value === next || value === data)).toBe(false);
+    stringify.mockRestore();
+  });
+
+  it("an inline data edit is still detected, as sourceSetData, and a constructor-only key change never looks at the payload", () => {
+    const before = bigData();
+    const after = bigData();
+    after.features[0]!.properties.name = "renamed";
+    const edited = diff(doc({ layers: [over(before)] }), doc({ layers: [over(after)] }), NO_HINTS);
+    expect(edited.ops).toEqual([expect.objectContaining({ op: "sourceSetData", sourceId: "pins-source" })]);
+
+    const stringify = vi.spyOn(JSON, "stringify");
+    const clustered = diff(
+      doc({ layers: [over(before)] }),
+      doc({ layers: [lotsLayer({ id: "pins", type: "circle", source: { type: "geojson", data: after, cluster: true } })] }),
+      NO_HINTS
+    );
+    expect(clustered.ops).toEqual([
+      expect.objectContaining({ op: "sourceReplace", sourceId: "pins-source", reason: "cluster" }),
+      expect.objectContaining({ op: "layerReplace", layerId: "pins", reason: "source" }),
+    ]);
+    expect(stringify.mock.calls.some(([value]) => value === before || value === after)).toBe(false);
+    stringify.mockRestore();
   });
 });
