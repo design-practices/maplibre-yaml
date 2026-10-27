@@ -131,4 +131,67 @@ describe("the update engine chunk can't be downloaded", () => {
     expect(applied).toHaveBeenCalledTimes(1);
     expect(renderer.getDocument().layers[0]).toEqual(layer("#0f0"));
   });
+
+  it("queues a second update behind a still-failing chunk, rejects it too, and a later update applies once the chunk recovers", async () => {
+    // Fresh chunk-load counters: the previous test left them at
+    // { attempts: 2, failing: false }.
+    chunkLoads.attempts = 0;
+    chunkLoads.failing = true;
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const onError = vi.fn();
+    const config = { center: [0, 0] as [number, number], zoom: 2, mapStyle: "https://example.com/style.json" };
+    const renderer = new MapRenderer(container, config, [layer("#f00")], { onError });
+    const loaded = new Promise<void>((resolve) => renderer.on("load", resolve));
+    (renderer.getMap() as any).emit("load");
+    await loaded;
+    const rejected = vi.fn();
+    const applied = vi.fn();
+    renderer.on("update:rejected", rejected);
+    renderer.on("update:applied", applied);
+    const before = renderer.getDocument();
+
+    const docA = { config, layers: [layer("#0f0")], sources: {}, options: {} };
+    const docB = { config, layers: [layer("#00f")], sources: {}, options: {} };
+
+    // Neither update is awaited before the next is issued (KTD5: one in
+    // flight, at most one queued) — docB queues behind docA.
+    const firstPromise = renderer.update(docA);
+    const secondPromise = renderer.update(docB);
+
+    const first = await firstPromise;
+    expect(first.outcome).toBe("rejected");
+    expect(first.errors).toHaveLength(1);
+    expect(first.errors![0]!.kind).toBe("chunk");
+
+    const second = await secondPromise;
+
+    // Current behavior (map-renderer.ts startUpdate/performUpdate): when
+    // the first update's run settles, `startUpdate`'s `.finally()` hands
+    // the queued update to a fresh `startUpdate` call, which re-attempts
+    // the chunk import via `performUpdate`. The chunk is still failing, so
+    // the queued update is also rejected with kind 'chunk' rather than
+    // being dropped as 'superseded'. If another change to the queue makes
+    // this ambiguous, the invariants below (no applied event while the
+    // chunk fails, document untouched, later update applies after
+    // recovery) are what must hold regardless.
+    expect(second.outcome).toBe("rejected");
+    if (second.outcome === "rejected") {
+      expect(second.errors).toHaveLength(1);
+      expect(second.errors![0]!.kind).toBe("chunk");
+    }
+    expect(chunkLoads.attempts).toBe(2);
+    expect(rejected).toHaveBeenCalledTimes(2);
+    expect(applied).not.toHaveBeenCalled();
+    expect(renderer.getDocument()).toBe(before);
+    expect(renderer.getDocument().layers[0]).toEqual(layer("#f00"));
+
+    chunkLoads.failing = false;
+    const retry = await renderer.update({ config, layers: [layer("#00f")], sources: {}, options: {} });
+    expect(chunkLoads.attempts).toBe(3);
+    expect(retry.outcome).toBe("applied");
+    expect(applied).toHaveBeenCalledTimes(1);
+    expect(renderer.getDocument().layers[0]).toEqual(layer("#00f"));
+  });
 });

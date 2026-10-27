@@ -5,9 +5,11 @@
  * @description
  * `<ml-scrollytelling>` re-sets the inner map's `config` on every story
  * render, and the inner element now updates in place (0.10). The engine is a
- * host under R10: when an update ADDED layers, the active chapter's
- * `layers.show/hide` is run again so a layer the chapter hides stays hidden;
- * a paint-only edit must not re-run the chapter (no camera move, no actions).
+ * host under R10: when an update ADDED or REPLACED layers, the active
+ * chapter's `layers.show/hide` is run again so a layer the chapter hides
+ * stays hidden (a replaced layer is a new layer object under the same id,
+ * so it comes back visible too); a paint-only edit must not re-run the
+ * chapter (no camera move, no actions).
  */
 import { describe, it, expect } from "vitest";
 import { createStoryController, watchMapUpdates, type StoryMap } from "../../src/scrollytelling";
@@ -109,8 +111,24 @@ describe("the engine's update listener", () => {
     controller.activate("c1");
     calls.length = 0;
     applied(mapEl, { propertiesSet: [{ layerId: "route", property: "line-color" }] });
-    applied(mapEl, { replaced: ["route"], rebuild: true });
     expect(calls).toEqual([]);
+  });
+
+  it("a story edit that replaced a layer the active chapter hides leaves it hidden after ml-map:update-applied", () => {
+    const container = document.createElement("div");
+    const { map, calls } = fakeMap(["route", "quakes"]);
+    const controller = createStoryController(container, story(), map, { reducedMotion: () => true });
+    const mapEl = document.createElement("div");
+    watchMapUpdates(mapEl, controller);
+    controller.activate("c1");
+    calls.length = 0;
+
+    // The update replaced `route` in place (a `replaced`-only summary, no `added`): it came back visible.
+    applied(mapEl, { replaced: ["route"], rebuild: true });
+    expect(calls).toEqual([
+      ["setLayoutProperty", "quakes", "visibility", "visible"],
+      ["setLayoutProperty", "route", "visibility", "none"],
+    ]);
   });
 
   it("only the layer visibility runs again: no camera move, no enter actions, no chapter event", () => {

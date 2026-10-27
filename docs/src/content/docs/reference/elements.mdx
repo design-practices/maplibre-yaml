@@ -85,7 +85,7 @@ legend, and for the label language of a Protomaps basemap
 |----------|------|--------------|
 | `config` | object or JSON string (set); object or `null` (get) | The document. Set before or after the element connects, it is validated like every other path; a value JSON-equal to the one shown is a no-op, and a different one is applied to the running map in place ([Updating the document](#updating-the-document)). Get returns the document being shown |
 | `base` | string or `null` | Reflects the `base` attribute; setting it re-resolves the document's paths and applies the result as an update |
-| `camera` | `"document"` or `"host"` | Reflects the `camera` attribute. Can be changed on a running map; it governs the next update on |
+| `camera` | `"document"` or `"host"` | Reflects the `camera` attribute. Can be changed on a running map; it governs the next update onward, not one already in flight |
 | `debug` | boolean | Reflects the `debug` attribute |
 | `quiet` | boolean | Reflects the `quiet` attribute |
 | `MLMap.fitToWaitMs` (static) | number | How long a map with `fitTo` on a `url:` source waits for the data before its first paint, so it opens already framed. Default `1500` (ms); `0` turns the wait off. Set it before maps render |

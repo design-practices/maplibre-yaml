@@ -373,8 +373,10 @@ export interface StoryController {
 
 /**
  * Re-apply the active chapter's layer visibility whenever the story's map
- * applied an update that added layers (`ml-map:update-applied` with a
- * non-empty `summary.added`). A paint-only edit leaves the chapter alone.
+ * applied an update that added or replaced layers (`ml-map:update-applied`
+ * with a non-empty `summary.added` or `summary.replaced`): a replaced layer
+ * is a new layer object under the same id, so it comes back visible just
+ * like an added one. A paint-only edit leaves the chapter alone.
  *
  * @param mapElement - The story's `<ml-map>` (any event target that dispatches its events).
  * @returns Stop listening.
@@ -384,8 +386,9 @@ export function watchMapUpdates(
   controller: Pick<StoryController, "reapplyLayers">
 ): () => void {
   const listener = (event: Event) => {
-    const summary = (event as CustomEvent<{ summary?: { added?: string[] } }>).detail?.summary;
-    if (summary?.added?.length) controller.reapplyLayers();
+    const summary = (event as CustomEvent<{ summary?: { added?: string[]; replaced?: string[] } }>)
+      .detail?.summary;
+    if (summary?.added?.length || summary?.replaced?.length) controller.reapplyLayers();
   };
   mapElement.addEventListener("ml-map:update-applied", listener);
   return () => mapElement.removeEventListener("ml-map:update-applied", listener);

@@ -140,6 +140,18 @@ it with the CLI:
 npx maplibre-yaml@latest schema map
 ```
 
+## Updating a running map \{#updating-a-running-map}
+
+A page that already shows a `<ml-map>` doesn't need to replace the element
+for a new document: call `el.update(doc)`, or assign the document to
+`el.config`, and the running map changes in place by id, moving the camera
+only if the document's camera changed. The outcome arrives as
+`ml-map:update-applied` (`{ summary }`) or `ml-map:update-rejected`
+(`{ kind, errors }`); `el.setState(values)` / `el.getState()` read and write
+the document's `state:` values at runtime, and `camera="host"` on the
+element keeps an update from moving a reader's own view. Full rules:
+[`<ml-map>` reference](/reference/elements/#updating-the-document).
+
 ## Three things agents get wrong
 
 ### 1. A map document is `type: map` with a `config:` block \{#1-ml-map-src-wants-a-type-map-block-not-a-pages-document}
