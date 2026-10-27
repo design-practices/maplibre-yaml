@@ -47,6 +47,7 @@ import type {
   ProjectionConfig,
 } from '../schemas/map.schema';
 import { applyProjection, applySky, applyTerrain, type Scene3DMap } from './scene-3d';
+import type { AppliedDocument, DocumentOptions } from './update/types';
 import { createStrings, type Strings } from '../i18n';
 import { mapLanguage } from './popup-builder';
 import { applyAccessibleName } from './accessible-name';
@@ -455,6 +456,25 @@ export interface MapRendererEvents {
 /**
  * Main class for rendering maps from configuration
  */
+/** The document's option blocks, as `denormalizeOptions` names them. */
+const DOCUMENT_OPTION_KEYS = [
+  'title', 'description', 'controls', 'legend', 'state', 'parameters', 'markers',
+  'popups', 'images', 'terrain', 'sky', 'projection', 'light',
+] as const satisfies readonly (keyof DocumentOptions)[];
+
+/**
+ * The document's option blocks out of the renderer options: the host's own
+ * (`onError`, `chrome`, `sourceData`, ...) stay out, and an absent block
+ * stays absent rather than becoming an `undefined` key.
+ */
+function documentOptions(options: MapRendererOptions): DocumentOptions {
+  const picked: DocumentOptions = {};
+  for (const key of DOCUMENT_OPTION_KEYS) {
+    if (options[key] !== undefined) (picked as Record<string, unknown>)[key] = options[key];
+  }
+  return picked;
+}
+
 export class MapRenderer {
   private map: MapLibreMap;
   private layerManager: LayerManager;
@@ -502,6 +522,14 @@ export class MapRenderer {
   private classify: ClassifyRuntime | null = null;
   /** Where buildLegend() last drew, so classify can redraw it. */
   private legendTarget: { container: string | HTMLElement; layers: Layer[]; config?: LegendConfig } | null = null;
+  /**
+   * The normalized document this map shows (KTD1, live documents): the four
+   * constructor arguments, kept so `update(next)` can diff against them
+   * without reading map state. Host-supplied options are not part of it.
+   * Not public: `getDocument()` is its reader, and the update engine the
+   * only writer.
+   */
+  protected readonly applied: AppliedDocument;
 
 
   /**
@@ -546,6 +574,7 @@ export class MapRenderer {
     // One `locale:` table for MapLibre's controls and the library's own
     // strings (namespaced `maplibre-yaml.*`, which MapLibre ignores).
     this.strings = createStrings(config.locale);
+    this.applied = { config, layers, sources: sources ?? {}, options: documentOptions(options) };
 
     // When a `controls.attribution` control is configured, MapLibre's built-in
     // attribution must be disabled at construction time so the two don't
