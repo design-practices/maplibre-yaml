@@ -453,6 +453,12 @@ export interface FormatLoader {
   suspend?(): void;
   /** Read by view again after {@link suspend}. */
   resume?(): void;
+  /**
+   * Whether {@link suspend} is in force: carried over when a loader is
+   * recreated for changed options (live documents, U3), so a source nothing
+   * draws does not start following the map because its `load:` changed.
+   */
+  readonly suspended?: boolean;
 }
 
 /**
@@ -468,8 +474,13 @@ abstract class ViewLoader implements FormatLoader {
   private viewport = false;
   /** Why the last view wasn't read (below `minzoom`, too dense), or undefined. */
   private skipped: "minzoom" | "dense" | undefined;
-  /** Following was stopped by {@link suspend} (and {@link resume} restarts it). */
-  private suspended = false;
+  /**
+   * Following was stopped by {@link suspend} (and {@link resume} restarts
+   * it). Set before the loader reaches by-view mode, it holds the follow
+   * back until {@link resume}: a loader recreated while nothing draws its
+   * source (live documents, U3) is started this way.
+   */
+  private _suspended = false;
   private hintedDense = false;
   private hintedDecode = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -497,6 +508,11 @@ abstract class ViewLoader implements FormatLoader {
   /** The zoom below which a by-view read reads nothing. */
   get minzoom(): number {
     return this.load.minzoom;
+  }
+
+  /** Whether {@link suspend} is in force (see {@link FormatLoader.suspended}). */
+  get suspended(): boolean {
+    return this._suspended;
   }
 
   /**
@@ -556,13 +572,17 @@ abstract class ViewLoader implements FormatLoader {
     this.map.off("moveend", this.onMoveEnd);
     if (this.skipped) this.callbacks.onTooDense?.(false);
     this.skipped = undefined;
-    this.suspended = this.viewport;
+    this._suspended = true;
   }
 
-  /** Follow the map again after {@link suspend} (a layer draws the source again). */
+  /**
+   * Follow the map again after {@link suspend} (a layer draws the source
+   * again). A whole-file loader has nothing to resume.
+   */
   resume(): void {
-    if (this.destroyed || !this.suspended) return;
-    this.suspended = false;
+    if (this.destroyed || !this._suspended) return;
+    this._suspended = false;
+    if (!this.viewport) return;
     void this.follow().catch((error: unknown) => this.fail(error));
   }
 
@@ -630,10 +650,15 @@ abstract class ViewLoader implements FormatLoader {
     );
   }
 
-  /** Follow the map: read the view now, and again after every move. */
+  /**
+   * Follow the map: read the view now, and again after every move. Under
+   * {@link suspend} the loader only notes that it reads by view; the first
+   * read waits for {@link resume}.
+   */
   protected async follow(): Promise<void> {
     if (this.destroyed) return;
     this.viewport = true;
+    if (this._suspended) return;
     this.map.on("moveend", this.onMoveEnd);
     await this.refresh();
   }

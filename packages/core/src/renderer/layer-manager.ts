@@ -53,6 +53,67 @@ type RasterDEMSourceConfig = z.infer<typeof RasterDEMSourceSchema>;
 type ImageSourceConfig = z.infer<typeof ImageSourceSchema>;
 type VideoSourceConfig = z.infer<typeof VideoSourceSchema>;
 
+const emptyCollection = (): FeatureCollection => ({ type: "FeatureCollection", features: [] });
+
+/** The polling interval a GeoJSON source asks for (`refresh.refreshInterval`, or the legacy top-level key). */
+function intervalOf(config: GeoJSONSourceConfig | undefined): number | undefined {
+  return config?.refresh?.refreshInterval || config?.refreshInterval || undefined;
+}
+
+/** The merge strategy a source's live updates use. */
+function strategyOf(config: GeoJSONSourceConfig | undefined): MergeStrategy {
+  return config?.refresh?.updateStrategy || config?.updateStrategy || "replace";
+}
+
+/** What a live update merges with (strategy, key and window), from the refresh block or the legacy keys. */
+function mergeOptionsOf(config: GeoJSONSourceConfig): {
+  strategy: MergeStrategy;
+  updateKey?: string;
+  windowSize?: number;
+  windowDuration?: number;
+  timestampField?: string;
+} {
+  return {
+    strategy: strategyOf(config),
+    updateKey: config.refresh?.updateKey || config.updateKey,
+    windowSize: config.refresh?.windowSize,
+    windowDuration: config.refresh?.windowDuration,
+    timestampField: config.refresh?.timestampField,
+  };
+}
+
+/**
+ * Everything a running poll captured besides its interval (the URL, the
+ * cache policy, the merge options): a change here restarts the poll, an
+ * interval change alone reschedules it (live documents, U3).
+ */
+function pollingShape(config: GeoJSONSourceConfig | undefined): string {
+  if (!config) return "";
+  const { refreshInterval: _interval, ...refresh } = (config.refresh ?? {}) as Record<string, unknown>;
+  return JSON.stringify({ url: config.url, cache: config.cache, refresh, updateStrategy: config.updateStrategy, updateKey: config.updateKey });
+}
+
+/** Everything a stream connection captured; `undefined` when the source has no stream. */
+function streamShape(config: GeoJSONSourceConfig | undefined): string | undefined {
+  if (!config?.stream) return undefined;
+  return JSON.stringify({ stream: config.stream, url: config.url, merge: mergeOptionsOf(config) });
+}
+
+/** What a FlatGeobuf or GeoParquet reader was built from: a change here recreates it. */
+function loaderShape(config: GeoJSONSourceConfig): string {
+  return JSON.stringify({
+    url: config.url,
+    format: formatOfSource(config),
+    load: loadModeOf(config),
+    columns: declaredColumns(config),
+  });
+}
+
+/** Structural equality of two JSON-shaped values. */
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 /**
  * Wrap the layer's primary colour in a feature-state `case`, so a highlighted
  * feature renders differently.
@@ -240,6 +301,34 @@ export class LayerManager {
   private columnsFor: (sourceId: string) => readonly string[] | "all" | undefined;
   /** Named sources a highlighted layer draws from (see LayerManagerDataOptions). */
   private namedSourcesNeedingIds: ReadonlySet<string>;
+  /**
+   * Every source this manager handed to MapLibre, by id, as the document
+   * gave it (named and inline alike): what a live update compares the next
+   * document's source against to decide what changed (live documents, U3).
+   */
+  private sourceSpecs = new Map<string, Record<string, unknown>>();
+  /**
+   * Per source, the generation of its current load (live documents, KTD5):
+   * bumped whenever the source is re-targeted, replaced or removed. Every
+   * async continuation — a fetch, a reader's delivery, a polling tick —
+   * carries the generation it started under and is dropped when it no
+   * longer matches, so a slow response for a URL the document has since
+   * left never lands over newer data.
+   */
+  private sourceGenerations = new Map<string, number>();
+  /**
+   * Sources whose last load failed (a fetch, a reader, a decoder chunk):
+   * what the renderer builds `hints.failedSources` from, so `reload()`
+   * retries them even when the document is unchanged (KTD11). A source
+   * leaves the set when data lands, or when it is removed.
+   */
+  private failed = new Set<string>();
+  /**
+   * Where a document layer sat before {@link replaceSource} took it off the
+   * map — the layer above it — so its re-add (`replaceLayer` with no
+   * anchor) lands in the same slot.
+   */
+  private parkedAnchors = new Map<string, string | undefined>();
 
   constructor(
     map: MapLibreMap,
@@ -278,6 +367,7 @@ export class LayerManager {
     for (const [id, spec] of Object.entries(sources)) {
       if (!spec || typeof spec !== "object") continue;
       this.namedSources.set(id, spec as Record<string, unknown>);
+      this.sourceSpecs.set(id, spec as Record<string, unknown>);
 
       if (this.map.getSource(id)) continue;
 
@@ -492,13 +582,297 @@ export class LayerManager {
       this.pollingManager.stop(sourceId);
       this.streamManager.disconnect(sourceId);
     }
+    this.forgetSource(sourceId);
+    this.namedSources.delete(sourceId);
+    if (this.map.getSource(sourceId)) this.map.removeSource(sourceId);
+  }
+
+  /**
+   * Drop everything this manager holds for a source that is going away or
+   * being rebuilt: its reader, data, failure state, pending load and spec.
+   * The generation moves on, so any load still in flight for it is dropped.
+   */
+  private forgetSource(sourceId: string): void {
+    this.nextGeneration(sourceId);
     this.formatLoaders.get(sourceId)?.destroy();
     this.formatLoaders.delete(sourceId);
     this.sourceData.delete(sourceId);
-    this.namedSources.delete(sourceId);
+    this.failed.delete(sourceId);
     this.keylessWarned.delete(sourceId);
     this.pendingData.delete(sourceId);
+    this.sourceSpecs.delete(sourceId);
+  }
+
+  /** The sources whose last load failed (see the field). A copy: safe to hold across an update. */
+  failedSources(): ReadonlySet<string> {
+    return new Set(this.failed);
+  }
+
+  /** The next generation for a source's loads (see `sourceGenerations`). */
+  private nextGeneration(sourceId: string): number {
+    const generation = (this.sourceGenerations.get(sourceId) ?? 0) + 1;
+    this.sourceGenerations.set(sourceId, generation);
+    return generation;
+  }
+
+  /** Whether a continuation started under `generation` is still the source's current load. */
+  private isCurrent(sourceId: string, generation: number): boolean {
+    return this.sourceGenerations.get(sourceId) === generation;
+  }
+
+  /**
+   * The key a source's pipeline runs under and the layer its data events
+   * name: a named source runs under its own id (one poll for every layer
+   * over it); an inline source runs under its layer.
+   */
+  private pipelineOwner(sourceId: string): { key: string; layerId: string } {
+    if (this.namedSources.has(sourceId)) return { key: sourceId, layerId: sourceId };
+    for (const [layerId, id] of this.layerToSource) {
+      if (id === sourceId) return { key: layerId, layerId };
+    }
+    return { key: sourceId, layerId: sourceId };
+  }
+
+  /** Stop a source's poll and stream, whatever key they run under. */
+  private stopPipeline(sourceId: string): void {
+    const { key } = this.pipelineOwner(sourceId);
+    this.pollingManager.stop(key);
+    this.streamManager.disconnect(key);
+    this.activeSourcePipelines.delete(sourceId);
+  }
+
+  /** Record the next document's spec for a source as the one on the map. */
+  private rememberSpec(sourceId: string, spec: Record<string, unknown>): void {
+    this.sourceSpecs.set(sourceId, spec);
+    if (this.namedSources.has(sourceId)) this.namedSources.set(sourceId, spec);
+  }
+
+  /** A tile source's spec as MapLibre sees it; `sourceId` reports a format problem, no id keeps quiet. */
+  private resolvedTileSpec(spec: Record<string, unknown>, sourceId?: string): Record<string, unknown> {
+    return this.toMapLibreSourceSpec(spec, sourceId) as Record<string, unknown>;
+  }
+
+  /**
+   * Replace a GeoJSON source's data in place (live documents, U3): an
+   * inline `data:` edit, or a named source's. Layers over it hear
+   * `data-loaded` as they do after a refresh, so classify breaks and the
+   * host's feature-state reset follow the new data.
+   */
+  setSourceData(sourceId: string, data: FeatureCollection): void {
+    if (!this.map.getSource(sourceId)) {
+      throw new Error(`Source "${sourceId}" is not on the map, so its data cannot be set.`);
+    }
+    this.nextGeneration(sourceId);
+    this.deliverSourceData(sourceId, this.pipelineOwner(sourceId).layerId, data);
+  }
+
+  /**
+   * Point a source at another URL in place (live documents, KTD4). A GeoJSON
+   * source is fetched again through the same path first render uses and
+   * `setData` applied when the response is still current; its live-data
+   * pipeline is re-targeted. A tile, image or video source goes through
+   * MapLibre's own setter.
+   *
+   * @returns false when the running maplibre-gl has no setter for this
+   *   source (RasterTileSource gained `setUrl` in 4.0): the caller replaces
+   *   the source instead.
+   */
+  async setSourceUrl(sourceId: string, next: Record<string, unknown>): Promise<boolean> {
+    const source = this.map.getSource(sourceId) as
+      | { setUrl?: (url: string) => unknown; updateImage?: (options: { url: string }) => unknown }
+      | undefined;
+    if (!source) throw new Error(`Source "${sourceId}" is not on the map, so its url cannot be set.`);
+    const prev = this.sourceSpecs.get(sourceId);
+    if (next["type"] === "geojson") {
+      const reload = !prev || prev["url"] !== next["url"] || this.failed.has(sourceId);
+      await this.retargetPipeline(sourceId, next, { reload });
+      return true;
+    }
+    const resolved = this.resolvedTileSpec(next, sourceId);
+    const url = resolved["url"];
+    if (typeof source.setUrl === "function") {
+      const before = prev ? this.resolvedTileSpec(prev)["url"] : undefined;
+      if (typeof url === "string" && url !== before) source.setUrl(url);
+      this.rememberSpec(sourceId, next);
+      return true;
+    }
+    if (next["type"] === "image" && typeof source.updateImage === "function" && typeof url === "string") {
+      source.updateImage({ url });
+      this.rememberSpec(sourceId, next);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Point a tile source at other tile URLs in place through `setTiles`
+   * (live documents, KTD4), resolved as on first render.
+   *
+   * @returns false when the running maplibre-gl has no `setTiles` on this
+   *   source (RasterTileSource gained it in 3.5): the caller replaces the
+   *   source instead.
+   */
+  setSourceTiles(sourceId: string, next: Record<string, unknown>): boolean {
+    const source = this.map.getSource(sourceId) as { setTiles?: (tiles: string[]) => unknown } | undefined;
+    if (!source) throw new Error(`Source "${sourceId}" is not on the map, so its tiles cannot be set.`);
+    if (typeof source.setTiles !== "function") return false;
+    const prev = this.sourceSpecs.get(sourceId);
+    const tiles = this.resolvedTileSpec(next, sourceId)["tiles"];
+    const before = prev ? this.resolvedTileSpec(prev)["tiles"] : undefined;
+    if (Array.isArray(tiles) && !sameJson(tiles, before)) source.setTiles(tiles as string[]);
+    this.rememberSpec(sourceId, next);
+    return true;
+  }
+
+  /**
+   * Bring a GeoJSON source's pipeline in line with the next document's
+   * config (live documents, U3), touching only what changed: an interval
+   * change reschedules the running poll; a change to what the poll captured
+   * (URL, cache, merge options) restarts it; `refresh` removed stops it,
+   * added starts it; a `stream` change reconnects; a FlatGeobuf or
+   * GeoParquet source whose reader options changed gets a new reader. A
+   * merge-strategy change drops the features accumulated under the old
+   * strategy and fetches at once, so the map never shows a mix.
+   *
+   * @param options.reload - Fetch the URL again now (it changed, or its
+   *   last load failed) and `setData` the response if it is still current.
+   */
+  async retargetPipeline(sourceId: string, next: Record<string, unknown>, options: { reload?: boolean } = {}): Promise<void> {
+    const prev = this.sourceSpecs.get(sourceId);
+    this.rememberSpec(sourceId, next);
+    if (next["type"] !== "geojson") return;
+    const before = prev as GeoJSONSourceConfig | undefined;
+    const after = next as unknown as GeoJSONSourceConfig;
+    const owner = this.pipelineOwner(sourceId);
+
+    if (this.isFormatSource(after)) {
+      const changed = !before || !this.isFormatSource(before) || loaderShape(before) !== loaderShape(after);
+      if (changed || options.reload) await this.recreateLoader(sourceId, next);
+      return;
+    }
+    if (before && this.isFormatSource(before)) {
+      this.formatLoaders.get(sourceId)?.destroy();
+      this.formatLoaders.delete(sourceId);
+    }
+
+    const strategyChanged = before !== undefined && strategyOf(before) !== strategyOf(after);
+    if (strategyChanged) {
+      // What `merge` / `append-window` built up belongs to the old strategy.
+      this.nextGeneration(sourceId);
+      this.sourceData.set(sourceId, emptyCollection());
+    }
+    if (options.reload && after.url) void this.fetchInto(sourceId, owner.layerId, after);
+
+    const interval = intervalOf(after);
+    if (interval && after.url) {
+      const running = this.pollingManager.has(owner.key);
+      if (running && intervalOf(before) && pollingShape(before) === pollingShape(after)) {
+        if (intervalOf(before) !== interval) this.pollingManager.setInterval(owner.key, interval);
+      } else {
+        this.pollingManager.stop(owner.key);
+        await this.startPolling(owner.key, sourceId, after, strategyChanged && !options.reload);
+      }
+    } else {
+      this.pollingManager.stop(owner.key);
+    }
+
+    if (streamShape(before) !== streamShape(after)) {
+      this.streamManager.disconnect(owner.key);
+      if (after.stream) await this.startStream(owner.key, sourceId, after);
+    }
+
+    if (this.namedSources.has(sourceId)) {
+      if (this.pollingManager.has(owner.key) || this.streamManager.getState(owner.key)) this.activeSourcePipelines.add(sourceId);
+      else this.activeSourcePipelines.delete(sourceId);
+    }
+  }
+
+  /**
+   * Destroy a FlatGeobuf or GeoParquet source's reader and start one from
+   * the next document's source (live documents, U3). A reader suspended
+   * because nothing draws the source stays suspended; a read the old reader
+   * still had in flight never lands (its generation is over).
+   */
+  async recreateLoader(sourceId: string, next: Record<string, unknown>): Promise<void> {
+    const previous = this.formatLoaders.get(sourceId);
+    const suspended = previous
+      ? previous.suspended === true
+      : this.namedSources.has(sourceId) && this.sourceRefCount(sourceId) === 0;
+    this.nextGeneration(sourceId);
+    this.stopPipeline(sourceId);
+    this.rememberSpec(sourceId, next);
+    const config = next as unknown as GeoJSONSourceConfig;
+    const { layerId } = this.pipelineOwner(sourceId);
+    const format = formatOfSource(config);
+    // Not awaited: the update completes when its operations are applied, not when the file is read.
+    if (format === "flatgeobuf") void this.startFlatGeobuf(sourceId, layerId, config, suspended);
+    else if (format === "geoparquet" && typeReadsFormat(config.type, format)) void this.startGeoParquet(sourceId, layerId, config, suspended);
+    else {
+      previous?.destroy();
+      this.formatLoaders.delete(sourceId);
+    }
+  }
+
+  /**
+   * Rebuild a named source from the next document's spec (live documents,
+   * KTD4): for a change MapLibre has no setter for, or a setter the running
+   * maplibre-gl lacks. The document layers over it are taken off the map
+   * (their slot remembered, see `parkedAnchors`) for the caller to add again
+   * through `replaceLayer`; the source is removed and registered anew, so a
+   * `url:` fetches again. Refused — nothing changes — while a layer the
+   * document did not declare still draws it.
+   */
+  replaceSource(sourceId: string, next: Record<string, unknown>): void {
+    if (!this.namedSources.has(sourceId)) {
+      throw new Error(`Source "${sourceId}" is not one of the document's named sources, so it cannot be replaced on its own.`);
+    }
+    const users = this.styleLayers().filter((l) => l.source === sourceId);
+    const foreign = users.filter((l) => !this.claimedLayerIds.has(l.id)).map((l) => l.id);
+    if (foreign.length > 0) {
+      throw new Error(
+        `Source "${sourceId}" is still used by ${foreign.map((id) => `"${id}"`).join(", ")}, ` +
+          `which the document did not declare, so it is left as it is and its change is not applied. ` +
+          `Remove that layer, or give the document's source another id.`
+      );
+    }
+    for (const { id } of users) {
+      this.parkedAnchors.set(id, this.successorOf(id));
+      this.map.removeLayer(id);
+    }
+    this.stopPipeline(sourceId);
+    this.forgetSource(sourceId);
     if (this.map.getSource(sourceId)) this.map.removeSource(sourceId);
+    this.registerSources({ [sourceId]: next });
+  }
+
+  /**
+   * Fetch a GeoJSON `url:` again and `setData` the response, dropping it
+   * when the source moved on meanwhile (KTD5). Failures are reported as on
+   * first load and remembered for `hints.failedSources`.
+   */
+  private async fetchInto(sourceId: string, layerId: string, config: GeoJSONSourceConfig): Promise<void> {
+    const generation = this.nextGeneration(sourceId);
+    for (const target of this.layersForPipeline(sourceId, layerId)) this.callbacks.onDataLoading?.(target);
+    try {
+      const data = await loadSourceData(config as typeof config & { url: string }, { fetcher: this.dataFetcher });
+      if (!this.isCurrent(sourceId, generation)) return;
+      this.deliverSourceData(sourceId, layerId, data);
+    } catch (error) {
+      if (!this.isCurrent(sourceId, generation)) return;
+      this.failed.add(sourceId);
+      this.callbacks.onDataError?.(layerId, error as Error);
+    }
+  }
+
+  /** New data for a source: remembered, set on the map, announced to every layer over it. */
+  private deliverSourceData(sourceId: string, layerId: string, data: FeatureCollection): void {
+    this.sourceData.set(sourceId, data);
+    this.failed.delete(sourceId);
+    const source = this.map.getSource(sourceId) as GeoJSONSource | undefined;
+    source?.setData?.(data);
+    for (const target of this.layersForPipeline(sourceId, layerId)) {
+      this.callbacks.onDataLoaded?.(target, data.features.length);
+    }
   }
 
   /** The style's layers, as `{ id, source }` records; empty when there is no style to read. */
@@ -556,7 +930,7 @@ export class LayerManager {
    * slot on the map (its current successor, host layers included).
    */
   async replaceLayer(layer: Layer, beforeId?: string): Promise<void> {
-    const anchor = beforeId ?? this.successorOf(layer.id);
+    const anchor = beforeId ?? this.successorOf(layer.id) ?? this.parkedAnchors.get(layer.id);
     this.removeLayer(layer.id);
     await this.addLayer(layer, anchor);
   }
@@ -756,6 +1130,7 @@ export class LayerManager {
   private async addSource(sourceId: string, layer: Layer): Promise<void> {
     // layer.source is guaranteed to be an object (string refs handled in addLayer)
     const source = layer.source as { type: string };
+    this.sourceSpecs.set(sourceId, source as unknown as Record<string, unknown>);
 
     if (source.type === "geojson") {
       const geojsonSource = source as unknown as GeoJSONSourceConfig;
@@ -925,6 +1300,8 @@ export class LayerManager {
     this.addMapSource(sourceId, sourceSpec);
 
     this.sourceData.set(sourceId, initialData);
+    // This load's generation: a re-target before it lands makes it stale (KTD5).
+    const generation = this.nextGeneration(sourceId);
 
     // Cloud-native vector data (ml-cnv): a FlatGeobuf or GeoParquet file is
     // decoded into this GeoJSON source by its own data provider instead of
@@ -950,7 +1327,9 @@ export class LayerManager {
         this.pendingData.delete(sourceId);
         const data = await (pending ??
           loadSourceData(config as typeof config & { url: string }, { fetcher: this.dataFetcher }));
+        if (!this.isCurrent(sourceId, generation)) return;
         this.sourceData.set(sourceId, data);
+        this.failed.delete(sourceId);
 
         const source = this.map.getSource(sourceId) as GeoJSONSource;
         if (source?.setData) {
@@ -959,6 +1338,8 @@ export class LayerManager {
 
         this.callbacks.onDataLoaded?.(layerId, data.features.length);
       } catch (error: any) {
+        if (!this.isCurrent(sourceId, generation)) return;
+        this.failed.add(sourceId);
         this.callbacks.onDataError?.(layerId, error);
       }
     } else if (config.prefetchedData) {
@@ -976,7 +1357,8 @@ export class LayerManager {
   private async startFlatGeobuf(
     sourceId: string,
     layerId: string,
-    config: GeoJSONSourceConfig
+    config: GeoJSONSourceConfig,
+    suspended = false
   ): Promise<void> {
     this.formatLoaders.get(sourceId)?.destroy();
     this.callbacks.onDataLoading?.(layerId);
@@ -984,18 +1366,10 @@ export class LayerManager {
       this.map,
       config.url!,
       loadModeOf(config as unknown as Record<string, unknown>),
-      {
-        onData: (data) => {
-          this.sourceData.set(sourceId, data);
-          const source = this.map.getSource(sourceId) as GeoJSONSource | undefined;
-          source?.setData?.(data);
-          this.callbacks.onDataLoaded?.(layerId, data.features.length);
-        },
-        onError: (error) => this.callbacks.onDataError?.(layerId, error),
-        ...this.formatHints(sourceId),
-      }
+      this.readerCallbacks(sourceId, layerId)
     );
     this.formatLoaders.set(sourceId, loader);
+    if (suspended) loader.suspend();
     // A whole-file load the host already started (the `fitTo` prefetch,
     // ml-aot.75) is reused, not repeated; viewport reads ignore it.
     const pending = this.pendingData.get(sourceId);
@@ -1012,7 +1386,8 @@ export class LayerManager {
   private async startGeoParquet(
     sourceId: string,
     layerId: string,
-    config: GeoJSONSourceConfig
+    config: GeoJSONSourceConfig,
+    suspended = false
   ): Promise<void> {
     this.formatLoaders.get(sourceId)?.destroy();
     this.callbacks.onDataLoading?.(layerId);
@@ -1022,26 +1397,36 @@ export class LayerManager {
       config.url!,
       loadModeOf(config as unknown as Record<string, unknown>),
       columns,
-      {
-        onData: (data) => {
-          this.sourceData.set(sourceId, data);
-          const source = this.map.getSource(sourceId) as GeoJSONSource | undefined;
-          source?.setData?.(data);
-          this.callbacks.onDataLoaded?.(layerId, data.features.length);
-        },
-        onError: (error) => this.callbacks.onDataError?.(layerId, error),
-        ...this.formatHints(sourceId),
-      }
+      this.readerCallbacks(sourceId, layerId)
     );
     this.formatLoaders.set(sourceId, loader);
+    if (suspended) loader.suspend();
     const pending = this.pendingData.get(sourceId);
     this.pendingData.delete(sourceId);
     await loader.start(pending);
   }
 
-  /** A cloud-native reader's author hints and "too dense" reports, for its source. */
-  private formatHints(sourceId: string): Pick<FlatGeobufCallbacks, "onHint" | "onTooDense"> {
+  /**
+   * A cloud-native reader's callbacks for its source: data and errors under
+   * the source's current generation (a reader replaced meanwhile delivers
+   * nothing, KTD5), author hints and "too dense" reports.
+   */
+  private readerCallbacks(sourceId: string, layerId: string): FlatGeobufCallbacks {
+    const generation = this.sourceGenerations.get(sourceId) ?? 0;
     return {
+      onData: (data) => {
+        if (!this.isCurrent(sourceId, generation)) return;
+        this.sourceData.set(sourceId, data);
+        this.failed.delete(sourceId);
+        const source = this.map.getSource(sourceId) as GeoJSONSource | undefined;
+        source?.setData?.(data);
+        this.callbacks.onDataLoaded?.(layerId, data.features.length);
+      },
+      onError: (error) => {
+        if (!this.isCurrent(sourceId, generation)) return;
+        this.failed.add(sourceId);
+        this.callbacks.onDataError?.(layerId, error);
+      },
       onHint: (message) => this.callbacks.onSourceHint?.(sourceId, message),
       onTooDense: (dense) => this.callbacks.onViewTooDense?.(sourceId, dense),
     };
@@ -1116,76 +1501,70 @@ export class LayerManager {
       );
       return;
     }
-    // Setup streaming if configured
-    if (config.stream) {
-      const streamConfig = config.stream;
-      await this.streamManager.connect(layerId, {
-        type: streamConfig.type,
-        url: streamConfig.url || config.url!,
-        onData: (data) => {
-          this.handleDataUpdate(sourceId, layerId, data, {
-            strategy:
-              config.refresh?.updateStrategy ||
-              config.updateStrategy ||
-              "replace",
-            updateKey: config.refresh?.updateKey || config.updateKey,
-            windowSize: config.refresh?.windowSize,
-            windowDuration: config.refresh?.windowDuration,
-            timestampField: config.refresh?.timestampField,
-          });
-        },
-        onError: (error) => {
-          this.callbacks.onDataError?.(layerId, error);
-        },
-        reconnect: {
-          enabled: streamConfig.reconnect !== false,
-          maxRetries: streamConfig.reconnectMaxAttempts,
-          initialDelay: streamConfig.reconnectDelay,
-          maxDelay: streamConfig.reconnectMaxDelay,
-        },
-        eventTypes: streamConfig.eventTypes,
-        protocols: streamConfig.protocols,
-      });
-    }
+    if (config.stream) await this.startStream(layerId, sourceId, config);
+    if (intervalOf(config) && config.url) await this.startPolling(layerId, sourceId, config);
+  }
 
-    // Setup polling if configured (new refresh config or legacy refreshInterval)
-    const refreshInterval =
-      config.refresh?.refreshInterval || config.refreshInterval;
-    if (refreshInterval && config.url) {
-      const url = config.url;
-      const cacheEnabled = config.cache?.enabled ?? true;
-      const cacheTTL = config.cache?.ttl;
+  /** Connect a source's `stream:` under `layerId` (the pipeline key; see `pipelineOwner`). */
+  private async startStream(layerId: string, sourceId: string, config: GeoJSONSourceConfig): Promise<void> {
+    const streamConfig = config.stream!;
+    const merge = mergeOptionsOf(config);
+    await this.streamManager.connect(layerId, {
+      type: streamConfig.type,
+      url: streamConfig.url || config.url!,
+      onData: (data) => {
+        this.handleDataUpdate(sourceId, layerId, data, merge);
+      },
+      onError: (error) => {
+        this.callbacks.onDataError?.(layerId, error);
+      },
+      reconnect: {
+        enabled: streamConfig.reconnect !== false,
+        maxRetries: streamConfig.reconnectMaxAttempts,
+        initialDelay: streamConfig.reconnectDelay,
+        maxDelay: streamConfig.reconnectMaxDelay,
+      },
+      eventTypes: streamConfig.eventTypes,
+      protocols: streamConfig.protocols,
+    });
+  }
 
-      await this.pollingManager.start(layerId, {
-        interval: refreshInterval,
-        onTick: async () => {
-          // A tick asks the server what changed: never answer it from the
-          // cache. The cache's TTL (5 minutes by default) is longer than
-          // most refresh intervals, so reading through it served the first
-          // response again until it expired (ml-ahu). `revalidate` still
-          // writes the new response, so other readers of the cache are
-          // current too.
-          const result = await this.dataFetcher.fetch(url, {
-            skipCache: !cacheEnabled,
-            revalidate: true,
-            ttl: cacheTTL,
-          });
-          this.handleDataUpdate(sourceId, layerId, result.data as FeatureCollection, {
-            strategy:
-              config.refresh?.updateStrategy ||
-              config.updateStrategy ||
-              "replace",
-            updateKey: config.refresh?.updateKey || config.updateKey,
-            windowSize: config.refresh?.windowSize,
-            windowDuration: config.refresh?.windowDuration,
-            timestampField: config.refresh?.timestampField,
-          });
-        },
-        onError: (error) => {
-          this.callbacks.onDataError?.(layerId, error);
-        },
-      });
-    }
+  /**
+   * Poll a source's `url:` under `layerId` (the pipeline key; see
+   * `pipelineOwner`). `immediate` fetches at once as well as on the schedule.
+   */
+  private async startPolling(layerId: string, sourceId: string, config: GeoJSONSourceConfig, immediate = false): Promise<void> {
+    const url = config.url!;
+    const cacheEnabled = config.cache?.enabled ?? true;
+    const cacheTTL = config.cache?.ttl;
+    const merge = mergeOptionsOf(config);
+
+    await this.pollingManager.start(layerId, {
+      interval: intervalOf(config)!,
+      immediate,
+      onTick: async () => {
+        // A tick that started before the source was re-targeted lands on
+        // data it no longer belongs to: dropped (KTD5).
+        const generation = this.sourceGenerations.get(sourceId) ?? 0;
+        // A tick asks the server what changed: never answer it from the
+        // cache. The cache's TTL (5 minutes by default) is longer than
+        // most refresh intervals, so reading through it served the first
+        // response again until it expired (ml-ahu). `revalidate` still
+        // writes the new response, so other readers of the cache are
+        // current too.
+        const result = await this.dataFetcher.fetch(url, {
+          skipCache: !cacheEnabled,
+          revalidate: true,
+          ttl: cacheTTL,
+        });
+        if (!this.isCurrent(sourceId, generation)) return;
+        this.handleDataUpdate(sourceId, layerId, result.data as FeatureCollection, merge);
+      },
+      onError: (error) => {
+        this.failed.add(sourceId);
+        this.callbacks.onDataError?.(layerId, error);
+      },
+    });
   }
 
   /**
@@ -1211,6 +1590,7 @@ export class LayerManager {
 
     const mergeResult = this.dataMerger.merge(existing, incoming, options);
     this.sourceData.set(sourceId, mergeResult.data);
+    this.failed.delete(sourceId);
     if (mergeResult.unkeyed && options.updateKey) {
       this.warnKeyless(sourceId, incoming, options.updateKey, mergeResult.unkeyed);
     }
@@ -1315,6 +1695,7 @@ export class LayerManager {
 
   removeLayer(layerId: string): void {
     this.claimedLayerIds.delete(layerId);
+    this.parkedAnchors.delete(layerId);
     // Stop all data updates
     this.pollingManager.stop(layerId);
     this.streamManager.disconnect(layerId);
@@ -1336,9 +1717,7 @@ export class LayerManager {
     this.layerToSource.delete(layerId);
 
     if (isInlineSource) {
-      this.sourceData.delete(sourceId);
-      this.formatLoaders.get(sourceId)?.destroy();
-      this.formatLoaders.delete(sourceId);
+      this.forgetSource(sourceId);
     } else if (this.sourceRefCounts.has(sourceId)) {
       // Shared: the data stays as long as a sibling still draws from it.
       this.releaseSource(sourceId);
@@ -1378,5 +1757,9 @@ export class LayerManager {
     this.claimedLayerIds.clear();
     this.pendingReleases = null;
     this.hintedAnchors.clear();
+    this.sourceSpecs.clear();
+    this.sourceGenerations.clear();
+    this.failed.clear();
+    this.parkedAnchors.clear();
   }
 }

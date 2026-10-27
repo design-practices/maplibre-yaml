@@ -7,6 +7,9 @@
  * MapLibre error.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // A stand-in maplibre-gl module with a real protocol registry (the parts
 // core reads: `config.REGISTERED_PROTOCOLS`, `addProtocol`, `removeProtocol`,
@@ -30,7 +33,7 @@ vi.mock("maplibre-gl", () => {
 });
 
 import { install } from "../../src/formats/pmtiles";
-import { toMapLibreTileSpec, withoutFormatKeys } from "../../src/renderer/cloud-sources";
+import { FlatGeobufLoader, toMapLibreTileSpec, withoutFormatKeys } from "../../src/renderer/cloud-sources";
 import { isProtocolRegistered, prepareProtocols } from "../../src/renderer/cloud-protocols";
 import { maplibregl, removeProtocol } from "../../src/renderer/maplibre-interop";
 import { LayerManager } from "../../src/renderer/layer-manager";
@@ -371,5 +374,90 @@ describe("a basemap style loaded from a URL: relative URLs resolve against the s
     expect(absolutizeSourceUrls({ type: "vector", url: "pmtiles://https://h/a.pmtiles" }).url).toBe(
       "pmtiles://https://h/a.pmtiles"
     );
+  });
+});
+
+describe("LayerManager recreates a FlatGeobuf reader for changed options (live documents, U3)", () => {
+  const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "../../../../docs/public/gallery-assets/cloud-native");
+  const fgb = new Uint8Array(readFileSync(join(FIXTURES, "districts.fgb")));
+  const FGB = "https://h.org/districts.fgb";
+
+  /** Let every settled promise continuation run. */
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((done) => setTimeout(done, 0));
+  }
+
+  /** A fetch that serves the fixture whole, each response released by the test. */
+  function gatedFetch() {
+    const gates: (() => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            gates.push(() => resolve(new Response(fgb, { status: 200, headers: { "content-length": String(fgb.length) } })));
+          })
+      )
+    );
+    return {
+      inFlight: () => gates.length,
+      release: async () => {
+        gates.shift()?.();
+        await flush();
+        await flush();
+      },
+    };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("the new reader carries over `suspended`; the old reader's in-flight read never lands", async () => {
+    const gate = gatedFetch();
+    const setData = vi.fn();
+    const source = { setData };
+    const added = new Set<string>();
+    const map = {
+      addSource: vi.fn((id: string) => added.add(id)),
+      getSource: vi.fn((id: string) => (added.has(id) ? source : undefined)),
+      addLayer: vi.fn(),
+      getLayer: vi.fn(),
+      removeLayer: vi.fn(),
+      removeSource: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+    };
+    const callbacks = { onDataLoading: vi.fn(), onDataLoaded: vi.fn(), onDataError: vi.fn() };
+    const manager = new LayerManager(map as never, callbacks);
+    manager.registerSources({ d: { type: "geojson", url: FGB } });
+    expect(gate.inFlight()).toBe(1);
+    await manager.addLayer({ id: "a", type: "fill", source: "d" } as never);
+    // Nothing draws the source any more: its reader is suspended.
+    manager.removeLayer("a");
+    const destroy = vi.spyOn(FlatGeobufLoader.prototype, "destroy");
+    const suspend = vi.spyOn(FlatGeobufLoader.prototype, "suspend");
+
+    await manager.recreateLoader("d", { type: "geojson", url: FGB, load: { maxFeatures: 10 } });
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(gate.inFlight()).toBe(2);
+    const fresh = suspend.mock.instances.at(-1) as unknown as FlatGeobufLoader;
+    expect(fresh).not.toBe(destroy.mock.instances[0]);
+    expect(fresh.suspended).toBe(true);
+
+    // The old read lands first: dropped, no data event.
+    await gate.release();
+    await vi.waitFor(() => expect(gate.inFlight()).toBe(1));
+    expect(setData).not.toHaveBeenCalled();
+    expect(callbacks.onDataLoaded).not.toHaveBeenCalled();
+
+    await gate.release();
+    await vi.waitFor(() => expect(setData).toHaveBeenCalledTimes(1));
+    expect(callbacks.onDataLoaded).toHaveBeenCalledTimes(1);
+    expect(callbacks.onDataError).not.toHaveBeenCalled();
+    manager.destroy();
   });
 });

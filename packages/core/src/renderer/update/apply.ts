@@ -1,5 +1,5 @@
 /**
- * @file Live documents: applying layer and source operations (0.10, ml-4ug, U2)
+ * @file Live documents: applying layer and source operations (0.10, ml-4ug, U2/U3)
  * @module @maplibre-yaml/core/renderer/update
  *
  * @description
@@ -7,9 +7,12 @@
  * the differ produced, reaching the map and the renderer's collaborators
  * only through the injected {@link UpdateHost} (KTD10). It owns the apply
  * order, existence reconciliation (KTD1), document-only reordering (KTD3),
- * end-of-diff source reference settlement (KTD4) and per-operation failure
- * handling on both channels (KTD7). It decides nothing from map state
- * beyond whether a layer exists; values come from the documents (R10).
+ * in-place source changes through MapLibre's setters with a replacement
+ * fallback when the running maplibre-gl lacks one (KTD4), end-of-diff
+ * source reference settlement (KTD4) and per-operation failure handling on
+ * both channels (KTD7). It decides nothing from map state beyond whether a
+ * layer exists and whether a source instance has a setter; values come
+ * from the documents (R10).
  *
  * Apply order: named-source changes, layer removes, layer replacements and
  * adds in document position, property sets, the ordering pass, source
@@ -22,6 +25,7 @@
  * shares nothing with the main bundle.
  */
 
+import type { FeatureCollection } from "geojson";
 import type { Layer } from "../../schemas/layer.schema";
 import type { MapErrorContext } from "../map-renderer";
 import type {
@@ -58,9 +62,11 @@ interface Phases {
 }
 
 /**
- * Sort the operations into phases. Inline sources (`${layerId}-source`)
- * travel with their layer — `LayerManager` adds, replaces and removes them
- * as part of the layer — so their operations are not applied on their own.
+ * Sort the operations into phases. An inline source (`${layerId}-source`)
+ * is added, replaced and removed with its layer — `LayerManager` owns it as
+ * part of the layer, and the differ pairs its `sourceReplace` with a
+ * `layerReplace` — so only its in-place changes (`data`, `url`, `tiles`)
+ * are applied on their own.
  */
 function partition(ops: readonly UpdateOp[]): Phases {
   const phases: Phases = { sourceChanges: [], removes: [], structural: [], properties: [], moves: [], sourceRemovals: [] };
@@ -68,10 +74,12 @@ function partition(ops: readonly UpdateOp[]): Phases {
     switch (op.op) {
       case "sourceAdd":
       case "sourceReplace":
+        if (!op.inline) phases.sourceChanges.push(op);
+        break;
       case "sourceSetData":
       case "sourceSetUrl":
       case "sourceSetTiles":
-        if (!op.inline) phases.sourceChanges.push(op);
+        phases.sourceChanges.push(op);
         break;
       case "sourceRemove":
         if (!op.inline) phases.sourceRemovals.push(op);
@@ -95,6 +103,12 @@ function partition(ops: readonly UpdateOp[]): Phases {
     }
   }
   return phases;
+}
+
+/** The id of the source a layer draws: its named source, or its own inline one. */
+function sourceIdOf(layer: Layer): string | undefined {
+  if (layer.type === "background") return undefined;
+  return typeof layer.source === "string" ? layer.source : `${layer.id}-source`;
 }
 
 /** Where a layer sits in the document, as the differ computes it (see `LayerPosition`). */
@@ -149,18 +163,68 @@ const layerContext = (layerId: string): MapErrorContext => ({ kind: "layer", lay
 const sourceContext = (sourceId: string): MapErrorContext => ({ kind: "source", sourceId });
 
 /**
- * Named-source changes.
- *
- * @remarks
- * U3 fills this in: `sourceReplace`, `sourceSetData`, `sourceSetUrl` and
- * `sourceSetTiles` through the setters and loaders `LayerManager` gains
- * there (KTD4). Until then only `sourceAdd` applies, through the same
- * registration first render uses; the other operations are recorded in
- * the summary by the differ but change nothing on the map.
+ * Replace a source and every document layer over it in document position
+ * (KTD4) when the source instance has no setter for the change: a named
+ * source is rebuilt by `LayerManager` (refused, as a failure, while a host
+ * layer draws it), an inline one is rebuilt with its layer. The dependent
+ * layers' replacements join the structural phase, which has not run yet;
+ * their own property sets and moves are dropped, as the replacement
+ * carries the next document's values.
  */
-async function applySourceChange(host: UpdateHost, op: SourceChangeOp): Promise<void> {
-  if (op.op === "sourceAdd") {
-    host.layerManager.registerSources({ [op.sourceId]: op.source });
+function replaceSourceAndLayers(host: UpdateHost, request: ApplyRequest, phases: Phases, op: SourceChangeOp): void {
+  const { next, summary } = request;
+  if (!op.inline) host.layerManager.replaceSource(op.sourceId, op.source as Record<string, unknown>);
+  // The differ listed its own `sourceReplace`; a setter fallback is news to the summary.
+  if (op.op !== "sourceReplace") summary.sourcesReplaced.push(op.sourceId);
+  const covered = new Set(phases.structural.map((entry) => entry.layerId));
+  const replaced = new Set<string>();
+  next.layers.forEach((layer, index) => {
+    if (sourceIdOf(layer) !== op.sourceId || covered.has(layer.id)) return;
+    phases.structural.push({ op: "layerReplace", layerId: layer.id, layer, position: positionOf(next.layers, index), reason: "source" });
+    summary.replaced.push(layer.id);
+    replaced.add(layer.id);
+  });
+  if (replaced.size === 0) return;
+  phases.properties = phases.properties.filter((entry) => !replaced.has(entry.layerId));
+  phases.moves = phases.moves.filter((entry) => !replaced.has(entry.layerId));
+}
+
+/**
+ * Source changes (KTD4): a new named source registers as on first render; a
+ * change without a setter rebuilds the source and its layers; `data`, `url`
+ * and `tiles` go through `LayerManager`'s setters, which re-target the
+ * source's live-data pipeline or reader alongside, and fall back to the
+ * rebuild when the running maplibre-gl has no setter on this source.
+ */
+async function applySourceChange(host: UpdateHost, request: ApplyRequest, phases: Phases, op: SourceChangeOp): Promise<void> {
+  const { layerManager } = host;
+  switch (op.op) {
+    case "sourceAdd":
+      layerManager.registerSources({ [op.sourceId]: op.source });
+      return;
+    case "sourceReplace":
+      replaceSourceAndLayers(host, request, phases, op);
+      return;
+    case "sourceSetData": {
+      const data = (op.source as { data?: unknown }).data;
+      if (data !== undefined && typeof data === "object") layerManager.setSourceData(op.sourceId, data as FeatureCollection);
+      await layerManager.retargetPipeline(op.sourceId, op.source as Record<string, unknown>);
+      // New features: a retained highlight id would light up whichever feature now holds it.
+      for (const layer of request.next.layers) {
+        if (sourceIdOf(layer) === op.sourceId) host.eventHandler.resetFeatureState(layer.id);
+      }
+      return;
+    }
+    case "sourceSetUrl":
+      if (!(await layerManager.setSourceUrl(op.sourceId, op.source as Record<string, unknown>))) {
+        replaceSourceAndLayers(host, request, phases, op);
+      }
+      return;
+    case "sourceSetTiles":
+      if (!layerManager.setSourceTiles(op.sourceId, op.source as Record<string, unknown>)) {
+        replaceSourceAndLayers(host, request, phases, op);
+      }
+      return;
   }
 }
 
@@ -258,7 +322,7 @@ export async function applyOps(host: UpdateHost, request: ApplyRequest): Promise
   host.layerManager.beginSourceSettlement();
   try {
     for (const op of phases.sourceChanges) {
-      await attempt(host, summary, op, sourceContext(op.sourceId), () => applySourceChange(host, op));
+      await attempt(host, summary, op, sourceContext(op.sourceId), () => applySourceChange(host, request, phases, op));
     }
     for (const op of phases.removes) {
       await attempt(host, summary, op, layerContext(op.layerId), () => removeLayer(host, op));
